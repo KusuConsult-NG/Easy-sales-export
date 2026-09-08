@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
+import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
 import type {
     AnalyticsServiceContract,
     PlatformHealthMetrics,
@@ -158,39 +159,63 @@ export class AnalyticsService implements AnalyticsServiceContract {
     static async getPlatformHealthMetrics(): Promise<PlatformHealthMetrics> {
         const db = getAdminDb();
         
+        //   #518 "ACTIVE USERS" MEANT SOMETHING DIFFERENT HERE FROM EVERYWHERE
+        //   ELSE, AND WAS COMPUTED FROM A FIELD NOBODY WRITES.
+        //
+        //   This read `totalUsers - (users where status == "suspended")`.
+        //
+        //   NOTHING WRITES THAT. The only `status: "suspended"` write in the
+        //   codebase is on a seller VERIFICATION record
+        //   (api/admin/marketplace/suspend-seller), never on a user document;
+        //   account suspension is auth-revocation.ts setting `disabled` on the
+        //   auth account. So the subtrahend was always 0 and `activeUsers` was
+        //   `totalUsers` — every account ever created, reported as active.
+        //
+        //   THE SIBLING QUERY IN THIS SAME Promise.all RECORDS THE IDENTICAL
+        //   DEFECT: "'locked' is not an escrow status and never was … so
+        //   `activeEscrows` has always read 0". Whoever found that fixed the
+        //   escrow line and left the line above it, which is this audit's most
+        //   repeated shape — the fix reaching one of N doors — with the two
+        //   doors adjacent in one array.
+        //
+        //   AND IT WAS A THIRD DEFINITION. lib/recent-activity.ts is this
+        //   platform's stated rule for "recently active" and its header argues
+        //   the key deliberately; getDashboardStats applies it. This method
+        //   answered a different question under the same label, so two admin
+        //   surfaces could report "Active Users" an order of magnitude apart.
+        //   One rule now, and RECENT_ACTIVITY_DAYS rather than a hand-written 30.
+        const activeSince = new Date();
+        activeSince.setDate(activeSince.getDate() - RECENT_ACTIVITY_DAYS);
+
         try {
-            const [totalUsersSnap, suspendedUsersSnap, lockedEscrowsSnap] = await Promise.all([
+            const [totalUsersSnap, activeUsersSnap, fundedEscrowsSnap] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).count().get(),
-                db.collection(COLLECTIONS.USERS).where("status", "==", "suspended").count().get(),
-                // "locked" is not an escrow status and never was. The string
-                // appears exactly once in this codebase — here, in this query —
-                // so `activeEscrows` on the platform health panel has always
-                // read 0, whatever was actually held.
-                //
+                db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", activeSince).count().get(),
                 // An escrow holding money is `funded`: marketplace/_payment.ts
                 // sets it when payment clears, and it stays there until a
                 // release, a refund or a dispute moves it on.
                 db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "funded").count().get()
             ]);
 
-            const totalUsers = totalUsersSnap.data().count ?? 0;
-            const suspendedUsers = suspendedUsersSnap.data().count ?? 0;
-            const activeUsers = totalUsers - suspendedUsers;
-            const activeEscrows = lockedEscrowsSnap.data().count ?? 0;
-
             return {
-                totalUsers,
-                activeUsers,
-                activeEscrows,
+                totalUsers: totalUsersSnap.data().count ?? 0,
+                activeUsers: activeUsersSnap.data().count ?? 0,
+                activeEscrows: fundedEscrowsSnap.data().count ?? 0,
                 lastCalculatedAt: new Date().toISOString()
             };
         } catch (error) {
             logger.error("Failed to fetch platform health metrics:", error);
+            //   THE CATCH USED TO RETURN THREE ZEROS AND A FRESH
+            //   lastCalculatedAt — fabricated figures stamped as just measured,
+            //   which is the worst version of the shape #514, #516 and #517 each
+            //   found: not merely a failed read rendered as an answer, but one
+            //   carrying a timestamp asserting its freshness.
             return {
                 totalUsers: 0,
                 activeUsers: 0,
                 activeEscrows: 0,
-                lastCalculatedAt: new Date().toISOString()
+                lastCalculatedAt: new Date().toISOString(),
+                unavailable: ["totalUsers", "activeUsers", "activeEscrows"],
             };
         }
     }
@@ -522,7 +547,9 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const filterFrom = options?.dateFrom ? dateRangeStart(options.dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const filterTo   = options?.dateTo   ? dateRangeEnd(options.dateTo) : now;
 
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        //   The same window as lib/recent-activity.ts and getPlatformHealthMetrics,
+        //   read from the constant rather than spelled out a third time — #518.
+        const thirtyDaysAgo = new Date(Date.now() - RECENT_ACTIVITY_DAYS * 24 * 60 * 60 * 1000);
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
         const [

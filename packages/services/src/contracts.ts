@@ -178,6 +178,15 @@ export interface PlatformHealthMetrics {
     activeUsers: number;
     activeEscrows: number;
     lastCalculatedAt: string;
+    /**
+     * Figures that could NOT be read, by name — #518.
+     *
+     * The catch here returned three zeros with a fresh lastCalculatedAt, so a
+     * total outage was indistinguishable from an empty platform AND carried a
+     * timestamp asserting it had just been measured. A name in here means the
+     * accompanying number is not a measurement.
+     */
+    unavailable?: string[];
 }
 
 export interface AnalyticsServiceContract {
