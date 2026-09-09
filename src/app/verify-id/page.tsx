@@ -17,6 +17,15 @@ export default function VerifyIDPage() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    /**
+     *   #575 Whether this screen has gone away while an await was in flight.
+     *
+     *   startCamera awaits three times before it arms its scan loop, and one of
+     *   those is a DYNAMIC IMPORT of jsqr — a chunk fetched over the network, on
+     *   a page whose whole audience is people with unreliable connections. The
+     *   cleanup can easily run in the middle of that. See both call sites below.
+     */
+    const cancelledRef = useRef(false);
 
     /**
      *   #344 THIS VERIFIED IN THE BROWSER, AGAINST A KEY THE BROWSER DOES NOT
@@ -53,6 +62,11 @@ export default function VerifyIDPage() {
                 ? { valid: true, payload: body.data }
                 : { valid: false, error: body?.error || `Verification failed (${response.status})` };
 
+            //   #575 The verification is in flight across an await too. A
+            //   result set on an unmounted component is a React warning today
+            //   and a memory reference held open either way.
+            if (cancelledRef.current) return;
+
             setResult(verificationResult);
             logger.info("Digital ID verification attempt", {
                 timestamp: new Date().toISOString(),
@@ -60,9 +74,11 @@ export default function VerifyIDPage() {
             });
         } catch (err) {
             logger.error("Digital ID verification request failed", err);
-            setResult({ valid: false, error: "Could not reach the verification service. Please try again." });
+            if (!cancelledRef.current) {
+                setResult({ valid: false, error: "Could not reach the verification service. Please try again." });
+            }
         } finally {
-            setVerifying(false);
+            if (!cancelledRef.current) setVerifying(false);
         }
     };
 
@@ -74,6 +90,20 @@ export default function VerifyIDPage() {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
             });
+            /**
+             *   #575 THE CAMERA COULD OUTLIVE THE PAGE.
+             *
+             *   The cleanup below calls stopCamera, which stops whatever is in
+             *   streamRef — so the ref is populated FIRST, before any further
+             *   await, and every path out of this function from here on either
+             *   leaves it for the cleanup or stops it itself.
+             *
+             *   It used to be assigned after two more awaits, so a person who
+             *   left the page while the browser was still asking for camera
+             *   permission got a stream handed to a component that no longer
+             *   existed, with nothing holding a reference to stop it. The camera
+             *   light stays on, on a phone, until the tab is closed.
+             */
             streamRef.current = stream;
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
@@ -84,6 +114,21 @@ export default function VerifyIDPage() {
 
             // Scan every 300ms
             const jsQR = (await import("jsqr")).default;
+
+            /**
+             *   #575 AND THE SCAN LOOP COULD BE ARMED AFTER THE PAGE HAD GONE.
+             *
+             *   This import is a network fetch. If the cleanup ran during it,
+             *   stopCamera had already cleared an interval that did not exist
+             *   yet — and then this line started one. A 300ms loop, drawing
+             *   frames from a dead video element, for the life of the tab, on a
+             *   component React had already unmounted.
+             */
+            if (cancelledRef.current) {
+                stopCamera();
+                return;
+            }
+
             scanIntervalRef.current = setInterval(() => {
                 const video = videoRef.current;
                 const canvas = canvasRef.current;
@@ -106,6 +151,22 @@ export default function VerifyIDPage() {
                 }
             }, 300);
         } catch (err: any) {
+            /**
+             *   #575 AND A FAILURE AFTER THE CAMERA OPENED LEFT IT OPEN.
+             *
+             *   Only getUserMedia was really expected to throw here, so the
+             *   catch just showed a message. But `videoRef.current.play()` and
+             *   the jsqr import both come AFTER the camera is already running,
+             *   and either can fail — an autoplay policy, a chunk that will not
+             *   download. The stream was live, `cameraActive` was already true,
+             *   and nothing stopped it: the page showed "Camera not available"
+             *   with the camera on.
+             *
+             *   stopCamera is idempotent — it clears refs it may not have set —
+             *   so this is safe on the permission-denied path too, where there
+             *   is nothing to stop.
+             */
+            stopCamera();
             setCameraError(err.name === "NotAllowedError"
                 ? "Camera permission denied. Please allow camera access and try again."
                 : "Camera not available. Use file upload instead."
@@ -123,11 +184,18 @@ export default function VerifyIDPage() {
         setScanStatus("");
     }, []);
 
-    useEffect(() => () => stopCamera(), [stopCamera]);
+    useEffect(() => {
+        cancelledRef.current = false;
+        return () => {
+            cancelledRef.current = true;
+            stopCamera();
+        };
+    }, [stopCamera]);
 
     // ── Image file upload ────────────────────────────────────────────────────────
     async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
+        const input = e.target;
+        const file = input.files?.[0];
         if (!file) return;
         setResult(null);
         setVerifying(true);
@@ -154,6 +222,25 @@ export default function VerifyIDPage() {
             logger.error("Failed to decode QR from image", err instanceof Error ? err : undefined);
             setResult({ valid: false, error: "Failed to process image." });
             setVerifying(false);
+        } finally {
+            /**
+             *   #576 THE SAME IMAGE COULD NOT BE TRIED TWICE.
+             *
+             *   A file input fires `change` only when the selection CHANGES.
+             *   This never cleared its value, so after a failed read — "No QR
+             *   code found", "Failed to process image", or a verification that
+             *   could not reach the server — picking the very same photograph
+             *   again did nothing at all. No spinner, no error, no reaction.
+             *
+             *   The person holding the ID card has one photograph of it. Being
+             *   told to choose a different file, or to reload the page, is the
+             *   whole of the workaround they were left with.
+             *
+             *   Cleared in `finally`, so a retry works after a success too — the
+             *   verifier is idempotent and a second look at the same card is a
+             *   reasonable thing to want.
+             */
+            input.value = "";
         }
         setScanStatus("");
     };
