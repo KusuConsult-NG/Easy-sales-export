@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 73;
+const CAP = 68;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -122,6 +122,12 @@ const CONVERTED = [
     'src/app/academy/live/[courseId]/page.tsx',
     'src/app/farm-nation/(member)/edit-property/[id]/page.tsx',
     'src/app/academy/certificate/[certificateId]/page.tsx',
+    //   #550 — batch 5.
+    'src/app/farm-nation/(member)/my-purchases/page.tsx',
+    'src/app/dashboard/disputes/new/page.tsx',
+    'src/app/farm-nation/checkout/[propertyId]/page.tsx',
+    'src/app/academy/(learner)/progress/page.tsx',
+    'src/app/export/(app)/portfolio/page.tsx',
     'src/app/farm-nation/(member)/dashboard/page.tsx',
     'src/app/cooperatives/(member)/dashboard/page.tsx',
     'src/app/export/(app)/dashboard/page.tsx',

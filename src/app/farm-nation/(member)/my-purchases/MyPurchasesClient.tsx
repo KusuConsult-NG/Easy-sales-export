@@ -1,0 +1,409 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import Image from "next/image";
+import {
+    ArrowLeft, MapPin, DollarSign, Calendar, AlertCircle, Loader2,
+    CheckCircle, Clock, XCircle, Download, Phone, Mail
+} from "lucide-react";
+import { getMyPurchaseRequestsAction, cancelPurchaseRequestAction } from "@/app/actions/farm-nation";
+import { useToast } from "@/contexts/ToastContext";
+import { formatLocalDate } from "@/lib/date-utils";
+
+interface PurchaseRequest {
+    id: string;
+    propertyId: string;
+    propertyName: string;
+    propertyPrice: number;
+    propertyType: "sale" | "lease";
+    propertyImages?: string[];
+    propertyLocation?: string;
+    sellerName: string;
+    sellerEmail?: string;
+    sellerPhone?: string;
+    status: "pending_payment" | "payment_confirmed" | "completed" | "cancelled";
+    escrowStatus: "pending" | "held" | "released" | "refunded";
+    createdAt: Date;
+}
+
+export default function MyPurchasesClient({ initial = null }: {
+    /**  #550 The purchase requests the server already fetched. */
+    initial?: PurchaseRequest[] | null;
+}) {
+    const router = useRouter();
+    const { data: session, status } = useSession();
+    const { showToast } = useToast();
+
+    const [purchases, setPurchases] = useState<PurchaseRequest[]>(initial ?? []);
+    const [loading, setLoading] = useState(initial === null);
+    const [error, setError] = useState<string | null>(null);
+    const [filterStatus, setFilterStatus] = useState<string>("all");
+
+    async function loadPurchases() {
+        if (!session?.user) return;
+
+        try {
+            const result = await getMyPurchaseRequestsAction();
+            if (result.success && result.data?.requests) {
+                // Cast to PurchaseRequest[] as the action returns generic objects
+                setPurchases(result.data.requests as unknown as PurchaseRequest[]);
+            }
+        } catch (error) {
+            logger.error("Failed to load purchases:", error);
+        }
+        setLoading(false);
+    }
+
+    async function handleCancelPurchase(requestId: string) {
+        if (!confirm("Are you sure you want to cancel this purchase request? This action cannot be undone.")) {
+            return;
+        }
+
+        try {
+            const result = await cancelPurchaseRequestAction(requestId);
+            if (result.success) {
+                showToast("Purchase cancelled successfully", "success");
+                loadPurchases();
+            } else {
+                showToast(result.error || "Failed to cancel purchase", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while cancelling purchase", "error");
+        }
+    }
+
+    function handleDownloadAgreement(purchase: PurchaseRequest) {
+        const agreementText = `
+LAND PURCHASE AGREEMENT
+
+Property: ${purchase.propertyName}
+Purchase Type: ${purchase.propertyType === "sale" ? "Sale" : "Lease"}
+Price: ₦${Number(purchase.propertyPrice || 0).toLocaleString()}
+Location: ${purchase.propertyLocation || "N/A"}
+
+BUYER INFORMATION:
+${session?.user?.name || "Unknown"}
+
+FARM OWNER INFORMATION:
+${purchase.sellerName}
+${purchase.sellerEmail ? `Email: ${purchase.sellerEmail}` : ""}
+${purchase.sellerPhone ? `Phone: ${purchase.sellerPhone}` : ""}
+
+Transaction Status: ${purchase.status.replace("_", " ").toUpperCase()}
+Escrow Status: ${purchase.escrowStatus.toUpperCase()}
+Date: ${purchase.createdAt.toLocaleDateString()}
+
+This document serves as a record of the purchase agreement initiated through Easy Sales Export platform.
+        `.trim();
+
+        const blob = new Blob([agreementText], { type: "text/plain" });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `agreement-${purchase.propertyName.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        showToast("Agreement downloaded successfully", "success");
+    }
+
+    useEffect(() => {
+        if (status === "unauthenticated") {
+            router.push("/auth/login");
+        } else if (status === "authenticated") {
+            //   #550 Already supplied by the server. `loadPurchases` stays: the
+            //   cancel handler calls it to refresh the list.
+            if (initial !== null) return;
+            loadPurchases();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status, session]);;
+
+    const filteredPurchases = purchases.filter(purchase => {
+        if (filterStatus === "all") return true;
+        return purchase.status === filterStatus;
+    });
+
+    const getStatusBadge = (status: string) => {
+        const styles = {
+            pending_payment: "bg-yellow-100 text-yellow-700",
+            payment_confirmed: "bg-blue-100 text-blue-700",
+            completed: "bg-green-100 text-green-700",
+            cancelled: "bg-red-100 text-red-700",
+        };
+
+        const icons = {
+            pending_payment: Clock,
+            payment_confirmed: CheckCircle,
+            completed: CheckCircle,
+            cancelled: XCircle,
+        };
+
+        const Icon = icons[status as keyof typeof icons] || Clock;
+
+        return (
+            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg font-semibold text-sm ${styles[status as keyof typeof styles]}`}>
+                <Icon className="w-4 h-4" />
+                {status.replace("_", " ").toUpperCase()}
+            </div>
+        );
+    };
+
+    const getEscrowBadge = (escrowStatus: string) => {
+        const styles = {
+            pending: "bg-slate-100 text-slate-900",
+            held: "bg-blue-100 text-blue-700",
+            released: "bg-green-100 text-green-700",
+            refunded: "bg-yellow-100 text-yellow-700",
+        };
+
+        return (
+            <span className={`px-2 py-1 rounded text-xs font-semibold ${styles[escrowStatus as keyof typeof styles]}`}>
+                Escrow: {escrowStatus.charAt(0).toUpperCase() + escrowStatus.slice(1)}
+            </span>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto mb-4" />
+                    <p className="text-slate-600">Loading your purchases...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-50 p-8">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <button
+                        onClick={() => router.push("/farm-nation")}
+                        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to Marketplace
+                    </button>
+                    <h1 className="text-4xl font-bold text-slate-900 mb-2">My Purchase Requests</h1>
+                    <p className="text-slate-600">Track your property acquisition requests</p>
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Total Requests</p>
+                        <p className="text-3xl font-bold text-slate-900">{purchases.length}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Pending Payment</p>
+                        <p className="text-3xl font-bold text-yellow-600">
+                            {purchases.filter(p => p.status === "pending_payment").length}
+                        </p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">In Progress</p>
+                        <p className="text-3xl font-bold text-blue-600">
+                            {purchases.filter(p => p.status === "payment_confirmed").length}
+                        </p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Completed</p>
+                        <p className="text-3xl font-bold text-green-600">
+                            {purchases.filter(p => p.status === "completed").length}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Filters */}
+                <div className="bg-white rounded-2xl p-4 mb-6 elevation-2">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-900">Filter:</span>
+                        {["all", "pending_payment", "payment_confirmed", "completed", "cancelled"].map((status) => (
+                            <button
+                                key={status}
+                                onClick={() => setFilterStatus(status)}
+                                className={`px-4 py-2 rounded-lg font-medium text-sm transition ${filterStatus === status
+                                    ? "bg-green-600 text-white"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                    }`}
+                            >
+                                {status === "all" ? "All" : status.replace("_", " ").toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Error Display */}
+                {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                        <p className="text-red-800">{error}</p>
+                    </div>
+                )}
+
+                {/* Purchases List */}
+                {filteredPurchases.length === 0 ? (
+                    <div className="bg-white rounded-2xl p-12 text-center elevation-2">
+                        <div className="max-w-md mx-auto">
+                            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <DollarSign className="w-12 h-12 text-slate-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
+                                {filterStatus === "all" ? "No Purchase Requests" : `No ${filterStatus.replace("_", " ")} Requests`}
+                            </h3>
+                            <p className="text-slate-600 mb-6">
+                                {filterStatus === "all"
+                                    ? "Browse available properties and make your first purchase request."
+                                    : `You don't have any requests with status "${filterStatus.replace("_", " ")}".`}
+                            </p>
+                            {filterStatus === "all" && (
+                                <button
+                                    onClick={() => router.push("/farm-nation")}
+                                    className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition"
+                                >
+                                    Browse Properties
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {filteredPurchases.map((purchase) => (
+                            <div
+                                key={purchase.id}
+                                className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift transition"
+                            >
+                                <div className="p-6">
+                                    <div className="flex items-start gap-6">
+                                        {/* Property Image */}
+                                        {purchase.propertyImages && purchase.propertyImages.length > 0 ? (
+                                            <div className="relative w-32 h-32 rounded-xl overflow-hidden shrink-0 bg-slate-200">
+                                                <Image
+                                                    src={purchase.propertyImages[0]}
+                                                    alt={purchase.propertyName}
+                                                    fill
+                                                    className="object-cover"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="w-32 h-32 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                                                <MapPin className="w-8 h-8 text-slate-400" />
+                                            </div>
+                                        )}
+
+                                        {/* Details */}
+                                        <div className="flex-1">
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-slate-900 mb-1">
+                                                        {purchase.propertyName}
+                                                    </h3>
+                                                    {purchase.propertyLocation && (
+                                                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                                                            <MapPin className="w-4 h-4" />
+                                                            <span>{purchase.propertyLocation}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {getStatusBadge(purchase.status)}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                                <div className="bg-slate-50 rounded-lg p-3">
+                                                    <p className="text-xs text-slate-600 mb-1">Amount</p>
+                                                    <p className="text-lg font-bold text-slate-900">
+                                                        ₦{Number(purchase.propertyPrice || 0).toLocaleString()}
+                                                    </p>
+                                                </div>
+
+                                                <div className="bg-slate-50 rounded-lg p-3">
+                                                    <p className="text-xs text-slate-600 mb-1">Type</p>
+                                                    <p className="text-lg font-bold text-slate-900 capitalize">
+                                                        {purchase.propertyType}
+                                                    </p>
+                                                </div>
+
+                                                <div className="bg-slate-50 rounded-lg p-3">
+                                                    <p className="text-xs text-slate-600 mb-1">Request Date</p>
+                                                    <p className="text-sm font-semibold text-slate-900">
+                                                        {formatLocalDate(purchase.createdAt)}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Seller Info */}
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                                <p className="text-xs font-semibold text-blue-800 mb-2">Farm Owner Information</p>
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                                    <div className="flex items-center gap-2 text-slate-900">
+                                                        <CheckCircle className="w-4 h-4 text-blue-600" />
+                                                        <span>{purchase.sellerName}</span>
+                                                    </div>
+                                                    {purchase.sellerEmail && (
+                                                        <div className="flex items-center gap-2 text-slate-900">
+                                                            <Mail className="w-4 h-4 text-blue-600" />
+                                                            <span>{purchase.sellerEmail}</span>
+                                                        </div>
+                                                    )}
+                                                    {purchase.sellerPhone && (
+                                                        <div className="flex items-center gap-2 text-slate-900">
+                                                            <Phone className="w-4 h-4 text-blue-600" />
+                                                            <span>{purchase.sellerPhone}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    {getEscrowBadge(purchase.escrowStatus)}
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    {purchase.status === "completed" && (
+                                                        <button
+                                                            onClick={() => handleDownloadAgreement(purchase)}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition"
+                                                        >
+                                                            <Download className="w-4 h-4" />
+                                                            Download Agreement
+                                                        </button>
+                                                    )}
+
+                                                    <button
+                                                        onClick={() => router.push(`/farm-nation/property/${purchase.propertyId}`)}
+                                                        className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm font-semibold rounded-lg transition"
+                                                    >
+                                                        View Property
+                                                    </button>
+
+                                                    {purchase.status === "pending_payment" && (
+                                                        <button
+                                                            onClick={() => handleCancelPurchase(purchase.id)}
+                                                            className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-semibold rounded-lg transition"
+                                                        >
+                                                            Cancel Request
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

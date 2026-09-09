@@ -227,7 +227,7 @@ describe('#439 — the rule is stated once, and cannot be restated', () => {
             'src/app/admin/farm-nation/listings/page.tsx',
             'src/app/export/(app)/products/MyExportProductsClient.tsx',
             'src/app/farm-nation/(member)/my-properties/page.tsx',
-            'src/app/farm-nation/checkout/[propertyId]/page.tsx',
+            'src/app/farm-nation/checkout/[propertyId]/CheckoutClient.tsx',
             'src/app/farm-nation/map/page.tsx',
             'src/app/farm-nation/page.tsx',
             'src/app/farm-nation/properties/page.tsx',
