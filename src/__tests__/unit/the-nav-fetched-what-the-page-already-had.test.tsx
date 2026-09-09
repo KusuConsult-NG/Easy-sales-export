@@ -76,10 +76,42 @@
  *   Three attempts to kill one mutant, and each attempt was a test that looked
  *   thorough. A mutant that survives is telling you what your check is actually
  *   asking.
+ *
+ * ── #540 THE HYDRATION WATERFALL, ON THE SCREEN IT COSTS MOST ───────────────
+ *
+ *   The browser received a dashboard of EMPTY TILES, downloaded the JS bundle,
+ *   hydrated, and only THEN made the round trip for the numbers. Four steps
+ *   before a user saw anything, three of them after the page already looked
+ *   loaded.
+ *
+ *   Both layouts mounting this provider are SERVER components already awaiting
+ *   their auth guard, so they now fetch the payload there and pass it in. The
+ *   first HTML the browser receives is populated, and the client's first poll
+ *   becomes a refresh one interval later rather than the thing standing between
+ *   the user and their data.
+ *
+ *   167 user-facing pages, 139 of them client components, 117 fetching on
+ *   mount. This fixes the waterfall on /dashboard and /messages and establishes
+ *   the pattern; it does NOT claim to have fixed the other 115. Converting them
+ *   wholesale is the change most likely to break a working screen, which is the
+ *   owner's standing objection to this codebase.
+ *
+ *     the seed still firing an immediate poll        KILLED (2 tests)
+ *     a seeded provider reporting "not loaded"       KILLED (1)
+ *     the layout passing null instead of the seed    KILLED (1)
+ *     polling disabled once seeded                   KILLED (8) — the vacuity
+ *                                                    control
+ *     the DASHBOARD seed dropped, summary kept       SURVIVED, then KILLED
+ *
+ *   THAT SURVIVOR AGAIN. The first-paint test read only the nav's value, and
+ *   the summary is seeded from EITHER payload — so dropping the dashboard seed
+ *   changed nothing, while the page's tiles would have been blank on first
+ *   paint. The probe reads a page value and a nav value now.
  */
 
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
+import { readFileSync } from 'fs';
 
 const mockUseSession = jest.fn();
 const m = {
@@ -333,6 +365,115 @@ describe('#539 — the REAL nav, not a stand-in for it', () => {
         expect(m.getMyUnreadMessageCount).not.toHaveBeenCalled();
         expect(m.getMyServiceRegistrations).not.toHaveBeenCalled();
         expect(m.getMyUnreadNotificationCount).not.toHaveBeenCalled();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#540 — the server hands the data over instead of the browser asking', () => {
+    /**
+     * THE HYDRATION WATERFALL, ON THE SCREEN IT COSTS MOST.
+     *
+     * The browser used to receive a dashboard of empty tiles, download the JS
+     * bundle, hydrate, and only THEN make the round trip for the numbers. Four
+     * steps before a user saw anything, three of them AFTER the page appeared
+     * to have loaded.
+     *
+     * Both layouts that mount this provider are server components already
+     * awaiting their auth guard, so they fetch the payload there and pass it
+     * in. What is asserted here is the part a screenshot cannot show: that the
+     * seeded provider renders the real values on its FIRST render, and does not
+     * immediately re-ask for what it was just given.
+     */
+    it('RENDERS THE REAL VALUES ON THE FIRST RENDER, BEFORE ANY FETCH', async () => {
+        const { NavSummaryProvider, useNavSummary } = await parts();
+
+        function Probe() {
+            const s = useNavSummary();
+            //   The PAGE's value (walletBalance, off `dashboard`) is read as
+            //   well as the NAV's (unreadMessages, off the summary).
+            //
+            //   Checking only the nav's let a mutant survive: dropping the
+            //   dashboard seed entirely changed no result, because the summary
+            //   is seeded from either payload. The tiles would have been blank
+            //   on first paint — the waterfall unfixed for the page — and this
+            //   test would have said it was fine.
+            return (
+                <div data-testid="probe">
+                    {s?.unreadMessages ?? -1}/{String(s?.loaded)}/{s?.dashboard?.walletBalance ?? -1}
+                </div>
+            );
+        }
+
+        render(
+            <NavSummaryProvider mode="full" userId="u1" initialDashboard={DASHBOARD_PAYLOAD as any}>
+                <Probe />
+            </NavSummaryProvider>,
+        );
+
+        //   Synchronously, with no waitFor: this is the whole point. A value
+        //   that only appeared after an await would be the waterfall again.
+        expect(screen.getByTestId('probe')).toHaveTextContent('3/true/1234');
+        expect(m.getMyDashboard).not.toHaveBeenCalled();
+    });
+
+    it('AND DOES NOT RE-ASK FOR WHAT THE SERVER JUST SENT', async () => {
+        //   A seed that still fired an immediate poll would remove the WAIT and
+        //   keep the REQUEST — half the fix, and the half that shows up in a
+        //   screenshot rather than on the server.
+        const { NavSummaryProvider } = await parts();
+
+        render(
+            <NavSummaryProvider mode="nav" userId="u1" initialSummary={NAV_PAYLOAD as any}>
+                <div />
+            </NavSummaryProvider>,
+        );
+        await act(async () => { await new Promise(r => setTimeout(r, 60)); });
+
+        expect(m.getMyNavSummary).not.toHaveBeenCalled();
+    });
+
+    it('AND STILL REFRESHES ON THE INTERVAL AFTERWARDS', async () => {
+        //   The vacuity guard: a seed that disabled polling entirely passes both
+        //   tests above and freezes every badge for the life of the page.
+        const { NavSummaryProvider } = await parts();
+
+        render(
+            <NavSummaryProvider
+                mode="nav" userId="u1" intervalMs={50} initialSummary={NAV_PAYLOAD as any}
+            >
+                <div />
+            </NavSummaryProvider>,
+        );
+
+        await waitFor(() => expect(m.getMyNavSummary).toHaveBeenCalled());
+    });
+
+    it('AND FALLS BACK TO FETCHING WHEN THE SERVER COULD NOT SUPPLY IT', async () => {
+        //   Both layouts pass null if their server fetch threw. The screen must
+        //   then behave exactly as it did before this change rather than render
+        //   a permanently empty nav.
+        const { NavSummaryProvider } = await parts();
+
+        render(
+            <NavSummaryProvider mode="nav" userId="u1" initialSummary={null}>
+                <div />
+            </NavSummaryProvider>,
+        );
+
+        await waitFor(() => expect(m.getMyNavSummary).toHaveBeenCalledTimes(1));
+    });
+
+    it('AND BOTH LAYOUTS ACTUALLY DO THE SERVER FETCH', () => {
+        //   The two tests above prove the provider USES a seed. This proves one
+        //   is given — without it the feature is correct and unreachable, which
+        //   is the shape this audit keeps finding.
+        const dash = readFileSync('src/app/dashboard/layout.tsx', 'utf-8');
+        const msgs = readFileSync('src/app/messages/layout.tsx', 'utf-8');
+
+        expect(dash).toContain('await getMyDashboard()');
+        expect(dash).toContain('initialDashboard={initialDashboard}');
+        expect(msgs).toContain('await getMyNavSummary()');
+        expect(msgs).toContain('initialSummary={initialSummary}');
     });
 });
 

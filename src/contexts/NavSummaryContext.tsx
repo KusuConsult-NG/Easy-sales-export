@@ -69,16 +69,48 @@ export function NavSummaryProvider({
     mode,
     userId,
     intervalMs = 8000,
+    initialDashboard = null,
+    initialSummary = null,
     children,
 }: {
     mode: "full" | "nav";
     userId: string | undefined;
     intervalMs?: number;
+    /**
+     *   #540 THE DATA THE SERVER ALREADY HAD, HANDED OVER INSTEAD OF FETCHED
+     *        AGAIN.
+     *
+     *   Both layouts that mount this provider are SERVER components — they
+     *   already await requireHubRegistration() before any HTML is sent. They
+     *   can therefore fetch this payload on the server and pass it in, so the
+     *   first HTML the browser receives is already populated.
+     *
+     *   Without it the sequence was: HTML with empty tiles -> download the JS
+     *   bundle -> hydrate -> THEN make the round trip -> repaint. Four steps
+     *   before a user saw a single number, three of which happen after the
+     *   page has already appeared to load.
+     *
+     *   When a seed is given the poll starts with `immediate: false`, because
+     *   refetching what the server just sent would be the same round trip this
+     *   removes.
+     */
+    initialDashboard?: MyDashboard | null;
+    initialSummary?: MyNavSummary | null;
     children: React.ReactNode;
 }) {
-    const [summary, setSummary] = useState<MyNavSummary>(EMPTY);
-    const [dashboard, setDashboard] = useState<MyDashboard | null>(null);
-    const [loaded, setLoaded] = useState(false);
+    const seeded = initialDashboard ?? initialSummary;
+
+    const [summary, setSummary] = useState<MyNavSummary>(
+        seeded
+            ? {
+                serviceRegistrations: seeded.serviceRegistrations,
+                unreadNotifications: seeded.unreadNotifications,
+                unreadMessages: seeded.unreadMessages,
+            }
+            : EMPTY,
+    );
+    const [dashboard, setDashboard] = useState<MyDashboard | null>(initialDashboard);
+    const [loaded, setLoaded] = useState(seeded !== null);
 
     usePolling(async () => {
         if (!userId) return;
@@ -102,7 +134,13 @@ export function NavSummaryProvider({
         } finally {
             setLoaded(true);
         }
-    }, intervalMs, { enabled: !!userId, restartKey: `${mode}:${userId ?? ""}` });
+    }, intervalMs, {
+        enabled: !!userId,
+        //   Seeded from the server: the first poll is a REFRESH, due one
+        //   interval from now, not a fetch of something we already have.
+        immediate: seeded === null,
+        restartKey: `${mode}:${userId ?? ""}`,
+    });
 
     const value = useMemo<NavSummaryValue>(() => ({
         serviceRegistrations: summary.serviceRegistrations,

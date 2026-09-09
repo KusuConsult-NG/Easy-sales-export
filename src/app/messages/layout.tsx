@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireHubRegistration } from "@/lib/hub-guard";
 import DashboardNav from "@/components/dashboard/DashboardNav";
 import { NavSummaryProvider } from "@/contexts/NavSummaryContext";
+import { getMyNavSummary } from "@/app/actions/my-data";
 
 export default async function MessagesLayout({
     children,
@@ -14,6 +15,11 @@ export default async function MessagesLayout({
         redirect("/auth/login?callbackUrl=/messages");
     }
 
+    //   #540 Same as the dashboard layout: fetched on the server so the nav
+    //   badges are already in the HTML rather than appearing a round trip after
+    //   hydration.
+    const initialSummary = await getMyNavSummary().catch(() => null);
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
             {/*
@@ -22,7 +28,11 @@ export default async function MessagesLayout({
                 badges need — three queries, not the dashboard's eight. Three
                 round trips become one.
             */}
-            <NavSummaryProvider mode="nav" userId={sessionResult.session?.user?.id}>
+            <NavSummaryProvider
+                mode="nav"
+                userId={sessionResult.session?.user?.id}
+                initialSummary={initialSummary}
+            >
                 {/* Shared Dashboard Navigation */}
                 <DashboardNav />
 
