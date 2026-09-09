@@ -302,14 +302,31 @@ describe('#340 — every public reader of this collection now shares one rule', 
     it('all four call the shared strip', () => {
         // The ratchet. A fifth reader that spreads a listing without this is the
         // defect coming back under a new name.
+        //
+        //   #562 The listings ROUTE is no longer one of the four readers — its
+        //   body moved to lib/land-listings-reader so that /land and
+        //   /farm-nation/map could read it on the server rather than fetching
+        //   the route from the browser. The reader takes its place here, and
+        //   the route is checked below for having kept no second copy.
         for (const file of [
-            'src/app/api/farm-nation/listings/route.ts',
+            'src/lib/land-listings-reader.ts',
             'src/app/actions/land-actions.ts',
             'src/app/actions/land-listings.ts',
             'src/app/actions/farm-nation/_fn_listings.ts',
         ]) {
             expect(source(file)).toContain('stripInternalLandFields');
         }
+    });
+
+    it('and the route delegates rather than keeping its own copy', () => {
+        //   The half of the extraction that could go wrong. A handler that
+        //   still built its own listing objects would have the stripping rule
+        //   in a fifth place, which is exactly what the ratchet above exists to
+        //   prevent.
+        const handler = source('src/app/api/farm-nation/listings/route.ts');
+
+        expect(handler).toContain('readPublicLandListings');
+        expect(handler).not.toContain('COLLECTIONS.LAND_LISTINGS');
     });
 
     it('and both actions named getPropertyByIdAction check viewability', () => {

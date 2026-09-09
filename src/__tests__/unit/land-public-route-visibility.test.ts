@@ -70,7 +70,18 @@ function codeOnly(src: string): string {
         .join('\n');
 }
 
-const route = source('src/app/api/farm-nation/listings/route.ts');
+/**
+ *   #562 The route's BODY moved to lib/land-listings-reader, so that /land and
+ *   /farm-nation/map could read it on the server instead of fetching the route
+ *   from the browser after the page had already been rendered.
+ *
+ *   The checks below read the reader, not the handler, and that is not a
+ *   weakening: it is the same code, and it now has three callers instead of
+ *   one, so an assertion on it covers more than it did. The route is still read
+ *   separately, to prove it did not keep a second copy of the query.
+ */
+const route = source('src/lib/land-listings-reader.ts');
+const handler = source('src/app/api/farm-nation/listings/route.ts');
 const actions = source('src/app/actions/land-actions.ts');
 
 const LISTING = {
@@ -186,11 +197,35 @@ describe('one definition of publicly visible', () => {
 });
 
 describe('what the public pages still get', () => {
-    it('both pages call this route', () => {
-        // The premise. If either stops, the exposure changes and so does the
-        // argument above.
-        expect(source('src/app/land/page.tsx')).toContain('/api/farm-nation/listings');
-        expect(source('src/app/farm-nation/map/page.tsx')).toContain('/api/farm-nation/listings');
+    it('both pages get exactly what this reader produces', () => {
+        // The premise. If either page found another way to the listings, the
+        // exposure would change and so would the argument above.
+        //
+        //   #562 Each page is now a server half that calls the shared reader
+        //   and a client half that still falls back to the HTTP route. Both
+        //   paths end at the same function, which is a stronger premise than
+        //   "both call the route" was — there is no longer a second copy of the
+        //   query for one of them to drift onto.
+        for (const server of ['src/app/land/page.tsx', 'src/app/farm-nation/map/page.tsx']) {
+            expect({ server, reads: source(server).includes('readPublicLandListings') })
+                .toEqual({ server, reads: true });
+        }
+        for (const client of [
+            'src/app/land/LandMapClient.tsx',
+            'src/app/farm-nation/map/FarmNationMapClient.tsx',
+        ]) {
+            expect({ client, fallsBack: source(client).includes('/api/farm-nation/listings') })
+                .toEqual({ client, fallsBack: true });
+        }
+    });
+
+    it('and the route kept no second copy of the query', () => {
+        //   The whole point of the extraction. A handler that still built its
+        //   own listing objects would be the two-copies-of-one-contract defect
+        //   this audit keeps finding, with the stripping rule in one of them.
+        expect(handler).toContain('readPublicLandListings');
+        expect(handler).not.toContain('stripInternalLandFields');
+        expect(handler).not.toContain('PUBLIC_LAND_STATUSES');
     });
 
     it('price normalisation is unchanged', () => {

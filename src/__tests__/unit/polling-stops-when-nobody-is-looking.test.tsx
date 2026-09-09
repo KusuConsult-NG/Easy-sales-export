@@ -328,7 +328,7 @@ describe('#538 — no poller goes back to a bare setInterval', () => {
         'src/app/verify-id/page.tsx',
         'src/app/wave/landing/page.tsx',
         'src/app/cooperatives/payment/callback/page.tsx',
-        'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx',
+        'src/app/academy/[courseId]/quiz/[moduleId]/QuizClient.tsx',
     ]);
 
     /**

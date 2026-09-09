@@ -54,7 +54,7 @@ import { stripComments } from '@/lib/testing/strip-comments';
 const ROOT = process.cwd();
 const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8'), { label: rel });
 
-const APPLICATION = 'src/app/academy/application/page.tsx';
+const APPLICATION = 'src/app/academy/application/AcademyApplicationClient.tsx';
 const LAYOUT = 'src/app/academy/(learner)/layout.tsx';
 const SETUP = 'src/app/academy/setup/AcademySetupClient.tsx';
 const DASHBOARD = 'src/app/academy/dashboard/page.tsx';

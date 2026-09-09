@@ -3,9 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
-import { isRetired } from "@/lib/record-retirement";
+import { readUploadedCertificates } from "@/lib/certificates-reader";
 
 /**
  * GET - List user's certificates
@@ -21,23 +19,13 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // List certificates (Admin SDK)
-        const snapshot = await db.collection(COLLECTIONS.USER_CERTIFICATES)
-            .where("userId", "==", session.user.id)
-            .get();
-
-        // #303 A certificate the member removed leaves this list. The row and
-        // the stored file both survive — see the DELETE route — so the filter
-        // here is what makes "removed" mean removed to the person who asked.
-        const certificates = snapshot.docs.filter(doc => !isRetired(doc.data())).map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                uploadedAt: data.uploadedAt?.toDate?.()?.toISOString?.() ?? data.uploadedAt ?? null,
-                createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt ?? null,
-            };
-        });
+        //   #562 The body moved to lib/certificates-reader so
+        //   /dashboard/certificates can read it on the SERVER instead of
+        //   fetching this route from the browser after the page had already
+        //   been rendered. #303's rule — a certificate the member removed
+        //   leaves this list, while the row and the file both survive — moved
+        //   with it, unaltered.
+        const certificates = await readUploadedCertificates(session.user.id);
 
         return NextResponse.json({
             success: true,

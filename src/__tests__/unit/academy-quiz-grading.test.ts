@@ -227,7 +227,7 @@ describe('the score is not accepted from the caller', () => {
     it('neither screen grades in the browser', () => {
         for (const file of [
             'src/components/academy/QuizComponent.tsx',
-            'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx',
+            'src/app/academy/[courseId]/quiz/[moduleId]/QuizClient.tsx',
         ]) {
             const code = codeOnly(source(file));
 
@@ -260,7 +260,7 @@ describe('the score is not accepted from the caller', () => {
         // server's answer leaves the learner with no score at all.
         for (const file of [
             'src/components/academy/QuizComponent.tsx',
-            'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx',
+            'src/app/academy/[courseId]/quiz/[moduleId]/QuizClient.tsx',
         ]) {
             expect(source(file)).toContain('result.data.score');
         }
@@ -341,7 +341,7 @@ describe('maxAttempts is enforced, having been enforced nowhere', () => {
         // a limit to a real quiz. The live one has no such code; this one has no
         // data. Adding one to the live path would change what a learner may do,
         // which is a product decision and not an audit's.
-        const learner = source('src/app/academy/[courseId]/quiz/[moduleId]/page.tsx');
+        const learner = source('src/app/academy/[courseId]/quiz/[moduleId]/QuizClient.tsx');
 
         expect(learner).not.toMatch(/maxAttempts/);
         expect(readFileSync(join(process.cwd(), 'src/lib/academy-quiz-api.ts'), 'utf-8'))

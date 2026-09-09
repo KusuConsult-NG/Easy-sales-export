@@ -48,7 +48,7 @@ const SUBMIT = 'src/app/actions/academy/_ac_applications.ts';
 const ADMIN_LIST = 'src/app/actions/academy/_ac_admin_applications.ts';
 const ADMIN_REVIEW = 'src/app/actions/academy/_ac_admin_review.ts';
 const ENROLMENT = 'src/app/actions/academy/_ac_enrollment.ts';
-const FORM = 'src/app/academy/application/page.tsx';
+const FORM = 'src/app/academy/application/AcademyApplicationClient.tsx';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');

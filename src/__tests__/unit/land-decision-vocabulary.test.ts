@@ -354,7 +354,7 @@ describe('readers of "for sale" agree with the writers', () => {
         // fallback, next to a `status === "verified"` that missed two of the three
         // for-sale spellings. So the map showed a strict subset of what /land
         // showed, from the same HTTP response.
-        const src = code('src/app/farm-nation/map/page.tsx');
+        const src = code('src/app/farm-nation/map/FarmNationMapClient.tsx');
 
         expect(src).not.toContain('verificationStatus === "verified"');
         expect(src).toContain('isPurchasable(l.status)');

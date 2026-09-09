@@ -74,7 +74,18 @@ const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: relative(ROOT, p) });
 
 const PURCHASE = 'src/app/actions/academy/_ac_course_payment.ts';
-const CERTS = 'src/app/api/academy/certificates/route.ts';
+/**
+ *   #562 The route's BODY moved to lib/certificates-reader, so that
+ *   /dashboard/certificates could read it on the server instead of fetching
+ *   this route from the browser after the page had already been rendered.
+ *
+ *   Every check below now reads the reader. That is not a weakening: it is the
+ *   same code, with two callers instead of one, so an assertion on it covers
+ *   more than it did. The route is read separately, to prove it kept no second
+ *   copy of the query it used to own.
+ */
+const CERTS = 'src/lib/certificates-reader.ts';
+const CERTS_ROUTE_FILE = 'src/app/api/academy/certificates/route.ts';
 const SHARED = 'src/lib/academy-course-progress.ts';
 
 const LEARNER = 'learner-1';
@@ -184,6 +195,17 @@ describe('#424 — the record completion is keyed on gets created', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#425 — the certificates list reads where completion is written', () => {
+    it('and the route kept no second copy of the query', () => {
+        //   The half of #562's extraction that could go wrong: a handler still
+        //   building its own certificate list would put #425's finding back in
+        //   two places, one of which nothing checks.
+        const handler = code(CERTS_ROUTE_FILE);
+
+        expect(handler).toContain('readAcademyCertificates');
+        expect(handler).not.toContain('COLLECTIONS.COURSE_PROGRESS');
+        expect(handler).not.toContain('COLLECTIONS.WAVE_CERTIFICATES');
+    });
+
     it('IT QUERIES course_progress FOR completed === true', () => {
         const src = code(CERTS);
         expect(src).toMatch(/collection\(COLLECTIONS\.COURSE_PROGRESS\)/);

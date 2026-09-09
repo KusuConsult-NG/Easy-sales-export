@@ -135,8 +135,15 @@ describe('#303 — a removed certificate still looks removed', () => {
         expect(code(CERT_ACTION)).toMatch(/COLLECTIONS\.CERTIFICATES/);
         expect(code(CERT_ACTION)).toMatch(/isRetired\(/);
 
-        expect(code('src/app/api/certificates/route.ts')).toMatch(/COLLECTIONS\.USER_CERTIFICATES/);
-        expect(code('src/app/api/certificates/route.ts')).toMatch(/filter\(doc => !isRetired\(doc\.data\(\)\)\)/);
+        //   #562 The route's body moved to lib/certificates-reader so
+        //   /dashboard/certificates could read it on the server rather than
+        //   fetching its own application over HTTP. #303's filter moved with
+        //   it, and is asserted where it now lives — plus the route is checked
+        //   for having kept no second, unfiltered copy of the listing.
+        expect(code('src/lib/certificates-reader.ts')).toMatch(/COLLECTIONS\.USER_CERTIFICATES/);
+        expect(code('src/lib/certificates-reader.ts')).toMatch(/filter\(doc => !isRetired\(doc\.data\(\)\)\)/);
+        expect(code('src/app/api/certificates/route.ts')).toMatch(/readUploadedCertificates/);
+        expect(code('src/app/api/certificates/route.ts')).not.toMatch(/COLLECTIONS\.USER_CERTIFICATES/);
     });
 
     it('AND THE DOWNLOAD REFUSES IT', () => {

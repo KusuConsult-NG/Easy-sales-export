@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 23;
+const CAP = 18;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -158,6 +158,13 @@ const CONVERTED = [
     'src/app/cooperatives/(member)/my-loans/page.tsx',
     'src/app/marketplace/onboarding/page.tsx',
     'src/app/farm-nation/onboarding/page.tsx',
+    //   #562 — batch 15. The first four API-route self-fetchers, each read
+    //   through a reader shared with the route rather than over HTTP.
+    'src/app/land/page.tsx',
+    'src/app/farm-nation/map/page.tsx',
+    'src/app/dashboard/certificates/page.tsx',
+    'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx',
+    'src/app/academy/application/page.tsx',
     //   #560 — batch 14.
     'src/app/cooperatives/payment/page.tsx',
     'src/app/marketplace/seller/products/[id]/edit/page.tsx',
@@ -219,6 +226,16 @@ const UNWRAP_INLINE_CAP = 16;
  *   list that goes stale fails instead of quietly reading as deliberate (#484).
  */
 const NOT_CONVERTIBLE: { page: string; because: string }[] = [
+    {
+        page: 'src/app/wave/(member)/dashboard/page.tsx',
+        because: 'gated on membershipStatus resolved in the browser — #543 kept it '
+            + 'client-fetched on purpose and parallelised its reads instead',
+    },
+    {
+        page: 'src/app/academy/dashboard/page.tsx',
+        because: 'gated on membership and payment state resolved in the browser — same '
+            + 'deliberate exclusion as WAVE, recorded in #543',
+    },
     {
         page: 'src/app/wave/briefing/page.tsx',
         because: 'no read on mount at all — the action call is an offline-sync WRITE '
@@ -372,11 +389,20 @@ describe('#545 — the waterfall that is left is counted', () => {
         //   of 93 is satisfied by finding none.
         const pages = pagesThatFetchAfterHydration();
 
-        //   #554 Lowered from 50 as the ledger was worked down — it is a guard
-        //   against a scan pointed at nothing, not a second cap, and leaving it
-        //   at 50 would have made THIS test fail as the real number improved.
-        //   Kept well below the current count so it still catches a broken scan.
-        expect(pages.length).toBeGreaterThan(20);
+        /**
+         *   THE FLOOR IS DERIVED NOW, NOT GUESSED.
+         *
+         *   This was a literal — 50, then 20 — and it went stale TWICE as the
+         *   ledger was worked down, failing for a change that improved things.
+         *   A guard that has to be edited every few batches is a guard people
+         *   learn to edit rather than obey.
+         *
+         *   So it is tied to something that cannot shrink: the pages recorded
+         *   below as never coming off this ledger. Every one of them matches
+         *   the scan by construction, so a scan pointed at nothing fails here,
+         *   and the number moves only when that list does.
+         */
+        expect(pages.length).toBeGreaterThanOrEqual(NOT_CONVERTIBLE.length);
         expect(pages.every(p => p.startsWith('src/app/'))).toBe(true);
         expect(pages.every(p => p.endsWith('page.tsx'))).toBe(true);
     });

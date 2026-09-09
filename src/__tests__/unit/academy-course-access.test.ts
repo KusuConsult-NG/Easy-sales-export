@@ -186,7 +186,7 @@ describe('the links that went nowhere', () => {
      *        being deleted — which is the stronger position anyway: they now
      *        guard the screen a learner is actually graded on.
      */
-    const LIVE_QUIZ = 'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx';
+    const LIVE_QUIZ = 'src/app/academy/[courseId]/quiz/[moduleId]/QuizClient.tsx';
 
     it('and a graded quiz does not push the learner to a 404', () => {
         const src = source(LIVE_QUIZ);

@@ -190,7 +190,7 @@ describe('#492 — and the other seven answer "could not read" before "nothing t
             'if (!event) {',
         ],
         [
-            'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx',
+            'src/app/academy/[courseId]/quiz/[moduleId]/QuizClient.tsx',
             'if (loadError) {',
             'if (!course || !currentModule || !quiz) {',
         ],

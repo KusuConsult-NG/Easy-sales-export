@@ -129,7 +129,7 @@ describe('the URL branch names this account, not just Cloudinary', () => {
 
 describe('which certificate path the product actually uses', () => {
     it('the dashboard posts to the route, not the action', () => {
-        expect(source('src/app/dashboard/certificates/page.tsx'))
+        expect(source('src/app/dashboard/certificates/CertificatesClient.tsx'))
             .toContain('fetch("/api/certificates/upload"');
     });
 

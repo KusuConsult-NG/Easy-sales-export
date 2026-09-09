@@ -47,7 +47,18 @@ const RESOURCE_ACTIONS = 'src/app/actions/resource-actions.ts';
 const MEMBER_RESOURCES = 'src/app/actions/wave/_wv_resources.ts';
 const CERTIFICATES = 'src/app/actions/wave/_wv_certificates.ts';
 const VERIFY_ROUTE = 'src/app/api/academy/verify/[certificateId]/route.ts';
-const CERTS_ROUTE = 'src/app/api/academy/certificates/route.ts';
+/**
+ *   #562 The route's BODY moved to lib/certificates-reader, so that
+ *   /dashboard/certificates could read it on the server instead of fetching
+ *   this route from the browser after the page had already been rendered.
+ *
+ *   Every check below now reads the reader. That is not a weakening: it is the
+ *   same code, with two callers instead of one, so an assertion on it covers
+ *   more than it did. The route is read separately, to prove it kept no second
+ *   copy of the query it used to own.
+ */
+const CERTS_ROUTE = 'src/lib/certificates-reader.ts';
+const CERTS_ROUTE_ROUTE_FILE = 'src/app/api/academy/certificates/route.ts';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');
@@ -245,6 +256,17 @@ describe('the verification link resolves', () => {
 });
 
 describe('the unified certificates endpoint reads the fields the writer writes', () => {
+    it('and the route kept no second copy of the query', () => {
+        //   #562's extraction, checked in the direction it could fail: a
+        //   handler still reading wave_certificates itself would restore the
+        //   four-disagreeing-field-names defect in a place this suite does not
+        //   look at.
+        const handler = source(CERTS_ROUTE_ROUTE_FILE);
+
+        expect(handler).toContain('readAcademyCertificates');
+        expect(handler).not.toContain('COLLECTIONS.WAVE_CERTIFICATES');
+    });
+
     it('queries both id fields, because live rows use only one', () => {
         // It queried `userId` while the writer stored `memberId`, so the branch
         // returned nothing at all.

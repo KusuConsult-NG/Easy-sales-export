@@ -288,7 +288,7 @@ describe('#386 — what was deliberately NOT carried across', () => {
         // mentions attempts nowhere — so adding one would change what a learner
         // is allowed to do rather than repair a broken promise. Stated in
         // lib/academy-quiz-api.ts rather than left implied.
-        const learner = code('src/app/academy/[courseId]/quiz/[moduleId]/page.tsx');
+        const learner = code('src/app/academy/[courseId]/quiz/[moduleId]/QuizClient.tsx');
 
         expect(learner).not.toMatch(/attempt/i);
         // Matched on a phrase that does not straddle the comment's line wrap.

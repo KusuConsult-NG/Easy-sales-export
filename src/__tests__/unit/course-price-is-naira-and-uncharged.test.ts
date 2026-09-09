@@ -121,7 +121,7 @@ describe('#368 — the course price is shown in the currency it is charged in', 
     it("and academy's own application page already wrote plan fees in Naira", () => {
         // The inconsistency was inside one module, not between the platform and
         // a deliberate USD surface.
-        expect(readFileSync(join(ROOT, 'src/app/academy/application/page.tsx'), 'utf-8'))
+        expect(readFileSync(join(ROOT, 'src/app/academy/application/AcademyApplicationClient.tsx'), 'utf-8'))
             .toContain('Pay ₦');
     });
 
