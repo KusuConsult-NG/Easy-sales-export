@@ -17,6 +17,7 @@ import { useToast } from "@/contexts/ToastContext";
 // service: this is a "use client" file, and importing the service pulled
 // supabase-db into the client bundle. #382's ratchet caught it.
 import { isNotificationVisible, getVisibleFilterTabs, NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
+import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 
 /* ──────────────────────────────────────────────────────────────
  * Types
@@ -157,11 +158,12 @@ export default function NotificationsPage() {
             }
         };
 
-        load();
-        const interval = setInterval(load, 8000);
+        //   #545 Paused while the tab is hidden — see hooks/usePolling. This
+        //   was one of the five user-facing pollers #538 listed as debt.
+        const stopPolling = startVisibilityAwareInterval(load, 8000);
         return () => {
             cancelled = true;
-            clearInterval(interval);
+            stopPolling();
         };
     }, [userId, status, router, pageSize]);
 

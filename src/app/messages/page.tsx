@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { isSessionExpired } from '@/lib/session-expiry-code';
@@ -44,6 +45,15 @@ export default function MessagesPage() {
      */
     const [listError, setListError] = useState<string | null>(null);
 
+    /**
+     *   #544 The ids of the messages last seen, in order.
+     *
+     *   Drives BOTH the "did anything change" decision and the scroll, so the
+     *   read receipt and the scroll cannot disagree about what is new. A ref
+     *   rather than state because changing it must not itself cause a render.
+     */
+    const lastSeenRef = useRef<string | null>(null);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -76,12 +86,13 @@ export default function MessagesPage() {
             }
         }
 
-        fetchConversations();
-        const interval = setInterval(fetchConversations, 8000); // Poll every 8 seconds
+        //   #544 Paused while the tab is hidden, like every other poller —
+        //   see hooks/usePolling.
+        const stopPolling = startVisibilityAwareInterval(fetchConversations, 8000);
 
         return () => {
             isMounted = false;
-            clearInterval(interval);
+            stopPolling();
         };
     }, [userId]);
 
@@ -93,39 +104,68 @@ export default function MessagesPage() {
         }
 
         let isMounted = true;
+
+        //   #544 A NEW CONVERSATION IS ALWAYS "CHANGED", so opening one still
+        //   clears its badge on the first poll.
+        lastSeenRef.current = null;
+
         async function loadMessages() {
             try {
                 const result = await getMessagesAction(selectedConv!);
-                if (isMounted && result.messages) {
-                    // Sort chronologically
-                    const sorted = [...result.messages].sort((a, b) => {
-                        // toMillis handles both shapes. This was
-                        // new Date(x.timestamp).getTime(), which is NaN when
-                        // the value is a Timestamp object rather than the ISO
-                        // string serializeDocs produces — and a comparator
-                        // returning NaN leaves the order undefined.
-                        return toMillis(a.timestamp) - toMillis(b.timestamp);
-                    });
+                if (!isMounted || !result.messages) return;
 
-                    setMessages(prev => {
-                        if (JSON.stringify(prev) !== JSON.stringify(sorted)) {
-                            const shouldScroll = prev.length !== sorted.length || 
-                                (prev.length > 0 && prev[prev.length - 1].id !== sorted[sorted.length - 1].id);
-                            if (shouldScroll) {
-                                setTimeout(scrollToBottom, 50);
-                            }
-                            return sorted;
-                        }
-                        return prev;
-                    });
-                }
+                // Sort chronologically
+                const sorted = [...result.messages].sort((a, b) => {
+                    // toMillis handles both shapes. This was
+                    // new Date(x.timestamp).getTime(), which is NaN when
+                    // the value is a Timestamp object rather than the ISO
+                    // string serializeDocs produces — and a comparator
+                    // returning NaN leaves the order undefined.
+                    return toMillis(a.timestamp) - toMillis(b.timestamp);
+                });
 
-                // Mark as read. The result was discarded entirely; a refusal
-                // left the badge showing unread with nothing anywhere saying
-                // why. Not a toast — this runs every three seconds.
-                const readResult = await markAsReadAction(selectedConv!);
-                if (readResult?.error) {
-                    console.error("[messages] the conversation was not marked read:", readResult.error);
+                /**
+                 *   #544 THE READ RECEIPT WAS WRITTEN EVERY THREE SECONDS
+                 *        WHETHER ANYTHING HAD ARRIVED OR NOT.
+                 *
+                 *   markAsReadAction was called unconditionally on every tick.
+                 *   messagingService.markAsRead reads the conversation document
+                 *   and then UPDATES it — so an open chat performed twenty
+                 *   document reads and TWENTY WRITES a minute, for ever, saying
+                 *   the same thing each time. In a background tab too, because
+                 *   nothing paused the poll.
+                 *
+                 *   A read receipt only means something when something has been
+                 *   read. The signature is the message ids in order: it changes
+                 *   when a message arrives, is edited or is removed, and does
+                 *   not change when the answer is identical — which it is, on
+                 *   nineteen ticks out of twenty in a quiet conversation.
+                 *
+                 *   Comparing ids rather than JSON.stringify of the whole list
+                 *   also stops a server-side timestamp being re-serialised a
+                 *   hair differently from counting as "new messages arrived".
+                 */
+                const signature = sorted.map(m => m.id).join("|");
+                const changed = lastSeenRef.current !== signature;
+
+                if (changed) {
+                    const previous = lastSeenRef.current;
+                    lastSeenRef.current = signature;
+                    setMessages(sorted);
+
+                    //   Scroll only when the thread actually grew or its last
+                    //   message changed — not on every re-render.
+                    const previousIds = previous === null ? [] : previous.split("|").filter(Boolean);
+                    const shouldScroll = previousIds.length !== sorted.length
+                        || (sorted.length > 0 && previousIds[previousIds.length - 1] !== sorted[sorted.length - 1].id);
+                    if (shouldScroll) setTimeout(scrollToBottom, 50);
+
+                    // The result was discarded entirely; a refusal left the
+                    // badge showing unread with nothing anywhere saying why.
+                    const readResult = await markAsReadAction(selectedConv!);
+                    if (readResult?.error) {
+                        console.error("[messages] the conversation was not marked read:", readResult.error);
+                    }
                 }
             } catch (err) {
                 console.error("Messages page messages poll failed:", err);
@@ -134,12 +174,14 @@ export default function MessagesPage() {
             }
         }
 
-        loadMessages();
-        const interval = setInterval(loadMessages, 3000); // Poll every 3 seconds for messages
+        //   #544 Three seconds is right for an open chat and wrong for a tab
+        //   nobody is looking at. The shared primitive stops it while hidden
+        //   and catches up the moment it is looked at again.
+        const stopPolling = startVisibilityAwareInterval(loadMessages, 3000);
 
         return () => {
             isMounted = false;
-            clearInterval(interval);
+            stopPolling();
         };
     }, [selectedConv, userId]);
 

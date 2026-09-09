@@ -341,11 +341,12 @@ describe('#538 — no poller goes back to a bare setInterval', () => {
      * sweep can still fail.
      */
     const STILL_HAND_ROLLED = new Set([
-        'src/app/messages/page.tsx',
-        'src/app/escrow/[id]/chat/page.tsx',
-        'src/app/dashboard/disputes/page.tsx',
-        'src/app/dashboard/notifications/page.tsx',
-        'src/app/wave/(member)/live-training/page.tsx',
+        //   #544 and #545 emptied this of user-facing screens. Every entry that
+        //   was here — the messages page's two pollers, the escrow chat, the
+        //   disputes list, the notifications list and the live-training
+        //   refresh — is on the shared primitive now. What is left is admin
+        //   only, and the LEDGER IS HONEST test below fails if a listed file
+        //   stops polling, so this list cannot quietly become decoration.
         //   Admin screens. Same defect, smaller blast radius — a handful of
         //   staff rather than every member — so they are recorded and left for
         //   the admin pass rather than changed in a user-facing fix.
@@ -424,6 +425,15 @@ describe('#538 — no poller goes back to a bare setInterval', () => {
         for (const f of [...NOT_SERVER_POLLS, ...STILL_HAND_ROLLED]) {
             expect({ f, exists: existsSync(join(ROOT, f)) }).toEqual({ f, exists: true });
         }
+    });
+
+    it('AND THE USER-FACING LEDGER IS EMPTY — #544/#545 paid it off', () => {
+        //   The claim being made, checked rather than asserted: every remaining
+        //   hand-rolled poller is an ADMIN screen. If a member-facing one is
+        //   ever parked here again, this fails and the parking is deliberate.
+        const memberFacing = [...STILL_HAND_ROLLED].filter(f => !f.includes('/admin/'));
+
+        expect(memberFacing).toEqual([]);
     });
 
     it('AND THE DEBT LEDGER IS HONEST — each listed file really does poll', () => {

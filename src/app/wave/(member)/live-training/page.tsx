@@ -6,6 +6,7 @@ import BackButton from "@/components/ui/BackButton";
 import VideoClassroom from "@/components/VideoClassroom";
 import { useSession } from "next-auth/react";
 import { logger } from "@/lib/logger";
+import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 
 interface TrainingSession {
     id: string;
@@ -58,10 +59,9 @@ export default function WAVELiveTrainingPage() {
             }
         };
 
-        fetchSessions();
-        // Refresh every 60s so session state updates automatically
-        const timer = setInterval(fetchSessions, 60_000);
-        return () => clearInterval(timer);
+        //   #545 Refreshes every 60s so session state updates automatically —
+        //   while somebody is looking at it. See hooks/usePolling.
+        return startVisibilityAwareInterval(fetchSessions, 60_000);
     }, [sessionStatus]);
 
     const handleMeetingEnd = () => setActiveSession(null);

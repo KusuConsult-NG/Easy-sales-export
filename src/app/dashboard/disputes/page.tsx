@@ -14,6 +14,7 @@ import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { useToast } from "@/contexts/ToastContext";
 import { disputeStatusesForFilter } from "@/lib/dispute-status";
 import { startSupportConversationAction } from "@/app/actions/messages";
+import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 
 interface Dispute {
     id: string;
@@ -85,12 +86,12 @@ export default function DisputesPage() {
             }
         }
 
-        fetchDisputes();
-        const interval = setInterval(fetchDisputes, 10000); // Poll every 10 seconds
+        //   #545 Paused while the tab is hidden — see hooks/usePolling.
+        const stopPolling = startVisibilityAwareInterval(fetchDisputes, 10000);
 
         return () => {
             isMounted = false;
-            clearInterval(interval);
+            stopPolling();
         };
     }, [userId, status, router]);
 

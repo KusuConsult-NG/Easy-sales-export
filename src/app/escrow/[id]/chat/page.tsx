@@ -8,6 +8,7 @@ import { Send, Loader2, MessageCircle, ArrowLeft, Shield } from "lucide-react";
 import { sendEscrowMessageAction, getEscrowMessagesAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/marketplace";
 import type { Message } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
+import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 
 interface EscrowChatPageProps {
     params: Promise<{ id: string }>;
@@ -86,13 +87,9 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
     useEffect(() => {
         if (status !== "authenticated") return;
 
-        loadMessages();
-
-        const interval = setInterval(() => {
-            loadMessages();
-        }, 5000); // Poll every 5 seconds
-
-        return () => clearInterval(interval);
+        //   #545 Paused while the tab is hidden. An escrow chat left open in
+        //   a background tab polled every five seconds indefinitely.
+        return startVisibilityAwareInterval(loadMessages, 5000);
     }, [status, loadMessages]);
 
     // Auto-scroll to bottom when new messages arrive
