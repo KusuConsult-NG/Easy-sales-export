@@ -169,7 +169,10 @@ async function _upsertAcademyCourseAction(
 
         await logAuditAction({
             userId: session.user.id,
-            action: isNew ? "CREATE_COURSE" : "UPDATE_COURSE",
+            //   #533 The union's own names. This wrote SCREAMING_CASE, which
+            //   nothing else in the audit vocabulary uses, so a course row
+            //   could not be found beside any other content event.
+            action: isNew ? "course_created" : "course_updated",
             resourceId: courseId,
             resourceType: "academy_course",
             metadata: { title: courseData.title },

@@ -383,13 +383,33 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
             });
         }
 
-        // 📜 Audit Log
-        const { logAuditAction } = await import("@/lib/audit-log");
-        await logAuditAction({
+        /**
+         *   #533 TWO THINGS WERE WRONG WITH THIS ROW, AND THE OTHER TWO ACTIONS
+         *        IN THIS FILE HAD BOTH RIGHT.
+         *
+         *   THE NAMES were SCREAMING_CASE — a second vocabulary the AuditAction
+         *   union has never contained, reaching the log through a `string` field
+         *   and an `as AuditAction` cast. `land_verified` already existed;
+         *   `land_unverified` is new, because un-verifying a parcel genuinely
+         *   had no name.
+         *
+         *   AND logAuditAction ROUTES TO createAuditLog, WHICH RETHROWS. By the
+         *   time this line runs the parcel has already been transitioned —
+         *   claimStatusTransitionFromAny has claimed it and written `verified` —
+         *   so a failed log write landed in this function's outer catch and
+         *   returned success:false for a verification that HAD happened. The
+         *   admin is told the parcel was not verified while the listing says it
+         *   was. recordAdminAction exists for exactly this and its own header
+         *   describes the same failure on the withdrawal path; the two sibling
+         *   actions in this file already use it.
+         */
+        await recordAdminAction({
             userId: session.user.id,
-            action: verified ? "VERIFY_PROPERTY" : "UNVERIFY_PROPERTY",
+            action: verified ? "land_verified" : "land_unverified",
+            targetId: propertyId,
+            targetType: "land_listing",
             details: `${verified ? "Verified" : "Unverified"} property ${propertyId}`,
-            metadata: { propertyId, verified }
+            metadata: { propertyId, verified },
         });
 
         return { success: true as const, data: null, meta: null, error: null };

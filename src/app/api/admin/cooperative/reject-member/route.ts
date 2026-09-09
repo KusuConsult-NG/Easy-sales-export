@@ -84,9 +84,10 @@ export async function POST(request: NextRequest) {
         // Log audit entry
         try {
             const { logAuditAction } = await import('@/app/actions/audit');
-            await logAuditAction("wave_reject", memberId, "cooperative_member", {
+            //   #533 The rejection half of the same defect — see the note on
+            //   the approve route.
+            await logAuditAction("cooperative_reject", memberId, "cooperative_member", {
                 adminId: session.user.id,
-                action: "cooperative_membership_rejected",
                 reason,
             });
         } catch { /* non-blocking */ }

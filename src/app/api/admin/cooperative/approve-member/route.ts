@@ -109,9 +109,21 @@ export async function POST(request: NextRequest) {
         // Log audit entry
         try {
             const { logAuditAction } = await import('@/app/actions/audit');
-            await logAuditAction("wave_approve", memberId, "cooperative_member", {
+            //   #533 THIS WAS FILED UNDER WAVE'S NAME.
+            //
+            //   `logAuditAction("wave_approve", ...)` on a COOPERATIVE
+            //   membership approval, with the real name — "cooperative_
+            //   membership_approved" — put in the metadata, where nothing that
+            //   reads the log looks for an action. So somebody asking who
+            //   approved a cooperative member searched cooperative actions and
+            //   found nothing, while an audit of WAVE approvals returned
+            //   cooperative rows.
+            //
+            //   The platform names this act per module — academy_approve,
+            //   wave_approve, export_approve, farm_nation_reject — and simply
+            //   had no cooperative pair. It has one now.
+            await logAuditAction("cooperative_approve", memberId, "cooperative_member", {
                 adminId: session.user.id,
-                action: "cooperative_membership_approved",
             });
         } catch { /* non-blocking */ }
 

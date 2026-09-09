@@ -83,10 +83,10 @@
  *   THE OTHER 88 FILES ARE NOT CONVERTED HERE, and the number is stated rather
  *   than left vague. Converting every admin gate on the platform in one change
  *   is the kind of sweep the owner's standing brief exists to prevent — this is
- *   a live platform that "has always broken in one way or the other". The four
+ *   a live platform that "has always broken in one way or the other". The THREE
  *   below are the bounded set where the platform already disagrees with ITSELF
  *   inside one file, which is both the sharpest evidence and the safest scope.
- *   The ratchet at the foot of this file makes a fifth half-conversion fail,
+ *   The ratchet at the foot of this file makes a FOURTH half-conversion fail,
  *   which is what stops the class growing while the rest is worked through.
  *
  *   _getPlatformSettingsAction HAS NO GATE AT ALL and is left alone. It returns

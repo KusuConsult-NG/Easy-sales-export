@@ -466,7 +466,9 @@ export async function approveWithdrawalAction(
                 await Promise.allSettled([
                     logAuditAction({
                         userId: adminId,
-                        action: "APPROVE_WITHDRAWAL",
+                        //   #533 The name the admin withdrawal queue already
+                        //   writes (_withdrawals.ts), so one search finds both.
+                        action: "withdrawal_approve",
                         details: `Approved withdrawal of ₦${notificationData.amount} for user ${notificationData.email}`,
                         metadata: { withdrawalId, amount: notificationData.amount }
                     }),
@@ -658,7 +660,7 @@ export async function rejectWithdrawalAction(
                 await Promise.allSettled([
                     logAuditAction({
                         userId: adminId,
-                        action: "REJECT_WITHDRAWAL",
+                        action: "withdrawal_reject",
                         details: `Rejected withdrawal of ₦${notificationData.amount} for user ${notificationData.userId}. Reason: ${reason}`,
                         metadata: { withdrawalId, amount: notificationData.amount, reason }
                     }),

@@ -66,7 +66,7 @@ describe('the course upsert audit entry', () => {
 
         expect(src).not.toContain('action: courseId === "new" ? "CREATE_COURSE" : "UPDATE_COURSE"');
         expect(src).toContain('const isNew = courseId === "new"');
-        expect(src).toContain('action: isNew ? "CREATE_COURSE" : "UPDATE_COURSE"');
+        expect(src).toContain('action: isNew ? "course_created" : "course_updated"');
     });
 
     it('and the reassignment that broke it is still there', () => {

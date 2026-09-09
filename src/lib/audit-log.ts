@@ -41,6 +41,9 @@ export type AuditAction =
     | 'escrow_created'
     | 'escrow_released'
     | 'escrow_refunded'
+    //   #533 Extending an escrow's release date moves WHEN money is paid, and
+    //   had no name — it was written as "EXTEND_ESCROW".
+    | 'escrow_extended'
     | 'loan_applied'
     | 'loan_approved'
     | 'loan_partially_approved'
@@ -61,6 +64,10 @@ export type AuditAction =
     | 'land_created'
     | 'land_updated'
     | 'land_verified'
+    //   #533 Un-verifying a parcel had no name, so it was written as the
+    //   SCREAMING "UNVERIFY_PROPERTY" — a second vocabulary this union does not
+    //   contain. `user_unverify` already exists for the same act on a person.
+    | 'land_unverified'
     | 'land_rejected'
     | 'land_deleted'
     | 'land_inquiry'
@@ -154,6 +161,13 @@ export type AuditAction =
     | 'export_reject'
     // Farm Nation & Cooperative
     | 'farm_nation_reject'
+    //   #533 A cooperative membership decision was filed as 'wave_approve' and
+    //   'wave_reject' — another module's names — with the real one buried in
+    //   metadata, where no reader looks. The platform already names the same
+    //   act per module: academy_approve, wave_approve, export_approve,
+    //   farm_nation_reject. These are the two it was missing.
+    | 'cooperative_approve'
+    | 'cooperative_reject'
     | 'cooperative_join'
     | 'contribution_make'
     // Content Moderation Actions
@@ -422,9 +436,23 @@ export async function logAdminAction(
 /**
  * Legacy Audit Log Entry Interface (from audit.ts)
  */
+/**
+ *   #533 `action` WAS `string`, AND THE PLATFORM GREW A SECOND VOCABULARY.
+ *
+ *   This interface said `action: string`, and the implementation then wrote
+ *   `entry.action as AuditAction`. A union of 165 names, a type that accepts
+ *   any of them, and a cast that accepts anything at all — so nine names in six
+ *   files were written into the audit log that the union has never contained:
+ *   CREATE_COURSE, UPDATE_COURSE, APPROVE_WITHDRAWAL, REJECT_WITHDRAWAL,
+ *   EXTEND_ESCROW, VERIFY_PROPERTY, UNVERIFY_PROPERTY, and two cooperative
+ *   membership decisions filed under WAVE's names.
+ *
+ *   Typed properly, the compiler is the ratchet: a name outside the union no
+ *   longer builds, which is a stronger guarantee than any test in this suite.
+ */
 export interface LegacyAuditLogEntry {
     userId: string;
-    action: string;
+    action: AuditAction;
     details?: string;
     resourceId?: string;
     resourceType?: string;
@@ -440,7 +468,13 @@ export interface LegacyAuditLogEntry {
  * Unified/Consolidated logAuditAction helper to support both legacy and admin signatures
  */
 export async function logAuditAction(
-    actionOrEntry: any,
+    //   #533 `any`, and that is how the second vocabulary got in.
+    //
+    //   The parameter accepted anything, so an object literal was never checked
+    //   against LegacyAuditLogEntry and a positional call was never checked
+    //   against AuditAction. Typed as the union of the two shapes it actually
+    //   supports, the compiler refuses a name this platform does not have.
+    actionOrEntry: AuditAction | LegacyAuditLogEntry,
     targetId?: string,
     targetType?: string,
     metadata?: Record<string, any>,
@@ -453,10 +487,10 @@ export async function logAuditAction(
     try {
         if (actionOrEntry && typeof actionOrEntry === 'object') {
             // Legacy signature (from src/lib/audit.ts)
-            const entry = actionOrEntry as LegacyAuditLogEntry;
+            const entry = actionOrEntry;
             await createAuditLog({
                 userId: entry.userId,
-                action: entry.action as AuditAction,
+                action: entry.action,
                 details: entry.details || "",
                 targetId: entry.resourceId || entry.targetId,
                 targetType: entry.resourceType || entry.targetType,
@@ -466,7 +500,7 @@ export async function logAuditAction(
             });
         } else {
             // Admin signature (from src/lib/admin-audit-log.ts)
-            const action = actionOrEntry as AuditAction;
+            const action = actionOrEntry;
             /**
              * `'system'` is a real answer, not a default.
              *

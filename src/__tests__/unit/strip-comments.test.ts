@@ -363,7 +363,18 @@ describe('it agrees with the naive version everywhere the naive version is right
         // Raised rather than relaxed, on the same test as every time: that file
         // strips OTHER files with lib/testing/strip-comments — the good one —
         // and never reads its own text, so no assertion in it can be misled.
-        expect(AFFECTED.length).toBeLessThanOrEqual(18);
+        //
+        // EIGHTEEN became NINETEEN when #533 added
+        // the-audit-log-had-two-vocabularies.test.ts. ELEVENTH form, same
+        // mechanism as the last four: that file's header quotes a source line
+        // containing `//` inside a string, and its depth-aware scanner carries
+        // the literal '/*' and '*/' characters as bracket cases, so the naive
+        // regex opens a block comment it should not.
+        //
+        // Raised rather than relaxed, on the same test as every time: that file
+        // strips OTHER files with lib/testing/strip-comments — the good one —
+        // and never reads its own text.
+        expect(AFFECTED.length).toBeLessThanOrEqual(19);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');

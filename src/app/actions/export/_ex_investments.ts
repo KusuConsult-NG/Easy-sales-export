@@ -740,7 +740,9 @@ export async function extendEscrowAction(
         const { logAuditAction } = await import("@/lib/audit-log");
         await logAuditAction({
             userId: session.user.id,
-            action: "EXTEND_ESCROW",
+            //   #533 A new union name, because the platform genuinely had none:
+            //   extending an escrow moves WHEN money is released.
+            action: "escrow_extended",
             details: `Extended escrow for ${exportId} by ${days} days. Reason: ${reason}`,
             metadata: { exportId, days, reason, oldDate: currentReleaseDate, newDate: newReleaseDate }
         });
