@@ -8,7 +8,11 @@
 import { useState } from "react";
 import { ChevronLeft, CheckCircle, Edit, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import type { WaveApplicationData } from "./page";
+//   #560 The form's shape lives with the form. When this screen was split
+//   into a server page and a client component, `page` became the server half —
+//   which exports nothing but the page — and the type moved with the component
+//   that owns it.
+import type { WaveApplicationData } from "./WaveApplicationClient";
 
 interface Props {
     data: WaveApplicationData;

@@ -6,7 +6,9 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
-import type { WaveApplicationData } from "../page";
+//   #560 The form's shape lives with the form — see ReviewStep. `page` is now
+//   the server half and exports only the page component.
+import type { WaveApplicationData } from "../WaveApplicationClient";
 
 interface Props {
     data: WaveApplicationData;

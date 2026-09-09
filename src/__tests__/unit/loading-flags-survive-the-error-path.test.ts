@@ -493,7 +493,7 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
         ['src/app/loans/approve/page.tsx', 'handleApproval'],
         ['src/app/land/verify/page.tsx', 'handleVerification'],
         ['src/app/escrow/[id]/dispute/CreateDisputeClient.tsx', 'handleSubmit'],
-        ['src/app/escrow/[id]/chat/page.tsx', 'handleSendMessage'],
+        ['src/app/escrow/[id]/chat/EscrowChatClient.tsx', 'handleSendMessage'],
         ['src/app/admin/content-approval/page.tsx', 'handleApprove'],
         ['src/app/admin/content-approval/page.tsx', 'handleReject'],
         /**

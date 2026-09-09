@@ -137,7 +137,7 @@ beforeEach(() => {
 });
 
 async function renderMessages() {
-    const { default: MessagesPage } = await import('@/app/messages/page');
+    const { default: MessagesPage } = await import('@/app/messages/MessagesClient');
     render(<MessagesPage />);
     await waitFor(() => expect(m.getConversationsAction).toHaveBeenCalled());
 }
@@ -223,7 +223,7 @@ describe('#544 — the receipt is written when something is read', () => {
         //   What matters is structural and checkable: the call sits inside the
         //   `changed` branch, not beside it.
         const src = require('fs').readFileSync(
-            require('path').join(process.cwd(), 'src/app/messages/page.tsx'), 'utf-8',
+            require('path').join(process.cwd(), 'src/app/messages/MessagesClient.tsx'), 'utf-8',
         ) as string;
 
         const loadMessages = src.slice(
@@ -245,7 +245,7 @@ describe('#544 — the receipt is written when something is read', () => {
         //   JSON.stringify of the rows would put the write back on every tick
         //   the moment a timestamp re-serialised differently.
         const src = require('fs').readFileSync(
-            require('path').join(process.cwd(), 'src/app/messages/page.tsx'), 'utf-8',
+            require('path').join(process.cwd(), 'src/app/messages/MessagesClient.tsx'), 'utf-8',
         ) as string;
 
         expect(src).toContain('const signature = sorted.map(m => m.id).join("|");');
@@ -256,7 +256,7 @@ describe('#544 — the receipt is written when something is read', () => {
         //   #538 converted eleven pollers and did not reach this file; these
         //   two are the busiest in the app.
         const src = require('fs').readFileSync(
-            require('path').join(process.cwd(), 'src/app/messages/page.tsx'), 'utf-8',
+            require('path').join(process.cwd(), 'src/app/messages/MessagesClient.tsx'), 'utf-8',
         ) as string;
 
         const armed = src.match(/startVisibilityAwareInterval\(/g) ?? [];
@@ -270,7 +270,7 @@ describe('#544 — the receipt is written when something is read', () => {
         //   changes; without that line, switching to a conversation whose ids
         //   happened to match the previous one would never mark it read.
         const src = require('fs').readFileSync(
-            require('path').join(process.cwd(), 'src/app/messages/page.tsx'), 'utf-8',
+            require('path').join(process.cwd(), 'src/app/messages/MessagesClient.tsx'), 'utf-8',
         ) as string;
 
         const effect = src.slice(

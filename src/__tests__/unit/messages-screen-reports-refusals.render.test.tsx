@@ -91,7 +91,7 @@ jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
 }));
 
-import MessagesPage from '@/app/messages/page';
+import MessagesPage from '@/app/messages/MessagesClient';
 
 /** A conversation the member already has, so "blanked" is distinguishable. */
 const EXISTING = {

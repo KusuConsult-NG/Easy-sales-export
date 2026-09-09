@@ -1,325 +1,52 @@
-"use client";
+/**
+ * An escrow chat — the server half. See #543 / #545.
+ *
+ * Two reads on mount: the escrow row, and the messages. In the browser they ran
+ * one after the other — the messages poll only starts once the session resolves
+ * — so a buyer opening a dispute conversation waited for the page, then the
+ * escrow, then the thread.
+ *
+ * They are independent reads, so they are made together here.
+ *
+ * WHAT IS DELIBERATELY NOT DECIDED HERE: whether this viewer may see the chat.
+ * The client compares the escrow row's buyerId and sellerId against its own
+ * session and redirects if neither matches, and that stays exactly where it
+ * was. The row is only ever handed to the browser that asked for it, and
+ * getEscrowMessagesAction does its own check server-side regardless.
+ */
 
-import { useState, useEffect, useRef, use, useCallback } from "react";
-import { logger } from '@/lib/logger';
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { Send, Loader2, MessageCircle, ArrowLeft, Shield } from "lucide-react";
-import { sendEscrowMessageAction, getEscrowMessagesAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/marketplace";
-import type { Message } from "@/app/actions/marketplace";
-import { useToast } from "@/contexts/ToastContext";
-import { startVisibilityAwareInterval } from "@/hooks/usePolling";
+import { getEscrowMessagesAction, getEscrowTransactionByIdAction } from "@/app/actions/marketplace";
+import { rawSeed } from "@/lib/server-seed";
+import EscrowChatClient from "./EscrowChatClient";
 
-interface EscrowChatPageProps {
+/**
+ *   #560 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
+ */
+export const dynamic = "force-dynamic";
+
+export default async function EscrowChatPage({
+    params,
+}: {
     params: Promise<{ id: string }>;
-}
+}) {
+    const { id } = await params;
 
-export default function EscrowChatPage({ params }: EscrowChatPageProps) {
-    // Unwrap the params Promise using React.use() (Next.js 15+)
-    const resolvedParams = use(params);
-    const escrowId = resolvedParams.id;
+    const [escrowResult, messagesResult] = await Promise.all([
+        getEscrowTransactionByIdAction(id).catch(() => null),
+        getEscrowMessagesAction(id).catch(() => null),
+    ]);
 
-    const router = useRouter();
-    const { data: session, status } = useSession();
-    const { showToast } = useToast();
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [newMessage, setNewMessage] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [sending, setSending] = useState(false);
-    const [escrowData, setEscrowData] = useState<EscrowTransaction | null>(null);
-    const [authorized, setAuthorized] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const escrow = rawSeed("escrow transaction", escrowResult);
+    const messages = rawSeed("escrow messages", messagesResult);
 
-    useEffect(() => {
-        if (status === "unauthenticated") {
-            router.push("/auth/login");
-        }
-    }, [status, router]);
-
-    // Load escrow data and verify authorization
-    useEffect(() => {
-        async function checkAuthorization() {
-            if (status !== "authenticated" || !session?.user) return;
-
-            const result = await getEscrowTransactionByIdAction(escrowId);
-            if (result.success) {
-                const escrow = result.data;
-                const isBuyer = escrow?.buyerId === session.user.id;
-                const isSeller = escrow?.sellerId === session.user.id;
-                const isAdminUser = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
-
-                if (isBuyer || isSeller || isAdminUser) {
-                    setEscrowData(escrow);
-                    setAuthorized(true);
-                } else {
-                    showToast("You are not authorized to view this chat", "error");
-                    router.push("/escrow");
-                }
-            } else {
-                showToast(result.error || "Escrow transaction not found", "error");
-                router.push("/escrow");
-            }
-        }
-        checkAuthorization();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, session, escrowId, router]);
-
-    const loadMessages = useCallback(async () => {
-        try {
-            const result = await getEscrowMessagesAction(escrowId);
-            setTimeout(() => {
-                if (result.success && result.data) {
-                    setMessages(result.data);
-                }
-                setLoading(false);
-            }, 0);
-        } catch (error) {
-            logger.error("Failed to load messages:", error);
-            setTimeout(() => setLoading(false), 0);
-        }
-    }, [escrowId]);
-
-    function scrollToBottom() {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-
-    // Load messages on mount and every 3 seconds
-    useEffect(() => {
-        if (status !== "authenticated") return;
-
-        //   #545 Paused while the tab is hidden. An escrow chat left open in
-        //   a background tab polled every five seconds indefinitely.
-        return startVisibilityAwareInterval(loadMessages, 5000);
-    }, [status, loadMessages]);
-
-    // Auto-scroll to bottom when new messages arrive
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    async function handleSendMessage(e: React.FormEvent) {
-        e.preventDefault();
-
-        if (!newMessage.trim() || !session?.user) return;
-
-        setSending(true);
-
-        // #407. setSending(false) sat after the await with no try, so a rejected
-        // promise left the send button dead in an escrow dispute conversation —
-        // the one channel where a buyer and seller argue about money.
-        try {
-            const result = await sendEscrowMessageAction({
-                escrowId,
-                senderId: session.user.id,
-                senderName: session.user.name || session.user.email || "Unknown",
-                message: newMessage.trim(),
-            });
-
-            if (result.success) {
-                setNewMessage("");
-                await loadMessages(); // Refresh messages
-            } else {
-                showToast(result.error || "Failed to send message", "error");
-            }
-        } catch {
-            // The draft is deliberately NOT cleared here: the message may not
-            // have been delivered, and clearing it would lose what was typed.
-            showToast("Could not send the message. Check your connection and try again.", "error");
-        } finally {
-            setSending(false);
-        }
-    }
-
-
-
-    function formatTime(timestamp: any): string {
-        if (!timestamp) return "";
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    }
-
-    function formatDate(timestamp: any): string {
-        if (!timestamp) return "";
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        const today = new Date();
-        const messageDate = new Date(date);
-
-        // Check if message is from today
-        if (
-            messageDate.getDate() === today.getDate() &&
-            messageDate.getMonth() === today.getMonth() &&
-            messageDate.getFullYear() === today.getFullYear()
-        ) {
-            return "Today";
-        }
-
-        // Check if message is from yesterday
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        if (
-            messageDate.getDate() === yesterday.getDate() &&
-            messageDate.getMonth() === yesterday.getMonth() &&
-            messageDate.getFullYear() === yesterday.getFullYear()
-        ) {
-            return "Yesterday";
-        }
-
-        return messageDate.toLocaleDateString();
-    }
-
-    // Group messages by date
-    function groupMessagesByDate(messages: Message[]) {
-        const groups: { date: string; messages: Message[] }[] = [];
-        let currentDate = "";
-
-        messages.forEach((message) => {
-            const messageDate = formatDate(message.timestamp);
-
-            if (messageDate !== currentDate) {
-                currentDate = messageDate;
-                groups.push({ date: messageDate, messages: [message] });
-            } else {
-                groups[groups.length - 1].messages.push(message);
-            }
-        });
-
-        return groups;
-    }
-
-    const isMyMessage = (message: Message) => message.senderId === session?.user?.id;
+    //   All or nothing: a chat handed its escrow row while the thread was still
+    //   on its way is a screen that looks loaded and is not.
+    const complete = escrow !== null && messages !== null;
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-900 via-blue-900 to-slate-900 flex flex-col">
-            {/* Header */}
-            <div className="bg-white/10 backdrop-blur-xl border-b border-white/20 px-6 py-4">
-                <div className="max-w-4xl mx-auto flex items-center space-x-4">
-                    <button
-                        onClick={() => router.push("/escrow")}
-                        className="p-2 hover:bg-white/10 rounded-lg transition"
-                    >
-                        <ArrowLeft className="w-5 h-5 text-blue-200" />
-                    </button>
-                    <div className="flex items-center space-x-3 flex-1">
-                        <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
-                            <Shield className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-semibold text-white">Escrow Chat</h1>
-                            <p className="text-sm text-blue-200">Transaction #{escrowId.slice(0, 8)}</p>
-                        </div>
-                    </div>
-                    {session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin") ? (
-                        <div className="text-xs text-red-300 bg-red-500/20 px-3 py-1 rounded-full font-semibold">
-                            Admin Mode
-                        </div>
-                    ) : (
-                        <div className="text-xs text-blue-300 bg-blue-500/20 px-3 py-1 rounded-full">
-                            Secure Messaging
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Messages Container */}
-            <div className="flex-1 overflow-y-auto px-6 py-6">
-                <div className="max-w-4xl mx-auto">
-                    {loading ? (
-                        <div className="flex items-center justify-center py-20">
-                            <Loader2 className="w-8 h-8 text-blue-300 animate-spin" />
-                        </div>
-                    ) : messages.length === 0 ? (
-                        <div className="text-center py-20">
-                            <MessageCircle className="w-16 h-16 text-blue-300 mx-auto mb-4" />
-                            <h3 className="text-xl font-semibold text-white mb-2">No messages yet</h3>
-                            <p className="text-blue-200">Start the conversation by sending a message below</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-6">
-                            {groupMessagesByDate(messages).map((group, groupIndex) => (
-                                <div key={groupIndex}>
-                                    {/* Date Divider */}
-                                    <div className="flex items-center justify-center mb-4">
-                                        <div className="bg-white/10 backdrop-blur-sm px-4 py-1 rounded-full">
-                                            <span className="text-sm text-blue-200">{group.date}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Messages for this date */}
-                                    <div className="space-y-4">
-                                        {group.messages.map((message) => (
-                                            <div
-                                                key={message.id}
-                                                className={`flex ${isMyMessage(message) ? "justify-end" : "justify-start"
-                                                    }`}
-                                            >
-                                                <div
-                                                    className={`max-w-[70%] ${isMyMessage(message)
-                                                        ? "bg-blue-500 text-white"
-                                                        : "bg-white/10 backdrop-blur-xl border border-white/20 text-white"
-                                                        } rounded-2xl px-4 py-3`}
-                                                >
-                                                    {/* Sender Name (only for other's messages) */}
-                                                    {!isMyMessage(message) && (
-                                                        <div className="text-xs text-blue-300 mb-1 font-medium">
-                                                            {message.senderName}
-                                                        </div>
-                                                    )}
-
-                                                    {/* Message Text */}
-                                                    <p className="text-sm wrap-break-word">{message.message}</p>
-
-                                                    {/* Timestamp */}
-                                                    <div
-                                                        className={`text-xs mt-1 ${isMyMessage(message) ? "text-blue-100" : "text-blue-300"
-                                                            }`}
-                                                    >
-                                                        {formatTime(message.timestamp)}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                            <div ref={messagesEndRef} />
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Message Input */}
-            <div className="bg-white/10 backdrop-blur-xl border-t border-white/20 px-6 py-4">
-                <div className="max-w-4xl mx-auto">
-                    <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
-                        <input
-                            type="text"
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="Type your message..."
-                            disabled={sending}
-                            maxLength={1000}
-                            className="flex-1 px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
-                        />
-                        <button
-                            type="submit"
-                            disabled={!newMessage.trim() || sending}
-                            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-xl font-medium transition flex items-center space-x-2"
-                        >
-                            {sending ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                                <>
-                                    <Send className="w-5 h-5" />
-                                    <span>Send</span>
-                                </>
-                            )}
-                        </button>
-                    </form>
-                    <div className="mt-2 text-xs text-blue-300 text-center">
-                        Messages are monitored for security. Be professional and respectful.
-                    </div>
-                </div>
-            </div>
-        </div>
+        <EscrowChatClient
+            escrowId={id}
+            initial={complete && escrow && messages ? { escrow, messages } : null}
+        />
     );
 }
