@@ -335,7 +335,7 @@ describe('#366 — the sixteen layouts this guards', () => {
     it('and three more files mention it only in comments', () => {
         // Named, because they are why a raw-text count was 19 and not 16.
         for (const file of [
-            'src/app/profile/page.tsx',
+            'src/app/profile/ProfileClient.tsx',
             'src/app/actions/auth.ts',
             'src/app/actions/password-reset.ts',
         ]) {

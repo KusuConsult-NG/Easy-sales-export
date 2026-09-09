@@ -23,7 +23,7 @@
  *        app/auth/reset-password/page.tsx           LIVE
  *            minLength={8} and "Must be at least 8 characters" — one of five.
  *
- *        app/profile/page.tsx (change password)     LIVE
+ *        app/profile/ProfileClient.tsx (change password)     LIVE
  *            `if (passwordData.new.length < 8)` — one of five.
  *
  *        components/auth/ModuleRegisterPage.tsx     dead component
@@ -200,7 +200,7 @@ describe('#330 — every live password screen states the same rule', () => {
     const PASSWORD_SCREENS = [
         'src/components/auth/RegisterForm.tsx',
         'src/app/auth/reset-password/page.tsx',
-        'src/app/profile/page.tsx',
+        'src/app/profile/ProfileClient.tsx',
     ];
 
     it.each(PASSWORD_SCREENS)('%s renders PasswordStrengthIndicator', (rel) => {
@@ -237,7 +237,7 @@ describe('#330 — every live password screen states the same rule', () => {
     });
 
     it('the profile modal refuses with the message the SERVER would give', () => {
-        const src = stripComments(read('src/app/profile/page.tsx'));
+        const src = stripComments(read('src/app/profile/ProfileClient.tsx'));
         expect(src).toMatch(/firstPasswordProblem\(passwordData\.new\)/);
     });
 

@@ -183,7 +183,7 @@ describe('#359 — each dead link now points at a real page', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#359 — the profile page honours the tab the links ask for', () => {
-    const code = source('src/app/profile/page.tsx');
+    const code = source('src/app/profile/ProfileClient.tsx');
 
     it('IT READS THE tab PARAM, WHICH IT DID NOT', () => {
         // Without this, a link labelled "Settings" lands on "general" and the

@@ -302,7 +302,7 @@ describe('changePasswordAction revokes the OTHER sessions', () => {
         // This asserted the opposite — that they stayed signed in — and used it
         // as the reason the safe value was "wrong".
         const legacy = source('src/app/auth/reset-legacy-password/page.tsx');
-        const profile = source('src/app/profile/page.tsx');
+        const profile = source('src/app/profile/ProfileClient.tsx');
 
         expect(legacy).toContain('sign in again');
         expect(legacy).toContain('/auth/login');

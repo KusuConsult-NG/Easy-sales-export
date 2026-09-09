@@ -369,7 +369,7 @@ describe('#208 — the refusal points somewhere that exists', () => {
 
     it('AND A SCREEN, LINKED FROM THE PROFILE', () => {
         expect(existsSync(join(ROOT, SCREEN))).toBe(true);
-        expect(source('src/app/profile/page.tsx')).toContain('href="/profile/bank-account"');
+        expect(source('src/app/profile/ProfileClient.tsx')).toContain('href="/profile/bank-account"');
 
         // AWAITED, not merely named. `void 0 && reverifyBankAccountAction(...)`
         // contains the string and calls nothing — asserting the name appears is

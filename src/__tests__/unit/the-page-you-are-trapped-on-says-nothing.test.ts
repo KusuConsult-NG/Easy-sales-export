@@ -144,7 +144,7 @@ const written = (): Record<string, any> => (mockVersionedUpdate.mock.calls[0]?.[
 const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: p });
 
-const PAGE = 'src/app/profile/page.tsx';
+const PAGE = 'src/app/profile/ProfileClient.tsx';
 const WRITER = 'src/app/actions/profile.ts';
 
 const MEMBER = 'member-1';

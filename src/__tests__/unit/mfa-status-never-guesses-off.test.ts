@@ -63,7 +63,7 @@ const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8
 
 const ROUTE = 'src/app/api/auth/mfa/status/route.ts';
 const MFA_PAGE = 'src/app/settings/security/mfa/page.tsx';
-const PROFILE = 'src/app/profile/page.tsx';
+const PROFILE = 'src/app/profile/ProfileClient.tsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#313 — the endpoint, executed', () => {

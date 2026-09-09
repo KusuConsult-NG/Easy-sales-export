@@ -532,7 +532,7 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
         ['src/app/export/onboarding/steps/KYCVerificationStep.tsx', 'handleSubmit'],
         ['src/app/marketplace/buyer/orders/[id]/review/page.tsx', 'handleProductReview'],
         ['src/app/marketplace/buyer/orders/[id]/review/page.tsx', 'handleSellerReview'],
-        ['src/app/profile/page.tsx', 'handleSave'],
+        ['src/app/profile/ProfileClient.tsx', 'handleSave'],
         ['src/app/academy/[courseId]/quiz/[moduleId]/page.tsx', 'submitQuiz'],
         ['src/components/academy/QuizComponent.tsx', 'handleSubmit'],
         ['src/components/admin/EnrollStudentModal.tsx', 'handleEnroll'],
