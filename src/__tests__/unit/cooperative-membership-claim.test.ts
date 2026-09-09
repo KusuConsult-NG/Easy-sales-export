@@ -254,7 +254,7 @@ describe('a membership document id is not a user id', () => {
     // refuses and returns an empty list, so the member's own loans page showed
     // them nothing while their loan was live.
     const TYPES = 'src/lib/types/cooperative.ts';
-    const MY_LOANS = 'src/app/cooperatives/(member)/my-loans/page.tsx';
+    const MY_LOANS = 'src/app/cooperatives/(member)/my-loans/MyLoansClient.tsx';
     const APPLICATIONS = 'src/app/actions/cooperative/_loans_applications.ts';
 
     it('and they really can differ', () => {

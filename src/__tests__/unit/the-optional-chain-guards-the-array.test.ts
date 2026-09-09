@@ -167,7 +167,7 @@ describe('#442 — the sites #130 knew about and the ones it missed', () => {
         'src/app/marketplace/buyer/products/BuyerProductsClient.tsx',
         'src/app/marketplace/checkout/page.tsx',
         'src/app/marketplace/products/[id]/ProductDetailClient.tsx',
-        'src/app/marketplace/sell/page.tsx',
+        'src/app/marketplace/sell/SellerHomeClient.tsx',
     ];
 
     it('EVERY READER OF pricingTiers GUARDS THE ARRAY', () => {

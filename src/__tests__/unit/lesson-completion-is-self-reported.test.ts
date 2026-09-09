@@ -50,7 +50,7 @@ const source = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf
 const raw = (rel: string) => readFileSync(join(ROOT, rel), 'utf-8');
 
 const PROGRESS = 'src/app/actions/academy/_ac_progress.ts';
-const LESSON_PAGE = 'src/app/academy/[courseId]/lesson/[lessonId]/page.tsx';
+const LESSON_PAGE = 'src/app/academy/[courseId]/lesson/[lessonId]/LessonClient.tsx';
 const WRITER = 'src/app/actions/course-actions.ts';
 
 const LEARNER = 'learner-1';

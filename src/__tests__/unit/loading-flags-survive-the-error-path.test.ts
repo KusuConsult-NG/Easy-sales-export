@@ -556,7 +556,7 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
         ['src/app/admin/export/edit/[id]/page.tsx', 'loadData'],
         ['src/app/admin/finance/page.tsx', 'loadFinanceData'],
         ['src/app/admin/marketplace/disputes/[id]/page.tsx', 'loadNotes'],
-        ['src/app/marketplace/sell/page.tsx', 'loadSellerData'],
+        ['src/app/marketplace/sell/SellerHomeClient.tsx', 'loadSellerData'],
         ['src/app/marketplace/village-market/[id]/page.tsx', 'loadEvent'],
         ['src/app/wave/(member)/resources/page.tsx', 'loadResources'],
         ['src/components/lms/CourseProgressCard.tsx', 'fetchProgress'],

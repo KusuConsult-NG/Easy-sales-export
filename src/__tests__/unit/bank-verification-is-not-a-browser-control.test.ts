@@ -146,7 +146,7 @@ describe('#346 — the effect cannot drive an unbounded render loop', () => {
         // The cost, pinned rather than asserted from memory: without the ref
         // these two are what make the effect re-run forever.
         expect(source(MP_STEP)).toContain('function handleVerified(');
-        expect(source('src/app/marketplace/onboarding/page.tsx'))
+        expect(source('src/app/marketplace/onboarding/MarketplaceOnboardingClient.tsx'))
             .toContain('onChange={(bankAccount) => updateFormData({ bankAccount })}');
         expect(source('src/app/export/onboarding/page.tsx'))
             .toMatch(/setFormData\(\(prev: any\) => \{[\s\S]{0,80}?\.\.\.prev, \.\.\.stepData/);

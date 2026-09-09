@@ -193,8 +193,8 @@ describe('#370 — everything downstream of the application IS live', () => {
      * product presents the second half of a flow whose first half is missing.
      */
     const DOWNSTREAM: Array<[string, string]> = [
-        ['src/app/cooperatives/(member)/my-loans/page.tsx', 'getUserLoanApplicationsAction'],
-        ['src/app/cooperatives/(member)/my-loans/page.tsx', 'getRepaymentScheduleAction'],
+        ['src/app/cooperatives/(member)/my-loans/MyLoansClient.tsx', 'getUserLoanApplicationsAction'],
+        ['src/app/cooperatives/(member)/my-loans/MyLoansClient.tsx', 'getRepaymentScheduleAction'],
         ['src/components/loans/RepayFromSavingsModal.tsx', 'repayLoanFromSavingsAction'],
         ['src/components/loans/RepaymentSchedule.tsx', 'getRepaymentScheduleAction'],
         ['src/components/admin/RecordRepaymentModal.tsx', 'submitRepaymentAction'],
@@ -209,9 +209,9 @@ describe('#370 — everything downstream of the application IS live', () => {
     it('and the member screen that offers repayment is itself reachable', () => {
         // A screen behind the hub guard, linked from the cooperative area —
         // not another orphan.
-        expect(existsSync(join(ROOT, 'src/app/cooperatives/(member)/my-loans/page.tsx'))).toBe(true);
+        expect(existsSync(join(ROOT, 'src/app/cooperatives/(member)/my-loans/MyLoansClient.tsx'))).toBe(true);
         expect(importersOf('src/components/loans/RepayFromSavingsModal.tsx'))
-            .toContain('src/app/cooperatives/(member)/my-loans/page.tsx');
+            .toContain('src/app/cooperatives/(member)/my-loans/MyLoansClient.tsx');
     });
 
     it('and the admin repayment modal is reached from the admin loan queue', () => {

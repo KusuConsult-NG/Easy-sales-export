@@ -179,7 +179,7 @@ describe('#492 — and the other seven answer "could not read" before "nothing t
      */
     const ORDERED: Array<[string, string, string]> = [
         [
-            'src/app/marketplace/sell/page.tsx',
+            'src/app/marketplace/sell/SellerHomeClient.tsx',
             'if (loadError) {',
             //   The one that sends an approved seller to get verified again.
             'if (!verification || verification.status !== "approved") {',

@@ -247,7 +247,7 @@ describe('#439 — the rule is stated once, and cannot be restated', () => {
             'src/app/marketplace/checkout/page.tsx',
             'src/app/marketplace/products/[id]/ProductDetailClient.tsx',
             'src/app/marketplace/products/MarketplaceProductsClient.tsx',
-            'src/app/marketplace/sell/page.tsx',
+            'src/app/marketplace/sell/SellerHomeClient.tsx',
             'src/app/marketplace/sellers/[sellerId]/page.tsx',
         ];
         // Asserted before the loop: a `for` over an emptied list makes no

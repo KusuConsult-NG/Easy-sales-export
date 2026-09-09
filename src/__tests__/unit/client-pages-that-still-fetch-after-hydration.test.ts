@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 48;
+const CAP = 43;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -152,6 +152,12 @@ const CONVERTED = [
     'src/app/marketplace/buyer/orders/page.tsx',
     'src/app/marketplace/buyer/orders/[id]/page.tsx',
     'src/app/marketplace/buyer/products/page.tsx',
+    //   #555 — batch 10.
+    'src/app/marketplace/sell/page.tsx',
+    'src/app/academy/[courseId]/lesson/[lessonId]/page.tsx',
+    'src/app/cooperatives/(member)/my-loans/page.tsx',
+    'src/app/marketplace/onboarding/page.tsx',
+    'src/app/farm-nation/onboarding/page.tsx',
     'src/app/farm-nation/(member)/dashboard/page.tsx',
     'src/app/cooperatives/(member)/dashboard/page.tsx',
     'src/app/export/(app)/dashboard/page.tsx',
@@ -254,7 +260,12 @@ describe('#552 — the converted pages converge on one unwrapper', () => {
                     const src = readFileSync(full, 'utf-8');
                     //   Only the pages this ledger converted.
                     if (!src.includes('EXPLICITLY DYNAMIC')) continue;
-                    if (src.includes('seedOrNull')) continue;
+                    //   #555 `rawSeed` counts too. This check predates it — it
+                    //   was written when seedOrNull was the only shared
+                    //   unwrapper — so thirteen pages that HAD converged still
+                    //   read as inline and the cap failed for a change that
+                    //   improved things. The instrument was stale, not the code.
+                    if (src.includes('seedOrNull') || src.includes('rawSeed')) continue;
                     if (!/\?\.success/.test(src)) continue;
                     found.push(full.slice(ROOT.length + 1));
                 }

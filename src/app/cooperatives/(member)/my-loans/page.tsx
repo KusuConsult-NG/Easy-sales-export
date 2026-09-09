@@ -1,384 +1,66 @@
-"use client";
+/**
+ * A member's cooperative loans — the server half. See #543 / #545.
+ *
+ * #547 left this screen on the ledger because its load is a CHAIN: the
+ * membership, then that member's applications keyed on the membership's
+ * userId, then a repayment schedule per disbursed loan. Seeding only the first
+ * link would have saved one round trip out of 2+N and introduced exactly the
+ * failure the ledger warns about — a seed present while the rest still fetches.
+ *
+ * So the whole chain is walked here. The schedules are keyed by loan id and the
+ * client's derivation — outstanding balance, next instalment, the flattened
+ * schedule rows — stays where it was.
+ *
+ * A break anywhere passes null for everything: the client then walks the chain
+ * itself exactly as it did before, rather than being handed a half-answer.
+ */
 
-import { useState, useEffect } from "react";
-import { logger } from '@/lib/logger';
-import Link from "next/link";
-import {
-    DollarSign,
-    Calendar,
-    Clock,
-    TrendingUp,
-    AlertCircle,
-    CheckCircle,
-    Loader2,
-    ArrowRight,
-} from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
-import { getMembershipAction } from "@/app/actions/cooperative";
-import { getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/cooperative";
-import RepayFromSavingsModal from "@/components/loans/RepayFromSavingsModal";
+import { getMembershipAction, getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/cooperative";
+import { rawSeed } from "@/lib/server-seed";
+import MyLoansClient from "./MyLoansClient";
 
-// Helper to convert FieldValue | Timestamp to Date
-function toDate(value: any): Date {
-    if (!value) return new Date();
-    if (value instanceof Date) return value;
-    if (typeof value.toDate === 'function') return value.toDate();
-    return new Date();
-}
+/**
+ *   #555 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
+ */
+export const dynamic = "force-dynamic";
 
-export default function MyLoansPage() {
-    const [loading, setLoading] = useState(true);
-    const [membership, setMembership] = useState<any>(null);
-    const [loans, setLoans] = useState<any[]>([]);
-    const [error, setError] = useState<string | null>(null);
-    const [repayTarget, setRepayTarget] = useState<{
-        loanId: string;
-        installmentId: string;
-        installmentNumber: number;
-        amountDue: number;
-    } | null>(null);
+export default async function MyLoansPage() {
+    const membershipRes = rawSeed(
+        "cooperative membership", await getMembershipAction().catch(() => null),
+    );
 
-    useEffect(() => {
-        loadLoans();
-    }, []);
+    const membership = membershipRes?.success ? membershipRes.data?.membership : null;
 
-    async function loadLoans() {
-        setLoading(true);
-        setError(null);
-        try {
-            const result = await getMembershipAction();
-            if (result.success  && result.data?.membership) {
-                setMembership(result.data.membership);
+    //   The membership row carries `userId`, and that is the argument — the
+    //   client's own comment records why a membership DOCUMENT id silently
+    //   returns an empty list here.
+    const applications = membership
+        ? await getUserLoanApplicationsAction(
+            (membership as any).userId || (membership as any).id,
+        ).catch(() => null)
+        : null;
 
-                // `membership.id (which is the User ID)` — an assumption the
-                // codebase itself breaks. A membership document is usually keyed
-                // by the user id, but joinCooperativeAction creates one with an
-                // AUTO-GENERATED id, and the email and paymentReference
-                // fallbacks return whatever document they matched.
-                //
-                // When the two differ, getUserLoanApplicationsAction refuses:
-                // its guard is `session.user.id !== userId && !isAdmin`, so
-                // passing a document id that is not the caller's user id returns
-                // an empty list. The member's own loans page then showed them no
-                // loans at all, silently, while their loan was live.
-                //
-                // The membership row carries `userId`; that is the argument.
-                const membershipRecord = result.data.membership;
-                const loanApplications = await getUserLoanApplicationsAction(
-                    membershipRecord.userId || membershipRecord.id,
-                );
+    //   One schedule per disbursed loan, in parallel rather than in sequence.
+    const disbursed = (applications ?? []).filter((l: any) => l.status === "disbursed");
+    const scheduleResults = await Promise.all(
+        disbursed.map((l: any) =>
+            getRepaymentScheduleAction(l.id || "").catch(() => null)),
+    );
 
-                // Only show disbursed loans (active loans with repayment schedules)
-                const disbursedLoans = loanApplications.filter((loan: any) => loan.status === "disbursed");
+    const schedules: Record<string, any> = {};
+    disbursed.forEach((l: any, i: number) => {
+        if (scheduleResults[i]) schedules[l.id || ""] = scheduleResults[i];
+    });
 
-                // Fetch repayment schedule for each disbursed loan
-                const loansWithSchedules = await Promise.all(
-                    disbursedLoans.map(async (loan) => {
-                        const scheduleResult = await getRepaymentScheduleAction(loan.id || "");
-
-                        if (scheduleResult.success && scheduleResult.data?.schedule) {
-                            const schedule = scheduleResult.data.schedule;
-
-                            // Calculate balance (sum of unpaid installments)
-                            const balance = schedule
-                                .filter((inst: any) => inst.status !== "paid")
-                                .reduce((sum: number, inst: any) => sum + (inst.totalAmount - inst.paidAmount), 0);
-
-                            // Find next unpaid installment
-                            const nextPayment = schedule.find((inst: any) => inst.status === "pending" || inst.status === "partial");
-
-                            return {
-                                ...loan,
-                                balance,
-                                repaymentSchedule: schedule.map((inst: any) => ({
-                                    date: inst.dueDate,
-                                    amount: inst.totalAmount,
-                                    paid: inst.status === "paid"
-                                })),
-                                nextPaymentDate: nextPayment ? nextPayment.dueDate : null,
-                                nextPaymentAmount: nextPayment ? nextPayment.totalAmount - nextPayment.paidAmount : 0,
-                                // The instalment id was dropped by the mapping
-                                // above, which is why nothing on this page could
-                                // ever name the instalment being paid.
-                                nextInstallmentId: nextPayment ? nextPayment.id : null,
-                                nextInstallmentNumber: nextPayment ? nextPayment.installmentNumber : null,
-                                startDate: toDate(loan.disbursedAt || loan.appliedAt),
-                                interestRate: loan.interestRate,
-                                duration: loan.durationMonths
-                            };
-                        }
-
-                        // Fallback if schedule fetch fails
-                        return {
-                            ...loan,
-                            balance: loan.totalRepayment,
-                            repaymentSchedule: [],
-                            nextPaymentDate: null,
-                            nextPaymentAmount: loan.monthlyPayment || 0,
-                            // No schedule was loaded, so there is no instalment
-                            // to name and the repay button stays hidden rather
-                            // than submitting against a guess.
-                            nextInstallmentId: null,
-                            nextInstallmentNumber: null,
-                            startDate: toDate(loan.disbursedAt) || toDate(loan.appliedAt) || new Date(),
-                            interestRate: loan.interestRate,
-                            duration: loan.durationMonths
-                        };
-                    })
-                );
-
-                setLoans(loansWithSchedules);
-            } else {
-                setError(result.error || "Failed to load membership data");
-            }
-        } catch (error) {
-            logger.error("Failed to load loans:", error);
-            setError("An unexpected error occurred while loading your loans");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    function formatDate(date: Date) {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-        }).format(new Date(date));
-    }
-
-    const activeLoans = loans.filter((l: any) => l.status === "disbursed");
-    const totalBalance = activeLoans.reduce((sum: number, l: any) => sum + l.balance, 0);
-    const totalBorrowed = activeLoans.reduce((sum: number, l: any) => sum + l.amount, 0);
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
-            </div>
-        );
-    }
+    //   All or nothing. A partial chain is the failure this conversion was
+    //   held back for.
+    const complete = membershipRes !== null
+        && applications !== null
+        && scheduleResults.every(Boolean);
 
     return (
-        <div className="min-h-screen bg-slate-50 py-8">
-            <div className="max-w-7xl mx-auto px-4">
-                {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                        My Loans
-                    </h1>
-                    <p className="text-slate-600">
-                        Track your loan balances and repayment schedule
-                    </p>
-                </div>
-
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-linear-to-br from-blue-600 to-indigo-600 text-white rounded-2xl p-6 shadow-lg">
-                        <div className="flex items-center gap-3 mb-3">
-                            <DollarSign className="w-8 h-8" />
-                        </div>
-                        <p className="text-sm text-blue-100 mb-1">Total Outstanding</p>
-                        <p className="text-3xl font-bold">{formatCurrency(totalBalance)}</p>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                                <TrendingUp className="w-5 h-5 text-purple-600" />
-                            </div>
-                            <p className="text-sm text-slate-600">Total Borrowed</p>
-                        </div>
-                        <p className="text-3xl font-bold text-slate-900">
-                            {formatCurrency(totalBorrowed)}
-                        </p>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                                <CheckCircle className="w-5 h-5 text-green-600" />
-                            </div>
-                            <p className="text-sm text-slate-600">Active Loans</p>
-                        </div>
-                        <p className="text-3xl font-bold text-slate-900">
-                            {activeLoans.length}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Active Loans */}
-                {activeLoans.length > 0 ? (
-                    <div className="space-y-6">
-                        {activeLoans.map((loan) => {
-                            const paidPayments = loan.repaymentSchedule.filter((p: any) => p.paid).length;
-                            const totalPayments = loan.repaymentSchedule.length;
-                            const progress = (paidPayments / totalPayments) * 100;
-
-                            return (
-                                <div key={loan.id} className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                                    {/* Loan Header */}
-                                    <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white p-6">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div>
-                                                <h3 className="text-2xl font-bold mb-1">
-                                                    {formatCurrency(loan.amount)}
-                                                </h3>
-                                                <p className="text-blue-100">
-                                                    Disbursed on {formatDate(loan.startDate)}
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm text-blue-100 mb-1">Balance</p>
-                                                <p className="text-2xl font-bold">{formatCurrency(loan.balance)}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Progress Bar */}
-                                        <div className="mb-3">
-                                            <div className="flex items-center justify-between text-sm mb-2">
-                                                <span>Repayment Progress</span>
-                                                <span>{paidPayments}/{totalPayments} payments</span>
-                                            </div>
-                                            <div className="w-full bg-blue-800 rounded-full h-3">
-                                                <div
-                                                    className="bg-white rounded-full h-3 transition-all"
-                                                    style={{ width: `${progress}%` }}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-6 text-sm">
-                                            <div>
-                                                <span className="text-blue-100">Rate:</span>{" "}
-                                                <span className="font-semibold">{loan.interestRate}%</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-blue-100">Duration:</span>{" "}
-                                                <span className="font-semibold">{loan.duration} months</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Next Payment Alert */}
-                                    <div className="bg-yellow-50 border-b border-yellow-200 p-4">
-                                        <div className="flex items-center gap-3">
-                                            <Clock className="w-5 h-5 text-yellow-600" />
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-slate-900">
-                                                    Next Payment Due
-                                                </p>
-                                                <p className="text-sm text-slate-600">
-                                                    {formatDate(loan.nextPaymentDate)} - {formatCurrency(loan.nextPaymentAmount)}
-                                                </p>
-                                            </div>
-                                            {/*
-                                              * This was a Link to /cooperatives/payment — the
-                                              * membership REGISTRATION FEE page. A borrower
-                                              * pressing the only repayment button on the page
-                                              * was sent to a different payment entirely.
-                                              *
-                                              * Hidden rather than disabled when the schedule
-                                              * did not load: there is no instalment to name,
-                                              * and a button that cannot say what it is paying
-                                              * should not be offered.
-                                              */}
-                                            {loan.nextInstallmentId && (
-                                                <button
-                                                    onClick={() => setRepayTarget({
-                                                        loanId: loan.id,
-                                                        installmentId: loan.nextInstallmentId,
-                                                        installmentNumber: loan.nextInstallmentNumber ?? 1,
-                                                        amountDue: loan.nextPaymentAmount,
-                                                    })}
-                                                    className="px-4 py-2 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition"
-                                                >
-                                                    Repay from Savings
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Repayment Schedule */}
-                                    <div className="p-6">
-                                        <h4 className="font-bold text-slate-900 mb-4">
-                                            Repayment Schedule
-                                        </h4>
-                                        <div className="space-y-3">
-                                            {loan.repaymentSchedule.map((payment: any, index: number) => (
-                                                <div
-                                                    key={payment.id || `repayment-${index}-${payment.date}`}
-                                                    className={`flex items-center justify-between p-4 rounded-lg ${payment.paid
-                                                        ? "bg-green-50 border border-green-200"
-                                                        : "bg-slate-50 border border-slate-200"
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        {payment.paid ? (
-                                                            <CheckCircle className="w-5 h-5 text-green-600" />
-                                                        ) : (
-                                                            <div className="w-5 h-5 rounded-full border-2 border-slate-400" />
-                                                        )}
-                                                        <div>
-                                                            <p className="font-semibold text-slate-900">
-                                                                Payment #{index + 1}
-                                                            </p>
-                                                            <p className="text-sm text-slate-600">
-                                                                {formatDate(payment.date)}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="font-bold text-slate-900">
-                                                            {formatCurrency(payment.amount)}
-                                                        </p>
-                                                        {payment.paid && (
-                                                            <p className="text-xs text-green-600">Paid</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-                        <DollarSign className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-slate-900 mb-2">
-                            No Active Loans
-                        </h3>
-                        <p className="text-slate-600 mb-6">
-                            You don't have any active loans at the moment
-                        </p>
-                        <Link
-                            href="/cooperatives/loans"
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition"
-                        >
-                            Apply for a Loan
-                            <ArrowRight className="w-5 h-5" />
-                        </Link>
-                    </div>
-                )}
-            </div>
-
-            {repayTarget && membership && (
-                <RepayFromSavingsModal
-                    loanId={repayTarget.loanId}
-                    installmentId={repayTarget.installmentId}
-                    installmentNumber={repayTarget.installmentNumber}
-                    amountDue={repayTarget.amountDue}
-                    userId={membership.id}
-                    savingsBalance={Number(membership.savingsBalance || 0)}
-                    onClose={() => setRepayTarget(null)}
-                    // Reload rather than patching state: the savings balance and
-                    // the instalment both moved, and the server is the only
-                    // place that knows what they moved to.
-                    onRepaid={loadLoans}
-                />
-            )}
-        </div>
+        <MyLoansClient
+            initial={complete ? { membershipRes, loanApplications: applications, schedules } : null}
+        />
     );
 }

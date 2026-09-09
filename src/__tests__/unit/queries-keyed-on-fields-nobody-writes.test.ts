@@ -172,7 +172,7 @@ describe('#335 — the cooperative widget now reads the rows that exist', () => 
     });
 
     it('the member page it must agree with derives it the same way', () => {
-        const page = source('src/app/cooperatives/(member)/my-loans/page.tsx');
+        const page = source('src/app/cooperatives/(member)/my-loans/MyLoansClient.tsx');
         expect(page).toMatch(/status === "pending" \|\| inst\.status === "partial"/);
         expect(page).toMatch(/nextPayment\.totalAmount - nextPayment\.paidAmount/);
     });
