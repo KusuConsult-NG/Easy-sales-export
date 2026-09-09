@@ -6,6 +6,8 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -45,7 +47,8 @@ async function _getWaveApplicationsAction(): Promise<
          * verification queue and the WAVE withdrawal queue — each on the
          * permission required by the action the screen exists to perform.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "wave:approve_applications");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("wave:approve_applications");
 
         // Audit logging
         await createAdminAuditLog({

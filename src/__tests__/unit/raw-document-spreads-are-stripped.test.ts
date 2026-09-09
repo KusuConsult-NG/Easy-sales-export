@@ -118,8 +118,13 @@ describe('#338 — the two spreads that were not gated, now are', () => {
     });
 
     it('and on export:approve_applications', () => {
+        //   #535 moved this decision off `session.user.roles` and onto the live
+        //   roles, through the one rule every PII-visibility decision now
+        //   shares. The permission is unchanged and is what this assertion is
+        //   about; the pattern is re-anchored on the shared rule rather than on
+        //   the expression that read the token.
         expect(source(EXPORTS)).toMatch(
-            /const maySeeApplicantPii = hasAdminPermission\(session\.user\.roles, "export:approve_applications"\)/);
+            /const maySeeApplicantPii = await mayRevealMemberPii\("export:approve_applications"\)/);
     });
 
     it('the raw spread is still THERE for a caller who may see it', () => {

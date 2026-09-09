@@ -6,6 +6,8 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -132,7 +134,8 @@ async function _getStandardFarmNationRegistrantsAction(options: {
          * escrow list and the farm-nation transaction list were each closed by
          * requiring the permission that lets you process the payout.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:resolve_disputes");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("finance:resolve_disputes");
 
         const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);

@@ -6,6 +6,8 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue, FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -55,7 +57,8 @@ async function _getStandardWaveWithdrawalsAction(options: {
          * the farm-nation registrant list and the land verification queue were
          * each closed the same way.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:process_withdrawals");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("finance:process_withdrawals");
 
         const fetchLimit = options.search ? 5000 : (options.limit || 25);
         const orderDirection = options.sortOrder || "desc";

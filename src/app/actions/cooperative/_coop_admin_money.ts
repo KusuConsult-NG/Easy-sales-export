@@ -5,6 +5,8 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { logAuditAction } from "@/lib/audit-log";
@@ -53,12 +55,29 @@ async function _getAllTransactionsAction(options?: {
 
         /**
          * Bank details go only to the callers who can act on these records.
-         * `roles` above is the LIVE set this action already resolves, so the
-         * check below inherits that. Seventh and eighth instances of a list
-         * gated more loosely than the action it feeds; see the WAVE withdrawal
-         * queue for the six before them.
+         * Seventh and eighth instances of a list gated more loosely than the
+         * action it feeds; see the WAVE withdrawal queue for the six before
+         * them.
+         *
+         *   #535 THIS COMMENT USED TO SAY "`roles` above is the LIVE set this
+         *   action already resolves, so the check below inherits that", AND IT
+         *   WAS NOT TRUE.
+         *
+         *   The resolution above is
+         *
+         *       let roles = session.user.roles;
+         *       if (!isAdmin(roles)) { ...read the live roles... }
+         *
+         *   so the database is consulted ONLY when the token is too NARROW. When
+         *   the token already claims admin — the ordinary case, and the
+         *   revoked-admin case this whole pattern exists for — `roles` is the
+         *   token's, unread and possibly hours stale. The fallback can enlarge a
+         *   too-small claim and can never shrink a too-large one.
+         *
+         *   Asked of the record now, through the one rule the other eleven
+         *   bank-details decisions share.
          */
-        const maySeeBankDetails = hasAdminPermission(roles, "finance:process_withdrawals");
+        const maySeeBankDetails = await mayRevealMemberPii("finance:process_withdrawals");
 
         // Audit logging
         await createAdminAuditLog({

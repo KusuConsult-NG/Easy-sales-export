@@ -161,16 +161,16 @@ describe('#151 — no list hands out bank details on isAdmin() alone', () => {
     it.each(GATED_LISTS)('%s gates them on %s', (file, permission) => {
         const src = readFileSync(join(process.cwd(), file), 'utf8');
 
-        //   EITHER gate counts — #532.
+        //   ANY of the three forms counts — #532, then #535.
         //
         //   This asserted `hasAdminPermission` by name, which pinned the check
-        //   to the WEAKER of the two forms the platform has. requireAdmin asks
-        //   the same PERMISSION_MATRIX and re-reads the roles from the database
-        //   first, so a file that moves to it has strengthened the gate, and
-        //   _land.ts failed here for having done exactly that. What the sweep
-        //   is defending is that the list is gated on the named permission, not
-        //   which of the two functions asks.
-        expect(src).toMatch(/hasAdminPermission\(|requireAdmin\(/);
+        //   to the WEAKEST of the forms the platform has. requireAdmin and
+        //   mayRevealMemberPii both ask the same PERMISSION_MATRIX and re-read
+        //   the roles from the database first, so a file that moves to either
+        //   has STRENGTHENED the gate — and files failed here for having done
+        //   exactly that, twice. What the sweep defends is that the list is
+        //   gated on the named permission, not which function asks.
+        expect(src).toMatch(/hasAdminPermission\(|requireAdmin\(|mayRevealMemberPii\(/);
         expect(src).toContain(permission);
     });
 

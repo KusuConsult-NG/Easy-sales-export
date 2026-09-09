@@ -8,6 +8,8 @@ import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { stripPii, stripSecrets } from "@/lib/admin-pii";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
@@ -161,7 +163,8 @@ async function _getStandardAcademyApplicationsAction(options: {
          * The list itself stays open: a support user answering "did my academy
          * application go through" needs the status. The bank block does not.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "academy:approve_applications");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("academy:approve_applications");
 
         const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all") || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);

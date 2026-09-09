@@ -7,6 +7,8 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransition } from "@/lib/status-transition";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -94,7 +96,8 @@ async function _getFarmNationTransactionsAction(options: {
          * do — requires "finance:resolve_disputes". Names, emails and phones
          * stay for every admin, because the list is built on them.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:resolve_disputes");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("finance:resolve_disputes");
 
         const fetchLimit = options.limit || 50;
         let queryRef: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).orderBy("createdAt", "desc");

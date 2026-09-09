@@ -40,6 +40,30 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
+
+/**
+ *   #535 THE PII-VISIBILITY RULE IS MOCKED HERE, AND ONLY HERE.
+ *
+ *   maySeePii in _users.ts used to read `session.user.roles`; it asks the
+ *   database now, through mayRevealMemberPii → requireAdmin. The obvious harness
+ *   repair — seed the acting admin's own row so requireAdmin finds it — was
+ *   tried and made things worse: this suite's subject is the USER LIST, and an
+ *   extra row breaks the deduplication, ordering, paging and count assertions
+ *   that are the point of the file. Eight tests failed that had nothing to do
+ *   with PII.
+ *
+ *   So the rule is stubbed to answer from the session, which is exactly what the
+ *   code did when these tests were written, and the rule itself is executed
+ *   against a real database in who-may-see-an-account-number.test.ts. Each file
+ *   tests one thing.
+ */
+jest.mock('@/lib/member-pii-visibility', () => ({
+    mayRevealMemberPii: async (permission: string) => {
+        const { hasAdminPermission } = jest.requireActual('@/lib/admin-permissions') as any;
+        const session = await (globalThis as any).mockRequireSession();
+        return hasAdminPermission(session?.session?.user?.roles ?? [], permission);
+    },
+}));
 import { COLLECTIONS } from '@/lib/types/firestore';
 
 jest.mock('@/lib/redis', () => ({

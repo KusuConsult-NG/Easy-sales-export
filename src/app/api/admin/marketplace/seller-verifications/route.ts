@@ -7,6 +7,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { stripPii } from "@/lib/admin-pii";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 
 /**
  * API Route: Get All Seller Verifications (Admin Only)
@@ -51,7 +53,8 @@ export async function GET(request: NextRequest) {
          *        come out. Only super_admin, admin and marketplace_admin — who
          *        can actually approve one — see the pack.
          */
-        const maySeeVerificationPii = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
+        //   #535 The LIVE roles, not the token's — see lib/member-pii-visibility.
+        const maySeeVerificationPii = await mayRevealMemberPii("marketplace:approve_sellers");
 
         // Get all seller verifications (Admin SDK)
         const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)

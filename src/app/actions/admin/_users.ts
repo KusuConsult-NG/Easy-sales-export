@@ -20,6 +20,8 @@ import { stripRegistrationPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
 import { safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import {
     isManufacturedProfile,
     isVerifiedMember,
@@ -447,7 +449,8 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
          *
          * Same permission as the export, so the two surfaces now agree.
          */
-        const maySeePii = hasAdminPermission(session.user.roles, "users:export");
+        //   #535 The LIVE roles, not the token's — see lib/member-pii-visibility.
+        const maySeePii = await mayRevealMemberPii("users:export");
 
         const pageSize = options.search ? 5000 : (options.limit || 50);
         const page = options.page ?? 0; // page offset (0-indexed)

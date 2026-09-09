@@ -110,6 +110,54 @@ import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-p
  *   Purely additive: every existing call site either destructures `userId` or
  *   tests `"error" in result`, so nothing changes for them.
  */
+/**
+ * The caller's LIVE admin roles, read from the database.
+ *
+ *   #535 THE ONE DECISION THAT REVEALS A MEMBER'S BANK ACCOUNT NUMBER IS MADE
+ *        TWELVE TIMES, AND TEN OF THEM ASKED THE TOKEN.
+ *
+ *   Twelve admin lists hydrate seller, borrower, applicant or withdrawer bank
+ *   details behind a single expression:
+ *
+ *       const maySeeBankDetails = hasAdminPermission(<roles>, "<permission>");
+ *
+ *   Two of the twelve already resolve <roles> from the database — the admin
+ *   withdrawal queue (#532) and the marketplace escrow list, which reads the
+ *   caller's own document. The platform has therefore decided twice,
+ *   independently, that this decision belongs to the record. The other ten read
+ *   `session.user.roles`, which #356 established can be hours out of date.
+ *
+ *   TWO OF THOSE TEN LOOK LIVE AND ARE NOT. _coop_admin_money and
+ *   _coop_admin_members do
+ *
+ *       let roles = session.user.roles;
+ *       if (!isAdmin(roles)) { ...read the live roles... }
+ *
+ *   and then comment that "`roles` above is the LIVE set this action already
+ *   resolves". It is not: the live read happens ONLY when the token is too
+ *   NARROW. When the token already claims admin the database is never asked,
+ *   which is precisely the revoked-admin case the whole pattern exists for. A
+ *   comment asserting what the code does not do is worse than no comment.
+ *
+ * ── WHY A SEPARATE FUNCTION FROM requireAdmin ───────────────────────────────
+ *
+ *   requireAdmin answers "may this caller do X" and is pinned by #375 to name
+ *   its permission. These call sites ask something different: they need the
+ *   live role SET, because each of them then asks TWO questions of it — may you
+ *   open this list at all, and may you see the bank details on it. Calling
+ *   requireAdmin twice would read the same document twice and would put a bare
+ *   gate into a file, which is the shape #375 exists to prevent.
+ *
+ *   The refusals are identical to requireAdmin's, deliberately: unauthenticated,
+ *   no profile, suspended or banned, not an admin. It is that function's first
+ *   four steps, returning what it already read.
+ */
+export async function liveAdminRoles(): Promise<{ roles: string[] } | { error: string }> {
+    const gate = await requireAdmin();
+    if ("error" in gate) return { error: gate.error };
+    return { roles: gate.roles };
+}
+
 export async function requireAdmin(permission?: AdminPermission): Promise<
     { userId: string; roles: string[] } | { error: string }
 > {

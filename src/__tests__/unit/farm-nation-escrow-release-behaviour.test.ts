@@ -32,6 +32,8 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
+// #535 The bank-details decision reads the database through auth().
+import { auth } from '@/lib/auth';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
 jest.mock('@/lib/redis', () => ({
@@ -41,12 +43,14 @@ jest.mock('@/lib/redis', () => ({
     redis: null,
 }));
 
-jest.mock('@/lib/auth', () => ({
-    auth: async () => null,
-    signIn: async () => undefined,
-    signOut: async () => undefined,
-    handlers: {},
-}));
+//   #535 THE LOCAL @/lib/auth MOCK IS GONE, AND IT WAS ALREADY DEAD.
+//
+//   This file imports `jest` from '@jest/globals', so its jest.mock calls do NOT
+//   hoist above the imports — #392's subject. jest.setup.js already mocks
+//   @/lib/auth with a jest.fn(), and that is the copy every module here has been
+//   receiving; the factory below claimed `auth` returns null and never ran.
+//   Removing it lets actAs() drive the mock that is actually in play, and stops
+//   the file asserting something untrue about itself.
 
 /** Credits once per reference and reports the balance after, as the SQL does. */
 const credited = new Map<string, number>();
@@ -88,6 +92,17 @@ const LISTINGS = COLLECTIONS.LAND_LISTINGS;
 const USERS = COLLECTIONS.USERS;
 const PAYOUTS = 'farm_nation_payouts';
 
+/**
+ * Acting as somebody — session, auth() AND the record.
+ *
+ *   #535 THE SESSION ALONE USED TO BE ENOUGH.
+ *
+ *   The decision this file is about — whether bank details are included —
+ *   read `session.user.roles`. It asks the database now (mayRevealMemberPii →
+ *   requireAdmin), so a caller who exists only in a session mock resolves to
+ *   nobody and the details are withheld. That reads exactly like the defect
+ *   these tests assert against, and is the harness.
+ */
 function actAs(id: string | null, roles: string[] = ['general_user']): void {
     (globalThis as {
         mockRequireSession: { mockImplementation: (f: () => unknown) => void };
@@ -96,6 +111,16 @@ function actAs(id: string | null, roles: string[] = ['general_user']): void {
             ? { session: null, error: { error: 'Authentication required' } }
             : { session: { user: { id, roles, email: `${id}@e.com` } }, error: null },
     ));
+
+    (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve(
+        id === null ? null : { user: { id, roles, email: `${id}@e.com` } },
+    ));
+
+    if (id !== null) {
+        store.seed(COLLECTIONS.USERS, id, {
+            ...(store.get(COLLECTIONS.USERS, id) ?? {}), roles, email: `${id}@e.com`,
+        });
+    }
 }
 
 beforeEach(() => {

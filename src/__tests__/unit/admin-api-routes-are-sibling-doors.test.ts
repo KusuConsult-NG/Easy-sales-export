@@ -118,9 +118,24 @@ const ROWS: Record<string, any[]> = {
     [COLLECTIONS.LOAN_APPLICATIONS]: [{ id: 'a1', data: () => LOAN_APPLICATION }],
 };
 
+/**
+ *   #535 THE CALLER'S OWN ROW, WHICH THIS STUB NOW HAS TO SERVE.
+ *
+ *   These routes decide whether to include the pack — bank details and identity
+ *   documents — and that decision read `session.user.roles`. It asks the
+ *   database now (mayRevealMemberPii → requireAdmin → getAdminDb), so the
+ *   document stub has to carry the acting caller's roles or every positive case
+ *   reads as "the pack was withheld", which is the defect these tests assert
+ *   against rather than the harness they need.
+ */
+let CALLER_ROLES: string[] = [];
+
 const USER_DOC = {
     exists: true,
-    data: () => ({ firstName: 'A', lastName: 'Seller', email: 'seller@example.com' }),
+    data: () => ({
+        firstName: 'A', lastName: 'Seller', email: 'seller@example.com',
+        roles: CALLER_ROLES,
+    }),
 };
 
 // A chainable query stub. Every filter returns itself; get() hands back the
@@ -164,6 +179,17 @@ const REQUEST = { url: 'https://x.test/api?status=pending' } as any;
 
 async function get(mod: string, session: any, req: any = REQUEST) {
     global.mockRequireSession.mockResolvedValueOnce(session);
+    //   #535 The same roles on the record and in the token, so these tests keep
+    //   measuring what they were written to measure — which permission opens
+    //   the pack, not whether the caller exists.
+    CALLER_ROLES = session?.session?.user?.roles ?? [];
+    //   Resolved lazily, NOT by a static import. This file mocks @/lib/logger,
+    //   and @/lib/auth pulls the logger in — so importing auth at the top loads
+    //   the real logger before the mock is registered. #392's ratchet reported
+    //   exactly that, correctly.
+     
+    const { auth } = require('@/lib/auth');
+    (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve(session?.session ?? null));
     const { GET } = await import(mod);
     return (GET as any)(req);
 }
@@ -295,8 +321,17 @@ describe('#339 — the permissions chosen are the ones the siblings use', () => 
             ['src/app/api/admin/marketplace/seller-verifications/route.ts', 'marketplace:approve_sellers'],
         ];
 
+        //   #535 The PERMISSION is what this asserts, not the expression that
+        //   asks for it. The seller-verifications route moved its pack decision
+        //   onto the live roles through the shared rule; the other three still
+        //   read the token and are among the 88 that
+        //   half-converted-off-the-stale-token.test.ts counts. Either spelling
+        //   names the same permission, which is the claim.
         for (const [file, permission] of expected) {
-            expect(src(file)).toContain(`hasAdminPermission(session.user.roles, "${permission}")`);
+            expect(src(file)).toMatch(new RegExp(
+                `hasAdminPermission\\(session\\.user\\.roles, "${permission}"\\)`
+                + `|mayRevealMemberPii\\("${permission}"\\)`,
+            ));
         }
     });
 

@@ -204,7 +204,21 @@ describe('#437 — the two admin conventions, both sound', () => {
         const roleOnly = adminRoutes.filter((f) => {
             const src = code(f);
             const usesBareIsAdmin = /[^a-zA-Z]isAdmin\s*\(\s*session/.test(src);
-            const namesPermission = /hasAdminPermission\s*\(|requireAdmin\s*\(\s*["']/.test(src);
+            //   #535 mayRevealMemberPii counts, and finding that out was a small
+        //   lesson about this ratchet.
+        //
+        //   seller-verifications appeared here the moment its ONLY
+        //   hasAdminPermission call — a FIELD-VISIBILITY decision, not a gate —
+        //   moved to the shared rule. So the route had been passing this check
+        //   on an expression that never gated anything: its access decision has
+        //   always been isAdmin() alone, deliberately, because the seller queue
+        //   is open to every admin and only the pack is restricted (#339).
+        //
+        //   The pattern accepts the shared rule rather than pretending the
+        //   route changed. What this test really asserts is that a route names
+        //   the permission SOMEWHERE, and that is still true.
+        const namesPermission =
+            /hasAdminPermission\s*\(|requireAdmin\s*\(\s*["']|mayRevealMemberPii\s*\(/.test(src);
             return usesBareIsAdmin && !namesPermission;
         }).map(routeName);
 

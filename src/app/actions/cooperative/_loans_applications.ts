@@ -10,6 +10,8 @@ import { isEligibleForLoan, getTierInterestRate, DEFAULT_MONTHLY_INTEREST_RATE }
 import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
 import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication, ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
@@ -404,7 +406,8 @@ export async function getAdminLoanApplicationsAction(options: {
          * approving a loan requires, and every row here carries an applicant's
          * account number, account name and bank code.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "cooperatives:approve_loans");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("cooperatives:approve_loans");
 
         const fetchLimit = options.search ? 5000 : (options.limit || 20);
 

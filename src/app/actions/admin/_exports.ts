@@ -20,6 +20,8 @@ import { stripPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { recordAdminAction } from "@/lib/audit-log";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 
 // ============================================
 // Export Window Management (Admin)
@@ -548,7 +550,8 @@ async function _getStandardExportApplicationsAction(options: {
          *        not one of them. Gated on the permission the screen exists to
          *        exercise, as _withdrawals.ts and _marketplace.ts do.
          */
-        const maySeeApplicantPii = hasAdminPermission(session.user.roles, "export:approve_applications");
+        //   #535 The LIVE roles, not the token's — see lib/member-pii-visibility.
+        const maySeeApplicantPii = await mayRevealMemberPii("export:approve_applications");
 
         const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);

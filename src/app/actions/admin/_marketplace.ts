@@ -15,6 +15,8 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { stripPii } from "@/lib/admin-pii";
 import { safeToISOString } from "@/lib/date-utils";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
@@ -404,7 +406,8 @@ async function _getStandardSellerVerificationsAction(
          * application and could read every seller's account number and download
          * their identity documents.
          */
-        const maySeeVerificationPii = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
+        //   #535 The LIVE roles, not the token's — see lib/member-pii-visibility.
+        const maySeeVerificationPii = await mayRevealMemberPii("marketplace:approve_sellers");
 
         let cursorSnap = null;
         if (cursorId) {
@@ -706,7 +709,8 @@ async function _getMarketplaceUsersAction(options: {
         // every admin role, and each row carried a marketplace buyer's or
         // seller's bank account. Acting on one requires
         // "marketplace:approve_sellers" or "marketplace:suspend_sellers".
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("marketplace:approve_sellers");
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);

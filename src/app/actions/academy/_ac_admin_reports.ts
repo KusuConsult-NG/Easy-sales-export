@@ -7,6 +7,8 @@ import { logger } from '@/lib/logger';
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+// #535 One rule for who may see a member's bank details and ID papers.
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -37,7 +39,8 @@ async function _getAcademyEnrollmentsAction(options?: {
          * verification queue and the WAVE withdrawal queue — each on the
          * permission required by the action the screen exists to perform.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "academy:approve_applications");
+        //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
+        const maySeeBankDetails = await mayRevealMemberPii("academy:approve_applications");
 
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
         const fetchLimit = options?.search ? 5000 : (options?.limit || 50);

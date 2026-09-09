@@ -51,6 +51,8 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
+// #535 The PII decision reads the database through auth(); actAs sets it.
+import { auth } from '@/lib/auth';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { readFileSync } from 'fs';
 import { stripComments } from '@/lib/testing/strip-comments';
@@ -76,11 +78,26 @@ const ACCOUNT = '0123456789';
 
 let store: FakeDbHandle;
 
+/**
+ * Acting as an admin — session, auth() AND the record.
+ *
+ *   #535 THE SESSION ALONE USED TO BE ENOUGH.
+ *
+ *   These lists decide whether to include bank details and identity numbers,
+ *   and that decision read `session.user.roles`. It asks the database now
+ *   (mayRevealMemberPii → requireAdmin), so a caller who exists only in a
+ *   session mock resolves to nobody and the pack is withheld — which reads
+ *   exactly like the defect these tests assert against and is the harness.
+ */
 function actAs(roles: string[]) {
     global.mockRequireSession.mockImplementation(() => Promise.resolve({
         session: { user: { id: 'admin1', roles, email: 'a@x.com' } },
         error: null,
     }));
+    (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve({
+        user: { id: 'admin1', roles, email: 'a@x.com' },
+    }));
+    store.seed(COLLECTIONS.USERS, 'admin1', { roles, email: 'a@x.com' });
 }
 
 function seed() {
