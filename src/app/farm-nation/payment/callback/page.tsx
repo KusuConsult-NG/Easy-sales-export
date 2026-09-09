@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, Suspense } from "react";
+import { useState, Suspense } from "react";
+import { useOnce } from "@/hooks/useOnce";
 import { useRouter, useSearchParams } from "next/navigation";
 import { verifyPropertyPaymentAction } from "@/app/actions/farm-nation-payment";
 import { CheckCircle, XCircle, Loader2, Home, MapPin, LayoutDashboard } from "lucide-react";
@@ -13,7 +14,16 @@ function PaymentCallbackContent() {
     const [message, setMessage] = useState("");
     const [propertyId, setPropertyId] = useState<string | null>(null);
 
-    useEffect(() => {
+    /**
+     *   #568 EXACTLY ONCE. See the export callback for the full note: this was
+     *   `useEffect(..., [searchParams])`, useSearchParams hands back a new
+     *   object on re-render, and verifyPropertyPaymentAction was therefore
+     *   re-run on every one.
+     *
+     *   The money was never at risk — a lost claim returns success — but each
+     *   redundant render bought another Paystack verification.
+     */
+    useOnce(() => {
         const verifyPayment = async () => {
             const reference = searchParams.get("reference");
 
@@ -41,7 +51,7 @@ function PaymentCallbackContent() {
         };
 
         verifyPayment();
-    }, [searchParams]);
+    });
 
     return (
         <div className="min-h-screen bg-linear-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center p-4">

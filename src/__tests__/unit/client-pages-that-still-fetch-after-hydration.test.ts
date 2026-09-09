@@ -63,8 +63,26 @@ const ROOT = process.cwd();
  * A new client page that fetches on mount is not forbidden — sometimes it is
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
+ *
+ * ── IT WAS RAISED ONCE, IN #568, AND HERE IS EXACTLY WHY ────────────────────
+ *
+ *   12 -> 14. NOT because two screens regressed: because two were NEVER
+ *   COUNTED. The scan required `useEffect`, and academy/payment/callback and
+ *   marketplace/payment/callback have always done their mount read behind
+ *   `useOnce` instead — this codebase's own effect wrapper. They matched the
+ *   definition and were invisible to the measurement.
+ *
+ *   The number of screens that fetch after hydration did not change on the day
+ *   this was raised. What changed is that the instrument can see all of them.
+ *
+ *   Recorded this loudly because silently raising a ratchet is precisely what
+ *   ratchets exist to prevent, and "the measurement was wrong" is the one
+ *   reason that justifies it — which makes it the excuse to check hardest.
+ *   Every page in the count is now named below: thirteen in NOT_CONVERTIBLE
+ *   with a reason each, and cooperatives/(member)/loans, left untouched at the
+ *   owner's explicit instruction about the loan product.
  */
-const CAP = 12;
+const CAP = 14;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -79,7 +97,23 @@ function pagesThatFetchAfterHydration(): string[] {
             } else if (entry === 'page.tsx') {
                 const src = readFileSync(full, 'utf-8');
                 if (!src.includes('"use client"')) continue;
-                if (!/useEffect/.test(src)) continue;
+                /**
+                 *   #568 `useOnce` COUNTS TOO, AND THE SCAN HAS BEEN BLIND TO
+                 *        IT SINCE THIS LEDGER WAS WRITTEN.
+                 *
+                 *   The check was `/useEffect/` alone. useOnce is this
+                 *   codebase's own wrapper — an effect with a ref guard, used by
+                 *   the payment callbacks — so a page whose only mount read sat
+                 *   behind it was INVISIBLE here. Two of the seven payment
+                 *   callbacks were never counted, and converting a third to
+                 *   useOnce in #568 silently removed it from the count, which is
+                 *   how this was noticed: a change that should not have moved
+                 *   the number moved it.
+                 *
+                 *   A ledger that a refactor can walk out of is not a ledger.
+                 *   Any mount-time effect counts, whatever it is spelled.
+                 */
+                if (!/useEffect|useOnce/.test(src)) continue;
                 if (!/(Action\s*\(|await fetch\()/.test(src)) continue;
                 found.push(full.slice(ROOT.length + 1));
             }
@@ -263,6 +297,36 @@ const NOT_CONVERTIBLE: { page: string; because: string }[] = [
         page: 'src/app/verify-id/page.tsx',
         because: 'a QR scanner — its only fetch fires on a scan, and its effect is a '
             + 'camera teardown; nothing is read on mount at all',
+    },
+    {
+        page: 'src/app/academy/payment/callback/page.tsx',
+        because: 'a payment callback — one of the two that were invisible to this scan '
+            + 'until #568 taught it about useOnce; same reasoning as the others',
+    },
+    {
+        page: 'src/app/marketplace/payment/callback/page.tsx',
+        because: 'a payment callback — the other one the scan could not see before #568',
+    },
+    {
+        page: 'src/app/export/payment/callback/page.tsx',
+        because: 'a payment callback — see #568. Verifying a payment is a MUTATION, and '
+            + 'moving it into a server render would make it a side effect of a GET: it '
+            + 'would run on any re-render, prefetch or crawl, with no browser involved. '
+            + 'The idempotency gate makes that safe, not right',
+    },
+    {
+        page: 'src/app/farm-nation/payment/callback/page.tsx',
+        because: 'a payment callback — same reasoning as the export one above',
+    },
+    {
+        page: 'src/app/export/buyer/cart/payment-callback/page.tsx',
+        because: 'a payment callback, and it also clears the basket and the buyer details '
+            + 'out of localStorage (#569) — neither of which a server render can reach',
+    },
+    {
+        page: 'src/app/cooperatives/payment/callback/page.tsx',
+        because: 'a payment callback — same reasoning, plus its redirect target depends on '
+            + 'window.location.hostname, which only the browser knows',
     },
     {
         page: 'src/app/marketplace/checkout/page.tsx',

@@ -99,7 +99,24 @@ export default function ExportCartPage() {
             );
 
             if (result.success ) {
-                // Store buyer details in user-scoped localStorage for post-payment processing
+                /**
+                 * Store buyer details in user-scoped localStorage.
+                 *
+                 *   #569 KEPT, AND NOW ACTUALLY CLEARED. Nothing in this
+                 *   codebase reads this key — it was written "for post-payment
+                 *   processing" that was never built — so what it did was leave
+                 *   the buyer's name, email, phone and delivery details, plus a
+                 *   snapshot of what they bought and paid, on the machine
+                 *   indefinitely.
+                 *
+                 *   It is NOT removed here, because a buyer who is about to be
+                 *   sent to Paystack may come back to a support conversation
+                 *   about what they were charged, and this is the only local
+                 *   record of the basket at the moment of payment. It is
+                 *   cleared where it stops being needed: the payment callback,
+                 *   once the order exists server-side. See the `finally` block
+                 *   in export/buyer/cart/payment-callback.
+                 */
                 const userId = session?.user?.id;
                 const detailsKey = userId ? `export_buyer_details_${userId}` : "export_buyer_details";
                 localStorage.setItem(detailsKey, JSON.stringify({

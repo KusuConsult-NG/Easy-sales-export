@@ -1,13 +1,25 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
+import { useSession } from "next-auth/react";
+import { useOnce } from "@/hooks/useOnce";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { verifyExportOrderPaymentAction } from "@/app/actions/export-payment";
 
+/**
+ * The two keys this flow leaves in the browser, named where both sides can see
+ * them. The cart page writes them; this screen is where they stop being needed.
+ */
+const CART_KEY = "export_cart";
+const buyerDetailsKey = (userId?: string | null) =>
+    userId ? `export_buyer_details_${userId}` : "export_buyer_details";
+
 function PaymentCallbackContent() {
     const router = useRouter();
+    const { data: session } = useSession();
+    const userId = session?.user?.id;
     const searchParams = useSearchParams();
     const reference = searchParams.get("reference");
 
@@ -15,7 +27,14 @@ function PaymentCallbackContent() {
     const [message, setMessage] = useState("Verifying your payment securely...");
     const [orderId, setOrderId] = useState<string | null>(null);
 
-    useEffect(() => {
+    /**
+     *   #568 EXACTLY ONCE. `reference` is a string, so this effect's dependency
+     *   was already stable — but React 18's Strict Mode probe mount re-runs it
+     *   regardless, which is the case useOnce exists for, and it is the guard
+     *   the other payment callbacks use. Being the only one that "probably does
+     *   not need it" is how a screen ends up without it.
+     */
+    useOnce(() => {
         if (!reference) {
             setStatus("error");
             setMessage("No payment reference found. Please contact support if you were charged.");
@@ -29,9 +48,6 @@ function PaymentCallbackContent() {
                 if (result.success) {
                     setStatus("success");
                     setOrderId(result.data?.orderId || null);
-                    // Clear the local storage cart and details
-                    localStorage.removeItem("export_cart"); // Assuming standard cart storage key
-                    const userId = localStorage.getItem("user_id_cache"); // Simplistic approach, though usually we rely on context
                 } else {
                     setStatus("error");
                     setMessage(result.error || "Failed to verify payment");
@@ -39,11 +55,46 @@ function PaymentCallbackContent() {
             } catch (error) {
                 setStatus("error");
                 setMessage("An unexpected error occurred during verification.");
+            } finally {
+                /**
+                 *   #569 THE BASKET AND THE BUYER'S DETAILS WERE LEFT ON THE
+                 *        MACHINE FOR A READER THAT WAS NEVER BUILT.
+                 *
+                 *   The cart page stores `export_buyer_details_{userId}` before
+                 *   redirecting to Paystack, commented "for post-payment
+                 *   processing". NOTHING IN THIS CODEBASE EVER READS IT —
+                 *   checked across every source file. So what it actually did
+                 *   was leave the buyer's name, email, phone and delivery
+                 *   details, plus a snapshot of what they bought and what they
+                 *   paid, in localStorage indefinitely, on whatever machine
+                 *   they used. A shared or borrowed computer keeps it forever.
+                 *
+                 *   This is the post-payment moment it was written for, so this
+                 *   is where it is cleared. Nothing is lost: the order itself
+                 *   was created server-side by the verification above, which is
+                 *   the record that matters and the one that is kept.
+                 *
+                 *   Cleared in `finally`, not on success: a failed verification
+                 *   is not a reason to keep a copy of somebody's address on a
+                 *   machine they may not own. And the cart key was already
+                 *   cleared by the cart page before it redirected — this is the
+                 *   belt to that braces, and it is a real one, because a buyer
+                 *   who abandoned Paystack and came back later never passed
+                 *   through that clearing at all.
+                 */
+                try {
+                    localStorage.removeItem(CART_KEY);
+                    localStorage.removeItem(buyerDetailsKey(userId));
+                } catch {
+                    //   #347 — getItem and removeItem both throw where site data
+                    //   is blocked. A cleanup that cannot run must not take the
+                    //   confirmation screen down with it.
+                }
             }
         }
 
         verify();
-    }, [reference]);
+    });
 
     if (status === "verifying") {
         return (

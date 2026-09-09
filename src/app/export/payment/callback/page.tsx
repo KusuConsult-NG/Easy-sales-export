@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useState } from "react";
+import { useOnce } from "@/hooks/useOnce";
 import { useRouter, useSearchParams } from "next/navigation";
 import { verifyInvestmentPaymentAction } from "@/app/actions/export-payment";
 import { verifyExportInvestmentAction } from "@/app/actions/export";
@@ -14,7 +15,25 @@ function PaymentCallbackContent() {
     const [message, setMessage] = useState("");
     const [investmentDetails, setInvestmentDetails] = useState<any>(null);
 
-    useEffect(() => {
+    /**
+     *   #568 EXACTLY ONCE — the guard three of this platform's six payment
+     *        callbacks already had, and this one did not.
+     *
+     *   This was `useEffect(..., [searchParams])`. useSearchParams returns a
+     *   NEW ReadonlyURLSearchParams object on re-render, so any re-render
+     *   re-ran the verification — and React 18's Strict Mode probe mount
+     *   re-runs it again in development, which is the case useOnce exists for.
+     *
+     *   WHAT THAT COST, STATED ACCURATELY: not money. Every verifier here
+     *   claims the reference through claim_payment_once and #259 made a LOST
+     *   claim return success — "the payment was already applied, by the webhook
+     *   or by an earlier delivery of this same callback" — so a duplicate never
+     *   double-credited anything and never told a paying investor they had
+     *   failed. What it cost was a whole extra Paystack verification API call
+     *   and its database round trip, per redundant render, on the one screen
+     *   where the user is already waiting.
+     */
+    useOnce(() => {
         const verifyPayment = async () => {
             const reference = searchParams.get("reference");
 
@@ -69,7 +88,7 @@ function PaymentCallbackContent() {
         };
 
         verifyPayment();
-    }, [searchParams]);
+    });
 
     return (
         <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-violet-50 flex items-center justify-center p-4">
