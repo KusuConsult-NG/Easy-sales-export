@@ -106,20 +106,42 @@ export default function AcademyDashboardPage() {
 
     async function fetchDashboardData() {
         try {
-            const response = await fetch("/api/academy/dashboard");
-            const data = await response.json();
+            /**
+             *   #543 TWO SEQUENTIAL ROUND TRIPS THAT DO NOT DEPEND ON EACH OTHER.
+             *
+             *   The dashboard payload and the live-session list were fetched one
+             *   after the other, so a member waited for the sum rather than the
+             *   longer of the two.
+             *
+             *   Like the WAVE dashboard, this load is gated on membership and
+             *   payment state resolved in the browser, so it is parallelised
+             *   rather than server-seeded — fetching on the server would do the
+             *   work for every visitor including the unpaid ones this screen
+             *   turns away.
+             *
+             *   allSettled: a failing live-session lookup must not cost the
+             *   member their course list.
+             */
+            const [dashSettled, liveSettled] = await Promise.allSettled([
+                fetch("/api/academy/dashboard").then(r => r.json()),
+                getLiveSessionsAction(),
+            ]);
 
-            if (data.success) {
-                setCourses(data.courses || []);
-                setCertificates(data.certificates || []);
-                setStats(data.stats || stats);
+            if (dashSettled.status === "fulfilled") {
+                const data = dashSettled.value;
+                if (data?.success) {
+                    setCourses(data.courses || []);
+                    setCertificates(data.certificates || []);
+                    setStats(data.stats || stats);
+                }
             }
 
-            // Fetch live sessions
-            const liveRes = await getLiveSessionsAction();
-            if (liveRes.success && liveRes.data) {
-                const active = liveRes.data.filter((s: any) => s.status === "live");
-                setLiveSessions(active);
+            if (liveSettled.status === "fulfilled") {
+                const liveRes = liveSettled.value;
+                if (liveRes.success && liveRes.data) {
+                    const active = liveRes.data.filter((s: any) => s.status === "live");
+                    setLiveSessions(active);
+                }
             }
         } catch (error) {
             logger.error("Failed to fetch dashboard data:", error);

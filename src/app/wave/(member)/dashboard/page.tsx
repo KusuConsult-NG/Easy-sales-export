@@ -62,22 +62,48 @@ export default function WaveDashboardPage() {
         try {
             // Membership check handled by useMembershipStatus hook
 
-            // Load stats
-            const statsResult = await getWaveMemberStatsAction();
-            if (statsResult.success && statsResult.data?.stats) {
-                setStats(statsResult.data.stats);
+            /**
+             *   #543 THREE ROUND TRIPS, ONE AFTER THE OTHER, FOR NO REASON.
+             *
+             *   These were three sequential `await`s. None depends on the
+             *   result of another — the stats, the resources and the events are
+             *   unrelated reads — so the member waited the SUM of three round
+             *   trips instead of the longest one.
+             *
+             *   NOT server-seeded like the other five dashboards, deliberately.
+             *   This load is gated on `membershipStatus`, which
+             *   useMembershipStatus resolves in the browser; fetching on the
+             *   server would do the work for every visitor including the ones
+             *   about to be redirected to /wave.
+             *
+             *   allSettled, not all: one failing panel must not cost the other
+             *   two, which is the rule getMyDashboard already follows.
+             */
+            const [statsSettled, resourcesSettled, eventsSettled] = await Promise.allSettled([
+                getWaveMemberStatsAction(),
+                getWaveResourcesAction(),
+                getWaveTrainingEventsAction(),
+            ]);
+
+            if (statsSettled.status === "fulfilled") {
+                const statsResult = statsSettled.value;
+                if (statsResult.success && statsResult.data?.stats) {
+                    setStats(statsResult.data.stats);
+                }
             }
 
-            // Load recent resources (limit 3)
-            const resourcesResult = await getWaveResourcesAction();
-            if (resourcesResult.success && resourcesResult.data) {
-                setRecentResources(resourcesResult.data.slice(0, 3));
+            if (resourcesSettled.status === "fulfilled") {
+                const resourcesResult = resourcesSettled.value;
+                if (resourcesResult.success && resourcesResult.data) {
+                    setRecentResources(resourcesResult.data.slice(0, 3));
+                }
             }
 
-            // Load upcoming events (limit 3)
-            const eventsResult = await getWaveTrainingEventsAction();
-            if (eventsResult.success && eventsResult.data) {
-                setUpcomingEvents(eventsResult.data.slice(0, 3));
+            if (eventsSettled.status === "fulfilled") {
+                const eventsResult = eventsSettled.value;
+                if (eventsResult.success && eventsResult.data) {
+                    setUpcomingEvents(eventsResult.data.slice(0, 3));
+                }
             }
         } catch (error) {
             logger.error("Dashboard load error:", error);

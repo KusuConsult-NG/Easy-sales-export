@@ -147,7 +147,7 @@ describe('the vendor role still works, which is why nothing is lost', () => {
 
     it('and the marketplace seller surface it maps onto is real', () => {
         for (const p of [
-            'src/app/marketplace/seller/dashboard/page.tsx',
+            'src/app/marketplace/seller/dashboard/SellerDashboardClient.tsx',
             'src/app/marketplace/seller/products/page.tsx',
             'src/app/marketplace/seller/orders/page.tsx',
         ]) {
