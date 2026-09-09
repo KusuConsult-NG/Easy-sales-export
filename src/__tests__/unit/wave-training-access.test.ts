@@ -65,14 +65,27 @@ function codeOnly(src: string): string {
         .join('\n');
 }
 
-const route = source('src/app/api/wave/training-sessions/route.ts');
+//   #567 The GET gate and listing moved TOGETHER to lib/wave-training-reader,
+//   so /wave/live-training could read them on the server rather than fetching
+//   this route from the browser on a 60-second poll. They moved together
+//   deliberately — the listing carries roomKey and the gate in front of it has
+//   been wrong twice, so splitting them is how it goes wrong a third time.
+//   These checks read the reader; the route is checked separately for having
+//   kept no second copy.
+const route = source('src/lib/wave-training-reader.ts');
+const handler = source('src/app/api/wave/training-sessions/route.ts');
 const middleware = source('src/middleware.ts');
 
 describe('reading the programme requires being in it', () => {
     it('the route checks programme access, not just a session', () => {
         // THE test.
         expect(route).toContain('canReadWaveProgramme({ roles: session.user.roles, waveRegStatus })');
-        expect(route).toContain('WAVE programme access required');
+        //   #567 The refusal MESSAGE is the route's to word; the reader answers
+        //   `{ allowed: false }`. Both halves are checked, because a reader that
+        //   refused and a route that answered 200 anyway would pass either one.
+        expect(route).toContain('return { allowed: false }');
+        expect(handler).toContain('WAVE programme access required');
+        expect(handler).toContain('if (!result.allowed)');
     });
 
     it('the check precedes the query', () => {
@@ -175,7 +188,10 @@ describe('the response is bounded and current', () => {
     it('still returns what a participant needs to attend', () => {
         // Vacuity guard: stripping the meeting link would make the endpoint
         // pointless. It is the payload — the fix is who receives it.
-        const mapper = route.slice(route.indexOf('const sessions = docs.map'), route.indexOf('const nextCursor'));
+        const mapper = route.slice(
+            route.indexOf('const sessions: WaveTrainingSession[] = docs.map'),
+            route.indexOf('const nextCursor'),
+        );
 
         for (const field of ['title', 'scheduledAt', 'durationMinutes', 'roomName', 'customMeetingLink']) {
             expect(mapper).toContain(field);
@@ -183,8 +199,11 @@ describe('the response is bounded and current', () => {
     });
 
     it('pagination is unchanged', () => {
-        expect(route).toContain('Math.min(Math.max(rawLimit, 1), 50)');
+        //   #567 The clamp moved with the reader; the route still parses the
+        //   raw parameter and hands it over.
+        expect(route).toContain('Math.min(Math.max(options.limit ?? 20, 1), 50)');
         expect(route).toContain('limit + 1');
+        expect(handler).toContain('searchParams.get("limit")');
     });
 });
 
@@ -194,15 +213,35 @@ describe('the POST, which was already right', () => {
         // refused wave_admin — the role holding wave:manage_training, the
         // permission that names this exact operation. Asserted by permission
         // rather than by the literal role check it used to spell out.
-        const post = route.slice(route.indexOf('export async function POST'));
+        //   The POST never moved — only the GET's gate and listing did.
+        const post = handler.slice(handler.indexOf('export async function POST'));
 
         expect(post).toContain('wave:manage_training');
         expect(post).toContain('{ status: 403 }');
     });
 
     it('requires the fields a session needs', () => {
-        const post = route.slice(route.indexOf('export async function POST'));
+        const post = handler.slice(handler.indexOf('export async function POST'));
 
         expect(post).toContain('!title || !scheduledAt || !durationMinutes');
+    });
+
+    it('and the GET kept no second copy of the gate or the query', () => {
+        //   #567's extraction, checked where it could fail. A handler still
+        //   deciding access itself would be a second place for the staleness
+        //   rule to be got wrong; one still building the listing would be a
+        //   second place for roomKey to escape the gate.
+        const get = handler.slice(
+            handler.indexOf('export async function GET'),
+            handler.indexOf('export async function POST'),
+        );
+
+        expect(get).toContain('readWaveTrainingSessions');
+        expect(get).not.toContain('canReadWaveProgramme');
+        expect(get).not.toContain('WAVE_TRAINING_SESSIONS');
+        //   `data.roomKey`, not `roomKey`: the handler's comment explains WHY
+        //   the gate and listing moved together and says the word. What must
+        //   not be there is a second place that reads the field off a row.
+        expect(get).not.toContain('data.roomKey');
     });
 });

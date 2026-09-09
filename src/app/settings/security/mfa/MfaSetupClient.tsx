@@ -1,0 +1,360 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
+import { Shield, Key, Download, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import Image from "next/image";
+import { useToast } from "@/contexts/ToastContext";
+import { useRouter } from "next/navigation";
+
+export default function MfaSetupClient({ initial = null }: { initial?: { enabled: boolean } | null }) {
+    const { showToast } = useToast();
+    const router = useRouter();
+    const [step, setStep] = useState<"setup" | "verify" | "complete">("setup");
+    const [qrCode, setQrCode] = useState<string>("");
+    const [secret, setSecret] = useState<string>("");
+    const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+    const [verificationCode, setVerificationCode] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const [mfaEnabled, setMfaEnabled] = useState(initial?.enabled ?? false);
+    /** #313 — the status read failed, so neither "on" nor "off" is known. */
+    const [statusUnknown, setStatusUnknown] = useState(false);
+
+    useEffect(() => {
+        //   #567 — the server read this before the page was sent. A null seed
+        //   means it could NOT read it, and then this asks over HTTP exactly as
+        //   it did before, ending in the "unknown" state below if that fails
+        //   too. A failure is never turned into "off" on either path.
+        if (initial !== null) return;
+        checkMFAStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const checkMFAStatus = async () => {
+        try {
+            const response = await fetch("/api/auth/mfa/status");
+            const data = await response.json();
+            // Was: `setMfaEnabled(data.enabled || false)` — #313.
+            //
+            // Neither response.ok nor data.success was read, so a 401 or a 500
+            // (whose body carries no `enabled` at all) set this to FALSE and
+            // the screen told a protected account it had no second factor,
+            // then offered to set one up. Unknown is now its own state.
+            if (!response.ok || !data.success) {
+                setStatusUnknown(true);
+                return;
+            }
+            setStatusUnknown(false);
+            setMfaEnabled(data.enabled === true);
+        } catch (error) {
+            logger.error("Failed to check MFA status:", error);
+            setStatusUnknown(true);
+        }
+    };
+
+    async function handleSetupMFA() {
+        setIsLoading(true);
+        try {
+            const response = await fetch("/api/auth/mfa/setup", {
+                method: "POST",
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setQrCode(data.qrCode);
+                setSecret(data.secret);
+                setRecoveryCodes(data.recoveryCodes);
+                setStep("verify");
+                showToast("Scan QR code with authenticator app", "success");
+            } else {
+                showToast(data.error || "Setup failed", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    async function handleVerify() {
+        if (verificationCode.length !== 6) {
+            showToast("Please enter a 6-digit code", "error");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const response = await fetch("/api/auth/mfa/enable", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: verificationCode }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setStep("complete");
+                setMfaEnabled(true);
+                showToast("MFA enabled successfully!", "success");
+            } else {
+                showToast(data.error || "Verification failed", "error");
+            }
+        } catch (error) {
+            showToast("Verification failed", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    async function handleDisableMFA() {
+        if (!confirm("Are you sure you want to disable MFA? This will reduce your account security.")) {
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const response = await fetch("/api/auth/mfa/disable", {
+                method: "POST",
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setMfaEnabled(false);
+                setStep("setup");
+                showToast("MFA disabled", "success");
+            } else {
+                showToast(data.error || "Failed to disable", "error");
+            }
+        } catch (error) {
+            showToast("Failed to disable MFA", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const downloadRecoveryCodes = () => {
+        const content = `Easy Sales Export - MFA Recovery Codes\n\nGenerated: ${new Date().toLocaleString()}\n\n${recoveryCodes.join('\n')}\n\nKeep these codes safe. Each can only be used once.`;
+        const blob = new Blob([content], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "easy-sales-recovery-codes.txt";
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+            <div className="max-w-2xl mx-auto">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                        <Shield className="w-8 h-8 text-green-600" />
+                        Multi-Factor Authentication
+                    </h1>
+                    <p className="text-slate-600 mt-2">
+                        Add an extra layer of security to your account
+                    </p>
+                </div>
+
+                {/* #313 — an unreadable status is not "MFA is off". Offering
+                    setup here would send a protected member into a flow the
+                    server refuses with "MFA is already enabled". */}
+                {statusUnknown && step === "setup" ? (
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <div className="flex items-center gap-3 text-amber-600 mb-4">
+                            <Shield className="w-6 h-6" />
+                            <h2 className="text-xl font-bold">We could not check your MFA status</h2>
+                        </div>
+                        <p className="text-slate-600 mb-6">
+                            This is a problem reaching the server, not a change to your account &mdash;
+                            your existing settings are untouched. Reload the page to try again.
+                        </p>
+                        <button
+                            onClick={() => { setStatusUnknown(false); checkMFAStatus(); }}
+                            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl transition"
+                        >
+                            Try again
+                        </button>
+                    </div>
+                ) : mfaEnabled && step === "setup" ? (
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <div className="flex items-center gap-3 text-green-600 mb-4">
+                            <CheckCircle className="w-6 h-6" />
+                            <h2 className="text-xl font-bold">MFA is Active</h2>
+                        </div>
+                        <p className="text-slate-600 mb-6">
+                            Your account is protected with multi-factor authentication.
+                        </p>
+                        <button
+                            onClick={handleDisableMFA}
+                            disabled={isLoading}
+                            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition disabled:opacity-50"
+                        >
+                            {isLoading ? "Disabling..." : "Disable MFA"}
+                        </button>
+                    </div>
+                ) : step === "setup" ? (
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">
+                            Enable MFA
+                        </h2>
+                        <div className="space-y-4 mb-6">
+                            <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">
+                                    1
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-slate-900">Download Authenticator App</h3>
+                                    <p className="text-sm text-slate-600">
+                                        Install Google Authenticator, Authy, or Microsoft Authenticator
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">
+                                    2
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-slate-900">Scan QR Code</h3>
+                                    <p className="text-sm text-slate-600">
+                                        Use your app to scan the QR code we'll provide
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">
+                                    3
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-slate-900">Verify Setup</h3>
+                                    <p className="text-sm text-slate-600">
+                                        Enter the 6-digit code from your app
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleSetupMFA}
+                            disabled={isLoading}
+                            className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Setting up...
+                                </>
+                            ) : (
+                                <>
+                                    <Key className="w-5 h-5" />
+                                    Start Setup
+                                </>
+                            )}
+                        </button>
+                    </div>
+                ) : step === "verify" ? (
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-6">
+                            Scan QR Code
+                        </h2>
+
+                        <div className="flex flex-col items-center mb-6">
+                            {qrCode && (
+                                <div className="bg-white p-4 rounded-xl border-2 border-slate-200">
+                                    <Image
+                                        src={qrCode}
+                                        alt="MFA QR Code"
+                                        width={200}
+                                        height={200}
+                                    />
+                                </div>
+                            )}
+                            <div className="mt-4 text-center">
+                                <p className="text-sm text-slate-600 mb-2">
+                                    Or enter this code manually:
+                                </p>
+                                <code className="bg-slate-100 px-3 py-1 rounded text-sm font-mono">
+                                    {secret}
+                                </code>
+                            </div>
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                Enter 6-digit code
+                            </label>
+                            <input
+                                type="text"
+                                maxLength={6}
+                                value={verificationCode}
+                                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 text-center text-2xl tracking-widest font-mono"
+                                placeholder="000000"
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleVerify}
+                            disabled={isLoading || verificationCode.length !== 6}
+                            className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition disabled:opacity-50"
+                        >
+                            {isLoading ? "Verifying..." : "Verify & Enable"}
+                        </button>
+                    </div>
+                ) : (
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <div className="flex items-center justify-center flex-col mb-6">
+                            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                                <CheckCircle className="w-10 h-10 text-green-600" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900">
+                                MFA Enabled!
+                            </h2>
+                            <p className="text-slate-600 mt-2 text-center">
+                                Your account is now protected with multi-factor authentication
+                            </p>
+                        </div>
+
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <h3 className="font-semibold text-yellow-900 mb-2">
+                                        Save Your Recovery Codes
+                                    </h3>
+                                    <p className="text-sm text-yellow-800 mb-3">
+                                        If you lose access to your authenticator app, you can use these codes to access your account. Each code can only be used once.
+                                    </p>
+                                    <div className="bg-white rounded-lg p-3 mb-3">
+                                        <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+                                            {recoveryCodes.map((code, i) => (
+                                                <div key={i} className="text-slate-900">
+                                                    {code}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={downloadRecoveryCodes}
+                                        className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg transition text-sm"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Download Recovery Codes
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => router.push("/dashboard")}
+                            className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition"
+                        >
+                            Go to Dashboard
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

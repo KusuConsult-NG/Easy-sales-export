@@ -312,13 +312,23 @@ describe('the training-sessions route resolves access from the database too', ()
      * answered 403 for up to an hour, so she sat inside the programme looking at a
      * screen telling her she had no access to it.
      */
-    const SESSIONS_ROUTE = 'src/app/api/wave/training-sessions/route.ts';
+    //   #567 The GET gate and listing moved TOGETHER to lib/wave-training-reader,
+    //   so /wave/live-training could read them on the server rather than fetching
+    //   this route from the browser on a 60-second poll. They moved together
+    //   deliberately — the listing carries roomKey and the gate in front of it has
+    //   been wrong twice, so splitting them is how it goes wrong a third time.
+    //   These checks read the reader; the route is checked separately for having
+    //   kept no second copy.
+    const SESSIONS_ROUTE = 'src/lib/wave-training-reader.ts';
 
     it('falls back to the stored record when the session does not grant access', () => {
         const src = code(SESSIONS_ROUTE);
 
         expect(src).toContain('let allowed = canReadWaveProgramme(');
-        expect(src).toContain('if (!allowed) {');
+        //   #567 The reader guards with an EARLY RETURN rather than wrapping
+        //   the fallback in `if (!allowed)`. Same rule, one less level of
+        //   nesting: everything after the return is the refusal path.
+        expect(src).toContain('if (allowed) return true;');
         expect(src).toContain('.collection(COLLECTIONS.USERS)');
     });
 
@@ -344,7 +354,7 @@ describe('the training-sessions route resolves access from the database too', ()
         const src = code(SESSIONS_ROUTE);
         const firstCheck = src.indexOf('let allowed = canReadWaveProgramme(');
         const fallback = src.indexOf('.collection(COLLECTIONS.USERS)');
-        const guard = src.indexOf('if (!allowed) {');
+        const guard = src.indexOf('if (allowed) return true;');
 
         expect(guard).toBeGreaterThan(firstCheck);
         expect(fallback).toBeGreaterThan(guard);

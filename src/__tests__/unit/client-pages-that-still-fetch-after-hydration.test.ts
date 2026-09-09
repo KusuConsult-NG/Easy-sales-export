@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 14;
+const CAP = 12;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -158,6 +158,10 @@ const CONVERTED = [
     'src/app/cooperatives/(member)/my-loans/page.tsx',
     'src/app/marketplace/onboarding/page.tsx',
     'src/app/farm-nation/onboarding/page.tsx',
+    //   #567 — batch 17. The last two API-route self-fetchers, each read
+    //   through a reader shared with the route rather than over HTTP.
+    'src/app/settings/security/mfa/page.tsx',
+    'src/app/wave/(member)/live-training/page.tsx',
     //   #564 — batch 16, the cooperative member screens and the public
     //   certificate verifier.
     'src/app/cooperatives/(member)/fixed-savings/page.tsx',
@@ -254,6 +258,18 @@ const NOT_CONVERTIBLE: { page: string; because: string }[] = [
     {
         page: 'src/app/marketplace/sell/create/page.tsx',
         because: 'a create form — its actions fire on submit and on upload, not on mount',
+    },
+    {
+        page: 'src/app/verify-id/page.tsx',
+        because: 'a QR scanner — its only fetch fires on a scan, and its effect is a '
+            + 'camera teardown; nothing is read on mount at all',
+    },
+    {
+        page: 'src/app/marketplace/checkout/page.tsx',
+        because: 'its mount reads take the CART, which lives in localStorage, and '
+            + 'COORDINATES from the browser geocoder — inputs the server cannot see. '
+            + 'Only the saved-address read could move, and moving one of two would '
+            + 'take the page off this ledger while the real wait remained',
     },
 ];
 

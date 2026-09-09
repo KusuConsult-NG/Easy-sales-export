@@ -94,14 +94,22 @@ const MINT = 'src/lib/classroom-room-key.ts';
 const COMPONENT = 'src/components/VideoClassroom.tsx';
 const ACADEMY_ACTIONS = 'src/app/actions/academy/_ac_live.ts';
 const WAVE_ACTIONS = 'src/app/actions/wave/_wv_admin_live.ts';
-const WAVE_API = 'src/app/api/wave/training-sessions/route.ts';
+//   #567 The GET gate and listing moved TOGETHER to lib/wave-training-reader,
+//   so /wave/live-training could read them on the server rather than fetching
+//   this route from the browser on a 60-second poll. They moved together
+//   deliberately — the listing carries roomKey and the gate in front of it has
+//   been wrong twice, so splitting them is how it goes wrong a third time.
+//   These checks read the reader; the route is checked separately for having
+//   kept no second copy.
+const WAVE_API = 'src/lib/wave-training-reader.ts';
+const WAVE_API_HANDLER = 'src/app/api/wave/training-sessions/route.ts';
 
 /** Every screen that opens a classroom. */
 const CLASSROOM_PAGES = [
     'src/app/academy/live/[courseId]/AcademyLiveClassClient.tsx',
     'src/app/admin/academy/live/[courseId]/page.tsx',
     'src/app/admin/wave/training/live/[eventId]/page.tsx',
-    'src/app/wave/(member)/live-training/page.tsx',
+    'src/app/wave/(member)/live-training/LiveTrainingClient.tsx',
 ];
 
 const FREE_COURSE = 'course-free';
@@ -553,7 +561,7 @@ describe('#188 — no screen composes a room name any more', () => {
             .toContain('const roomKey = liveSession?.roomKey ?? "";');
         expect(source('src/app/admin/wave/training/live/[eventId]/page.tsx'))
             .toContain('getWaveLiveRoomKeyAction(eventId)');
-        expect(source('src/app/wave/(member)/live-training/page.tsx'))
+        expect(source('src/app/wave/(member)/live-training/LiveTrainingClient.tsx'))
             .toContain('roomKey={activeSession.roomKey ?? ""}');
     });
 
@@ -561,8 +569,10 @@ describe('#188 — no screen composes a room name any more', () => {
         const src = source(WAVE_API);
         expect(src).toContain('roomKey: data.roomKey ?? null');
         expect(src).toContain('canReadWaveProgramme');
-        // And a session scheduled through this route gets a key of its own.
-        expect(src).toContain('roomKey: mintClassroomRoomKey()');
+        //   #567 And a session scheduled through the route gets a key of its
+        //   own. The POST never moved — only the GET's gate and listing did —
+        //   so the minting is asserted where it still lives.
+        expect(source(WAVE_API_HANDLER)).toContain('roomKey: mintClassroomRoomKey()');
     });
 
     it('the academy strip removes the key alongside the meeting link', () => {

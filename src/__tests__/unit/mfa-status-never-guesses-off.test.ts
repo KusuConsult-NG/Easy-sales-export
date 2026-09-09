@@ -62,7 +62,7 @@ const ROOT = process.cwd();
 const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8'), { label: rel });
 
 const ROUTE = 'src/app/api/auth/mfa/status/route.ts';
-const MFA_PAGE = 'src/app/settings/security/mfa/page.tsx';
+const MFA_PAGE = 'src/app/settings/security/mfa/MfaSetupClient.tsx';
 const PROFILE = 'src/app/profile/ProfileClient.tsx';
 
 // ─────────────────────────────────────────────────────────────────────────────

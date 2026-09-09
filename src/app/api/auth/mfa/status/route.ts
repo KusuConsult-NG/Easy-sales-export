@@ -3,8 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { readMfaStatus } from "@/lib/mfa-status-reader";
 import { withRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -17,22 +16,17 @@ async function getMFAStatusHandler(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        // Get user MFA status (Admin SDK)
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-
-        if (!userDoc.exists) {
-            return NextResponse.json({
-                success: true,
-                enabled: false,
-                authenticated: true,
-            });
-        }
-
-        const userData = userDoc.data()!;
+        //   #567 The read moved to lib/mfa-status-reader so
+        //   /settings/security/mfa can read it on the SERVER rather than
+        //   fetching this route from the browser after the page had already
+        //   been rendered. It THROWS rather than answering false when it
+        //   cannot read, which is what keeps the catch below meaningful: a
+        //   failure has never again been reportable as "unprotected".
+        const { enabled } = await readMfaStatus(session.user.id);
 
         return NextResponse.json({
             success: true,
-            enabled: userData.mfaEnabled || false,
+            enabled,
             authenticated: true,
         });
     } catch (error: any) {

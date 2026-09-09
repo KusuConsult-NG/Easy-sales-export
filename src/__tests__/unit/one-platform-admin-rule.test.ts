@@ -414,7 +414,7 @@ describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', 
         'src/app/admin/settings/security/page.tsx',
         'src/app/escrow/[id]/chat/EscrowChatClient.tsx',
         'src/app/marketplace/products/MarketplaceProductsClient.tsx',
-        'src/app/wave/(member)/live-training/page.tsx',
+        'src/app/wave/(member)/live-training/LiveTrainingClient.tsx',
         'src/components/admin/AdminSidebar.tsx',
         'src/components/dashboard/DashboardNav.tsx',
         'src/components/layout/Sidebar.tsx',
@@ -464,6 +464,6 @@ describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', 
         // Stated so the owner decision is about the rest, not about these.
         expect(code('src/app/actions/academy/_ac_live.ts')).toContain('academy_admin');
         expect(code('src/lib/wave-access.ts')).toContain('wave_admin');
-        expect(code('src/app/wave/(member)/live-training/page.tsx')).toContain('trainer');
+        expect(code('src/app/wave/(member)/live-training/LiveTrainingClient.tsx')).toContain('trainer');
     });
 });

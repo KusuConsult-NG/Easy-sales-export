@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { canReadWaveProgramme } from "@/lib/wave-access";
+import { readWaveTrainingSessions } from "@/lib/wave-training-reader";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -29,135 +29,32 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Being signed in is not being in the programme.
-        //
-        // This asked for a session and nothing else, then returned every
-        // training session document — including customMeetingLink and roomName,
-        // which are the live video room. So the meeting links for a
-        // women's-only programme were available to every account on the
-        // platform, including the ones /api/wave/check-eligibility exists to
-        // turn away.
-        //
-        // src/middleware.ts has enforced exactly this for /wave PAGES since it
-        // was written. The rule now lives in @/lib/wave-access and both read it.
-        /**
-         * Two layers, because the session value goes stale.
-         *
-         * THE DEFECT
-         * ----------
-         * This read `serviceRegistrations.wave.status` off the SESSION alone. That
-         * value is minted at login and refreshed hourly — which is the entire
-         * reason module-access-check.ts exists and carries a database fallback for
-         * it, in its own words: "the user's JWT is still stale and doesn't carry the
-         * new role, so hasAppAccess returns false and the layout bounces them back".
-         *
-         * The /wave/(member) layout uses that fallback, so a member approved five
-         * minutes ago is admitted to the member area. This route had no fallback, so
-         * her training list answered 403 for up to an hour. She was inside the
-         * programme looking at a screen that told her she had no access to it.
-         *
-         * The RULE is unchanged — canReadWaveProgramme, which is deliberately
-         * generous and admits someone still mid-application. Only where the status
-         * is read from changes, and only when the session's copy does not already
-         * grant access, so the ordinary request still costs no query.
-         */
-        let waveRegStatus = (session.user as any)?.serviceRegistrations?.wave?.status ?? null;
-        let allowed = canReadWaveProgramme({ roles: session.user.roles, waveRegStatus });
+        //   #567 The gate and the listing moved TOGETHER to
+        //   lib/wave-training-reader, so /wave/live-training can read them on
+        //   the server rather than fetching this route from the browser on a
+        //   60-second poll. They moved together deliberately: this listing
+        //   carries roomKey — the secret that opens the video classroom — and
+        //   the gate in front of it has been wrong twice. Copying one without
+        //   the other is how it goes wrong a third time.
+        const { searchParams } = new URL(request.url);
+        const rawLimit = parseInt(searchParams.get("limit") || "20");
 
-        if (!allowed) {
-            try {
-                const freshDoc = await getAdminDb()
-                    .collection(COLLECTIONS.USERS)
-                    .doc(session.user.id)
-                    .get();
-                const fresh = freshDoc.data();
-                if (fresh) {
-                    waveRegStatus = fresh.serviceRegistrations?.wave?.status ?? null;
-                    allowed = canReadWaveProgramme({
-                        // The stored roles too: an admin whose role was granted after
-                        // login is in the same position.
-                        roles: Array.isArray(fresh.roles) ? fresh.roles : session.user.roles,
-                        waveRegStatus,
-                    });
-                }
-            } catch (e) {
-                // The session's answer stands, which is the refusal. Logged rather
-                // than swallowed: a failing fallback looks exactly like a legitimate
-                // 403 from the caller's side.
-                logger.error("[WAVE training-sessions] Access fallback lookup failed", e);
-            }
-        }
+        const result = await readWaveTrainingSessions(session as any, {
+            limit: rawLimit,
+            cursor: searchParams.get("cursor"),
+        });
 
-        if (!allowed) {
+        if (!result.allowed) {
             return NextResponse.json(
                 { success: false, data: null, error: "WAVE programme access required", meta: { cursor: null, hasMore: false } },
                 { status: 403 }
             );
         }
 
-        const { searchParams } = new URL(request.url);
-        const rawLimit = parseInt(searchParams.get("limit") || "20");
-        const limit = Math.min(Math.max(rawLimit, 1), 50);
-        const cursor = searchParams.get("cursor");
-
-        const db = getAdminDb();
-
-        // Deactivated sessions are not listed.
-        //
-        // endWaveLiveSession sets isActive: false (wave/_admin.ts) and nothing
-        // read it, so a session an admin had ended stayed in this response with
-        // its room name and meeting link intact.
-        let query: import("@/lib/supabase-db").SupabaseQuery = db
-            .collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
-            .where("isActive", "==", true)
-            .orderBy("scheduledAt", "asc")
-            .limit(limit + 1); // Fetch one extra to determine hasMore
-
-        if (cursor) {
-            const cursorDate = new Date(cursor);
-            if (!isNaN(cursorDate.getTime())) {
-                query = query.startAfter(cursorDate);
-            }
-        }
-
-        const snap = await query.get();
-
-        const hasMore = snap.docs.length > limit;
-        const docs = hasMore ? snap.docs.slice(0, limit) : snap.docs;
-
-        // Named fields, not the document.
-        //
-        // The spread also carried createdBy — the user id of the admin who
-        // scheduled the session — which no participant needs.
-        const sessions = docs.map((doc: any) => {
-            const data = doc.data() ?? {};
-            return {
-                id: doc.id,
-                title: data.title ?? "",
-                description: data.description ?? "",
-                durationMinutes: data.durationMinutes ?? null,
-                roomName: data.roomName ?? null,
-                // #188 — the built-in classroom. `roomName` is derived from the
-                // event id and is only the row's correlation key; `roomKey` is
-                // the server-minted secret that actually opens the room. This
-                // route is behind canReadWaveProgramme, so it reaches members of
-                // the programme and nobody else.
-                roomKey: data.roomKey ?? null,
-                customMeetingLink: data.customMeetingLink ?? null,
-                isActive: data.isActive ?? false,
-                scheduledAt: data.scheduledAt?.toDate?.()?.toISOString() ?? data.scheduledAt,
-                createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
-            };
-        });
-
-        const nextCursor = hasMore && docs.length > 0
-            ? docs[docs.length - 1].data().scheduledAt?.toDate?.()?.toISOString() ?? null
-            : null;
-
         return NextResponse.json({
             success: true,
-            data: { sessions },
-            meta: { cursor: nextCursor, hasMore },
+            data: { sessions: result.sessions },
+            meta: { cursor: result.cursor, hasMore: result.hasMore },
         });
     } catch (error) {
         logger.error("GET /api/wave/training-sessions error:", error);
