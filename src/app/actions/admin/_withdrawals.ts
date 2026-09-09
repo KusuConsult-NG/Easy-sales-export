@@ -52,9 +52,12 @@ async function _processWithdrawalAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
-            return { error: "Unauthorized: Permission required - finance:process_withdrawals", success: false as const };
-        }
+
+        //   #532 The old JWT check stood here, below the live one. After
+        //   requireAdmin has asked the database it can only SUBTRACT — it
+        //   refuses nobody the first would admit, except an admin granted the
+        //   permission after their token was issued. A redundant check that can
+        //   only produce false refusals is not defence in depth.
 
         const valid = WithdrawalProcessingSchema.safeParse({ withdrawalId, action, reasoning });
         if (!valid.success) {
@@ -313,12 +316,18 @@ async function _getPendingWithdrawalsAction(
     statusFilter: "pending" | "completed" | "rejected" | "approved_pending_payout" | "all" = "pending"
 ): Promise<ActionResponse<any[]>> {
     try {
+        //   #532 THE MONEY PATH IN THIS FILE WAS CONVERTED OFF THE STALE JWT
+        //   AND THE QUEUE THAT SHOWS THE BANK ACCOUNTS WAS NOT.
+        //
+        //   _processWithdrawalAction above opens with requireAdmin. This one
+        //   asked `session.user.roles` — twice, and the second time is the one
+        //   that matters: see maySeeBankDetails below.
+        const gate = await requireAdmin("finance:read");
+        if ("error" in gate) return { error: gate.error, success: false as const, data: null };
+
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
-            return { error: "Unauthorized: Permission required - finance:read", success: false as const, data: null };
-        }
 
         /**
          * "finance:read" is held by super_admin, admin, support,
@@ -334,7 +343,17 @@ async function _getPendingWithdrawalsAction(
          * and who requested — because reconciling a total does not need an
          * account number.
          */
-        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:process_withdrawals");
+        //   #532 DECIDED ON THE LIVE ROLES, NOT ON THE TOKEN.
+        //
+        //   This was `hasAdminPermission(session.user.roles, ...)`, which is the
+        //   JWT claim. So the question "may this person see every withdrawer's
+        //   bank account number" was answered by a token that #356 established
+        //   can be hours out of date — an admin whose finance:process_withdrawals
+        //   had just been revoked kept seeing account numbers across the
+        //   standard, cooperative AND wave queues until their session rolled
+        //   over. requireAdmin already read the live roles above; using them
+        //   costs nothing and is the whole point of having asked.
+        const maySeeBankDetails = hasAdminPermission(gate.roles, "finance:process_withdrawals");
 
         // Helper to build a query per collection
         const buildQuery = (collectionName: string) => {

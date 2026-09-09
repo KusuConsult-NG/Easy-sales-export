@@ -161,7 +161,16 @@ describe('#151 — no list hands out bank details on isAdmin() alone', () => {
     it.each(GATED_LISTS)('%s gates them on %s', (file, permission) => {
         const src = readFileSync(join(process.cwd(), file), 'utf8');
 
-        expect(src).toContain('hasAdminPermission');
+        //   EITHER gate counts — #532.
+        //
+        //   This asserted `hasAdminPermission` by name, which pinned the check
+        //   to the WEAKER of the two forms the platform has. requireAdmin asks
+        //   the same PERMISSION_MATRIX and re-reads the roles from the database
+        //   first, so a file that moves to it has strengthened the gate, and
+        //   _land.ts failed here for having done exactly that. What the sweep
+        //   is defending is that the list is gated on the named permission, not
+        //   which of the two functions asks.
+        expect(src).toMatch(/hasAdminPermission\(|requireAdmin\(/);
         expect(src).toContain(permission);
     });
 

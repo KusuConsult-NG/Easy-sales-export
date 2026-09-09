@@ -14,7 +14,6 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { LandListingVerificationSchema } from "@/lib/schemas";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
@@ -30,11 +29,21 @@ import {
 
 async function _getPendingLandListings(limit = 50): Promise<ActionResponse<any[]>> {
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
-        const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
-            return { error: "Unauthorized: Permission required - land:verify_listings", success: false as const, data: null };
+        //   #532 THE DECISION IN THIS FILE WAS CONVERTED OFF THE STALE JWT AND
+        //   THE QUEUE WAS NOT.
+        //
+        //   _verifyLandListing below opens with requireAdmin — "Live role
+        //   re-validation — bypasses stale JWT" — and this action, twenty lines
+        //   above it, still asked `session.user.roles`. So a revoked admin could
+        //   not decide a parcel and could still LIST every pending one: the
+        //   owner's id, the uploaded title documents and the parcel details, for
+        //   as long as their token lived.
+        //
+        //   #510's note, on the same shape found the other way round: the read
+        //   "is the one that hands the data over".
+        const adminCheck = await requireAdmin("land:verify_listings");
+        if ("error" in adminCheck) {
+            return { error: adminCheck.error, success: false as const, data: null };
         }
 
         /**
@@ -129,9 +138,15 @@ async function _verifyLandListing(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
-            return { error: "Unauthorized: Permission required - land:verify_listings", success: false as const };
-        }
+
+        //   #532 THE OLD JWT CHECK STOOD HERE, BELOW THE LIVE ONE.
+        //
+        //   Left behind when the live gate was added, and after that it could
+        //   only ever SUBTRACT: requireAdmin has already asked the database, so
+        //   the second check refuses nobody the first would admit — except an
+        //   admin who was granted the permission after their token was issued,
+        //   who is refused by a claim that is merely out of date. A redundant
+        //   check that can only produce false refusals is not defence in depth.
 
         const valid = LandListingVerificationSchema.safeParse({ listingId, decision, reason });
         if (!valid.success) {

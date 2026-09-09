@@ -8,7 +8,6 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeValue } from "@/lib/firestore-serialize";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { invalidateSystemSettingsCache } from "@/lib/cache-invalidation";
 import {
@@ -34,12 +33,20 @@ async function _savePlatformSettingsAction(
     }
 ): Promise<ActionState> {
     try {
+        //   #532 TWO "SAVE SETTINGS" ACTIONS IN ONE FILE, GATED TWO WAYS.
+        //
+        //   _saveSystemSettingsAction, ninety lines below, opens with
+        //   requireAdmin("config:update"). This one — the other config WRITE in
+        //   the same file, on the same permission — still asked the JWT, so a
+        //   revoked admin could change the platform name, the support address
+        //   members are told to write to, and MAINTENANCE MODE, for as long as
+        //   their token lived.
+        const gate = await requireAdmin("config:update");
+        if ("error" in gate) return { error: gate.error, success: false as const };
+
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "config:update")) {
-            return { error: "Unauthorized: Admin access required", success: false as const };
-        }
 
         // Was: `{ ...settings, updatedBy, updatedAt }` — #317, and #43's class.
         //

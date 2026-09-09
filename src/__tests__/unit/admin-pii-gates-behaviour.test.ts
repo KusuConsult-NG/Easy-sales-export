@@ -42,15 +42,25 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { stripPii } from '@/lib/admin-pii';
+// #532 requireAdmin calls auth(); actAs below has to set it too.
+import { auth } from '@/lib/auth';
 
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null, setCache: async () => undefined,
     deleteCache: async () => undefined, redis: null,
 }));
-jest.mock('@/lib/auth', () => ({
-    auth: async () => null, signIn: async () => undefined,
-    signOut: async () => undefined, handlers: {},
-}));
+//   #532 THE LOCAL @/lib/auth MOCK IS GONE, AND IT WAS ALREADY DEAD.
+//
+//   This file imports `jest` from '@jest/globals', so its jest.mock calls do
+//   NOT hoist above the imports — #392's whole subject. jest.setup.js already
+//   mocks @/lib/auth with a jest.fn(), and that is the copy every module here
+//   has been receiving; the factory below claimed `auth` returns null and never
+//   ran. Removing it stops the file asserting something untrue about itself,
+//   and lets actAs() drive the mock that is actually in play.
+//
+//   #392's ratchet reported this the moment a static `import { auth }` was added
+//   above, which is the ratchet doing its job on a problem that predated the
+//   import.
 
 let store: FakeDbHandle;
 
@@ -65,6 +75,21 @@ const BANK = {
     accountName: 'Ada Obi', bankCode: '058',
 };
 
+/**
+ * Acting as somebody — session, auth() AND the record.
+ *
+ *   #532 THIS USED TO SET THE SESSION ALONE, AND THAT WAS ENOUGH.
+ *
+ *   _getPendingWithdrawalsAction gated on `session.user.roles`, so a mocked
+ *   session decided everything — including maySeeBankDetails, which is what
+ *   several of the assertions below are about. It asks requireAdmin now, which
+ *   calls auth() and re-reads the roles from the database, so a caller who
+ *   exists only in a session mock is nobody.
+ *
+ *   The record is MERGED rather than replaced: MEMBER is seeded in beforeEach
+ *   with bank details, KYC and next of kin, and this function is called with
+ *   that same id in two tests.
+ */
 function actAs(id: string | null, roles: string[] = ['general_user']): void {
     (globalThis as {
         mockRequireSession: { mockImplementation: (f: () => unknown) => void };
@@ -73,6 +98,14 @@ function actAs(id: string | null, roles: string[] = ['general_user']): void {
             ? { session: null, error: { error: 'Authentication required' } }
             : { session: { user: { id, roles, email: `${id}@e.com` } }, error: null },
     ));
+
+    (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve(
+        id === null ? null : { user: { id, roles, email: `${id}@e.com` } },
+    ));
+
+    if (id !== null) {
+        store.seed(USERS, id, { ...(store.get(USERS, id) ?? {}), roles, email: `${id}@e.com` });
+    }
 }
 
 beforeEach(() => {

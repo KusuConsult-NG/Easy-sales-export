@@ -122,18 +122,42 @@ describe('#317 — the write stores the five fields and nothing else', () => {
         // THE test for the half that had never worked: the screen was posting
         // { success, error, data } and the spread wrote it verbatim.
         const written: any[] = [];
+        //   The stub answers requireAdmin's read too — #532.
+        //
+        //   This action gated on `session.user.roles` when the test was written,
+        //   so a mocked session was the whole gate. It asks requireAdmin now,
+        //   which calls getAdminDb() and reads the caller's row; against
+        //   `{ exists: false }` that is "User profile not found" and the write
+        //   never happens. The stub hands back a super_admin document for a read
+        //   and still records what is written.
         jest.doMock('@/lib/supabase-db', () => ({
             supabaseDb: {
                 collection: () => ({
                     doc: () => ({
-                        get: () => Promise.resolve({ exists: false }),
+                        get: () => Promise.resolve({
+                            exists: true,
+                            data: () => ({ roles: ['super_admin'] }),
+                        }),
                         set: (v: any) => { written.push(v); return Promise.resolve(); },
                     }),
                 }),
             },
+            getAdminDb: () => ({
+                collection: () => ({
+                    doc: () => ({
+                        get: () => Promise.resolve({
+                            exists: true,
+                            data: () => ({ roles: ['super_admin'] }),
+                        }),
+                    }),
+                }),
+            }),
         }));
         (globalThis as any).mockRequireSession.mockImplementationOnce(() =>
             Promise.resolve({ session: { user: { id: 'a1', roles: ['super_admin'] } }, error: null }));
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock).mockImplementation(() =>
+            Promise.resolve({ user: { id: 'a1', roles: ['super_admin'] } }));
 
         const mod = await import('@/app/actions/admin/_settings');
         await (mod.savePlatformSettingsAction as any)({

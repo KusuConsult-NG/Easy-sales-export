@@ -736,6 +736,7 @@ export default function ProfilePage() {
                                                 type="text"
                                                 value={userData.firstName}
                                                 onChange={(e) => setUserData({ ...userData, firstName: e.target.value })}
+                                                required
                                                 placeholder="First name"
                                                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />
@@ -756,6 +757,7 @@ export default function ProfilePage() {
                                                 type="text"
                                                 value={userData.lastName}
                                                 onChange={(e) => setUserData({ ...userData, lastName: e.target.value })}
+                                                required
                                                 placeholder="Last name"
                                                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />
@@ -809,6 +811,7 @@ export default function ProfilePage() {
                                                 <select
                                                     value={userData.gender}
                                                     onChange={(e) => setUserData({ ...userData, gender: e.target.value as any })}
+                                                    required
                                                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none cursor-pointer"
                                                 >
                                                     <option value="">Select Gender</option>
@@ -823,6 +826,7 @@ export default function ProfilePage() {
                                                 type="text"
                                                 value={userData.location}
                                                 onChange={(e) => setUserData({ ...userData, location: e.target.value })}
+                                                required
                                                 placeholder="City, State"
                                                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />

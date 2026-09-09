@@ -257,7 +257,10 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/api/admin/maintenance/hard-reset/route.ts': ['config:update'],
 
         // Money out, and the assignment of the case that moves it.
-        'src/app/actions/admin/_withdrawals.ts': ['finance:process_withdrawals'],
+        // #532 The queue joined the money path on the live gate: it was reading
+        // `session.user.roles`, and so was the maySeeBankDetails decision that
+        // controls whether every withdrawer's account number is returned.
+        'src/app/actions/admin/_withdrawals.ts': ['finance:process_withdrawals', 'finance:read'],
         'src/app/actions/marketplace/_escrow_lifecycle.ts': ['finance:resolve_disputes'],
         'src/app/actions/marketplace/_escrow_disputes.ts': Array(2).fill('finance:resolve_disputes'),
 
@@ -281,7 +284,10 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // #381's pair: the money knobs — fees, order bounds, USD→NGN and the
         // WAVE commission. Read is separate from update because seeing what
         // the platform charges is not the same right as changing it.
-        'src/app/actions/admin/_settings.ts': ['config:read', 'config:update'],
+        // #532 _savePlatformSettingsAction joined its sibling _saveSystemSettings
+        // on the live gate — two config WRITES in one file, previously gated two
+        // different ways.
+        'src/app/actions/admin/_settings.ts': ['config:update', 'config:read', 'config:update'],
 
         // Module queues — the permission deliberately includes the module admin.
         'src/app/actions/export-aggregation.ts': ['export:approve_applications'],
@@ -289,7 +295,10 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // permission as the rest of the export queue, held by super_admin,
         // admin and export_admin.
         'src/app/actions/export-booking.ts': Array(2).fill('export:approve_applications'),
-        'src/app/actions/admin/_land.ts': ['land:verify_listings'],
+        // #532 The pending-listing QUEUE joined the decision on the live gate.
+        // A revoked admin could not decide a parcel and could still list every
+        // pending one, with its owner and its title documents.
+        'src/app/actions/admin/_land.ts': ['land:verify_listings', 'land:verify_listings'],
 
         // Reads. All ten roles hold these, so behaviour is unchanged — named so
         // the rule follows the matrix if it is ever narrowed.
@@ -404,7 +413,9 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // a real gate (#431).
         // 39 → 41: add-roles' two handlers stopped reading the JWT (#526).
         // 41 → 42: the erased-profile reader (#530).
-        expect(callSites().length).toBe(42);
+        // 42 → 45: #532 converted the three half-converted files — the land
+        // queue, the platform-settings write and the withdrawal queue.
+        expect(callSites().length).toBe(45);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

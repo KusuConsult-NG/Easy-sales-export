@@ -62,6 +62,12 @@ export interface ProfileCompletenessInput {
     phone?: unknown;
     phoneNumber?: unknown;
     identityDocument?: unknown;
+    // Owner instruction, after #529 landed: "on profile, other fields like
+    // Gender, location, Your first and last name Your phone number are
+    // mandatory to fill as well."
+    gender?: unknown;
+    location?: unknown;
+    state?: unknown;
     profileComplete?: unknown;
 }
 
@@ -112,6 +118,25 @@ export function missingProfileFields(user: ProfileCompletenessInput | null | und
             field: "identityDocument",
             label: "A government-issued ID (required for numbers outside Nigeria)",
         });
+    }
+
+    //   Owner instruction, added after #529 landed: gender and location are
+    //   mandatory too.
+    //
+    //   GENDER IS SET-ONCE (see the long note in actions/profile.ts: WAVE is a
+    //   female-only programme and its eligibility check reads this field, so a
+    //   member may set it and then only an audited admin may change it). That
+    //   makes it a field somebody can be MISSING and cannot be asked for twice,
+    //   which is exactly why it belongs in this list rather than in a form
+    //   validation: the platform needs it before the member is let in.
+    if (!text(u.gender)) missing.push({ field: "gender", label: "Your gender" });
+
+    //   `state` is accepted as the location for a row written by an importer or
+    //   by a module onboarding form, neither of which fills the profile
+    //   screen's free-text `location`. Without it, several thousand real
+    //   members with a state on file would be told their location is missing.
+    if (!text(u.location) && !text(u.state)) {
+        missing.push({ field: "location", label: "Your location (city and state)" });
     }
 
     return missing;

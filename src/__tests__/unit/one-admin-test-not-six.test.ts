@@ -110,8 +110,12 @@ beforeEach(() => {
 describe('#356 — requireAdmin admits every admin role', () => {
     it('MODERATOR AND SUPPORT ARE ADMITTED, AND WERE NOT', async () => {
         // THE test. Fifteen admin action files refused both of these.
+        //   #532 added `roles` to the success shape — the live roles this
+        //   function already read, so a caller needing a SECOND live decision
+        //   need not fall back on the token. Asserted in full rather than with
+        //   toMatchObject, which would stop noticing an extra field leaking out.
         for (const role of ['moderator', 'support']) {
-            await expect(callRequireAdmin([role])).resolves.toEqual({ userId: 'admin-1' });
+            await expect(callRequireAdmin([role])).resolves.toEqual({ userId: 'admin-1', roles: [role] });
         }
     });
 
@@ -131,7 +135,7 @@ describe('#356 — requireAdmin admits every admin role', () => {
 
         expect(ALL_ADMIN_ROLES.length).toBe(10);          // vacuity guard
         for (const role of ALL_ADMIN_ROLES) {
-            await expect(callRequireAdmin([role])).resolves.toEqual({ userId: 'admin-1' });
+            await expect(callRequireAdmin([role])).resolves.toEqual({ userId: 'admin-1', roles: [role] });
         }
     });
 
@@ -174,7 +178,7 @@ describe('#356 — requireAdmin can ask for a specific permission', () => {
     it('while admin and super_admin hold it', async () => {
         for (const role of ['admin', 'super_admin']) {
             await expect(callRequireAdmin([role], 'finance:resolve_disputes'))
-                .resolves.toEqual({ userId: 'admin-1' });
+                .resolves.toEqual({ userId: 'admin-1', roles: [role] });
         }
     });
 
@@ -187,7 +191,8 @@ describe('#356 — requireAdmin can ask for a specific permission', () => {
 
     it('a caller that names no permission is unchanged', async () => {
         // The 13 existing call sites must behave exactly as before.
-        await expect(callRequireAdmin(['academy_admin'])).resolves.toEqual({ userId: 'admin-1' });
+        await expect(callRequireAdmin(['academy_admin']))
+            .resolves.toEqual({ userId: 'admin-1', roles: ['academy_admin'] });
     });
 });
 

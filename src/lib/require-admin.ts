@@ -97,8 +97,21 @@ import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-p
  *        and exactly 1 bare, with that one named, so a new bare gate fails the
  *        build.
  */
+/**
+ *   #532 THE LIVE ROLES ARE RETURNED, NOT DISCARDED.
+ *
+ *   This function already reads the user document and its roles in order to
+ *   answer the permission question, and then threw them away — so a caller that
+ *   needed a SECOND live decision had either to query again or to fall back on
+ *   `session.user.roles`, the stale JWT claim this whole function exists to
+ *   avoid. _getPendingWithdrawalsAction did the latter, and the second decision
+ *   it was making was whether to include members' bank account numbers.
+ *
+ *   Purely additive: every existing call site either destructures `userId` or
+ *   tests `"error" in result`, so nothing changes for them.
+ */
 export async function requireAdmin(permission?: AdminPermission): Promise<
-    { userId: string } | { error: string }
+    { userId: string; roles: string[] } | { error: string }
 > {
     // 1. Verify the user has an active NextAuth session
     const session = await auth();
@@ -138,7 +151,7 @@ export async function requireAdmin(permission?: AdminPermission): Promise<
             return { error: "Unauthorized: Admin access required" };
         }
 
-        return { userId: session.user.id };
+        return { userId: session.user.id, roles };
     } catch (error) {
         console.error("[requireAdmin] Firestore lookup failed:", error);
         // Fail closed — never grant access if we cannot verify the live role

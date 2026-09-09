@@ -155,6 +155,11 @@ const COMPLETE = {
     lastName: 'Obi',
     email: 'ada@example.com',
     phone: '+2348030000001',
+    // Owner instruction, after this finding landed: "on profile, other fields
+    // like Gender, location, Your first and last name Your phone number are
+    // mandatory to fill as well."
+    gender: 'female',
+    location: 'Ikeja, Lagos',
 };
 
 beforeEach(() => {
@@ -224,7 +229,8 @@ describe('#529 — the empty save no longer opens the platform', () => {
 
         const res = await save({ firstName: 'Ada', lastName: 'Obi' });
 
-        expect(res.data.missing.map((m: any) => m.field).sort()).toEqual(['email', 'phone']);
+        expect(res.data.missing.map((m: any) => m.field).sort())
+            .toEqual(['email', 'gender', 'location', 'phone']);
     });
 
     it('and NOBODY ALREADY THROUGH THE GATE IS PUT BACK OUTSIDE IT', async () => {
@@ -278,7 +284,24 @@ describe('#529 — the rule, which used to live in a click handler', () => {
     });
 
     it('and the missing list is ordered the way the form is filled', () => {
-        expect(missingProfileFields({}).map((m) => m.field)).toEqual(['name', 'email', 'phone']);
+        expect(missingProfileFields({}).map((m) => m.field))
+            .toEqual(['name', 'email', 'phone', 'gender', 'location']);
+    });
+
+    it('GENDER AND LOCATION ARE MANDATORY — owner instruction', () => {
+        //   Added after this finding landed: "on profile, other fields like
+        //   Gender, location, Your first and last name Your phone number are
+        //   mandatory to fill as well."
+        expect(isProfileComplete({ ...COMPLETE, gender: '' })).toBe(false);
+        expect(isProfileComplete({ ...COMPLETE, location: '' })).toBe(false);
+    });
+
+    it('AND A ROW WITH A `state` AND NO `location` STILL COUNTS', () => {
+        //   Importers and the module onboarding forms write `state`, never the
+        //   profile screen's free-text `location`. Requiring only `location`
+        //   would tell several thousand real members their location is missing
+        //   when the platform already has it — #485: onboarding must not stop.
+        expect(isProfileComplete({ ...COMPLETE, location: '', state: 'Lagos' })).toBe(true);
     });
 
     it('and the flag is never downgraded, stated at the rule', () => {
