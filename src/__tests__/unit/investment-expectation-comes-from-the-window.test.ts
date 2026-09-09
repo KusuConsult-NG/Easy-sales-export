@@ -152,7 +152,7 @@ describe('#429 — the expectation is derived from the window, not supplied', ()
     it('and the premise holds — the one caller really did pass commodity twice', () => {
         // If the screen is ever corrected to pass a real title, this test should
         // be re-read rather than deleted: the server deriving it is still right.
-        const screen = code('src/app/export/windows/[id]/page.tsx');
+        const screen = code('src/app/export/windows/[id]/ExportWindowDetailClient.tsx');
         const call = screen.slice(screen.indexOf('initializeInvestmentPaymentAction('));
         const args = call.slice(0, call.indexOf(');'));
         expect([...args.matchAll(/windowData\.commodity/g)].length).toBe(2);

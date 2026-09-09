@@ -44,7 +44,7 @@ const LIVE = 'src/app/actions/academy/_ac_live.ts';
 const APPLICATIONS = 'src/app/actions/academy/_ac_applications.ts';
 const REVIEW = 'src/app/actions/academy/_ac_admin_review.ts';
 const BARREL = 'src/app/actions/academy/index.ts';
-const LIVE_PAGE = 'src/app/academy/live/page.tsx';
+const LIVE_PAGE = 'src/app/academy/live/AcademyLiveClient.tsx';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');

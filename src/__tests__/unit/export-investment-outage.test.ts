@@ -67,7 +67,7 @@ const WINDOWS = 'src/app/actions/export/_ex_windows.ts';
 const AGGREGATION = 'src/app/actions/export-aggregation.ts';
 const LOOSE = 'src/app/actions/export/_ex_investments.ts';
 const WEBHOOK = 'src/infrastructure/payments/service.ts';
-const WINDOW_PAGE = 'src/app/export/windows/[id]/page.tsx';
+const WINDOW_PAGE = 'src/app/export/windows/[id]/ExportWindowDetailClient.tsx';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');

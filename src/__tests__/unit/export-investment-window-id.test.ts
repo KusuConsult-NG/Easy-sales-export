@@ -151,7 +151,7 @@ describe('the metadata the live initiator actually writes', () => {
     });
 
     it('and /export/windows/[id] is what calls it — this is not a dead path', async () => {
-        const page = read('src/app/export/windows/[id]/page.tsx');
+        const page = read('src/app/export/windows/[id]/ExportWindowDetailClient.tsx');
         expect(page).toContain('initializeInvestmentPaymentAction');
     });
 });

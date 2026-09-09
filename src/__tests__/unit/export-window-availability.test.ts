@@ -53,7 +53,7 @@ const source = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 
 const ACTION = 'src/app/actions/export-investments.ts';
 const INVEST = 'src/app/actions/export/_ex_investments.ts';
-const PAGE = 'src/app/export/windows/[id]/page.tsx';
+const PAGE = 'src/app/export/windows/[id]/ExportWindowDetailClient.tsx';
 
 const WINDOW = 'win-1';
 

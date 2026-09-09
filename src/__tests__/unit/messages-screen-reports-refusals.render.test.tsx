@@ -304,7 +304,7 @@ describe('#310 — the two screens that already got this right', () => {
 
     it.each([
         ['src/app/cooperatives/(member)/directory/page.tsx'],
-        ['src/app/dashboard/disputes/page.tsx'],
+        ['src/app/dashboard/disputes/DisputesClient.tsx'],
     ])('%s still reads result.error on a refused conversation', (rel) => {
         expect(src(rel)).toMatch(/showToast\(\s*\(?result[\s\S]{0,30}?\.error/);
     });

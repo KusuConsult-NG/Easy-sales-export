@@ -82,7 +82,7 @@ function walk(dir: string): string[] {
 const DISPUTE_SCREENS = [
     'src/app/admin/disputes/page.tsx',
     'src/app/admin/marketplace/disputes/page.tsx',
-    'src/app/dashboard/disputes/page.tsx',
+    'src/app/dashboard/disputes/DisputesClient.tsx',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ describe('#420 — no screen offers a choice that cannot match', () => {
     });
 
     it('and the member screen filters through the shared rule, not an equality', () => {
-        const src = code('src/app/dashboard/disputes/page.tsx');
+        const src = code('src/app/dashboard/disputes/DisputesClient.tsx');
         expect(src).toMatch(/disputeStatusesForFilter\(filterStatus\)\.includes\(d\.status\)/);
         expect(src).not.toMatch(/d\.status === filterStatus/);
     });
