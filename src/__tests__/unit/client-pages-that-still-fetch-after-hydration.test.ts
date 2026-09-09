@@ -78,11 +78,12 @@ const ROOT = process.cwd();
  *   Recorded this loudly because silently raising a ratchet is precisely what
  *   ratchets exist to prevent, and "the measurement was wrong" is the one
  *   reason that justifies it — which makes it the excuse to check hardest.
- *   Every page in the count is now named below: thirteen in NOT_CONVERTIBLE
- *   with a reason each, and cooperatives/(member)/loans, left untouched at the
- *   owner's explicit instruction about the loan product.
+ *   Every page in the count is now named below, in NOT_CONVERTIBLE, with a
+ *   reason each. (#570 converted cooperatives/(member)/loans, which had been
+ *   the one exception — held back at the owner's instruction about the loan
+ *   product until they released it.)
  */
-const CAP = 14;
+const CAP = 13;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -196,6 +197,9 @@ const CONVERTED = [
     //   through a reader shared with the route rather than over HTTP.
     'src/app/settings/security/mfa/page.tsx',
     'src/app/wave/(member)/live-training/page.tsx',
+    //   #570 — the cooperative loans screen, once the owner released the hold
+    //   they had placed on the loan product.
+    'src/app/cooperatives/(member)/loans/page.tsx',
     //   #564 — batch 16, the cooperative member screens and the public
     //   certificate verifier.
     'src/app/cooperatives/(member)/fixed-savings/page.tsx',

@@ -4,6 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { fixedSavingsPlanStatus } from "@/lib/cooperative-savings";
+import { normaliseLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * A cooperative member's own records, read once and defined once.
@@ -84,4 +85,85 @@ export async function readFixedSavingsPlans(userId: string): Promise<Record<stri
             createdAt: data.createdAt?.toDate?.() || new Date(),
         };
     });
+}
+
+/**
+ * The loan products a member may actually apply for.
+ *
+ *   #570 Moved here from /api/cooperative/loan-products so /cooperatives/loans
+ *   can read it on the SERVER instead of fetching the route from the browser.
+ *
+ *   INACTIVE PRODUCTS ARE NOT OFFERED. create-loan-product and
+ *   update-loan-product both write `isActive: Boolean(isActive)` and NOTHING
+ *   read it — not this route, not the admin list, not the application path — so
+ *   an admin deactivating a product removed it from nowhere: it stayed on the
+ *   public list at its old rate and could still be applied for. A toggle that
+ *   is collected, stored and never consulted, and this one had a price on it.
+ *
+ *   The field list is a WHITELIST, not a spread: a loan product row is admin
+ *   data and only these six fields are the offer.
+ */
+const PUBLIC_PRODUCT_FIELDS = [
+    "name",
+    "description",
+    "minAmount",
+    "maxAmount",
+    "interestRate",
+    "durationMonths",
+] as const;
+
+export async function readActiveLoanProducts(): Promise<Record<string, unknown>[]> {
+    const snapshot = await db.collection(COLLECTIONS.LOAN_PRODUCTS)
+        .where("isActive", "==", true)
+        .orderBy("minAmount", "asc")
+        .get();
+
+    return snapshot.docs.map((doc: any) => {
+        const data = doc.data() ?? {};
+        const product: Record<string, unknown> = { id: doc.id };
+        for (const field of PUBLIC_PRODUCT_FIELDS) {
+            if (data[field] !== undefined) product[field] = data[field];
+        }
+        return product;
+    });
+}
+
+/**
+ * This member's loan applications, from BOTH places one can be filed.
+ *
+ *   #570 Moved here from /api/cooperative/my-loan-applications, with the
+ *   finding it carries:
+ *
+ *   A MEMBER'S OWN APPLICATION DID NOT APPEAR IN THEIR OWN LIST. The page that
+ *   calls this submits through applyForLoanAction, which files into
+ *   cooperative_loans and keys the borrower `memberId`. The route read
+ *   loan_applications by `userId`, so an application filed on that very page
+ *   was never in the list rendered underneath the form. The member saw
+ *   "submitted" and then nothing, indefinitely.
+ *
+ *   Both collections, newest first. See lib/loan-application-location.ts.
+ */
+export async function readMyLoanApplications(userId: string): Promise<Record<string, any>[]> {
+    const [generalSnap, coopSnap] = await Promise.all([
+        db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+            .where("userId", "==", userId)
+            .orderBy("appliedAt", "desc")
+            .get(),
+        db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+            .where("memberId", "==", userId)
+            .get(),
+    ]);
+
+    return [
+        ...generalSnap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            appliedAt: doc.data().appliedAt?.toDate?.() || new Date(),
+        })),
+        ...coopSnap.docs.map(doc => ({
+            ...normaliseLoanApplication(doc.data(), COLLECTIONS.COOPERATIVE_LOANS),
+            id: doc.id,
+            appliedAt: doc.data().appliedAt?.toDate?.() || doc.data().createdAt?.toDate?.() || new Date(),
+        })),
+    ].sort((a: any, b: any) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
 }

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, parseCurrencyStringToFloat } from "@/lib/utils";
+import { membershipAnswerFrom } from "@/lib/cooperative-membership-answer";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import {
     FIXED_SAVINGS_ANNUAL_RATE,
@@ -35,20 +36,25 @@ type FixedSavingsPlan = {
     createdAt: Date;
 };
 
+/**
+ *   #570 The seeded answer, through the SAME function the HTTP fallback uses.
+ *
+ *   This screen had its own `readMembership` and /cooperatives/loans had its
+ *   own copy of the raw reading, which is why #565's fix reached only one of
+ *   them. One function now, for both screens and both paths.
+ */
+function seededStatus(membership: { isMember: boolean; status: string } | null) {
+    //   A seed whose membership half is null is not an answer either — the same
+    //   third state, arriving from the server rather than from a fetch.
+    if (!membership) return null;
+    const answer = membershipAnswerFrom({ success: true, ...membership });
+    return answer.known ? answer.status : null;
+}
+
 export type FixedSavingsSeed = {
     membership: { isMember: boolean; status: string } | null;
     plans: Record<string, any>[];
 };
-
-/**
- * The membership ANSWER, read in one place.
- *
- * Used by the seed and by the HTTP fallback, so the two cannot come to disagree
- * about what "not a member" means — which is the whole of #565.
- */
-function readMembership(data: { isMember?: boolean; status?: string } | null) {
-    return data?.isMember ? (data.status as "approved" | "pending") : "not_member" as const;
-}
 
 export default function FixedSavingsClient({ initial = null }: { initial?: FixedSavingsSeed | null }) {
     const router = useRouter();
@@ -58,7 +64,7 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
     const [showCalculator, setShowCalculator] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [membershipStatus, setMembershipStatus] = useState<"approved" | "pending" | "not_member" | null>(
-        initial ? readMembership(initial.membership) : null,
+        initial ? seededStatus(initial.membership) : null,
     );
     /**
      *   #565 "COULD NOT TELL" IS NOT "NOT A MEMBER".
@@ -103,13 +109,14 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
 
             //   A 500 answers { success: false } with no isMember at all, which
             //   read as "not a member" too. Both failures are one state now.
-            if (data?.success === false) {
+            const answer = membershipAnswerFrom(data);
+            if (!answer.known) {
                 setMembershipCheckFailed(true);
                 return;
             }
 
             setMembershipCheckFailed(false);
-            setMembershipStatus(readMembership(data));
+            setMembershipStatus(answer.status);
         } catch (error) {
             logger.error("Failed to check membership:", error);
             setMembershipCheckFailed(true);

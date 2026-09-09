@@ -84,9 +84,14 @@ function codeOnly(src: string): string {
 }
 
 const action = source('src/app/actions/cooperative/_coop_money.ts');
-const publicRoute = source('src/app/api/cooperative/loan-products/route.ts');
+//   #570 The route bodies moved to lib/cooperative-readers, so the loans screen
+//   could read them on the server rather than fetching its own application over
+//   HTTP. These checks read the reader; the routes are checked separately for
+//   having kept no second copy of the query.
+const publicRoute = source('src/lib/cooperative-readers.ts');
+const publicHandler = source('src/app/api/cooperative/loan-products/route.ts');
 const applyRoute = source('src/app/api/cooperative/apply-loan/route.ts');
-const page = source('src/app/cooperatives/(member)/loans/page.tsx');
+const page = source('src/app/cooperatives/(member)/loans/LoansClient.tsx');
 
 describe("the loan is written on the chosen product's terms", () => {
     it('reads the collection the admin actually writes', () => {
@@ -163,6 +168,15 @@ describe("the loan is written on the chosen product's terms", () => {
 });
 
 describe('a switched-off product is not offered', () => {
+    it('and the route kept no second copy of the query', () => {
+        //   #570's extraction, checked where it could fail: a handler still
+        //   querying LOAN_PRODUCTS itself would be a second place for the
+        //   isActive filter to be forgotten — which is the defect this whole
+        //   section is about.
+        expect(publicHandler).toContain('readActiveLoanProducts');
+        expect(publicHandler).not.toContain('LOAN_PRODUCTS');
+    });
+
     it('the public list filters on isActive', () => {
         expect(publicRoute).toContain('.where("isActive", "==", true)');
     });
@@ -185,8 +199,22 @@ describe('a switched-off product is not offered', () => {
 
 describe('the public list publishes named fields only', () => {
     it('does not spread the document', () => {
-        expect(codeOnly(publicRoute)).not.toContain('...doc.data()');
-        expect(publicRoute).toContain('PUBLIC_PRODUCT_FIELDS');
+        //   #570 SCOPED TO THE PRODUCTS READER, not the whole file.
+        //
+        //   Both cooperative readers now live in one module, and the loan
+        //   APPLICATIONS reader legitimately spreads `...doc.data()` — an
+        //   application row belongs to the member reading it. A file-wide check
+        //   saw that and reported the PRODUCTS list as spreading, which it does
+        //   not. The claim is about one function, so it reads one function.
+        const src = codeOnly(publicRoute);
+        const products = src.slice(
+            src.indexOf('export async function readActiveLoanProducts'),
+            src.indexOf('export async function readMyLoanApplications'),
+        );
+
+        expect(products.length).toBeGreaterThan(100);
+        expect(products).not.toContain('...doc.data()');
+        expect(products).toContain('PUBLIC_PRODUCT_FIELDS');
     });
 
     it('does not publish the admin who created the product', () => {

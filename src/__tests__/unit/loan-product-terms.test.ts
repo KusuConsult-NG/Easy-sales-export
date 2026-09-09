@@ -320,7 +320,7 @@ describe('all three sites share one implementation', () => {
     });
 
     it('the member calculator uses it too, and no longer divides by 12', async () => {
-        const src = codeOnly(await source('src/app/cooperatives/(member)/loans/page.tsx'));
+        const src = codeOnly(await source('src/app/cooperatives/(member)/loans/LoansClient.tsx'));
 
         expect(src).toContain('calculateRepaymentTerms(');
         expect(src).not.toContain('/ 100 / 12');

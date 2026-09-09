@@ -456,7 +456,24 @@ describe("the member's own view of their own applications", () => {
     // cooperative_loans, and then watched the list underneath that very form
     // stay empty. Their loan history on /cooperatives/my-loans was empty too,
     // while the loan itself was live.
-    const MEMBER_ROUTE = 'src/app/api/cooperative/my-loan-applications/route.ts';
+    //   #570 The route body moved to lib/cooperative-readers so the loans screen
+    //   could read it on the server rather than fetching its own application over
+    //   HTTP. These checks read the reader — the same code, with one more caller
+    //   — and the handler is checked below for having kept no second copy.
+    const MEMBER_ROUTE = 'src/lib/cooperative-readers.ts';
+    const MEMBER_HANDLER = 'src/app/api/cooperative/my-loan-applications/route.ts';
+
+    it('and the route kept no second copy of the query', () => {
+        //   A handler still reading one collection itself would restore the
+        //   exact defect this section records — a member's own application
+        //   missing from their own list — in a file this suite no longer looks
+        //   at.
+        const handler = code(MEMBER_HANDLER);
+
+        expect(handler).toContain('readMyLoanApplications');
+        expect(handler).not.toContain('COLLECTIONS.LOAN_APPLICATIONS');
+        expect(handler).not.toContain('COLLECTIONS.COOPERATIVE_LOANS');
+    });
 
     it('the applications list covers both collections', () => {
         // THE test.
@@ -491,7 +508,7 @@ describe("the member's own view of their own applications", () => {
 
     it('and the page really does submit into the collection they were missing', () => {
         // Vacuity guard, and the whole reason this is a live defect.
-        const page = readFileSync(join(process.cwd(), 'src/app/cooperatives/(member)/loans/page.tsx'), 'utf-8');
+        const page = readFileSync(join(process.cwd(), 'src/app/cooperatives/(member)/loans/LoansClient.tsx'), 'utf-8');
 
         expect(page).toContain('/api/cooperative/my-loan-applications');
         expect(page).toContain('applyForLoanAction');

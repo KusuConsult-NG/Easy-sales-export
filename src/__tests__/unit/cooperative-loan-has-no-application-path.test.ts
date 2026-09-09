@@ -252,7 +252,7 @@ describe('#370 — the sweeps are not vacuous', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 const LIVE_ACTION = 'src/app/actions/cooperative/_coop_money.ts';
-const LIVE_PAGE = 'src/app/cooperatives/(member)/loans/page.tsx';
+const LIVE_PAGE = 'src/app/cooperatives/(member)/loans/LoansClient.tsx';
 
 describe('#377 — the correction: the cooperative loan DOES have a way in', () => {
     /**

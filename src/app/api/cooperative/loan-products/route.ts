@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { readActiveLoanProducts } from "@/lib/cooperative-readers";
 
 /**
  * API Route: Get All Loan Products
@@ -16,41 +15,18 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  * user id of the admin who created the product — on an endpoint with no
  * authentication. Same shape as the export catalogue and the land listings.
  */
-const PUBLIC_PRODUCT_FIELDS = [
-    "name",
-    "description",
-    "minAmount",
-    "maxAmount",
-    "interestRate",
-    "durationMonths",
-] as const;
-
+/**
+ * API Route: the loan products on offer.
+ *
+ *   #570 The body moved to lib/cooperative-readers so /cooperatives/loans can
+ *   read it on the SERVER instead of fetching this route from the browser after
+ *   the page had already been rendered. The finding it carries — an admin
+ *   deactivating a product removed it from nowhere, because nothing read
+ *   isActive — moved with it, along with the field whitelist.
+ */
 export async function GET(request: NextRequest) {
     try {
-        // Inactive products are not offered.
-        //
-        // create-loan-product and update-loan-product both write
-        // `isActive: Boolean(isActive)` and NOTHING read it — not this route,
-        // not the admin list, not the application path. So an admin
-        // deactivating a product removed it from nowhere: it stayed on the
-        // public list at its old rate and could still be applied for.
-        //
-        // A toggle that is collected, stored and never consulted is the third
-        // of its kind in this audit, after MFA enforcement and the notification
-        // settings. This one had a price on it.
-        const snapshot = await db.collection(COLLECTIONS.LOAN_PRODUCTS)
-            .where("isActive", "==", true)
-            .orderBy("minAmount", "asc")
-            .get();
-
-        const products = snapshot.docs.map((doc: any) => {
-            const data = doc.data() ?? {};
-            const product: Record<string, unknown> = { id: doc.id };
-            for (const field of PUBLIC_PRODUCT_FIELDS) {
-                if (data[field] !== undefined) product[field] = data[field];
-            }
-            return product;
-        });
+        const products = await readActiveLoanProducts();
 
         return NextResponse.json({
             success: true,

@@ -6,6 +6,8 @@
  *   #565 A FAILED MEMBERSHIP CHECK TOLD A PAID-UP MEMBER THEY WERE NOT ONE, AND
  *        OFFERED TO SELL THEM A MEMBERSHIP THEY ALREADY HAD.
  *
+ *   #570 AND THEN IT TURNED OUT THERE WERE TWO OF THEM.
+ *
  *   /cooperatives/fixed-savings opened like this:
  *
  *       try {
@@ -33,6 +35,19 @@
  *
  *   It is its own state now, and says what actually happened.
  *
+ * ── AND THE FIX REACHED ONE OF TWO DOORS ────────────────────────────────────
+ *
+ *   /cooperatives/loans carried a byte-for-byte copy of the same try/catch, and
+ *   did the same thing over a member's own loan applications and repayment
+ *   figures. It was not fixed with #565 because it was held back at the owner's
+ *   instruction about the loan product; when they released it, the copy was
+ *   still there.
+ *
+ *   Both screens now call membershipAnswerFrom — ONE function, used by the seed
+ *   and by the HTTP fallback on both pages. The reason #565 reached one door is
+ *   that there were two copies of the reading; there is one now, so there is no
+ *   second copy for the next fix to miss.
+ *
  *   #566 AND /cooperatives/withdrawals MADE AN HTTP ROUND TRIP TO ASK A
  *        QUESTION THE NEXT CALL ANSWERS ANYWAY.
  *
@@ -48,9 +63,19 @@
  *     the catch setting "not_member" again              KILLED (1 test)
  *     the 500 branch removed                            KILLED (1)
  *     the failure panel removed                         KILLED (2)
- *     readMembership letting everyone in                KILLED (1)
+ *     the loans catch setting "not_member" again        KILLED (1)
+ *     the loans failure panel removed                   KILLED (1)
+ *     the shared reading treating a 500 as a "no"       KILLED (1)
+ *     the shared reading letting everyone in            KILLED (1)
+ *     the shared reading guessing upward on no status   KILLED (1)
  *     the withdrawals seed ignored                      KILLED (1)
  *     reword this header                                SURVIVED, as intended
+ *
+ *   TWO OF THOSE SURVIVED THE FIRST RUN, AND NEITHER WAS EQUIVALENT. The
+ *   rendered tests only ever fed the shared reading fixtures a healthy route
+ *   produces, so "a member row with no status" and "a non-member read as
+ *   pending" were never exercised — both real inputs. Closed by testing the
+ *   function directly rather than only through two screens.
  *
  *   AND ONE MUTANT WAS DISCARDED AS EQUIVALENT, NOT RECORDED AS A SURVIVOR.
  *   Rewriting readMembership to trust `status` alone and ignore `isMember`
@@ -91,6 +116,12 @@ async function renderFixedSavings(initial: any) {
     const { default: FixedSavingsClient } =
         await import('@/app/cooperatives/(member)/fixed-savings/FixedSavingsClient');
     render(<FixedSavingsClient initial={initial} />);
+}
+
+async function renderLoans(initial: any) {
+    const { default: LoansClient } =
+        await import('@/app/cooperatives/(member)/loans/LoansClient');
+    render(<LoansClient initial={initial} />);
 }
 
 beforeEach(() => {
@@ -161,6 +192,117 @@ describe('#565 — a member is not told they are not a member', () => {
         });
         expect(screen.queryByText(/could not check your cooperative membership/i))
             .not.toBeInTheDocument();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#570 — the shared reading, exercised directly', () => {
+    /**
+     * The rendered tests above go through this function, but only ever with
+     * fixtures a healthy route produces. Mutation testing showed the gap: two
+     * changes to the reading survived, because no test fed it the inputs they
+     * differ on. Those inputs are real — a row without a status is a row this
+     * platform writes — so they are fed here.
+     */
+    const answer = (data: any) => require('@/lib/cooperative-membership-answer')
+        .membershipAnswerFrom(data);
+
+    it('A MEMBER WITH A STATUS IS READ AT THAT STATUS', () => {
+        expect(answer({ success: true, isMember: true, status: 'approved' }))
+            .toEqual({ known: true, status: 'approved' });
+    });
+
+    it('A MEMBER WITH NO STATUS IS PENDING, NOT APPROVED', () => {
+        //   THE GUESS THAT MUST NOT BE MADE. The route itself defaults this row
+        //   to "pending"; reading it as "approved" would admit somebody the
+        //   admins have not passed, into loans and fixed savings both.
+        expect(answer({ success: true, isMember: true }))
+            .toEqual({ known: true, status: 'pending' });
+        expect(answer({ success: true, isMember: true, status: 'something_else' }))
+            .toEqual({ known: true, status: 'pending' });
+    });
+
+    it('A REAL NON-MEMBER IS not_member, NOT pending', () => {
+        //   Distinct answers: the onboarding guide offers a JOIN action for a
+        //   non-member and a "waiting on review" state for a pending one.
+        //   Collapsing them tells someone who has never applied that their
+        //   application is being reviewed.
+        expect(answer({ success: true, isMember: false, status: 'not_member' }))
+            .toEqual({ known: true, status: 'not_member' });
+    });
+
+    it('AND EVERY WAY OF NOT KNOWING IS "NOT KNOWN"', () => {
+        expect(answer(null)).toEqual({ known: false });
+        expect(answer(undefined)).toEqual({ known: false });
+        //   A 500 carries no isMember at all — the door #565 and #570 both
+        //   walked through.
+        expect(answer({ success: false, message: 'Internal server error' }))
+            .toEqual({ known: false });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#570 — and the loans screen, which had the same copy of it', () => {
+    it('A FAILED CHECK SAYS SO THERE TOO', async () => {
+        //   THE SECOND DOOR. Same defect, same screen shape, over a member's
+        //   loan applications rather than their savings.
+        (global as any).fetch = jest.fn(async () => { throw new Error('network down'); });
+
+        await renderLoans(null);
+
+        expect(await screen.findByText(/could not check your cooperative membership/i))
+            .toBeInTheDocument();
+        expect(screen.queryByText(/must first become an approved cooperative member/i))
+            .not.toBeInTheDocument();
+    });
+
+    it('AND A REAL NON-MEMBER IS STILL SHOWN THE JOIN PANEL', async () => {
+        (global as any).fetch = jest.fn(async (url: string) => ({
+            ok: true,
+            json: async () => url.includes('check-membership')
+                ? { success: true, isMember: false, status: 'not_member' }
+                : { success: true, products: [], applications: [] },
+        }));
+
+        await renderLoans(null);
+
+        expect(await screen.findByText(/must first become an approved cooperative member/i))
+            .toBeInTheDocument();
+    });
+
+    it('AND A SEEDED MEMBER SEES THEIR LOANS WITHOUT A FETCH', async () => {
+        await renderLoans({
+            membership: { isMember: true, status: 'approved' },
+            products: [],
+            applications: [],
+        });
+
+        await waitFor(() => {
+            expect(screen.queryByText(/must first become an approved cooperative member/i))
+                .not.toBeInTheDocument();
+        });
+        expect((global as any).fetch).not.toHaveBeenCalled();
+    });
+
+    it('AND BOTH SCREENS READ THE ANSWER THROUGH THE SAME FUNCTION', () => {
+        //   The ratchet on the CLASS, not the instance. Two copies of this
+        //   reading is what made #565 reach one door; a third copy would do it
+        //   again, and nothing else in this suite would notice.
+        const { readFileSync } = require('fs');
+        const { join } = require('path');
+        const ROOT = process.cwd();
+
+        for (const rel of [
+            'src/app/cooperatives/(member)/fixed-savings/FixedSavingsClient.tsx',
+            'src/app/cooperatives/(member)/loans/LoansClient.tsx',
+        ]) {
+            const src = readFileSync(join(ROOT, rel), 'utf-8') as string;
+            expect({ rel, shared: src.includes('membershipAnswerFrom') })
+                .toEqual({ rel, shared: true });
+            //   And neither decides it locally any more.
+            expect({ rel, ownCopy: /setMembershipStatus\("not_member"\)/.test(src) })
+                .toEqual({ rel, ownCopy: false });
+        }
     });
 });
 
