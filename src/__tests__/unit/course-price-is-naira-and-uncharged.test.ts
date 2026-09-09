@@ -64,7 +64,7 @@ import { stripComments } from '@/lib/testing/strip-comments';
 const ROOT = process.cwd();
 const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8'));
 
-const COURSES_PAGE = 'src/app/academy/(learner)/courses/page.tsx';
+const COURSES_PAGE = 'src/app/academy/(learner)/courses/CourseCatalogClient.tsx';
 
 function walk(dir: string, out: string[] = []): string[] {
     for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {

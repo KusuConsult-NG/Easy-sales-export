@@ -55,7 +55,7 @@ import { checkCourseAccess, ACADEMY_TIERS_OPENED, ACADEMY_PLANS } from '@/lib/ac
 
 const ENROLMENT = 'src/app/actions/academy/_ac_enrollment.ts';
 const COURSE_PAGE = 'src/app/academy/[courseId]/page.tsx';
-const CATALOGUE = 'src/app/academy/(learner)/courses/page.tsx';
+const CATALOGUE = 'src/app/academy/(learner)/courses/CourseCatalogClient.tsx';
 const COURSE_PAY = 'src/app/actions/academy/_ac_course_payment.ts';
 const QUIZ_PAGE = 'src/app/academy/courses/[courseId]/quiz/page.tsx';
 

@@ -68,7 +68,7 @@ const code = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 const raw = (rel: string) => readFileSync(rel, 'utf-8');
 
 const COURSE_PAGE = 'src/app/academy/[courseId]/page.tsx';
-const CATALOGUE = 'src/app/academy/(learner)/courses/page.tsx';
+const CATALOGUE = 'src/app/academy/(learner)/courses/CourseCatalogClient.tsx';
 const COURSE_PAY = 'src/app/actions/academy/_ac_course_payment.ts';
 const ENROL_PAY = 'src/app/actions/academy/_payment.ts';
 const FLOW = 'src/lib/academy-purchase-flow.ts';

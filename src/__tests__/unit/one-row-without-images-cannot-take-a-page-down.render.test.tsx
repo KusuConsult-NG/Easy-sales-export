@@ -225,7 +225,7 @@ describe('#439 — the rule is stated once, and cannot be restated', () => {
         const READERS = [
             'src/app/actions/saved-items.ts',
             'src/app/admin/farm-nation/listings/page.tsx',
-            'src/app/export/(app)/products/page.tsx',
+            'src/app/export/(app)/products/MyExportProductsClient.tsx',
             'src/app/farm-nation/(member)/my-properties/page.tsx',
             'src/app/farm-nation/checkout/[propertyId]/page.tsx',
             'src/app/farm-nation/map/page.tsx',
