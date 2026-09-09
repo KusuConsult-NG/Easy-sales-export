@@ -129,7 +129,7 @@ describe('#334 — and what it says instead is what the code does', () => {
         // real action. (confirmDeliveryAction is NOT it — order-management.ts
         // says "DO NOT WIRE THIS UP" over a rejected payout model.)
         expect(help).toMatch(/Confirm Receipt/);
-        const orderPage = source('src/app/marketplace/buyer/orders/[id]/page.tsx');
+        const orderPage = source('src/app/marketplace/buyer/orders/[id]/BuyerOrderDetailClient.tsx');
         expect(orderPage).toContain('confirmOrderReceiptAction');
     });
 

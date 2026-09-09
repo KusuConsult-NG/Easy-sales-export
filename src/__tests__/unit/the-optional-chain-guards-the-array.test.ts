@@ -164,9 +164,9 @@ describe('#442 — the sites #130 knew about and the ones it missed', () => {
      */
     const PRICE_READERS = [
         'src/app/actions/marketplace/_buyer.ts',
-        'src/app/marketplace/buyer/products/page.tsx',
+        'src/app/marketplace/buyer/products/BuyerProductsClient.tsx',
         'src/app/marketplace/checkout/page.tsx',
-        'src/app/marketplace/products/[id]/page.tsx',
+        'src/app/marketplace/products/[id]/ProductDetailClient.tsx',
         'src/app/marketplace/sell/page.tsx',
     ];
 

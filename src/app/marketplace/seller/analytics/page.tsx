@@ -7,6 +7,7 @@
 
 import { getSellerAnalyticsAction } from "@/app/actions/marketplace";
 import SellerAnalyticsClient from "./SellerAnalyticsClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #552 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -14,7 +15,7 @@ import SellerAnalyticsClient from "./SellerAnalyticsClient";
 export const dynamic = "force-dynamic";
 
 export default async function SellerAnalyticsPage() {
-    const result = await getSellerAnalyticsAction().catch(() => null);
+    const result = rawSeed("seller analytics", await getSellerAnalyticsAction().catch(() => null));
 
     return <SellerAnalyticsClient initial={result} />;
 }

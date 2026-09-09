@@ -7,6 +7,7 @@
 
 import { getMyExportInvestmentsAction } from "@/app/actions/export";
 import ExportTransactionsClient from "./ExportTransactionsClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #546 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -14,7 +15,7 @@ import ExportTransactionsClient from "./ExportTransactionsClient";
 export const dynamic = "force-dynamic";
 
 export default async function ExportTransactionsPage() {
-    const result = await getMyExportInvestmentsAction().catch(() => null);
+    const result = rawSeed("export transactions", await getMyExportInvestmentsAction().catch(() => null));
 
     return <ExportTransactionsClient initial={result} />;
 }

@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 53;
+const CAP = 48;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -146,6 +146,12 @@ const CONVERTED = [
     'src/app/farm-nation/property/[id]/page.tsx',
     'src/app/farm-nation/page.tsx',
     'src/app/farm-nation/properties/page.tsx',
+    //   #554 — batch 9.
+    'src/app/marketplace/products/[id]/page.tsx',
+    'src/app/marketplace/products/page.tsx',
+    'src/app/marketplace/buyer/orders/page.tsx',
+    'src/app/marketplace/buyer/orders/[id]/page.tsx',
+    'src/app/marketplace/buyer/products/page.tsx',
     'src/app/farm-nation/(member)/dashboard/page.tsx',
     'src/app/cooperatives/(member)/dashboard/page.tsx',
     'src/app/export/(app)/dashboard/page.tsx',
@@ -304,7 +310,11 @@ describe('#545 — the waterfall that is left is counted', () => {
         //   of 93 is satisfied by finding none.
         const pages = pagesThatFetchAfterHydration();
 
-        expect(pages.length).toBeGreaterThan(50);
+        //   #554 Lowered from 50 as the ledger was worked down — it is a guard
+        //   against a scan pointed at nothing, not a second cap, and leaving it
+        //   at 50 would have made THIS test fail as the real number improved.
+        //   Kept well below the current count so it still catches a broken scan.
+        expect(pages.length).toBeGreaterThan(20);
         expect(pages.every(p => p.startsWith('src/app/'))).toBe(true);
         expect(pages.every(p => p.endsWith('page.tsx'))).toBe(true);
     });

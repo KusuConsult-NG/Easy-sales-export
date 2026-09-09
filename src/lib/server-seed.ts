@@ -60,3 +60,42 @@ export function seedOrNull<T>(
 
     return (result.data ?? null) as T | null;
 }
+
+/**
+ * Log a refusal on a seed that is handed to the client RAW, and return it
+ * unchanged.
+ *
+ *   #554 THE RAW-SEED PAGES HAD THE SAME SILENT-FAILURE GAP.
+ *
+ *   seedOrNull unwraps. Several pages deliberately do NOT unwrap: where the
+ *   client derives from the result — mapping flash-sale rows into products,
+ *   picking `.products` out of a related-products envelope — the whole result
+ *   is passed through so the derivation stays in one place.
+ *
+ *   Those pages therefore never read `success` or `error` either, and #319's
+ *   D2 sweep caught it: "an action result captured and never inspected at all"
+ *   went from 29 to 31. The result IS inspected — by the client, downstream —
+ *   but a REFUSAL on the server still went unrecorded, exactly the gap #551
+ *   closed for the unwrapping pages.
+ *
+ *   So this reads the refusal, says so, and hands the result straight back. The
+ *   client keeps deciding what a refusal means; the server just stops being
+ *   silent about it.
+ */
+export function rawSeed<T extends { success?: boolean; error?: unknown }>(
+    label: string,
+    result: T | null | undefined,
+): T | null {
+    if (!result) {
+        logger.warn(`[server-seed] ${label}: the read threw; the client will fetch instead`);
+        return null;
+    }
+
+    if (!result.success) {
+        logger.warn(`[server-seed] ${label}: refused; the client will handle it`, {
+            error: result.error ?? null,
+        });
+    }
+
+    return result;
+}

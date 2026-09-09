@@ -7,6 +7,7 @@
 
 import { getLiveSessionsAction } from "@/app/actions/academy";
 import AcademyLiveClient from "./AcademyLiveClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #548 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -14,7 +15,7 @@ import AcademyLiveClient from "./AcademyLiveClient";
 export const dynamic = "force-dynamic";
 
 export default async function AcademyLivePage() {
-    const result = await getLiveSessionsAction().catch(() => null);
+    const result = rawSeed("academy live sessions", await getLiveSessionsAction().catch(() => null));
 
     return <AcademyLiveClient initial={result} />;
 }

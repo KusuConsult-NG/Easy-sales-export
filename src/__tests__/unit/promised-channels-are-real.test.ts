@@ -53,7 +53,7 @@ import { stripComments } from '@/lib/testing/strip-comments';
 
 const ROOT = process.cwd();
 const SELLER = 'src/app/marketplace/seller/orders/[id]/page.tsx';
-const BUYER = 'src/app/marketplace/buyer/orders/[id]/page.tsx';
+const BUYER = 'src/app/marketplace/buyer/orders/[id]/BuyerOrderDetailClient.tsx';
 const RESOLVER = 'src/app/actions/marketplace/_escrow_disputes.ts';
 
 const raw = (rel: string) => readFileSync(join(ROOT, rel), 'utf-8');

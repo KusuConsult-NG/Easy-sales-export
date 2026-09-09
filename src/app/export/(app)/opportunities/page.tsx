@@ -9,6 +9,7 @@
 
 import { getActiveExportWindowsAction } from "@/app/actions/export-aggregation";
 import ExportOpportunitiesClient from "./ExportOpportunitiesClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #546 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -16,7 +17,7 @@ import ExportOpportunitiesClient from "./ExportOpportunitiesClient";
 export const dynamic = "force-dynamic";
 
 export default async function ExportOpportunitiesPage() {
-    const result = await getActiveExportWindowsAction().catch(() => null);
+    const result = rawSeed("export opportunities", await getActiveExportWindowsAction().catch(() => null));
 
     return <ExportOpportunitiesClient initial={result} />;
 }

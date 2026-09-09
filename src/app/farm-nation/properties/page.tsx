@@ -8,6 +8,7 @@
 
 import { searchLandListingsAction } from "@/app/actions/land-listings";
 import PropertiesClient from "./PropertiesClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #553 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -15,7 +16,7 @@ import PropertiesClient from "./PropertiesClient";
 export const dynamic = "force-dynamic";
 
 export default async function FarmNationPropertiesPage() {
-    const result = await searchLandListingsAction({ limit: 12 }).catch(() => null);
+    const result = rawSeed("farm-nation properties", await searchLandListingsAction({ limit: 12 }).catch(() => null));
 
     return <PropertiesClient initial={result} />;
 }

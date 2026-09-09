@@ -9,6 +9,7 @@
 
 import { getSellerOrdersAction } from "@/app/actions/marketplace";
 import SellerOrdersClient from "./SellerOrdersClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #552 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -16,7 +17,7 @@ import SellerOrdersClient from "./SellerOrdersClient";
 export const dynamic = "force-dynamic";
 
 export default async function SellerOrdersPage() {
-    const result = await getSellerOrdersAction({ limit: 20 }).catch(() => null);
+    const result = rawSeed("seller orders", await getSellerOrdersAction({ limit: 20 }).catch(() => null));
 
     return <SellerOrdersClient initial={result} />;
 }

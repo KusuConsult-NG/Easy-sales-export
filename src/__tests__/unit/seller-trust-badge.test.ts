@@ -342,7 +342,7 @@ describe('every read path uses it', () => {
     const VILLAGE = 'src/app/actions/village-market.ts';
     const API = 'src/app/api/marketplace/products/route.ts';
     const BUYER = 'src/app/actions/marketplace/_buyer.ts';
-    const BUYER_PAGE = 'src/app/marketplace/buyer/products/page.tsx';
+    const BUYER_PAGE = 'src/app/marketplace/buyer/products/BuyerProductsClient.tsx';
 
     it.each([CATALOG, VILLAGE, API, BUYER])('%s hydrates the badge', (rel: string) => {
         expect(code(rel)).toContain('hydrateSellerTrust(');
@@ -413,7 +413,7 @@ describe('the name fallback has one spelling', () => {
     it('the shield still has its title, so this did not strip the label', () => {
         // Vacuity guard: a blanket delete of the string would pass the two above
         // and remove the badge's accessible name.
-        expect(source('src/app/marketplace/buyer/products/page.tsx')).toContain('title="Verified Seller"');
+        expect(source('src/app/marketplace/buyer/products/BuyerProductsClient.tsx')).toContain('title="Verified Seller"');
     });
 
     it('the schema default agrees with the constant', () => {

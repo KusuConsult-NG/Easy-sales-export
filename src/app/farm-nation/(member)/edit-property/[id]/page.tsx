@@ -8,6 +8,7 @@
 
 import { getPropertyByIdAction } from "@/app/actions/land-listings";
 import EditPropertyClient from "./EditPropertyClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #549 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function EditPropertyPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const result = await getPropertyByIdAction(id).catch(() => null);
+    const result = rawSeed("edit property", await getPropertyByIdAction(id).catch(() => null));
 
     return <EditPropertyClient id={id} initial={result} />;
 }

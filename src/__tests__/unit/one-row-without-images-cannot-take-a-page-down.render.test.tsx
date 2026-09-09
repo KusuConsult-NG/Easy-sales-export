@@ -243,10 +243,10 @@ describe('#439 — the rule is stated once, and cannot be restated', () => {
             'src/app/farm-nation/properties/PropertiesClient.tsx',
             'src/app/farm-nation/property/[id]/PropertyDetailsClient.tsx',
             'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx',
-            'src/app/marketplace/buyer/products/page.tsx',
+            'src/app/marketplace/buyer/products/BuyerProductsClient.tsx',
             'src/app/marketplace/checkout/page.tsx',
-            'src/app/marketplace/products/[id]/page.tsx',
-            'src/app/marketplace/products/page.tsx',
+            'src/app/marketplace/products/[id]/ProductDetailClient.tsx',
+            'src/app/marketplace/products/MarketplaceProductsClient.tsx',
             'src/app/marketplace/sell/page.tsx',
             'src/app/marketplace/sellers/[sellerId]/page.tsx',
         ];

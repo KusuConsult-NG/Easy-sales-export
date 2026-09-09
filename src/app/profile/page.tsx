@@ -23,6 +23,7 @@
 
 import { getUserProfileAction } from "@/app/actions/profile";
 import ProfileClient from "./ProfileClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #543 EXPLICITLY DYNAMIC.
@@ -43,7 +44,7 @@ export const dynamic = "force-dynamic";
 
 
 export default async function ProfilePage() {
-    const initialProfile = await getUserProfileAction().catch(() => null);
+    const initialProfile = rawSeed("profile", await getUserProfileAction().catch(() => null));
 
     return <ProfileClient initialProfile={initialProfile} />;
 }

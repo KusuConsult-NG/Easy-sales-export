@@ -9,6 +9,7 @@
 
 import { getPropertyByIdAction } from "@/app/actions/land-listings";
 import CheckoutClient from "./CheckoutClient";
+import { rawSeed } from "@/lib/server-seed";
 
 /**
  *   #550 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage({ params }: { params: Promise<{ propertyId: string }> }) {
     const { propertyId } = await params;
-    const result = await getPropertyByIdAction(propertyId).catch(() => null);
+    const result = rawSeed("farm-nation checkout", await getPropertyByIdAction(propertyId).catch(() => null));
 
     return <CheckoutClient initial={result} />;
 }
