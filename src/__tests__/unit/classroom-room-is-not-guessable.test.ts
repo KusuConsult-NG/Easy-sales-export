@@ -98,7 +98,7 @@ const WAVE_API = 'src/app/api/wave/training-sessions/route.ts';
 
 /** Every screen that opens a classroom. */
 const CLASSROOM_PAGES = [
-    'src/app/academy/live/[courseId]/page.tsx',
+    'src/app/academy/live/[courseId]/AcademyLiveClassClient.tsx',
     'src/app/admin/academy/live/[courseId]/page.tsx',
     'src/app/admin/wave/training/live/[eventId]/page.tsx',
     'src/app/wave/(member)/live-training/page.tsx',
@@ -547,7 +547,7 @@ describe('#188 — no screen composes a room name any more', () => {
         // The two academy pages read it off the live-session row; the WAVE
         // admin page asks the permission-gated action; the WAVE member page
         // reads the entitlement-gated API's answer.
-        expect(source('src/app/academy/live/[courseId]/page.tsx'))
+        expect(source('src/app/academy/live/[courseId]/AcademyLiveClassClient.tsx'))
             .toContain('roomKey={liveSession?.roomKey ?? ""}');
         expect(source('src/app/admin/academy/live/[courseId]/page.tsx'))
             .toContain('const roomKey = liveSession?.roomKey ?? "";');

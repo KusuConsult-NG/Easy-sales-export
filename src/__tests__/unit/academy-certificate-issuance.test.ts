@@ -60,7 +60,7 @@ import {
 } from '@/lib/academy-certificate';
 
 const PDF_ROUTE = 'src/app/api/academy/certificate/[certificateId]/route.tsx';
-const CERT_PAGE = 'src/app/academy/certificate/[certificateId]/page.tsx';
+const CERT_PAGE = 'src/app/academy/certificate/[certificateId]/CertificateClient.tsx';
 const COURSE_ACTIONS = 'src/app/actions/course-actions.ts';
 
 function source(rel: string): string {

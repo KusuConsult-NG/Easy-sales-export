@@ -1,0 +1,442 @@
+"use client";
+
+import { useState, useEffect, use } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Map, MapPin, ArrowLeft, Loader2, Save, Check } from "lucide-react";
+import Link from "next/link";
+import { updateLandListing } from "@/app/actions/land-actions";
+import { getPropertyByIdAction } from "@/app/actions/land-listings";
+import { useServerSeed } from "@/hooks/useServerSeed";
+import { useToast } from "@/contexts/ToastContext";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
+
+interface EditPropertyPageProps {
+    params: Promise<{ id: string }>;
+}
+
+export default function EditPropertyClient(props: {
+    /**  #549 The id as a plain string — the server page resolved the params. */
+    id: string;
+    /**
+     *   The RAW property the server already fetched. Raw, because the effect
+     *   below unpacks it into a dozen form fields — deriving listing types from
+     *   three booleans among them — and that mapping stays in one place.
+     */
+    initial?: any | null;
+}) {
+    const params = { id: props.id };
+    const takeSeed = useServerSeed(props.initial ?? null);
+    const router = useRouter();
+    const { data: session } = useSession();
+    const { showToast } = useToast();
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [formData, setFormData] = useState({
+        title: "",
+        description: "",
+        state: "",
+        lga: "",
+        address: "",
+        price: "" as string | number,
+        size: "" as string | number,
+        category: [] as string[],
+        features: [] as string[],
+        listingTypes: [] as ("sale" | "rent" | "lease")[],
+    });
+
+    const nigerianStates = [
+        "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
+        "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Gombe", "Imo",
+        "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos",
+        "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers",
+        "Sokoto", "Taraba", "Yobe", "Zamfara", "FCT"
+    ];
+
+    const propertyTypes = [
+        { value: "farmland", label: "Farmland", icon: "🌾" },
+        { value: "ranch", label: "Ranch", icon: "🐄" },
+        { value: "commercial_farm", label: "Commercial Farm", icon: "🏭" },
+        { value: "agricultural_land", label: "Agricultural Land", icon: "🌻" }
+    ];
+
+    useEffect(() => {
+        async function loadProperty() {
+            if (!session?.user) return;
+
+            try {
+                const result = takeSeed() ?? await getPropertyByIdAction(params.id);
+                if (result.success && result.data) {
+                    const prop = result.data;
+                    const location = prop.location || { state: "", lga: "", address: "" };
+                    const listingTypes: ("sale" | "rent" | "lease")[] = [];
+                    if (prop.availableForSale) listingTypes.push("sale");
+                    if (prop.availableForLease) {
+                        listingTypes.push("lease");
+                    } else if (prop.availableForRent) {
+                        listingTypes.push("rent");
+                    }
+                    if (listingTypes.length === 0) {
+                        listingTypes.push((prop.type || "sale") as any);
+                    }
+                    setFormData({
+                        title: prop.title || "",
+                        description: prop.description || "",
+                        state: location.state || "",
+                        lga: location.lga || (location as any).city || "",
+                        address: location.address || "",
+                        price: prop.price ?? "",
+                        size: prop.size ?? "",
+                        category: Array.isArray(prop.category)
+                            ? prop.category
+                            : (prop.category ? [prop.category] : ["farmland"]),
+                        features: (prop as any).features || [],
+                        listingTypes: listingTypes,
+                    });
+                } else {
+                    showToast(result.error || "Property not found", "error");
+                    router.push("/farm-nation/my-properties");
+                }
+            } catch (error) {
+                showToast("Failed to load property", "error");
+            } finally {
+                setIsLoading(false);
+            }
+        }
+
+        loadProperty();
+    }, [params.id, session, router, showToast, takeSeed]);
+
+    const toggleCategory = (value: string) => {
+        setFormData(prev => {
+            const current = Array.isArray(prev.category) ? prev.category : (prev.category ? [prev.category] : []);
+            const updated = current.includes(value)
+                ? current.filter(c => c !== value)
+                : [...current, value];
+            return { ...prev, category: updated };
+        });
+    };
+
+    const toggleListingType = (value: "sale" | "rent" | "lease") => {
+        setFormData(prev => {
+            const current = prev.listingTypes || [];
+            const exists = current.includes(value);
+            if (exists) {
+                if (current.length <= 1) return prev;
+                return { ...prev, listingTypes: current.filter(t => t !== value) };
+            } else {
+                return { ...prev, listingTypes: [...current, value] };
+            }
+        });
+    };
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+
+        if (!session?.user) {
+            showToast("Please login to continue", "error");
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            const result = await updateLandListing({
+                listingId: params.id,
+                title: formData.title,
+                description: formData.description,
+                location: {
+                    address: formData.address,
+                    state: formData.state,
+                    lga: formData.lga,
+                    city: formData.lga, 
+                    lat: 0, // Preserve original lat/lng if updating dynamically later via Maps
+                    lng: 0,
+                },
+                price: parseCurrencyStringToFloat(String(formData.price)),
+                size: parseCurrencyStringToFloat(String(formData.size)),
+                category: formData.category,
+                features: formData.features,
+                availableForSale: formData.listingTypes.includes("sale"),
+                availableForRent: formData.listingTypes.includes("rent") || formData.listingTypes.includes("lease"),
+                availableForLease: formData.listingTypes.includes("lease"),
+                type: formData.listingTypes.includes("sale") ? "sale" : (formData.listingTypes.includes("rent") ? "rent" : "lease"),
+                escrowAvailable: true,
+            });
+
+            if (result.success) {
+                showToast("Property updated successfully", "success");
+                router.push("/farm-nation/my-properties");
+            } else {
+                showToast(result.error || "Failed to update property", "error");
+            }
+        } catch (error: any) {
+            showToast(error.message || "An error occurred", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-green-600" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-50 py-8">
+            <div className="max-w-5xl mx-auto px-4">
+                <Link
+                    href="/farm-nation/my-properties"
+                    className="inline-flex items-center gap-2 text-primary hover:underline mb-6"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to My Properties
+                </Link>
+
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                    <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white">
+                        <h1 className="text-3xl font-bold mb-2">Edit Land Listing</h1>
+                        <p className="text-green-100">
+                            Update your property details on Farm Nation
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="p-8 space-y-8">
+                        <section>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                                <Map className="w-6 h-6" />
+                                Property Information
+                            </h2>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Land Title *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Category *
+                                    </label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {propertyTypes.map((type) => (
+                                            <button
+                                                key={type.value}
+                                                type="button"
+                                                onClick={() => toggleCategory(type.value)}
+                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category.includes(type.value)
+                                                    ? "border-green-600 bg-green-50"
+                                                    : "border-slate-200 hover:border-green-400"
+                                                    }`}
+                                            >
+                                                <div className="text-2xl mb-2">{type.icon}</div>
+                                                <p className="text-sm font-semibold text-slate-900">
+                                                    {type.label}
+                                                </p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Description *
+                                    </label>
+                                    <textarea
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        rows={5}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                                <MapPin className="w-6 h-6" />
+                                Location
+                            </h2>
+
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            State *
+                                        </label>
+                                        <select
+                                            value={formData.state}
+                                            onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            required
+                                        >
+                                            <option value="">Select State</option>
+                                            {nigerianStates.map(state => (
+                                                <option key={state} value={state}>{state}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            LGA / City *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.lga}
+                                            onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Address *
+                                    </label>
+                                    <textarea
+                                        value={formData.address}
+                                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                        rows={2}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6">
+                                Size & Pricing
+                            </h2>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Size (acres) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={formData.size}
+                                        onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        min="0"
+                                        step="0.1"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Total Price (₦) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={formData.price}
+                                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        min="0"
+                                        step="1000"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Availability Options */}
+                        <section>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6">
+                                Availability Options
+                            </h2>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-3">
+                                        Listing Type * (Select one or more)
+                                    </label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {[
+                                            { value: "sale", label: "For Sale", description: "List this land for permanent purchase", icon: "🏷️" },
+                                            { value: "rent", label: "For Rent", description: "List this land for short-term rental/lease", icon: "🔑" },
+                                            { value: "lease", label: "For Lease", description: "List this land for long-term agricultural lease", icon: "📄" }
+                                        ].map((option) => {
+                                            const isSelected = formData.listingTypes.includes(option.value as any);
+                                            return (
+                                                <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    onClick={() => toggleListingType(option.value as any)}
+                                                    className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col relative ${isSelected
+                                                        ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
+                                                        : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
+                                                        }`}
+                                                >
+                                                    {isSelected && (
+                                                        <div className="absolute top-3 right-3 bg-green-600 text-white rounded-full p-0.5">
+                                                            <Check className="w-3.5 h-3.5" />
+                                                        </div>
+                                                    )}
+                                                    <div className="text-3xl mb-3">{option.icon}</div>
+                                                    <h3 className="font-bold text-slate-950 mb-1">{option.label}</h3>
+                                                    <p className="text-xs text-slate-600 leading-relaxed">{option.description}</p>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-slate-100 pt-6">
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200/60 rounded-xl cursor-not-allowed">
+                                        <input
+                                            type="checkbox"
+                                            id="escrow"
+                                            checked={true}
+                                            disabled={true}
+                                            className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500 cursor-not-allowed bg-slate-100"
+                                        />
+                                        <label htmlFor="escrow" className="text-sm font-semibold text-slate-500 cursor-not-allowed select-none">
+                                            Enable Escrow Protection (Required)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <div className="flex gap-4 pt-4">
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="flex-1 px-8 py-4 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Updating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="w-5 h-5" />
+                                        Save Changes
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+}

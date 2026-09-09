@@ -74,7 +74,7 @@ describe('#351 — the Certificates link goes somewhere', () => {
     it('and /academy/certificate really has no index page', () => {
         // The claim, measured. If someone builds one, this fails and the link
         // can go back.
-        expect(existsSync(join(process.cwd(), 'src/app/academy/certificate/[certificateId]/page.tsx'))).toBe(true);
+        expect(existsSync(join(process.cwd(), 'src/app/academy/certificate/[certificateId]/CertificateClient.tsx'))).toBe(true);
         expect(existsSync(join(process.cwd(), 'src/app/academy/certificate/page.tsx'))).toBe(false);
     });
 

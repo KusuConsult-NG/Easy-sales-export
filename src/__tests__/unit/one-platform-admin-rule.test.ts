@@ -399,7 +399,7 @@ describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', 
      * deleted from here, which is the only way the decision gets closed.
      */
     const STILL_HAND_WRITTEN = [
-        'src/app/academy/live/[courseId]/page.tsx',
+        'src/app/academy/live/[courseId]/AcademyLiveClassClient.tsx',
         'src/app/actions/academy/_ac_live.ts',
         'src/app/actions/admin-users.ts',
         'src/app/actions/audit-log-actions.ts',
