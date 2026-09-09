@@ -73,8 +73,9 @@ const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: relative(ROOT, p) });
 
 const MONEY = 'src/app/actions/cooperative/_coop_money.ts';
-const READER = 'src/app/api/cooperative/fixed-savings/route.ts';
-const SCREEN = 'src/app/cooperatives/(member)/fixed-savings/page.tsx';
+//   #564 The list handler's body moved to lib/cooperative-readers.
+const READER = 'src/lib/cooperative-readers.ts';
+const SCREEN = 'src/app/cooperatives/(member)/fixed-savings/FixedSavingsClient.tsx';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const PAST = new Date('2026-05-01T00:00:00.000Z');

@@ -101,7 +101,13 @@ const code = (rel: string) => stripComments(readFileSync(rel, 'utf-8'), { label:
 const DOORS = [
     'src/app/actions/cooperative/_withdrawal.ts',
     'src/app/api/cooperative/withdraw/route.ts',
-    'src/app/api/cooperative/check-membership/route.ts',
+    //   #564 The check-membership handler's body moved to
+    //   lib/cooperative-readers, so the member screens could read it on the
+    //   server instead of fetching the route from the browser. The DOOR is the
+    //   reader now — and it is a door with more callers than the handler had,
+    //   so this covers more than it did. The route is checked separately below
+    //   for having kept no second, narrower lookup.
+    'src/lib/cooperative-readers.ts',
     'src/app/api/cooperative/create-fixed-savings/route.ts',
     'src/app/actions/platform.ts',
     'src/app/actions/cooperative/_coop_membership.ts',
@@ -122,6 +128,16 @@ describe('#488 — every door that asks "are you a member" asks it the same way'
         //   THE test. Eleven doors, one question, and eight of them were asking
         //   a narrower version that refuses real members.
         expect(code(rel)).toContain('findCooperativeMemberRow');
+    });
+
+    it('and the check-membership route delegates rather than looking up itself', () => {
+        //   #564's extraction, checked where it could fail: a handler still
+        //   doing its own doc-id read would restore the exact defect #488 is
+        //   about, in a file this ratchet would no longer be looking at.
+        const handler = code('src/app/api/cooperative/check-membership/route.ts');
+
+        expect(handler).toContain('readCooperativeMembership');
+        expect(handler).not.toContain('COOPERATIVE_MEMBERS');
     });
 
     it('AND NONE OF THEM STILL TREATS A DOC-ID MISS AS ABSENCE', () => {

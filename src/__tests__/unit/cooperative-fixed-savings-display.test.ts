@@ -48,10 +48,11 @@ import {
     projectedFixedSavingsProfit,
 } from '@/lib/cooperative-savings';
 
-const MY_SAVINGS = 'src/app/cooperatives/(member)/my-savings/page.tsx';
-const FIXED_SAVINGS = 'src/app/cooperatives/(member)/fixed-savings/page.tsx';
+const MY_SAVINGS = 'src/app/cooperatives/(member)/my-savings/MySavingsClient.tsx';
+const FIXED_SAVINGS = 'src/app/cooperatives/(member)/fixed-savings/FixedSavingsClient.tsx';
 const CREATE_ROUTE = 'src/app/api/cooperative/create-fixed-savings/route.ts';
-const LIST_ROUTE = 'src/app/api/cooperative/fixed-savings/route.ts';
+//   #564 The list handler's body moved to lib/cooperative-readers.
+const LIST_ROUTE = 'src/lib/cooperative-readers.ts';
 const SAVINGS_LIB = 'src/lib/cooperative-savings.ts';
 
 function source(rel: string): string {

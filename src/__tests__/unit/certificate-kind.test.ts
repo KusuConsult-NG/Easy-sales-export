@@ -124,7 +124,7 @@ describe('the readers that treated every row as a credential', () => {
         // THE test for the forgery path. Asserted on the route source because a
         // Next.js route handler needs a NextRequest and the params promise, and
         // what matters is that the guard precedes the answer.
-        const src = await source('src/app/api/academy/verify/[certificateId]/route.ts');
+        const src = await source('src/lib/certificate-verification-reader.ts');
 
         const guardAt = src.indexOf('isIssuedCertificate');
         const validAt = src.indexOf('isValid: true');
@@ -136,11 +136,27 @@ describe('the readers that treated every row as a credential', () => {
     it('the verify endpoint answers "not found" rather than naming the reason', async () => {
         // A verifier does not need to be told "this id exists but is not a
         // certificate", and saying so would confirm which ids exist.
-        const src = await source('src/app/api/academy/verify/[certificateId]/route.ts');
-        const guarded = src.slice(src.indexOf('if (!isIssuedCertificate'));
+        //
+        //   #564 The property now spans two files, so both halves are checked.
+        //   The READER refuses with the same NOT_FOUND it uses for an unknown
+        //   id — one value, so there is nothing for a caller to tell apart —
+        //   and the ROUTE turns that single value into the 404 and its message.
+        //   Checking only one half would leave the other free to leak the
+        //   distinction back.
+        const reader = await source('src/lib/certificate-verification-reader.ts');
+        const guarded = reader.slice(reader.indexOf('if (!isIssuedCertificate'));
 
-        expect(guarded.slice(0, 300)).toMatch(/not found or invalid/i);
-        expect(guarded.slice(0, 300)).toContain('404');
+        expect(guarded.slice(0, 200)).toContain('return NOT_FOUND');
+        //   And NOT_FOUND is literally the same value the unknown-id path
+        //   returns, not a second object that happens to look similar.
+        expect(reader).toMatch(/const NOT_FOUND: VerificationResult = \{ found: false \};/);
+        expect(reader.match(/return NOT_FOUND;/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+
+        const handler = await source('src/app/api/academy/verify/[certificateId]/route.ts');
+        const refusal = handler.slice(handler.indexOf('if (!result.found)'));
+
+        expect(refusal.slice(0, 300)).toMatch(/not found or invalid/i);
+        expect(refusal.slice(0, 300)).toContain('404');
     });
 
     it('the academy dashboard counts only issued certificates', async () => {

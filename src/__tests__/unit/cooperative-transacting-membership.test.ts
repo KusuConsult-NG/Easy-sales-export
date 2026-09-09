@@ -339,7 +339,7 @@ describe("the member's own withdrawal history", () => {
     // cooperative withdrawal, and rendered "no withdrawals yet" to members
     // whose money had already been paid out.
     const MY_DATA = 'src/app/actions/my-data.ts';
-    const HISTORY_PAGE = 'src/app/cooperatives/(member)/withdrawals/page.tsx';
+    const HISTORY_PAGE = 'src/app/cooperatives/(member)/withdrawals/WithdrawalsClient.tsx';
 
     it('reads the collection cooperative withdrawals are written to', () => {
         // THE test.

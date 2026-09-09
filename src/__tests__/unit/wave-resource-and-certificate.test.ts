@@ -46,7 +46,11 @@ const ADMIN_RESOURCES = 'src/app/actions/wave/_wv_admin_resources.ts';
 const RESOURCE_ACTIONS = 'src/app/actions/resource-actions.ts';
 const MEMBER_RESOURCES = 'src/app/actions/wave/_wv_resources.ts';
 const CERTIFICATES = 'src/app/actions/wave/_wv_certificates.ts';
-const VERIFY_ROUTE = 'src/app/api/academy/verify/[certificateId]/route.ts';
+//   #564 The verifier's body moved to lib/certificate-verification-reader so
+//   the public verification PAGE could resolve a credential on the server
+//   rather than fetching this route from the browser. Same code, one more
+//   caller, so these checks cover more than they did.
+const VERIFY_ROUTE = 'src/lib/certificate-verification-reader.ts';
 /**
  *   #562 The route's BODY moved to lib/certificates-reader, so that
  *   /dashboard/certificates could read it on the server instead of fetching

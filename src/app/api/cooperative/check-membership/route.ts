@@ -3,9 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
-import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { readCooperativeMembership } from "@/lib/cooperative-readers";
 
 /**
  * API Route: Check Cooperative Membership Status
@@ -22,22 +20,15 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        /**
-         *   #488 THE ROUTE WHOSE ENTIRE JOB IS THIS QUESTION ASKED THE NARROW
-         *        VERSION OF IT.
-         *
-         *        A doc-id read that misses is indistinguishable from having no
-         *        membership — lib/cooperative-member-lookup.ts says so in its
-         *        header — and this answered `isMember: false, status:
-         *        "not_member"` to a paid-up member whose row carries `userId` as
-         *        a field. Of the eight doors that had this, it is the one whose
-         *        answer other screens are most likely to trust.
-         */
-        const memberRow = await findCooperativeMemberRow(
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
-        );
+        //   #564 The body moved to lib/cooperative-readers so the member
+        //   screens can read it on the SERVER rather than fetching this route
+        //   from the browser after the page had already been rendered. #488's
+        //   finding — a doc-id lookup misses a member whose row carries userId
+        //   as a field, and a miss looks exactly like not being a member —
+        //   moved with it, unaltered.
+        const membership = await readCooperativeMembership(userId);
 
-        if (!memberRow) {
+        if (!membership.isMember) {
             return NextResponse.json({
                 success: true,
                 isMember: false,
@@ -45,13 +36,11 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        const membershipData = memberRow.data;
-
         return NextResponse.json({
             success: true,
             isMember: true,
-            status: membershipData?.membershipStatus || "pending",
-            data: membershipData
+            status: membership.status,
+            data: membership.data
         });
     } catch (error) {
         logger.error("Failed to check membership:", error);

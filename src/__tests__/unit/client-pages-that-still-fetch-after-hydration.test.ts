@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 18;
+const CAP = 14;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -158,6 +158,12 @@ const CONVERTED = [
     'src/app/cooperatives/(member)/my-loans/page.tsx',
     'src/app/marketplace/onboarding/page.tsx',
     'src/app/farm-nation/onboarding/page.tsx',
+    //   #564 — batch 16, the cooperative member screens and the public
+    //   certificate verifier.
+    'src/app/cooperatives/(member)/fixed-savings/page.tsx',
+    'src/app/cooperatives/(member)/my-savings/page.tsx',
+    'src/app/cooperatives/(member)/withdrawals/page.tsx',
+    'src/app/academy/verify/[certificateId]/page.tsx',
     //   #562 — batch 15. The first four API-route self-fetchers, each read
     //   through a reader shared with the route rather than over HTTP.
     'src/app/land/page.tsx',

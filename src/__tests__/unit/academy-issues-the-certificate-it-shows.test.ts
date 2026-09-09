@@ -118,7 +118,12 @@ const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), 
 const ISSUER = 'src/lib/academy-certificate-issue.ts';
 const COMPLETE = 'src/app/actions/course-actions.ts';
 const GENERATE = 'src/app/api/academy/certificate/generate/route.ts';
-const VERIFY = 'src/app/api/academy/verify/[certificateId]/route.ts';
+//   #564 The verifier's body moved to lib/certificate-verification-reader so
+//   the public verification PAGE could resolve a credential on the server
+//   rather than fetching this route from the browser. Same code, one more
+//   caller, so these checks cover more than they did.
+const VERIFY = 'src/lib/certificate-verification-reader.ts';
+const VERIFY_HANDLER = 'src/app/api/academy/verify/[certificateId]/route.ts';
 const AGGREGATE = 'src/app/actions/academy/_ac_progress.ts';
 const DASHBOARD = 'src/app/api/academy/dashboard/route.ts';
 
@@ -248,10 +253,14 @@ describe('#430 — the number the holder was given is the number that resolves',
          * vouched for, and a second lookup path that skipped it would reopen
          * that hole through the new door.
          */
+        //   #564 The reader names this row `byNumberData` where the handler
+        //   called it `numberedData`. The RULE is what this test is about, so
+        //   it asks for the guard on whichever name the by-number branch binds,
+        //   rather than pinning one spelling.
         const src = code(VERIFY);
         const numbered = src.slice(src.indexOf('certificateNumber", "=='));
         const guardInBranch = numbered.slice(0, numbered.indexOf('if (!certificateDoc.exists && !waveDoc'));
-        expect(guardInBranch).toMatch(/isIssuedCertificate\(numberedData\)/);
+        expect(guardInBranch).toMatch(/isIssuedCertificate\((numberedData|byNumberData)\)/);
     });
 
     it('and the number is taken from the completion date, not from today — #82 still holding', () => {
