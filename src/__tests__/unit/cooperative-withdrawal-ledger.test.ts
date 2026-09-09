@@ -51,7 +51,7 @@ const ADMIN_MONEY = 'src/app/actions/cooperative/_coop_admin_money.ts';
 const REPORTS = 'src/app/actions/cooperative/_coop_admin_reports.ts';
 const FORENSICS = 'src/app/actions/forensics.ts';
 const CREATE_SAVINGS = 'src/app/api/cooperative/create-fixed-savings/route.ts';
-const HISTORY_PAGE = 'src/app/cooperatives/(member)/history/page.tsx';
+const HISTORY_PAGE = 'src/app/cooperatives/(member)/history/CooperativeHistoryClient.tsx';
 
 function code(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8')

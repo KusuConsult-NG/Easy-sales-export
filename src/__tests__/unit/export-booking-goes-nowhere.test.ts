@@ -175,7 +175,7 @@ describe('#380 — what #311 recorded, corrected', () => {
      * cannot lose its doors again.
      */
     const ADMIN_SCREEN = 'src/app/admin/export/bookings/page.tsx';
-    const MEMBER_SCREEN = 'src/app/export/(app)/bookings/page.tsx';
+    const MEMBER_SCREEN = 'src/app/export/(app)/bookings/ExportBookingsClient.tsx';
 
     it('export_bookings now has readers outside the action file', () => {
         const readers = sourceFiles().filter((f) =>
@@ -202,11 +202,22 @@ describe('#380 — what #311 recorded, corrected', () => {
     it('and the member can see their own — getUserBookingsAction HAS a caller', () => {
         // #311 found this reader exported, correct and dead: written for a
         // screen nobody built. This is that screen.
+        //
+        //   #546 There are TWO callers now and both belong to that one screen:
+        //   the server page fetches so the HTML arrives populated, and the
+        //   client keeps its own call as the fallback for when the server read
+        //   fails. Asserting a single caller would have forced me to delete one
+        //   of them — and deleting the client's would turn a failed server read
+        //   into a permanently empty list, which is exactly the #307 defect
+        //   this screen was built to avoid.
         const callers = sourceFiles()
             .filter((f) => f !== ACTION)
             .filter((f) => /getUserBookingsAction/.test(code(f)));
 
-        expect(callers).toEqual([MEMBER_SCREEN]);
+        expect(callers.sort()).toEqual([
+            MEMBER_SCREEN,
+            'src/app/export/(app)/bookings/page.tsx',
+        ].sort());
     });
 
     it('both screens have a way in, so neither is #362 again', () => {

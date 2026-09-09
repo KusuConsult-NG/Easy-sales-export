@@ -92,7 +92,7 @@ jest.mock('@/lib/audit-log', () => ({
 const ROOT = process.cwd();
 const ACTION = 'src/app/actions/export-booking.ts';
 const ADMIN_SCREEN = 'src/app/admin/export/bookings/page.tsx';
-const MEMBER_SCREEN = 'src/app/export/(app)/bookings/page.tsx';
+const MEMBER_SCREEN = 'src/app/export/(app)/bookings/ExportBookingsClient.tsx';
 
 const ADMIN = 'admin-7';
 const MEMBER = 'member-3';

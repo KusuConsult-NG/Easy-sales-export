@@ -79,7 +79,7 @@ describe('#351 — the Certificates link goes somewhere', () => {
     });
 
     it('while My Courses really does lead to certificates', () => {
-        expect(source('src/app/academy/(learner)/my-courses/page.tsx'))
+        expect(source('src/app/academy/(learner)/my-courses/MyCoursesClient.tsx'))
             .toContain('/academy/certificate/${course.courseId}');
     });
 
