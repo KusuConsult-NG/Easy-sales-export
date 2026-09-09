@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 58;
+const CAP = 53;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -140,6 +140,12 @@ const CONVERTED = [
     'src/app/marketplace/seller/orders/page.tsx',
     'src/app/wave/(member)/shipments/page.tsx',
     'src/app/marketplace/orders/[id]/page.tsx',
+    //   #553 — batch 8.
+    'src/app/escrow/[id]/dispute/page.tsx',
+    'src/app/academy/[courseId]/page.tsx',
+    'src/app/farm-nation/property/[id]/page.tsx',
+    'src/app/farm-nation/page.tsx',
+    'src/app/farm-nation/properties/page.tsx',
     'src/app/farm-nation/(member)/dashboard/page.tsx',
     'src/app/cooperatives/(member)/dashboard/page.tsx',
     'src/app/export/(app)/dashboard/page.tsx',
@@ -164,6 +170,70 @@ const CONVERTED = [
  *   So they are counted instead. The number may only go down.
  */
 const UNWRAP_INLINE_CAP = 16;
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#553 — a seed reaches the component that actually holds the state', () => {
+    /**
+     * THE TRAP I FELL INTO TWICE.
+     *
+     * Some of these client files hold TWO components: a thin default export
+     * that wraps a Suspense boundary, and the real component below or above it.
+     * Declaring `initial` on the default export while the state lives in the
+     * other one leaves the prop dangling — it compiled to "Cannot find name
+     * 'initial'" in dashboard/disputes/new (#550) and again in
+     * farm-nation/properties (#553), because I recognised the shape and still
+     * did not check for it first.
+     *
+     * tsc caught both, which is the only reason this is an anecdote rather than
+     * a defect. This makes it mechanical: wherever a converted client renders
+     * an inner component inside Suspense, the seed must be passed to it.
+     */
+    it('EVERY CONVERTED CLIENT WITH AN INNER COMPONENT PASSES THE SEED DOWN', () => {
+        const offenders: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) {
+                    if (entry !== 'admin') walk(full);
+                } else if (/Client\.tsx$/.test(entry)) {
+                    const src = readFileSync(full, 'utf-8');
+                    if (!/initial\s*[=?]/.test(src)) continue;
+
+                    //   An inner component rendered by the default export.
+                    const inner = src.match(/<(\w+Content)\s*([^>]*)\/>/);
+                    if (!inner) continue;
+
+                    //   It must be handed the seed.
+                    if (!/initial=\{/.test(inner[2] ?? '')) {
+                        offenders.push(full.slice(ROOT.length + 1));
+                    }
+                }
+            }
+        };
+        walk(join(ROOT, 'src/app'));
+
+        expect(offenders).toEqual([]);
+    });
+
+    it('AND THE CHECK CAN ACTUALLY FIRE — a known wrapper is found', () => {
+        //   The guard on the measurement: if the pattern matched nothing, the
+        //   assertion above would pass for the wrong reason.
+        const wrappers: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) walk(full);
+                else if (/Client\.tsx$/.test(entry)
+                    && /<\w+Content\s*[^>]*\/>/.test(readFileSync(full, 'utf-8'))) {
+                    wrappers.push(full);
+                }
+            }
+        };
+        walk(join(ROOT, 'src/app'));
+
+        expect(wrappers.length).toBeGreaterThan(0);
+    });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#552 — the converted pages converge on one unwrapper', () => {

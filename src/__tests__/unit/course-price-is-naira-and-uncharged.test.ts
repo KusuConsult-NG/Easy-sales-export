@@ -155,7 +155,7 @@ describe('#368 — per-course purchase is half-built', () => {
          *        later without anything failing.
          */
         expect(componentCallers('initializeCoursePaymentAction'))
-            .toContain('src/app/academy/[courseId]/page.tsx');
+            .toContain('src/app/academy/[courseId]/CourseDetailClient.tsx');
         expect(componentCallers('initializeEnrollmentPaymentAction')).toEqual([]);
     });
 

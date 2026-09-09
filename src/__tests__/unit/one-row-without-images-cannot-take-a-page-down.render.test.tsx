@@ -159,8 +159,13 @@ describe('#439 — the public catalogue survives the row that took it down', () 
     it('RENDERS THE GRID FOR THE EXACT THREE ROWS, one of which has no images key', async () => {
         // Against the pre-fix line this does not fail an assertion — the render
         // throws, which is the defect.
-        const PropertiesPage = (await import('@/app/farm-nation/properties/page')).default;
-        render(<PropertiesPage />);
+        //   #553 The CLIENT half. The page is an async SERVER component now and
+        //   cannot be mounted in jsdom; what this suite is about — the grid
+        //   surviving a row with no `images` key — lives in the client, and
+        //   `initial={null}` makes it fetch through the mocked action exactly as
+        //   it did when the page did the fetching itself.
+        const PropertiesPage = (await import('@/app/farm-nation/properties/PropertiesClient')).default;
+        render(<PropertiesPage initial={null} />);
 
         await waitFor(() => {
             expect(screen.getByTestId('property-grid')).toBeInTheDocument();
@@ -178,8 +183,13 @@ describe('#439 — the public catalogue survives the row that took it down', () 
         // states have to remain distinguishable.
         mockSearch.mockResolvedValue({ success: true, data: { listings: [], lastDocId: null }, error: null });
 
-        const PropertiesPage = (await import('@/app/farm-nation/properties/page')).default;
-        render(<PropertiesPage />);
+        //   #553 The CLIENT half. The page is an async SERVER component now and
+        //   cannot be mounted in jsdom; what this suite is about — the grid
+        //   surviving a row with no `images` key — lives in the client, and
+        //   `initial={null}` makes it fetch through the mocked action exactly as
+        //   it did when the page did the fetching itself.
+        const PropertiesPage = (await import('@/app/farm-nation/properties/PropertiesClient')).default;
+        render(<PropertiesPage initial={null} />);
 
         await waitFor(() => {
             expect(screen.getByText('No properties found')).toBeInTheDocument();
@@ -229,9 +239,9 @@ describe('#439 — the rule is stated once, and cannot be restated', () => {
             'src/app/farm-nation/(member)/my-properties/page.tsx',
             'src/app/farm-nation/checkout/[propertyId]/CheckoutClient.tsx',
             'src/app/farm-nation/map/page.tsx',
-            'src/app/farm-nation/page.tsx',
-            'src/app/farm-nation/properties/page.tsx',
-            'src/app/farm-nation/property/[id]/page.tsx',
+            'src/app/farm-nation/FarmNationLandingClient.tsx',
+            'src/app/farm-nation/properties/PropertiesClient.tsx',
+            'src/app/farm-nation/property/[id]/PropertyDetailsClient.tsx',
             'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx',
             'src/app/marketplace/buyer/products/page.tsx',
             'src/app/marketplace/checkout/page.tsx',

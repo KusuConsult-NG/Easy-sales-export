@@ -66,12 +66,12 @@ const STORE = 'src/lib/saved-items-store.ts';
 const ACTIONS = 'src/app/actions/saved-items.ts';
 const BUTTON = 'src/components/saved/SaveItemButton.tsx';
 const PROJECTION = 'src/lib/public-seller-summary.ts';
-const PROPERTY_PAGE = 'src/app/farm-nation/property/[id]/page.tsx';
+const PROPERTY_PAGE = 'src/app/farm-nation/property/[id]/PropertyDetailsClient.tsx';
 const STOREFRONT = 'src/app/marketplace/sellers/[sellerId]/page.tsx';
 const BUYER_DASHBOARD = 'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx';
 const BUYER_STATS = 'src/app/actions/marketplace/_mp_buyer_dashboard.ts';
 const SELLER_API = 'src/app/api/marketplace/sellers/[sellerId]/route.ts';
-const PROPERTIES_PAGE = 'src/app/farm-nation/properties/page.tsx';
+const PROPERTIES_PAGE = 'src/app/farm-nation/properties/PropertiesClient.tsx';
 const SAVED_SELLERS_PAGE = 'src/app/marketplace/buyer/saved/SavedSellersClient.tsx';
 const SAVED_PROPERTIES_PAGE = 'src/app/farm-nation/saved/SavedPropertiesClient.tsx';
 

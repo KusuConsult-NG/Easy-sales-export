@@ -267,7 +267,7 @@ describe('#340 — the badge that could never say "Verified"', () => {
     it('THE HOME PAGE NO LONGER TESTS documents.length', () => {
         // `documents` is an object in both writers, so `.length` was undefined
         // and `undefined > 0` is false on every listing that has ever existed.
-        const page = source('src/app/farm-nation/page.tsx');
+        const page = source('src/app/farm-nation/FarmNationLandingClient.tsx');
 
         expect(page).not.toContain('property.documents.length');
         expect(page).toContain('isPurchasable(property.status)');
@@ -292,7 +292,7 @@ describe('#340 — the badge that could never say "Verified"', () => {
     });
 
     it("the property page no longer prints the owner's email address", () => {
-        expect(source('src/app/farm-nation/property/[id]/page.tsx'))
+        expect(source('src/app/farm-nation/property/[id]/PropertyDetailsClient.tsx'))
             .not.toContain('{property.ownerEmail}');
     });
 });

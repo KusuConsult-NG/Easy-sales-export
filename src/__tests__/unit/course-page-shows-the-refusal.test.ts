@@ -58,7 +58,7 @@ import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 
 const ROOT = process.cwd();
-const PAGE = 'src/app/academy/[courseId]/page.tsx';
+const PAGE = 'src/app/academy/[courseId]/CourseDetailClient.tsx';
 const ACTION = 'src/app/actions/academy/_ac_enrollment.ts';
 
 const raw = (rel: string) => readFileSync(join(ROOT, rel), 'utf-8');

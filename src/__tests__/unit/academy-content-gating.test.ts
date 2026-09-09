@@ -194,7 +194,7 @@ describe('the gate this makes redundant', () => {
         // and it stays — it is a better experience than a stripped page. What
         // changed is that it is no longer what protects the content.
         const page = readFileSync(
-            join(process.cwd(), 'src/app/academy/[courseId]/page.tsx'), 'utf-8'
+            join(process.cwd(), 'src/app/academy/[courseId]/CourseDetailClient.tsx'), 'utf-8'
         );
 
         expect(page).toContain('checkCourseAccess(userPlan,');

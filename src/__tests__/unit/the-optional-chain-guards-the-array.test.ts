@@ -189,7 +189,7 @@ describe('#442 — the sites #130 knew about and the ones it missed', () => {
     it('and the academy Start Learning handler guards its lessons array', () => {
         // Its neighbour checks `course.modules.length` and then indexes
         // `lessons` without checking it — the same half-guard one level down.
-        expect(code('src/app/academy/[courseId]/page.tsx'))
+        expect(code('src/app/academy/[courseId]/CourseDetailClient.tsx'))
             .toMatch(/firstModule\?\.lessons\?\.\[0\]/);
     });
 });

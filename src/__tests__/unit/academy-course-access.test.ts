@@ -54,7 +54,7 @@ import { join } from 'path';
 import { checkCourseAccess, ACADEMY_TIERS_OPENED, ACADEMY_PLANS } from '@/lib/academy-plan';
 
 const ENROLMENT = 'src/app/actions/academy/_ac_enrollment.ts';
-const COURSE_PAGE = 'src/app/academy/[courseId]/page.tsx';
+const COURSE_PAGE = 'src/app/academy/[courseId]/CourseDetailClient.tsx';
 const CATALOGUE = 'src/app/academy/(learner)/courses/CourseCatalogClient.tsx';
 const COURSE_PAY = 'src/app/actions/academy/_ac_course_payment.ts';
 const QUIZ_PAGE = 'src/app/academy/courses/[courseId]/quiz/page.tsx';
@@ -167,7 +167,7 @@ describe('the links that went nowhere', () => {
     it('which are the routes actually on disk', () => {
         // The premise, checked rather than asserted.
         expect(existsSync(join(process.cwd(), 'src/app/academy/dashboard/page.tsx'))).toBe(true);
-        expect(existsSync(join(process.cwd(), 'src/app/academy/[courseId]/page.tsx'))).toBe(true);
+        expect(existsSync(join(process.cwd(), 'src/app/academy/[courseId]/CourseDetailClient.tsx'))).toBe(true);
         expect(existsSync(join(process.cwd(), 'src/app/dashboard/academy'))).toBe(false);
         expect(existsSync(join(process.cwd(), 'src/app/academy/courses/[courseId]/page.tsx'))).toBe(false);
     });
