@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { resolveActiveUser } from "@/lib/user-identity";
 
 /**
  * Enforces strict module onboarding checks.
@@ -97,11 +98,32 @@ export async function requireHubRegistration() {
         
         // Maintain live Firestore validation fallback to prevent stale session exploits
         if (!userData) {
+            /**
+             *   #542 THE MIGRATION POINTER IS FOLLOWED HERE TOO.
+             *
+             *   This read was `USERS.doc(session.user.id)` and nothing else.
+             *   session-guard, user-cache and the Paystack paths all walk
+             *   `_migratedTo` / `supabaseAuthId` to the live row; this one did
+             *   not, so for a migrated member /profile DISPLAYED the finished
+             *   profile from the live row while this guard read the old row,
+             *   found no `profileComplete`, and sent them to /hub/register —
+             *   which forwards to /profile. Every login, forever.
+             *
+             *   The walk keeps the last row that EXISTS, so a dangling pointer
+             *   degrades to the newest good profile rather than locking the
+             *   member out of all sixteen module layouts.
+             */
             const db = getAdminDb();
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(sessionResult.session.user.id).get();
-            
+            const uid = sessionResult.session.user.id;
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+
             if (userDoc.exists) {
-                userData = userDoc.data();
+                const resolved = await resolveActiveUser(uid, async (id) => {
+                    if (id === uid) return userDoc.data() ?? null;
+                    const doc = await db.collection(COLLECTIONS.USERS).doc(id).get();
+                    return doc.exists ? (doc.data() ?? null) : null;
+                });
+                userData = resolved.row ?? userDoc.data();
             }
         }
         

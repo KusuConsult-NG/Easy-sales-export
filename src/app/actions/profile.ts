@@ -17,6 +17,7 @@ import { z } from "zod";
 import { strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { withSafeAction } from "@/lib/safe-action";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { resolveActiveUserId } from "@/lib/user-identity";
 import { versionedUpdate } from "@/lib/optimistic-locking";
 import { FieldValue } from "@/lib/firestore-compat";
 import { serializeDoc } from "@/lib/firestore-serialize";
@@ -49,7 +50,21 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
-    const userId = session.user.id;
+    /**
+     *   #542 THE SCREEN SHOWS THE ROW THE PLATFORM CONSIDERS LIVE.
+     *
+     *   This read `USERS.doc(session.user.id)` with no pointer walk, so a
+     *   migrated member opened /profile and saw the PRE-migration row — usually
+     *   little more than an email address — while requireSession, the JWT
+     *   callback and every money path had already resolved `_migratedTo` to
+     *   their real record.
+     *
+     *   They were shown an empty profile, told to complete it, and their answers
+     *   went to a document diverging from the one the rest of the platform uses.
+     */
+    const userId = (await resolveActiveUserId(
+        session.user.id, db.collection(COLLECTIONS.USERS),
+    )).id;
     const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
     if (!userDoc.exists) { return { success: false as const, error: "User profile not found", data: null };
@@ -165,7 +180,28 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         }
     }
 
-    const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+    /**
+     *   #542 THE SAVE WRITES TO THE ROW THE SCREEN IS SHOWING.
+     *
+     *   Three readers of this identity walked `_migratedTo` to the live row —
+     *   requireSession, the JWT callback's getUserProfile, and every Paystack
+     *   path. Three did not: this writer, getUserProfileAction above, and
+     *   hub-guard. So the platform knew a migrated member as one account and
+     *   their own profile screen read and wrote another.
+     *
+     *   All three walk it now. They have to move together: fixing the guard
+     *   alone would stamp `profileComplete` on the row nobody reads and leave
+     *   the redirect loop surviving the save meant to end it.
+     *
+     *   It also has to move WITH hub-guard, which now walks the same pointer.
+     *   Fixing the guard alone would have swapped one mismatch for another —
+     *   `profileComplete` stamped on the row nobody reads, and the redirect
+     *   loop surviving the save that was meant to end it.
+     */
+    const activeUserId = (await resolveActiveUserId(
+        userId, db.collection(COLLECTIONS.USERS),
+    )).id;
+    const userRef = db.collection(COLLECTIONS.USERS).doc(activeUserId);
 
     // Gender is set once, as the note above this function already says.
     //
@@ -262,7 +298,11 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         await versionedUpdate(transaction, userRef, validated.version, updatePayload);
     });
 
+    //   #542 Both ids. The session still names the old row, so the entry the
+    //   guard reads is keyed on THAT — clearing only the active id would leave
+    //   a stale "incomplete" answer cached under the id actually being asked for.
     await invalidateUserCache(userId);
+    if (activeUserId !== userId) await invalidateUserCache(activeUserId);
 
     //   The save SUCCEEDS even when something is still missing.
     //
