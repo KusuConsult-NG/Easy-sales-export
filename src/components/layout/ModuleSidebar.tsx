@@ -41,6 +41,7 @@ import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getMyUnreadMessageCount } from "@/app/actions/my-data";
+import { usePolling } from "@/hooks/usePolling";
 
 
 const COLLAPSED_KEY = "sidebar_collapsed_v2";
@@ -410,26 +411,17 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     // ── Unread messages, scoped server-side ───────────────────────────────
     // The browser query this replaces silently dropped its array-contains
     // filter, counting every conversation on the platform.
-    useEffect(() => {
+    //   #538 …and only while the tab is visible. This sidebar is mounted on
+    //   every module screen, and the NotificationCenter inside it polls too.
+    usePolling(async () => {
         if (!userId) return;
-        let cancelled = false;
-
-        const load = async () => {
-            try {
-                const count = await getMyUnreadMessageCount();
-                if (!cancelled) setUnreadMessages(count);
-            } catch (error) {
-                console.error("ModuleSidebar unread messages failed:", error);
-            }
-        };
-
-        load();
-        const interval = setInterval(load, 8000);
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
-    }, [userId]);
+        try {
+            const count = await getMyUnreadMessageCount();
+            setUnreadMessages(count);
+        } catch (error) {
+            console.error("ModuleSidebar unread messages failed:", error);
+        }
+    }, 8000, { enabled: !!userId, restartKey: userId ?? "" });
 
     // ── Active path helper ────────────────────────────────────────────────
     const isActive = (href: string, exact?: boolean) => {

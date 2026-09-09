@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { getMyMembershipStatus } from "@/app/actions/my-data";
+import { usePolling } from "@/hooks/usePolling";
 
 /**
  *   #418 THE BROWSER'S MAP WAS NARROWER THAN THE SERVER'S, ON THE TWO MODULES
@@ -71,6 +72,8 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
             return;
         }
 
+        //   #538 The immediate check stays in this effect; the REPEAT moved to
+        //   usePolling below, which stops while the tab is hidden.
         let cancelled = false;
 
         async function checkStatus() {
@@ -93,14 +96,28 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
 
         checkStatus();
 
-        // Poll every 8 seconds
-        const interval = setInterval(checkStatus, 8000);
-
         return () => {
             cancelled = true;
-            clearInterval(interval);
         };
     }, [userId, moduleType, userEmail, sessionStatus]);
+
+    //   #538 The 8s repeat, paused while the tab is hidden. This hook is used
+    //   by the WAVE and Academy member dashboards, which a member leaves open.
+    usePolling(async () => {
+        if (!userId) return;
+        try {
+            const result = await getMyMembershipStatus(moduleType);
+            if (result.status === "unknown") {
+                setStatus(sessionStatus || "not_found");
+                return;
+            }
+            if (result.data) setData(result.data);
+            setStatus(result.status);
+        } catch (err) {
+            console.error(`[useMembershipStatus] Error checking status for ${moduleType}:`, err);
+            setStatus("error");
+        }
+    }, 8000, { enabled: !!userId, immediate: false, restartKey: `${userId ?? ""}:${moduleType}` });
 
     return { status, data, isLoading: status === "loading" };
 }

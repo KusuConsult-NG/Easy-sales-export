@@ -37,6 +37,7 @@ import { GLOBAL_NAV_ITEMS, MODULE_NAVIGATION, type NavigationItem } from "@/lib/
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { getMyServiceRegistrations } from "@/app/actions/my-data";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { usePolling } from "@/hooks/usePolling";
 
 const ALL_SIDEBAR_TOGGLES = Array.from(new Set([
     ...Object.values(MODULE_NAVIGATION).flat().map(i => i.featureToggle),
@@ -64,26 +65,16 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
     // Polls a session-scoped server action rather than querying Supabase from
     // the browser. Same 8s cadence as the listener it replaces.
-    useEffect(() => {
+    //   #538 …and only while the tab is visible. See usePolling.
+    usePolling(async () => {
         if (!userId) return;
-        let cancelled = false;
-
-        const load = async () => {
-            try {
-                const regs = await getMyServiceRegistrations();
-                if (!cancelled) setServiceRegs(regs);
-            } catch (error) {
-                console.error("Sidebar service registrations failed:", error);
-            }
-        };
-
-        load();
-        const interval = setInterval(load, 8000);
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
-    }, [userId]);
+        try {
+            const regs = await getMyServiceRegistrations();
+            setServiceRegs(regs);
+        } catch (error) {
+            console.error("Sidebar service registrations failed:", error);
+        }
+    }, 8000, { enabled: !!userId, restartKey: userId ?? "" });
 
     useEffect(() => {
         setMounted(true);

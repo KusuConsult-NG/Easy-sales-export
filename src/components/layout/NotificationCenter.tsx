@@ -12,6 +12,7 @@ import { isNotificationVisible, NOTIFICATION_BADGE_WINDOW } from "@/lib/notifica
 import { toDate } from "@/lib/date-utils";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
+import { usePolling } from "@/hooks/usePolling";
 
 export interface Notification extends Omit<FirestoreNotification, "createdAt" | "readAt"> {
     createdAt: any;
@@ -34,20 +35,23 @@ export default function NotificationCenter() {
     const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
     const roles = (session?.user as any)?.roles as string[] | undefined;
 
-    // Load notifications via Polling
     useEffect(() => {
-        if (!userId) {
-            setLoading(false);
-            return;
-        }
+        if (!userId) setLoading(false);
+    }, [userId]);
 
-        let isMounted = true;
+    // Load notifications via Polling — while the tab is visible.
+    //
+    //   #538 This centre is rendered inside BOTH sidebars, so it is mounted on
+    //   every module screen, and it polled every 10s in background tabs too.
+    usePolling(async () => {
+        if (!userId) return;
+
         // Scoped server-side to the signed-in user. This previously queried
         // Supabase directly from the browser with the public anon key.
-        async function fetchNotifications() {
+        {
             try {
                 const notifs = await getMyNotifications(NOTIFICATION_BADGE_WINDOW);
-                if (isMounted) {
+                {
                     setNotifications(notifs as any);
                     setLoadFailed(false);
                 }
@@ -64,20 +68,12 @@ export default function NotificationCenter() {
                 //   minutes in should not blank a panel that is showing real
                 //   notifications.
                 console.error("Failed to fetch notifications:", err);
-                if (isMounted) setLoadFailed(true);
+                setLoadFailed(true);
             } finally {
-                if (isMounted) setLoading(false);
+                setLoading(false);
             }
         }
-
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 10000); // Poll every 10 seconds
-
-        return () => {
-            isMounted = false;
-            clearInterval(interval);
-        };
-    }, [userId]);
+    }, 10000, { enabled: !!userId, restartKey: userId ?? "" });
 
     // Filter to only show notifications for subscribed modules
     const visibleNotifications = notifications.filter((n) =>

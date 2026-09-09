@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getMyUnreadNotificationCount } from "@/app/actions/my-data";
+import { usePolling } from "@/hooks/usePolling";
 
 /**
  * Unread notification count for the signed-in user.
@@ -17,32 +18,21 @@ export function useUnreadNotifications(userId: string | undefined) {
         if (!userId) {
             setUnreadCount(0);
             setIsLoading(false);
-            return;
         }
-
-        let cancelled = false;
-
-        async function fetchCount() {
-            try {
-                const count = await getMyUnreadNotificationCount();
-                if (!cancelled) setUnreadCount(count);
-            } catch (err) {
-                console.error("Error fetching unread notification count:", err);
-            } finally {
-                if (!cancelled) setIsLoading(false);
-            }
-        }
-
-        fetchCount();
-
-        // Poll every 10 seconds
-        const interval = setInterval(fetchCount, 10000);
-
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
     }, [userId]);
+
+    //   #538 Polls only while the tab is visible. See hooks/usePolling.
+    usePolling(async () => {
+        if (!userId) return;
+        try {
+            const count = await getMyUnreadNotificationCount();
+            setUnreadCount(count);
+        } catch (err) {
+            console.error("Error fetching unread notification count:", err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, 10000, { enabled: !!userId, restartKey: userId ?? "" });
 
     return { unreadCount, isLoading };
 }

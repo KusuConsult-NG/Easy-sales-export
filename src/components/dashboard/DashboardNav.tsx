@@ -29,6 +29,7 @@ import type { UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
+import { usePolling } from "@/hooks/usePolling";
 
 interface NavItem {
     label: string;
@@ -101,50 +102,32 @@ export default function DashboardNav() {
 
     // Service registrations, via a session-scoped server action rather than a
     // direct browser query. Same 8s cadence as the listener it replaces.
-    useEffect(() => {
+    //
+    //   #538 …but only while the tab is being looked at. This nav is mounted on
+    //   every /dashboard and /messages screen, so its three pollers ran in every
+    //   background tab for as long as the browser stayed open. See usePolling.
+    usePolling(async () => {
         if (!userId) return;
-        let cancelled = false;
-
-        const load = async () => {
-            try {
-                const regs = await getMyServiceRegistrations();
-                if (!cancelled) setServiceRegs(regs);
-            } catch (error) {
-                console.error("DashboardNav service registrations failed:", error);
-            }
-        };
-
-        load();
-        const interval = setInterval(load, 8000);
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
-    }, [userId]);
+        try {
+            const regs = await getMyServiceRegistrations();
+            setServiceRegs(regs);
+        } catch (error) {
+            console.error("DashboardNav service registrations failed:", error);
+        }
+    }, 8000, { enabled: !!userId, restartKey: userId ?? "" });
 
     // Unread messages. The browser query this replaces lost its
     // array-contains filter silently, so it counted every conversation on the
     // platform and downloaded them all. The count is now scoped server-side.
-    useEffect(() => {
+    usePolling(async () => {
         if (!userId) return;
-        let cancelled = false;
-
-        const load = async () => {
-            try {
-                const count = await getMyUnreadMessageCount();
-                if (!cancelled) setUnreadMessages(count);
-            } catch (error) {
-                console.error("DashboardNav unread messages failed:", error);
-            }
-        };
-
-        load();
-        const interval = setInterval(load, 8000);
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
-    }, [userId]);
+        try {
+            const count = await getMyUnreadMessageCount();
+            setUnreadMessages(count);
+        } catch (error) {
+            console.error("DashboardNav unread messages failed:", error);
+        }
+    }, 8000, { enabled: !!userId, restartKey: userId ?? "" });
 
     const moduleLinks = getModuleLinks(roles, serviceRegs, session?.user?.gender);
     const toggles = useFeatureToggles(["digital_id_system", "escrow_messaging"]);

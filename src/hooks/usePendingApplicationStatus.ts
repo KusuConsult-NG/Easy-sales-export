@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePolling } from "@/hooks/usePolling";
 import { getMyApplicationStatus } from "@/app/actions/my-data";
 import { logger } from "@/lib/logger";
 
@@ -77,14 +78,41 @@ export function usePendingApplicationStatus({
 
         checkStatus();
 
-        // Poll every 10 seconds
-        const interval = setInterval(checkStatus, 10000);
-
         return () => {
             cancelled = true;
-            clearInterval(interval);
         };
     }, [userId, collectionName, statusField]);
+
+    //   #538 The 10s repeat, paused while the tab is hidden.
+    //
+    //   This one matters more than the badges: it is the hook behind every
+    //   "your application is being reviewed" waiting screen, which is exactly
+    //   the page a user leaves open in a background tab for hours while they
+    //   wait. It kept polling the whole time.
+    usePolling(async () => {
+        if (!userId) return;
+        try {
+            const result = await getMyApplicationStatus(collectionName, statusField);
+
+            //   #415 A NON-ANSWER MUST NOT OVERWRITE THE LAST REAL ONE.
+            if (result.status === "unknown" || result.status === "unauthenticated") {
+                setCheckFailed(true);
+                setSessionExpired(result.status === "unauthenticated");
+                return;
+            }
+
+            setCheckFailed(false);
+            setSessionExpired(false);
+            setStatus(result.status);
+            if (result.createdAt) setCreatedAt(new Date(result.createdAt));
+            setRejectionReason(result.rejectionReason ?? null);
+        } catch (err) {
+            setCheckFailed(true);
+            logger.error("[usePendingApplicationStatus] status poll failed", { collectionName, err });
+        } finally {
+            setIsLoading(false);
+        }
+    }, 10000, { enabled: !!userId, immediate: false, restartKey: `${userId ?? ""}:${collectionName}:${statusField}` });
 
     return { status, isLoading, rejectionReason, createdAt, checkFailed, sessionExpired };
 }

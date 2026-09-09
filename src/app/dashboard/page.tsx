@@ -13,6 +13,7 @@ import { getMyDashboard } from "@/app/actions/my-data";
 import { toDate } from "@/lib/date-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
+import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 
 const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
@@ -274,13 +275,20 @@ function DashboardHomeContent() {
             if (!cancelled) setStats(s => ({ ...s, loading: false }));
         });
 
-        const interval = setInterval(() => {
+        //   #538 The 8s repeat runs only while the tab is being looked at.
+        //
+        //   This is the most expensive poller in the app — getMyDashboard is
+        //   eight queries — and it ran at full rate in every background tab.
+        //   The primitive is shared with usePolling rather than reimplemented
+        //   here; `load` closes over `cancelled`, so the hook itself cannot be
+        //   used without unpicking the effect #453 arranged.
+        const stopPolling = startVisibilityAwareInterval(() => {
             load().catch(error => console.error("Dashboard refresh failed:", error));
-        }, 8000);
+        }, 8000, { immediate: false });
 
         return () => {
             cancelled = true;
-            clearInterval(interval);
+            stopPolling();
         };
     }, [userId]);
 
