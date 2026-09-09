@@ -95,7 +95,7 @@ const code = (rel: string) => stripComments(readFileSync(rel, 'utf-8'), { label:
 
 /** The three screens that render the estimate to a person. */
 const SCREENS = [
-    'src/app/marketplace/seller/orders/[id]/page.tsx',
+    'src/app/marketplace/seller/orders/[id]/SellerOrderDetailClient.tsx',
     'src/app/marketplace/orders/[id]/OrderConfirmationClient.tsx',
     'src/app/marketplace/buyer/orders/[id]/BuyerOrderDetailClient.tsx',
 ];

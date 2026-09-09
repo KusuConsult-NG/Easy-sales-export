@@ -52,7 +52,7 @@ import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 
 const ROOT = process.cwd();
-const SELLER = 'src/app/marketplace/seller/orders/[id]/page.tsx';
+const SELLER = 'src/app/marketplace/seller/orders/[id]/SellerOrderDetailClient.tsx';
 const BUYER = 'src/app/marketplace/buyer/orders/[id]/BuyerOrderDetailClient.tsx';
 const RESOLVER = 'src/app/actions/marketplace/_escrow_disputes.ts';
 

@@ -185,7 +185,7 @@ describe('#492 — and the other seven answer "could not read" before "nothing t
             'if (!verification || verification.status !== "approved") {',
         ],
         [
-            'src/app/marketplace/village-market/[id]/page.tsx',
+            'src/app/marketplace/village-market/[id]/VillageMarketEventClient.tsx',
             'if (loadError) {',
             'if (!event) {',
         ],

@@ -65,7 +65,7 @@ function codeOnly(src: string): string {
 }
 
 const route = source('src/app/api/id-card/pdf/route.ts');
-const page = source('src/app/cooperatives/(member)/id-card/page.tsx');
+const page = source('src/app/cooperatives/(member)/id-card/IdCardClient.tsx');
 
 describe('the card is the caller\'s own', () => {
     it('every field comes from the session-derived action', () => {

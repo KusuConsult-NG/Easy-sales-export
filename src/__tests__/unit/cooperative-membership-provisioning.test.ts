@@ -57,7 +57,7 @@ const IDENTITY = 'src/app/actions/cooperative/_coop_identity.ts';
 const PROVISIONING = 'src/lib/cooperative-provisioning.ts';
 const MEMBERSHIP = 'src/app/actions/cooperative/_coop_membership.ts';
 const ROLE_MAP = 'src/lib/module-access-check.ts';
-const ID_CARD_PAGE = 'src/app/cooperatives/(member)/id-card/page.tsx';
+const ID_CARD_PAGE = 'src/app/cooperatives/(member)/id-card/IdCardClient.tsx';
 const MEMBER_LAYOUT = 'src/app/cooperatives/(member)/layout.tsx';
 
 function code(rel: string): string {

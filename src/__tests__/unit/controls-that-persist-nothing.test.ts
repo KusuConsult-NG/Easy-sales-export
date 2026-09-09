@@ -275,7 +275,7 @@ describe('#388 — no screen offers a write it cannot perform', () => {
             { label: 'seller orders list' },
         );
         const detail = stripComments(
-            readFileSync(join(SRC, 'app/marketplace/seller/orders/[id]/page.tsx'), 'utf-8'),
+            readFileSync(join(SRC, 'app/marketplace/seller/orders/[id]/SellerOrderDetailClient.tsx'), 'utf-8'),
             { label: 'seller order detail' },
         );
         // Neither seller screen may SET "delivered" — that is the buyer's, per

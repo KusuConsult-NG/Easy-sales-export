@@ -92,7 +92,7 @@ const code = (rel: string) =>
 
 const BUYER_DETAIL = 'app/marketplace/buyer/orders/[id]/BuyerOrderDetailClient.tsx';
 const BUYER_LIST = 'app/marketplace/buyer/orders/BuyerOrdersClient.tsx';
-const SELLER_DETAIL = 'app/marketplace/seller/orders/[id]/page.tsx';
+const SELLER_DETAIL = 'app/marketplace/seller/orders/[id]/SellerOrderDetailClient.tsx';
 const SELLER_LIST = 'app/marketplace/seller/orders/SellerOrdersClient.tsx';
 const CRON = 'app/api/cron/release-escrow/route.ts';
 const NOTIFICATIONS = 'lib/marketplace-notifications.ts';
