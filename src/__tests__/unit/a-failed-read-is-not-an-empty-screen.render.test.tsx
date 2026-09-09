@@ -200,7 +200,7 @@ describe('#492 — and the other seven answer "could not read" before "nothing t
             ') : notes.length === 0 ? (',
         ],
         [
-            'src/app/wave/(member)/resources/page.tsx',
+            'src/app/wave/(member)/resources/WaveResourcesClient.tsx',
             ') : loadError ? (',
             ') : filteredResources.length === 0 ? (',
         ],
@@ -244,7 +244,7 @@ describe('#492 — and the other seven answer "could not read" before "nothing t
     it('and the WAVE default library still shows for a genuinely empty read', () => {
         //   Kept on purpose: a member with no materials at all is worse off
         //   without it. Only the FAILED case is told apart.
-        const body = code('src/app/wave/(member)/resources/page.tsx');
+        const body = code('src/app/wave/(member)/resources/WaveResourcesClient.tsx');
 
         expect(body).toContain('const defaultResources: WaveResource[]');
         expect(body).toContain('setResources(defaultResources)');

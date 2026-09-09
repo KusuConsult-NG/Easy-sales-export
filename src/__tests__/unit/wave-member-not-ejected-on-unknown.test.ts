@@ -46,8 +46,8 @@ import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 
 const PAGES = [
-    'src/app/wave/(member)/profile/page.tsx',
-    'src/app/wave/(member)/training/page.tsx',
+    'src/app/wave/(member)/profile/WaveProfileClient.tsx',
+    'src/app/wave/(member)/training/WaveTrainingClient.tsx',
 ];
 
 function source(rel: string): string {

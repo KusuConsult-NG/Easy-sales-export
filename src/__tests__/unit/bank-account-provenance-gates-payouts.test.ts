@@ -70,7 +70,7 @@ const ROOT = process.cwd();
 const RULE = 'src/lib/bank-account-provenance.ts';
 const TRANSFER = 'src/lib/paystack-transfer.ts';
 const REVERIFY = 'src/app/actions/bank-account.ts';
-const SCREEN = 'src/app/profile/bank-account/page.tsx';
+const SCREEN = 'src/app/profile/bank-account/BankAccountClient.tsx';
 
 /** Every payout path in the platform. */
 const PAYOUT_SITES = [

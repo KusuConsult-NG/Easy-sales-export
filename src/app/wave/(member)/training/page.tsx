@@ -1,391 +1,51 @@
-"use client";
+/**
+ * WAVE training events — the server half. See #543 / #545.
+ *
+ * The same conditional chain as the WAVE profile page: the membership check
+ * gates everything, so it runs first and the two reads it gates run TOGETHER.
+ * The client awaited those two one after the other, which cost the member the
+ * sum of both round trips; they are independent and are now issued in parallel
+ * on whichever side does the work.
+ *
+ * All the branching — the "could not tell" toast and the not-enrolled redirect,
+ * both #323 — stays in the client, reading the same results.
+ */
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import {
-    Calendar,
-    Users,
-    Clock,
-    Loader2,
-    CheckCircle,
-    XCircle,
-    Video,
-    User,
-} from "lucide-react";
-import { checkWaveMembershipAction, getUserTrainingRegistrationsAction } from "@/app/actions/wave";
-import { getWaveTrainingEventsAction, registerForTrainingAction, type WaveTrainingEvent } from "@/app/actions/wave";
-import { useToast } from "@/contexts/ToastContext";
-import BackButton from "@/components/ui/BackButton";
-import { toSafeDate } from "@/lib/utils";
+    checkWaveMembershipAction,
+    getUserTrainingRegistrationsAction,
+    getWaveTrainingEventsAction,
+} from "@/app/actions/wave";
+import { rawSeed } from "@/lib/server-seed";
+import WaveTrainingClient from "./WaveTrainingClient";
 
-export default function WaveTrainingPage() {
-    const router = useRouter();
-    const { showToast } = useToast();
-    const { data: session } = useSession();
+/**
+ *   #556 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
+ */
+export const dynamic = "force-dynamic";
 
-    const [loading, setLoading] = useState(true);
-    const [events, setEvents] = useState<WaveTrainingEvent[]>([]);
-    const [registeredEventIds, setRegisteredEventIds] = useState<Set<string>>(new Set());
-    const [registeringId, setRegisteringId] = useState<string | null>(null);
+export default async function WaveTrainingPage() {
+    const membership = rawSeed(
+        "wave membership", await checkWaveMembershipAction().catch(() => null),
+    );
 
-    useEffect(() => {
-        loadTrainingData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const enrolled = membership?.success === true && membership.data?.enrolled === true;
 
-    async function loadTrainingData() {
-        setLoading(true);
-        try {
-            // Check membership
-            const membership = await checkWaveMembershipAction();
+    const [events, registrations] = enrolled
+        ? await Promise.all([
+            getWaveTrainingEventsAction(undefined, 100, true).catch(() => null),
+            getUserTrainingRegistrationsAction().catch(() => null),
+        ])
+        : [null, null];
 
-            // #323, same as the profile page. A refusal returns data: null, so
-            // `!membership.data?.enrolled` was true and a real member was
-            // ejected to the marketing page on any transient failure.
-            if (!membership.success) {
-                showToast(membership.error || "Could not check your WAVE membership", "error");
-                return;
-            }
-            if (!membership.data?.enrolled) {
-                router.push("/wave");
-                return;
-            }
-
-            // Load events
-            const eventsResult = await getWaveTrainingEventsAction(undefined, 100, true);
-            if (eventsResult.success && eventsResult.data) {
-                setEvents(eventsResult.data);
-            }
-
-            // Load user's registrations
-            const regsResult = await getUserTrainingRegistrationsAction();
-            if (regsResult.success && regsResult.data?.registrations) {
-                const eventIds = new Set<string>(
-                    regsResult.data.registrations.map((reg: any) => reg.eventId)
-                );
-                setRegisteredEventIds(eventIds);
-            }
-        } catch (error) {
-            showToast("Failed to load training events", "error");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function handleRegister(eventId: string) {
-        if (!eventId) return;
-
-        const userId = session?.user?.id;
-        if (!userId) {
-            showToast("You must be logged in to register", "error");
-            return;
-        }
-
-        setRegisteringId(eventId);
-        try {
-            const result = await registerForTrainingAction(userId, eventId);
-
-            if (result.success) {
-                showToast("Successfully registered for training!", "success");
-                loadTrainingData();
-            } else {
-                showToast(result.error || "Failed to register", "error");
-            }
-        } catch (error) {
-            showToast("Registration failed", "error");
-        } finally {
-            setRegisteringId(null);
-        }
-    }
-
-    function getEventStatusColor(status: string) {
-        switch (status) {
-            case "upcoming":
-                return "bg-blue-100 text-blue-700";
-            case "ongoing":
-                return "bg-emerald-100 text-emerald-800";
-            case "completed":
-                return "bg-gray-100 text-gray-700";
-            case "cancelled":
-                return "bg-red-100 text-red-700";
-            default:
-                return "bg-gray-100 text-gray-700";
-        }
-    }
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
-            </div>
-        );
-    }
-
-    const upcomingEvents = events.filter((e) => e.status === "upcoming");
-    const ongoingEvents = events.filter((e) => e.status === "ongoing");
-    const completedEvents = events.filter((e) => e.status === "completed");
+    //   All or nothing, for the reason the ledger records: a seed present while
+    //   the rest of the chain still fetches is worse than no seed at all.
+    const complete = membership !== null
+        && (!enrolled || (events !== null && registrations !== null));
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 py-8">
-            <div className="max-w-7xl mx-auto px-4">
-                {/* Header */}
-                <div className="mb-8">
-                    <BackButton fallbackPath="/wave/dashboard" />
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                        Training Events
-                    </h1>
-                    <p className="text-gray-600">
-                        Register for workshops, webinars, and field trips to grow your skills
-                    </p>
-                </div>
-
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-gray-600">Upcoming</h3>
-                            <Calendar className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <p className="text-3xl font-bold text-gray-900">{upcomingEvents.length}</p>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-gray-600">Enrolled</h3>
-                            <CheckCircle className="w-5 h-5 text-emerald-700" />
-                        </div>
-                        <p className="text-3xl font-bold text-gray-900">{registeredEventIds.size}</p>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-gray-600">Completed</h3>
-                            <Calendar className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <p className="text-3xl font-bold text-gray-900">{completedEvents.length}</p>
-                    </div>
-                </div>
-
-                {/* Upcoming Events */}
-                {upcomingEvents.length > 0 && (
-                    <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Upcoming Training
-                        </h2>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {upcomingEvents.map((event) => {
-                                const isRegistered = event.id && registeredEventIds.has(event.id);
-                                const isFull = event.currentParticipants >= event.maxParticipants;
-                                const isRegistering = registeringId === event.id;
-
-                                return (
-                                    <div
-                                        key={event.id}
-                                        className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100"
-                                    >
-                                        {/* Header */}
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div>
-                                                <h3 className="text-xl font-bold text-gray-900 mb-1">
-                                                    {event.title}
-                                                </h3>
-                                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getEventStatusColor(event.status)}`}>
-                                                    {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Description */}
-                                        <p className="text-gray-600 mb-4">
-                                            {event.description}
-                                        </p>
-
-                                        {/* Details */}
-                                        <div className="space-y-3 mb-4">
-                                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                <User className="w-4 h-4 text-emerald-700" />
-                                                <span className="font-medium">Instructor:</span> {event.instructor}
-                                            </div>
-
-                                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                <Calendar className="w-4 h-4 text-emerald-700" />
-                                                <span className="font-medium">Date:</span>{" "}
-                                                {toSafeDate(event.date).toLocaleDateString("en-US", {
-                                                    weekday: "long",
-                                                    year: "numeric",
-                                                    month: "long",
-                                                    day: "numeric",
-                                                })}
-                                            </div>
-
-                                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                <Clock className="w-4 h-4 text-blue-600" />
-                                                <span className="font-medium">Duration:</span> {event.duration}
-                                            </div>
-
-                                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                <Users className="w-4 h-4 text-emerald-700" />
-                                                <span className="font-medium">Capacity:</span> {event.currentParticipants}/{event.maxParticipants} enrolled
-                                            </div>
-
-                                            {event.meetingLink && (
-                                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                    <Video className="w-4 h-4 text-red-600" />
-                                                    <span className="font-medium">Format:</span> Online
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Action Button */}
-                                        {isRegistered ? (
-                                            <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-emerald-800 font-semibold">
-                                                <CheckCircle className="w-5 h-5" />
-                                                You're Registered
-                                            </div>
-                                        ) : isFull ? (
-                                            <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 font-semibold">
-                                                <XCircle className="w-5 h-5" />
-                                                Event Full
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={() => event.id && handleRegister(event.id)}
-                                                disabled={isRegistering}
-                                                className="w-full px-4 py-3 bg-emerald-700 text-white font-semibold rounded-xl hover:bg-emerald-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                                            >
-                                                {isRegistering ? (
-                                                    <>
-                                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                                        Registering...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Calendar className="w-5 h-5" />
-                                                        Register Now
-                                                    </>
-                                                )}
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {/* Ongoing Events */}
-                {ongoingEvents.length > 0 && (
-                    <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Currently Ongoing
-                        </h2>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {ongoingEvents.map((event) => (
-                                <div
-                                    key={event.id}
-                                    className="bg-green-50 rounded-2xl shadow-lg p-6 border-2 border-green-200"
-                                >
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                                        <span className="text-emerald-800 font-semibold text-sm">LIVE NOW</span>
-                                    </div>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-2">
-                                        {event.title}
-                                    </h3>
-                                    <p className="text-gray-600 mb-4">{event.description}</p>
-                                    {event.meetingLink && (
-                                        <a
-                                            href={event.meetingLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 text-white font-semibold rounded-lg hover:bg-green-700 transition"
-                                        >
-                                            <Video className="w-4 h-4" />
-                                            Join Now
-                                        </a>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Completed & Recorded Sessions */}
-                {completedEvents.length > 0 && (
-                    <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Completed & Recorded Sessions
-                        </h2>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {completedEvents.map((event) => (
-                                <div
-                                    key={event.id}
-                                    className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 flex flex-col justify-between"
-                                >
-                                    <div>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-semibold">
-                                                Completed
-                                            </span>
-                                            {event.videoUrl && (
-                                                <span className="flex items-center gap-1 text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-1 rounded-md">
-                                                    <Video className="w-3.5 h-3.5" />
-                                                    Recording Available
-                                                </span>
-                                            )}
-                                        </div>
-                                        <h3 className="text-xl font-bold text-gray-900 mb-2">
-                                            {event.title}
-                                        </h3>
-                                        <p className="text-gray-600 text-sm mb-4 leading-relaxed">{event.description}</p>
-                                        
-                                        <div className="space-y-2 text-xs text-gray-500 mb-6">
-                                            <div className="flex items-center gap-2">
-                                                <User className="w-3.5 h-3.5 text-gray-400" />
-                                                <span>Instructor: {event.instructor}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                                                <span>Date: {toSafeDate(event.date).toLocaleDateString()}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {event.videoUrl ? (
-                                        <a
-                                            href={event.videoUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="w-full text-center px-4 py-3 bg-linear-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-xs hover:shadow-sm"
-                                        >
-                                            <Video className="w-5 h-5" />
-                                            Watch Recording
-                                        </a>
-                                    ) : (
-                                        <div className="w-full text-center px-4 py-3 bg-gray-50 text-gray-400 border border-gray-100 font-semibold rounded-xl select-none cursor-not-allowed">
-                                            No Recording Available
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Empty State */}
-                {events.length === 0 && (
-                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center border border-gray-100">
-                        <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                            No Training Events
-                        </h3>
-                        <p className="text-gray-600">
-                            Check back soon for upcoming workshops, webinars, and training sessions!
-                        </p>
-                    </div>
-                )}
-            </div>
-        </div>
+        <WaveTrainingClient
+            initial={complete && membership ? { membership, events, registrations } : null}
+        />
     );
 }

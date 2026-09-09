@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 43;
+const CAP = 38;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -158,6 +158,12 @@ const CONVERTED = [
     'src/app/cooperatives/(member)/my-loans/page.tsx',
     'src/app/marketplace/onboarding/page.tsx',
     'src/app/farm-nation/onboarding/page.tsx',
+    //   #556 — batch 11, the WAVE member area and the payout account.
+    'src/app/profile/bank-account/page.tsx',
+    'src/app/wave/(member)/earnings/page.tsx',
+    'src/app/wave/(member)/profile/page.tsx',
+    'src/app/wave/(member)/training/page.tsx',
+    'src/app/wave/(member)/resources/page.tsx',
     'src/app/farm-nation/(member)/dashboard/page.tsx',
     'src/app/cooperatives/(member)/dashboard/page.tsx',
     'src/app/export/(app)/dashboard/page.tsx',

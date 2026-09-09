@@ -1,335 +1,46 @@
-"use client";
+/**
+ * A WAVE member's profile — the server half. See #543 / #545.
+ *
+ * Two reads, and the second is CONDITIONAL on the first: the membership check
+ * decides whether this visitor is a member at all, and only a member's
+ * statistics are worth reading. Doing them both unconditionally would be
+ * faster and would also do the work for every visitor the screen is about to
+ * send back to /wave, which is what #543 held the WAVE dashboard back for.
+ *
+ * So the chain is walked in order here, and every decision it feeds — the
+ * "could not tell" toast and the not-enrolled redirect, both #323 — stays in
+ * the client, reading the same results it would have fetched itself.
+ *
+ * A break anywhere seeds nothing and the client walks the chain as before.
+ */
 
-import { useState, useEffect } from "react";
-import { logger } from '@/lib/logger';
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { useToast } from "@/contexts/ToastContext";
-import BackButton from "@/components/ui/BackButton";
-import {
-    User,
-    Briefcase,
-    Award,
-    Calendar,
-    TrendingUp,
-    Loader2,
-    Heart,
-    BookOpen,
-    CheckCircle,
-} from "lucide-react";
 import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave";
-import { toSafeDate } from "@/lib/utils";
+import { rawSeed } from "@/lib/server-seed";
+import WaveProfileClient from "./WaveProfileClient";
 
-export default function WaveProfilePage() {
-    const router = useRouter();
-    // useToast was imported and never used — this page had no way to tell the
-    // member anything had gone wrong, which is part of why #323's refusal had
-    // nowhere to go but a redirect.
-    const { showToast } = useToast();
-    const [loading, setLoading] = useState(true);
-    const [memberData, setMemberData] = useState<any>(null);
-    const [stats, setStats] = useState({
-        resourcesAccessed: 0,
-        trainingsRegistered: 0,
-        trainingsCompleted: 0,
-        daysActive: 0,
-    });
+/**
+ *   #556 EXPLICITLY DYNAMIC — reads a session, so Next cannot prerender it (#543).
+ */
+export const dynamic = "force-dynamic";
 
-    useEffect(() => {
-        loadProfile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+export default async function WaveProfilePage() {
+    const membership = rawSeed(
+        "wave membership", await checkWaveMembershipAction().catch(() => null),
+    );
 
-    async function loadProfile() {
-        setLoading(true);
-        try {
-            // Check membership
-            const membership = await checkWaveMembershipAction();
+    //   Only for a member who is staying on this screen.
+    const stats = membership?.success && membership.data?.enrolled
+        ? rawSeed("wave member stats", await getWaveMemberStatsAction().catch(() => null))
+        : null;
 
-            // "Could not tell" is not "not a member" — #323.
-            //
-            // This was `if (!membership.data?.enrolled)`. On a refusal the
-            // action returns data: null, so `data?.enrolled` is undefined and
-            // the negation is true — a genuine WAVE member hitting a transient
-            // failure was ejected from the member area to the marketing page,
-            // which is the platform telling them they are not a member.
-            //
-            // The action distinguishes the three states deliberately: a real
-            // "not enrolled" comes back success:true with enrolled:false, while
-            // a failure comes back success:false with data:null. The server-side
-            // caller in actions/wave/_member.ts already reads it that way; these
-            // two browser pages were the ones that did not. Same mirror of #316,
-            // where "cannot tell" was read as "unpaid".
-            if (!membership.success) {
-                showToast(membership.error || "Could not check your WAVE membership", "error");
-                return;
-            }
-            if (!membership.data?.enrolled) {
-                router.push("/wave");
-                return;
-            }
-
-            setMemberData(membership.data?.memberData);
-
-            // Load stats
-            const statsResult = await getWaveMemberStatsAction();
-            if (statsResult.success && statsResult.data?.stats) {
-                setStats(statsResult.data.stats);
-            }
-        } catch (error) {
-            logger.error("Profile load error:", error);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
-            </div>
-        );
-    }
-
-    const enrolledDate = memberData?.enrolledAt
-        ? toSafeDate(memberData.enrolledAt).toLocaleDateString("en-US", {
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-        })
-        : "N/A";
+    //   All or nothing: a half-walked chain is a seed present while the rest
+    //   still fetches, the failure the ledger warns about.
+    const complete = membership !== null
+        && (!membership.success || !membership.data?.enrolled || stats !== null);
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 py-8">
-            <div className="max-w-5xl mx-auto px-4">
-                {/* Header */}
-                <div className="mb-8">
-                    <BackButton fallbackPath="/wave/dashboard" />
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                        My WAVE Profile
-                    </h1>
-                    <p className="text-gray-600">
-                        Your journey in the Women Agripreneurs Value-creation Empowerment program
-                    </p>
-                </div>
-
-                {/* Profile Card */}
-                <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-100">
-                    <div className="flex items-start gap-6">
-                        <div className="w-24 h-24 bg-linear-to-br from-emerald-500 to-emerald-700 rounded-full flex items-center justify-center text-white text-3xl font-bold">
-                            <Heart className="w-12 h-12" />
-                        </div>
-                        <div className="flex-1">
-                            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                                WAVE Member
-                            </h2>
-                            <p className="text-gray-600 mb-4">
-                                Member since {enrolledDate}
-                            </p>
-                            <div className="flex items-center gap-3">
-                                <span className="px-4 py-2 bg-emerald-100 text-emerald-800 rounded-full text-sm font-semibold flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4" />
-                                    Active Member
-                                </span>
-                                <span className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-semibold">
-                                    {stats.daysActive} Days Active
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                <BookOpen className="w-6 h-6 text-blue-600" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-600">Resources</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {stats.resourcesAccessed}
-                                </p>
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                            Learning materials accessed
-                        </p>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                <Calendar className="w-6 h-6 text-emerald-700" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-600">Training</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {stats.trainingsRegistered}
-                                </p>
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                            Events registered for
-                        </p>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                <Award className="w-6 h-6 text-emerald-700" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-600">Completed</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {stats.trainingsCompleted}
-                                </p>
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                            Training sessions completed
-                        </p>
-                    </div>
-                </div>
-
-                {/* Progress Section */}
-                <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-100">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                        <TrendingUp className="w-6 h-6 text-emerald-700" />
-                        Your Progress
-                    </h3>
-
-                    {/* Engagement Score */}
-                    <div className="mb-6">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold text-gray-700">
-                                Engagement Level
-                            </span>
-                            <span className="text-sm font-semibold text-emerald-700">
-                                {Math.min(100, Math.round((stats.resourcesAccessed * 10 + stats.trainingsCompleted * 20) / 3))}%
-                            </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-3">
-                            <div
-                                className="bg-linear-to-r from-emerald-500 to-emerald-700 h-3 rounded-full transition-all duration-500"
-                                style={{
-                                    width: `${Math.min(100, Math.round((stats.resourcesAccessed * 10 + stats.trainingsCompleted * 20) / 3))}%`,
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Milestones */}
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-gray-700">
-                            Milestones Achieved
-                        </h4>
-
-                        <div className="flex items-center gap-3">
-                            <div
-                                className={`w-10 h-10 rounded-full flex items-center justify-center ${memberData?.active
-                                    ? "bg-emerald-100"
-                                    : "bg-gray-100"
-                                    }`}
-                            >
-                                <CheckCircle
-                                    className={`w-5 h-5 ${memberData?.active
-                                        ? "text-emerald-700"
-                                        : "text-gray-400"
-                                        }`}
-                                />
-                            </div>
-                            <div>
-                                <p className="font-semibold text-gray-900">Enrollment Complete</p>
-                                <p className="text-xs text-gray-500">Joined WAVE program</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div
-                                className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.resourcesAccessed > 0
-                                    ? "bg-emerald-100"
-                                    : "bg-gray-100"
-                                    }`}
-                            >
-                                <CheckCircle
-                                    className={`w-5 h-5 ${stats.resourcesAccessed > 0
-                                        ? "text-emerald-700"
-                                        : "text-gray-400"
-                                        }`}
-                                />
-                            </div>
-                            <div>
-                                <p className="font-semibold text-gray-900">First Resource Accessed</p>
-                                <p className="text-xs text-gray-500">Started learning journey</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div
-                                className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.trainingsRegistered > 0
-                                    ? "bg-emerald-100"
-                                    : "bg-gray-100"
-                                    }`}
-                            >
-                                <CheckCircle
-                                    className={`w-5 h-5 ${stats.trainingsRegistered > 0
-                                        ? "text-emerald-700"
-                                        : "text-gray-400"
-                                        }`}
-                                />
-                            </div>
-                            <div>
-                                <p className="font-semibold text-gray-900">First Training Registered</p>
-                                <p className="text-xs text-gray-500">Engaged with live events</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div
-                                className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.trainingsCompleted > 0
-                                    ? "bg-emerald-100"
-                                    : "bg-gray-100"
-                                    }`}
-                            >
-                                <CheckCircle
-                                    className={`w-5 h-5 ${stats.trainingsCompleted > 0
-                                        ? "text-emerald-700"
-                                        : "text-gray-400"
-                                        }`}
-                                />
-                            </div>
-                            <div>
-                                <p className="font-semibold text-gray-900">First Training Completed</p>
-                                <p className="text-xs text-gray-500">Achievement unlocked!</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="bg-linear-to-r from-emerald-700 to-emerald-700 rounded-2xl p-8 text-white">
-                    <h3 className="text-2xl font-bold mb-4">Continue Your Journey</h3>
-                    <p className="text-emerald-100 mb-6">
-                        Keep growing your skills and building your agribusiness with WAVE resources and training.
-                    </p>
-                    <div className="flex flex-wrap gap-4">
-                        <button
-                            onClick={() => router.push("/wave/resources")}
-                            className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-xl hover:bg-emerald-50 transition"
-                        >
-                            Browse Resources
-                        </button>
-                        <button
-                            onClick={() => router.push("/wave/training")}
-                            className="px-6 py-3 bg-white/20 backdrop-blur-sm text-white font-semibold rounded-xl hover:bg-white/30 transition border border-white/30"
-                        >
-                            View Training Events
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <WaveProfileClient
+            initial={complete && membership ? { membership, stats } : null}
+        />
     );
 }

@@ -144,7 +144,7 @@ describe('#410 — and it matters because every caller is a way in', () => {
             'src/components/layout/WebsiteNav.tsx',
             'src/components/layout/Sidebar.tsx',
             'src/components/dashboard/DashboardNav.tsx',
-            'src/app/wave/(member)/earnings/page.tsx',
+            'src/app/wave/(member)/earnings/WaveEarningsClient.tsx',
         ];
         for (const c of callers) {
             expect({ caller: c, uses: code(c).includes('useFeatureToggle') })
