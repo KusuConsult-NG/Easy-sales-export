@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 63;
+const CAP = 58;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -134,12 +134,87 @@ const CONVERTED = [
     'src/app/marketplace/buyer/quotes/page.tsx',
     'src/app/marketplace/seller/quotes/page.tsx',
     'src/app/wave/(member)/certificates/page.tsx',
+    //   #552 — batch 7.
+    'src/app/marketplace/village-market/page.tsx',
+    'src/app/marketplace/seller/analytics/page.tsx',
+    'src/app/marketplace/seller/orders/page.tsx',
+    'src/app/wave/(member)/shipments/page.tsx',
+    'src/app/marketplace/orders/[id]/page.tsx',
     'src/app/farm-nation/(member)/dashboard/page.tsx',
     'src/app/cooperatives/(member)/dashboard/page.tsx',
     'src/app/export/(app)/dashboard/page.tsx',
     'src/app/marketplace/buyer/dashboard/page.tsx',
     'src/app/marketplace/seller/dashboard/page.tsx',
 ];
+
+/**
+ * Converted server pages that still unwrap their action result inline, rather
+ * than through lib/server-seed.
+ *
+ *   #552 A SECOND LEDGER, FOR THE SAME REASON AS THE FIRST.
+ *
+ *   #551 found that every one of these drops the action's `error` — a failed
+ *   server seed leaves no log line anywhere — and introduced seedOrNull to fix
+ *   it. Five pages use it. These do not, and a blanket regex across them was
+ *   considered and REJECTED: their shapes genuinely differ (a Promise.all of
+ *   two results, a single result, a picked sub-field, a comment between the
+ *   two statements), and #535 already recorded what a regex over heterogeneous
+ *   sites costs on code that is working.
+ *
+ *   So they are counted instead. The number may only go down.
+ */
+const UNWRAP_INLINE_CAP = 16;
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#552 — the converted pages converge on one unwrapper', () => {
+    function serverPagesUnwrappingInline(): string[] {
+        const found: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) {
+                    if (entry !== 'admin') walk(full);
+                } else if (entry === 'page.tsx') {
+                    const src = readFileSync(full, 'utf-8');
+                    //   Only the pages this ledger converted.
+                    if (!src.includes('EXPLICITLY DYNAMIC')) continue;
+                    if (src.includes('seedOrNull')) continue;
+                    if (!/\?\.success/.test(src)) continue;
+                    found.push(full.slice(ROOT.length + 1));
+                }
+            }
+        };
+        walk(join(ROOT, 'src/app'));
+        return found.sort();
+    }
+
+    it('NO MORE PAGES UNWRAP INLINE THAN ARE RECORDED', () => {
+        const pages = serverPagesUnwrappingInline();
+
+        expect({ count: pages.length, cap: UNWRAP_INLINE_CAP })
+            .toEqual({ count: pages.length, cap: UNWRAP_INLINE_CAP });
+        expect(pages.length).toBeLessThanOrEqual(UNWRAP_INLINE_CAP);
+    });
+
+    it('AND THE SHARED UNWRAPPER IS ACTUALLY USED SOMEWHERE', () => {
+        //   The guard on the measurement: a cap of 16 is also satisfied by
+        //   nobody using seedOrNull at all, which would mean the fix in #551
+        //   reached nothing.
+        const users: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) walk(full);
+                else if (entry === 'page.tsx' && readFileSync(full, 'utf-8').includes('seedOrNull')) {
+                    users.push(full);
+                }
+            }
+        };
+        walk(join(ROOT, 'src/app'));
+
+        expect(users.length).toBeGreaterThan(3);
+    });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#545 — the waterfall that is left is counted', () => {

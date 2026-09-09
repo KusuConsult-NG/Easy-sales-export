@@ -260,7 +260,7 @@ describe('#388 — no screen offers a write it cannot perform', () => {
 
     it('and the seller order list sends a shipped order to the page that can change it', () => {
         const page = stripComments(
-            readFileSync(join(SRC, 'app/marketplace/seller/orders/page.tsx'), 'utf-8'),
+            readFileSync(join(SRC, 'app/marketplace/seller/orders/SellerOrdersClient.tsx'), 'utf-8'),
             { label: 'seller orders list' },
         );
         // The card links through rather than pretending to act. Asserted on the
@@ -271,7 +271,7 @@ describe('#388 — no screen offers a write it cannot perform', () => {
 
     it('and it does NOT offer the seller a delivery confirmation', () => {
         const page = stripComments(
-            readFileSync(join(SRC, 'app/marketplace/seller/orders/page.tsx'), 'utf-8'),
+            readFileSync(join(SRC, 'app/marketplace/seller/orders/SellerOrdersClient.tsx'), 'utf-8'),
             { label: 'seller orders list' },
         );
         const detail = stripComments(
