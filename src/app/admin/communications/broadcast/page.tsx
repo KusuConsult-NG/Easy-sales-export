@@ -37,7 +37,9 @@ const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; lab
             { value: "unpaid_applicants", label: "Unpaid Applicants", desc: "Users who applied but have not completed their required payment" },
             { value: "abandoned_failed_transactions", label: "Abandoned / Failed Payments", desc: "Users with failed or aborted payments" },
             { value: "stalled_users" as BroadcastAudience, label: "⚠️ Stalled Users", desc: "Started a module but profile is incomplete (missing bank/address)." },
-            { value: "ghost_users" as BroadcastAudience, label: "👻 Ghost Users", desc: "Registered but never clicked start on any service. Zero platform data." },
+            // #536 "Zero platform data" was never true — it is zero data in the
+            // fields the segmenter reads. Says what is measured now.
+            { value: "ghost_users" as BroadcastAudience, label: "👻 Ghost Users", desc: "No application, bank details or address on record." },
             { value: "active_last_30_days" as BroadcastAudience, label: "🟢 Active Last 30 Days", desc: "Users who logged in or performed an action in the last 30 days" },
             { value: "fully_verified_sellers" as BroadcastAudience, label: "✅ Fully Verified Sellers", desc: "Marketplace sellers who have passed full KYC and admin approval" },
             { value: "csv_upload" as BroadcastAudience, label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },

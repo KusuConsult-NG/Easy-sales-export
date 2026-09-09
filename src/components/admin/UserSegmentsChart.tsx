@@ -34,7 +34,18 @@ export default function UserSegmentsChart({ segments }: UserSegmentsChartProps) 
             color: "#6366f1", // indigo
             bg: "bg-indigo-50",
             icon: AlertTriangle,
-            description: "Profile complete but no module application",
+            /**
+             *   #536 THIS SAID "Profile complete but no module application".
+             *
+             *   The classifier never looks at profileComplete. A row lands here
+             *   when it has SOME data — an address, a bank detail, or a module
+             *   registration that is neither approved nor pending — and no live
+             *   application. "Profile complete" is a different fact, decided by
+             *   a different rule (lib/profile-completeness), and a label naming
+             *   it invites the reader to conclude something the number does not
+             *   support.
+             */
+            description: "Some details on file, no live application",
         },
         {
             label: "Ghost",
@@ -42,7 +53,20 @@ export default function UserSegmentsChart({ segments }: UserSegmentsChartProps) 
             color: "#94a3b8", // slate
             bg: "bg-slate-50",
             icon: Ghost,
-            description: "Incomplete registrations / minimal data",
+            /**
+             *   #536 THIS SAID "Incomplete registrations / minimal data", AND
+             *   THE OWNER READ IT AS A SYNC FAULT.
+             *
+             *   It is not one. A row is here when it carries no module
+             *   registration status, no bank details and no address in any
+             *   spelling this platform writes. Most of them are imported member
+             *   records that never went through a module onboarding — which is a
+             *   true fact about the data, not a broken sign-up.
+             *
+             *   The label now says what is measured. "Incomplete registration"
+             *   said what somebody inferred from it.
+             */
+            description: "No application, bank details or address on record",
         },
     ];
 

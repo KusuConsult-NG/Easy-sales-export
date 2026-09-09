@@ -7,8 +7,65 @@ import { isMarketplaceBuyer } from "./broadcast-audience";
 import { isRecentlyActive } from "@/lib/recent-activity";
 
 /**
+ * Values this platform writes when it means "nothing on file".
+ *
+ *   #536 The classifier already excluded the literal "N/A" from two of its four
+ *   reads and not from the other two. Widening the reads without widening this
+ *   would have counted the placeholder as data — a row saying "N/A" is a row
+ *   with no address, and the importer writes it.
+ */
+const PLACEHOLDER_VALUES = new Set(["", "n/a", "na", "none", "null", "undefined", "-"]);
+
+/** Is there a real value here? Placeholders and whitespace are not. */
+function present(v: unknown): boolean {
+    if (typeof v !== "string") return Boolean(v);
+    return !PLACEHOLDER_VALUES.has(v.trim().toLowerCase());
+}
+
+/**
  * High-Precision Mutually Exclusive Segmenter
  * Categorizes users based on their engagement depth.
+ *
+ *   #536 THE GHOST BUCKET READ TWO SPELLINGS OF ADDRESS AND TWO OF BANK. THE
+ *        PLATFORM WRITES SEVEN AND FOUR.
+ *
+ *   Reported by the owner, who opened the admin dashboard and saw
+ *
+ *       Ghost   19,853 (47.1%)   Incomplete registrations / minimal data
+ *
+ *   and asked whether the data was out of sync with the database. It is not:
+ *   this function is what the dashboard means by "Ghost", and it looked at
+ *
+ *       verificationProfile.address.state   |   address.state
+ *       verificationProfile.bankDetails.bankName | bankDetails.bankName
+ *
+ *   and nothing else. Measured against the platform's OWN WRITERS:
+ *
+ *     _wv_applications writes onto the user row  stateOfOrigin, residentialState,
+ *                                                lga, residentialAddress
+ *     admin/_legacy    (the importer)            stateOfOrigin, lga,
+ *                                                residentialAddress, address.state
+ *     bank-account.ts                            bankAccountNumber, bankName,
+ *                                                bankCode, bankAccountName,
+ *                                                AND the nested bankDetails
+ *
+ *   So a member whose row carries `stateOfOrigin: "Kano"` and a verified
+ *   `bankAccountNumber` — everything the payout paths need — was counted under
+ *   "minimal data", because the two keys this function happens to read were not
+ *   the two the writer happened to use. The same reader-narrower-than-writer
+ *   shape the export routes were fixed for, on a number the owner reads as a
+ *   health metric.
+ *
+ * ── WHAT IS NOT WIDENED, AND WHY ────────────────────────────────────────────
+ *
+ *   PHONE AND NAME ARE STILL NOT DATA for this purpose, deliberately. The
+ *   segments feed broadcast targeting, where "Ghost Users" is described on the
+ *   SMS screen as "Registered users with zero activity on the platform" — and a
+ *   phone number is not activity. Adding it would empty the bucket by changing
+ *   what it means rather than by correcting what it reads.
+ *
+ *   THE ORDER IS UNCHANGED: active > pending > stalled > ghost, first match
+ *   wins, and "suspended" still falls through to hasStartedAny as STALLED.
  */
 export function categorizeUser(data: any): BroadcastAudience {
     const regs = data.serviceRegistrations || {};
@@ -27,9 +84,25 @@ export function categorizeUser(data: any): BroadcastAudience {
 
     // 3. Check for Stalled Progress (Started profile/KYC but no applications)
     const hasStartedAny = Object.values(regs).some((r: any) => r.status && r.status !== "not_started");
-    const hasBank = (data.verificationProfile?.bankDetails?.bankName && data.verificationProfile?.bankDetails?.bankName !== "N/A") || (data.bankDetails?.bankName);
-    const hasAddress = (data.verificationProfile?.address?.state && data.verificationProfile?.address?.state !== "N/A") || (data.address?.state);
-    
+
+    //   #536 Every spelling the platform's own writers use, and the placeholder
+    //   rule applied to all of them rather than to two of four.
+    const hasBank =
+        present(data.verificationProfile?.bankDetails?.bankName)
+        || present(data.bankDetails?.bankName)
+        || present(data.bankDetails?.accountNumber)
+        || present(data.bankAccountNumber)
+        || present(data.bankName);
+
+    const hasAddress =
+        present(data.verificationProfile?.address?.state)
+        || present(data.address?.state)
+        || present(data.state)
+        || present(data.stateOfOrigin)
+        || present(data.residentialState)
+        || present(data.residentialAddress)
+        || present(data.lga);
+
     if (hasStartedAny || hasBank || hasAddress) return "stalled_users";
 
     // 4. Ghost User (No activity detected)

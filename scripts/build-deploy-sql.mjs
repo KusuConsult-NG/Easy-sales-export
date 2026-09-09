@@ -151,6 +151,18 @@ const EXPECTED = [
              "people as ghosts and the repair beside it may write each of them a duplicate " +
              "profile. Measured 23.608 ms -> 0.298 ms on the batch of 100 the scan issues.",
     },
+    {
+        n: "034",
+        why: "user_segment, WIDENED — #536. The four dashboard counters read two " +
+             "spellings of address and two of bank while the platform's own writers " +
+             "use seven and four, so a member carrying stateOfOrigin and a verified " +
+             "bankAccountNumber was counted under 'minimal data'. MUST ship with the " +
+             "matching change to categorizeUser in lib/broadcast-logic.ts: the two " +
+             "are one rule and a parity suite fails on a single disagreement. Applied " +
+             "without the code the dashboard and the broadcast segments disagree; the " +
+             "code without this leaves the dashboard exactly as it was, because it " +
+             "reads the RPC. CREATE OR REPLACE over 029, transaction-safe.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
