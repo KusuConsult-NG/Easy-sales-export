@@ -146,7 +146,7 @@ describe('#332 — the type now admits what the writers produce', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#332 — the statement says which rows are not wallet money', () => {
-    const page = source('src/app/dashboard/wallet/page.tsx');
+    const page = source('src/app/dashboard/wallet/WalletClient.tsx');
 
     it('THE WALLET PAGE CONSULTS THE PREDICATE', () => {
         expect(page).toMatch(/walletLedgerMovesBalance\(txn\)/);

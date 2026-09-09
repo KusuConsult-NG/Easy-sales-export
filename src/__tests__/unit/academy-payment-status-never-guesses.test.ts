@@ -56,7 +56,7 @@ const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8
 
 const APPLICATION = 'src/app/academy/application/page.tsx';
 const LAYOUT = 'src/app/academy/(learner)/layout.tsx';
-const SETUP = 'src/app/academy/setup/page.tsx';
+const SETUP = 'src/app/academy/setup/AcademySetupClient.tsx';
 const DASHBOARD = 'src/app/academy/dashboard/page.tsx';
 
 // ─────────────────────────────────────────────────────────────────────────────

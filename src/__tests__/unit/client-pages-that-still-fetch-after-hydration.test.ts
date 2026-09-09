@@ -64,7 +64,7 @@ const ROOT = process.cwd();
  * the right shape — but it has to displace one that was converted, or this
  * fails and the choice becomes deliberate.
  */
-const CAP = 38;
+const CAP = 33;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -158,6 +158,12 @@ const CONVERTED = [
     'src/app/cooperatives/(member)/my-loans/page.tsx',
     'src/app/marketplace/onboarding/page.tsx',
     'src/app/farm-nation/onboarding/page.tsx',
+    //   #558 — batch 12.
+    'src/app/dashboard/wallet/page.tsx',
+    'src/app/dashboard/notifications/page.tsx',
+    'src/app/marketplace/seller/products/page.tsx',
+    'src/app/academy/setup/page.tsx',
+    'src/app/export/onboarding/page.tsx',
     //   #556 — batch 11, the WAVE member area and the payout account.
     'src/app/profile/bank-account/page.tsx',
     'src/app/wave/(member)/earnings/page.tsx',
@@ -188,6 +194,33 @@ const CONVERTED = [
  *   So they are counted instead. The number may only go down.
  */
 const UNWRAP_INLINE_CAP = 16;
+
+/**
+ * Pages that match the SHAPE and will never come off this ledger by conversion.
+ *
+ *   The count is deliberately a shape and not a judgement — see the header —
+ *   which means some of what it counts has nothing for a server to fetch. Left
+ *   unrecorded, each of these gets picked up as a candidate, read, and put back
+ *   down again; #558 spent a candidate slot on wave/briefing that way.
+ *
+ *   Named rather than described, and asserted to still be IN the count, so a
+ *   list that goes stale fails instead of quietly reading as deliberate (#484).
+ */
+const NOT_CONVERTIBLE: { page: string; because: string }[] = [
+    {
+        page: 'src/app/wave/briefing/page.tsx',
+        because: 'no read on mount at all — the action call is an offline-sync WRITE '
+            + 'replaying a registration out of localStorage, which the server cannot see',
+    },
+    {
+        page: 'src/app/export/buyer/cart/page.tsx',
+        because: 'the cart lives in the browser; the actions fire on checkout, not on mount',
+    },
+    {
+        page: 'src/app/marketplace/sell/create/page.tsx',
+        because: 'a create form — its actions fire on submit and on upload, not on mount',
+    },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#553 — a seed reaches the component that actually holds the state', () => {
@@ -355,6 +388,20 @@ describe('#545 — the waterfall that is left is counted', () => {
             expect({ f, stillFetchesInBrowser: pages.has(f) })
                 .toEqual({ f, stillFetchesInBrowser: false });
         }
+    });
+
+    it('AND THE PAGES THAT CANNOT BE CONVERTED ARE NAMED, NOT REDISCOVERED', () => {
+        //   Each must still exist and still be counted. If one is ever
+        //   converted the list has to be edited, which is the point: the note
+        //   cannot rot into a list of paths that mean nothing.
+        const pages = new Set(pagesThatFetchAfterHydration());
+
+        for (const { page } of NOT_CONVERTIBLE) {
+            expect({ page, exists: existsSync(join(ROOT, page)) })
+                .toEqual({ page, exists: true });
+            expect({ page, counted: pages.has(page) }).toEqual({ page, counted: true });
+        }
+        expect(NOT_CONVERTIBLE.every(e => e.because.length > 20)).toBe(true);
     });
 
     it('AND THE SCREENS A MEMBER LANDS ON FIRST ARE AMONG THEM', () => {

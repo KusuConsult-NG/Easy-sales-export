@@ -92,7 +92,7 @@ const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: p });
 
 const SERVICE = 'src/infrastructure/notifications/service.ts';
-const PAGE = 'src/app/dashboard/notifications/page.tsx';
+const PAGE = 'src/app/dashboard/notifications/NotificationsClient.tsx';
 
 const ME = 'admin-1';
 let store: FakeDbHandle;
@@ -283,7 +283,21 @@ describe('#534 — the screen asks for a window', () => {
     it('and re-reading on a wider window is what the poll depends on', () => {
         //   The effect has to re-run when the window grows, or "show more"
         //   changes a number and fetches nothing.
-        expect(src()).toContain('}, [userId, status, router, pageSize]);');
+        //
+        //   #558 THIS PINNED THE DEPENDENCY ARRAY VERBATIM — the exact string
+        //   `}, [userId, status, router, pageSize]);` — and so it failed when a
+        //   FIFTH dependency was added for the server seed. Nothing about the
+        //   behaviour it names had changed; the test was pinned to one spelling
+        //   of the implementation, which is a defect class this audit has found
+        //   several times over.
+        //
+        //   What it means is that `pageSize` is IN the list. That is what is
+        //   asked now, and adding or removing anything else is free.
+        const deps = src().match(/\}, \[([^\]]*)\]\);/g) ?? [];
+        const pollDeps = deps.find(d => d.includes('userId') && d.includes('status'));
+
+        expect({ found: pollDeps !== undefined }).toEqual({ found: true });
+        expect(pollDeps).toContain('pageSize');
     });
 });
 

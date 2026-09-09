@@ -174,7 +174,7 @@ describe('#349 — the export step saves its draft like every other step', () =>
     });
 
     it('and the wizard really does pass it, so this was a dropped call', () => {
-        const page = source('src/app/export/onboarding/page.tsx');
+        const page = source('src/app/export/onboarding/ExportOnboardingClient.tsx');
         const stepJsx = page.slice(page.indexOf('<KYCVerificationStep'));
 
         expect(stepJsx.slice(0, 300)).toContain('onChange={handleStepChange}');

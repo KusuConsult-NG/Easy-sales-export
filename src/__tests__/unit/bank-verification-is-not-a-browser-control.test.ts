@@ -148,7 +148,7 @@ describe('#346 — the effect cannot drive an unbounded render loop', () => {
         expect(source(MP_STEP)).toContain('function handleVerified(');
         expect(source('src/app/marketplace/onboarding/MarketplaceOnboardingClient.tsx'))
             .toContain('onChange={(bankAccount) => updateFormData({ bankAccount })}');
-        expect(source('src/app/export/onboarding/page.tsx'))
+        expect(source('src/app/export/onboarding/ExportOnboardingClient.tsx'))
             .toMatch(/setFormData\(\(prev: any\) => \{[\s\S]{0,80}?\.\.\.prev, \.\.\.stepData/);
     });
 });

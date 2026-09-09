@@ -75,7 +75,7 @@ const code = (p: string) => {
 };
 
 const CENTRE = join(SRC, 'components/layout/NotificationCenter.tsx');
-const SCREEN = join(SRC, 'app/dashboard/notifications/page.tsx');
+const SCREEN = join(SRC, 'app/dashboard/notifications/NotificationsClient.tsx');
 const ACTIONS = join(SRC, 'app/actions/notifications.ts');
 
 /** A named handler's body, bounded by brace matching rather than a span (#400). */

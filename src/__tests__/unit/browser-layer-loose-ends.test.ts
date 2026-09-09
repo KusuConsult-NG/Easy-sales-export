@@ -204,7 +204,7 @@ describe('#351 — the PDF invoice names its currency', () => {
     it('THE ONLY OTHER PDF PATH RASTERISES, so it is unaffected', () => {
         // Reachability, checked rather than assumed. The wallet receipt draws
         // the DOM through html2canvas — the sign is pixels there.
-        const wallet = source('src/app/dashboard/wallet/page.tsx');
+        const wallet = source('src/app/dashboard/wallet/WalletClient.tsx');
 
         expect(wallet).toContain('html2canvas');
         expect(wallet).toContain('pdf.addImage(imgData');

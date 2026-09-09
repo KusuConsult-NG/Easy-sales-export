@@ -488,8 +488,8 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
      *   the content-approval queue that marks land verified and products live
      */
     const FIXED: Array<[string, string]> = [
-        ['src/app/dashboard/wallet/page.tsx', 'handleFund'],
-        ['src/app/dashboard/wallet/page.tsx', 'handleWithdraw'],
+        ['src/app/dashboard/wallet/WalletClient.tsx', 'handleFund'],
+        ['src/app/dashboard/wallet/WalletClient.tsx', 'handleWithdraw'],
         ['src/app/loans/approve/page.tsx', 'handleApproval'],
         ['src/app/land/verify/page.tsx', 'handleVerification'],
         ['src/app/escrow/[id]/dispute/CreateDisputeClient.tsx', 'handleSubmit'],

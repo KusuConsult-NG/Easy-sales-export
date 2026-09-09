@@ -260,7 +260,7 @@ describe('#371 — the nested roots the User type never declared', () => {
         // Vacuity guard on the exemptions above: if either disappeared, the
         // exemption would be silently excusing something else.
         expect(code('src/app/actions/sms-broadcast.ts')).toContain('u.kyc && u.kyc.phoneNumber');
-        expect(code('src/app/export/onboarding/page.tsx')).toContain('finalData.kyc.documents');
+        expect(code('src/app/export/onboarding/ExportOnboardingClient.tsx')).toContain('finalData.kyc.documents');
         // And finalData is the wizard's draft, not a user document.
         expect(code('src/app/export/onboarding/steps/KYCVerificationStep.tsx'))
             .toMatch(/onNext\(\{\s*kyc:/);

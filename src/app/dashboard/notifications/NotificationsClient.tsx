@@ -1,0 +1,508 @@
+"use client";
+
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import {
+    Bell, Check, Trash2, Filter, Eye,
+    Package, DollarSign, AlertCircle, TrendingUp,
+    Users, Loader2, Info, CheckCircle, XCircle,
+    Landmark, BookOpen,
+} from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { getMyNotifications, deleteMyNotification } from "@/app/actions/my-data";
+import { COLLECTIONS } from "@/lib/types/firestore";
+import { useToast } from "@/contexts/ToastContext";
+// #534 NOTIFICATION_PAGE_SIZE comes from here, not from the notifications
+// service: this is a "use client" file, and importing the service pulled
+// supabase-db into the client bundle. #382's ratchet caught it.
+import { isNotificationVisible, getVisibleFilterTabs, NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
+import { startVisibilityAwareInterval } from "@/hooks/usePolling";
+import { useServerSeed } from "@/hooks/useServerSeed";
+
+/* ──────────────────────────────────────────────────────────────
+ * Types
+ * ────────────────────────────────────────────────────────────── */
+type NotifType =
+    | "info" | "success" | "warning" | "error"
+    | "loan" | "payment" | "wave" | "withdrawal"
+    | "land" | "escrow" | "dispute"
+    | "order" | "academy" | "cooperative" | "system"
+    | "export" | "payout" | "farm_nation" | "marketplace"
+    | "general" | "transaction";
+
+interface Notification {
+    id: string;
+    userId: string;
+    type: NotifType;
+    title: string;
+    message: string;
+    link?: string;
+    linkText?: string;
+    read: boolean;
+    createdAt: any;
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Helpers
+ * ────────────────────────────────────────────────────────────── */
+function getIcon(type: NotifType) {
+    switch (type) {
+        case "order": case "transaction": case "marketplace": return <Package className="w-5 h-5" />;
+        case "payment": case "payout": return <DollarSign className="w-5 h-5" />;
+        case "warning": case "dispute": return <AlertCircle className="w-5 h-5" />;
+        case "wave": return <TrendingUp className="w-5 h-5" />;
+        case "cooperative": return <Users className="w-5 h-5" />;
+        case "academy": return <BookOpen className="w-5 h-5" />;
+        case "loan": case "export": return <Landmark className="w-5 h-5" />;
+        case "success": return <CheckCircle className="w-5 h-5" />;
+        case "error": case "withdrawal": return <XCircle className="w-5 h-5" />;
+        case "info": default: return <Info className="w-5 h-5" />;
+    }
+}
+
+function getIconColor(type: NotifType): string {
+    switch (type) {
+        case "order": case "transaction": return "text-blue-600 bg-blue-100";
+        case "marketplace": return "text-indigo-600 bg-indigo-100";
+        case "payment": case "payout": return "text-green-600 bg-green-100";
+        case "warning": return "text-yellow-600 bg-yellow-100";
+        case "error": case "dispute": return "text-red-600 bg-red-100";
+        case "wave": return "text-purple-600 bg-purple-100";
+        case "cooperative": return "text-indigo-600 bg-indigo-100";
+        case "academy": return "text-pink-600 bg-pink-100";
+        case "loan": case "export": return "text-cyan-600 bg-cyan-100";
+        case "success": return "text-emerald-600 bg-emerald-100";
+        default: return "text-gray-600 bg-gray-100";
+    }
+}
+
+function toDate(val: any): Date {
+    if (!val) return new Date();
+    if (val instanceof Date) return val;
+    if (val?.toDate) return val.toDate();
+    if (val?.seconds) return new Date(val.seconds * 1000);
+    return new Date(val);
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * All possible filter tabs (label config)
+ * ────────────────────────────────────────────────────────────── */
+const ALL_FILTER_TABS: { key: string; label: string }[] = [
+    { key: "all",         label: "All" },
+    { key: "unread",      label: "Unread" },
+    { key: "payment",     label: "Payments" },
+    { key: "order",       label: "Orders" },
+    { key: "wave",        label: "WAVE" },
+    { key: "cooperative", label: "Cooperative" },
+    { key: "academy",     label: "Academy" },
+    { key: "loan",        label: "Loans" },
+    { key: "export",      label: "Export" },
+    { key: "farm_nation", label: "Farm Nation" },
+    { key: "dispute",     label: "Disputes" },
+];
+
+/**
+ * One page of notifications, as the read returns it: ONE MORE than the window,
+ * so "there are older ones" is answered by the read rather than guessed.
+ *
+ * Split in one place, used by the server seed and by every poll, so the two
+ * cannot come to disagree about where the window ends.
+ */
+function windowOf(rows: any[], size: number) {
+    return { rows: rows.slice(0, size) as Notification[], reachedEnd: rows.length <= size };
+}
+
+export default function NotificationsClient({ initial = null }: { initial?: any[] | null }) {
+    const { data: session, status } = useSession();
+    const router = useRouter();
+    const { showToast } = useToast();
+
+    //   #558 — the server already read the first window.
+    const seed = initial ? windowOf(initial, NOTIFICATION_PAGE_SIZE) : null;
+    const takeSeed = useServerSeed(initial);
+
+    const [notifications, setNotifications] = useState<Notification[]>(seed?.rows ?? []);
+    const [loading, setLoading] = useState(seed === null);
+    const [filter, setFilter] = useState("all");
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    /**
+     *   #534 HOW MANY ROWS THIS SCREEN ASKS FOR.
+     *
+     *   It asked for 200 and rendered every one, on an eight-second poll. The
+     *   owner opened it and got two months of "New WAVE Application" in a single
+     *   column, back to the first submission — notifyAdmins writes one row per
+     *   admin per application, nothing ages a notification out, and this screen
+     *   put no window on what it showed.
+     *
+     *   A page at a time, with Show more. Nothing is hidden and nothing is
+     *   deleted; the older rows are one click away instead of all at once.
+     */
+    const [pageSize, setPageSize] = useState(NOTIFICATION_PAGE_SIZE);
+    const [reachedEnd, setReachedEnd] = useState(seed?.reachedEnd ?? false);
+
+    const userId = session?.user?.id;
+    // Prevent duplicate auto-read calls on re-renders
+    const autoReadDoneRef = useRef(false);
+
+    /* ── Subscription data from session (synced live via auth.config) ── */
+    const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
+    const roles = (session?.user as any)?.roles as string[] | undefined;
+
+    /* ── Real-time Firestore listener ── */
+    useEffect(() => {
+        if (status === "unauthenticated") { router.push("/auth/login"); return; }
+        if (!userId) return;
+
+        // Polls a session-scoped server action instead of querying Supabase
+        // from the browser. Same 8s cadence as the listener it replaces.
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                //   One over the window, so "there are older ones" is answered
+                //   by the read rather than guessed from the length.
+                const data = await getMyNotifications(pageSize + 1);
+                if (!cancelled) {
+                    const next = windowOf(data, pageSize);
+                    setReachedEnd(next.reachedEnd);
+                    setNotifications(next.rows);
+                }
+            } catch (error) {
+                console.error("Notification load error:", error);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        /**
+         *   #558 A SEEDED POLLER MUST NOT TICK IMMEDIATELY.
+         *
+         *   This is the one screen in the ledger whose mount read is a POLL, and
+         *   seeding a poller only removes the empty first paint unless the first
+         *   tick is also suppressed — otherwise the browser re-asks, 0ms after
+         *   hydrating, for what the server just sent. The seed IS the tick that
+         *   would have happened, so the interval starts at 8s instead of now.
+         *
+         *   Taken once, so widening the window with Show more — which re-runs
+         *   this effect through `pageSize` — polls immediately, as it must.
+         */
+        const seeded = takeSeed() !== null;
+
+        //   #545 Paused while the tab is hidden — see hooks/usePolling. This
+        //   was one of the five user-facing pollers #538 listed as debt.
+        const stopPolling = startVisibilityAwareInterval(load, 8000, { immediate: !seeded });
+        return () => {
+            cancelled = true;
+            stopPolling();
+        };
+    }, [userId, status, router, pageSize, takeSeed]);
+
+    /* ── Which tabs to show based on user's module subscriptions ── */
+    const visibleTabs = useMemo(() => {
+        const visibleKeys = new Set(getVisibleFilterTabs(serviceRegistrations, roles));
+        return ALL_FILTER_TABS.filter(t => visibleKeys.has(t.key));
+    }, [serviceRegistrations, roles]);
+
+    const visibleTabKeys = useMemo(
+        () => new Set(visibleTabs.map(t => t.key)),
+        [visibleTabs]
+    );
+
+    /* ── Filtered + subscription-gated list ── */
+    const filtered = notifications.filter(n => {
+        // Subscription gate — hide module notifications the user isn't subscribed to
+        if (!isNotificationVisible(n.type, serviceRegistrations, roles)) return false;
+
+        // Tab filter
+        if (filter === "all") return true;
+        if (filter === "unread") return !n.read;
+        if (filter === "payment") return n.type === "payment" || n.type === "payout" || n.type === "transaction";
+        if (filter === "order") return n.type === "order" || n.type === "transaction";
+        if (filter === "farm_nation") return n.type === "farm_nation" || n.type === "land";
+        if (filter === "dispute") return n.type === "dispute";
+        if (filter === "export") return n.type === "export";
+        return n.type === filter;
+    });
+
+    const unreadCount = notifications.filter(n =>
+        !n.read && isNotificationVisible(n.type, serviceRegistrations, roles)
+    ).length;
+
+    /* ── If current tab is now hidden (subscription changed), reset to "all" ── */
+    useEffect(() => {
+        if (filter !== "all" && !visibleTabKeys.has(filter)) {
+            setFilter("all");
+        }
+    }, [filter, visibleTabKeys]);
+
+    /* ── Auto-mark all visible unread as read when the page first loads ── */
+    useEffect(() => {
+        if (autoReadDoneRef.current || !userId || notifications.length === 0) return;
+
+        const unreadVisible = notifications.filter(n =>
+            !n.read && isNotificationVisible(n.type, serviceRegistrations, roles)
+        );
+        if (unreadVisible.length === 0) return;
+
+        autoReadDoneRef.current = true;
+
+        // Optimistic update — reflect instantly in UI
+        const ids = unreadVisible.map(n => n.id);
+        setNotifications(prev =>
+            prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n)
+        );
+
+        // Persist in the background without blocking the UI
+        import("@/app/actions/notifications").then(({ markAllAsReadAction }) => {
+            markAllAsReadAction(userId).catch(() => {
+                // Non-fatal — onSnapshot will self-heal on next open
+            });
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notifications, userId]);
+
+    /* ── Actions ── */
+    /**
+     *   #406 THE TOAST SAID "FAILED" AND THE ROW STAYED READ.
+     *
+     *   These three handlers write the optimistic change, then report a refusal
+     *   in a toast — and leave the change on screen. The user is told the write
+     *   failed while looking at the result of it. Deletion was the same: the row
+     *   vanished from the list and came back on the next load.
+     *
+     *   Each one now reverts exactly what it changed. The toast keeps its job of
+     *   saying what went wrong; the list keeps its job of showing what is true.
+     */
+    async function handleMarkAsRead(id: string) {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+        const revert = () => setNotifications(prev =>
+            prev.map(n => n.id === id ? { ...n, read: false } : n));
+        try {
+            const { markNotificationAsReadAction } = await import("@/app/actions/notifications");
+            const result = await markNotificationAsReadAction(id);
+            if (!result.success) {
+                showToast(result.error || "Failed to mark as read", "error");
+                revert();
+            }
+        } catch {
+            showToast("Failed to mark as read", "error");
+            revert();
+        }
+    }
+
+    async function handleMarkAllAsRead() {
+        if (!userId) return;
+        // Only the ones this call changes. Reverting the whole list would turn
+        // already-read notifications back to unread.
+        const changed = notifications.filter(n => !n.read).map(n => n.id);
+        if (changed.length === 0) return;
+
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        const revert = () => setNotifications(prev =>
+            prev.map(n => changed.includes(n.id) ? { ...n, read: false } : n));
+        try {
+            const { markAllAsReadAction } = await import("@/app/actions/notifications");
+            const result = await markAllAsReadAction(userId);
+            if (!result.success) {
+                showToast(result.error || "Failed to mark all as read", "error");
+                revert();
+            }
+        } catch {
+            showToast("Failed to mark all as read", "error");
+            revert();
+        }
+    }
+
+    async function handleDelete(id: string) {
+        setDeletingId(id);
+        // #406. The row was removed optimistically and never put back, so a
+        // refused delete emptied it from the list while it still existed — and
+        // it reappeared on the next load. Restored at its original index so a
+        // failure does not silently reorder the list either.
+        const index = notifications.findIndex(n => n.id === id);
+        const removed = index > -1 ? notifications[index] : null;
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        const revert = () => {
+            if (!removed) return;
+            setNotifications(prev => {
+                if (prev.some(n => n.id === id)) return prev;
+                const next = [...prev];
+                next.splice(Math.min(index, next.length), 0, removed);
+                return next;
+            });
+        };
+        try {
+            // Ownership is verified server-side; the browser can no longer
+            // delete an arbitrary notification id.
+            const result = await deleteMyNotification(id);
+            if (!result.success) {
+                showToast(result.error || "Failed to delete notification", "error");
+                revert();
+            }
+        } catch {
+            showToast("Failed to delete notification", "error");
+            revert();
+        } finally {
+            setDeletingId(null);
+        }
+    }
+
+    if (loading || status === "loading") {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-50 py-8 px-4">
+            <div className="max-w-4xl mx-auto">
+
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900 mb-1">Notifications</h1>
+                        <p className="text-gray-500 text-sm">
+                            {unreadCount > 0
+                                ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
+                                : "All caught up!"}
+                        </p>
+                    </div>
+                    {unreadCount > 0 && (
+                        <button
+                            onClick={handleMarkAllAsRead}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition flex items-center gap-2 text-sm font-semibold"
+                        >
+                            <Check className="w-4 h-4" />
+                            Mark All Read
+                        </button>
+                    )}
+                </div>
+
+                {/* Filter Tabs — only shows tabs for subscribed modules */}
+                <div className="bg-white rounded-xl p-3 shadow-sm mb-5 overflow-x-auto">
+                    <div className="flex items-center gap-2 min-w-max">
+                        <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+                        {visibleTabs.map((f) => (
+                            <button
+                                key={f.key}
+                                onClick={() => setFilter(f.key)}
+                                className={`px-3 py-1.5 rounded-lg font-medium text-sm transition whitespace-nowrap ${
+                                    filter === f.key
+                                        ? "bg-blue-600 text-white shadow-sm"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
+                            >
+                                {f.label}
+                                {f.key === "unread" && unreadCount > 0 && (
+                                    <span className="ml-1.5 px-1.5 py-0.5 bg-white/20 rounded-full text-xs">
+                                        {unreadCount}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Notifications List */}
+                {filtered.length === 0 ? (
+                    <div className="bg-white rounded-xl p-12 text-center shadow-sm">
+                        <Bell className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-gray-900 mb-1">No Notifications</h3>
+                        <p className="text-gray-500 text-sm">
+                            {filter === "all" ? "You're all caught up!" : `No ${filter} notifications`}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {filtered.map((notif) => (
+                            <div
+                                key={notif.id}
+                                className={`rounded-xl p-5 shadow-sm transition hover:shadow-md ${
+                                    !notif.read ? "border-l-4 border-blue-500 bg-blue-50/20" : "border border-slate-100 bg-white"
+                                }`}
+                            >
+                                <div className="flex items-start gap-4">
+                                    {/* Icon */}
+                                    <div className={`p-2.5 rounded-xl shrink-0 ${getIconColor(notif.type)}`}>
+                                        {getIcon(notif.type)}
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-3 mb-1">
+                                            <h3 className={`font-bold text-sm break-words ${!notif.read ? "text-gray-900" : "text-gray-600"}`}>
+                                                {notif.title}
+                                            </h3>
+                                            <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                                                {formatDistanceToNow(toDate(notif.createdAt), { addSuffix: true })}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-gray-500 leading-relaxed mb-3 break-words">
+                                            {notif.message}
+                                        </p>
+
+                                        {/* Actions */}
+                                        <div className="flex items-center flex-wrap gap-2">
+                                            {notif.link && (
+                                                <button
+                                                    onClick={() => router.push(notif.link!)}
+                                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                    {notif.linkText || "View"}
+                                                </button>
+                                            )}
+                                            {!notif.read && (
+                                                <button
+                                                    onClick={() => handleMarkAsRead(notif.id)}
+                                                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5"
+                                                >
+                                                    <Check className="w-3.5 h-3.5" />
+                                                    Mark Read
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleDelete(notif.id)}
+                                                disabled={deletingId === notif.id}
+                                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 disabled:opacity-50"
+                                            >
+                                                {deletingId === notif.id
+                                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    : <Trash2 className="w-3.5 h-3.5" />
+                                                }
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {/*
+                          *   #534 The way to the older ones.
+                          *
+                          *   Before this the screen fetched 200 and rendered all
+                          *   of them, so a two-month backlog arrived in one
+                          *   column. Nothing is hidden — the rows are still
+                          *   there, still ordered newest first, and this asks
+                          *   for the next page. It is shown only when the read
+                          *   itself said there are more, so it never appears
+                          *   over an empty result.
+                          */}
+                        {!reachedEnd && filter === "all" && (
+                            <button
+                                onClick={() => setPageSize((n) => n + NOTIFICATION_PAGE_SIZE)}
+                                className="w-full py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+                            >
+                                Show older notifications
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
