@@ -292,6 +292,25 @@ describe('#309 — the action whose NAME said it recorded', () => {
             bankDetails: { bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi' },
         });
 
+        /**
+         *   #537 The account number below is now behind
+         *        mayRevealMemberPii("cooperatives:approve_loans"), which re-reads
+         *        the caller's roles from the database instead of trusting the
+         *        token. This suite signed in through `requireSession` alone, so
+         *        the live read found nothing and the rule withheld the field —
+         *        correctly, but it emptied the evidence THIS test is about.
+         *
+         *        The caller is therefore signed in at the live door too. It has
+         *        to be done through a dynamic import: the beforeEach above calls
+         *        jest.resetModules(), so a top-level `auth` would be a different
+         *        copy from the one requireAdmin resolves inside the action.
+         */
+        store.seed(COLLECTIONS.USERS, ADMIN, { roles: ['super_admin'], email: 'a@e.com' });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve({
+            user: { id: ADMIN, email: 'a@e.com', roles: ['super_admin'] },
+        }));
+
         const { getAdminLoanApplicationsExportAction } =
             await import('@/app/actions/cooperative/_loans_applications');
         const res: any = await getAdminLoanApplicationsExportAction({ statusFilter: 'all' });

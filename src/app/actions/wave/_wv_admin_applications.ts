@@ -538,6 +538,18 @@ async function _getStandardWaveApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
+        /**
+         *   #537 THE SIBLING LIST IN THIS FILE WAS CLOSED IN #535; THIS ONE WAS
+         *        NOT, AND IT IS THE BIGGER LIST.
+         *
+         *        The gate above admits every admin role. This reader then
+         *        injected `canonical.bankDetails` into BOTH the `user` block and
+         *        the `data` block of every row, while the sibling forty lines
+         *        further up spreads the same object only when
+         *        mayRevealMemberPii("wave:approve_applications") allows it.
+         */
+        const maySeeBankDetails = await mayRevealMemberPii("wave:approve_applications");
+
         const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
@@ -885,6 +897,20 @@ async function _getStandardWaveApplicationsAction(options: {
             const uData = userMap.get(app.userId as string) || {};
             const canonical = extractCanonicalUser(uData, app);
 
+            //   #537 The application row's OWN bank keys go with the injected
+            //   ones. Unlike the loans queue these are not hypothetical: the
+            //   approval path in this same file writes `appData.accountNumber`
+            //   and `appData.bankCode` onto the row, so leaving `...app`
+            //   unfiltered would hand back the account number that the
+            //   `bankDetails` gate two lines down had just withheld.
+            const { bankName: _bn, accountNumber: _an, accountName: _acn,
+                bankCode: _bc, bankDetails: _bd, ...appWithoutBank } = app;
+
+            //   `canonical` carries its own `bankDetails`, so spreading it
+            //   unfiltered below would put back exactly what the gate withholds.
+            //   Written that way first; the withheld-case test caught it.
+            const { bankDetails: _cbd, ...canonicalWithoutBank } = canonical;
+
             return {
                 id: app.id,
                 user: {
@@ -897,13 +923,14 @@ async function _getStandardWaveApplicationsAction(options: {
                     state: canonical.address.state,
                     lga: canonical.address.lga,
                     gender: app.gender || uData.gender || canonical.gender || "",
-                    bankDetails: canonical.bankDetails
+                    ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                 },
                 status: app.status || "pending",
                 data: {
-                    ...app,
-                    ...canonical, // Inject SSOT fields directly into the data object
-                    bankDetails: canonical.bankDetails
+                    ...(maySeeBankDetails ? app : appWithoutBank),
+                    // Inject SSOT fields directly into the data object
+                    ...(maySeeBankDetails ? canonical : canonicalWithoutBank),
+                    ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                 }
             };
         });

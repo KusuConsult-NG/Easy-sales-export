@@ -32,6 +32,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
+import { auth } from '@/lib/auth';
 
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null,
@@ -44,6 +45,21 @@ let store: FakeDbHandle;
 
 const APPS = COLLECTIONS.ACADEMY_APPLICATIONS;
 
+/**
+ * Sign the caller in at BOTH doors.
+ *
+ *   #537 The pending queue's bank details now go through
+ *        mayRevealMemberPii("academy:approve_applications"), which re-reads the
+ *        caller's roles from the database rather than trusting the token. This
+ *        helper set only `requireSession`, so the live read found no profile
+ *        row, the rule failed closed — correctly — and the two hydration tests
+ *        below lost the object they exist to measure.
+ *
+ *        Seeding the caller is the honest repair: those two tests are about
+ *        which SOURCE a bank detail is taken from, not about who may see it, so
+ *        the caller they run as has to be someone who may. Who may is asserted
+ *        separately, in the-account-name-was-the-account-number.test.ts.
+ */
 function actAs(id: string | null, roles: string[] = ['super_admin']): void {
     (globalThis as {
         mockRequireSession: { mockImplementation: (f: () => unknown) => void };
@@ -52,6 +68,12 @@ function actAs(id: string | null, roles: string[] = ['super_admin']): void {
             ? { session: null, error: { error: 'Authentication required' } }
             : { session: { user: { id, roles, email: `${id}@example.com`, name: id } }, error: null },
     ));
+    (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve(
+        id === null ? null : { user: { id, roles, email: `${id}@example.com` } },
+    ));
+    if (id !== null) {
+        store.seed(COLLECTIONS.USERS, id, { roles, email: `${id}@example.com` });
+    }
 }
 
 beforeEach(() => {

@@ -639,7 +639,31 @@ export async function getAdminLoanApplicationsAction(options: {
             
             const bankName = user.bankDetails?.bankName || app.bankName || user.bankName || user.bankAccount?.bankName || "N/A";
             const accountNumber = user.bankDetails?.accountNumber || app.accountNumber || user.accountNumber || user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A";
-            const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountNumber || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A");
+            /**
+             *   #537 THE ACCOUNT NAME AN APPROVER READ WAS THE ACCOUNT NUMBER.
+             *
+             *        The fifth term of this chain was `bankAccount?.accountNumber`.
+             *        Its own sibling — getAdminLoanApplicationsExportAction, 190
+             *        lines below, enriching the SAME rows for the CSV — reads
+             *        `bankAccount?.accountName`, and so does every other one of
+             *        the twenty sites in this codebase that resolves an account
+             *        name. This was the only one that did not.
+             *
+             *        It bit a borrower whose bank details live only under
+             *        `user.bankAccount`: no `bankDetails`, no top-level
+             *        `bankAccountName`. `accountNumber` is always present on that
+             *        shape, so the wrong term never fell through — it SHADOWED
+             *        the `user.fullName` fallback immediately after it, which is
+             *        the value that would otherwise have been right.
+             *
+             *        What the approver saw on /admin/cooperatives/loans was a
+             *        string of digits in the Account Name field, next to the same
+             *        digits in Account Number, on the screen where a disbursement
+             *        is authorised. Exporting the identical row to CSV showed the
+             *        real name. Two doors onto one field, disagreeing — and the
+             *        one a human reads before releasing money was the wrong one.
+             */
+            const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A");
             const bankCode = user.bankDetails?.bankCode || app.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A";
 
             const bankDetails = maySeeBankDetails
@@ -735,6 +759,31 @@ export async function getAdminLoanApplicationsExportAction(options: {
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
+
+        /**
+         *   #537 THE EXPORT BUTTON WAS THE WAY ROUND THE RESTRICTION.
+         *
+         *        getAdminLoanApplicationsAction — the queue this exports — puts
+         *        bank details behind mayRevealMemberPii("cooperatives:approve_loans"),
+         *        on roles re-read from the database. This function attached
+         *        bankName, accountNumber and accountName to EVERY row with no
+         *        check at all beyond `isAdmin(session.user.roles)`, which is the
+         *        stale JWT claim #356 established can be hours out of date.
+         *
+         *        So an admin role that the screen refuses to show an account
+         *        number to could press Export and download all of them, and a
+         *        revoked admin could do it until their token expired.
+         *
+         *        #535 CLOSED SIXTEEN OF THESE AND ITS RATCHET SAID THIS FILE WAS
+         *        DONE, because the ratchet asked whether the FILE CONTAINS
+         *        `mayRevealMemberPii(`. It does — in the other reader. A file
+         *        with two exports, one gated, passed a containment check while
+         *        half of it stayed open. That is the same instrument weakness
+         *        that let the settings mutant survive in #532: asking whether
+         *        the text is present rather than whether the code runs it. The
+         *        check is per-function now.
+         */
+        const maySeeBankDetails = await mayRevealMemberPii("cooperatives:approve_loans");
 
         let query = db.collection(COLLECTIONS.LOAN_APPLICATIONS).orderBy("appliedAt", "desc");
 
@@ -832,14 +881,25 @@ export async function getAdminLoanApplicationsExportAction(options: {
                 bankCode: loan.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A"
             };
 
+            //   #537 The row's OWN bank keys go too, not just the enriched ones.
+            //   No writer of either collection stamps them today, so this strips
+            //   nothing at present — but `accountNumber` is read off `loan` three
+            //   lines up, so something once did, and a gate that only covers the
+            //   copies it adds is the "flattened copies under other names"
+            //   omission #535 had to correct on the screen door.
+            const { bankName: _bn, accountNumber: _an, accountName: _acn, bankCode: _bc,
+                bankDetails: _bd, ...loanWithoutBank } = loan as Record<string, unknown>;
+
             return {
-                ...loan,
+                ...(maySeeBankDetails ? loan : loanWithoutBank),
                 phone: user.phone || user.phoneNumber || user.kyc?.phoneNumber || user.kyc?.phone || "",
                 state: user.address?.state || user.stateOfOrigin || "",
                 lga: user.address?.lga || user.lga || "",
-                bankName: bankDetails?.bankName || "",
-                accountNumber: bankDetails?.accountNumber || "",
-                accountName: bankDetails?.accountName || ""
+                ...(maySeeBankDetails ? {
+                    bankName: bankDetails?.bankName || "",
+                    accountNumber: bankDetails?.accountNumber || "",
+                    accountName: bankDetails?.accountName || ""
+                } : {}),
             };
         });
 

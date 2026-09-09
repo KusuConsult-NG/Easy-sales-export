@@ -28,6 +28,21 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
             return { error: "Unauthorized: Permission required - users:update", success: false as const , data: null };
         }
 
+        /**
+         *   #537 THE THIRD READER IN THIS FILE, AND THE ONLY UNGATED ONE.
+         *
+         *        The two below both put bank details behind
+         *        mayRevealMemberPii("academy:approve_applications"). This one —
+         *        the PENDING queue, the list an admin actually works from —
+         *        attached bankName, accountNumber, accountName and bankCode to
+         *        every applicant with nothing but the gate above, which admits
+         *        any `academy_admin` on the stale token.
+         *
+         *        #535's ratchet passed this file because the file CONTAINS
+         *        `mayRevealMemberPii(`. It does, twice, in the other two.
+         */
+        const maySeeBankDetails = await mayRevealMemberPii("academy:approve_applications");
+
         const snapshot = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where("status", "==", "pending")
             .get();
@@ -51,13 +66,13 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
             const uData = userMap.get(app.userId as string) || {};
             const pi = (app.personalInfo || {}) as any;
             
-            // Canonical bankDetails injection
-            const bankDetails = uData.bankDetails || {
+            // Canonical bankDetails injection, for the callers allowed it.
+            const bankDetails = maySeeBankDetails ? (uData.bankDetails || {
                 bankName: uData.bankName || uData.bankAccount?.bankName || "N/A",
                 accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
                 accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
                 bankCode: uData.bankCode || uData.bankAccount?.bankCode || "N/A"
-            };
+            }) : undefined;
 
             return {
                 ...app,
@@ -66,7 +81,7 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
                     email: uData.email || pi.email || "N/A",
                     phone: uData.phone || uData.phoneNumber || pi.phone || "N/A"
                 },
-                bankDetails
+                ...(bankDetails ? { bankDetails } : {}),
             };
         });
 
