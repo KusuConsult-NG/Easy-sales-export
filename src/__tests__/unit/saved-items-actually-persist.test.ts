@@ -72,8 +72,8 @@ const BUYER_DASHBOARD = 'src/app/marketplace/buyer/dashboard/BuyerDashboardClien
 const BUYER_STATS = 'src/app/actions/marketplace/_mp_buyer_dashboard.ts';
 const SELLER_API = 'src/app/api/marketplace/sellers/[sellerId]/route.ts';
 const PROPERTIES_PAGE = 'src/app/farm-nation/properties/page.tsx';
-const SAVED_SELLERS_PAGE = 'src/app/marketplace/buyer/saved/page.tsx';
-const SAVED_PROPERTIES_PAGE = 'src/app/farm-nation/saved/page.tsx';
+const SAVED_SELLERS_PAGE = 'src/app/marketplace/buyer/saved/SavedSellersClient.tsx';
+const SAVED_PROPERTIES_PAGE = 'src/app/farm-nation/saved/SavedPropertiesClient.tsx';
 
 const SAVED = COLLECTIONS.SAVED_ITEMS;
 const LISTINGS = COLLECTIONS.LAND_LISTINGS;

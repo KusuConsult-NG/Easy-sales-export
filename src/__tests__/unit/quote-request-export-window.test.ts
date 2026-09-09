@@ -208,8 +208,8 @@ describe('a marketplace product still takes the product branch', () => {
 
 describe('the quote is reachable once it is written', () => {
     const root = process.cwd();
-    const BUYER_PAGE = 'src/app/marketplace/buyer/quotes/page.tsx';
-    const SELLER_PAGE = 'src/app/marketplace/seller/quotes/page.tsx';
+    const BUYER_PAGE = 'src/app/marketplace/buyer/quotes/BuyerQuotesClient.tsx';
+    const SELLER_PAGE = 'src/app/marketplace/seller/quotes/SellerQuotesClient.tsx';
 
     it('both list pages exist', () => {
         // They did not. This is the whole of the "written and invisible" defect:
