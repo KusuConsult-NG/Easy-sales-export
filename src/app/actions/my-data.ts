@@ -150,6 +150,71 @@ export async function getMyDashboard(): Promise<MyDashboard> {
     };
 }
 
+/** The three values the nav draws, and nothing else. */
+export interface MyNavSummary {
+    serviceRegistrations: Record<string, any>;
+    unreadNotifications: number;
+    unreadMessages: number;
+}
+
+/**
+ * The nav's three values in ONE call.
+ *
+ *   #539 THE NAV POLLED THREE THINGS THE DASHBOARD WAS ALREADY FETCHING.
+ *
+ *        DashboardNav ran three separate pollers — service registrations (8s),
+ *        unread messages (8s) and, through useUnreadNotifications, unread
+ *        notifications (10s). getMyDashboard returns ALL THREE. On /dashboard
+ *        every one of them was therefore fetched TWICE, about every eight
+ *        seconds, for as long as the screen was open.
+ *
+ *        #453 collapsed the dashboard PAGE's eight actions into one round trip
+ *        and #538 stopped the polling in hidden tabs. Neither could see this,
+ *        because the duplication is not inside one component: the nav lives in
+ *        the LAYOUT and the tiles live in the PAGE, and nothing was shared
+ *        between them.
+ *
+ *        This is the same "several doors onto one thing" the audit keeps
+ *        finding. It costs latency rather than correctness, which is why it
+ *        survived so long — nothing was ever WRONG on the screen.
+ *
+ *   WHY A SECOND ACTION RATHER THAN REUSING getMyDashboard EVERYWHERE.
+ *   DashboardNav is also mounted by /messages, where there is no dashboard to
+ *   draw. Sharing getMyDashboard there would have replaced three cheap queries
+ *   with eight, so the nav asks for what the nav needs. The three functions are
+ *   the same ones getMyDashboard calls, so there is still one definition of
+ *   each value — this composes them, it does not restate them.
+ */
+export async function getMyNavSummary(): Promise<MyNavSummary> {
+    const empty: MyNavSummary = {
+        serviceRegistrations: {}, unreadNotifications: 0, unreadMessages: 0,
+    };
+
+    // The one session check, for the same reason getMyDashboard has one.
+    if (!(await currentUserId())) return empty;
+
+    // allSettled, not all: one failing count must cost its own badge and not
+    // blank the whole navigation.
+    const settled = await Promise.allSettled([
+        getMyServiceRegistrations(),
+        getMyUnreadNotificationCount(),
+        getMyUnreadMessageCount(),
+    ]);
+
+    const at = <T,>(index: number, fallback: T, name: string): T => {
+        const result = settled[index];
+        if (result.status === "fulfilled") return result.value as T;
+        logger.error(`[my-data] nav summary: ${name} failed`, { reason: result.reason });
+        return fallback;
+    };
+
+    return {
+        serviceRegistrations: at(0, {}, "service registrations"),
+        unreadNotifications: at(1, 0, "unread notification count"),
+        unreadMessages: at(2, 0, "unread message count"),
+    };
+}
+
 /**
  * Module subscriptions driving sidebar and dashboard navigation.
  * Replaces a live document listener on the caller's own user record.

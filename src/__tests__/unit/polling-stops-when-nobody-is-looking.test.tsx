@@ -388,13 +388,27 @@ describe('#538 — no poller goes back to a bare setInterval', () => {
         }
     });
 
-    it('AND THE DASHBOARD PAGE — the most expensive one — USES THE PRIMITIVE', () => {
-        const src = stripComments(
+    it('AND THE DASHBOARD\'S POLL — the most expensive one — IS VISIBILITY-AWARE', () => {
+        //   #539 moved this poll OUT of the page and into NavSummaryProvider,
+        //   because the nav above the page was fetching three of the same
+        //   values separately. The property #538 established travels with it:
+        //   the poll must still pause when nobody is looking, wherever it lives.
+        const page = stripComments(
             readFileSync(join(ROOT, 'src/app/dashboard/page.tsx'), 'utf-8'),
-            { label: 'dashboard' },
+            { label: 'dashboard page' },
         );
-        expect(src).toContain('startVisibilityAwareInterval(');
-        expect(/setInterval\s*\(/.test(src)).toBe(false);
+        const provider = stripComments(
+            readFileSync(join(ROOT, 'src/contexts/NavSummaryContext.tsx'), 'utf-8'),
+            { label: 'nav summary provider' },
+        );
+
+        //   The page polls nothing at all now.
+        expect(/setInterval\s*\(/.test(page)).toBe(false);
+        expect(/getMyDashboard\s*\(/.test(page)).toBe(false);
+
+        //   And the provider that took it over uses the shared hook.
+        expect(provider).toContain('usePolling(');
+        expect(/setInterval\s*\(/.test(provider)).toBe(false);
     });
 
     it('AND NO NEW HAND-ROLLED POLLER HAS APPEARED', () => {

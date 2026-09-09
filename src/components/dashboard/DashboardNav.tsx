@@ -30,6 +30,7 @@ import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 import { usePolling } from "@/hooks/usePolling";
+import { useNavSummary } from "@/contexts/NavSummaryContext";
 
 interface NavItem {
     label: string;
@@ -88,7 +89,6 @@ function getModuleLinks(roles: UserRole[], serviceRegs: any, gender?: string): {
 export default function DashboardNav() {
     const { data: session } = useSession();
     const pathname = usePathname();
-    const [unreadMessages, setUnreadMessages] = useState(0);
     const [mobileOpen, setMobileOpen] = useState(false);
 
     const userId = session?.user?.id;
@@ -97,24 +97,42 @@ export default function DashboardNav() {
     const userEmail = session?.user?.email || "";
 
 
-    const { unreadCount } = useUnreadNotifications(userId);
-    const [serviceRegs, setServiceRegs] = useState<any>({});
+    /**
+     *   #539 THIS NAV POLLED THREE THINGS THE DASHBOARD ALREADY HAD.
+     *
+     *   Service registrations (8s), unread messages (8s) and unread
+     *   notifications (10s) were three pollers here, and getMyDashboard —
+     *   polled by the page one level down — returns all three. Every value on
+     *   this nav was fetched twice on /dashboard, about every eight seconds.
+     *
+     *   The shared poll now lives in NavSummaryProvider, mounted by the layout
+     *   ABOVE both this nav and the page, because a page cannot hand anything
+     *   to its own parent.
+     *
+     *   THE FALLBACK IS REAL, NOT DEFENSIVE DECORATION. `useNavSummary()`
+     *   returns null wherever no provider is mounted, and this component then
+     *   polls for itself exactly as it used to. That is what keeps this change
+     *   from silently emptying the badges on any screen that mounts the nav and
+     *   was not wrapped. Both paths are asserted in the tests.
+     */
+    const shared = useNavSummary();
+    const usingSharedPoll = shared !== null;
 
-    // Service registrations, via a session-scoped server action rather than a
-    // direct browser query. Same 8s cadence as the listener it replaces.
-    //
-    //   #538 …but only while the tab is being looked at. This nav is mounted on
-    //   every /dashboard and /messages screen, so its three pollers ran in every
-    //   background tab for as long as the browser stayed open. See usePolling.
+    const [ownServiceRegs, setOwnServiceRegs] = useState<any>({});
+    const [ownUnreadMessages, setOwnUnreadMessages] = useState(0);
+    const { unreadCount: ownUnreadCount } = useUnreadNotifications(
+        usingSharedPoll ? undefined : userId,
+    );
+
+    // Fallback polls — disabled entirely whenever the shared poll is present.
     usePolling(async () => {
         if (!userId) return;
         try {
-            const regs = await getMyServiceRegistrations();
-            setServiceRegs(regs);
+            setOwnServiceRegs(await getMyServiceRegistrations());
         } catch (error) {
             console.error("DashboardNav service registrations failed:", error);
         }
-    }, 8000, { enabled: !!userId, restartKey: userId ?? "" });
+    }, 8000, { enabled: !!userId && !usingSharedPoll, restartKey: userId ?? "" });
 
     // Unread messages. The browser query this replaces lost its
     // array-contains filter silently, so it counted every conversation on the
@@ -122,12 +140,15 @@ export default function DashboardNav() {
     usePolling(async () => {
         if (!userId) return;
         try {
-            const count = await getMyUnreadMessageCount();
-            setUnreadMessages(count);
+            setOwnUnreadMessages(await getMyUnreadMessageCount());
         } catch (error) {
             console.error("DashboardNav unread messages failed:", error);
         }
-    }, 8000, { enabled: !!userId, restartKey: userId ?? "" });
+    }, 8000, { enabled: !!userId && !usingSharedPoll, restartKey: userId ?? "" });
+
+    const serviceRegs = shared ? shared.serviceRegistrations : ownServiceRegs;
+    const unreadMessages = shared ? shared.unreadMessages : ownUnreadMessages;
+    const unreadCount = shared ? shared.unreadNotifications : ownUnreadCount;
 
     const moduleLinks = getModuleLinks(roles, serviceRegs, session?.user?.gender);
     const toggles = useFeatureToggles(["digital_id_system", "escrow_messaging"]);

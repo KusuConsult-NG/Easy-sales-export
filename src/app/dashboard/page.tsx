@@ -9,11 +9,10 @@ import {
     TrendingUp, Users, BookOpen, Landmark, ExternalLink, Settings,
 } from "lucide-react";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
-import { getMyDashboard } from "@/app/actions/my-data";
 import { toDate } from "@/lib/date-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
-import { startVisibilityAwareInterval } from "@/hooks/usePolling";
+import { useNavSummary } from "@/contexts/NavSummaryContext";
 
 const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
@@ -203,94 +202,56 @@ function DashboardHomeContent() {
     const [recentResources, setRecentResources] = useState<DashboardResource[]>([]);
 
     // ── All dashboard data, polled from session-scoped server actions ─────
-    // These were six direct Supabase queries from the browser using the public
-    // anon key. With no row-level security on any table, that key could read
-    // and write the whole database. Everything now runs server-side, scoped to
-    // the signed-in user, on the same 8s cadence as the listeners it replaces.
+    /**
+     *   #539 THE PAGE NO LONGER FETCHES. IT READS THE LAYOUT'S POLL.
+     *
+     *   This effect used to call getMyDashboard on its own 8s interval while
+     *   DashboardNav — one level up, in the layout — separately polled the
+     *   three values that same payload already contained. Four pollers on this
+     *   screen, three of them redundant, about every eight seconds.
+     *
+     *   NavSummaryProvider in dashboard/layout.tsx now makes that call once and
+     *   hands the whole payload down. Everything the effect below used to do —
+     *   allSettled inside getMyDashboard so one failure costs its own tile
+     *   (#453), the visibility pause (#538) — moved into the provider with it,
+     *   unchanged. What is left here is mapping the payload onto local state.
+     *
+     *   `loaded` rather than a `loading` flag of our own: the provider knows
+     *   when the first poll has answered, and two flags for one fact is how
+     *   this codebase grew most of its drift.
+     */
+    const shared = useNavSummary();
+
     useEffect(() => {
-        if (!userId) return;
-        let cancelled = false;
+        if (!shared?.loaded) return;
 
-        const load = async () => {
-            // allSettled, NOT all.
-            //
-            // Promise.all rejects on the first rejection and discards every
-            // other result, so a single failing action left this entire page on
-            // its initial zeros — no balance, no counts, no notifications, no
-            // events — rather than losing one tile.
-            //
-            // That is reachable: each action in my-data.ts wraps its query in
-            // try/catch and returns a safe default, but currentUserId() calls
-            // requireSession() OUTSIDE that try. A session lookup that throws
-            // took the whole dashboard down.
-            //
-            // Each failure now costs only its own value, and says which one it
-            // was — a blank tile with nothing in the console is the kind of
-            // thing that gets diagnosed twice.
-            //   #453 ONE ROUND TRIP, NOT EIGHT.
-            //
-            //   These were eight separate server actions. Parallel in the
-            //   browser and still eight HTTP requests to the container, each
-            //   re-checking the same session — which, with Redis unset, is
-            //   eight database reads of the same user row before any of the
-            //   work below starts.
-            //
-            //   getMyDashboard does the same eight queries in parallel on the
-            //   server, behind one session check. The allSettled behaviour the
-            //   comment above describes is kept, inside it: a failure still
-            //   costs its own tile and says which one.
-            const dash = await getMyDashboard();
+        const dash = shared.dashboard;
+        if (!dash) return;
 
-            const regs = dash.serviceRegistrations;
-            const unreadNotifications = dash.unreadNotifications;
-            const unreadMessages = dash.unreadMessages;
-            const recent = dash.recentNotifications;
-            const walletBalance = dash.walletBalance;
-            const activeOrders = dash.activeOrders;
-            const events = dash.upcomingEvents;
-            const resources = dash.recentResources;
+        setServiceRegistrations(dash.serviceRegistrations);
+        setRecentNotifications(dash.recentNotifications as RecentNotification[]);
+        setUpcomingEvents(
+            (dash.upcomingEvents as any[]).map(e => ({ ...e, date: toDate(e.date) })) as DashboardEvent[]
+        );
+        setRecentResources(
+            (dash.recentResources as any[]).map(r => ({ ...r, uploadedAt: toDate(r.uploadedAt) })) as DashboardResource[]
+        );
+        setStats(s => ({
+            ...s,
+            unreadNotifications: dash.unreadNotifications,
+            unreadMessages: dash.unreadMessages,
+            walletBalance: dash.walletBalance,
+            activeOrders: dash.activeOrders,
+            loading: false,
+        }));
+    }, [shared]);
 
-            if (cancelled) return;
-
-            setServiceRegistrations(regs);
-            setRecentNotifications(recent as RecentNotification[]);
-            setUpcomingEvents(
-                (events as any[]).map(e => ({ ...e, date: toDate(e.date) })) as DashboardEvent[]
-            );
-            setRecentResources(
-                (resources as any[]).map(r => ({ ...r, uploadedAt: toDate(r.uploadedAt) })) as DashboardResource[]
-            );
-            setStats(s => ({
-                ...s,
-                unreadNotifications,
-                unreadMessages,
-                walletBalance,
-                activeOrders,
-                loading: false,
-            }));
-        };
-
-        load().catch(error => {
-            console.error("Dashboard data load failed:", error);
-            if (!cancelled) setStats(s => ({ ...s, loading: false }));
-        });
-
-        //   #538 The 8s repeat runs only while the tab is being looked at.
-        //
-        //   This is the most expensive poller in the app — getMyDashboard is
-        //   eight queries — and it ran at full rate in every background tab.
-        //   The primitive is shared with usePolling rather than reimplemented
-        //   here; `load` closes over `cancelled`, so the hook itself cannot be
-        //   used without unpicking the effect #453 arranged.
-        const stopPolling = startVisibilityAwareInterval(() => {
-            load().catch(error => console.error("Dashboard refresh failed:", error));
-        }, 8000, { immediate: false });
-
-        return () => {
-            cancelled = true;
-            stopPolling();
-        };
-    }, [userId]);
+    useEffect(() => {
+        //   A signed-in user whose first poll has answered but returned nothing
+        //   must still leave the spinner. Kept separate so the mapping above
+        //   stays a pure "payload in, state out".
+        if (shared?.loaded && !shared.dashboard) setStats(s => ({ ...s, loading: false }));
+    }, [shared?.loaded, shared?.dashboard]);
 
 
     if (status === "loading") {

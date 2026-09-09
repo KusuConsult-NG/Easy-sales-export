@@ -82,6 +82,28 @@ jest.mock('@/components/AnnouncementBanner', () => ({
 }));
 
 import DashboardPage from '@/app/dashboard/page';
+import { NavSummaryProvider } from '@/contexts/NavSummaryContext';
+
+/**
+ *   #539 THE PAGE IS MOUNTED THE WAY PRODUCTION MOUNTS IT — INSIDE THE
+ *        PROVIDER, WHICH IS WHERE THE FETCH NOW LIVES.
+ *
+ *   The page used to poll getMyDashboard itself. It no longer does: the nav
+ *   above it in the layout polled the same three values separately, so the call
+ *   moved up to NavSummaryProvider, which both the nav and this page read.
+ *
+ *   Wrapping here rather than stubbing the context is deliberate. Every
+ *   assertion below is about what the SCREEN shows given what a query returned,
+ *   and that chain — action -> getMyDashboard -> provider -> page -> DOM — is
+ *   only real if the provider is in it. A stubbed context would have turned
+ *   these into tests of a fixture.
+ */
+const renderDashboard = () =>
+    render(
+        <NavSummaryProvider mode="full" userId="u1">
+            <DashboardPage />
+        </NavSummaryProvider>,
+    );
 
 function signedIn() {
     mockUseSession.mockReturnValue({
@@ -110,12 +132,12 @@ beforeEach(() => {
 
 describe('dashboard — happy path', () => {
     it('mounts without throwing', async () => {
-        expect(() => render(<DashboardPage />)).not.toThrow();
+        expect(() => renderDashboard()).not.toThrow();
         await waitFor(() => expect(m.getMyWalletBalance).toHaveBeenCalled());
     });
 
     it('shows the figures the actions returned', async () => {
-        render(<DashboardPage />);
+        renderDashboard();
 
         // Wallet balance is currency-formatted; the others are plain counts.
         expect(await screen.findByText(/12,500/)).toBeInTheDocument();
@@ -124,7 +146,7 @@ describe('dashboard — happy path', () => {
     });
 
     it('calls every one of the eight actions', async () => {
-        render(<DashboardPage />);
+        renderDashboard();
         await waitFor(() => {
             for (const fn of Object.values(m)) expect(fn).toHaveBeenCalled();
         });
@@ -149,7 +171,7 @@ describe('dashboard — one action failing must not blank the rest', () => {
     it('still renders the wallet balance when the message count fails', async () => {
         m.getMyUnreadMessageCount.mockRejectedValue(new Error('session lookup failed'));
 
-        render(<DashboardPage />);
+        renderDashboard();
 
         expect(await screen.findByText(/12,500/)).toBeInTheDocument();
     });
@@ -157,7 +179,7 @@ describe('dashboard — one action failing must not blank the rest', () => {
     it('still renders the counts when the wallet balance fails', async () => {
         m.getMyWalletBalance.mockRejectedValue(new Error('boom'));
 
-        render(<DashboardPage />);
+        renderDashboard();
 
         expect(await screen.findByText('5')).toBeInTheDocument();
         expect(screen.getByText('3')).toBeInTheDocument();
@@ -166,7 +188,7 @@ describe('dashboard — one action failing must not blank the rest', () => {
     it('leaves the failed value at its default rather than crashing', async () => {
         m.getMyWalletBalance.mockRejectedValue(new Error('boom'));
 
-        render(<DashboardPage />);
+        renderDashboard();
 
         // ₦0 — the initial value, not a crash and not a stale figure.
         expect(await screen.findByText(/₦0|0\.00|^0$/)).toBeInTheDocument();
@@ -175,7 +197,7 @@ describe('dashboard — one action failing must not blank the rest', () => {
     it('finishes loading even when every action fails', async () => {
         for (const fn of Object.values(m)) fn.mockRejectedValue(new Error('everything is down'));
 
-        render(<DashboardPage />);
+        renderDashboard();
 
         // The spinner must not be permanent: a dead backend should leave the
         // page usable and empty, not stuck loading forever.

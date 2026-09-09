@@ -40,6 +40,8 @@
  *     the page calls the eight actions again      KILLED
  *     getMyDashboard drops a field                KILLED
  *     allSettled weakened to all                  KILLED
+ *     the nav's fallback poll left unguarded      KILLED  (#539)
+ *     the page fetching for itself again          KILLED  (#539)
  *     reword this header                          SURVIVED, as intended
  */
 
@@ -51,6 +53,21 @@ const source = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 
 const PAGE = 'src/app/dashboard/page.tsx';
 const ACTIONS = 'src/app/actions/my-data.ts';
+/**
+ *   #539 THE SINGLE CALL MOVED UP A LEVEL, AND THE PROPERTY IS UNCHANGED.
+ *
+ *   #453's claim was "this screen makes one round trip, not eight". It still
+ *   is — but the page is no longer where the trip is made. DashboardNav, in the
+ *   LAYOUT above this page, was separately polling three of the values
+ *   getMyDashboard already returns, so on /dashboard each of those three was
+ *   fetched twice about every eight seconds. A page cannot hand anything to its
+ *   own parent layout, so the call had to move ABOVE both of them.
+ *
+ *   The assertions below therefore follow it to the provider rather than being
+ *   deleted. The page must now call NOTHING, which is a stronger statement than
+ *   the one it replaces.
+ */
+const PROVIDER = 'src/contexts/NavSummaryContext.tsx';
 
 /** The eight the page used to call one at a time. */
 const THE_EIGHT = [
@@ -66,10 +83,27 @@ const THE_EIGHT = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#453 — one round trip, not eight', () => {
-    it('THE PAGE CALLS ONE ACTION', () => {
+    it('THE SCREEN CALLS ONE ACTION — from the provider above the page', () => {
+        expect(source(PROVIDER)).toContain('await getMyDashboard()');
+    });
+
+    it('AND THE PAGE ITSELF NOW CALLS NOTHING AT ALL', () => {
+        //   Stronger than #453's original claim. The page used to make the one
+        //   call; it now reads the result and makes none.
         const page = source(PAGE);
 
-        expect(page).toContain('await getMyDashboard()');
+        expect(/\bgetMyDashboard\s*\(/.test(page)).toBe(false);
+        expect(page).toContain('useNavSummary()');
+    });
+
+    it('AND THE NAV DOES NOT POLL WHEN THE SHARED POLL IS PRESENT', () => {
+        //   The finding itself: three pollers in the nav, every one of them
+        //   reading a value the dashboard payload already carried.
+        const nav = source('src/components/dashboard/DashboardNav.tsx');
+
+        expect(nav).toContain('useNavSummary()');
+        const guarded = nav.match(/enabled: !!userId && !usingSharedPoll/g) ?? [];
+        expect(guarded).toHaveLength(2);
     });
 
     it('AND CALLS NONE OF THE EIGHT DIRECTLY', () => {
