@@ -30,6 +30,51 @@ const ROLES = [
     { value: "general", label: "General interest" },
 ];
 
+/**
+ * The one key this screen leaves in the browser, and the one payload shape the
+ * server accepts — named where both the submit path and the sync path can see
+ * them. #573 happened because those two paths each built their own.
+ */
+const PENDING_SYNC_KEY = "wave_briefing_pending_sync";
+
+/** Three tries, then the queue is cleared and the person is asked to resubmit. */
+const MAX_SYNC_ATTEMPTS = 3;
+
+type BriefingPayload = {
+    firstName: string;
+    lastName: string;
+    otherName: string;
+    phoneNumber: string;
+    email: string;
+    state: string;
+    role: string;
+    fullName: string;
+};
+
+/**
+ * Queue a payload for the next time the browser is online, or give up on it.
+ *
+ * Giving up CLEARS it: a payload that has failed three times is not going to
+ * succeed on the fourth, and leaving somebody's name, email and phone number in
+ * localStorage forever to keep proving that is the #569 shape again.
+ */
+function rememberAttempt(data: BriefingPayload, attempts: number): { gaveUp: boolean } {
+    try {
+        if (attempts >= MAX_SYNC_ATTEMPTS) {
+            localStorage.removeItem(PENDING_SYNC_KEY);
+            return { gaveUp: true };
+        }
+        localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify({ data, attempts }));
+    } catch {
+        //   #347 — localStorage throws outright where site data is blocked. A
+        //   queue that cannot be written must not take the form down with it.
+        //   Nothing is queued, so nothing will retry: that is a give-up too, and
+        //   the caller says so rather than leaving a silent gap.
+        return { gaveUp: true };
+    }
+    return { gaveUp: false };
+}
+
 export default function WaveBriefingPage() {
     const [formData, setFormData] = useState({
         firstName: "",
@@ -45,6 +90,9 @@ export default function WaveBriefingPage() {
     const [error, setError] = useState("");
     const [isOfflinePending, setIsOfflinePending] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
+    //   The in-flight guard for the offline sync — see the effect below for why
+    //   a ref and not `isSubmitting`.
+    const syncingRef = useRef(false);
     const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
 
     // Intersection Observer for scroll animations
@@ -66,38 +114,95 @@ export default function WaveBriefingPage() {
         return () => observer.disconnect();
     }, []);
 
-    // Offline sync listener
+    /**
+     * Offline sync listener.
+     *
+     *   #574 A QUEUED REGISTRATION RETRIED FOREVER, AND THE EFFECT KEPT
+     *        RESTARTING IT.
+     *
+     *   Three things compounded here, and #573 above meant the FIRST attempt
+     *   could never succeed, so all three were reached on every offline
+     *   registration:
+     *
+     *     THE PAYLOAD WAS ONLY CLEARED ON SUCCESS. A refusal — and a rejected
+     *     payload is refused every time — left it in localStorage, so the
+     *     person's name, email and phone number stayed on the machine
+     *     indefinitely. The same shape as #569, arrived at from the other
+     *     direction.
+     *
+     *     THE EFFECT DEPENDED ON `isSubmitting`, which it sets itself. So each
+     *     attempt re-ran the effect, which re-ran the mount check, which
+     *     started another attempt: a retry loop driven by its own state, not by
+     *     the network.
+     *
+     *     AND THE `!isSubmitting` GUARD COULD NOT STOP IT. It reads a value
+     *     captured when the effect ran, so two overlapping invocations both saw
+     *     `false`. A ref is the guard that actually holds.
+     *
+     *   The queue is bounded now: three attempts, then it is cleared and the
+     *   person is told plainly to submit again. Bounded rather than
+     *   error-classified deliberately — the rate limiter's refusal IS worth
+     *   retrying and a validation refusal is not, and telling them apart by
+     *   matching message strings is the kind of guess that rots.
+     */
     useEffect(() => {
-        async function handleOnline() {
-            const pendingData = localStorage.getItem("wave_briefing_pending_sync");
-            if (pendingData && !isSubmitting) {
-                try {
-                    const data = JSON.parse(pendingData);
-                    setIsOfflinePending(false);
-                    setIsSubmitting(true);
-                    const result = await registerForBriefingAction(data);
-                    if (result.success) {
-                        setIsRegistered(true);
-                        localStorage.removeItem("wave_briefing_pending_sync");
-                    } else {
-                        setError(result.error || "Registration failed on sync");
-                    }
-                } catch {
-                    setError("Failed to sync registration.");
-                } finally {
-                    setIsSubmitting(false);
-                }
+        async function syncPending() {
+            //   A ref, not `isSubmitting`: see above.
+            if (syncingRef.current) return;
+
+            const pendingRaw = localStorage.getItem(PENDING_SYNC_KEY);
+            if (!pendingRaw) return;
+
+            let pending: { data?: unknown; attempts?: number } | null = null;
+            try {
+                pending = JSON.parse(pendingRaw);
+            } catch {
+                //   Unparseable: it can never succeed, so it is not kept.
+                localStorage.removeItem(PENDING_SYNC_KEY);
+                return;
             }
-        };
+
+            const data = (pending && "data" in pending ? pending.data : pending) as BriefingPayload;
+            const attempts = Number(pending?.attempts) || 0;
+
+            syncingRef.current = true;
+            setIsOfflinePending(false);
+            setIsSubmitting(true);
+            try {
+                const result = await registerForBriefingAction(data);
+                if (result.success) {
+                    setIsRegistered(true);
+                    localStorage.removeItem(PENDING_SYNC_KEY);
+                    return;
+                }
+
+                if (rememberAttempt(data, attempts + 1).gaveUp) {
+                    setError(
+                        `${result.error || "Registration failed on sync"} — please fill the form in again.`,
+                    );
+                } else {
+                    setError(result.error || "Registration failed on sync");
+                }
+            } catch {
+                if (rememberAttempt(data, attempts + 1).gaveUp) {
+                    setError("We could not send your registration. Please fill the form in again.");
+                } else {
+                    setError("Failed to sync registration.");
+                }
+            } finally {
+                setIsSubmitting(false);
+                syncingRef.current = false;
+            }
+        }
 
         // Immediate check on mount if the browser is already online
         if (typeof window !== "undefined" && navigator.onLine) {
-            handleOnline();
+            syncPending();
         }
 
-        window.addEventListener("online", handleOnline);
-        return () => window.removeEventListener("online", handleOnline);
-    }, [isSubmitting]);
+        window.addEventListener("online", syncPending);
+        return () => window.removeEventListener("online", syncPending);
+    }, []);
 
     const scrollToForm = () => {
         formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -123,8 +228,33 @@ export default function WaveBriefingPage() {
             return;
         }
 
+        const payload: BriefingPayload = {
+            ...formData,
+            fullName,
+        };
+
         if (typeof navigator !== "undefined" && !navigator.onLine) {
-            localStorage.setItem("wave_briefing_pending_sync", JSON.stringify(formData));
+            /**
+             *   #573 THE QUEUED PAYLOAD WAS NOT THE ONE THE SERVER ACCEPTS.
+             *
+             *   This stored `formData`, which has firstName, lastName and
+             *   otherName — and no `fullName`. The ONLINE path builds a payload
+             *   that adds it, and briefingRegistrationSchema requires it:
+             *   `fullName: strictNameSchema`, not optional.
+             *
+             *   So every registration taken while offline was rejected the
+             *   moment it synced, with a validation message about a field the
+             *   form never showed. And because the old sync only cleared the
+             *   queue on success, it then retried the same rejected payload for
+             *   as long as the browser kept the key.
+             *
+             *   A woman who filled this in on a bad connection — which is the
+             *   entire reason the offline path exists — was never registered
+             *   and was never told she was not.
+             *
+             *   The same payload is queued as would have been sent.
+             */
+            rememberAttempt(payload, 0);
             setIsOfflinePending(true);
             return;
         }
@@ -132,10 +262,6 @@ export default function WaveBriefingPage() {
         setIsSubmitting(true);
 
         try {
-            const payload = {
-                ...formData,
-                fullName,
-            };
             const result = await registerForBriefingAction(payload);
             if (result.success) {
                 setIsRegistered(true);
