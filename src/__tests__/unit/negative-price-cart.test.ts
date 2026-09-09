@@ -125,12 +125,25 @@ const location = { state: 'Lagos', city: 'Ikeja', street: '1 Road', isWithinCity
  * fee and the Paystack customer fields, not the line-total arithmetic under
  * test. tsc caught it; the suite would not have.
  *
- * deliveryFee is passed as 0 deliberately: the action recomputes it server-side
- * and ignores the argument, which the success case below asserts.
+ *   #572 deliveryFee WAS passed as 0 here, with a note saying the action
+ *   "recomputes it server-side and ignores the argument".
+ *
+ *   That note described the defect. The argument is the fee the CHECKOUT SCREEN
+ *   SHOWED THE BUYER, and ignoring it meant nothing ever compared what was
+ *   displayed with what would be charged. It is a check now: a charge that
+ *   exceeds the quote is refused rather than taken.
+ *
+ *   So these cases pass a generous quote — they are about the line-total
+ *   arithmetic, not about the fee — and the guard itself is exercised directly
+ *   in its own describe block below.
  */
-async function checkout(items: any[]) {
+const GENEROUS_QUOTE = 1_000_000;
+
+async function checkout(items: any[], quotedDeliveryFee: number = GENEROUS_QUOTE) {
     const { initializeOrderPaymentAction } = await import('@/app/actions/marketplace/_payment_orders');
-    return initializeOrderPaymentAction(items as any, 'buyer@e.com', '08030000000', 0, location as any);
+    return initializeOrderPaymentAction(
+        items as any, 'buyer@e.com', '08030000000', quotedDeliveryFee, location as any,
+    );
 }
 
 describe('validateCartItems — neither factor of the line total is trusted', () => {
@@ -311,5 +324,88 @@ describe('addFlashSaleProductAction — an impossible price is refused at the so
 
         expect(r.success).toBe(false);
         expect(String(r.error)).toMatch(/join the event/i);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#572 — the quoted delivery fee is a check, not decoration', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSession(BUYER);
+        setProduct({ title: 'Cocoa', sellerId: SELLER, price: 50_000, availableQuantity: 100 });
+    });
+
+    it('REFUSES AN ORDER THAT WOULD COST MORE DELIVERY THAN THE SCREEN SHOWED', async () => {
+        //   THE CLAIM. A quote of zero with a real delivery address is what a
+        //   crafted request looks like — and what a buyer would see if they
+        //   somehow submitted before the quote resolved. Either way, charging
+        //   them a fee they were never shown is the outcome worth refusing.
+        const result: any = await checkout(
+            [{ id: 'p1', title: 'Cocoa', quantity: 1, unit: 'kg', selectedTier: 'retail', sellerId: SELLER }],
+            0,
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/delivery fee changed/i);
+    });
+
+    it('AND ACCEPTS ONE WHERE THE CHARGE IS AT OR BELOW THE QUOTE', async () => {
+        //   The vacuity guard: a check that refused everything would close the
+        //   shop. Charging a buyer LESS than they were shown never harms them.
+        const result: any = await checkout(
+            [{ id: 'p1', title: 'Cocoa', quantity: 1, unit: 'kg', selectedTier: 'retail', sellerId: SELLER }],
+            GENEROUS_QUOTE,
+        );
+
+        expect(result.success).toBe(true);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#571 — a tier applies only at the quantity that earns it', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSession(BUYER);
+        setProduct({
+            title: 'Cocoa',
+            sellerId: SELLER,
+            availableQuantity: 1000,
+            pricingTiers: [
+                { type: 'retail', price: 50_000, minQuantity: 1 },
+                { type: 'bulk', price: 30_000, minQuantity: 100 },
+            ],
+        });
+    });
+
+    it('REFUSES THE BULK PRICE FOR A SINGLE UNIT', async () => {
+        //   THE DEFECT. The price came from the database — so a buyer could not
+        //   invent a figure — but WHICH price was chosen by a client-supplied
+        //   string, and the minimum that earns the cheaper one was never read.
+        const result: any = await checkout(
+            [{ id: 'p1', title: 'Cocoa', quantity: 1, unit: 'kg', selectedTier: 'bulk', sellerId: SELLER }],
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/applies from 100/i);
+    });
+
+    it('AND ALLOWS IT AT THE QUANTITY THAT DOES EARN IT', async () => {
+        //   The vacuity guard: refusing every bulk order would remove the tier
+        //   the seller configured.
+        const result: any = await checkout(
+            [{ id: 'p1', title: 'Cocoa', quantity: 100, unit: 'kg', selectedTier: 'bulk', sellerId: SELLER }],
+        );
+
+        expect(result.success).toBe(true);
+    });
+
+    it('AND AN ORDINARY RETAIL ORDER IS UNTOUCHED', async () => {
+        //   The scope claim, checked: a retail tier carries minQuantity 1 by
+        //   schema default, so nothing an ordinary buyer does meets this guard.
+        const result: any = await checkout(
+            [{ id: 'p1', title: 'Cocoa', quantity: 1, unit: 'kg', selectedTier: 'retail', sellerId: SELLER }],
+        );
+
+        expect(result.success).toBe(true);
     });
 });

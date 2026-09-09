@@ -98,6 +98,49 @@ export async function validateCartItems(clientItems: CartItem[]): Promise<{ subt
             // Find correct price from database pricing tiers based on client selectedTier
             const selectedTierType = item.selectedTier || "retail";
             const matchedTier = productData?.pricingTiers?.find((t: any) => t.type === selectedTierType);
+
+            /**
+             *   #571 THE TIER WAS TAKEN FROM THE CLIENT AND THE QUANTITY THAT
+             *        EARNS IT WAS NEVER CHECKED.
+             *
+             *   The PRICE has come from the database since this function was
+             *   written, which is why a buyer cannot name their own figure. But
+             *   WHICH price is chosen by `item.selectedTier`, a client-supplied
+             *   string, and a bulk or export tier is cheaper per unit precisely
+             *   because it requires a minimum quantity. That minimum was never
+             *   read.
+             *
+             *   So a request naming `selectedTier: "bulk"` with `quantity: 1`
+             *   was charged the bulk unit price for a single unit. Every export
+             *   of a "use server" module is a reachable endpoint whether the app
+             *   calls it or not — this codebase already records that, in
+             *   _enrollInWaveAction — so "the checkout never sends that" is not
+             *   a control.
+             *
+             *   WHAT THE UI ACTUALLY SENDS, STATED SO THE SCOPE IS HONEST:
+             *   /marketplace/checkout sends `pricingTiers[0].type` and the
+             *   product page displays `pricingTiers[0].price`, so through the
+             *   screens the tier charged is the tier shown, and a retail tier
+             *   carries minQuantity 1 (the schema's default). Ordinary traffic
+             *   is unaffected by this check. What it closes is the endpoint —
+             *   and the case where a seller's first tier is a bulk one, where
+             *   the discount was being given through the UI too.
+             *
+             *   A tier whose minimum is not met does not apply, and the order is
+             *   REFUSED rather than silently repriced: charging a total the
+             *   buyer was never shown is the outcome this audit spends most of
+             *   its time removing.
+             */
+            if (matchedTier) {
+                const minQuantity = Number(matchedTier.minQuantity);
+                const required = Number.isFinite(minQuantity) && minQuantity > 0 ? minQuantity : 1;
+                if (quantity < required) {
+                    throw new Error(
+                        `${productData?.title || item.title}: the ${selectedTierType} price applies from ${required} ${item.unit || "units"} upwards`,
+                    );
+                }
+            }
+
             dbPrice = matchedTier?.price 
                 || productData?.pricingTiers?.[0]?.price 
                 || productData?.price 

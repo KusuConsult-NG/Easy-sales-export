@@ -58,6 +58,50 @@ async function _initializeOrderPaymentAction(
 
         const fees = await getPlatformFees();
         const calculatedDeliveryFee = calculateDeliveryFee(cartItems, location || {}, fees);
+
+        /**
+         *   #572 THE QUOTED FEE WAS ACCEPTED, VALIDATED, AND THEN IGNORED.
+         *
+         *   `deliveryFee` is what the CHECKOUT SCREEN SHOWED THE BUYER — it
+         *   comes from calculateDeliveryAction. The charge below has always been
+         *   the server's own figure, which is right and is why a buyer cannot
+         *   name their own delivery cost. But the parameter was read once, for
+         *   `< 0`, and never again: a number that looks like it sets the price
+         *   and does not is a trap for whoever edits this next.
+         *
+         *   Both figures come from ONE function, calculateDeliveryFee, with the
+         *   same platform fees — so today they agree. NOTHING PROVED THAT. They
+         *   are computed at different moments, from separately-assembled
+         *   inputs, and an admin editing the delivery settings between the quote
+         *   and the submit is enough to part them.
+         *
+         *   So the quote is now a CHECK rather than dead weight. If the charge
+         *   would EXCEED what the buyer was shown, the order is refused and they
+         *   are asked to refresh — being charged more than the screen said is
+         *   the outcome worth refusing over. A charge that is LOWER than quoted
+         *   never harms the buyer and proceeds, logged.
+         *
+         *   The tolerance is one naira: these are naira-denominated integers
+         *   before conversion to kobo, and an exact comparison would refuse over
+         *   a rounding difference that costs nobody anything.
+         */
+        if (calculatedDeliveryFee > deliveryFee + 1) {
+            logger.error("[initializeOrderPaymentAction] Delivery fee exceeds the quote shown", {
+                userId, quoted: deliveryFee, calculated: calculatedDeliveryFee,
+            });
+            return {
+                error: "The delivery fee changed while you were checking out. Please refresh and try again.",
+                success: false as const,
+                data: null,
+            };
+        }
+
+        if (calculatedDeliveryFee < deliveryFee) {
+            logger.warn("[initializeOrderPaymentAction] Charging less delivery than quoted", {
+                userId, quoted: deliveryFee, calculated: calculatedDeliveryFee,
+            });
+        }
+
         const totalAmount = subtotal + calculatedDeliveryFee;
 
         // #272 Both bounds, not just the floor. maxOrderAmount was configured,
@@ -433,13 +477,15 @@ export const createBankTransferOrderAction = withSafeAction("createBankTransferO
  * Calculate Delivery Fee (Server-Side)
  */
 async function _calculateDeliveryAction(items: CartItem[], location?: any): Promise<ActionResponse<{ fee: number }>> { 
-    console.log("[Server Actions] _calculateDeliveryAction called with location:", location);
+    //   #572 The four console.log lines that were here ran on EVERY keystroke
+    //   that moved the delivery address — this action is called from a debounced
+    //   effect — and printed the caller's location object and the platform's fee
+    //   table into the server log each time. Removed rather than converted to
+    //   logger calls: nothing here needs recording on the happy path, and the
+    //   failure below already is.
     try {
-        console.log("[Server Actions] Fetching platform fees...");
         const fees = await getPlatformFees();
-        console.log("[Server Actions] Platform fees fetched:", fees);
         const fee = calculateDeliveryFee(items, location, fees);
-        console.log("[Server Actions] Calculated fee:", fee);
         return { error: null, success: true as const, data: { fee } };
     } catch (error: any) { 
         logger.error("Calculate delivery fee error:", error);
