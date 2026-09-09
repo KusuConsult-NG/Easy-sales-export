@@ -216,7 +216,11 @@ describe('the reads, which were already scoped', () => {
 
         const r = await getUserNotificationsAction(VICTIM);
 
-        expect(r).toEqual([]);
+        //   #534 The action returns a PAGE now — the read underneath was
+        //   unbounded and read the caller's whole history. A refusal is an
+        //   empty page rather than an empty array; what matters, and is
+        //   unchanged, is that the service was never reached.
+        expect(r).toEqual({ notifications: [], hasMore: false });
         expect(mockGetUser).not.toHaveBeenCalled();
     });
 
@@ -248,6 +252,7 @@ describe('the reads, which were already scoped', () => {
 
         await getUserNotificationsAction(CALLER);
 
-        expect(mockGetUser).toHaveBeenCalledWith(CALLER);
+        //   #534 The paging options travel with the id.
+        expect(mockGetUser).toHaveBeenCalledWith(CALLER, {});
     });
 });

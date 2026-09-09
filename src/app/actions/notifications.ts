@@ -95,20 +95,34 @@ export async function createBulkNotificationsAction(
 }
 
 /**
- * Get user notifications
+ * Get user notifications — one page.
+ *
+ *   #534 The service call underneath had no limit and read the caller's entire
+ *   history. It is paged now, and this hands the page shape through rather than
+ *   flattening it, so a caller can tell "that is all of them" from "that is the
+ *   first twenty-five".
+ *
+ *   THIS ACTION HAS NO CALLER, and that is not a reason to leave it: every
+ *   export of a `"use server"` module is a registered POST endpoint (#374,
+ *   #379), so an unbounded read reachable by any signed-in caller is live
+ *   whether a page uses it or not.
  */
-export async function getUserNotificationsAction(userId: string): Promise<Notification[]> { 
+export async function getUserNotificationsAction(
+    userId: string,
+    options: { limit?: number; before?: string } = {},
+): Promise<notificationService.NotificationPage> {
+    const empty = { notifications: [], hasMore: false };
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return [];
+        if (!sessionResult.session) return empty;
         const { session } = sessionResult;
         if (!session?.user?.id || (session.user.id !== userId && !isPlatformAdmin(session.user.roles))) {
-            return [];
+            return empty;
         }
-        return await notificationService.getUserNotifications(userId);
+        return await notificationService.getUserNotifications(userId, options);
     } catch (error) { 
         logger.error("Failed to fetch notifications action:", error);
-        return [];
+        return empty;
     }
 }
 

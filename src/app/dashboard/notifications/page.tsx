@@ -13,7 +13,10 @@ import { formatDistanceToNow } from "date-fns";
 import { getMyNotifications, deleteMyNotification } from "@/app/actions/my-data";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useToast } from "@/contexts/ToastContext";
-import { isNotificationVisible, getVisibleFilterTabs } from "@/lib/notification-filter";
+// #534 NOTIFICATION_PAGE_SIZE comes from here, not from the notifications
+// service: this is a "use client" file, and importing the service pulled
+// supabase-db into the client bundle. #382's ratchet caught it.
+import { isNotificationVisible, getVisibleFilterTabs, NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
 
 /* ──────────────────────────────────────────────────────────────
  * Types
@@ -106,6 +109,20 @@ export default function NotificationsPage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    /**
+     *   #534 HOW MANY ROWS THIS SCREEN ASKS FOR.
+     *
+     *   It asked for 200 and rendered every one, on an eight-second poll. The
+     *   owner opened it and got two months of "New WAVE Application" in a single
+     *   column, back to the first submission — notifyAdmins writes one row per
+     *   admin per application, nothing ages a notification out, and this screen
+     *   put no window on what it showed.
+     *
+     *   A page at a time, with Show more. Nothing is hidden and nothing is
+     *   deleted; the older rows are one click away instead of all at once.
+     */
+    const [pageSize, setPageSize] = useState(NOTIFICATION_PAGE_SIZE);
+    const [reachedEnd, setReachedEnd] = useState(false);
 
     const userId = session?.user?.id;
     // Prevent duplicate auto-read calls on re-renders
@@ -126,8 +143,13 @@ export default function NotificationsPage() {
 
         const load = async () => {
             try {
-                const data = await getMyNotifications(200);
-                if (!cancelled) setNotifications(data as Notification[]);
+                //   One over the window, so "there are older ones" is answered
+                //   by the read rather than guessed from the length.
+                const data = await getMyNotifications(pageSize + 1);
+                if (!cancelled) {
+                    setReachedEnd(data.length <= pageSize);
+                    setNotifications(data.slice(0, pageSize) as Notification[]);
+                }
             } catch (error) {
                 console.error("Notification load error:", error);
             } finally {
@@ -141,7 +163,7 @@ export default function NotificationsPage() {
             cancelled = true;
             clearInterval(interval);
         };
-    }, [userId, status, router]);
+    }, [userId, status, router, pageSize]);
 
     /* ── Which tabs to show based on user's module subscriptions ── */
     const visibleTabs = useMemo(() => {
@@ -425,6 +447,26 @@ export default function NotificationsPage() {
                                 </div>
                             </div>
                         ))}
+
+                        {/*
+                          *   #534 The way to the older ones.
+                          *
+                          *   Before this the screen fetched 200 and rendered all
+                          *   of them, so a two-month backlog arrived in one
+                          *   column. Nothing is hidden — the rows are still
+                          *   there, still ordered newest first, and this asks
+                          *   for the next page. It is shown only when the read
+                          *   itself said there are more, so it never appears
+                          *   over an empty result.
+                          */}
+                        {!reachedEnd && filter === "all" && (
+                            <button
+                                onClick={() => setPageSize((n) => n + NOTIFICATION_PAGE_SIZE)}
+                                className="w-full py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+                            >
+                                Show older notifications
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

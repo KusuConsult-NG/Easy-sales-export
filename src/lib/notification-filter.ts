@@ -179,3 +179,14 @@ export function getVisibleFilterTabs(
  *   fails the build.
  */
 export const NOTIFICATION_BADGE_WINDOW = 50;
+
+/**
+ * How many notifications the notifications SCREEN shows at once — #534.
+ *
+ * It lives here for the same reason NOTIFICATION_BADGE_WINDOW does, and for one
+ * more: the screen is a `"use client"` file and the service that pages the reads
+ * is server-only. Putting the constant in the service and importing it from the
+ * page pulled supabase-db into a client bundle, which #382's ratchet caught on
+ * the first run — correctly. One number, in the one module both sides may read.
+ */
+export const NOTIFICATION_PAGE_SIZE = 25;

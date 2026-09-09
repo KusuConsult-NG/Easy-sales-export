@@ -13,6 +13,9 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import type { Notification as SharedNotification } from "@/lib/types/shared";
+// #534 The window size lives in a client-safe module: the notifications
+// screen is a "use client" file and must not reach this one.
+import { NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
 
 /**
  * Server-side Notification shape.
@@ -97,16 +100,55 @@ export async function createBulkNotifications(
     }
 }
 
-/**
- * Get user notifications
- */
-export async function getUserNotifications(userId: string): Promise<Notification[]> {
-    const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
-        .where("userId", "==", userId)
-        .orderBy("createdAt", "desc")
-        .get();
+/** One page of notifications, and whether there is another behind it. */
+export interface NotificationPage {
+    notifications: Notification[];
+    hasMore: boolean;
+}
 
-    return serializeDocs(snapshot.docs) as unknown as Notification[];
+/**
+ * Get user notifications — one page at a time.
+ *
+ *   #534 THIS READ EVERY NOTIFICATION THE USER HAD EVER RECEIVED.
+ *
+ *        `.where(userId).orderBy(createdAt, desc).get()` with no `.limit()`.
+ *        The adapter caps an unlimited query at DEFAULT_QUERY_LIMIT — 5,000 —
+ *        and sets `truncated` on the snapshot, which nothing here read. So the
+ *        function returned "all the notifications" and meant "the newest five
+ *        thousand", with no way for a caller to tell.
+ *
+ *        Nothing ages a notification out. The platform purges audit logs and
+ *        chatbot rows on a schedule and has never had one for these, so every
+ *        row ever written to a member is still there — the owner's own account
+ *        holds one per WAVE application going back months, because notifyAdmins
+ *        writes one to EVERY admin for EVERY submission.
+ *
+ *        Paged now, newest first, with an explicit `before` cursor. The caller
+ *        asks for more if it wants more.
+ */
+export async function getUserNotifications(
+    userId: string,
+    options: { limit?: number; before?: Date | string } = {},
+): Promise<NotificationPage> {
+    const limit = Math.max(1, Math.min(options.limit ?? NOTIFICATION_PAGE_SIZE, 200));
+
+    let query = db.collection(COLLECTIONS.NOTIFICATIONS)
+        .where("userId", "==", userId)
+        .orderBy("createdAt", "desc");
+
+    if (options.before) {
+        query = query.startAfter(options.before);
+    }
+
+    //   One more than asked for, so "is there another page" is answered by the
+    //   read itself rather than by a second count that could disagree with it.
+    const snapshot = await query.limit(limit + 1).get();
+    const docs = snapshot.docs.slice(0, limit);
+
+    return {
+        notifications: serializeDocs(docs) as unknown as Notification[],
+        hasMore: snapshot.docs.length > limit,
+    };
 }
 
 /**
@@ -162,10 +204,42 @@ export async function markNotificationAsRead(notificationId: string, currentUser
  */
 export async function markAllAsRead(userId: string): Promise<ActionResponse<any>> {
     try {
+        /**
+         *   #534 THIS READ WAS CAPPED AND THE COUNTER WAS SET TO ZERO ANYWAY.
+         *
+         *   The query had no `.limit()`, so the adapter capped it at
+         *   DEFAULT_QUERY_LIMIT — 5,000 — and set `truncated` on the snapshot.
+         *   Nothing read that flag. The function then marked whatever it got
+         *   and finished with
+         *
+         *       await db.collection(USERS).doc(userId).set({ unreadCount: 0 })
+         *
+         *   unconditionally. So for a user past the cap, "mark all as read"
+         *   marked five thousand, left the rest unread, and wrote a counter
+         *   saying none were — and getUnreadCount TRUSTS that counter, taking
+         *   the expensive path only when the field is missing. The badge would
+         *   have read zero for ever over thousands of unread rows.
+         *
+         *   Nobody is past 5,000 today; the owner's own account is in the low
+         *   hundreds. It is fixed because the shape is the one this audit keeps
+         *   finding — a bounded read used as if it were complete, and a derived
+         *   figure written from it — not because it has fired.
+         *
+         *   `.all()` is the adapter's honest escape hatch for a sweep that
+         *   genuinely needs everything, and it reports its own ceiling.
+         */
         const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)
             .where("read", "==", false)
+            .all()
             .get();
+
+        if (snapshot.truncated) {
+            logger.error(
+                `[Notifications] the unread sweep for ${userId} hit the unbounded ceiling. `
+                + `Some notifications remain unread and the count is recomputed rather than zeroed.`,
+            );
+        }
 
         if (snapshot.empty) {
             // Make sure count is 0 anyway to ensure perfect synchronization
@@ -189,12 +263,36 @@ export async function markAllAsRead(userId: string): Promise<ActionResponse<any>
             await batch.commit();
         }
 
+        //   #534 Zero only when the sweep really finished.
+        //
+        //   A truncated sweep leaves unread rows behind, so writing 0 would be
+        //   a figure the data contradicts. The count is recounted from the
+        //   database instead — `.count()` is a server-side aggregate and is not
+        //   subject to the row cap — and the caller is told it is incomplete.
+        if (snapshot.truncated) {
+            const remaining = await db.collection(COLLECTIONS.NOTIFICATIONS)
+                .where("userId", "==", userId)
+                .where("read", "==", false)
+                .count()
+                .get();
+
+            await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                unreadCount: remaining.data().count,
+            }, { merge: true });
+
+            return {
+                success: true,
+                error: null,
+                data: { count: snapshot.size, truncated: true, remaining: remaining.data().count },
+            };
+        }
+
         // Atomically update user document to 0 unreadCount
         await db.collection(COLLECTIONS.USERS).doc(userId).set({
             unreadCount: 0
         }, { merge: true });
 
-        return { success: true, error: null, data: { count: snapshot.size } };
+        return { success: true, error: null, data: { count: snapshot.size, truncated: false } };
     } catch (error) {
         logger.error("Mark all notifications read error:", error);
         return { success: false, error: "Failed to mark notifications as read", data: null };
