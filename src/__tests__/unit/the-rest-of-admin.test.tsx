@@ -417,6 +417,22 @@ const ADMIN_SUBJECTS: [string, string][] = [
  * AND NO REASON IS CLAIMED FOR THESE EIGHTEEN. #604 built a four-category
  * taxonomy for them, checked it, and found it false — see `wouldExcuse` below,
  * which keeps the refutation where the next person will look for it.
+ *
+ * #609 ACCOUNTED FOR ELEVEN OF THEM, ONE SCREEN AT A TIME RATHER THAN BY A
+ * THEORY, and they stay on this list because THIS suite still does not reach
+ * them — being covered elsewhere is not the same as being covered here, and
+ * collapsing the two is how a to-do list becomes an exoneration:
+ *
+ *   six load nothing until a button is pressed, so they are probed by
+ *   `an-admin-screen-that-does-nothing-until-you-click.test.tsx`, which found a
+ *   crash on /admin/forensics;
+ *   five call no action and no fetch on any path, which that file checks in both
+ *   directions — the check #604's taxonomy could not survive.
+ *
+ * SEVEN REMAIN GENUINELY UNACCOUNTED FOR: settings/fees, settings/general,
+ * settings/notifications, settings/security, system-health,
+ * system-health/diagnostics and wave/compliance. system-health is covered by its
+ * own suite after #604's mutant survived here; the other six are still a to-do.
  */
 const NOT_REACHED = [
     'communications',

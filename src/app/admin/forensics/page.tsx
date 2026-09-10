@@ -226,13 +226,23 @@ export default function ForensicsPage() {
                                       *        clean result on a fraction of the population — but
                                       *        below, folded, and counted separately.
                                       */}
-                                    {r.affectedIds.length > 0 && (
+                                    {/*
+                                      *   #609 — `r.affectedIds.length` with no guard, three
+                                      *   lines above a sibling that reads
+                                      *   `r.notCheckedIds?.length ?? 0`. One check in a scan
+                                      *   result that carries no affectedIds threw inside this
+                                      *   .map and took the whole forensics page down — the
+                                      *   screen an administrator opens BECAUSE they suspect
+                                      *   the data is wrong. Adjacent reads of the same shape,
+                                      *   one guarded and one not.
+                                      */}
+                                    {(r.affectedIds?.length ?? 0) > 0 && (
                                         <div className="mt-3 overflow-x-auto rounded-lg bg-slate-50 p-3">
                                             <p className="mb-1 text-xs font-semibold text-slate-500">
-                                                Affected records ({r.affectedIds.length})
+                                                Affected records ({r.affectedIds?.length ?? 0})
                                             </p>
                                             <code className="whitespace-pre text-xs text-slate-700">
-                                                {r.affectedIds.join("\n")}
+                                                {(r.affectedIds ?? []).join("\n")}
                                             </code>
                                         </div>
                                     )}
