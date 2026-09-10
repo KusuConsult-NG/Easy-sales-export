@@ -187,17 +187,32 @@ describe('#352 — the page cannot divide by zero', () => {
     });
 
     it('and every width it does compute is clamped to 0-100', () => {
+        /**
+         *   #589 MOVED THE FUNDING HALF INTO A HELPER, and the clamp with it.
+         *
+         *   The screen was one of SIX readers of "what this window has raised",
+         *   and the only one with no fallback for a window that has raised
+         *   nothing yet. windowFundedPercent carries the clamp now and is
+         *   tested for it directly, in
+         *   one-bad-row-must-not-take-the-screen-down.
+         *
+         *   Both spellings are accepted here: the spots model still computes
+         *   its own width inline, and it is the one #352 was about.
+         */
         const widths = [...page.matchAll(/width: `\$\{([^`]+)\}%`/g)].map((m) => m[1]);
 
         expect(widths.length).toBeGreaterThan(0);          // vacuity guard
         for (const w of widths) {
-            expect(w).toContain('Math.min(100, Math.max(0,');
+            expect(
+                w.includes('Math.min(100, Math.max(0,') || w.includes('windowFundedPercent('),
+            ).toBe(true);
         }
     });
 
     it('it falls back to the FUNDING model, not to a blank panel', () => {
-        expect(page).toMatch(/window\.fundingGoal > 0 \?/);
-        expect(page).toContain('window.fundedAmount / window.fundingGoal');
+        //   #589 — read through the shared helper rather than off the document.
+        expect(page).toMatch(/windowFundingGoal\(window\) > 0 \?/);
+        expect(page).toContain('windowFundedPercent(window)');
     });
 
     it('and the "Total Spots" row is omitted rather than printed as 0', () => {

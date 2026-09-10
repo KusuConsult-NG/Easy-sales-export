@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { getExportOpportunityById, type ExportOpportunity } from "@/app/actions/export-investments";
 import { initializeInvestmentPaymentAction } from "@/app/actions/export-payment";
 import { exportWindowRoiPercent } from "@/lib/export-window-status";
+import { windowRaisedAmount, windowFundingGoal, windowFundedPercent } from "@/lib/export-window-funding";
 
 export default function ExportWindowDetailClient({ initial = null }: {
     /**
@@ -374,18 +375,31 @@ export default function ExportWindowDetailClient({ initial = null }: {
                                             ></div>
                                         </div>
                                     </>
-                                ) : window.fundingGoal > 0 ? (
+                                ) : windowFundingGoal(window) > 0 ? (
+                                    /**
+                                     *   #589 — `window.fundedAmount.toLocaleString()`
+                                     *   threw for every window nobody had invested in
+                                     *   yet, which is every window at the moment it is
+                                     *   created: the goal is written at creation and
+                                     *   the raised counter is not.
+                                     *
+                                     *   It threw DURING RENDER, so the page was blank —
+                                     *   and this page is where the invest button lives,
+                                     *   so the first investment could never be made and
+                                     *   the field was never written. See
+                                     *   lib/export-window-funding.
+                                     */
                                     <>
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-sm text-slate-600">Funded</span>
                                             <span className="font-bold text-slate-900">
-                                                ₦{window.fundedAmount.toLocaleString()} / ₦{window.fundingGoal.toLocaleString()}
+                                                ₦{windowRaisedAmount(window).toLocaleString()} / ₦{windowFundingGoal(window).toLocaleString()}
                                             </span>
                                         </div>
                                         <div className="w-full bg-slate-200 rounded-full h-2">
                                             <div
                                                 className="bg-purple-600 h-2 rounded-full"
-                                                style={{ width: `${Math.min(100, Math.max(0, (window.fundedAmount / window.fundingGoal) * 100))}%` }}
+                                                style={{ width: `${windowFundedPercent(window)}%` }}
                                             ></div>
                                         </div>
                                     </>

@@ -198,7 +198,10 @@ describe('the member directory', () => {
     it('and it really does return personal data, which is why this matters', () => {
         expect(directory).toContain('phone: data.phone');
         expect(directory).toContain('data.documents?.passportPhoto?.url');
-        expect(directory).toContain('occupation: data.occupation');
+        //   #589 normalised this field — the search dereferenced it and one
+        //   row without an occupation crashed the whole directory — so the
+        //   claim is that the field is PUBLISHED, not how it is spelled.
+        expect(directory).toMatch(/occupation: (data\.occupation|text\(data\.occupation\))/);
     });
 
     it('and no longer presents a truncated list as the whole membership', () => {

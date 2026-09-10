@@ -83,11 +83,35 @@ export default function CooperativeDirectoryClient({ initial = null }: {
         }
     };
 
-    const filteredMembers = members.filter(member =>
-        member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.occupation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.location.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    /**
+     *   #589 THE SECOND DOOR ON THE SAME RULE.
+     *
+     *   This read `member.occupation.toLowerCase()` on every member on every
+     *   keystroke, so a single row without an occupation threw and took the
+     *   whole directory with it — for everyone, not just that member's card.
+     *
+     *   The reader states the shape now, which is the durable half. This is
+     *   here because a row also arrives from the browser's own re-read and
+     *   from whatever a future caller passes, and because a filter is the one
+     *   place where one bad row costs every good one.
+     */
+    const query = searchTerm.trim().toLowerCase();
+    const matches = (value: unknown) =>
+        typeof value === "string" && value.toLowerCase().includes(query);
+
+    /**
+     *   AN EMPTY SEARCH IS NOT A SEARCH, and a surviving mutant is why this
+     *   line exists. My first guard was the filter alone — and a member with no
+     *   name, occupation OR location then matched none of the three predicates
+     *   and vanished from the directory, because `"".includes("")` is only true
+     *   for a value that IS a string. Guarding by dropping the row is the fix
+     *   doing the defect's job, one step quieter.
+     */
+    const filteredMembers = query === ""
+        ? members
+        : members.filter(member =>
+            matches(member.name) || matches(member.occupation) || matches(member.location)
+        );
 
     return (
         <div className="space-y-6">
@@ -156,7 +180,7 @@ export default function CooperativeDirectoryClient({ initial = null }: {
                                     {member.image ? (
                                         <Image src={member.image} alt={member.name} fill className="object-cover" />
                                     ) : (
-                                        member.name.charAt(0)
+                                        String(member.name ?? "?").charAt(0)
                                     )}
                                 </div>
                                 <div>

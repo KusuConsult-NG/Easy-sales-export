@@ -429,12 +429,39 @@ async function _getDirectoryMembersAction(): Promise<
                                    data.lastName === "undefined";
                 if (isCorrupted) return null;
 
+                /**
+                 *   #589 EVERY STRING THE DIRECTORY SEARCHES ON IS A STRING.
+                 *
+                 *   `occupation: data.occupation` was copied straight through,
+                 *   and the screen filters with
+                 *
+                 *       member.occupation.toLowerCase().includes(query)
+                 *
+                 *   on EVERY member, on every keystroke. One row without an
+                 *   occupation therefore took the whole directory down for
+                 *   everyone the moment somebody typed — and the admin door
+                 *   writes `occupation: app.occupation || uData.occupation || null`,
+                 *   so a null is not hypothetical, it is what that door stores
+                 *   when neither record has one.
+                 *
+                 *   The corruption check above already refuses a row with no
+                 *   first or last name; it says nothing about the other three
+                 *   fields, and `location` is a template string that renders
+                 *   "undefined, undefined" when the LGA is missing rather than
+                 *   throwing — visible nonsense instead of a crash, which is
+                 *   why it survived unnoticed.
+                 */
+                const text = (value: unknown) =>
+                    typeof value === "string" && value.trim() ? value.trim() : "";
+                const lga = text(data.lga);
+                const state = text(data.stateOfOrigin);
+
                 return {
                     id: doc.id,
                     name: `${data.firstName} ${data.lastName}`,
                     role: "Member",
-                    location: `${data.lga}, ${data.stateOfOrigin}`,
-                    occupation: data.occupation,
+                    location: [lga, state].filter(Boolean).join(", "),
+                    occupation: text(data.occupation),
                     joined: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : "Recent",
                     image: data.documents?.passportPhoto?.url || null,
                     phone: data.phone || ""
