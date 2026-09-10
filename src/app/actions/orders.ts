@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { decrementManyOrFail } from "@/lib/wallet-ledger";
+import { decrementManyOrFail, restoreReservedStock } from "@/lib/wallet-ledger";
 import type { Order, Product } from "@/lib/types/marketplace";
 
 import { getPlatformFees } from "@/lib/system-settings";
@@ -41,7 +41,10 @@ async function _createOrderAction(
         lga: string;
         phone: string;
     }
-): Promise<CreateOrderState> { let sessionResult;
+): Promise<CreateOrderState> {
+    //   #613 — declared out here so the catch can reverse whatever was reserved.
+    let reserved: Array<{ collection: string; id: string; field: string; amount: number }> = [];
+ let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -94,6 +97,13 @@ async function _createOrderAction(
                 data: null,
             };
         }
+
+        reserved = items.map((item) => ({
+            collection: COLLECTIONS.PRODUCTS,
+            id: item.productId,
+            field: "availableQuantity",
+            amount: item.quantity,
+        }));
 
         return await db.runTransaction(async (transaction) => { const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
             const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
@@ -229,6 +239,15 @@ async function _createOrderAction(
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
+        //   #613 — put the reserved units back. The reservation happens BEFORE
+        //   the order rows, which is the right order — reserving after writing
+        //   oversells — but everything after it can throw, and until now nothing
+        //   reversed it: no order was created AND the stock was gone. It
+        //   accumulated, so a product lost availability on every failed checkout
+        //   until it could not be bought while sitting in the warehouse.
+        if (reserved.length > 0) {
+            await restoreReservedStock(reserved, "createOrderAction failed after reserving stock");
+        }
         return { success: false as const, error: error instanceof Error ? error.message : "Failed to create order", data: null };
     }
 }

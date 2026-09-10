@@ -572,6 +572,69 @@ export async function decrementManyOrFail(
 }
 
 /**
+ * Puts back stock that was reserved for work which then failed.
+ *
+ *   #613 A RESERVATION IS A DEBIT, AND IT NEEDED THE SAME COMPENSATION THE MONEY
+ *        ALREADY HAD.
+ *
+ *   `decrementManyOrFail` takes units out of `availableQuantity` BEFORE an order
+ *   is written, which is the right order — reserving after writing oversells.
+ *   /marketplace's checkout says so in as many words:
+ *
+ *       // Reserved BEFORE the order rows are written, so a failure here
+ *       // creates nothing.
+ *
+ *   True of the ORDER and silent about the STOCK. The transaction that follows
+ *   can throw — "Product not found", "OUT OF STOCK", a timeout — and nothing put
+ *   the units back. No order existed, and the goods were gone from the shelf.
+ *
+ *   It ACCUMULATES, which is what makes it worth a module rather than a note. A
+ *   product loses a unit of availability on every failed checkout, permanently,
+ *   until it reads zero and cannot be bought while sitting in the seller's
+ *   warehouse. Nothing on any screen would explain why.
+ *
+ *   BEST EFFORT, AND LOUD WHEN IT FAILS — the same contract as
+ *   `compensateJsonbDebit` above, and for the same reason: this runs on a path
+ *   that is already failing, so it must not replace the original error with one
+ *   of its own.
+ */
+export async function restoreReservedStock(
+    items: Array<{ collection: string; id: string; field: string; amount: number }>,
+    reason: string,
+): Promise<void> {
+    if (items.length === 0) return;
+
+    try {
+        //   Through the compat adapter, so the units go back the way every other
+        //   counter moves — `FieldValue.increment`, applied in SQL by migration
+        //   010. A second, parallel way to move the same number is how two paths
+        //   come to disagree.
+        const { supabaseDb } = await import("./supabase-db");
+        const { FieldValue } = await import("./firestore-compat");
+
+        for (const item of items) {
+            if (!Number.isFinite(item.amount) || item.amount <= 0) continue;
+            await supabaseDb.collection(item.collection).doc(item.id).update({
+                [item.field]: FieldValue.increment(item.amount),
+            });
+        }
+
+        logger.warn(
+            `[wallet-ledger] restored ${items.length} stock reservation(s) after: ${reason}`,
+        );
+    } catch (err) {
+        //   Never rethrow. The caller is already returning a failure and this
+        //   would replace it with a less useful one — but the units really are
+        //   still missing, so this has to be findable.
+        logger.error(
+            `[wallet-ledger] COULD NOT RESTORE STOCK after: ${reason}. ` +
+            `Units remain reserved against no order and need manual repair.`,
+            { items, err },
+        );
+    }
+}
+
+/**
  * Raises a counter only while it stays within a ceiling held on the same record.
  *
  * For capacity: `currentParticipants` may rise only within `maxParticipants`.

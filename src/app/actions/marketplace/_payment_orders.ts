@@ -7,7 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { decrementManyOrFail } from "@/lib/wallet-ledger";
+import { decrementManyOrFail, restoreReservedStock } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
 import { platformFeeFor, sellerNetFor } from "@/lib/platform-fee";
 import { notifyOrderPlaced } from "@/lib/marketplace-notifications";
@@ -536,7 +536,10 @@ async function _createPaymentOnDeliveryOrderAction(
         state: string;
         lga: string;
     }
-): Promise<ActionResponse<null>> { 
+): Promise<ActionResponse<null>> {
+    //   #613 — declared here so the catch can reverse whatever was reserved.
+    let reserved: Array<{ collection: string; id: string; field: string; amount: number }> = [];
+ 
     let sessionResult;
     try {
         /**
@@ -593,14 +596,20 @@ async function _createPaymentOnDeliveryOrderAction(
         // the bank-transfer path above and the Paystack path earlier in this
         // file: the check-then-decrement this replaces took no lock, so two
         // different orders for the last unit both passed.
-        const stock = await decrementManyOrFail(validatedItems.map((item: any) => ({
+        //   #613 — kept, so the catch can put these units back if anything after
+        //   the reservation throws. See restoreReservedStock.
+        reserved = validatedItems.map((item: any) => ({
             collection: item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS,
             id: item.productId,
             field: "availableQuantity",
             amount: item.quantity,
-        })));
+        }));
+        const stock = await decrementManyOrFail(reserved);
 
         if (!stock.ok) {
+            //   Nothing to restore: 015 is all-or-nothing, so a refusal
+            //   decremented nothing.
+            reserved = [];
             // Nothing charged on this path either — payment happens on
             // delivery — so refuse outright. 015 is all-or-nothing, so nothing
             // was decremented.
@@ -693,7 +702,14 @@ async function _createPaymentOnDeliveryOrderAction(
 
         revalidatePath("/marketplace/buyer/orders");
         return { error: null, success: true as const, data: null };
-    } catch (error) { 
+    } catch (error) {
+        //   #613 — the reservation is a debit and needs reversing when the work
+        //   after it fails. Without this a failed payment-on-delivery order left
+        //   the units missing from the shelf with no order to show for them.
+        if (reserved.length > 0) {
+            await restoreReservedStock(reserved, "createPaymentOnDeliveryOrderAction failed after reserving stock");
+        }
+ 
         logger.error("createPaymentOnDeliveryOrderAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)

@@ -476,12 +476,33 @@ async function _walletCheckoutAction(
         metadata: { orderId },
     });
 
-    if (!ok) {
-        if (reason === "already_processed") {
-            logger.info(`[Wallet] Order ${orderId} already charged; ignoring duplicate checkout`);
-            return { error: null, success: true as const, data: { newBalance } };
-        }
+    if (!ok && reason !== "already_processed") {
         return { success: false as const, error: "Insufficient wallet balance", data: null };
+    }
+
+    /*
+     *   #613 A FAILURE BETWEEN THE DEBIT AND THE LEDGER LEFT A CHARGE WITH NO
+     *        ROW, AND THE RETRY GUARANTEED IT STAYED THAT WAY.
+     *
+     *   `already_processed` used to return here, before the two ledger writes
+     *   below. That is right for the MONEY — `debit_wallet_once` is idempotent
+     *   and must not charge twice — and wrong for the RECORD, because the two
+     *   writes after it are separate round trips that the adapter flushes one by
+     *   one. A timeout between them left the wallet debited with no purchase row
+     *   and no transaction row, and every retry took this early return and wrote
+     *   neither. The gap was permanent by construction.
+     *
+     *   The comment on those writes says what that costs: "Reconciliation reads
+     *   exactly these rows to decide whether a payment produced what it should
+     *   have." A charge invisible to reconciliation is the one it cannot repair.
+     *
+     *   So the early return is gone and the rows are written with a DETERMINISTIC
+     *   id derived from the order. Writing them twice is now a no-op rather than
+     *   a duplicate, which is what lets a retry finish the job the first call
+     *   started instead of stepping over it.
+     */
+    if (!ok) {
+        logger.info(`[Wallet] Order ${orderId} already charged; ensuring the ledger rows exist`);
     }
 
     // Ledger records, written after the money moved.
@@ -497,7 +518,11 @@ async function _walletCheckoutAction(
     // rows to decide whether a payment produced what it should have, so the
     // half-applied fix left the discrepancy where it does the most harm.
     const shortId = orderId.substring(0, 8).toUpperCase();
-    const txnRef = db.collection(TXN_COLLECTION).doc();
+    //   #613 — derived from the order, not random. A random id makes every retry
+    //   a NEW row, so repairing the gap above would have created duplicates
+    //   instead of closing it. One order, one purchase row, however many times
+    //   this runs.
+    const txnRef = db.collection(TXN_COLLECTION).doc(`checkout-${orderId}`);
     await txnRef.set({
         walletId: userId,
         userId,
@@ -509,7 +534,7 @@ async function _walletCheckoutAction(
         status: "completed",
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
 
     await db.collection(COLLECTIONS.TRANSACTIONS).doc(txnRef.id).set({
         id: txnRef.id,
@@ -522,7 +547,7 @@ async function _walletCheckoutAction(
         date: FieldValue.serverTimestamp(),
         reference: orderId,
         description: `Marketplace purchase — Order #${shortId}`
-    });
+    }, { merge: true });
 
     return { error: null, success: true as const, data: { newBalance } };
 }

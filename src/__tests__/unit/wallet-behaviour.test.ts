@@ -445,7 +445,32 @@ describe('walletCheckoutAction', () => {
         debitWalletOnce.mockImplementation(async () => ({ ok: false, balance: 40_000, reason: 'already_processed' }));
 
         expect(await checkout()).toMatchObject({ success: true, data: { newBalance: 40_000 } });
-        expect(store.size(TXNS)).toBe(0);
+    });
+
+    it('AND STILL WRITES THE LEDGER ROW THE FIRST ATTEMPT MAY NOT HAVE REACHED', async () => {
+        /*
+         *   #613 — this used to assert `store.size(TXNS)` was 0 here, which
+         *   encoded the defect rather than a guarantee.
+         *
+         *   `already_processed` returned BEFORE the two ledger writes. That is
+         *   right for the money and wrong for the record: the writes are separate
+         *   round trips, so a failure between them left the wallet charged with no
+         *   purchase row, and every retry took the early return and wrote neither.
+         *   The gap was permanent by construction.
+         *
+         *   What the test was protecting is "charging once", and that still holds
+         *   — `debit_wallet_once` is what enforces it. What it must ALSO hold is
+         *   that the row ends up there exactly once, which is why the row now
+         *   carries an id derived from the order.
+         */
+        debitWalletOnce.mockImplementation(async () => ({ ok: false, balance: 40_000, reason: 'already_processed' }));
+
+        await checkout();
+        await checkout();
+
+        expect(debitWalletOnce).toHaveBeenCalledTimes(2);
+        //   Twice attempted, once recorded. A random id would have made this 2.
+        expect(store.size(TXNS)).toBe(1);
     });
 });
 
