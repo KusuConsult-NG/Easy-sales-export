@@ -404,6 +404,11 @@ describe('#196 — the premise, re-measured', () => {
         const crons = readdirSync(join(ROOT, 'src/app/api/cron')).sort();
 
         expect(crons).toEqual([
+            //   #615 added the notification ageing job. This list is NAMED rather
+            //   than counted precisely so that adding one is a deliberate edit —
+            //   the second ratchet to catch this commit, after the workflow cap
+            //   in #614. Both fired for the right reason.
+            'age-notifications',
             'close-export-windows',
             'gdpr-purge',
             'process-email-queue',

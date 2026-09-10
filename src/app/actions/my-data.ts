@@ -33,6 +33,7 @@ import { toDate } from "@/lib/date-utils";
 import { isActiveOrderStatus } from "@/lib/order-status";
 import { logger } from "@/lib/logger";
 import { isNotificationVisible, NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
+import { isOnTheList } from "@/lib/notification-ageing";
 
 /** The signed-in user's id, or null when unauthenticated. */
 async function currentUserId(): Promise<string | null> {
@@ -275,14 +276,22 @@ export async function getMyNotifications(max = 200): Promise<any[]> {
     if (!userId) return [];
 
     try {
+        //   #615 — one over the window is not enough here: archived rows are
+        //   filtered AFTER the read, so a page made entirely of archived rows
+        //   would come back empty while current ones sat just past the limit.
+        //   Reading a multiple and trimming to `max` keeps the caller's contract.
         const snap = await db
             .collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)
             .orderBy("createdAt", "desc")
-            .limit(max)
+            .limit(max * 3)
             .get();
 
-        return serializeDocs<any>(snap.docs);
+        //   Archived rows are off the list and still in the store. Through the
+        //   shared predicate rather than `archived !== true` written out here,
+        //   because that is the spelling that drifts — #439, and the reason every
+        //   other shared reading in this codebase exists.
+        return serializeDocs<any>(snap.docs).filter(isOnTheList).slice(0, max);
     } catch (error) {
         logger.error("[my-data] getMyNotifications failed", { userId, error });
         return [];

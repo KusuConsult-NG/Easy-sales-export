@@ -56,6 +56,16 @@ name: Scheduled Jobs
 # a-job-nobody-scheduled.test.ts now holds all four lists to each other, so a
 # third omission fails the suite rather than waiting to be noticed.
 #
+#   age-notifications    #615. Nothing aged a notification out, so one screen
+#                        showed two months of them in a column (#534). Marks rows
+#                        past their window as archived — thirty days once read,
+#                        six months if never read. NOTHING IS DELETED; the flag is
+#                        reversible. Daily, after gdpr-purge.
+#
+#                        This one is the ratchet above working: the endpoint was
+#                        written, the suite went red for all three lists, and it
+#                        could not be forgotten the way the previous two were.
+#
 # GitHub's scheduler is best-effort and can be delayed under load, which is
 # acceptable for all four: every one of them is idempotent and catch-up by
 # design, so a late or skipped run costs latency rather than correctness.
@@ -83,6 +93,7 @@ permissions:
 #     - cron: '0 3 * * *'      # gdpr-purge           — daily at 03:00 UTC
 #     - cron: '7 * * * *'      # close-export-windows — hourly, off the hour
 #     - cron: '23 * * * *'     # release-stale-reservations — hourly
+#     - cron: '13 4 * * *'     # age-notifications    — daily, after gdpr-purge
 on:
   workflow_dispatch:
     inputs:
@@ -98,6 +109,7 @@ on:
           - gdpr-purge
           - close-export-windows
           - release-stale-reservations
+          - age-notifications
 
 # The offsets (:17, :43) keep these off the top of the hour, when GitHub's
 # scheduler is most contended and delays are longest.
@@ -140,6 +152,7 @@ jobs:
             '0 3 * * *')    echo "path=gdpr-purge"          >> "$GITHUB_OUTPUT" ;;
             '7 * * * *')    echo "path=close-export-windows" >> "$GITHUB_OUTPUT" ;;
             '23 * * * *')   echo "path=release-stale-reservations" >> "$GITHUB_OUTPUT" ;;
+            '13 4 * * *')   echo "path=age-notifications"    >> "$GITHUB_OUTPUT" ;;
             *)              echo "path=${{ inputs.job }}"   >> "$GITHUB_OUTPUT" ;;
           esac
 
