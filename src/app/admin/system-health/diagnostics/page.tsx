@@ -39,6 +39,7 @@ import { runSystemDiagnosticAction } from "@/app/actions/admin";
 import type { HealthReport } from "@/app/actions/health";
 import { useToast } from "@/contexts/ToastContext";
 import { formatDate } from "@/lib/utils";
+import { numberOrZero } from "@/lib/numbers";
 
 /**
  * A dependency card.
@@ -214,8 +215,15 @@ export default function AdminDiagnosticsPage() {
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Orphaned applications</span>
-                            <span className={`text-sm font-bold ${data && data.stats.orphanedApplications > 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                                {data ? data.stats.orphanedApplications : '—'}
+                            {/*
+                              *   #610 — `data && data.stats.orphanedApplications` guards
+                              *   `data` and throws on `data.stats`. #604 fixed this exact
+                              *   read on /admin/system-health and did not fix its sibling
+                              *   here: THE FIX REACHED ONE OF TWO DOORS, which is the
+                              *   shape #595 and #601 each recorded.
+                              */}
+                            <span className={`text-sm font-bold ${numberOrZero(data?.stats?.orphanedApplications) > 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                                {data ? numberOrZero(data.stats?.orphanedApplications) : '—'}
                             </span>
                         </div>
                     </div>

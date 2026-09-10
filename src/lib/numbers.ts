@@ -60,3 +60,26 @@ export function numberOrDash(value: unknown, fallback = "—"): string {
     const n = Number(value);
     return Number.isFinite(n) ? n.toLocaleString() : fallback;
 }
+
+/**
+ * A whole-number percentage, or 0 when there is nothing to take a percentage of.
+ *
+ *   #610 `Math.round((stats.approved / stats.totalApplications) * 100)` on
+ *   /admin/wave/compliance rendered "NaN%" before the first application arrived,
+ *   and again whenever the answer omitted the denominator. On a page whose
+ *   figures are reported to a regulator, NaN% reads as a fault rather than a
+ *   fact — and 0% is both true and legible.
+ *
+ *   NOT A SWEEP. The other five percentage sites in this codebase were checked
+ *   and every one already guards its denominator: the broadcast history has
+ *   `totalRecipients > 0 ?`, the seller analytics have `prevTotalSales > 0 &&`,
+ *   the export windows cap with Math.min. The defect was two lines, twelve lines
+ *   above three siblings in the same file that divide safely. This exists so the
+ *   sixth site does not have to remember, not because the first five forgot.
+ */
+export function percentage(part: unknown, whole: unknown): number {
+    const p = numberOrZero(part);
+    const w = numberOrZero(whole);
+    if (w <= 0) return 0;
+    return Math.round((p / w) * 100);
+}

@@ -429,10 +429,19 @@ const ADMIN_SUBJECTS: [string, string][] = [
  *   five call no action and no fetch on any path, which that file checks in both
  *   directions — the check #604's taxonomy could not survive.
  *
- * SEVEN REMAIN GENUINELY UNACCOUNTED FOR: settings/fees, settings/general,
+ * #610 TOOK THE LAST SEVEN — settings/fees, settings/general,
  * settings/notifications, settings/security, system-health,
- * system-health/diagnostics and wave/compliance. system-health is covered by its
- * own suite after #604's mutant survived here; the other six are still a to-do.
+ * system-health/diagnostics and wave/compliance — in
+ * `the-last-seven-admin-screens.test.tsx`, which gives each the answer it
+ * actually reads instead of guessing one shape for all of them. That is what
+ * #601 said would be needed at the start, and what the eighteen were waiting for.
+ *
+ * ALL EIGHTEEN ARE NOW ACCOUNTED FOR, AND NONE OF THEM HAS MOVED OFF THIS LIST.
+ * This suite still cannot reach them; being covered elsewhere is not being
+ * covered here, and the number below stays honest about what THIS instrument
+ * proves. It is the difference between "forty-eight screens covered" and
+ * "thirty covered here, eighteen covered by three other files, and no screen
+ * covered by nobody".
  */
 const NOT_REACHED = [
     'communications',

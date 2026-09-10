@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { Users, TrendingUp, DollarSign, CheckCircle, XCircle, Clock, Download, BarChart3 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { recordExport } from "@/lib/record-export";
+import { percentage, numberOrZero } from "@/lib/numbers";
 
 type ComplianceStats = {
     totalApplications: number;
@@ -180,7 +181,7 @@ export default function WAVECompliancePage() {
                                     <Users className="w-6 h-6 text-blue-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {stats.totalApplications}
+                                    {numberOrZero(stats.totalApplications)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
@@ -194,11 +195,11 @@ export default function WAVECompliancePage() {
                                     <CheckCircle className="w-6 h-6 text-green-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {stats.approved}
+                                    {numberOrZero(stats.approved)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
-                                Approved ({Math.round((stats.approved / stats.totalApplications) * 100)}%)
+                                Approved ({percentage(stats.approved, stats.totalApplications)}%)
                             </p>
                         </div>
 
@@ -208,7 +209,7 @@ export default function WAVECompliancePage() {
                                     <Clock className="w-6 h-6 text-yellow-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {stats.pending}
+                                    {numberOrZero(stats.pending)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
@@ -222,11 +223,11 @@ export default function WAVECompliancePage() {
                                     <XCircle className="w-6 h-6 text-red-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {stats.rejected}
+                                    {numberOrZero(stats.rejected)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
-                                Rejected ({Math.round((stats.rejected / stats.totalApplications) * 100)}%)
+                                Rejected ({percentage(stats.rejected, stats.totalApplications)}%)
                             </p>
                         </div>
                     </div>
@@ -296,7 +297,17 @@ export default function WAVECompliancePage() {
                                 Age Distribution
                             </h3>
                             <div className="space-y-4">
-                                {Object.entries(demographics.ageGroups).map(([age, count]) => (
+                                {/*
+                                  *   #610 — `{demographics && …}` guards the OUTER
+                                  *   object and this read is what throws. #601's
+                                  *   `numberOrZero(stats.bySeverity.info)` and #603's
+                                  *   `data?.services.firestore` in a third notation, and
+                                  *   the fourth instance in this audit — a habit rather
+                                  *   than an oversight. A response carrying demographics
+                                  *   without one of its three breakdowns blanked the page
+                                  *   WAVE's numbers are reported from.
+                                  */}
+                                {Object.entries(demographics.ageGroups ?? {}).map(([age, count]) => (
                                     <div key={age}>
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-sm font-semibold text-slate-900">{age}</span>
@@ -320,7 +331,7 @@ export default function WAVECompliancePage() {
                                 Top States
                             </h3>
                             <div className="space-y-4">
-                                {Object.entries(demographics.states)
+                                {Object.entries(demographics.states ?? {})
                                     .sort(([, a], [, b]) => b - a)
                                     .slice(0, 5)
                                     .map(([state, count]) => (
@@ -347,7 +358,7 @@ export default function WAVECompliancePage() {
                                 Business Types
                             </h3>
                             <div className="space-y-4">
-                                {Object.entries(demographics.businessTypes).map(([type, count]) => (
+                                {Object.entries(demographics.businessTypes ?? {}).map(([type, count]) => (
                                     <div key={type}>
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-sm font-semibold text-slate-900 capitalize">{type}</span>
