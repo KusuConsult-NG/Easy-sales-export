@@ -31,6 +31,31 @@ name: Scheduled Jobs
 #                        payment reconcile-paystack has just healed is not
 #                        reported as unfulfilled by a race between the two.
 #
+# #614 ADDED TWO THIS FILE HAD ALREADY DRIFTED PAST. Seven endpoints exist under
+# src/app/api/cron/ and this workflow named five, so the list of jobs was kept by
+# hand in four places — the route directories, the schedule block, the manual
+# dispatch options and the case statement below — and two of them fell out:
+#
+#   close-export-windows Closes an export window whose investment period has
+#                        ended (#196). Nothing else writes "closed", so without
+#                        it every expired window stays listed. The money half is
+#                        already safe — all three investment doors refuse an
+#                        expired window — so the cost is a list offering
+#                        opportunities that cannot be taken.
+#
+#   release-stale-reservations
+#                        Gives back a parcel a buyer walked away from (#140).
+#                        This is the severe one: a hold has no other exit. The
+#                        owner cannot relist, no other buyer can claim, and an
+#                        admin cannot free it either — #137 deliberately removed
+#                        "pending" from the statuses an approval may overwrite.
+#                        Closing the checkout tab took the parcel off the market
+#                        FOR GOOD. Hourly, against holds of two hours and seven
+#                        days, so a lapse is released well within either.
+#
+# a-job-nobody-scheduled.test.ts now holds all four lists to each other, so a
+# third omission fails the suite rather than waiting to be noticed.
+#
 # GitHub's scheduler is best-effort and can be delayed under load, which is
 # acceptable for all four: every one of them is idempotent and catch-up by
 # design, so a late or skipped run costs latency rather than correctness.
@@ -56,6 +81,8 @@ permissions:
 #     - cron: '43 */6 * * *'   # reconcile-paystack   — every 6 hours
 #     - cron: '51 */6 * * *'   # reconcile-fulfilment — every 6 hours, after it
 #     - cron: '0 3 * * *'      # gdpr-purge           — daily at 03:00 UTC
+#     - cron: '7 * * * *'      # close-export-windows — hourly, off the hour
+#     - cron: '23 * * * *'     # release-stale-reservations — hourly
 on:
   workflow_dispatch:
     inputs:
@@ -69,6 +96,8 @@ on:
           - reconcile-paystack
           - reconcile-fulfilment
           - gdpr-purge
+          - close-export-windows
+          - release-stale-reservations
 
 # The offsets (:17, :43) keep these off the top of the hour, when GitHub's
 # scheduler is most contended and delays are longest.
@@ -109,6 +138,8 @@ jobs:
             '43 */6 * * *') echo "path=reconcile-paystack"  >> "$GITHUB_OUTPUT" ;;
             '51 */6 * * *') echo "path=reconcile-fulfilment" >> "$GITHUB_OUTPUT" ;;
             '0 3 * * *')    echo "path=gdpr-purge"          >> "$GITHUB_OUTPUT" ;;
+            '7 * * * *')    echo "path=close-export-windows" >> "$GITHUB_OUTPUT" ;;
+            '23 * * * *')   echo "path=release-stale-reservations" >> "$GITHUB_OUTPUT" ;;
             *)              echo "path=${{ inputs.job }}"   >> "$GITHUB_OUTPUT" ;;
           esac
 
