@@ -22,6 +22,7 @@ import { logger } from "@/lib/logger";
 import { getUserBookingsAction } from "@/app/actions/export-booking";
 import { Container, Clock, CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { bookingDocuments } from "@/lib/booking-documents";
 
 type Booking = {
     id: string;
@@ -32,6 +33,12 @@ type Booking = {
     shippingTerms?: string;
     portOfOrigin?: string;
     vessel?: string;
+    /**
+     *   #590 — declared at last. The writer has stored these since #348's
+     *   commit and neither screen's type mentioned them, which is part of how
+     *   they went undrawn for so long.
+     */
+    documents?: { billOfLading?: string; certificateOfOrigin?: string };
 };
 
 export default function ExportBookingsClient({ initial = null }: {
@@ -116,6 +123,27 @@ export default function ExportBookingsClient({ initial = null }: {
                                 {(b.shippingTerms || b.portOfOrigin || b.vessel) && (
                                     <p className="text-xs text-slate-400 mt-1 truncate">
                                         {[b.shippingTerms, b.portOfOrigin, b.vessel].filter(Boolean).join(" · ")}
+                                    </p>
+                                )}
+                                {/*
+                                  * #590 — the two papers the wizard uploads and
+                                  * stores, drawn by nobody until now. #348
+                                  * rescued the six fields beside them and
+                                  * stopped one short.
+                                  */}
+                                {bookingDocuments(b).length > 0 && (
+                                    <p className="text-xs mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                        {bookingDocuments(b).map((doc) => (
+                                            <a
+                                                key={doc.label}
+                                                href={doc.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-600 hover:text-blue-800 underline font-medium"
+                                            >
+                                                {doc.label}
+                                            </a>
+                                        ))}
                                     </p>
                                 )}
                             </div>
