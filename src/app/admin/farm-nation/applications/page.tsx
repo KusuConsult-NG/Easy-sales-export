@@ -15,7 +15,7 @@ import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { recordExport } from "@/lib/record-export";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
-import { formatDateOrDash } from "@/lib/date-utils";
+import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 interface SellerProfile {
     id: string;
@@ -143,18 +143,27 @@ export default function FarmNationApplicationsPage() {
 
             const exportData = result.data;
             const rows = exportData.map((a: any) => {
-                let dateStr = "";
-                const ts = a.data.serviceRegistrations?.farmNation?.submittedAt || a.data.createdAt;
-                if (ts?.seconds) dateStr = new Date(ts.seconds * 1000).toLocaleDateString("en-NG");
-                else if (ts) dateStr = new Date(ts).toLocaleDateString("en-NG");
+                //   #605 — THE EXPORT COPY OF THE MAPPING #602 FIXED IN THE TABLE.
+                //
+                //   #602 guarded `item.data` and `item.user` where this screen
+                //   RENDERS its rows, after an application whose user record did not
+                //   join blanked the whole approval queue. This function builds the
+                //   CSV of the same rows from the same two joined halves and was
+                //   left reading both raw, so one un-joined application still failed
+                //   the entire export. Two copies of one contract; the fix reached
+                //   one of them. wave/members had the identical pair, found in #604.
+                const data = a?.data ?? {};
+                const user = a?.user ?? {};
+                const ts = data.serviceRegistrations?.farmNation?.submittedAt || data.createdAt;
+                const dateStr = formatShortDateOrDash(ts, "");
 
                 return [
-                    a.user.name || "",
-                    a.user.email || "",
-                    a.user.phone || a.data.phone || "",
-                    a.user.gender || a.data.gender || "",
-                    a.user.state && a.user.state !== "Unknown" ? `${a.user.state}${a.user.lga && a.user.lga !== "Unknown" ? `, ${a.user.lga}` : ""}` : (a.data.stateOfOrigin ? `${a.data.stateOfOrigin}${a.data.lga ? `, ${a.data.lga}` : ""}` : ""),
-                    a.status,
+                    user.name || "",
+                    user.email || "",
+                    user.phone || data.phone || "",
+                    user.gender || data.gender || "",
+                    user.state && user.state !== "Unknown" ? `${user.state}${user.lga && user.lga !== "Unknown" ? `, ${user.lga}` : ""}` : (data.stateOfOrigin ? `${data.stateOfOrigin}${data.lga ? `, ${data.lga}` : ""}` : ""),
+                    a?.status,
                     dateStr
                 ];
             });
@@ -290,18 +299,22 @@ export default function FarmNationApplicationsPage() {
         {
             header: "Submitted",
             accessor: (item: StandardPendingForm<SellerProfile>) => {
-                let date = new Date();
-                const ts = item.data?.serviceRegistrations?.farmNation?.submittedAt;
-                if (ts?.seconds) date = new Date(ts.seconds * 1000);
-                else if (ts) date = new Date(ts as string);
-                else if (item.data?.createdAt) {
-                    if ((item.data?.createdAt as any).seconds) date = new Date((item.data?.createdAt as any).seconds * 1000);
-                    else date = new Date(item.data?.createdAt);
-                }
-                
+                //   #605 — this opened `let date = new Date()`, so an application
+                //   with neither a submittedAt nor a createdAt was listed as
+                //   SUBMITTED TODAY, on the queue where staff decide which
+                //   applications are overdue. "We cannot tell when this arrived"
+                //   became "it arrived just now" — the exact lie `toDateOrNull`'s
+                //   own note warns about, and the reason it exists beside `toDate`.
+                //
+                //   The four-line shape ladder underneath it went too: it knew
+                //   `{ seconds }` and an ISO string and not the other two, and the
+                //   reader below knows all four.
+                const ts = item.data?.serviceRegistrations?.farmNation?.submittedAt
+                    ?? item.data?.createdAt;
+
                 return (
                     <span className="text-sm text-slate-500">
-                        {formatDateOrDash(date, { dateStyle: "medium" })}
+                        {formatDateOrDash(ts, { dateStyle: "medium" })}
                     </span>
                 );
             },

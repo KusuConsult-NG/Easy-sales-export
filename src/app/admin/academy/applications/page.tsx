@@ -22,7 +22,7 @@ import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
-import { formatDateOrDash } from "@/lib/date-utils";
+import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -682,7 +682,7 @@ export default function AdminAcademyApplicationsPage() {
                 app.plan || "",
                 app.stateOfOrigin || "",
                 app.lga || "",
-                app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("en-NG") : ""
+                app.submittedAt ? formatShortDateOrDash(app.submittedAt, "—", "en-NG") : ""
             ]);
             const csvContent = [
                 headers.join(","),

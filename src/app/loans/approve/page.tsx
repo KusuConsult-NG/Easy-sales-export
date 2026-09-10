@@ -17,6 +17,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { type LoanApplication, LoanPurpose } from "@/types/strict";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function LoanApprovalPage() {
     /**
@@ -281,7 +282,7 @@ export default function LoanApprovalPage() {
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Applied</p>
                                         <p className="font-semibold text-slate-900">
-                                            {new Date(loan.createdAt).toLocaleDateString()}
+                                            {formatShortDateOrDash(loan.createdAt)}
                                         </p>
                                     </div>
                                 </div>

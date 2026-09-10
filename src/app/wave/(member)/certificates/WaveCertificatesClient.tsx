@@ -12,6 +12,7 @@ import { Award, Download, Share2, Calendar, CheckCircle, TrendingUp, BookOpen, S
 import Link from "next/link";
 import { getCurrentUserCertificatesAction, WaveCertificate } from "@/app/actions/wave";
 import { humaniseCapitalised } from "@/lib/humanise";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 export default function WaveCertificatesClient({ initial = null }: {
     /**  #551 The certificates the server already fetched. */
@@ -169,7 +170,7 @@ export default function WaveCertificatesClient({ initial = null }: {
                                 {/* Certificate Meta */}
                                 <div className="flex items-center gap-2 mb-4 text-sm text-slate-600">
                                     <Calendar className="w-4 h-4" />
-                                    <span>Issued on {new Date(cert.issuedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                                    <span>Issued on {formatDateOrDash(cert.issuedDate, { month: 'long', day: 'numeric', year: 'numeric' }, "—", 'en-US')}</span>
                                     <CheckCircle className="w-4 h-4 text-emerald-700 ml-2" />
                                     <span className="text-emerald-700 font-medium">Verified</span>
                                 </div>

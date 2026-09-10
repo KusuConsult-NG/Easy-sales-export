@@ -193,17 +193,60 @@ export function formatDateOrDash(
     value: unknown,
     options: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" },
     fallback = "—",
+    locale = "en-NG",
 ): string {
     const d = toDateOrNull(value);
     if (!d) return fallback;
     try {
-        return new Intl.DateTimeFormat("en-NG", options).format(d);
+        return new Intl.DateTimeFormat(locale, options).format(d);
     } catch {
         return fallback;
     }
 }
 
 /** The same, with the time — the shape most of the copies used. */
-export function formatDateTimeOrDash(value: unknown, fallback = "—"): string {
-    return formatDateOrDash(value, { dateStyle: "medium", timeStyle: "short" }, fallback);
+export function formatDateTimeOrDash(value: unknown, fallback = "—", locale = "en-NG"): string {
+    return formatDateOrDash(value, { dateStyle: "medium", timeStyle: "short" }, fallback, locale);
+}
+
+/**
+ *   #605 AND SIXTY-THREE MORE COPIES, WRITTEN THE OTHER WAY.
+ *
+ *   #597 replaced seven hand-built `Intl.DateTimeFormat` helpers. It did not
+ *   touch the far commoner spelling, which is a bare method call:
+ *
+ *       {new Date(order.createdAt).toLocaleDateString()}
+ *       {new Date(update.timestamp).toLocaleString()}
+ *
+ *   `Date.prototype.toLocaleDateString` does NOT throw on an Invalid Date — it
+ *   returns the literal string "Invalid Date" — so this spelling fails quietly
+ *   where #597's threw loudly. That is the only reason it survived a commit
+ *   whose whole subject was date formatting: nothing fell over, so nothing
+ *   pointed at it.
+ *
+ *   IT IS NOT MERELY COSMETIC, AND THAT IS THE PART WORTH SAYING. `new Date(x)`
+ *   understands an ISO string and a number and NOTHING ELSE. This codebase
+ *   stores dates in four shapes — a Firestore Timestamp with `.toDate()`, a
+ *   plain `{ seconds }` object, an admin-style `{ _seconds }` that lost its
+ *   methods crossing the server boundary, and an ISO string from
+ *   `serializeValue` — and `toDateOrNull` reads all four. Every site handed one
+ *   of the first three was already printing "Invalid Date" to a person.
+ *
+ *   THREE SHAPES, ONE RULE. These wrappers exist so a call site keeps the
+ *   appearance it had — a short numeric date, a date with a time, a time alone —
+ *   without restating the coercion or inventing its own answer for "there is no
+ *   date". `locale` is a parameter rather than a constant because the sweep
+ *   preserved each screen's existing locale exactly; making certificates read
+ *   "5 March" instead of "March 5" is a product decision, not a defect fix, and
+ *   does not belong in the same commit as one.
+ */
+
+/** A short numeric date — what a bare `toLocaleDateString()` used to render. */
+export function formatShortDateOrDash(value: unknown, fallback = "—", locale = "en-NG"): string {
+    return formatDateOrDash(value, { year: "numeric", month: "2-digit", day: "2-digit" }, fallback, locale);
+}
+
+/** A time of day — what a bare `toLocaleTimeString()` used to render. */
+export function formatTimeOrDash(value: unknown, fallback = "—", locale = "en-NG"): string {
+    return formatDateOrDash(value, { hour: "2-digit", minute: "2-digit" }, fallback, locale);
 }

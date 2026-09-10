@@ -8,6 +8,7 @@ import { getLiveSessionsAction } from "@/app/actions/academy";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { logger } from "@/lib/logger";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatShortDateOrDash } from "@/lib/date-utils";
  
 export default function AcademyLiveClient({ initial = null }: {
     /**
@@ -212,7 +213,7 @@ export default function AcademyLiveClient({ initial = null }: {
                                                 Recorded
                                             </span>
                                             <span className="text-xs text-slate-400">
-                                                {session.createdAt ? new Date(session.createdAt).toLocaleDateString() : ""}
+                                                {session.createdAt ? formatShortDateOrDash(session.createdAt) : ""}
                                             </span>
                                         </div>
                                         <h3 className="font-bold text-slate-900 text-lg line-clamp-1">

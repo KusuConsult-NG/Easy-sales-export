@@ -18,6 +18,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { getDashboardStatsAction } from "@/app/actions/admin-analytics";
 import dynamic from "next/dynamic";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 const AnalyticsCharts = dynamic(() => import("@/components/admin/AnalyticsCharts"), {
     ssr: false,
@@ -249,12 +250,12 @@ export default function AdminAnalyticsPage() {
                                                 </p>
                                                 <p className="text-xs text-slate-500">
                                                     {(transaction.timestamp || transaction.date)
-                                                        ? new Date(transaction.timestamp || transaction.date).toLocaleDateString("en-NG", {
+                                                        ? formatDateOrDash(transaction.timestamp || transaction.date, {
                                                             month: "short",
                                                             day: "numeric",
                                                             hour: "2-digit",
                                                             minute: "2-digit",
-                                                        })
+                                                        }, "—", "en-NG")
                                                         : "—"}
                                                 </p>
                                             </div>

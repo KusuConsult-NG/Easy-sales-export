@@ -24,6 +24,7 @@ import { withdrawMaturedFixedSavingsAction } from "@/app/actions/cooperative";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
 import { useToast } from "@/contexts/ToastContext";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 type FixedSavingsPlan = {
     id: string;
@@ -512,11 +513,11 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
                                                     Maturity Date
                                                 </p>
                                                 <p className="text-sm text-green-700">
-                                                    {new Date(Date.now() + duration * 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", {
+                                                    {formatDateOrDash(Date.now() + duration * 30 * 24 * 60 * 60 * 1000, {
                                                         year: "numeric",
                                                         month: "long",
                                                         day: "numeric"
-                                                    })}
+                                                    }, "—", "en-US")}
                                                 </p>
                                             </div>
                                         </div>
@@ -623,13 +624,13 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
                                                     <div>
                                                         <p className="text-slate-500">Start Date</p>
                                                         <p className="font-semibold text-slate-900">
-                                                            {new Date(plan.startDate).toLocaleDateString()}
+                                                            {formatShortDateOrDash(plan.startDate)}
                                                         </p>
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-slate-500">Maturity Date</p>
                                                         <p className="font-semibold text-slate-900">
-                                                            {new Date(plan.maturityDate).toLocaleDateString()}
+                                                            {formatShortDateOrDash(plan.maturityDate)}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -679,7 +680,7 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
                                                 </div>
                                             </div>
                                             <p className="text-sm text-slate-500">
-                                                Matured on {new Date(plan.maturityDate).toLocaleDateString()}
+                                                Matured on {formatShortDateOrDash(plan.maturityDate)}
                                             </p>
                                             {/* #419 — the release. Before this there was no way, anywhere,
                                                 to get a matured plan's money back into savings. */}

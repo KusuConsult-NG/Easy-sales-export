@@ -14,6 +14,7 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { toast } from "sonner";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { numberOrZero } from "@/lib/numbers";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 interface Investment {
     id: string;
@@ -263,8 +264,8 @@ export default function ExportPortfolioClient({ initial = null }: {
                                         <td className="p-4 text-sm text-slate-600">
                                             <div className="flex items-center gap-1">
                                                 <Calendar className="w-4 h-4" />
-                                                {new Date(investment.startDate).toLocaleDateString()} -{" "}
-                                                {new Date(investment.endDate).toLocaleDateString()}
+                                                {formatShortDateOrDash(investment.startDate)} -{" "}
+                                                {formatShortDateOrDash(investment.endDate)}
                                             </div>
                                         </td>
                                         <td className="p-4">

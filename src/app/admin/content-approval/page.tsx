@@ -6,6 +6,7 @@ import { getContentApprovalItemsAction, approveContentAction, rejectContentActio
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import { humaniseUpper } from "@/lib/humanise";
+import { formatShortDateOrDash, formatTimeOrDash } from "@/lib/date-utils";
 
 export default function ContentApprovalPage() {
     const [contentFilter, setContentFilter] = useState<ContentType | "all">("all");
@@ -455,7 +456,7 @@ export default function ContentApprovalPage() {
                                                 )}
                                                 <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />
-                                                    {new Date(item.submittedAt).toLocaleDateString()} at {new Date(item.submittedAt).toLocaleTimeString()}
+                                                    {formatShortDateOrDash(item.submittedAt)} at {formatTimeOrDash(item.submittedAt)}
                                                 </p>
                                             </div>
                                         </div>
@@ -508,7 +509,7 @@ export default function ContentApprovalPage() {
                                                             </p>
                                                             {typeof item.metadata?.approvedAt === "string" && (
                                                                 <p className="text-xs text-green-500 mt-2 font-medium">
-                                                                    Approved on {new Date(item.metadata.approvedAt).toLocaleDateString()}
+                                                                    Approved on {formatShortDateOrDash(item.metadata.approvedAt)}
                                                                 </p>
                                                             )}
                                                         </div>
@@ -526,7 +527,7 @@ export default function ContentApprovalPage() {
                                                             </p>
                                                             {typeof item.metadata?.rejectedAt === "string" && (
                                                                 <p className="text-xs text-red-500 mt-2 font-medium">
-                                                                    Rejected on {new Date(item.metadata.rejectedAt).toLocaleDateString()}
+                                                                    Rejected on {formatShortDateOrDash(item.metadata.rejectedAt)}
                                                                 </p>
                                                             )}
                                                         </div>

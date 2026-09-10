@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getExportOpportunities, type ExportOpportunity } from "@/app/actions/export-investments";
 import { toast } from "sonner";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function ExportWindowsPage() {
     const [exportWindows, setExportWindows] = useState<ExportOpportunity[]>([]);
@@ -197,12 +198,12 @@ export default function ExportWindowsPage() {
                                         <div className="flex items-center gap-4 text-sm text-slate-600 mb-4">
                                             <div className="flex items-center gap-1">
                                                 <Calendar className="w-4 h-4" />
-                                                <span>Opens: {new Date(window.openDate).toLocaleDateString()}</span>
+                                                <span>Opens: {formatShortDateOrDash(window.openDate)}</span>
                                             </div>
                                             <div>•</div>
                                             <div className="flex items-center gap-1">
                                                 <Calendar className="w-4 h-4" />
-                                                <span>Closes: {new Date(window.closeDate).toLocaleDateString()}</span>
+                                                <span>Closes: {formatShortDateOrDash(window.closeDate)}</span>
                                             </div>
                                         </div>
 

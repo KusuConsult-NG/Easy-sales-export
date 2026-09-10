@@ -20,6 +20,7 @@ import { isNotificationVisible, getVisibleFilterTabs, NOTIFICATION_PAGE_SIZE } f
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { toDateOrNull } from "@/lib/date-utils";
 
 /* ──────────────────────────────────────────────────────────────
  * Types
@@ -78,12 +79,24 @@ function getIconColor(type: NotifType): string {
     }
 }
 
-function toDate(val: any): Date {
-    if (!val) return new Date();
-    if (val instanceof Date) return val;
-    if (val?.toDate) return val.toDate();
-    if (val?.seconds) return new Date(val.seconds * 1000);
-    return new Date(val);
+/*
+ *   #605 — THE SECOND COPY OF THE SAME `toDate`, AND HERE THE "NOW" FALLBACK
+ *   IS READ ALOUD.
+ *
+ *   Its one caller is `formatDistanceToNow`, so a notification whose createdAt
+ *   is missing or in a shape this copy did not know — `_seconds`, which it did
+ *   not — was labelled "less than a minute ago". Not a blank timestamp: a
+ *   confident, wrong one, on every stale notification at once.
+ *
+ *   This is the defect `toDateOrNull` was written for, quoted in its own note:
+ *   "we cannot tell when this happened" must not become "it happened just now".
+ *   reviews.ts made every review permanently editable that way.
+ */
+
+/** "3 days ago", or an honest "date unknown" when the row carries no date. */
+function notifiedAt(value: unknown): string {
+    const d = toDateOrNull(value);
+    return d ? formatDistanceToNow(d, { addSuffix: true }) : "date unknown";
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -466,7 +479,7 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
                                                 {notif.title}
                                             </h3>
                                             <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
-                                                {formatDistanceToNow(toDate(notif.createdAt), { addSuffix: true })}
+                                                {notifiedAt(notif.createdAt)}
                                             </span>
                                         </div>
                                         <p className="text-sm text-gray-500 leading-relaxed mb-3 break-words">

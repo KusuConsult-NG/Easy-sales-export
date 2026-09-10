@@ -14,6 +14,7 @@ import { normaliseAcademyPlan, checkCourseAccess } from "@/lib/academy-plan";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import { isRetired } from "@/lib/record-retirement";
 import { latestApplication } from "@/lib/latest-application";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 /**
  * Check Academy application status for current user
@@ -548,9 +549,14 @@ async function _getEnrolledCoursesWithDetailsAction(): Promise<ActionResponse<an
                 completedLessons: completedCount,
                 progress: progressPct,
                 status: progress.completedAt ? "completed" : (completedCount > 0 ? "in-progress" : "not-started"),
-                startedAt: progress.startedAt
-                    ? new Date((progress.startedAt as Timestamp).toDate()).toLocaleDateString()
-                    : "",
+                //   #605 — was `new Date((progress.startedAt as Timestamp).toDate())`.
+                //   The cast is not a runtime check: `.toDate` exists on a Firestore
+                //   Timestamp and on nothing else, so a startedAt that reached here as
+                //   an ISO string — which is what crosses any serialisation boundary —
+                //   threw "toDate is not a function" and took the enrolled-courses
+                //   action down. The reader below knows all four shapes this codebase
+                //   stores, so the cast is not needed and the throw is gone.
+                startedAt: progress.startedAt ? formatShortDateOrDash(progress.startedAt) : "",
             });
         });
 

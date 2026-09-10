@@ -31,6 +31,7 @@ import {
     getFarmNationDashboardStatsAction,
     type FarmNationDashboardStats,
 } from "@/app/actions/farm-nation";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 function formatCurrency(amount: any) {
     const value = Number(amount);
@@ -297,11 +298,11 @@ export default function FarmNationDashboardClient({ initial = null }: {
                                             <div className="flex items-center gap-2">
                                                 <StatusBadge status={prop.status} />
                                                 <span className="text-xs text-slate-400">
-                                                    {new Date(prop.createdAt).toLocaleDateString("en-NG", {
+                                                    {formatDateOrDash(prop.createdAt, {
                                                         month: "short",
                                                         day: "numeric",
                                                         year: "numeric",
-                                                    })}
+                                                    }, "—", "en-NG")}
                                                 </span>
                                             </div>
                                         </div>
@@ -411,10 +412,10 @@ export default function FarmNationDashboardClient({ initial = null }: {
                                                 </p>
                                                 <p className="text-xs text-slate-500 capitalize mt-0.5">
                                                     {tx.propertyType} ·{" "}
-                                                    {new Date(tx.createdAt).toLocaleDateString("en-NG", {
+                                                    {formatDateOrDash(tx.createdAt, {
                                                         month: "short",
                                                         day: "numeric",
-                                                    })}
+                                                    }, "—", "en-NG")}
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-3 shrink-0">
@@ -442,13 +443,13 @@ export default function FarmNationDashboardClient({ initial = null }: {
                                                 <div>
                                                     <p className="text-slate-500 font-semibold mb-0.5">Date</p>
                                                     <p className="text-slate-800 font-medium">
-                                                        {new Date(tx.createdAt).toLocaleString("en-NG", {
+                                                        {formatDateOrDash(tx.createdAt, {
                                                             month: "short",
                                                             day: "numeric",
                                                             year: "numeric",
                                                             hour: "2-digit",
                                                             minute: "2-digit"
-                                                        })}
+                                                        }, "—", "en-NG")}
                                                     </p>
                                                 </div>
                                                 <div>

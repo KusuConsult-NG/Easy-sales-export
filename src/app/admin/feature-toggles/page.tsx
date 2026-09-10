@@ -5,6 +5,7 @@ import { getAllFeatureToggles, updateFeatureToggle } from "@/app/actions/feature
 import { FEATURE_METADATA, type FeatureToggle, FEATURE_CATEGORIES } from "@/lib/feature-toggles";
 import { Shield, ToggleLeft, ToggleRight, Loader2, CheckCircle, XCircle, AlertTriangle, Search, Filter } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function FeatureTogglesPage() {
     const { showToast } = useToast();
@@ -217,7 +218,7 @@ export default function FeatureTogglesPage() {
                                                         )}
                                                         {toggle.updatedAt && (
                                                           <span className="text-slate-400">
-                                                            Last updated: {new Date(toggle.updatedAt).toLocaleDateString()}
+                                                            Last updated: {formatShortDateOrDash(toggle.updatedAt)}
                                                           </span>
                                                         )}
                                                         {toggle.updatedBy && (

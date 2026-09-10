@@ -9,6 +9,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { firstImageSrc } from "@/lib/first-image";
 import { exportStockOf } from "@/lib/export-stock";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function MyExportProductsClient({ initial = null }: {
     /**  #547 Fetched by the server — see page.tsx. */
@@ -256,7 +257,7 @@ export default function MyExportProductsClient({ initial = null }: {
 
                             <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-4">
                                 <span className="text-xs text-slate-400">
-                                    {product.createdAt ? `Submitted ${new Date(product.createdAt.seconds ? product.createdAt.seconds * 1000 : product.createdAt).toLocaleDateString()}` : ""}
+                                    {product.createdAt ? `Submitted ${formatShortDateOrDash(product.createdAt.seconds ? product.createdAt.seconds * 1000 : product.createdAt)}` : ""}
                                 </span>
                                 <button
                                     onClick={() => handleDeleteProduct(product.id, product.name)}

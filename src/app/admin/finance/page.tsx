@@ -25,6 +25,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
 import { recordExport } from "@/lib/record-export";
 import { numberOrZero } from "@/lib/numbers";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -58,7 +59,7 @@ function toIso(ts: any): string | null {
 
 function fmtDateTime(iso: string | null) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleString("en-NG", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    return formatDateOrDash(iso, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }, "—", "en-NG");
 }
 
 function typeLabel(raw: string | null | undefined): string {

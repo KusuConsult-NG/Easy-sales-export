@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Camera, Upload, CheckCircle, XCircle, AlertCircle, Loader2, ScanLine, StopCircle } from "lucide-react";
 import type { QRVerificationResult } from "@/lib/digital-id";
 import { logger } from '@/lib/logger';
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function VerifyIDPage() {
     const [qrData, setQrData] = useState<string>("");
@@ -373,7 +374,7 @@ export default function VerifyIDPage() {
                                             ["Name", result.payload.fullName],
                                             ["Email", result.payload.email],
                                             ["Role", result.payload.role?.replace("_", " ")],
-                                            ["Valid Until", new Date(result.payload.expiresAt).toLocaleDateString()],
+                                            ["Valid Until", formatShortDateOrDash(result.payload.expiresAt)],
                                         ].map(([label, value]) => (
                                             <div key={label}>
                                                 <dt className="font-semibold text-emerald-800">{label}</dt>

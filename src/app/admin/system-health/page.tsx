@@ -5,6 +5,7 @@ import Link from "next/link";
 import { runSystemHealthDiagnostic, type HealthReport, type HealthIssue } from "@/app/actions/health";
 import { Activity, AlertTriangle, CheckCircle, RefreshCw, ShieldAlert, Server, Database, CreditCard, Mail, ToggleLeft, ToggleRight, Search } from "lucide-react";
 import { numberOrZero } from "@/lib/numbers";
+import { formatTimeOrDash } from "@/lib/date-utils";
 
 export default function SystemHealthPage() {
     const [loading, setLoading] = useState(true);
@@ -233,7 +234,7 @@ export default function SystemHealthPage() {
                             </h2>
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-bold uppercase text-slate-400 bg-white border border-slate-100 px-2 py-1 rounded-lg shadow-xs">
-                                    Last Check: {new Date(report.timestamp).toLocaleTimeString()}
+                                    Last Check: {formatTimeOrDash(report.timestamp)}
                                 </span>
                             </div>
                         </div>

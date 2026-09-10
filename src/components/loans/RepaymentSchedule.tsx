@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Calendar, DollarSign, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { getRepaymentScheduleAction, type RepaymentInstallment } from "@/app/actions/cooperative";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 interface RepaymentScheduleProps {
     loanId: string;
@@ -190,7 +191,7 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
                                         </p>
                                         <p className="text-xs flex items-center gap-1 mt-1">
                                             <Calendar className="w-3 h-3" />
-                                            Due: {new Date(installment.dueDate).toLocaleDateString()}
+                                            Due: {formatShortDateOrDash(installment.dueDate)}
                                         </p>
                                     </div>
                                 </div>

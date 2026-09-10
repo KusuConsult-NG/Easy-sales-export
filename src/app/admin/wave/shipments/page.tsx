@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/wave";
 import type { ShipmentTracking } from "@/app/actions/wave";
 import { humanise } from "@/lib/humanise";
+import { formatDateTimeOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 interface UserSearchRef {
     id: string;
@@ -734,7 +735,7 @@ export default function AdminWaveShipmentsPage() {
                                     <span className="text-slate-400 block font-semibold mb-0.5">Est. Delivery</span>
                                     <span className="font-bold text-slate-800 flex items-center gap-1">
                                         <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                                        {new Date(selectedShipment.estimatedDelivery).toLocaleDateString()}
+                                        {formatShortDateOrDash(selectedShipment.estimatedDelivery)}
                                     </span>
                                 </div>
                             </div>
@@ -774,7 +775,7 @@ export default function AdminWaveShipmentsPage() {
                                                                 {update.location}
                                                             </span>
                                                             <span className="text-[10px] text-slate-400">
-                                                                {new Date(update.timestamp).toLocaleString()}
+                                                                {formatDateTimeOrDash(update.timestamp)}
                                                             </span>
                                                         </div>
                                                         <div className="text-[10px] font-semibold text-slate-550 capitalize mt-0.5">

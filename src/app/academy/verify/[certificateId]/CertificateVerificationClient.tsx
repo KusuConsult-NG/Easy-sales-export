@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Award, Calendar, User, BookOpen } from "lucide-react";
 import Link from "next/link";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 type CertificateVerification = {
     id: string;
@@ -153,11 +154,11 @@ export default function CertificateVerificationClient(
                                         <div className="flex-1">
                                             <p className="text-sm text-slate-600 mb-1">Completion Date</p>
                                             <p className="font-bold text-lg text-slate-900">
-                                                {new Date(verification.completionDate).toLocaleDateString('en-US', {
+                                                {formatDateOrDash(verification.completionDate, {
                                                     year: 'numeric',
                                                     month: 'long',
                                                     day: 'numeric'
-                                                })}
+                                                }, "—", 'en-US')}
                                             </p>
                                         </div>
                                     </div>

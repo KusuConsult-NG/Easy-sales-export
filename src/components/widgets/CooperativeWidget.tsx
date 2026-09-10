@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getCooperativeQuickStats } from "@/lib/cooperative-utils";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function CooperativeWidget() {
     const [loading, setLoading] = useState(true);
@@ -110,7 +111,7 @@ export default function CooperativeWidget() {
                         <p className="text-xs text-yellow-100 font-semibold">Next Payment Due</p>
                     </div>
                     <p className="text-sm">
-                        {new Date(stats.nextPaymentDate).toLocaleDateString()} -{" "}
+                        {formatShortDateOrDash(stats.nextPaymentDate)} -{" "}
                         {formatCurrency(stats.nextPaymentAmount)}
                     </p>
                 </div>

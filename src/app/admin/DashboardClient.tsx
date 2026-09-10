@@ -22,6 +22,7 @@ import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
 import UserSegmentsChart from "@/components/admin/UserSegmentsChart";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 // AnalyticsCharts is the only chart on this page that pulls in recharts, and it
 // was the one component still imported statically. admin/analytics/page.tsx
@@ -485,16 +486,14 @@ export default function AdminDashboardPage() {
                                                 </p>
                                                 <p className="text-xs text-slate-500">
                                                     {tx.date
-                                                        ? new Date(
-                                                              typeof tx.date === "string"
+                                                        ? formatDateOrDash(typeof tx.date === "string"
                                                                   ? tx.date
                                                                   : tx.date?.toDate
                                                                     ? tx.date.toDate()
-                                                                    : tx.date
-                                                          ).toLocaleDateString("en-NG", {
+                                                                    : tx.date, {
                                                               month: "short",
                                                               day: "numeric",
-                                                          })
+                                                          }, "—", "en-NG")
                                                         : "—"}
                                                 </p>
                                             </div>

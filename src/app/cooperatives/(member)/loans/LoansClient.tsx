@@ -17,6 +17,7 @@ import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { membershipAnswerFrom } from "@/lib/cooperative-membership-answer";
 import { humaniseCapitalised } from "@/lib/humanise";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 type LoanProduct = {
     id: string;
@@ -399,7 +400,7 @@ export default function LoansClient({ initial = null }: { initial?: LoansSeed | 
                                                         {app.productName}
                                                     </h3>
                                                     <p className="text-sm text-slate-600">
-                                                        Applied on {new Date(app.appliedAt).toLocaleDateString()}
+                                                        Applied on {formatShortDateOrDash(app.appliedAt)}
                                                     </p>
                                                 </div>
                                                 <div className={`px-3 py-1 rounded-full ${app.status === "approved" || app.status === "active"

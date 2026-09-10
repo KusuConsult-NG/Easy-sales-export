@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 // #351 the presets name a day in the ADMIN'S calendar, not UTC's.
-import { localCalendarDate } from "@/lib/date-utils";
+import { formatDateOrDash, localCalendarDate } from "@/lib/date-utils";
 import { Calendar, X, ChevronDown } from "lucide-react";
 
 export interface DateRange {
@@ -118,13 +118,13 @@ export default function DateRangeFilter({
         if (!hasFilter) return label;
         if (value.from && value.to) {
             if (value.from === value.to)
-                return new Date(value.from + "T00:00:00").toLocaleDateString("en-NG", {
+                return formatDateOrDash(value.from + "T00:00:00", {
                     day: "numeric", month: "short", year: "numeric",
-                });
-            return `${new Date(value.from + "T00:00:00").toLocaleDateString("en-NG", { day: "numeric", month: "short" })} → ${new Date(value.to + "T00:00:00").toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}`;
+                }, "—", "en-NG");
+            return `${formatDateOrDash(value.from + "T00:00:00", { day: "numeric", month: "short" }, "—", "en-NG")} → ${formatDateOrDash(value.to + "T00:00:00", { day: "numeric", month: "short", year: "numeric" }, "—", "en-NG")}`;
         }
-        if (value.from) return `From ${new Date(value.from + "T00:00:00").toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}`;
-        return `To ${new Date(value.to + "T00:00:00").toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}`;
+        if (value.from) return `From ${formatDateOrDash(value.from + "T00:00:00", { day: "numeric", month: "short", year: "numeric" }, "—", "en-NG")}`;
+        return `To ${formatDateOrDash(value.to + "T00:00:00", { day: "numeric", month: "short", year: "numeric" }, "—", "en-NG")}`;
     };
 
     return (

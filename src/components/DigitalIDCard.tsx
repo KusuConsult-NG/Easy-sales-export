@@ -3,6 +3,7 @@
 import { Download, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import Image from "next/image";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 interface DigitalIDCardProps {
     memberNumber: string;
@@ -138,21 +139,21 @@ export default function DigitalIDCard({
                             <div>
                                 <p className="text-blue-200 text-xs mb-1">Member Since</p>
                                 <p className="text-white text-sm font-medium">
-                                    {new Date(memberSince).toLocaleDateString("en-GB", {
+                                    {formatDateOrDash(memberSince, {
                                         day: "2-digit",
                                         month: "short",
                                         year: "numeric",
-                                    })}
+                                    }, "—", "en-GB")}
                                 </p>
                             </div>
                             <div>
                                 <p className="text-blue-200 text-xs mb-1">Valid Until</p>
                                 <p className="text-white text-sm font-medium">
-                                    {new Date(expiresAt).toLocaleDateString("en-GB", {
+                                    {formatDateOrDash(expiresAt, {
                                         day: "2-digit",
                                         month: "short",
                                         year: "numeric",
-                                    })}
+                                    }, "—", "en-GB")}
                                 </p>
                             </div>
                         </div>

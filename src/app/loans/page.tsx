@@ -16,6 +16,7 @@ import { getUserLoanApplications } from "@/app/actions/loan-actions";
 import { type LoanApplication, LoanStatus } from "@/types/strict";
 import { humanise, humaniseUpper } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function MyLoansPage() {
     const [loans, setLoans] = useState<LoanApplication[]>([]);
@@ -188,7 +189,7 @@ export default function MyLoansPage() {
                                     <div className="text-right">
                                         <p className="text-xs text-slate-500">Applied</p>
                                         <p className="text-sm font-semibold text-slate-900">
-                                            {new Date(loan.createdAt).toLocaleDateString()}
+                                            {formatShortDateOrDash(loan.createdAt)}
                                         </p>
                                     </div>
                                 </div>
@@ -230,7 +231,7 @@ export default function MyLoansPage() {
                                 {(loan.status === LoanStatus.APPROVED || loan.status === LoanStatus.DISBURSED) && (
                                     <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
                                         <p className="text-sm font-semibold text-green-900">
-                                            ✓ Approved {loan.approvedAt && `on ${new Date(loan.approvedAt).toLocaleDateString()}`}
+                                            ✓ Approved {loan.approvedAt && `on ${formatShortDateOrDash(loan.approvedAt)}`}
                                         </p>
                                         {loan.status === LoanStatus.DISBURSED && (
                                             <p className="text-sm text-green-700 mt-1">

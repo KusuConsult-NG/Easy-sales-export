@@ -26,6 +26,7 @@ import { recordExport } from "@/lib/record-export";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
 import { shortId } from "@/lib/humanise";
+import { formatDateTimeOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
@@ -173,7 +174,7 @@ export default function AdminTransactionsPage() {
         if (!filteredTransactions.length) return;
         const headers = ["Date", "User", "Phone", "Type", "Amount", "Status", "Description", "Reference"];
         const rows = filteredTransactions.map((t) => [
-            new Date(t.date).toLocaleDateString("en-NG"),
+            formatShortDateOrDash(t.date, "—", "en-NG"),
             t.userName,
             t.user?.phone || "",
             humanise(t.type, ""),
@@ -512,7 +513,7 @@ export default function AdminTransactionsPage() {
                                                                         <p><span className="font-medium text-slate-400">Reference:</span> <span className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-xs">{transaction.reference || "N/A"}</span></p>
                                                                         <p><span className="font-medium text-slate-400">Type:</span> <span className="font-semibold text-slate-900 capitalize">{humanise(transaction.type)}</span></p>
                                                                         <p><span className="font-medium text-slate-400">Description:</span> <span className="text-slate-900">{transaction.description || "N/A"}</span></p>
-                                                                        <p><span className="font-medium text-slate-400">Date:</span> <span className="text-slate-900">{new Date(transaction.date).toLocaleString("en-NG")}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Date:</span> <span className="text-slate-900">{formatDateTimeOrDash(transaction.date, "—", "en-NG")}</span></p>
                                                                     </div>
                                                                 </div>
 

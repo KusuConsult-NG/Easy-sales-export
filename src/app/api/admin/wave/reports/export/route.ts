@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { writeDataExportRecord } from "@/lib/data-export-record";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -243,7 +244,7 @@ function generateCSV(applications: any[], timeframe: string) {
         list(app.preferredCommodities),
         app.isMemberOfCooperative === true ? "Yes" : app.isMemberOfCooperative === false ? "No" : "",
         // "Unknown" rather than the export date. See the createdAt note above.
-        app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "Unknown",
+        app.createdAt ? formatShortDateOrDash(app.createdAt) : "Unknown",
     ]);
 
     const csvContent = csvDocument(headers, rows);
@@ -333,7 +334,7 @@ function generatePDFReport(applications: any[], timeframe: string) {
                     <td style="color: ${app.status === 'approved' ? '#059669' : app.status === 'rejected' ? '#dc2626' : '#f59e0b'}">
                         ${(app.status || 'pending').toUpperCase()}
                     </td>
-                    <td>${app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "Unknown"}</td>
+                    <td>${app.createdAt ? formatShortDateOrDash(app.createdAt) : "Unknown"}</td>
                 </tr>
             `).join("")}
         </tbody>

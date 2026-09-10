@@ -13,6 +13,7 @@ import type { ShipmentTracking } from "@/app/actions/wave";
 import { formatDistanceToNow } from "date-fns";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { humanise } from "@/lib/humanise";
+import { formatDateTimeOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function WaveShipmentsClient({ initial = null }: {
     /**  #552 The shipments the server already fetched. */
@@ -249,8 +250,8 @@ export default function WaveShipmentsClient({ initial = null }: {
                                                 </div>
                                                 <p className="font-bold text-gray-900">
                                                     {shipment.status === "delivered" && shipment.actualDelivery
-                                                        ? new Date(shipment.actualDelivery as unknown as string | number | Date).toLocaleDateString()
-                                                        : new Date(shipment.estimatedDelivery).toLocaleDateString()}
+                                                        ? formatShortDateOrDash(shipment.actualDelivery as unknown as string | number | Date)
+                                                        : formatShortDateOrDash(shipment.estimatedDelivery)}
                                                 </p>
                                             </div>
                                         </div>
@@ -359,7 +360,7 @@ export default function WaveShipmentsClient({ initial = null }: {
                                                             </p>
                                                         )}
                                                         <p className="text-xs text-gray-400">
-                                                            {new Date(update.timestamp).toLocaleString()}
+                                                            {formatDateTimeOrDash(update.timestamp)}
                                                         </p>
                                                     </div>
                                                 </div>

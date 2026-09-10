@@ -8,6 +8,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getBriefingRegistrationsAction } from "@/app/actions/briefing-admin";
 import { recordExport } from "@/lib/record-export";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ export default function BriefingRegistrationsPage() {
                 r.state || "",
                 r.role || "",
                 r.status || "",
-                r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-NG") : "",
+                r.createdAt ? formatShortDateOrDash(r.createdAt, "—", "en-NG") : "",
             ]);
 
             const csvContent = [
@@ -474,7 +475,7 @@ export default function BriefingRegistrationsPage() {
                                             </span>
                                         </td>
                                         <td className="px-5 py-4 text-slate-500 text-sm">
-                                            {reg.createdAt ? new Date(reg.createdAt).toLocaleDateString("en-NG") : "—"}
+                                            {reg.createdAt ? formatShortDateOrDash(reg.createdAt, "—", "en-NG") : "—"}
                                         </td>
                                         <td className="px-5 py-4 text-sm">
                                             <button 

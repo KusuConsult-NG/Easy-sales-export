@@ -11,6 +11,7 @@ import { getExportRequestStatsAction } from "@/app/actions/export-admin";
 import type { ExportWindow } from "@/lib/types/firestore";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function AdminExportPage() {
     const { showToast } = useToast();
@@ -231,7 +232,7 @@ export default function AdminExportPage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-slate-500">
-                                                {new Date(exp.createdAt).toLocaleDateString()}
+                                                {formatShortDateOrDash(exp.createdAt)}
                                             </td>
                                             <td className="px-6 py-4 text-right flex justify-end gap-2">
                                                 <Link
@@ -320,7 +321,7 @@ export default function AdminExportPage() {
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Delivery Date</p>
                                         <p className="font-medium">
-                                            {selectedExport.deliveryDate ? new Date(selectedExport.deliveryDate).toLocaleDateString() : 'N/A'}
+                                            {selectedExport.deliveryDate ? formatShortDateOrDash(selectedExport.deliveryDate) : 'N/A'}
                                         </p>
                                     </div>
                                 </div>

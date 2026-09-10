@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Calendar, ArrowDownCircle, ArrowUpCircle, Clock, Loader2, AlertCircle, ChevronDown } from "lucide-react";
 import { getMyExportInvestmentsAction } from "@/app/actions/export";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 interface TransactionRow {
     id: string;
@@ -126,7 +127,7 @@ export default function ExportTransactionsClient({ initial = null }: {
                                                     <div className="flex items-center gap-1">
                                                         <Calendar className="w-4 h-4" />
                                                         {tx.date
-                                                            ? new Date(tx.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                                                            ? formatDateOrDash(tx.date, { month: "short", day: "numeric", year: "numeric" }, "—", "en-US")
                                                             : "Date TBD"}
                                                     </div>
                                                     <span className="capitalize">{tx.type}</span>
@@ -163,7 +164,7 @@ export default function ExportTransactionsClient({ initial = null }: {
                                                 <p className="text-slate-500 font-semibold mb-0.5">Date</p>
                                                 <p className="text-slate-800 font-medium">
                                                     {tx.date
-                                                        ? new Date(tx.date).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                                                        ? formatDateOrDash(tx.date, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }, "—", "en-US")
                                                         : "TBD"}
                                                 </p>
                                             </div>

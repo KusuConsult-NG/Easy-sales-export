@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { getLandInquiryByIdAction } from "@/app/actions/land-listings";
 import Link from "next/link";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
 export default function InquiryDetailsClient({ initial = null }: {
     /**  #548 The inquiry the server already fetched. */
@@ -128,9 +129,28 @@ export default function InquiryDetailsClient({ initial = null }: {
                                 <div>
                                     <p className="text-sm text-slate-500">Date Received</p>
                                     <p className="font-semibold text-slate-900">
-                                        {inquiry.createdAt?.seconds
-                                            ? new Date(inquiry.createdAt.seconds * 1000).toLocaleString()
-                                            : 'N/A'}
+                                        {/*
+                                          *   #605 — THIS ALWAYS SAID "N/A".
+                                          *
+                                          *   `getLandInquiryByIdAction` returns
+                                          *   `serializeValue(doc.data())`, which converts
+                                          *   every Timestamp to an ISO STRING before it
+                                          *   crosses to the client. An ISO string has no
+                                          *   `.seconds`, so the test above was false for
+                                          *   every inquiry that has ever loaded, and the
+                                          *   date received — which the buyer and the
+                                          *   landowner both quote at each other — was
+                                          *   never shown at all.
+                                          *
+                                          *   The identical wrong assumption is already
+                                          *   commented as fixed in
+                                          *   SellerDashboardClient's comparator: "orders
+                                          *   arrive from a server action, so createdAt is
+                                          *   already an ISO string — reading .seconds off
+                                          *   it gave NaN". THE FIX REACHED ONE OF THE
+                                          *   DOORS.
+                                          */}
+                                        {formatDateTimeOrDash(inquiry.createdAt, 'N/A')}
                                     </p>
                                 </div>
                             </div>

@@ -16,6 +16,7 @@ import { disputeStatusesForFilter } from "@/lib/dispute-status";
 import { startSupportConversationAction } from "@/app/actions/messages";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 interface Dispute {
     id: string;
@@ -48,13 +49,21 @@ function StatusBadge({ status }: { status: Dispute["status"] }) {
     );
 }
 
-function toDate(val: any): Date {
-    if (!val) return new Date();
-    if (val instanceof Date) return val;
-    if (val?.toDate) return val.toDate();
-    if (val?.seconds) return new Date(val.seconds * 1000);
-    return new Date(val);
-}
+/*
+ *   #605 — A LOCAL COPY OF `toDate` STOOD HERE, AND IT ANSWERED "NOW" FOR
+ *   "I CANNOT TELL".
+ *
+ *   `if (!val) return new Date()` renders a dispute whose createdAt never
+ *   arrived as OPENED TODAY. On the screen where a buyer and a seller argue
+ *   about how long a dispute has been sitting, that is not a cosmetic default.
+ *
+ *   It also knew three of the four shapes — no `_seconds`, which is what an
+ *   admin-side Timestamp becomes once it loses its methods crossing the server
+ *   boundary — so those rendered as Invalid Date anyway.
+ *
+ *   The shared reader in @/lib/date-utils knows all four and says "—" when
+ *   there is nothing to say. One reading, not three.
+ */
 
 export default function DisputesClient({ initial = null }: {
     /**
@@ -252,7 +261,7 @@ export default function DisputesClient({ initial = null }: {
                                             <Package className="w-3.5 h-3.5" />
                                             Ref: {dispute.orderId}
                                             <span className="text-slate-300">•</span>
-                                            {toDate(dispute.createdAt).toLocaleDateString("en-NG", {
+                                            {formatDateOrDash(dispute.createdAt, {
                                                 day: "numeric", month: "short", year: "numeric"
                                             })}
                                         </div>

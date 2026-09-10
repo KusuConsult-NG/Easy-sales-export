@@ -10,6 +10,7 @@ import { getExportOpportunityById, type ExportOpportunity } from "@/app/actions/
 import { initializeInvestmentPaymentAction } from "@/app/actions/export-payment";
 import { exportWindowRoiPercent } from "@/lib/export-window-status";
 import { windowRaisedAmount, windowFundingGoal, windowFundedPercent } from "@/lib/export-window-funding";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 export default function ExportWindowDetailClient({ initial = null }: {
     /**
@@ -138,8 +139,8 @@ export default function ExportWindowDetailClient({ initial = null }: {
     const window = {
         ...windowData,
         minInvestment: new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(windowData.minInvestment),
-        openDate: new Date(windowData.openDate).toLocaleDateString(),
-        closeDate: new Date(windowData.closeDate).toLocaleDateString(),
+        openDate: formatShortDateOrDash(windowData.openDate),
+        closeDate: formatShortDateOrDash(windowData.closeDate),
         // Use real deep data with fallbacks
         description: windowData.description || "This premium export opportunity is secured and managed by experienced professionals.",
         specifications: windowData.specifications && windowData.specifications.length > 0

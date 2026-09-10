@@ -9,6 +9,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useStorage } from "@/hooks/use-storage";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 interface Certificate {
     id: string;
@@ -330,7 +331,7 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
                                             <div>
                                                 <h3 className="font-semibold text-slate-900">{cert.courseName}</h3>
                                                 <p className="text-sm text-slate-500">
-                                                    Issued {new Date(cert.issuedAt).toLocaleDateString()}
+                                                    Issued {formatShortDateOrDash(cert.issuedAt)}
                                                     {cert.grade && <span className="ml-2 text-emerald-600 font-medium">· {cert.grade}</span>}
                                                 </p>
                                             </div>
@@ -435,7 +436,7 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
                                                 <div>
                                                     <h3 className="font-semibold text-slate-900">{cert.fileName}</h3>
                                                     <p className="text-sm text-slate-500">
-                                                        Uploaded {new Date(cert.uploadedAt).toLocaleDateString()}
+                                                        Uploaded {formatShortDateOrDash(cert.uploadedAt)}
                                                     </p>
                                                 </div>
                                             </div>

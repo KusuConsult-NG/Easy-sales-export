@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 import type { BuyerExportOrder } from "@/lib/export-orders-reader";
+import { formatShortDateOrDash } from "@/lib/date-utils";
 
 /**
  * What each order status means to the buyer — see #585.
@@ -122,7 +123,7 @@ export default function MyExportOrdersClient({ orders }: { orders: BuyerExportOr
                                             <p className="font-mono font-bold text-slate-900">{order.orderId ?? order.id}</p>
                                             {order.createdAt && (
                                                 <p className="text-xs text-slate-500 mt-1">
-                                                    Placed {new Date(String(order.createdAt)).toLocaleDateString()}
+                                                    Placed {formatShortDateOrDash(String(order.createdAt))}
                                                 </p>
                                             )}
                                         </div>

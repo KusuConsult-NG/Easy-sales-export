@@ -13,6 +13,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { recordExport } from "@/lib/record-export";
+import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 interface WaveMember {
     id: string; // userId
@@ -191,7 +192,7 @@ export default function AdminWaveMembersPage() {
                 m.farmSize || "",
                 m.nin || "",
                 m.bvn || "",
-                m.enrolledAt ? new Date(m.enrolledAt).toLocaleDateString("en-NG") : "Unknown",
+                m.enrolledAt ? formatShortDateOrDash(m.enrolledAt, "—", "en-NG") : "Unknown",
                 m.applicationId || "",
             ]);
 
@@ -379,7 +380,7 @@ export default function AdminWaveMembersPage() {
                                             <div className="flex items-center gap-2">
                                                 <CheckCircle className="w-4 h-4 text-green-500" />
                                                 {member.enrolledAt
-                                                    ? new Date(member.enrolledAt).toLocaleDateString("en-NG")
+                                                    ? formatShortDateOrDash(member.enrolledAt, "—", "en-NG")
                                                     : "Unknown"}
                                             </div>
                                         </td>
@@ -445,7 +446,7 @@ export default function AdminWaveMembersPage() {
                                 { label: "NIN", value: selectedMember.nin ? `${selectedMember.nin.slice(0, 4)}****${selectedMember.nin.slice(-4)}` : undefined },
                                 { label: "BVN", value: selectedMember.bvn ? `${selectedMember.bvn.slice(0, 4)}****${selectedMember.bvn.slice(-4)}` : undefined },
                                 { label: "Enrolled", value: selectedMember.enrolledAt
-                                    ? new Date(selectedMember.enrolledAt).toLocaleDateString("en-NG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+                                    ? formatDateOrDash(selectedMember.enrolledAt, { weekday: "long", year: "numeric", month: "long", day: "numeric" }, "—", "en-NG")
                                     : "Unknown" },
                                 { label: "Application ID", value: selectedMember.applicationId },
                                 { label: "User ID", value: selectedMember.id },
@@ -470,7 +471,7 @@ export default function AdminWaveMembersPage() {
                                         `Bank,"${selectedMember.bankName || ''}"`,
                                         `Account,"${selectedMember.accountNumber || ''}"`,
                                         `Farm Size,"${selectedMember.farmSize || ''}"`,
-                                        `Enrolled,"${selectedMember.enrolledAt ? new Date(selectedMember.enrolledAt).toLocaleDateString('en-NG') : "Unknown"}"`,
+                                        `Enrolled,"${selectedMember.enrolledAt ? formatShortDateOrDash(selectedMember.enrolledAt, "—", 'en-NG') : "Unknown"}"`,
                                     ].join("\n");
                                     const blob = new Blob([csvContent], { type: "text/csv" });
                                     const url = URL.createObjectURL(blob);

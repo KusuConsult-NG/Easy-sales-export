@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X, FileText, User, MapPin, CreditCard, Calendar, Activity, CheckCircle2, AlertCircle, Info, Loader2 } from "lucide-react";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
 interface DynamicDetailModalProps {
     isOpen: boolean;
@@ -78,9 +79,15 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
             );
         }
 
-        if (typeof value === "object" && value._seconds) {
-            // Firestore Timestamp
-            return new Date(value._seconds * 1000).toLocaleString("en-NG");
+        //   #605 — this knew ONE of the four shapes a date arrives in. A
+        //   `{ seconds }` Timestamp, a live Timestamp with `.toDate()`, and an
+        //   ISO string all fell past it: the first two into the generic object
+        //   renderer below, which printed `seconds: 1750000000` and
+        //   `nanoseconds: 0` as two labelled rows, and the ISO string out as raw
+        //   text. This modal is what an administrator opens to read a record they
+        //   are about to act on.
+        if (typeof value === "object" && (value._seconds || value.seconds || typeof value.toDate === "function")) {
+            return formatDateTimeOrDash(value);
         }
 
         if (typeof value === "object") {
