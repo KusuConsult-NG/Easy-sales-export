@@ -87,6 +87,12 @@ export default function WaveBriefingPage() {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isRegistered, setIsRegistered] = useState(false);
+    /**
+     *   #587 — she holds a seat already. Separate from isRegistered so the
+     *   confirmation can say which of the two happened rather than claiming a
+     *   registration that was not made just now.
+     */
+    const [alreadyRegistered, setAlreadyRegistered] = useState(false);
     const [error, setError] = useState("");
     const [isOfflinePending, setIsOfflinePending] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
@@ -170,7 +176,15 @@ export default function WaveBriefingPage() {
             setIsSubmitting(true);
             try {
                 const result = await registerForBriefingAction(data);
-                if (result.success) {
+                if (result.success || meansAlreadyRegistered(result)) {
+                    /**
+                     *   #587 — INCLUDING when the server says she is already
+                     *   registered, which on this path usually means the first
+                     *   attempt DID land and its response never came back. The
+                     *   queue is done either way; retrying it three more times
+                     *   only delays telling her the truth.
+                     */
+                    setAlreadyRegistered(!result.success);
                     setIsRegistered(true);
                     localStorage.removeItem(PENDING_SYNC_KEY);
                     return;
@@ -203,6 +217,33 @@ export default function WaveBriefingPage() {
         window.addEventListener("online", syncPending);
         return () => window.removeEventListener("online", syncPending);
     }, []);
+
+    /**
+     * Did this refusal mean "you are already registered"?
+     *
+     *   #587 A REGISTRATION THAT SUCCEEDED COULD NEVER BE CONFIRMED.
+     *
+     *   The action refuses a second registration for the same email — correctly
+     *   — and both paths here treated that as a failure:
+     *
+     *     THE FORM showed a red error to a woman who holds a seat, and left her
+     *     looking at an empty form with no way to find that out.
+     *
+     *     AND THE OFFLINE QUEUE counted it as a failed attempt. That is the trap
+     *     on a bad connection, which is this page's entire audience: a
+     *     registration whose RESPONSE was lost IS registered. The replay says
+     *     "already registered", the queue calls it a failure, and after three of
+     *     them she is told to fill the form in again — which will say the same
+     *     thing, for ever. She ends in a permanent loop of being told she is not
+     *     registered when she is.
+     *
+     *   Read from a FLAG, never from the message text. #574 rejected classifying
+     *   these refusals by their wording — "the kind of guess that rots" — and
+     *   this is that argument honoured rather than repeated.
+     */
+    function meansAlreadyRegistered(result: unknown): boolean {
+        return (result as { meta?: { alreadyRegistered?: boolean } } | null)?.meta?.alreadyRegistered === true;
+    }
 
     const scrollToForm = () => {
         formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -263,7 +304,9 @@ export default function WaveBriefingPage() {
 
         try {
             const result = await registerForBriefingAction(payload);
-            if (result.success) {
+            if (result.success || meansAlreadyRegistered(result)) {
+                //   #587 — a seat she already holds is a seat.
+                setAlreadyRegistered(!result.success);
                 setIsRegistered(true);
                 // Scroll up so user sees the success message right above the form area
                 setTimeout(() => scrollToForm(), 100);
@@ -637,8 +680,14 @@ export default function WaveBriefingPage() {
                                 <CheckCircle className="w-12 h-12 text-green-700" />
                             </div>
 
-                            <h3 className="text-3xl font-black text-slate-900 mb-4">Registration Confirmed 🎉</h3>
-                            <p className="text-xl text-slate-600 mb-10 max-w-sm mx-auto">Your seat for the WAVE National Awareness Briefing has been securely reserved.</p>
+                            <h3 className="text-3xl font-black text-slate-900 mb-4">
+                                {alreadyRegistered ? "You Are Already Registered 🎉" : "Registration Confirmed 🎉"}
+                            </h3>
+                            <p className="text-xl text-slate-600 mb-10 max-w-sm mx-auto">
+                                {alreadyRegistered
+                                    ? "This email address already holds a seat for the WAVE National Awareness Briefing. There is nothing else to do."
+                                    : "Your seat for the WAVE National Awareness Briefing has been securely reserved."}
+                            </p>
 
                             <div className="bg-green-50 rounded-xl p-6 text-left space-y-4 mb-8">
                                 <p className="text-xs font-bold text-green-800 uppercase tracking-widest mb-2">Next Steps</p>
@@ -864,7 +913,7 @@ export default function WaveBriefingPage() {
                                             <div className="w-5 h-5 flex items-center justify-center mt-0.5">
                                                 <Clock className="w-5 h-5 text-white" />
                                             </div>
-                                            <span>Pending Sync (Offline)</span>
+                                            <span>Saved — waiting for a connection</span>
                                         </>
                                     ) : (
                                         <>
@@ -873,6 +922,25 @@ export default function WaveBriefingPage() {
                                         </>
                                     )}
                                 </button>
+
+                                {isOfflinePending && (
+                                    /*
+                                     * #586 — "Pending Sync (Offline)" on a greyed-out
+                                     * button was the ENTIRE acknowledgement a woman got
+                                     * for a registration taken on a bad connection, which
+                                     * is the case this whole path exists for. It is her
+                                     * answer to "did that work?", and it was jargon.
+                                     */
+                                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
+                                        <p className="text-amber-900 text-sm font-bold">
+                                            You are offline, so we have saved your registration on this phone.
+                                        </p>
+                                        <p className="text-amber-800 text-xs mt-1">
+                                            It will be sent by itself the moment you have a connection — you can close
+                                            this page and come back to it.
+                                        </p>
+                                    </div>
+                                )}
 
                                 <p className="text-center text-xs text-slate-400 font-medium">
                                     By registering, you agree to receive official briefing updates.

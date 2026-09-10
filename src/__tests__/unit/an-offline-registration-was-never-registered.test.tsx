@@ -55,6 +55,12 @@
  *   which is the only condition that guard exists for — and it is exactly what
  *   a flaky connection does. Covered now, by the bouncing-connection test below.
  *
+ *   AND THE HELPER THAT FILLS THIS FORM WAS ITSELF BROKEN — found on the
+ *   second pass, in #587. It skipped any field whose selector matched nothing,
+ *   and the phone input is named "phone" while the state key is "phoneNumber",
+ *   so every case here ran with an empty phone number and passed regardless.
+ *   See the helper.
+ *
  *   AND ONE "MUTANT" WAS DISCARDED AS A NO-OP. I wrote one that appended a
  *   comment to the refusal branch and called it "the queue kept after a
  *   refusal"; it changed no behaviour, so its survival meant nothing. Removing
@@ -105,14 +111,36 @@ async function renderBriefing() {
     await act(async () => { await Promise.resolve(); });
 }
 
-/** Fill the form the way a person does, then submit. */
-async function fillAndSubmit() {
-    const byName = (name: string) =>
-        document.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement;
+/**
+ * Fill the form the way a person does, then submit.
+ *
+ *   THE HELPER SKIPPED WHAT IT COULD NOT FIND, AND ONE FIELD WAS NEVER TYPED.
+ *
+ *   `if (!el) continue;` — and the phone input's DOM name is "phone" while the
+ *   state key is "phoneNumber", so EVERY case in this suite ran with an empty
+ *   phone number and passed anyway: the action is mocked, so nothing validated
+ *   the payload, and the two payloads being compared were equally empty.
+ *
+ *   The claim survived by luck. A helper that silently skips a field it cannot
+ *   find is a check that cannot fail — this audit's commonest defect, in my own
+ *   instrument. It throws now, and the field names are the DOM's rather than
+ *   the state's.
+ */
+const FIELD_SELECTORS: Record<keyof typeof FORM, string> = {
+    firstName: '[name="firstName"]',
+    lastName: '[name="lastName"]',
+    otherName: '[name="otherName"]',
+    phoneNumber: '[name="phone"]',
+    email: '[name="email"]',
+    state: '[name="state"]',
+    role: '[name="role"][value="woman_seeking"]',
+};
 
+async function fillAndSubmit() {
     for (const [name, value] of Object.entries(FORM)) {
-        const el = byName(name);
-        if (!el) continue;
+        const selector = FIELD_SELECTORS[name as keyof typeof FORM];
+        const el = document.querySelector(selector) as HTMLInputElement | HTMLSelectElement | null;
+        if (!el) throw new Error(`the form has no ${name} field at ${selector}`);
         await act(async () => { fireEvent.change(el, { target: { value } }); });
     }
 

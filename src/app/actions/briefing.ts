@@ -202,7 +202,38 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
                 .get(),
         ]);
 
-        if (!existingByEmail.empty) { return { success: false as const, error: "This email address is already registered for the briefing.", data: null };
+        /**
+         *   #587 ALREADY REGISTERED IS A FACT ABOUT HER, NOT A FAULT IN HER.
+         *
+         *   This refusal is correct and the message is true. What was missing is
+         *   a way for the CALLER to tell it apart from every other refusal, so
+         *   the screen showed a woman who holds a seat a red error saying she
+         *   had failed — and the offline queue, which cannot read English,
+         *   counted it as an attempt and retried it until it gave up.
+         *
+         *   That is the trap on a bad connection: a registration whose RESPONSE
+         *   was lost is registered. The replay then says "already registered",
+         *   the queue calls that a failure, and after three of them she is told
+         *   to fill the form in again — which will say the same thing forever.
+         *
+         *   A flag rather than a message match. #574 rejected classifying these
+         *   refusals by their text — "telling them apart by matching message
+         *   strings is the kind of guess that rots" — and this is that argument
+         *   honoured rather than repeated.
+         *
+         *   EMAIL ONLY. A phone-number collision may be a DIFFERENT woman on a
+         *   shared handset, and telling her she is registered when somebody else
+         *   is would be worse than the error she gets today. The email refusal
+         *   already discloses that the address is registered, so the flag adds
+         *   no information a caller did not have.
+         */
+        if (!existingByEmail.empty) {
+            return {
+                success: false as const,
+                error: "This email address is already registered for the briefing.",
+                data: null,
+                meta: { alreadyRegistered: true },
+            };
         }
         if (!existingByPhone.empty) { return { success: false as const, error: "This phone number is already registered for the briefing.", data: null };
         }

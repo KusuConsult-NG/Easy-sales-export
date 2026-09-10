@@ -281,6 +281,47 @@ describe('#268/#269 — what was already right stays right', () => {
         expect(second.success).toBe(false);
     });
 
+    /**
+     *   #587 AND THE EMAIL REFUSAL SAYS SO IN A WAY A CALLER CAN READ.
+     *
+     *   /wave/briefing showed a woman who holds a seat a red error, and its
+     *   offline queue counted the same refusal as a failed attempt — three
+     *   times, then "fill the form in again", which says the same thing for
+     *   ever. That is the trap on a bad connection: a registration whose
+     *   RESPONSE was lost is registered.
+     *
+     *   A flag rather than a message match, because #574 rejected classifying
+     *   these by their wording.
+     */
+    it('AND THE EMAIL REFUSAL CARRIES A FLAG THE CALLER CAN READ', async () => {
+        await register({ email: 'twice@example.com' });
+
+        const second = await register({ email: 'twice@example.com' });
+
+        expect(second.success).toBe(false);
+        expect(second.meta?.alreadyRegistered).toBe(true);
+    });
+
+    it('AND THE PHONE REFUSAL DOES NOT, BECAUSE A HANDSET IS SHARED', async () => {
+        //   A phone collision may be a DIFFERENT woman. Telling her she holds a
+        //   seat that is somebody else's would be worse than the error.
+        await register({ phoneNumber: '08032222222' });
+
+        const second = await register({ phoneNumber: '08032222222' });
+
+        expect(second.success).toBe(false);
+        expect(second.meta?.alreadyRegistered).toBeUndefined();
+    });
+
+    it('AND A SUCCESSFUL ONE CLAIMS NOTHING OF THE KIND', async () => {
+        //   Vacuity guard: a flag on every response would make the screen show
+        //   "already registered" to a first-time registrant.
+        const first = await register();
+
+        expect(first.success).toBe(true);
+        expect(first.meta?.alreadyRegistered).toBeUndefined();
+    });
+
     it('still validates the submission', async () => {
         expect((await register({ email: 'not-an-email' })).success).toBe(false);
         expect((await register({ phoneNumber: '123' })).success).toBe(false);
