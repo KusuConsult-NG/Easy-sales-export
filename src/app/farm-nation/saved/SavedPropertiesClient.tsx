@@ -8,6 +8,7 @@ import Image from "next/image";
 import { AlertCircle, ChevronLeft, Loader2, MapPin, Maximize } from "lucide-react";
 import { getSavedPropertiesAction, type SavedPropertyRecord } from "@/app/actions/saved-items";
 import { SaveItemButton } from "@/components/saved/SaveItemButton";
+import { numberOrZero } from "@/lib/numbers";
 
 /**
  * The properties somebody has saved — #105.
@@ -135,7 +136,7 @@ export default function SavedPropertiesClient({ initial = null }: {
                                             )}
                                         </div>
                                         <p className="text-green-700 font-bold mt-1">
-                                            ₦{row.listing.price.toLocaleString()}
+                                            ₦{numberOrZero(row.listing?.price).toLocaleString()}
                                         </p>
                                     </>
                                 ) : (

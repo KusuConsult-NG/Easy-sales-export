@@ -16,6 +16,7 @@ import { getPendingLoanApplications, approveLoanApplication } from "@/app/action
 import { useToast } from "@/contexts/ToastContext";
 import { type LoanApplication, LoanPurpose } from "@/types/strict";
 import { humanise } from "@/lib/humanise";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function LoanApprovalPage() {
     /**
@@ -252,7 +253,7 @@ export default function LoanApprovalPage() {
                                     <div className="flex-1">
                                         <div className="flex items-center gap-3 mb-2">
                                             <h3 className="text-2xl font-bold text-[#1358ec]">
-                                                ₦{loan.amount.toLocaleString()}
+                                                ₦{numberOrZero(loan.amount).toLocaleString()}
                                             </h3>
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${getPurposeColor(loan.purpose)}`}>
                                                 {humanise(loan.purpose)}

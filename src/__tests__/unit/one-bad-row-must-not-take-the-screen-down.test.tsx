@@ -138,7 +138,13 @@ jest.mock('sonner', () => ({ toast: { error: jest.fn(), success: jest.fn() } }))
  *   Those nineteen live in a-row-with-nothing-on-it, which holds their finding,
  *   their renders and their mutation table.
  *
- *   #597 RAISED IT AGAIN, FROM TWENTY-TWO TO FORTY-FOUR, and four more of the
+ *   #598 RAISED IT A THIRD TIME, TO SIXTY-THREE, and caught the fix reaching one
+ *   of two doors ONE COMMIT after #597 fixed the other: /export/(app)/dashboard
+ *   blanked on a PARTIAL figures object, the identical fault #597 had just
+ *   fixed on /marketplace/seller/analytics, in a file #595 had already been in.
+ *   Those live in a-number-nobody-wrote.
+ *
+ *   #597 RAISED IT, FROM TWENTY-TWO TO FORTY-FOUR, and four more of the
  *   twenty-two threw — including /cooperatives/withdrawals, which threw
  *   "Invalid time value" out of `Intl.DateTimeFormat.format`, and
  *   /export/opportunities, which is the screen a member browses to decide where
@@ -196,6 +202,26 @@ const PROVEN = [
     'farm-nation/saved',
     'academy/my-courses',
     'academy/progress',
+    //   #598's twenty-one, rendered in a-number-nobody-wrote.
+    'academy/certificate/[id]',
+    'academy/verify/[id]',
+    'academy/quiz',
+    'academy/live',
+    'farm-nation/inquiries/[id]',
+    'farm-nation/checkout',
+    'farm-nation/map',
+    'land/map',
+    'marketplace/seller/products/[id]/edit',
+    'marketplace/village-market',
+    'marketplace/village-market/[id]',
+    'wave/certificates',
+    'wave/resources',
+    'wave/profile',
+    'profile/bank-account',
+    'export/landing',
+    'export/(app)/dashboard',
+    'messages',
+    'cooperatives/id-card',
 ];
 
 beforeEach(() => {
@@ -321,8 +347,8 @@ describe('#589 — the ledger of screens proven against a bare document', () => 
     it('EVERY SUBJECT IS NAMED, AND THE FLOOR ONLY GOES UP', () => {
         //   Named rather than counted, so that "N screens are proven" cannot
         //   become true by deleting a test.
-        expect(PROVEN).toHaveLength(44);
-        expect(new Set(PROVEN).size).toBe(44);
+        expect(PROVEN).toHaveLength(63);
+        expect(new Set(PROVEN).size).toBe(63);
         expect(PROVEN.slice(0, 4)).toEqual([
             'cooperatives/directory',
             'export/windows/[id]',
@@ -345,6 +371,7 @@ describe('#589 — the ledger of screens proven against a bare document', () => 
         const siblings = [
             'src/__tests__/unit/a-row-with-nothing-on-it.test.tsx',
             'src/__tests__/unit/a-date-that-is-not-one.test.tsx',
+            'src/__tests__/unit/a-number-nobody-wrote.test.tsx',
         ].map(f => readFileSync(join(process.cwd(), f), 'utf-8')).join('\n');
         //   The four this file renders itself are not expected over there.
         for (const subject of PROVEN.slice(4)) {

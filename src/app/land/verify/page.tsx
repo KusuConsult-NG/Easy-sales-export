@@ -17,6 +17,7 @@ import {
 import { getLandListings, verifyLandListing } from "@/app/actions/land-actions";
 import { useToast } from "@/contexts/ToastContext";
 import { type LandListing, SoilQuality } from "@/types/strict";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function LandVerificationPage() {
     // #407. This screen had no way to report a failed decision at all.
@@ -246,7 +247,7 @@ export default function LandVerificationPage() {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-3xl font-bold text-[#1358ec]">
-                                            ₦{listing.price.toLocaleString()}
+                                            ₦{numberOrZero(listing.price).toLocaleString()}
                                         </p>
                                         <p className="text-sm text-slate-600">
                                             {(listing.size * 2.47).toFixed(1)} acres

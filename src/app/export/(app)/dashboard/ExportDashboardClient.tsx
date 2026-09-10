@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { getUserExportStatsAction, getUserExportInvestmentsAction } from "@/app/actions/export";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { numberOrZero } from "@/lib/numbers";
 
 interface PortfolioStats {
     totalInvested: number;
@@ -39,16 +40,34 @@ interface ActiveInvestment {
     daysRemaining: number;
 }
 
+/**
+ * Every figure this screen draws, at zero.
+ *
+ *   #598 — THE FIX REACHED ONE OF TWO DOORS, AGAIN, AND THE OTHER DOOR IS ONE
+ *   COMMIT OLD. #597 found /marketplace/seller/analytics blanking on a partial
+ *   figures object, because its `setStats` spread a THREE-key defaults literal
+ *   over a NINE-key shape. This screen had the identical fault in two places at
+ *   once — `useState(initial?.stats ?? {…})`, where a seeded partial REPLACES
+ *   the zeroes rather than filling them, and `setStats(statsResult.data)`,
+ *   which does the same on every later read — and #595 had already been in this
+ *   file, guarding the FAILED read while leaving the partial one.
+ *
+ *   `stats.totalInvested.toLocaleString()` then throws during render, so an
+ *   investor with money in escrow gets a blank page rather than a wrong number.
+ */
+const EMPTY_PORTFOLIO: PortfolioStats = {
+    totalInvested: 0,
+    activeInvestments: 0,
+    totalReturns: 0,
+    pendingReturns: 0,
+};
+
 export default function ExportDashboardClient({ initial = null }: {
     /**  #543 Fetched by the server, seeded into state — see page.tsx. */
     initial?: { stats: any; investments: ActiveInvestment[] } | null;
 }) {
-    const [stats, setStats] = useState<PortfolioStats>(initial?.stats ?? {
-        totalInvested: 0,
-        activeInvestments: 0,
-        totalReturns: 0,
-        pendingReturns: 0,
-    });
+    //   Over the full shape, so a partial seed fills it rather than replacing it.
+    const [stats, setStats] = useState<PortfolioStats>({ ...EMPTY_PORTFOLIO, ...(initial?.stats ?? {}) });
 
     const [investments, setInvestments] = useState<ActiveInvestment[]>(initial?.investments ?? []);
     /**
@@ -74,7 +93,7 @@ export default function ExportDashboardClient({ initial = null }: {
                 ]);
 
                 if (statsResult.success && statsResult.data) {
-                    setStats(statsResult.data);
+                    setStats({ ...EMPTY_PORTFOLIO, ...statsResult.data });
                     setStatsFailed(false);
                 } else {
                     setStatsFailed(true);
@@ -148,7 +167,7 @@ export default function ExportDashboardClient({ initial = null }: {
                             </div>
                         </div>
                         <div className="text-2xl font-bold text-slate-900 mb-1">
-                            ₦{stats.totalInvested.toLocaleString()}
+                            ₦{numberOrZero(stats.totalInvested).toLocaleString()}
                         </div>
                         <div className="text-sm text-slate-600">
                             Total Invested
@@ -178,7 +197,7 @@ export default function ExportDashboardClient({ initial = null }: {
                             </div>
                         </div>
                         <div className="text-2xl font-bold text-slate-900 mb-1">
-                            ₦{stats.totalReturns.toLocaleString()}
+                            ₦{numberOrZero(stats.totalReturns).toLocaleString()}
                         </div>
                         <div className="text-sm text-slate-600">
                             Total Returns
@@ -193,7 +212,7 @@ export default function ExportDashboardClient({ initial = null }: {
                             </div>
                         </div>
                         <div className="text-2xl font-bold text-slate-900 mb-1">
-                            ₦{stats.pendingReturns.toLocaleString()}
+                            ₦{numberOrZero(stats.pendingReturns).toLocaleString()}
                         </div>
                         <div className="text-sm text-slate-600">
                             Pending Returns
@@ -224,12 +243,14 @@ export default function ExportDashboardClient({ initial = null }: {
                                                         {investment.commodity}
                                                     </h3>
                                                     <p className="text-sm text-slate-600">
-                                                        Investment: ₦{investment.amount.toLocaleString()}
+                                                        {/*  #598 — read off each row inside a .map, so one
+                                                             investment without an amount took the LIST down. */}
+                                                        Investment: ₦{numberOrZero(investment.amount).toLocaleString()}
                                                     </p>
                                                 </div>
                                                 <div className="text-right">
                                                     <div className="text-sm font-medium text-green-600">
-                                                        +₦{investment.expectedReturn.toLocaleString()}
+                                                        +₦{numberOrZero(investment.expectedReturn).toLocaleString()}
                                                     </div>
                                                     <div className="text-xs text-slate-500">Expected Return</div>
                                                 </div>

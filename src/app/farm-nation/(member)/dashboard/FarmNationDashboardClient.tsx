@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import { logger } from "@/lib/logger";
 import Link from "next/link";
+import { numberOrZero } from "@/lib/numbers";
 import {
     Sprout,
     MapPin,
@@ -183,7 +184,7 @@ export default function FarmNationDashboardClient({ initial = null }: {
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                                 <p className="text-sm text-slate-500 font-medium mb-1">Total Land Listed</p>
                                 <h3 className="text-2xl font-bold text-slate-900">
-                                    {stats.totalHectares > 0 ? `${stats.totalHectares.toLocaleString()} Ha` : "0 Ha"}
+                                    {`${numberOrZero(stats.totalHectares).toLocaleString()} Ha`}
                                 </h3>
                             </div>
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">

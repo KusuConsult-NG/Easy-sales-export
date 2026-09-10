@@ -7,6 +7,7 @@ import MarketplaceRouteGuard from "@/components/marketplace/MarketplaceRouteGuar
 import ProductImage from "@/components/marketplace/ProductImage";
 import type { Metadata } from "next";
 import { SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+import { numberOrZero } from "@/lib/numbers";
 
 export const metadata: Metadata = {
     title: "Easy Market Nigeria — Buy & Sell Agricultural Products",
@@ -100,13 +101,13 @@ export default async function MarketplaceLandingPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-12 md:mb-16">
                     <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
-                            {stats.productsCount.toLocaleString()}+
+                            {numberOrZero(stats.productsCount).toLocaleString()}+
                         </div>
                         <div className="text-xs md:text-base text-slate-600 font-medium">Products Listed</div>
                     </div>
                     <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
-                            {stats.tradersCount.toLocaleString()}+
+                            {numberOrZero(stats.tradersCount).toLocaleString()}+
                         </div>
                         <div className="text-xs md:text-base text-slate-600 font-medium">Active Traders</div>
                     </div>

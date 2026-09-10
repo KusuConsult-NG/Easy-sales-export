@@ -9,6 +9,7 @@ import { COOPERATIVE_TIERS } from '@/lib/cooperative-tiers';
 import { useToast } from '@/contexts/ToastContext';
 import { parseCurrencyStringToFloat } from '@/lib/utils';
 import LoadingButton from '@/components/ui/LoadingButton';
+import { numberOrZero } from "@/lib/numbers";
 
 export default function ContributePage() {
     const router = useRouter();
@@ -228,7 +229,7 @@ export default function ContributePage() {
                                 <div className="mb-6">
                                     <p className="text-white/90 mb-2">Maximum Loan Eligibility</p>
                                     <p className="text-4xl font-bold">
-                                        ₦{tierPreview.maxLoan.toLocaleString()}
+                                        ₦{numberOrZero(tierPreview.maxLoan).toLocaleString()}
                                     </p>
                                     <p className="text-sm text-white/80 mt-1">
                                         {COOPERATIVE_TIERS[tierPreview.tier as 'Member'].maxLoanMultiplier}x your contribution

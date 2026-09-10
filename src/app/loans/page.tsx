@@ -15,6 +15,7 @@ import {
 import { getUserLoanApplications } from "@/app/actions/loan-actions";
 import { type LoanApplication, LoanStatus } from "@/types/strict";
 import { humanise, humaniseUpper } from "@/lib/humanise";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function MyLoansPage() {
     const [loans, setLoans] = useState<LoanApplication[]>([]);
@@ -172,7 +173,7 @@ export default function MyLoansPage() {
                                     <div className="flex-1">
                                         <div className="flex items-center gap-3 mb-2">
                                             <h3 className="text-2xl font-bold text-slate-900">
-                                                ₦{loan.amount.toLocaleString()}
+                                                ₦{numberOrZero(loan.amount).toLocaleString()}
                                             </h3>
                                             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(loan.status)}`}>
                                                 {getStatusIcon(loan.status)}

@@ -24,6 +24,7 @@ import { useSession } from "next-auth/react";
 import type { WaveResource, WaveTrainingEvent } from "@/app/actions/wave";
 import { toSafeDate } from "@/lib/utils";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function WaveDashboardPage() {
     const router = useRouter();
@@ -435,7 +436,7 @@ export default function WaveDashboardPage() {
                                                 <span className="text-gray-400 mx-2">|</span>
                                                 <span className="text-gray-500 text-[10px]">{item.sponsor}</span>
                                             </div>
-                                            <span className="font-semibold text-gray-700">₦{item.amount.toLocaleString()}</span>
+                                            <span className="font-semibold text-gray-700">₦{numberOrZero(item.amount).toLocaleString()}</span>
                                         </div>
                                         <div className="w-full bg-slate-100 rounded-full h-1.5">
                                             <div className={`${item.barColor} h-1.5 rounded-full`} style={{ width: `${item.pct}%` }}></div>

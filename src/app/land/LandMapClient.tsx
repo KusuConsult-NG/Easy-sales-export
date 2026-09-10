@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { SoilQuality, type LandListing } from "@/types/strict";
 import { logger } from '@/lib/logger';
+import { numberOrZero } from "@/lib/numbers";
 
 //Dynamically import LandMap to prevent SSR issues with leaflet
 const LandMap = dynamic(
@@ -96,12 +97,18 @@ export default function LandMapClient({ initial = null }: { initial?: LandListin
                                 {listing.title}
                             </h3>
                             <p className="text-2xl font-bold text-[#1358ec] mb-4">
-                                ₦{listing.price.toLocaleString()}
+                                ₦{numberOrZero(listing.price).toLocaleString()}
                             </p>
                             <div className="space-y-2 text-sm text-slate-600">
-                                <p>📍 {listing.location.city}, {listing.location.state}</p>
-                                <p>📏 {(listing.size * 2.47).toFixed(1)} acres</p>
-                                <p>🌱 {listing.soilQuality} soil quality</p>
+                                {/*
+                                  *   #598 — every one of these was read off the
+                                  *   row inside a `.map`, so a listing with no
+                                  *   `location` took the WHOLE MAP down rather
+                                  *   than losing one pin's caption.
+                                  */}
+                                <p>📍 {[listing.location?.city, listing.location?.state].filter(Boolean).join(", ") || "Location not recorded"}</p>
+                                <p>📏 {(numberOrZero(listing.size) * 2.47).toFixed(1)} acres</p>
+                                {listing.soilQuality && <p>🌱 {listing.soilQuality} soil quality</p>}
                             </div>
                         </div>
                     ))}

@@ -13,6 +13,7 @@ import { getUserExportInvestmentsAction, getUserExportStatsAction } from "@/app/
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { toast } from "sonner";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { numberOrZero } from "@/lib/numbers";
 
 interface Investment {
     id: string;
@@ -158,7 +159,7 @@ export default function ExportPortfolioClient({ initial = null }: {
                             <DollarSign className="w-5 h-5 text-orange-600" />
                         </div>
                         <div className="text-3xl font-bold text-slate-900">
-                            ₦{stats.totalValue.toLocaleString()}
+                            ₦{numberOrZero(stats.totalValue).toLocaleString()}
                         </div>
                     </div>
 
@@ -170,7 +171,7 @@ export default function ExportPortfolioClient({ initial = null }: {
                             <TrendingUp className="w-5 h-5 text-green-600" />
                         </div>
                         <div className="text-3xl font-bold text-green-600">
-                            +₦{stats.totalReturns.toLocaleString()}
+                            +₦{numberOrZero(stats.totalReturns).toLocaleString()}
                         </div>
                     </div>
 
@@ -249,10 +250,10 @@ export default function ExportPortfolioClient({ initial = null }: {
                                             </div>
                                         </td>
                                         <td className="p-4 text-slate-900">
-                                            ₦{investment.amount.toLocaleString()}
+                                            ₦{numberOrZero(investment.amount).toLocaleString()}
                                         </td>
                                         <td className="p-4 text-green-600 font-medium">
-                                            +₦{investment.expectedReturn.toLocaleString()}
+                                            +₦{numberOrZero(investment.expectedReturn).toLocaleString()}
                                         </td>
                                         <td className="p-4">
                                             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useExportCart } from "@/contexts/ExportCartContext";
 import { initializeExportOrderPaymentAction } from "@/app/actions/export-payment";
+import { numberOrZero } from "@/lib/numbers";
 
 type ShippingTerm = "FOB" | "CIF" | "DDP";
 
@@ -410,7 +411,7 @@ export default function ExportCartClient({ usdToNgn }: { usdToNgn: number }) {
                                                 <p className="text-sm text-slate-500">Grade: {item.grade}</p>
                                                 <p className="text-sm text-slate-500">{item.product.origin}</p>
                                                 <p className="text-sm text-slate-500 mt-1">
-                                                    ${item.product.pricePerMT.toLocaleString()} / MT
+                                                    ${numberOrZero(item.product?.pricePerMT).toLocaleString()} / MT
                                                 </p>
 
                                                 {/* Quantity controls */}

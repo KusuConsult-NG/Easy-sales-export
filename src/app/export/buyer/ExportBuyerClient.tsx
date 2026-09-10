@@ -9,6 +9,7 @@ import {
 import BackToHub from "@/components/common/BackToHub";
 import { useExportCart, type ExportProduct } from "@/contexts/ExportCartContext";
 import { clampToMinimumOrder, minimumOrderMT } from "@/lib/export-minimum-order";
+import { numberOrZero } from "@/lib/numbers";
 
 // ── Product Data ──────────────────────────────────────────────────────────────
 
@@ -392,7 +393,7 @@ function CartSidebar() {
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-bold text-slate-900 text-sm">{item.product.name}</h4>
                                         <p className="text-xs text-slate-500">Grade: {item.grade}</p>
-                                        <p className="text-xs text-slate-500">${item.product.pricePerMT.toLocaleString()} / MT</p>
+                                        <p className="text-xs text-slate-500">${numberOrZero(item.product?.pricePerMT).toLocaleString()} / MT</p>
                                     </div>
                                     <button
                                         onClick={() => removeFromCart(item.product.id)}
