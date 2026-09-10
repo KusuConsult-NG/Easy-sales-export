@@ -440,7 +440,10 @@ export default function AdminSellersPage() {
                             </thead>
                             <tbody className="divide-y divide-slate-200">
                                 {filteredVerifications.map((standardV) => {
-                                    const v = standardV.data;
+                                    //   #601 — a verification row whose `data`
+                                    //   half is absent blanked the whole seller
+                                    //   approval queue, inside a .map.
+                                    const v = standardV.data ?? {};
                                     return(
                                     <tr key={standardV.id} className="hover:bg-slate-50">
                                         <td className="px-6 py-4">
@@ -464,7 +467,7 @@ export default function AdminSellersPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="text-sm text-slate-900">{v.phone}</p>
-                                            <p className="text-sm text-slate-500">{v.email || standardV.user.email}</p>
+                                            <p className="text-sm text-slate-500">{v.email || standardV.user?.email}</p>
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="text-sm text-slate-900">{v.state}</p>

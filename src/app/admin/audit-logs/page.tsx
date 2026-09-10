@@ -182,21 +182,21 @@ export default function AdminAuditLogsPage() {
                                 <Info className="w-4 h-4" />
                                 <span>Info</span>
                             </div>
-                            <div className="text-3xl font-bold text-blue-400">{numberOrZero(stats.bySeverity.info).toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-blue-400">{numberOrZero(stats.bySeverity?.info).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-yellow-300 mb-1 flex items-center space-x-2">
                                 <AlertTriangle className="w-4 h-4" />
                                 <span>Warning</span>
                             </div>
-                            <div className="text-3xl font-bold text-yellow-400">{numberOrZero(stats.bySeverity.warning).toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-yellow-400">{numberOrZero(stats.bySeverity?.warning).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-red-300 mb-1 flex items-center space-x-2">
                                 <AlertCircle className="w-4 h-4" />
                                 <span>Critical</span>
                             </div>
-                            <div className="text-3xl font-bold text-red-400">{numberOrZero(stats.bySeverity.critical).toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-red-400">{numberOrZero(stats.bySeverity?.critical).toLocaleString()}</div>
                         </div>
                     </div>
                 )}

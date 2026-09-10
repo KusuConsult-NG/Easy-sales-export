@@ -13,6 +13,7 @@ import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFil
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import { recordExport } from "@/lib/record-export";
 import { humanise } from "@/lib/humanise";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -151,10 +152,10 @@ export default function AdminWaveApplicationsPage() {
     function handleOpenEdit(app: StandardPendingForm<WaveApplication>) {
         setEditingApp(app.data);
         setEditDraft({
-            surname: app.data.surname || "",
-            firstName: app.data.firstName || "",
-            otherNames: app.data.otherNames || "",
-            phone: app.data.phone || "",
+            surname: app.data?.surname || "",
+            firstName: app.data?.firstName || "",
+            otherNames: app.data?.otherNames || "",
+            phone: app.data?.phone || "",
         });
         setEditNote("");
     };
@@ -213,13 +214,13 @@ export default function AdminWaveApplicationsPage() {
                 "Bank Name", "Account Number", "Status", "Applied Date"
             ];
             const rows = exportData.map((app: any) => [
-                app.id, app.data.surname || "", app.data.firstName || "",
-                app.user.email || "", app.user.phone || app.data.phone || "",
-                app.user.gender || "",
-                app.data.stateOfResidence || "", app.data.lgaOfResidence || "",
-                app.data.nin || "", app.data.bvn || "", app.data.votersCardNumber || "",
-                app.data.bankName || "", app.data.accountNumber || "",
-                app.status, new Date(app.data.createdAt).toLocaleDateString("en-NG")
+                app.id, app.data?.surname || "", app.data?.firstName || "",
+                app.user?.email || "", app.user?.phone || app.data?.phone || "",
+                app.user?.gender || "",
+                app.data?.stateOfResidence || "", app.data?.lgaOfResidence || "",
+                app.data?.nin || "", app.data?.bvn || "", app.data?.votersCardNumber || "",
+                app.data?.bankName || "", app.data?.accountNumber || "",
+                app.status, formatDateOrDash(app.data?.createdAt)
             ]);
             const csvContent = [
                 headers.join(","),
@@ -394,21 +395,21 @@ export default function AdminWaveApplicationsPage() {
                                         </div>
                                         <div>
                                             <h3 className="text-lg font-bold text-slate-900">
-                                                {app.user.name}
+                                                {app.user?.name}
                                             </h3>
                                             <div className="flex items-center gap-2 flex-wrap text-sm text-slate-500">
-                                                <span>{app.user.email} • {app.data.phone || '—'}</span>
-                                                {app.user.gender && (
+                                                <span>{app.user?.email} • {app.data?.phone || '—'}</span>
+                                                {app.user?.gender && (
                                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
-                                                        {app.user.gender}
+                                                        {app.user?.gender}
                                                     </span>
                                                 )}
                                             </div>
-                                            {app.data.stateOfResidence && (
+                                            {app.data?.stateOfResidence && (
                                                 <p className="text-sm text-slate-600 mt-1">
-                                                    State: <span className="font-semibold">{app.data.stateOfResidence}</span>
-                                                    {app.data.lgaOfResidence && ` • LGA: `}
-                                                    {app.data.lgaOfResidence && <span className="font-semibold">{app.data.lgaOfResidence}</span>}
+                                                    State: <span className="font-semibold">{app.data?.stateOfResidence}</span>
+                                                    {app.data?.lgaOfResidence && ` • LGA: `}
+                                                    {app.data?.lgaOfResidence && <span className="font-semibold">{app.data?.lgaOfResidence}</span>}
                                                 </p>
                                             )}
 
@@ -417,25 +418,25 @@ export default function AdminWaveApplicationsPage() {
                                                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                                                     <p className="text-xs text-slate-500 mb-0.5">NIN</p>
                                                     <p className="text-sm font-mono font-semibold text-slate-800">
-                                                        {app.data.nin ? `${app.data.nin.slice(0, 3)}****${app.data.nin.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                        {app.data?.nin ? `${app.data?.nin.slice(0, 3)}****${app.data?.nin.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
                                                     </p>
                                                 </div>
                                                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                                                     <p className="text-xs text-slate-500 mb-0.5">Voter&apos;s Card (PVC)</p>
                                                     <p className="text-sm font-mono font-semibold text-slate-800">
-                                                        {app.data.votersCardNumber || <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                        {app.data?.votersCardNumber || <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
                                                     </p>
                                                 </div>
                                                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                                                     <p className="text-xs text-slate-500 mb-0.5">BVN</p>
                                                     <p className="text-sm font-mono font-semibold text-slate-800">
-                                                        {app.data.bvn ? `${app.data.bvn.slice(0, 3)}****${app.data.bvn.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                        {app.data?.bvn ? `${app.data?.bvn.slice(0, 3)}****${app.data?.bvn.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
                                                     </p>
                                                 </div>
                                             </div>
-                                            {app.data.bankName && (
+                                            {app.data?.bankName && (
                                                 <p className="text-xs text-slate-500 mt-2">
-                                                    🏦 {app.data.bankName} {app.data.accountNumber ? `• ****${app.data.accountNumber.slice(-4)}` : ''}
+                                                    🏦 {app.data?.bankName} {app.data?.accountNumber ? `• ****${app.data?.accountNumber.slice(-4)}` : ''}
                                                 </p>
                                             )}
                                         </div>
@@ -447,7 +448,7 @@ export default function AdminWaveApplicationsPage() {
 
                                 <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                                     <p className="text-xs text-slate-500">
-                                        Applied: {formatDate(app.data.createdAt)}
+                                        Applied: {formatDate(app.data?.createdAt)}
                                     </p>
 
                                     {app.status === "pending" && (
@@ -503,15 +504,15 @@ export default function AdminWaveApplicationsPage() {
                                         </button>
                                     )}
 
-                                    {app.status === "approved" && app.data.approvedBy && (
+                                    {app.status === "approved" && app.data?.approvedBy && (
                                         <p className="text-xs text-green-600 font-semibold">
-                                            ✓ Approved {app.data.approvalTimestamp ? `• ${formatDate(app.data.approvalTimestamp)}` : ''}
+                                            ✓ Approved {app.data?.approvalTimestamp ? `• ${formatDate(app.data?.approvalTimestamp)}` : ''}
                                         </p>
                                     )}
 
-                                    {app.status === "rejected" && app.data.rejectionReason && (
+                                    {app.status === "rejected" && app.data?.rejectionReason && (
                                         <p className="text-sm text-red-600">
-                                            Reason: {app.data.rejectionReason}
+                                            Reason: {app.data?.rejectionReason}
                                         </p>
                                     )}
                                 </div>

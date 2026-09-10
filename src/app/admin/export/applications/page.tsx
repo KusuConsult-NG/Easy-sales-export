@@ -439,16 +439,20 @@ export default function AdminExportApplicationsPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {applications.map((standardApp) => {
-                                const app = standardApp.data;
+                                //   #601 — the joined `user` and `data` halves
+                                //   are read straight off each row; a row missing
+                                //   either blanked the export approval queue.
+                                const app = standardApp.data ?? {};
+                                const applicant = standardApp.user ?? {};
                                 return (
                                 <tr key={standardApp.id} className="hover:bg-slate-50 transition">
                                     <td className="px-6 py-4">
-                                        <div className="font-semibold text-slate-900 text-sm">{standardApp.user.name}</div>
+                                        <div className="font-semibold text-slate-900 text-sm">{applicant.name}</div>
                                         <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-xs text-slate-500">{standardApp.user.email}</span>
-                                            {standardApp.user.gender && (
+                                            <span className="text-xs text-slate-500">{applicant.email}</span>
+                                            {applicant.gender && (
                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
-                                                    {standardApp.user.gender}
+                                                    {applicant.gender}
                                                 </span>
                                             )}
                                         </div>

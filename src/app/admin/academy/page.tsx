@@ -38,9 +38,24 @@ export default function AcademyAdminPage() {
     // Note: useAdminData already applies basic local search text filter,
     // but its internal filter looks at generic text fields if we pass search.
     // If we want to ensure instructor and title match purely locally we can still do a manual filter:
+    /**
+     *   #601 — THE ADMIN TWIN OF #595's COURSE CATALOGUE, WORD FOR WORD.
+     *
+     *   #595 fixed `course.title.toLowerCase()` and
+     *   `course.instructor.toLowerCase()` on /academy/courses because one course
+     *   without an instructor threw during render and took the whole catalogue
+     *   down. This is the same two lines on the screen where an administrator
+     *   PUBLISHES a course — and nothing in the course form requires an
+     *   instructor, so this is the screen that creates the row that breaks the
+     *   other one.
+     */
+    const query = searchQuery.toLowerCase();
     const filteredCourses = courses.filter(course =>
-        course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        course.instructor.toLowerCase().includes(searchQuery.toLowerCase())
+        [course.title, (course as any).instructor]
+            .filter((v): v is string => typeof v === "string")
+            .join(" ")
+            .toLowerCase()
+            .includes(query)
     );
 
     const getLevelBadge = (level: string = 'beginner') => {

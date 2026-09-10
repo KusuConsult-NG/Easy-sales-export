@@ -25,6 +25,7 @@ import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFil
 import { recordExport } from "@/lib/record-export";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
+import { shortId } from "@/lib/humanise";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
@@ -450,7 +451,9 @@ export default function AdminTransactionsPage() {
                                                     <td className="px-6 py-4">
                                                         <div>
                                                             <p className="text-sm font-semibold text-slate-900">{transaction.userName}</p>
-                                                            <p className="text-xs text-slate-500">{transaction.userId.slice(0, 12)}…</p>
+                                                            {/*  #601 — read off the row inside a .map, so one ledger
+                                                                 entry without a userId blanked the whole ledger. */}
+                                                            <p className="text-xs text-slate-500">{shortId(transaction.userId, 12)}…</p>
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4">
