@@ -1,6 +1,6 @@
 "use server";
 
-import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
@@ -52,7 +52,7 @@ async function _getFarmNationRegistrantsAction(options: {
                     role: data.roles?.[0] || "general_user",
                     roles: data.roles || [],
                     isVerified: data.isVerified ?? false,
-                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(0).toISOString(),
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : UNKNOWN_DATE_ISO,
                     farmNation: data.farmNation,
                     serviceRegistrations: { farmNation }
                 };

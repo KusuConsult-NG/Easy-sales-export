@@ -1,6 +1,6 @@
 "use server";
 
-import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { revalidatePath, updateTag } from 'next/cache';
@@ -124,7 +124,7 @@ async function _getAcademyApplicationsAction(options: {
                     ? (submittedRaw.toDate() as Date).toISOString()
                     : submittedRaw instanceof Date
                         ? submittedRaw.toISOString()
-                        : typeof submittedRaw === 'string' ? submittedRaw : new Date(0).toISOString(),
+                        : typeof submittedRaw === 'string' ? submittedRaw : UNKNOWN_DATE_ISO,
                 reviewedAt: reviewedRaw?.toDate
                     ? (reviewedRaw.toDate() as Date).toISOString()
                     : reviewedRaw instanceof Date

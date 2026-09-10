@@ -236,7 +236,11 @@ describe('#425 — the certificates list reads where completion is written', () 
         // the fault the WAVE branch of this same file records having had.
         const src = code(CERTS);
         expect(src).not.toMatch(/\?\?\s*new Date\(\)\.toISOString\(\)/);
-        expect(src).toMatch(/new Date\(0\)\.toISOString\(\)/);
+        //   #608 named the epoch fallback `UNKNOWN_DATE_ISO`. Same value, same
+        //   guarantee — and the constant carries the second half nobody had
+        //   followed through: the sentinel must not be RENDERED either, or an
+        //   undated certificate reads "Issued 01/01/1970" instead of "—".
+        expect(src).toMatch(/UNKNOWN_DATE_ISO/);
     });
 
     it('and the premise holds — nothing writes "completed" onto an enrolment row', () => {

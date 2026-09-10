@@ -15,6 +15,7 @@ import {
     REJECTABLE_FROM_STATUSES,
 } from "@/lib/land-listing-status";
 import { recordAdminAction } from "@/lib/audit-log";
+import { safeToISOString, UNKNOWN_DATE_ISO } from "@/lib/date-utils";
 
 export type ContentType = "products" | "land" | "certificates" | "resources" | "courses" | "export";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -96,7 +97,11 @@ export async function getContentApprovalItemsAction(
                 type: "products",
                 title: data.title || data.name || "Untitled Product",
                 submittedBy: data.sellerName || data.sellerId || "Unknown Seller",
-                submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
+                //   #608 — `new Date({ _seconds })` is an Invalid Date and
+                //   `.toISOString()` on one THROWS, so a single row whose createdAt
+                //   crossed as a serialised Timestamp failed the whole approval
+                //   queue. `|| Date.now()` dated an undated submission today.
+                submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `Price: ₦${retailPrice.toLocaleString()} - Category: ${data.category}`,
                 metadata: serializeValue(data) as Record<string, unknown>,
@@ -115,7 +120,11 @@ export async function getContentApprovalItemsAction(
                 type: "land",
                 title: data.title || "Untitled Land",
                 submittedBy: data.ownerName || data.ownerEmail || data.ownerId || "Unknown Owner",
-                submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
+                //   #608 — `new Date({ _seconds })` is an Invalid Date and
+                //   `.toISOString()` on one THROWS, so a single row whose createdAt
+                //   crossed as a serialised Timestamp failed the whole approval
+                //   queue. `|| Date.now()` dated an undated submission today.
+                submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `${data.size} ${data.unit || 'acres'} at ${data.location?.state || data.state || 'Unknown State'}, ${data.location?.lga || data.lga || 'Unknown LGA'}`,
                 metadata: serializeValue(data) as Record<string, unknown>,
@@ -134,7 +143,11 @@ export async function getContentApprovalItemsAction(
                 type: "export",
                 title: data.productName || data.title || "Untitled Export",
                 submittedBy: data.userId || "Unknown User",
-                submittedAt: (data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
+                //   #608 — `new Date({ _seconds })` is an Invalid Date and
+                //   `.toISOString()` on one THROWS, so a single row whose createdAt
+                //   crossed as a serialised Timestamp failed the whole approval
+                //   queue. `|| Date.now()` dated an undated submission today.
+                submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `${data.category || "General"} - ${data.availableQuantity || 0} ${data.unit || "units"}`,
                 metadata: serializeValue(data) as Record<string, unknown>,

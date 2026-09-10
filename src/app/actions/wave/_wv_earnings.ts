@@ -16,6 +16,7 @@ import { isAdmin } from "@/lib/role-utils";
 import type { MemberEarnings } from "@/lib/types/wave-actions";
 import { isAmountAtLeast } from "@/lib/amount";
 import { numberOrZero } from "@/lib/numbers";
+import { UNKNOWN_DATE, UNKNOWN_DATE_ISO, safeToISOString, toDateOrNull } from "@/lib/date-utils";
 
 /**
  * Calculate member earnings from sales
@@ -160,7 +161,18 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             }
 
             transactions.push({
-                date: escrow.createdAt?.toDate ? escrow.createdAt.toDate() : new Date(escrow.createdAt ?? Date.now()),
+                //   #608 — was `escrow.createdAt?.toDate ? … : new Date(escrow.createdAt ?? Date.now())`,
+                //   which knew a live Timestamp and an ISO string and neither of the
+                //   two `{ seconds }` shapes. Those made an INVALID DATE, and this
+                //   list is serialised twelve lines below with `t.date.toISOString()`
+                //   — which THROWS a RangeError rather than returning a bad string.
+                //   One escrow row whose createdAt crossed the boundary as
+                //   `{ _seconds }` took down the whole WAVE earnings action: no
+                //   balance, no transactions, no page.
+                //
+                //   The `?? Date.now()` was the other half — an undated sale dated
+                //   TODAY on an earnings statement.
+                date: toDateOrNull(escrow.createdAt) ?? UNKNOWN_DATE,
                 // The order, so a member can still tie a row back to a purchase.
                 orderId: escrow.orderId || doc.id,
                 saleAmount,
@@ -263,7 +275,7 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
                 .sort((a: any, b: any) => b.date.getTime() - a.date.getTime())
                 .map(t => ({
                     ...t,
-                    date: t.date.toISOString()
+                    date: safeToISOString(t.date, UNKNOWN_DATE_ISO)
                 }))
         };
 

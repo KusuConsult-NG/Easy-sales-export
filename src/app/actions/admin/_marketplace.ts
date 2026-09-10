@@ -1,6 +1,6 @@
 "use server";
 
-import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { revalidatePath, updateTag } from 'next/cache';
@@ -800,7 +800,7 @@ async function _getMarketplaceUsersAction(options: {
                 roles: data.roles || [],
                 buyerRole,
                 status: data.status || "active",
-                createdAt: safeToISOString(data.createdAt, new Date(0).toISOString()),
+                createdAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 ...(maySeeBankDetails ? {
                     bankDetails: serializeValue(data.bankDetails || {
                         bankName: data.bankName || data.bankAccount?.bankName || "",

@@ -119,36 +119,83 @@ export function dateRangeEnd(yyyyMmDd: string): Date {
  * RangeError on an unparseable value.
  */
 
+/**
+ *   #608 AND IT KNEW TWO OF THE FOUR SHAPES, SO IT ANSWERED "1970" FOR DATES IT
+ *        COULD HAVE READ.
+ *
+ *   These two were written as `val.toDate?.() ?? new Date(val)`, which handles a
+ *   live Timestamp and an ISO string and nothing else. A `{ seconds }` or
+ *   `{ _seconds }` object — what an admin-side Timestamp becomes once it has
+ *   crossed the server boundary, and the ordinary shape of a date stored in
+ *   JSONB — made `new Date(val)` an Invalid Date, so the fallback was returned
+ *   for a date that was sitting right there.
+ *
+ *   `toDateOrNull` two hundred lines above has known all four shapes for some
+ *   time. #605 found sixty-five display sites not using it; these are the two
+ *   SERIALISING readers, and they are the ones whose callers pass
+ *   `new Date(0).toISOString()` as the fallback — so the cost was not a dash, it
+ *   was a confident 1 January 1970 on an admin's user list and a member's
+ *   certificate.
+ */
+
 export function safeToISOString(val: any, fallback: string): string {
-    if (!val) return fallback;
-    try {
-        let d;
-        if (val.toDate && typeof val.toDate === "function") {
-            d = val.toDate();
-        } else {
-            d = new Date(val);
-        }
-        if (isNaN(d.getTime())) return fallback;
-        return d.toISOString();
-    } catch {
-        return fallback;
-    }
+    const d = toDateOrNull(val);
+    return d ? d.toISOString() : fallback;
 }
 
 export function safeToISOStringOptional(val: any): string | undefined {
-    if (!val) return undefined;
-    try {
-        let d;
-        if (val.toDate && typeof val.toDate === "function") {
-            d = val.toDate();
-        } else {
-            d = new Date(val);
-        }
-        if (isNaN(d.getTime())) return undefined;
-        return d.toISOString();
-    } catch {
-        return undefined;
-    }
+    return toDateOrNull(val)?.toISOString();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "There is no date here"
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ *   #608 THE EPOCH IS THIS CODEBASE'S WORD FOR "UNKNOWN", AND SCREENS READ IT
+ *        ALOUD AS 1 JANUARY 1970.
+ *
+ *   Twelve readers answer `new Date(0).toISOString()` when a row carries no
+ *   date. That is a deliberate and CORRECT choice for ORDERING — a descending
+ *   sort puts the epoch last, which is where an undated row belongs — and the
+ *   certificates reader says why it was picked over the alternative:
+ *
+ *       // Only when the row genuinely carries no date. Defaulting to
+ *       // "now" silently made every certificate look freshly issued.
+ *
+ *   Right about "now", and nobody followed the value to the screen. The same
+ *   string is handed to the client and rendered by an ordinary date formatter,
+ *   so a certificate with no issue date reads "Issued 01/01/1970" and a user
+ *   with no createdAt joined the platform in 1970.
+ *
+ *   A sentinel is a value that means "no value". It is correct in the comparison
+ *   it was chosen for and wrong everywhere it is read as itself, and nothing in
+ *   the code separated those two uses.
+ *
+ *   SO IT IS NAMED, AND THE DISPLAY READERS BELOW TREAT IT AS ABSENT. Ordering
+ *   is untouched: the value is still a real 0 and still sorts last.
+ *
+ *   THE RULE THIS ACCEPTS, STATED PLAINLY: an instant within a second of the
+ *   Unix epoch cannot be displayed by this application. Nothing it records
+ *   predates 2024, and every epoch value reaching a screen today comes from one
+ *   of those twelve fallbacks. That trade is worth making explicit rather than
+ *   leaving a reader to wonder why a date vanished.
+ */
+export const UNKNOWN_DATE = new Date(0);
+export const UNKNOWN_DATE_ISO = UNKNOWN_DATE.toISOString();
+
+/*
+ *   NOT EVERY `new Date(0)` IS THIS. Deleting a cookie is done by setting its
+ *   expiry to the epoch — `expires: new Date(0)` in auth.ts, three times — and
+ *   that is the HTTP convention for "already expired", not this codebase's word
+ *   for "no date". It stays as it is, and the ratchet on this constant is
+ *   written narrowly enough not to drag it in.
+ */
+
+/** True when a value is this codebase's "no date" sentinel, in any of its shapes. */
+export function isUnknownDate(value: unknown): boolean {
+    const d = toDateOrNull(value);
+    return d !== null && Math.abs(d.getTime()) < 1000;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -197,6 +244,15 @@ export function formatDateOrDash(
 ): string {
     const d = toDateOrNull(value);
     if (!d) return fallback;
+    //   #608 — the epoch is the codebase's "no date", not a date. See
+    //   UNKNOWN_DATE_ISO above for what this trade costs and why it is worth it.
+    //
+    //   THROUGH `isUnknownDate`, NOT A SECOND COPY OF ITS CONDITION. This line
+    //   was `Math.abs(d.getTime()) < 1000` written out again, and a mutant that
+    //   made only the formatter's copy one-sided SURVIVED — the two copies could
+    //   disagree and every test still passed. Two hand-maintained copies of one
+    //   rule is the defect this audit keeps finding in other people's code.
+    if (isUnknownDate(d)) return fallback;
     try {
         return new Intl.DateTimeFormat(locale, options).format(d);
     } catch {

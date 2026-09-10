@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { UNKNOWN_DATE, dateRangeEnd, dateRangeStart, toDateOrNull } from "@/lib/date-utils";
 
 /**
  * API Route: Get All Cooperative Membership Applications (Admin)
@@ -150,8 +150,11 @@ export async function GET(request: NextRequest) {
                     address: data.nextOfKin?.address || data.nextOfKinAddress || "",
                 },
                 documents: data.documents || {},
-                createdAt: data.createdAt?.toDate?.() || new Date(0),
-                updatedAt: data.updatedAt?.toDate?.() || new Date(0),
+                //   #608 — named, and widened: `?.toDate?.()` knew one of the four
+                //   shapes, so a createdAt that crossed as `{ _seconds }` fell to the
+                //   sentinel and the admin saw a member who joined in 1970.
+                createdAt: toDateOrNull(data.createdAt) ?? UNKNOWN_DATE,
+                updatedAt: toDateOrNull(data.updatedAt) ?? UNKNOWN_DATE,
             };
         });
 

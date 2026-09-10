@@ -3,7 +3,7 @@ import { AggregateField, FieldPath } from "@/lib/firestore-compat";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
 import { eachPaystackSuccess } from "@/lib/paystack-sweep";
@@ -743,7 +743,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                         id: d.id || Math.random().toString(),
                         type: d.type ?? d.action ?? "Transaction",
                         amount: Number(d.amount ?? d.registrationFee) || 0,
-                        date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString())
+                        date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : UNKNOWN_DATE_ISO)
                     });
                     collected++;
                 }

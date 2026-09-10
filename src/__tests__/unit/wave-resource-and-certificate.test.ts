@@ -294,7 +294,10 @@ describe('the unified certificates endpoint reads the fields the writer writes',
         // Defaulting to the current time made every row look freshly issued, which
         // is the kind of wrong that looks right.
         const src = code(CERTS_ROUTE);
-        expect(src).toContain('new Date(0).toISOString()');
+        //   #608 — same value, now named. See the note in the sibling test in
+        //   bought-course-can-be-finished.test.ts.
+        expect(src).toContain('UNKNOWN_DATE_ISO');
+        expect(src).not.toMatch(/\?\?\s*new Date\(\)\.toISOString\(\)/);
     });
 
     it('prefers the programme name over a synthesised one', () => {

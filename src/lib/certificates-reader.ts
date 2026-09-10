@@ -3,6 +3,7 @@ import "server-only";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isRetired } from "@/lib/record-retirement";
+import { UNKNOWN_DATE_ISO } from "@/lib/date-utils";
 
 /**
  * A member's certificates, read once and defined once.
@@ -135,7 +136,7 @@ export async function readAcademyCertificates(
                 d.completedAt?.toDate?.()?.toISOString() ??
                 // Never "now": that dated every certificate today, which is
                 // the fault the WAVE branch below records having had.
-                new Date(0).toISOString(),
+                UNKNOWN_DATE_ISO,
             certificateUrl: d.certificateUrl || undefined,
             grade: d.finalScore !== undefined ? `${d.finalScore}%` : d.grade || undefined,
             source: "academy",
@@ -162,7 +163,7 @@ export async function readAcademyCertificates(
                 issuedAt:
                     d.certificateIssuedAt?.toDate?.()?.toISOString() ??
                     d.completedAt?.toDate?.()?.toISOString() ??
-                    new Date(0).toISOString(),
+                    UNKNOWN_DATE_ISO,
                 certificateUrl: d.certificateUrl || undefined,
                 grade: d.finalScore !== undefined ? `${d.finalScore}%` : d.grade || undefined,
                 source: "academy",
@@ -218,7 +219,7 @@ export async function readAcademyCertificates(
                 ?? (issued instanceof Date ? issued.toISOString() : null)
                 // Only when the row genuinely carries no date. Defaulting to
                 // "now" silently made every certificate look freshly issued.
-                ?? new Date(0).toISOString(),
+                ?? UNKNOWN_DATE_ISO,
             certificateUrl: d.pdfUrl || d.certificateUrl || d.verificationUrl || undefined,
             grade: d.grade || undefined,
             source: "wave",

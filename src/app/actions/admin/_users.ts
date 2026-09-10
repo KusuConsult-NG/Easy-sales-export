@@ -19,7 +19,7 @@ import { hasAdminPermission, isAdmin, isSuperAdmin, includesPrivilegedRole } fro
 import { stripRegistrationPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
-import { safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
+import { UNKNOWN_DATE_ISO, safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import {
@@ -724,7 +724,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 verificationState: verificationState(data),
                 isManufacturedProfile: isManufacturedProfile(data),
                 hasContactableIdentity: hasContactableIdentity(data),
-                createdAt: safeToISOString(data.createdAt, new Date(0).toISOString()),
+                createdAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 verifiedAt: safeToISOStringOptional(data.verifiedAt),
                 // Location
                 address: data.address,
