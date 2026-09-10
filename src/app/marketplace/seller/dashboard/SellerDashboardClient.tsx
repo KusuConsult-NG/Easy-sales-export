@@ -21,6 +21,17 @@ import type { Order, Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { toDate } from "@/lib/date-utils";
 
+/** Every figure this dashboard draws, at zero — named so a partial server
+ *  answer fills the shape rather than replacing it. */
+const EMPTY_SELLER_STATS = {
+    totalSales: 0,
+    activeListings: 0,
+    pendingOrders: 0,
+    monthlyRevenue: 0,
+    conversionRate: 0,
+    averageRating: 0,
+};
+
 export default function SellerDashboardClient({ initial = null }: {
     /**  #543 The four action RESULTS the server already fetched — raw, so the
      *   sorting and top-N selection below stay in exactly one place. */
@@ -37,14 +48,18 @@ export default function SellerDashboardClient({ initial = null }: {
     } | null;
 }) {
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({
-        totalSales: 0,
-        activeListings: 0,
-        pendingOrders: 0,
-        monthlyRevenue: 0,
-        conversionRate: 0,
-        averageRating: 0
-    });
+    /**
+     *   #599 — THE THIRD SCREEN WITH THIS EXACT FAULT, AND THE SECOND ONE #594
+     *   HAD ALREADY BEEN IN.
+     *
+     *   `setStats(analyticsRes.data.analytics as any)` REPLACES this shape with
+     *   whatever the server answered. A partial answer therefore leaves
+     *   `averageRating` absent and `stats.averageRating.toFixed(1)` throws
+     *   during render — the whole seller dashboard, blank. #597 fixed it on
+     *   /marketplace/seller/analytics, #598 on /export/(app)/dashboard, and
+     *   this is the same line here.
+     */
+    const [stats, setStats] = useState(EMPTY_SELLER_STATS);
     const [recentOrders, setRecentOrders] = useState<Order[]>([]);
     const [topProducts, setTopProducts] = useState<Product[]>([]);
     const [toggles, setToggles] = useState<Record<string, boolean>>({});
@@ -88,7 +103,8 @@ export default function SellerDashboardClient({ initial = null }: {
                 }
 
                 if (analyticsRes.success && analyticsRes.data?.analytics) {
-                    setStats(analyticsRes.data.analytics as any);
+                    //   Over the full shape, so a partial answer fills it.
+                    setStats({ ...EMPTY_SELLER_STATS, ...(analyticsRes.data.analytics as any) });
                     setStatsFailed(false);
                 } else {
                     setStatsFailed(true);
@@ -342,7 +358,7 @@ export default function SellerDashboardClient({ initial = null }: {
                                                             Order #{order.orderNumber || order.id.slice(0, 8)}
                                                         </h3>
                                                         <p className="text-sm text-slate-600">
-                                                            {order.items.length} items • {formatCurrency(order.totalAmount)}
+                                                            {(order.items ?? []).length} items • {formatCurrency(order.totalAmount)}
                                                         </p>
                                                     </div>
                                                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.text}`}>
@@ -360,7 +376,7 @@ export default function SellerDashboardClient({ initial = null }: {
                                                     <div>
                                                         <span className="text-slate-500">Items:</span>
                                                         <p className="font-semibold text-slate-900 truncate">
-                                                            {order.items.map(i => i.productTitle).join(", ")}
+                                                            {(order.items ?? []).map(i => i.productTitle).join(", ")}
                                                         </p>
                                                     </div>
                                                 </div>

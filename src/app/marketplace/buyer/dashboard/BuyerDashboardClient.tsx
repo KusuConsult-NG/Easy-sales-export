@@ -328,7 +328,9 @@ export default function BuyerDashboardClient({ initial = null }: {
                                                             Order #{order.orderNumber || order.id.slice(0, 8)}
                                                         </h3>
                                                         <p className="text-sm text-slate-600">
-                                                            {order.items.length} Items • {formattedDate}
+                                                            {/*  #599 — read off the row inside a .map, so an
+                                                                 order with no `items` took the dashboard down. */}
+                                                            {(order.items ?? []).length} Items • {formattedDate}
                                                         </p>
                                                     </div>
                                                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badge.bg} ${badge.text}`}>
@@ -340,7 +342,7 @@ export default function BuyerDashboardClient({ initial = null }: {
                                                     <div>
                                                         <span className="text-slate-500">Products:</span>
                                                         <p className="font-semibold text-slate-900 truncate">
-                                                            {order.items.map(i => i.productTitle).join(", ")}
+                                                            {(order.items ?? []).map(i => i.productTitle).join(", ")}
                                                         </p>
                                                     </div>
                                                     <div>

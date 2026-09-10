@@ -138,6 +138,14 @@ jest.mock('sonner', () => ({ toast: { error: jest.fn(), success: jest.fn() } }))
  *   Those nineteen live in a-row-with-nothing-on-it, which holds their finding,
  *   their renders and their mutation table.
  *
+ *   #599 FINISHED IT, AT EIGHTY-THREE: every server-seeded client screen
+ *   outside admin is now a subject, and the-last-seeded-screen asserts that set
+ *   equality in both directions, so a new seeded screen fails until somebody
+ *   renders it with a bare row. All three crashes in that last batch were on
+ *   screens THIS AUDIT HAD ALREADY FIXED, which is the whole lesson: a fix
+ *   aimed at "the read failed" does nothing for "the read succeeded and
+ *   answered short".
+ *
  *   #598 RAISED IT A THIRD TIME, TO SIXTY-THREE, and caught the fix reaching one
  *   of two doors ONE COMMIT after #597 fixed the other: /export/(app)/dashboard
  *   blanked on a PARTIAL figures object, the identical fault #597 had just
@@ -222,6 +230,27 @@ const PROVEN = [
     'export/(app)/dashboard',
     'messages',
     'cooperatives/id-card',
+    //   #599's twenty — the last of the server-seeded screens.
+    'academy/courses',
+    'academy/application',
+    'academy/setup',
+    'cooperatives/fixed-savings',
+    'cooperatives/payment',
+    'dashboard/disputes/new',
+    'dashboard/wallet',
+    'escrow/[id]/chat',
+    'export/onboarding',
+    'farm-nation/landing',
+    'farm-nation/onboarding',
+    'marketplace/buyer/dashboard',
+    'marketplace/onboarding',
+    'marketplace/seller/dashboard',
+    'marketplace/verify',
+    'settings/security/mfa',
+    'wave/earnings',
+    'wave/live-training',
+    'wave/training',
+    'wave/application',
 ];
 
 beforeEach(() => {
@@ -347,8 +376,8 @@ describe('#589 — the ledger of screens proven against a bare document', () => 
     it('EVERY SUBJECT IS NAMED, AND THE FLOOR ONLY GOES UP', () => {
         //   Named rather than counted, so that "N screens are proven" cannot
         //   become true by deleting a test.
-        expect(PROVEN).toHaveLength(63);
-        expect(new Set(PROVEN).size).toBe(63);
+        expect(PROVEN).toHaveLength(83);
+        expect(new Set(PROVEN).size).toBe(83);
         expect(PROVEN.slice(0, 4)).toEqual([
             'cooperatives/directory',
             'export/windows/[id]',
@@ -372,6 +401,7 @@ describe('#589 — the ledger of screens proven against a bare document', () => 
             'src/__tests__/unit/a-row-with-nothing-on-it.test.tsx',
             'src/__tests__/unit/a-date-that-is-not-one.test.tsx',
             'src/__tests__/unit/a-number-nobody-wrote.test.tsx',
+            'src/__tests__/unit/the-last-seeded-screen.test.tsx',
         ].map(f => readFileSync(join(process.cwd(), f), 'utf-8')).join('\n');
         //   The four this file renders itself are not expected over there.
         for (const subject of PROVEN.slice(4)) {

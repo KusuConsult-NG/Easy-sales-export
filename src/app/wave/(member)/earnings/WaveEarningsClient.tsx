@@ -16,6 +16,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { humaniseCapitalised } from "@/lib/humanise";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 export default function WaveEarningsClient({ initial = null }: { initial?: MemberEarnings | null }) {
     const { data: session, status } = useSession();
@@ -260,7 +261,9 @@ export default function WaveEarningsClient({ initial = null }: { initial?: Membe
                                                 <h4 className="font-semibold text-slate-900 text-sm">Commission from Sale</h4>
                                                 <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                                                     <Calendar className="w-3.5 h-3.5" />
-                                                    <span>{txn.date.toLocaleDateString()}</span>
+                                                    {/*  #599 — `txn.date` came off the row; a transaction
+                                                         without one took the earnings screen down. */}
+                                                    <span>{formatDateOrDash(txn.date, { dateStyle: "medium" })}</span>
                                                 </div>
                                             </div>
                                         </div>
