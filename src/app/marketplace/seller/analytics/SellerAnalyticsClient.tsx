@@ -25,6 +25,20 @@ import { getSellerAnalyticsAction } from "@/app/actions/marketplace";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { formatCurrency } from "@/lib/utils";
 
+/** Every figure this screen draws, at zero. Named so a partial server answer
+ *  fills the shape rather than replacing it. */
+const EMPTY_ANALYTICS = {
+    totalSales: 0,
+    activeListings: 0,
+    pendingOrders: 0,
+    monthlyRevenue: 0,
+    conversionRate: 0,
+    averageRating: 0,
+    prevMonthRevenue: 0,
+    prevTotalSales: 0,
+    prevActiveListings: 0,
+};
+
 export default function SellerAnalyticsClient({ initial = null }: {
     /**
      *   #552 The RAW analytics result the server already fetched.
@@ -36,17 +50,18 @@ export default function SellerAnalyticsClient({ initial = null }: {
     initial?: Awaited<ReturnType<typeof getSellerAnalyticsAction>> | null;
 }) {
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({
-        totalSales: 0,
-        activeListings: 0,
-        pendingOrders: 0,
-        monthlyRevenue: 0,
-        conversionRate: 0,
-        averageRating: 0,
-        prevMonthRevenue: 0,
-        prevTotalSales: 0,
-        prevActiveListings: 0,
-    });
+    /**
+     *   #597 — THE SPREAD REPLACED THE SHAPE INSTEAD OF FILLING IT.
+     *
+     *   `setStats({ ...defaults, ...analyticsData })` spread a THREE-key
+     *   defaults object, not this one, so a server answer missing
+     *   `averageRating` left the state without it and
+     *   `stats.averageRating.toFixed(1)` threw during render — the whole
+     *   analytics page, blank, for a seller whose row predates the field.
+     *
+     *   The full shape is named once and used in both places now.
+     */
+    const [stats, setStats] = useState(EMPTY_ANALYTICS);
 
     const takeSeed = useServerSeed(initial);
 
@@ -55,9 +70,10 @@ export default function SellerAnalyticsClient({ initial = null }: {
             try {
                 const result = takeSeed() ?? await getSellerAnalyticsAction();
                 if (result.success && result.data?.analytics) {
-                    const analyticsData = result.data.analytics as typeof stats;
-                    const defaults = { prevMonthRevenue: 0, prevTotalSales: 0, prevActiveListings: 0 };
-                    setStats({ ...defaults, ...analyticsData });
+                    const analyticsData = result.data.analytics as Partial<typeof EMPTY_ANALYTICS>;
+                    //   Over the FULL shape, so a partial answer fills in rather
+                    //   than replacing.
+                    setStats({ ...EMPTY_ANALYTICS, ...analyticsData });
                 }
             } catch (error) {
                 logger.error("Failed to load analytics:", error);

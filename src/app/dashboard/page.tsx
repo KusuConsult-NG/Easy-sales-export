@@ -13,6 +13,7 @@ import { toDate } from "@/lib/date-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { useNavSummary } from "@/contexts/NavSummaryContext";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
@@ -399,7 +400,7 @@ function DashboardHomeContent() {
                                                 {event.type === 'wave' ? 'WAVE Training' : 'Village Market'}
                                             </span>
                                             <span className="text-xs text-slate-500 font-semibold">
-                                                {new Intl.DateTimeFormat("en-NG", { dateStyle: "short", timeStyle: "short" }).format(event.date)}
+                                                {formatDateOrDash(event.date, { dateStyle: "short", timeStyle: "short" })}
                                             </span>
                                         </div>
                                         <h3 className="font-bold text-slate-900 text-base mb-1 truncate">{event.title}</h3>

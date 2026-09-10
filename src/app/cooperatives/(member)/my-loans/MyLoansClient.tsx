@@ -18,6 +18,7 @@ import { getMembershipAction } from "@/app/actions/cooperative";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/cooperative";
 import RepayFromSavingsModal from "@/components/loans/RepayFromSavingsModal";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 // Helper to convert FieldValue | Timestamp to Date
 function toDate(value: any): Date {
@@ -170,12 +171,11 @@ export default function MyLoansClient({ initial = null }: {
         }
     }
 
-    function formatDate(date: Date) {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-        }).format(new Date(date));
+    //   #597 — this took `date: Date` and was handed whatever the document
+    //   held. A TypeScript annotation is not a runtime check on a value that
+    //   crossed the server boundary as JSON.
+    function formatDate(date: unknown) {
+        return formatDateOrDash(date);
     }
 
     const activeLoans = loans.filter((l: any) => l.status === "disbursed");

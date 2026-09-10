@@ -13,17 +13,18 @@ import { useToast } from "@/contexts/ToastContext";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+//   #597 — `if (!iso)` catches an absent date and nothing else; a string that
+//   does not parse still threw a RangeError out of Intl.
 function fmt(iso: string) {
-    if (!iso) return "—";
-    return new Intl.DateTimeFormat("en-NG", { year: "numeric", month: "long", day: "numeric" }).format(new Date(iso));
+    return formatDateOrDash(iso);
 }
 
 function fmtShort(iso: string) {
-    if (!iso) return "—";
-    return new Intl.DateTimeFormat("en-NG", { year: "numeric", month: "short" }).format(new Date(iso));
+    return formatDateOrDash(iso, { year: "numeric", month: "short" });
 }
 
 // ── Passport Upload Widget ────────────────────────────────────────────────────

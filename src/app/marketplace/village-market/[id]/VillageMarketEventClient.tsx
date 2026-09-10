@@ -26,11 +26,11 @@ import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { formatCurrency } from "@/lib/utils";
 import { humanise } from "@/lib/humanise";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 const fmtDate = (val: any) => {
-    if (!val) return "—";
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    return new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(d);
+    //   #597 — one reading, in lib/date-utils.
+    return formatDateOrDash(val, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 };
 
 function isEventLive(event: VillageMarketEvent) {

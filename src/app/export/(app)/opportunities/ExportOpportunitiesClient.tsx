@@ -8,6 +8,7 @@ import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { getActiveExportWindowsAction } from "@/app/actions/export-aggregation";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function ExportOpportunitiesClient({ initial = null }: {
     /**
@@ -107,10 +108,15 @@ export default function ExportOpportunitiesClient({ initial = null }: {
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {windows.map((window) => {
-                            const progressPercent = window.targetVolume > 0
+                            //   #597 — every one of these was read straight
+                            //   off the document, so a window without a price or
+                            //   a volume took the LIST down, not its own card.
+                            const targetVolume = numberOrZero(window.targetVolume);
+                            const currentVolume = numberOrZero(window.currentVolume);
+                            const progressPercent = targetVolume > 0
                                 ? Math.min(100, Math.round((window.currentVolume / window.targetVolume) * 100))
                                 : 0;
-                            const availableVolume = Math.max(0, window.targetVolume - window.currentVolume);
+                            const availableVolume = Math.max(0, targetVolume - currentVolume);
 
                             return (
                                 <div
@@ -133,7 +139,7 @@ export default function ExportOpportunitiesClient({ initial = null }: {
                                             </div>
                                             <div>
                                                 <p className="text-blue-100 text-sm">Price/kg</p>
-                                                <p className="font-semibold">₦{window.slotPrice.toLocaleString()}</p>
+                                                <p className="font-semibold">₦{numberOrZero(window.slotPrice).toLocaleString()}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -158,7 +164,7 @@ export default function ExportOpportunitiesClient({ initial = null }: {
 
                                             <div className="flex items-center justify-between mt-2">
                                                 <span className="text-xs text-slate-500">
-                                                    {window.currentVolume.toLocaleString()}kg filled
+                                                    {currentVolume.toLocaleString()}kg filled
                                                 </span>
                                                 <span className="text-xs text-slate-500">
                                                     {availableVolume.toLocaleString()}kg available

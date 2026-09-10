@@ -15,11 +15,11 @@ import {
 } from "lucide-react";
 import { getActiveVillageMarketEventsAction } from "@/app/actions/village-market";
 import type { VillageMarketEvent } from "@/lib/types/marketplace";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
 const fmtDate = (val: any) => {
-    if (!val) return "—";
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
+    //   #597 — one reading, in lib/date-utils.
+    return formatDateTimeOrDash(val);
 };
 
 function isLive(event: VillageMarketEvent) {

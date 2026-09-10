@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/utils";
 import { getMembershipAction, getTransactionsAction } from "@/app/actions/cooperative";
 import BackButton from "@/components/ui/BackButton";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 export type MySavingsSeed = {
     membership: Awaited<ReturnType<typeof getMembershipAction>>;
@@ -105,12 +106,11 @@ export default function MySavingsClient({ initial = null }: { initial?: MySaving
         loadSavings();
     }, [loadSavings]);
 
-    function formatDate(date: Date) {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-        }).format(new Date(date));
+    //   #597 — this took `date: Date` and was handed whatever the document
+    //   held. A TypeScript annotation is not a runtime check on a value that
+    //   crossed the server boundary as JSON.
+    function formatDate(date: unknown) {
+        return formatDateOrDash(date);
     }
 
     function getDaysToMaturity(maturityDate: Date) {

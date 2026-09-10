@@ -27,11 +27,11 @@ import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
 const fmtDate = (val: any) => {
-    if (!val) return "—";
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
+    //   #597 — one reading, in lib/date-utils.
+    return formatDateTimeOrDash(val);
 };
 
 function AddProductModal({

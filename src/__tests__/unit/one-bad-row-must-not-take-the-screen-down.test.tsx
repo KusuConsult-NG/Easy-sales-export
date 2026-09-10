@@ -136,9 +136,17 @@ jest.mock('sonner', () => ({ toast: { error: jest.fn(), success: jest.fn() } }))
  *   read five fields off `order.deliveryAddress` with no guard at all.
  *
  *   Those nineteen live in a-row-with-nothing-on-it, which holds their finding,
- *   their renders and their mutation table. They are named here too, because a
- *   floor split across two files is a floor nobody can read, and the test below
- *   checks that the other file still carries every one of them.
+ *   their renders and their mutation table.
+ *
+ *   #597 RAISED IT AGAIN, FROM TWENTY-TWO TO FORTY-FOUR, and four more of the
+ *   twenty-two threw — including /cooperatives/withdrawals, which threw
+ *   "Invalid time value" out of `Intl.DateTimeFormat.format`, and
+ *   /export/opportunities, which is the screen a member browses to decide where
+ *   to put money. Those live in a-date-that-is-not-one.
+ *
+ *   Every subject is named HERE as well, because a floor split across three
+ *   files is a floor nobody can read, and the test below checks that the other
+ *   files still carry every one of them.
  */
 const PROVEN = [
     //   #589's four, rendered at the foot of this file.
@@ -165,6 +173,29 @@ const PROVEN = [
     'export/(app)/portfolio',
     'cooperatives/my-savings',
     'farm-nation/properties',
+    //   #597's twenty-two, rendered in a-date-that-is-not-one.
+    'cooperatives/withdrawals',
+    'export/opportunities',
+    'marketplace/seller/analytics',
+    'farm-nation/dashboard',
+    'marketplace/products',
+    'marketplace/products/[id]',
+    'marketplace/buyer/products',
+    'marketplace/buyer/quotes',
+    'marketplace/seller/quotes',
+    'marketplace/buyer/saved',
+    'marketplace/sell',
+    'escrow/[id]',
+    'cooperatives/dashboard',
+    'cooperatives/loans',
+    'cooperatives/my-loans',
+    'export/transactions',
+    'export/investments/[id]',
+    'farm-nation/inquiries',
+    'farm-nation/property/[id]',
+    'farm-nation/saved',
+    'academy/my-courses',
+    'academy/progress',
 ];
 
 beforeEach(() => {
@@ -290,8 +321,8 @@ describe('#589 — the ledger of screens proven against a bare document', () => 
     it('EVERY SUBJECT IS NAMED, AND THE FLOOR ONLY GOES UP', () => {
         //   Named rather than counted, so that "N screens are proven" cannot
         //   become true by deleting a test.
-        expect(PROVEN).toHaveLength(22);
-        expect(new Set(PROVEN).size).toBe(22);
+        expect(PROVEN).toHaveLength(44);
+        expect(new Set(PROVEN).size).toBe(44);
         expect(PROVEN.slice(0, 4)).toEqual([
             'cooperatives/directory',
             'export/windows/[id]',
@@ -311,12 +342,13 @@ describe('#589 — the ledger of screens proven against a bare document', () => 
          *   rendering, and the failure mode this guards is a name being added
          *   here without a render being added there.
          */
-        const sibling = readFileSync(
-            join(process.cwd(), 'src/__tests__/unit/a-row-with-nothing-on-it.test.tsx'), 'utf-8',
-        );
+        const siblings = [
+            'src/__tests__/unit/a-row-with-nothing-on-it.test.tsx',
+            'src/__tests__/unit/a-date-that-is-not-one.test.tsx',
+        ].map(f => readFileSync(join(process.cwd(), f), 'utf-8')).join('\n');
         //   The four this file renders itself are not expected over there.
         for (const subject of PROVEN.slice(4)) {
-            expect({ subject, named: sibling.includes(`'${subject}'`) })
+            expect({ subject, named: siblings.includes(`'${subject}'`) })
                 .toEqual({ subject, named: true });
         }
     });

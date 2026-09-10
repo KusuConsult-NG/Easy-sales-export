@@ -150,3 +150,60 @@ export function safeToISOStringOptional(val: any): string | undefined {
         return undefined;
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Showing a date to a person
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ *   #597 SEVEN COPIES OF "FORMAT A DATE", NONE OF WHICH SURVIVED A DATE THAT
+ *        WAS NOT ONE.
+ *
+ *   Ten member-facing screens build an `Intl.DateTimeFormat` by hand, in seven
+ *   different local helpers, and every one of them ends in
+ *
+ *       .format(new Date(value))
+ *
+ *   `Intl.DateTimeFormat.prototype.format` THROWS A RangeError on an Invalid
+ *   Date — it does not return "Invalid Date" the way `toString` does. So a row
+ *   whose date field is absent, empty, or a string that does not parse takes the
+ *   whole screen down, exactly as #589's missing occupation did.
+ *
+ *   Four of the seven guard `if (!val) return "—"`, which catches undefined and
+ *   catches nothing else. Three guard nothing at all: /cooperatives/withdrawals,
+ *   /cooperatives/my-savings and /cooperatives/my-loans each declare
+ *   `formatDate(date: Date)` and are handed whatever the document held, because
+ *   a TypeScript annotation is not a runtime check on a value that crossed the
+ *   server boundary as JSON.
+ *
+ *   THE CRASH IS REAL AND WAS FOUND BY RENDERING, not by reading: the
+ *   withdrawals screen was rendered with a row carrying only an id and threw
+ *   "Invalid time value".
+ *
+ *   These go through `toDateOrNull`, which already knew how to read a Firestore
+ *   Timestamp, a `_seconds` shape that lost its methods crossing the boundary,
+ *   an ISO string and a number — so one reading rather than seven, and a dash
+ *   rather than a blank page.
+ *
+ *   NOT `toDate`. That falls back to `new Date()`, which renders a missing date
+ *   as TODAY: a quieter lie than a crash, and still a lie on a withdrawal
+ *   request or a loan maturity.
+ */
+export function formatDateOrDash(
+    value: unknown,
+    options: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" },
+    fallback = "—",
+): string {
+    const d = toDateOrNull(value);
+    if (!d) return fallback;
+    try {
+        return new Intl.DateTimeFormat("en-NG", options).format(d);
+    } catch {
+        return fallback;
+    }
+}
+
+/** The same, with the time — the shape most of the copies used. */
+export function formatDateTimeOrDash(value: unknown, fallback = "—"): string {
+    return formatDateOrDash(value, { dateStyle: "medium", timeStyle: "short" }, fallback);
+}

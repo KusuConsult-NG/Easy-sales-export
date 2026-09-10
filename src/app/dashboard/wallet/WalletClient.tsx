@@ -24,6 +24,7 @@ import { useSession } from "next-auth/react";
 import { walletLedgerMovesBalance } from "@/lib/types/marketplace";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
 /**
  * What the server read before the page was sent.
@@ -43,9 +44,8 @@ const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
 
 const fmtDate = (val: any) => {
-    if (!val) return "—";
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
+    //   #597 — one reading, in lib/date-utils.
+    return formatDateTimeOrDash(val);
 };
 
 const NIGERIAN_BANKS = [

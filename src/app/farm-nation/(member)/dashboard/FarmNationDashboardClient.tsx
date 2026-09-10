@@ -249,7 +249,8 @@ export default function FarmNationDashboardClient({ initial = null }: {
                         </Link>
                     </div>
 
-                    {stats.recentListings.length === 0 ? (
+                    {/*  #597 — a dashboard row with no `recentListings` key took the page down. */}
+                    {(stats.recentListings ?? []).length === 0 ? (
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 text-center">
                             <Home className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                             <h3 className="font-semibold text-slate-800 mb-1">No properties listed yet</h3>
@@ -268,7 +269,7 @@ export default function FarmNationDashboardClient({ initial = null }: {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {stats.recentListings.map((prop) => (
+                            {(stats.recentListings ?? []).map((prop) => (
                                 <div
                                     key={prop.id}
                                     className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex items-start justify-between gap-4 hover:shadow-md transition"
@@ -389,14 +390,14 @@ export default function FarmNationDashboardClient({ initial = null }: {
                             )}
                         </div>
 
-                        {stats.recentTransactions.length === 0 ? (
+                        {(stats.recentTransactions ?? []).length === 0 ? (
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 text-center">
                                 <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                                 <p className="text-sm text-slate-500">No transactions yet</p>
                             </div>
                         ) : (
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 divide-y divide-slate-100">
-                                {stats.recentTransactions.map((tx) => (
+                                {(stats.recentTransactions ?? []).map((tx) => (
                                     <div
                                         key={tx.id}
                                         onClick={() => setExpandedTxId(expandedTxId === tx.id ? null : tx.id)}

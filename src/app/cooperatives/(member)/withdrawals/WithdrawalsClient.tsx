@@ -17,6 +17,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { getMyWithdrawals } from "@/app/actions/my-data";
 import { humaniseCapitalised } from "@/lib/humanise";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 interface Withdrawal {
     id: string;
@@ -85,14 +86,14 @@ export default function WithdrawalsClient({ initial = null }: { initial?: Withdr
         loadWithdrawals();
     }, [loadWithdrawals]);
 
-    function formatDate(date: Date) {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        }).format(new Date(date));
+    //   #597 — THIS IS THE ONE THAT WAS CAUGHT BY RENDERING. A withdrawal row
+    //   carrying only an id threw "Invalid time value" out of Intl and took the
+    //   whole screen down.
+    function formatDate(date: unknown) {
+        return formatDateOrDash(date, {
+            year: "numeric", month: "long", day: "numeric",
+            hour: "2-digit", minute: "2-digit",
+        });
     }
 
     // Apply filters
