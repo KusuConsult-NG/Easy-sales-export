@@ -8,6 +8,10 @@ import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { recordAdminAction } from "@/lib/audit-log";
+import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
+import { creditWalletOnce } from "@/lib/wallet-ledger";
+import { isPositiveAmount } from "@/lib/amount";
+import { firstNumber } from "@/lib/numbers";
 
 const DEFAULT_CATALOG = [
     { id: "cashew-nuts", name: "Cashew Nuts", icon: "🥜", origin: "Ogbomoso, Oyo State", season: "Feb - May", category: "nuts", grades: ["W320", "W240", "W210"], certifications: ["NAFDAC", "SON"], pricePerMT: 2850, minOrderMT: 20 },
@@ -362,10 +366,37 @@ export async function updateAdminExportOrderStatusAction(
         // attack, and a whitelist is the cheapest way to make the mistake
         // impossible. It is not a transition check: which moves are legal is a
         // wider question than this function should answer alone.
+        /*
+         *   #616 "refunded" IS NOT ON THIS LIST, AND THAT IS THE FIX.
+         *
+         *   It was, and this action can only write a label. So an administrator
+         *   could set an order to "refunded", the buyer was NOTIFIED — "Export
+         *   order refunded" — no money moved, and `paymentStatus` stayed
+         *   `paid_awaiting_refund`, which is the field that means the money is
+         *   still owed.
+         *
+         *   Three things then disagreed at once: the order said refunded, the
+         *   payment status said awaiting refund, and the buyer had been told
+         *   they had their money back. Of those, telling the buyer is the one
+         *   that cannot be taken back.
+         *
+         *   Refunding is a real operation — refundExportOrderToWalletAction
+         *   credits the buyer through creditWalletOnce, the same mechanism the
+         *   escrow refund uses — so the honest move is for the action that
+         *   CANNOT do it to refuse, and to say where it is done instead.
+         */
         const ALLOWED_ORDER_STATUSES = [
             "pending_payment", "processing", "shipped", "delivered",
-            "completed", "cancelled", "cancelled_out_of_stock", "refunded",
+            "completed", "cancelled", "cancelled_out_of_stock",
         ];
+        if (status === "refunded") {
+            return {
+                success: false as const,
+                error: "This action cannot refund an order — it only records a status. "
+                    + "Use the refund action, which returns the money to the buyer's wallet.",
+                data: null,
+            };
+        }
         if (!ALLOWED_ORDER_STATUSES.includes(status)) {
             return {
                 success: false as const,
@@ -431,3 +462,186 @@ export async function updateAdminExportOrderStatusAction(
         return { success: false as const, error: "Failed to update export order status", data: null };
     }
 }
+
+/**
+ * Return the money for an export order that was charged and never fulfilled.
+ *
+ *   #616 THE DEBT WAS SURFACED AND HAD NO DOOR.
+ *
+ *        Both export stock-reservation paths mark an order
+ *        `paymentStatus: "paid_awaiting_refund"`, `status:
+ *        "cancelled_out_of_stock"` when the reservation fails after the payment
+ *        is already claimed. cron/reconcile-fulfilment reports every one of them
+ *        and says, correctly, that it will not move money itself: "moving money
+ *        back out belongs behind a human."
+ *
+ *        Behind a human, and behind nothing else. There was no action that
+ *        issued the refund. The only thing an administrator could do was set the
+ *        order's status to "refunded" — which wrote a word, notified the buyer
+ *        they had been refunded, moved nothing, and left `paid_awaiting_refund`
+ *        in place. That door is closed now, and this is the one that opens.
+ *
+ *   WHAT IT DOES
+ *
+ *        Credits the buyer's wallet through `creditWalletOnce` — the same
+ *        mechanism `_refundEscrowToBuyer` uses, with `status: "refund"` so
+ *        platform_revenue_totals() does not count money going back to a buyer as
+ *        income. The reference is derived from the order, so a second attempt
+ *        credits nothing and reports the same result.
+ *
+ *   WHAT IT WILL NOT DO
+ *
+ *        NOTHING IS DELETED and no order is invented. It refuses an order that
+ *        is not actually awaiting a refund, so this cannot be used to pay out
+ *        against an order that was fulfilled — and it refuses one with no
+ *        readable amount rather than guessing at zero.
+ */
+async function _refundExportOrderToWalletAction(orderId: string): Promise<ActionResponse<{ amount: number; alreadyRefunded: boolean }>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+
+        /*
+         *   `finance:resolve_disputes`, matching _refundEscrowToBuyer exactly.
+         *
+         *   Not "is some kind of admin": an export admin who approves
+         *   applications is not thereby authorised to return money.
+         *
+         *   AND NOT `finance:refund`, WHICH IS THE OBVIOUS CHOICE AND THE WRONG
+         *   ONE. That permission exists, is granted to super_admin ALONE, and
+         *   gates nothing anywhere in this codebase — it has never been used.
+         *   Reaching for it here would have locked every ordinary administrator
+         *   out of the only door that returns this money, which is what
+         *   admin-permission-gates caught. The escrow refund — the same
+         *   operation, money moving the same way — is available under
+         *   resolve_disputes, and two refunds requiring different authorities is
+         *   the "which answer you get depends on which screen" defect this audit
+         *   keeps finding.
+         *
+         *   THE UNUSED PERMISSION IS WORTH SOMEBODY'S ATTENTION and is not mine
+         *   to resolve: granting it to `admin`, or moving both refund paths onto
+         *   it, changes who can move money. That is a decision about privilege,
+         *   not a defect to fix while passing.
+         */
+        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) {
+            return { success: false as const, error: "Admin access required", data: null };
+        }
+
+        if (!orderId || typeof orderId !== "string") {
+            return { success: false as const, error: "An order id is required", data: null };
+        }
+
+        const db = getAdminDb();
+        const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderId);
+        const snap = await orderRef.get();
+        if (!snap.exists) {
+            return { success: false as const, error: "Order not found", data: null };
+        }
+
+        const order = snap.data() ?? {};
+
+        //   Only an order the platform has already recorded as owing money. This
+        //   is what stops the action being a general "pay this buyer" button.
+        if (order.paymentStatus !== "paid_awaiting_refund") {
+            return {
+                success: false as const,
+                error: order.paymentStatus === "refunded"
+                    ? "This order has already been refunded"
+                    : "This order is not awaiting a refund",
+                data: null,
+            };
+        }
+
+        const buyerId = String(order.buyerId || order.userId || "");
+        if (!buyerId) {
+            return { success: false as const, error: "This order has no buyer to refund", data: null };
+        }
+
+        //   #606's rule: a floor written as `amount <= 0` lets NaN through, and a
+        //   refund of NaN would be a credit of NaN. The amount must be a real,
+        //   positive number or this refuses and says so.
+        const amount = firstNumber(order.refundAmount, order.paidAmount, order.totalAmount);
+        if (!isPositiveAmount(amount)) {
+            return {
+                success: false as const,
+                error: "This order has no readable amount to refund",
+                data: null,
+            };
+        }
+
+        const { FieldValue } = await import("@/lib/firestore-compat");
+
+        const credit = await creditWalletOnce({
+            reference: `export-refund:${orderId}`,
+            userId: buyerId,
+            amount,
+            paymentType: "export_refund",
+            source: "export_orders",
+            //   Not "completed": platform_revenue_totals() sums completed rows,
+            //   and money going back to a buyer is not income.
+            status: "refund",
+            metadata: { orderId, reason: order.status || "cancelled_out_of_stock" },
+        });
+
+        //   The status moves only after the money has. A crash between them
+        //   leaves the order still marked as owing, which the reconciler reports
+        //   and this action is idempotent against — the safe direction.
+        const wrote = await orderRef.updateExisting({
+            status: "refunded",
+            paymentStatus: "refunded",
+            refundedAt: new Date().toISOString(),
+            refundedBy: session.user.id,
+            refundReference: `export-refund:${orderId}`,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        if (!wrote) {
+            return { success: false as const, error: "That order no longer exists", data: null };
+        }
+
+        await recordAdminAction({
+            action: "export_order_refunded",
+            userId: session.user.id,
+            targetId: orderId,
+            targetType: "export_order",
+            metadata: { amount, buyerId, alreadyCredited: !credit.claimed },
+        });
+
+        try {
+            const { createNotification } = await import("@/infrastructure/notifications/service");
+            await createNotification({
+                userId: buyerId,
+                type: "info",
+                title: "Export order refunded",
+                message: `₦${amount.toLocaleString()} has been returned to your wallet.`,
+                //   /dashboard/wallet, not /wallet — dead-internal-links caught this,
+                //   which is what it is for: a notification linking nowhere is a
+                //   dead end at the moment somebody is looking for their money.
+                link: "/dashboard/wallet",
+                linkText: "View wallet",
+            });
+        } catch (notifyError) {
+            //   The money moved. A notification that cannot be written must not
+            //   undo that, or report it as a failure the admin would retry.
+            logger.error("[export-refund] could not notify the buyer", { orderId, notifyError });
+        }
+
+        return {
+            success: true as const,
+            error: null,
+            data: { amount, alreadyRefunded: !credit.claimed },
+        };
+    } catch (error) {
+        logger.error("Refund export order error:", error);
+        return {
+            success: false as const,
+            error: error instanceof Error ? error.message : "Failed to refund the order",
+            data: null,
+        };
+    }
+}
+
+export const refundExportOrderToWalletAction = withFlexibleSafeAction(
+    "refundExportOrderToWalletAction", _refundExportOrderToWalletAction);

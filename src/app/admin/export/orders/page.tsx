@@ -1,18 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getAdminExportOrdersAction, updateAdminExportOrderStatusAction } from "@/app/actions/export-admin";
+import { getAdminExportOrdersAction, updateAdminExportOrderStatusAction, refundExportOrderToWalletAction } from "@/app/actions/export-admin";
 import { Ship, DollarSign, Package, CheckCircle, Clock, AlertCircle, FileText, Upload } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { humaniseUpper } from "@/lib/humanise";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function AdminExportOrdersPage() {
+    const { showToast } = useToast();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isRefunding, setIsRefunding] = useState(false);
     const [updateStatus, setUpdateStatus] = useState("");
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
@@ -54,6 +57,53 @@ export default function AdminExportOrdersPage() {
             alert("An error occurred");
         } finally {
             setIsUpdating(false);
+        }
+    }
+
+    /**
+     *   #616 RETURN THE MONEY FOR AN ORDER THAT WAS CHARGED AND NEVER FULFILLED.
+     *
+     *   Both export stock-reservation paths mark an order
+     *   `paid_awaiting_refund` when the reservation fails after the payment is
+     *   claimed, and cron/reconcile-fulfilment has reported every one of them
+     *   from the start. Nothing acted on the report: the only control on this
+     *   screen wrote a status, so the closest an administrator could get was
+     *   marking the order "refunded" — a word, a notification to the buyer
+     *   saying they had their money back, and no money moving at all.
+     *
+     *   This is the door that was missing. It appears only on an order that is
+     *   actually owed a refund, because the action refuses any other.
+     */
+    async function handleRefund() {
+        if (!selectedOrder) return;
+        if (!confirm(
+            `Return the money for order ${selectedOrder.id} to the buyer's wallet? `
+            + `This credits them immediately and cannot be undone from here.`
+        )) return;
+
+        setIsRefunding(true);
+        try {
+            const result = await refundExportOrderToWalletAction(selectedOrder.id);
+            if (result.success) {
+                //   `alreadyRefunded` is not a failure: the credit is idempotent,
+                //   so a second press reports the same outcome rather than paying
+                //   twice. Saying so plainly stops an admin wondering whether it
+                //   worked and pressing again.
+                showToast(
+                    result.data?.alreadyRefunded
+                        ? "This refund had already been credited — nothing was paid twice."
+                        : `₦${Number(result.data?.amount ?? 0).toLocaleString()} returned to the buyer's wallet.`,
+                    "success",
+                );
+                await fetchOrders();
+                setSelectedOrder(null);
+            } else {
+                showToast(result.error || "Could not refund this order", "error");
+            }
+        } catch {
+            showToast("An error occurred while refunding", "error");
+        } finally {
+            setIsRefunding(false);
         }
     }
 
@@ -248,6 +298,31 @@ export default function AdminExportOrdersPage() {
                                     <option value="cancelled">Cancelled</option>
                                 </select>
                             </div>
+
+                            {/*
+                              *   #616 — the refund door, shown only on an order that
+                              *   is actually owed one. "Refunded" is deliberately NOT
+                              *   an option in the status list above: that control
+                              *   writes a label and notifies the buyer, so offering it
+                              *   here let an administrator tell somebody their money
+                              *   was back while it had not moved.
+                              */}
+                            {selectedOrder.paymentStatus === "paid_awaiting_refund" && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                    <h3 className="font-semibold text-amber-900 mb-1">This buyer is owed a refund</h3>
+                                    <p className="text-sm text-amber-800 mb-3">
+                                        They were charged and the order could not be fulfilled. Refunding
+                                        credits their wallet immediately.
+                                    </p>
+                                    <button
+                                        onClick={handleRefund}
+                                        disabled={isRefunding}
+                                        className="px-4 py-2 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                                    >
+                                        {isRefunding ? "Refunding…" : "Return the money to their wallet"}
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Documents Section */}
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">

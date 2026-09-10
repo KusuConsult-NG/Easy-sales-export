@@ -41,6 +41,11 @@ export type AuditAction =
     | 'escrow_created'
     | 'escrow_released'
     | 'escrow_refunded'
+    //   #616 — money returned to a buyer for an export order that was charged
+    //   and never fulfilled. Its own action rather than borrowed from escrow:
+    //   an audit trail that records the wrong operation is #612's finding, and
+    //   these two are refunded by different mechanisms for different reasons.
+    | 'export_order_refunded'
     //   #533 Extending an escrow's release date moves WHEN money is paid, and
     //   had no name — it was written as "EXTEND_ESCROW".
     | 'escrow_extended'
@@ -231,6 +236,9 @@ export function getSeverityForAction(action: AuditAction): AuditSeverity {
     const criticalActions: AuditAction[] = [
         'user_delete',
         'escrow_refunded',
+        //   #616 — critical for the same reason escrow_refunded is: money
+        //   leaves the platform's balance and goes back to a person.
+        'export_order_refunded',
         'loan_disbursed',
         'suspicious_activity',
         'feature_toggled',
