@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { logger } from "@/lib/logger";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 interface TrainingSession {
     id: string;
@@ -39,6 +40,13 @@ export default function LiveTrainingClient(
     const takeSeed = useServerSeed(initial);
 
     const [sessions, setSessions] = useState<TrainingSession[]>([]);
+    /**
+     *   #595 — "No sessions scheduled yet. Your trainer will schedule live
+     *   sessions soon" over a read that failed. A `res.ok` that is false falls
+     *   through the whole `if` below with no else at all, and the catch only
+     *   writes to the logger.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [activeSession, setActiveSession] = useState<TrainingSession | null>(null);
     const [isLoading, setIsLoading] = useState(initial === null);
 
@@ -62,9 +70,13 @@ export default function LiveTrainingClient(
                         return now >= start && now < end;
                     });
                     setActiveSession(live || null);
+                    setLoadFailed(false);
+                } else {
+                    setLoadFailed(true);
                 }
             } catch (err) {
                 logger.error("Failed to fetch WAVE training sessions:", err);
+                setLoadFailed(true);
             } finally {
                 setIsLoading(false);
             }
@@ -186,7 +198,9 @@ export default function LiveTrainingClient(
                             <p className="text-amber-800 text-sm">No live session is running right now. The room opens automatically when a scheduled session begins.</p>
                         </div>
 
-                        {sessions.length === 0 ? (
+                        {loadFailed && sessions.length === 0 ? (
+                            <ListLoadFailed what="the training sessions" />
+                        ) : sessions.length === 0 ? (
                             <div className="bg-white rounded-xl shadow p-10 text-center">
                                 <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                                 <h2 className="text-xl font-bold text-slate-900 mb-2">No sessions scheduled yet</h2>

@@ -13,6 +13,7 @@ import { Users, Search, MapPin, Filter, Mail, Phone, Loader2 } from "lucide-reac
 import { getDirectoryMembersAction } from "@/app/actions/cooperative";
 import { startConversationAction, startSupportConversationAction } from "@/app/actions/messages";
 import { useToast } from "@/contexts/ToastContext";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 
 export default function CooperativeDirectoryClient({ initial = null }: {
@@ -24,6 +25,16 @@ export default function CooperativeDirectoryClient({ initial = null }: {
     const [searchTerm, setSearchTerm] = useState("");
     const [members, setMembers] = useState<any[]>(initial ?? []);
     const [loading, setLoading] = useState(initial === null);
+    /**
+     *   #595 — "No members found. Try adjusting your search terms" over a
+     *   directory that could not be READ, which sends a member hunting through
+     *   a search box for people the screen never asked about.
+     *
+     *   `fetchMembers` had NO try at all, so a rejected action also skipped
+     *   `setLoading(false)` and left the spinner turning. #589 hardened this
+     *   screen against one hostile ROW; this is the whole read failing.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -31,11 +42,19 @@ export default function CooperativeDirectoryClient({ initial = null }: {
         if (initial !== null) return;
 
         async function fetchMembers() {
-            const result = await getDirectoryMembersAction();
-            if (result.success && result.data?.members) {
-                setMembers(result.data.members);
+            try {
+                const result = await getDirectoryMembersAction();
+                if (result.success && result.data?.members) {
+                    setMembers(result.data.members);
+                    setLoadFailed(false);
+                } else {
+                    setLoadFailed(true);
+                }
+            } catch {
+                setLoadFailed(true);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         }
         fetchMembers();
     }, [initial]);
@@ -161,8 +180,13 @@ export default function CooperativeDirectoryClient({ initial = null }: {
                 </div>
             )}
 
+            {/* Could not read it — not "there is nobody". */}
+            {!loading && loadFailed && members.length === 0 && (
+                <ListLoadFailed what="the member directory" />
+            )}
+
             {/* Empty State */}
-            {!loading && filteredMembers.length === 0 && (
+            {!loading && !loadFailed && filteredMembers.length === 0 && (
                 <div className="text-center p-12 bg-white rounded-xl">
                     <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-slate-900">No members found</h3>

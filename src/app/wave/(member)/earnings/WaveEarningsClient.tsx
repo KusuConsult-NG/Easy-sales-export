@@ -14,6 +14,7 @@ import type { MemberEarnings } from "@/app/actions/wave";
 import { formatCurrency, parseCurrencyStringToFloat } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function WaveEarningsClient({ initial = null }: { initial?: MemberEarnings | null }) {
     const { data: session, status } = useSession();
@@ -28,6 +29,20 @@ export default function WaveEarningsClient({ initial = null }: { initial?: Membe
     const [withdrawalAmount, setWithdrawalAmount] = useState("");
     const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
     const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+    /**
+     *   #595 — THIS SCREEN WAS NOT THE #588 DEFECT, AND SAYING IT WAS WOULD
+     *   HAVE BEEN THE FALSER FINDING. A failed read here already produced a
+     *   FAILURE message rather than an empty state — but the message was one
+     *   unstyled grey line, "Failed to load earnings data", with no reassurance
+     *   that the money is still there and no way to try again, on the screen
+     *   where a member checks what they are owed. And its catch was empty, so a
+     *   THROWN read said nothing at all.
+     *
+     *   It is in the ledger's FIXED list because the shared panel is what it
+     *   should have been saying, not because it was telling anyone their
+     *   earnings were zero.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     /**
      * Whether withdrawals are open at all.
@@ -67,11 +82,19 @@ export default function WaveEarningsClient({ initial = null }: { initial?: Membe
             const result = await calculateEarningsAction(session.user.id);
             if (result.success ) {
                 setEarnings(result.data || null);
+                setLoadFailed(!result.data);
             } else {
                 setEarnings(null);
+                setLoadFailed(true);
                 showToast(result.error || "Failed to load earnings data", "error");
             }
         } catch (error) {
+            //   #595 — this catch was EMPTY. A thrown read left `earnings`
+            //   exactly as it was and said nothing at all, so the member saw
+            //   either stale figures or the bare sentence below with no
+            //   indication that anything had gone wrong.
+            setEarnings(null);
+            setLoadFailed(true);
         } finally {
             setLoading(false);
         }
@@ -109,10 +132,8 @@ export default function WaveEarningsClient({ initial = null }: { initial?: Membe
 
     if (!earnings) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-emerald-50 to-emerald-50 flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-gray-600">Failed to load earnings data</p>
-                </div>
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 to-emerald-50 flex items-center justify-center px-4">
+                <ListLoadFailed what="your earnings" onRetry={loadEarnings} />
             </div>
         );
     }

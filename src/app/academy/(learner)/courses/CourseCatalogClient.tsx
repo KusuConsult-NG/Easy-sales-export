@@ -25,6 +25,7 @@ import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";
 import { checkCourseAccess } from "@/lib/academy-plan";
 import { formatCurrency } from "@/lib/utils";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 
 
@@ -45,6 +46,16 @@ export default function CourseCatalogClient({ initial = null }: {
     const { showToast } = useToast();
 
     const [courses, setCourses] = useState<Course[]>([]);
+    /**
+     *   #595 — "No Courses Match Your Criteria. Try loosening your search
+     *   terms" when the CATALOGUE could not be read at all. The learner is sent
+     *   to widen a filter over a list that was never fetched, and clearing
+     *   every filter changes nothing.
+     *
+     *   The toast this screen already shows is not a state: it goes after a few
+     *   seconds and leaves that sentence behind it.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
     
     const [loading, setLoading] = useState(true);
@@ -92,7 +103,9 @@ export default function CourseCatalogClient({ initial = null }: {
 
             if (coursesRes.success && coursesRes.data) {
                 setCourses(coursesRes.data);
+                setLoadFailed(false);
             } else {
+                setLoadFailed(true);
                 showToast(coursesRes.error || "Failed to retrieve courses catalog", "error");
             }
 
@@ -104,6 +117,7 @@ export default function CourseCatalogClient({ initial = null }: {
             }
         } catch (error) {
             console.error("Failed to load catalog data:", error);
+            setLoadFailed(true);
             showToast("An unexpected error occurred while loading courses", "error");
         } finally {
             setLoading(false);
@@ -112,11 +126,27 @@ export default function CourseCatalogClient({ initial = null }: {
 
 
     // Filter and Sort Processing
+    /**
+     *   #595 ONE COURSE WITHOUT AN INSTRUCTOR TOOK THE WHOLE CATALOGUE DOWN.
+     *
+     *   This read `course.instructor.toLowerCase()` — and `title` and
+     *   `description` the same way — on every row, on every keystroke. A course
+     *   document written without one of those three fields throws DURING
+     *   RENDER, so the catalogue does not lose that row: it loses the page.
+     *   Found by a fixture that happened not to carry an instructor, which is
+     *   exactly how a real row gets written.
+     *
+     *   #589's class, on a screen the audit was already in for another reason.
+     *   `instructor` in particular is optional in practice: nothing in the
+     *   admin course form requires it.
+     */
+    const query = searchQuery.toLowerCase();
     const filteredCourses = courses.filter((course) => {
-        const matchesSearch = 
-            course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            course.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            course.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+        const haystack = [course.title, course.description, (course as any).instructor]
+            .filter((v): v is string => typeof v === "string")
+            .join(" ")
+            .toLowerCase();
+        const matchesSearch = haystack.includes(query);
 
         const matchesLevel = selectedLevel === "all" || course.level === selectedLevel;
         const matchesTier = selectedTier === "all" || (course.tier || "free") === selectedTier;
@@ -344,7 +374,9 @@ export default function CourseCatalogClient({ initial = null }: {
                     )}
                 </div>
 
-                {filteredCourses.length === 0 ? (
+                {loadFailed && courses.length === 0 ? (
+                    <ListLoadFailed what="the course catalogue" />
+                ) : filteredCourses.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center shadow-xs">
                         <Compass className="w-16 h-16 text-slate-300 mx-auto mb-4 animate-pulse" />
                         <h4 className="text-lg font-bold text-slate-900 mb-1">No Courses Match Your Criteria</h4>

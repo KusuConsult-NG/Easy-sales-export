@@ -7,6 +7,7 @@ import { Video, ArrowLeft, Loader2, Calendar } from "lucide-react";
 import { getLiveSessionsAction } from "@/app/actions/academy";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { logger } from "@/lib/logger";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
  
 export default function AcademyLiveClient({ initial = null }: {
     /**
@@ -21,6 +22,17 @@ export default function AcademyLiveClient({ initial = null }: {
     const { data: session, status } = useSession();
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
     const [recordedSessions, setRecordedSessions] = useState<any[]>([]);
+    /**
+     *   #595 — "No Active Live Classes. Check back when a session is scheduled"
+     *   over a read that failed, which is a learner told to come back later for
+     *   a class that may be broadcasting right now.
+     *
+     *   ONE FLAG FOR TWO LISTS IS CORRECT HERE, and that is the opposite of the
+     *   rule #592's certificates screen needed, for a reason worth stating:
+     *   both lists come from ONE call to getLiveSessionsAction and are split in
+     *   memory, so there is exactly one read and exactly one thing to fail.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
  
     const takeSeed = useServerSeed(initial);
@@ -42,9 +54,13 @@ export default function AcademyLiveClient({ initial = null }: {
                     const recorded = allSessions.filter((s: any) => s.status === "ended" && s.recordingUrl);
                     setLiveSessions(active);
                     setRecordedSessions(recorded);
+                    setLoadFailed(false);
+                } else {
+                    setLoadFailed(true);
                 }
             } catch (error) {
                 logger.error("Failed to load live sessions:", error);
+                setLoadFailed(true);
             } finally {
                 setIsLoading(false);
             }
@@ -137,6 +153,9 @@ export default function AcademyLiveClient({ initial = null }: {
                     </div>
                 ) : (
                     recordedSessions.length === 0 && (
+                        loadFailed ? (
+                            <ListLoadFailed what="the live classes" />
+                        ) : (
                         <div className="bg-white rounded-2xl shadow-lg p-12 text-center border border-slate-100">
                             <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                             <h3 className="text-xl font-semibold text-slate-950 mb-2">
@@ -152,6 +171,7 @@ export default function AcademyLiveClient({ initial = null }: {
                                 Go to Dashboard
                             </button>
                         </div>
+                        )
                     )
                 )}
  

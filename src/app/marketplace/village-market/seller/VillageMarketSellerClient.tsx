@@ -26,6 +26,7 @@ import type { VillageMarketEvent } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 const fmtDate = (val: any) => {
     if (!val) return "—";
@@ -258,6 +259,15 @@ export default function VillageMarketSellerClient(
     const takeSeed = useServerSeed(initial);
 
     const [events, setEvents] = useState<VillageMarketEvent[]>(initial ?? []);
+    /**
+     *   #595 — "No Events Available. Check back soon", over a read that never
+     *   happened. `load` below had NO try AT ALL: a rejected action skipped
+     *   `setEvents`, skipped `setLoading(false)`, and left the spinner turning
+     *   for as long as the page stayed open. #407's shape, and the reason this
+     *   screen was in the count is a catch that belongs to a different handler
+     *   two hundred lines up.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [loading, setLoading] = useState(initial === null);
     const [joiningId, setJoiningId] = useState<string | null>(null);
     const [addProductEventId, setAddProductEventId] = useState<string | null>(null);
@@ -272,9 +282,15 @@ export default function VillageMarketSellerClient(
         const seeded = takeSeed();
         if (seeded) { setEvents(seeded); setLoading(false); return; }
         setLoading(true);
-        const data = await getActiveVillageMarketEventsAction();
-        setEvents(data);
-        setLoading(false);
+        try {
+            const data = await getActiveVillageMarketEventsAction();
+            setEvents(data ?? []);
+            setLoadFailed(false);
+        } catch {
+            setLoadFailed(true);
+        } finally {
+            setLoading(false);
+        }
     }, [takeSeed]);
 
     useEffect(() => { load(); }, [load]);
@@ -351,6 +367,8 @@ export default function VillageMarketSellerClient(
                     <div className="flex items-center justify-center py-16">
                         <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
                     </div>
+                ) : loadFailed && events.length === 0 ? (
+                    <ListLoadFailed what="the Village Market events" onRetry={load} />
                 ) : events.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center">
                         <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />

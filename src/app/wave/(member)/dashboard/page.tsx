@@ -23,6 +23,7 @@ import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { useSession } from "next-auth/react";
 import type { WaveResource, WaveTrainingEvent } from "@/app/actions/wave";
 import { toSafeDate } from "@/lib/utils";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function WaveDashboardPage() {
     const router = useRouter();
@@ -35,6 +36,19 @@ export default function WaveDashboardPage() {
     });
     const [recentResources, setRecentResources] = useState<WaveResource[]>([]);
     const [upcomingEvents, setUpcomingEvents] = useState<WaveTrainingEvent[]>([]);
+    /**
+     *   #595 — "No resources available yet" and "No upcoming training events"
+     *   over reads that failed.
+     *
+     *   THIS SCREEN ALREADY DID THE HARD HALF AND NOT THE EASY ONE. It uses
+     *   `Promise.allSettled` on purpose — the comment above says "one failing
+     *   panel must not cost the other two" — and then each `if (settled.status
+     *   === "fulfilled")` has no else, so the whole point of allSettled is
+     *   recorded nowhere the member can see. Three panels that fail
+     *   independently, and three sentences that all say "there is nothing".
+     */
+    const [resourcesFailed, setResourcesFailed] = useState(false);
+    const [eventsFailed, setEventsFailed] = useState(false);
 
     const { data: sessionData } = useSession();
     const userId = (sessionData?.user as any)?.id;
@@ -96,17 +110,29 @@ export default function WaveDashboardPage() {
                 const resourcesResult = resourcesSettled.value;
                 if (resourcesResult.success && resourcesResult.data) {
                     setRecentResources(resourcesResult.data.slice(0, 3));
+                    setResourcesFailed(false);
+                } else {
+                    setResourcesFailed(true);
                 }
+            } else {
+                setResourcesFailed(true);
             }
 
             if (eventsSettled.status === "fulfilled") {
                 const eventsResult = eventsSettled.value;
                 if (eventsResult.success && eventsResult.data) {
                     setUpcomingEvents(eventsResult.data.slice(0, 3));
+                    setEventsFailed(false);
+                } else {
+                    setEventsFailed(true);
                 }
+            } else {
+                setEventsFailed(true);
             }
         } catch (error) {
             logger.error("Dashboard load error:", error);
+            setResourcesFailed(true);
+            setEventsFailed(true);
         } finally {
             setLoading(false);
         }
@@ -267,6 +293,8 @@ export default function WaveDashboardPage() {
                                     </div>
                                 ))}
                             </div>
+                        ) : resourcesFailed ? (
+                            <ListLoadFailed what="the resources" className="border-0 shadow-none" />
                         ) : (
                             <p className="text-center text-gray-500 py-8">
                                 No resources available yet
@@ -317,6 +345,8 @@ export default function WaveDashboardPage() {
                                     </div>
                                 ))}
                             </div>
+                        ) : eventsFailed ? (
+                            <ListLoadFailed what="the training events" className="border-0 shadow-none" />
                         ) : (
                             <p className="text-center text-gray-500 py-8">
                                 No upcoming training events

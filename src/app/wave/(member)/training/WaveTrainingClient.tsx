@@ -19,6 +19,7 @@ import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";
 import { toSafeDate } from "@/lib/utils";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 /**
  * What the server sends when it managed to walk the whole chain.
@@ -42,6 +43,11 @@ export default function WaveTrainingClient({ initial = null }: { initial?: WaveT
     const [events, setEvents] = useState<WaveTrainingEvent[]>([]);
     const [registeredEventIds, setRegisteredEventIds] = useState<Set<string>>(new Set());
     const [registeringId, setRegisteringId] = useState<string | null>(null);
+    /**
+     *   #595 — "No Training Events. Check back soon for upcoming workshops"
+     *   over a read that failed. The toast this screen shows is not a state.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     //   #556 — the server walked this chain already. Taken once, so registering
     //   for an event still refetches.
@@ -84,6 +90,9 @@ export default function WaveTrainingClient({ initial = null }: { initial?: WaveT
 
             if (eventsResult.success && eventsResult.data) {
                 setEvents(eventsResult.data);
+                setLoadFailed(false);
+            } else {
+                setLoadFailed(true);
             }
 
             if (regsResult.success && regsResult.data?.registrations) {
@@ -93,6 +102,7 @@ export default function WaveTrainingClient({ initial = null }: { initial?: WaveT
                 setRegisteredEventIds(eventIds);
             }
         } catch (error) {
+            setLoadFailed(true);
             showToast("Failed to load training events", "error");
         } finally {
             setLoading(false);
@@ -399,8 +409,12 @@ export default function WaveTrainingClient({ initial = null }: { initial?: WaveT
                     </div>
                 )}
 
+                {loadFailed && events.length === 0 && (
+                    <ListLoadFailed what="the training events" />
+                )}
+
                 {/* Empty State */}
-                {events.length === 0 && (
+                {!loadFailed && events.length === 0 && (
                     <div className="bg-white rounded-2xl shadow-lg p-12 text-center border border-gray-100">
                         <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-gray-900 mb-2">

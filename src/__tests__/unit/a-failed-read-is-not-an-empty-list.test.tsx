@@ -101,6 +101,26 @@
  *   MEASUREMENT — and the correction is deliberately narrow: see
  *   `emptyStateConsultsError`, and the measurement that rejected the wider fix.
  *
+ * ── #595: 17 → 0, AND THE PREDICATE LEARNED WHAT AN EMPTY STATE IS ──────────
+ *
+ *   The last eleven, in the-last-eleven-screens-that-could-not-tell.
+ *
+ *   AND THE INSTRUMENT WAS OVER-COUNTING AGAIN, BY THREE. It accepted
+ *   `.length === 0` anywhere in a file, so a form validator counted as an empty
+ *   state: `if (listingTypes.length === 0)`, `return Object.keys(newErrors)
+ *   .length === 0`. It now requires the length test to be a JSX BRANCH, which
+ *   is how every real empty state here is written. Three more — evidence files,
+ *   land photos, missing profile fields — are named in NOT_A_READ_LIST rather
+ *   than regexed away, because telling a fetched list from form state is a
+ *   data-flow question and an instrument that pretended to answer it would be
+ *   the third version of the mistake this ledger keeps recording.
+ *
+ *   ZERO IS NOT THE END. It is the point where the next one is a REGRESSION,
+ *   and the exact-equality assertion fails on it. The scan's own guard was
+ *   rewritten for that: at 30 it could assert the number was large; now it
+ *   takes a screen this ledger fixed, strips the fix back out in memory, and
+ *   requires the predicate to catch it.
+ *
  * ── #594: 23 → 17, AND THE COUNTS WERE THE LOUDER HALF ──────────────────────
  *
  *   Six more: fixed savings, cooperative history, notifications, reviews, and
@@ -174,8 +194,13 @@ const ROOT = process.cwd();
  * 35 when this was written. 30 after the five in the first batch. 23 after
  * #592's six, and after this predicate stopped over-counting MessagesClient —
  * see the note on `emptyStateConsultsError` below. 17 after #594's six.
+ *
+ * 0 after #595 took the last eleven and the predicate learned to tell a
+ * RENDERED empty state from a `.length === 0` in a validator. Zero is not the
+ * end of the ledger: it is the point at which every further failure of this
+ * kind is a REGRESSION, and this file fails on the first one.
  */
-const CAP = 17;
+const CAP = 0;
 
 /**
  * An empty-state condition that consults an error is a distinction.
@@ -205,6 +230,61 @@ function emptyStateConsultsError(src: string): boolean {
 }
 
 /**
+ * A length test that DECIDES WHAT TO DRAW, rather than one inside a validator.
+ *
+ *   #595 AND THE INSTRUMENT WAS OVER-COUNTING AGAIN — this time by three, and
+ *   for a different reason than #592's. Working through the last seventeen:
+ *
+ *       if ((interests?.learningPaths || []).length === 0) { … }   academy application
+ *       return Object.keys(newErrors).length === 0;                FinancialStep
+ *       if (listingTypes.length === 0) { … }                       edit-property
+ *
+ *   None of those is an empty state. They are form validation, and a screen
+ *   that validates a form is not thereby telling anybody their things are gone.
+ *   The old check accepted `.length === 0` ANYWHERE in the file.
+ *
+ *   So the shape is narrowed to what the finding is actually about: a length
+ *   test used as a JSX BRANCH — `{… ? (`, `{… && (`, or `) : … ? (` — which is
+ *   how every genuine empty state in this codebase is written, and how none of
+ *   the three above is.
+ *
+ *   IT IS STILL NOT EXACT, AND THE THREE IT STILL GETS WRONG ARE NAMED below in
+ *   NOT_A_READ_LIST rather than quietly regexed away. A regex cannot tell
+ *   `{events.length === 0 && (` — a list fetched from the server — from
+ *   `{media.images.length > 0 ? (` — photos the person just attached to a form.
+ *   That is a data-flow question, and an instrument that pretended to answer it
+ *   would be the third version of the mistake this ledger keeps recording.
+ */
+function rendersAnEmptyState(src: string): boolean {
+    return /(\{|\)\s*:)[^{}\n]*\.length\s*(?:===\s*0|>\s*0|\s*\?)[^{}\n]{0,70}(\?|&&)\s*\(/.test(src);
+}
+
+/**
+ * Screens whose only JSX length-test is over state the PERSON built, not a list
+ * the screen read. Verified by hand, one at a time, and capped by a test.
+ *
+ *     NewDisputeClient      `{evidenceUrls.length > 0 && (` — the files just
+ *                           uploaded as evidence. Its one read is a single
+ *                           ORDER, and both failure branches already redirect
+ *                           with a message; there is no list and no empty state.
+ *     list-land             `{media.images.length > 0 ? (` — the land photos
+ *                           being attached, and `missingRequirements`, which is
+ *                           the validator's own output.
+ *     ProfileClient         `{missing.length > 0 && (` — the profile fields
+ *                           still to fill in.
+ *
+ * This list is DELIBERATELY AWKWARD TO GROW: the test below asserts its exact
+ * length, so adding a fourth entry fails until somebody changes the number on
+ * purpose and says why. An exclusions list nobody has to justify is how a
+ * ratchet becomes decoration.
+ */
+const NOT_A_READ_LIST = [
+    'src/app/dashboard/disputes/new/NewDisputeClient.tsx',
+    'src/app/farm-nation/(member)/list-land/page.tsx',
+    'src/app/profile/ProfileClient.tsx',
+];
+
+/**
  * Does this source read a list and render an empty state without being able to
  * say the read failed?
  *
@@ -216,15 +296,19 @@ export function cannotTellEmptyFromFailed(src: string): boolean {
     //   It reads something, and it has somewhere for a failure to land.
     if (!/catch\s*[({]/.test(src)) return false;
     if (!/(Action\s*\(|fetch\()/.test(src)) return false;
-    //   It draws an empty state.
-    if (!/\.length\s*===\s*0|\.length\s*\?|\.length\s*>\s*0\s*\?/.test(src)) return false;
+    //   It DRAWS an empty state — not merely mentions a length somewhere.
+    if (!rendersAnEmptyState(src)) return false;
     //   And it cannot say "I could not read this".
     const distinguishes = /ListLoadFailed|loadFailed|readFailed|catalogState|loadError|setError\(|\berror\s*&&/;
     return !distinguishes.test(src) && !emptyStateConsultsError(src);
 }
 
+/** How many client screens the walk actually examined — the scan's own alibi. */
+let lastWalkSize = 0;
+
 function screensThatCannotTell(): string[] {
     const found: string[] = [];
+    let seen = 0;
     const walk = (dir: string) => {
         for (const entry of readdirSync(dir)) {
             const full = join(dir, entry);
@@ -233,13 +317,17 @@ function screensThatCannotTell(): string[] {
                 //   every member. Same exclusion as #545.
                 if (entry !== 'admin') walk(full);
             } else if (entry.endsWith('.tsx')) {
+                seen += 1;
+                const rel = full.slice(ROOT.length + 1);
+                if (NOT_A_READ_LIST.includes(rel)) continue;
                 if (cannotTellEmptyFromFailed(readFileSync(full, 'utf-8'))) {
-                    found.push(full.slice(ROOT.length + 1));
+                    found.push(rel);
                 }
             }
         }
     };
     walk(join(ROOT, 'src/app'));
+    lastWalkSize = seen;
     return found.sort();
 }
 
@@ -278,6 +366,23 @@ const FIXED = [
     'src/app/dashboard/reviews/MyReviewsClient.tsx',
     'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx',
     'src/app/marketplace/seller/dashboard/SellerDashboardClient.tsx',
+    //   #595's eleven — the last of them.
+    'src/app/academy/(learner)/courses/CourseCatalogClient.tsx',
+    'src/app/academy/dashboard/page.tsx',
+    'src/app/academy/live/AcademyLiveClient.tsx',
+    'src/app/cooperatives/(member)/directory/CooperativeDirectoryClient.tsx',
+    'src/app/export/(app)/dashboard/ExportDashboardClient.tsx',
+    'src/app/farm-nation/FarmNationLandingClient.tsx',
+    'src/app/marketplace/village-market/seller/VillageMarketSellerClient.tsx',
+    'src/app/wave/(member)/dashboard/page.tsx',
+    'src/app/wave/(member)/live-training/LiveTrainingClient.tsx',
+    'src/app/wave/(member)/training/WaveTrainingClient.tsx',
+    //   Not the #588 defect — it already said "Failed to load earnings data"
+    //   rather than showing an empty state — but it said it in one bare grey
+    //   line with no retry, and its catch was empty. Listed because it now uses
+    //   the shared panel, NOT because it was claiming anybody's earnings were
+    //   zero. See its own comment.
+    'src/app/wave/(member)/earnings/WaveEarningsClient.tsx',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -300,14 +405,48 @@ describe('#588 — the screens that cannot tell are counted', () => {
             .toEqual({ count: CAP, cap: CAP, screens });
     });
 
-    it('AND THE SCAN ACTUALLY FINDS SCREENS — the guard on the measurement', () => {
-        //   #484's shape: a scan pointed at the wrong directory reports zero
-        //   offenders for the same reason it reports nothing at all.
+    it('AND THE SCAN CAN STILL FIND ONE — the guard that zero now needs', () => {
+        /**
+         *   #484's shape, and at a CAP of 0 it is the whole question: a scan
+         *   pointed at the wrong directory reports no offenders for exactly the
+         *   same reason a fixed codebase does. While the number was 30 the
+         *   guard could just assert it was large. It cannot now.
+         *
+         *   So it does two things instead. It checks the walk actually READ a
+         *   plausible number of screens — a wrong path or a broken recursion
+         *   reads none — and then it takes a REAL screen that this ledger
+         *   fixed, strips the fix back out of the source in memory, and
+         *   requires the predicate to catch it. If the scan had gone blind,
+         *   that would come back false.
+         */
         const screens = screensThatCannotTell();
+        expect(screens).toEqual([]);
+        expect(lastWalkSize).toBeGreaterThan(100);
 
-        expect(screens.length).toBeGreaterThan(10);
-        expect(screens.every(s => s.startsWith('src/app/'))).toBe(true);
-        expect(screens.every(s => !s.includes('/admin/'))).toBe(true);
+        //   A screen this ledger fixed, with the fix taken back out.
+        const fixed = readFileSync(
+            join(ROOT, 'src/app/marketplace/seller/products/SellerProductsClient.tsx'), 'utf-8',
+        );
+        expect(cannotTellEmptyFromFailed(fixed)).toBe(false);
+        const unfixed = fixed
+            .replace(/ListLoadFailed/g, 'Placeholder')
+            .replace(/loadFailed/g, 'flag')
+            .replace(/setError\(/g, 'noop(');
+        expect(cannotTellEmptyFromFailed(unfixed)).toBe(true);
+    });
+
+    it('AND THE EXCLUSIONS ARE THREE, NAMED, AND STILL THERE', () => {
+        /**
+         *   The one way this ledger could reach zero dishonestly. An exclusions
+         *   list that grows quietly turns a ratchet into decoration, so its
+         *   length is asserted: a fourth entry fails here until somebody changes
+         *   the number deliberately. Each file must also still exist, so a
+         *   rename cannot leave a stale excuse behind.
+         */
+        expect(NOT_A_READ_LIST).toHaveLength(3);
+        for (const f of NOT_A_READ_LIST) {
+            expect({ f, exists: existsSync(join(ROOT, f)) }).toEqual({ f, exists: true });
+        }
     });
 
     it('AND EVERY SCREEN ALREADY TAUGHT IS OUT OF THE COUNT', () => {
@@ -318,7 +457,7 @@ describe('#588 — the screens that cannot tell are counted', () => {
          *   clothes. So: every path must exist on disk, and there must be as
          *   many as have been claimed.
          */
-        expect(FIXED).toHaveLength(18);
+        expect(FIXED).toHaveLength(29);
         for (const f of FIXED) {
             expect({ f, exists: existsSync(join(ROOT, f)) }).toEqual({ f, exists: true });
         }
@@ -332,9 +471,17 @@ describe('#588 — the screens that cannot tell are counted', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#588 — the predicate itself', () => {
+    //   Written as a screen actually writes it — the length test in a JSX
+    //   branch — because #595 narrowed the predicate to exactly that.
     const READS_A_LIST = `"use client";
         useEffect(() => { getThingsAction().then(r => setThings(r.data)).catch(e => log(e)); }, []);
-        return things.length === 0 ? <p>No things yet</p> : <List/>;`;
+        return <div>
+            {things.length === 0 ? (
+                <p>No things yet</p>
+            ) : (
+                <List/>
+            )}
+        </div>;`;
 
     it('POSITIVE CONTROL: A SCREEN THAT LOGS AND SHOWS THE EMPTY STATE COUNTS', () => {
         expect(cannotTellEmptyFromFailed(READS_A_LIST)).toBe(true);

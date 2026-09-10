@@ -12,6 +12,7 @@ import { searchLandListingsAction } from "@/app/actions/land-listings";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { isPurchasable } from "@/lib/land-listing-status";
 import { firstImageSrc } from "@/lib/first-image";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 const categories = [
     { name: "Arable Land", icon: "🌾" },
@@ -35,6 +36,15 @@ export default function FarmNationLandingClient({ initial = null }: {
     const { status: sessionStatus } = useSession();
     const router = useRouter();
     const [featuredProperties, setFeaturedProperties] = useState<any[]>([]);
+    /**
+     *   #595 — "No verified properties yet. Be the first to list your farm!"
+     *   over a read that failed, on the PUBLIC landing page. Its catch says
+     *   "Graceful fallback — don't break the landing page", which was the right
+     *   instinct and the wrong outcome: not breaking is not the same as
+     *   claiming the marketplace is empty to every visitor who arrives while
+     *   the read is failing.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
     const [totalCount, setTotalCount] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
@@ -60,9 +70,14 @@ export default function FarmNationLandingClient({ initial = null }: {
                         counts[type] = (counts[type] || 0) + 1;
                     });
                     setCategoryCounts(counts);
+                    setLoadFailed(false);
+                } else {
+                    setLoadFailed(true);
                 }
             } catch (e) {
-                // Graceful fallback — don't break the landing page
+                //   Still graceful — the page renders — but it no longer says
+                //   there is nothing here when it could not find out.
+                setLoadFailed(true);
             } finally {
                 setLoading(false);
             }
@@ -173,6 +188,8 @@ export default function FarmNationLandingClient({ initial = null }: {
                     <div className="flex items-center justify-center py-16">
                         <Loader2 className="w-10 h-10 animate-spin text-teal-500" />
                     </div>
+                ) : loadFailed && featuredProperties.length === 0 ? (
+                    <ListLoadFailed what="the featured properties" />
                 ) : featuredProperties.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-2xl shadow-sm">
                         <p className="text-slate-500 text-lg mb-2">No verified properties yet</p>

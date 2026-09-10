@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { checkAcademyPaymentStatusAction, getLiveSessionsAction, type LiveSession } from "@/app/actions/academy";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { formatLocalDate } from "@/lib/date-utils";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 type CourseProgress = {
     courseId: string;
@@ -35,6 +36,15 @@ export default function AcademyDashboardPage() {
     const { status } = useSession();
     const router = useRouter();
     const [courses, setCourses] = useState<CourseProgress[]>([]);
+    /**
+     *   #595 — "You haven't enrolled in any courses yet" over a read that
+     *   failed. The two reads are already on `allSettled` — a comment above
+     *   says "a failing live-session lookup must not cost the member their
+     *   course list" — but neither settled branch records the failure, so a
+     *   rejected dashboard fetch left `courses` at `[]` and the screen told a
+     *   paying learner they had enrolled in nothing.
+     */
+    const [coursesFailed, setCoursesFailed] = useState(false);
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [stats, setStats] = useState({
@@ -133,7 +143,14 @@ export default function AcademyDashboardPage() {
                     setCourses(data.courses || []);
                     setCertificates(data.certificates || []);
                     setStats(data.stats || stats);
+                    setCoursesFailed(false);
+                } else {
+                    setCoursesFailed(true);
                 }
+            } else {
+                //   allSettled: a REJECTED half is the other outcome, and it
+                //   had no branch at all before.
+                setCoursesFailed(true);
             }
 
             if (liveSettled.status === "fulfilled") {
@@ -145,6 +162,7 @@ export default function AcademyDashboardPage() {
             }
         } catch (error) {
             logger.error("Failed to fetch dashboard data:", error);
+            setCoursesFailed(true);
         } finally {
             setIsLoading(false);
         }
@@ -313,7 +331,9 @@ export default function AcademyDashboardPage() {
                         My Modules
                     </h2>
 
-                    {allModules.length === 0 ? (
+                    {coursesFailed && courses.length === 0 ? (
+                        <ListLoadFailed what="your courses" />
+                    ) : allModules.length === 0 ? (
                         <div className="text-center py-12">
                             <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                             <p className="text-slate-500 mb-4">

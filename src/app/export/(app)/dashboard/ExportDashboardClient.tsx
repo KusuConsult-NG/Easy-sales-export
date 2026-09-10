@@ -21,6 +21,7 @@ import {
     ChevronLeft,
 } from "lucide-react";
 import { getUserExportStatsAction, getUserExportInvestmentsAction } from "@/app/actions/export";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 interface PortfolioStats {
     totalInvested: number;
@@ -50,6 +51,15 @@ export default function ExportDashboardClient({ initial = null }: {
     });
 
     const [investments, setInvestments] = useState<ActiveInvestment[]>(initial?.investments ?? []);
+    /**
+     *   #595 — "No active investments yet. Browse Opportunities", shown to an
+     *   investor whose portfolio could not be READ. Neither `if (…success &&
+     *   …data)` below has an else and the catch only writes to the logger, so a
+     *   refusal leaves the `[]` this started as — and the stats above it stay at
+     *   the zeroes THEY were initialised with, which is the louder half again.
+     */
+    const [statsFailed, setStatsFailed] = useState(false);
+    const [investmentsFailed, setInvestmentsFailed] = useState(false);
     const [loading, setLoading] = useState(initial === null);
 
     useEffect(() => {
@@ -65,13 +75,22 @@ export default function ExportDashboardClient({ initial = null }: {
 
                 if (statsResult.success && statsResult.data) {
                     setStats(statsResult.data);
+                    setStatsFailed(false);
+                } else {
+                    setStatsFailed(true);
                 }
 
                 if (investmentsResult.success && investmentsResult.data) {
                     setInvestments(investmentsResult.data as ActiveInvestment[]);
+                    setInvestmentsFailed(false);
+                } else {
+                    setInvestmentsFailed(true);
                 }
             } catch (error) {
                 logger.error("Failed to load dashboard:", error);
+                //   One Promise.all: a throw means neither was read.
+                setStatsFailed(true);
+                setInvestmentsFailed(true);
             } finally {
                 setLoading(false);
             }
@@ -115,7 +134,11 @@ export default function ExportDashboardClient({ initial = null }: {
                     </p>
                 </div>
 
-                {/* Stats Cards */}
+                {/* Stats Cards — hidden when the read failed. Four zeroes over
+                    money in escrow are a claim, not a blank. */}
+                {statsFailed ? (
+                    <ListLoadFailed what="your investment totals" className="mb-8" />
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     {/* Total Invested */}
                     <div className="bg-white rounded-xl p-6 border border-slate-200">
@@ -177,6 +200,7 @@ export default function ExportDashboardClient({ initial = null }: {
                         </div>
                     </div>
                 </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Active Investments */}
@@ -227,7 +251,11 @@ export default function ExportDashboardClient({ initial = null }: {
                                     ))}
                                 </div>
 
-                                {investments.length === 0 && (
+                                {investmentsFailed && investments.length === 0 && (
+                                    <ListLoadFailed what="your investments" />
+                                )}
+
+                                {!investmentsFailed && investments.length === 0 && (
                                     <div className="text-center py-12">
                                         <Package className="w-16 h-16 mx-auto mb-4 text-slate-300" />
                                         <p className="text-slate-600 mb-4">
