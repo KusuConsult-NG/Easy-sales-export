@@ -306,7 +306,21 @@ function createMockDb() {
             // executor: production writes `.all().get()`.
             all: () => next({ unbounded: true }),
 
-            get: () => withAccess(descriptorFor('query'), () => global.mockFirestoreGet(name)),
+            /**
+             * THE FILTERS TRAVEL WITH THE READ — #591.
+             *
+             * This passed the collection name alone, so two queries against the
+             * SAME collection were indistinguishable in a fixture. A harness
+             * keyed on the name then hands one query's rows to the other, and
+             * the suite reports a finding twice or not at all. It bit the money
+             * scan, whose overpayment and escrow checks both read
+             * marketplace_orders.
+             *
+             * Additive, on the same precedent as the doc get above: existing
+             * fixtures take one parameter and ignore the second.
+             */
+            get: () => withAccess(descriptorFor('query'),
+                () => global.mockFirestoreGet(name, s.filters)),
 
             count: () => ({
                 get: () => withAccess(descriptorFor('count'),

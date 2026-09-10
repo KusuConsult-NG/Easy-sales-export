@@ -1103,6 +1103,105 @@ export async function runForensicScanAction(): Promise<
         } catch (e: any) { results.push({ module: "Academy", check: "Enrollment Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
+        // ============================================================================
+        // 10. MONEY WAITING FOR A HUMAN
+        // ============================================================================
+
+        /**
+         *   #591 THREE FLAGS THAT MEAN SOMEBODY IS OWED MONEY, WRITTEN AND READ
+         *        BY NOTHING.
+         *
+         *   Each is set by a money path that could not finish, and each is the
+         *   only record that it did not:
+         *
+         *     pendingManualDisbursement  admin/_loans.ts sets it when an
+         *                                approved loan's Paystack transfer
+         *                                fails, or the borrower has no bank
+         *                                details. The borrower has an APPROVED
+         *                                loan and no money, and the only trace
+         *                                is this boolean.
+         *
+         *     overpaymentStatus          infrastructure/payments/service.ts
+         *                                records "pending_review" with the
+         *                                surplus when somebody pays MORE than
+         *                                the order. Its own comment says the
+         *                                money was previously untracked "so
+         *                                nobody could find the money owed back"
+         *                                — and then nothing read what it wrote.
+         *
+         *     escrowNeedsReconciliation  order-management.ts sets it when an
+         *                                escrow release came back DUPLICATE or
+         *                                INDETERMINATE: the seller may already
+         *                                have been paid, and a retry could pay
+         *                                them twice. Its sibling flag
+         *                                escrowPendingManualRelease IS read by
+         *                                cron/reconcile-fulfilment; this one,
+         *                                the stronger of the two, is not.
+         *
+         *   MEASURED, NOT ASSUMED: a sweep of every field written into a
+         *   document payload and never referenced anywhere else returns these
+         *   three among 85 names, most of the rest being audit trail (*By, *At)
+         *   that is legitimately write-only.
+         *
+         *   THE SWEEP'S FIRST VERSION WAS WRONG and this check was nearly built
+         *   on it: it also listed disbursementTransferCode, which has ten
+         *   readers, because the generated grep's quoting misfired. It was
+         *   rebuilt and validated against known answers — including a field
+         *   whose only reader had just been added — before any of this was
+         *   written.
+         *
+         *   WHY HERE. This scan is the platform's answer to "what needs a
+         *   human?", it already has an admin screen, and three money flags with
+         *   no reader is exactly what it exists to surface. It reports rather
+         *   than repairs: paying a borrower, refunding a surplus and deciding
+         *   whether a seller was paid twice are all decisions with money on the
+         *   other end.
+         */
+        try {
+            const [loans, overpaid, escrow] = await Promise.all([
+                db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                    .where("pendingManualDisbursement", "==", true).get(),
+                db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                    .where("overpaymentStatus", "==", "pending_review").get(),
+                db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                    .where("escrowNeedsReconciliation", "==", true).get(),
+            ]);
+
+            const owed: string[] = [
+                ...loans.docs.map((d: any) => {
+                    const data = d.data() ?? {};
+                    const why = data.disbursementError || data.disbursementNote || "no reason recorded";
+                    return `loan ${d.id}: approved, not disbursed (${why})`;
+                }),
+                ...overpaid.docs.map((d: any) => {
+                    const data = d.data() ?? {};
+                    return `order ${d.id}: overpaid by ₦${Number(data.overpaidBy ?? 0).toLocaleString()}, owed back`;
+                }),
+                ...escrow.docs.map((d: any) =>
+                    `order ${d.id}: escrow release was duplicate or indeterminate — check Paystack before releasing again`),
+            ];
+
+            results.push({
+                module: "Finance",
+                check: "Money Waiting For A Human",
+                //   A warning, not a fail: nothing here is corrupt. Each is a
+                //   payment that stopped halfway and needs somebody to finish it.
+                status: owed.length > 0 ? "warning" : "pass",
+                details: `${loans.size} approved loans awaiting manual disbursement, `
+                    + `${overpaid.size} overpayments awaiting refund, `
+                    + `${escrow.size} escrow releases that need checking against Paystack.`,
+                affectedIds: owed,
+            });
+        } catch (e: any) {
+            results.push({
+                module: "Finance",
+                check: "Money Waiting For A Human",
+                status: "inconclusive",
+                details: `Could not complete this scan: ${e.message}`,
+                affectedIds: [],
+            });
+        }
+
         return { error: null, success: true as const, results , data: null };
 
     } catch (error: any) { logger.error("Forensic scan failed:", error);
