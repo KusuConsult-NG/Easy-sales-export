@@ -36,9 +36,33 @@ export interface ExportBuyerDetails { companyName: string;
 
 // const USD_TO_NGN_RATE = 1650; // REMOVED: Now fetched dynamically
 
+/**
+ *   #577 THE AMOUNT THE BUYER APPROVED IS NOW PART OF THE REQUEST.
+ *
+ *   The cart screen showed a naira total computed from a constant in the
+ *   browser — `const USD_TO_NGN_RATE = 1650` — while this action charges at
+ *   `getExchangeRates().usdToNgn`, an owner-editable setting. #381 removed that
+ *   constant from THIS file (its corpse is the commented line above) and left
+ *   the copy in the screen, so the two agreed only for as long as nobody
+ *   touched the setting. The catalogue price can drift the same way: the cart
+ *   holds a snapshot taken when the item was added, and every line here is
+ *   re-priced from the row.
+ *
+ *   So the caller states the total it displayed, and this refuses to charge
+ *   anything else. A mismatch is not an error in the buyer's cart — it is the
+ *   price having moved — so the refusal carries the current figures back for
+ *   the screen to show and the buyer to accept.
+ *
+ *   THE TOLERANCE IS ONE KOBO, and it is there for floating-point noise on the
+ *   multiplication, not as slack: a rate change of one thousandth of a naira on
+ *   a $100,000 order moves the total by ₦100 and is refused.
+ */
+const QUOTE_TOLERANCE_KOBO = 1;
+
 export async function initializeExportOrderPaymentAction(
     cartItems: ExportCartItemInput[],
-    buyerDetails: ExportBuyerDetails
+    buyerDetails: ExportBuyerDetails,
+    quotedTotalNGN: number
 ): Promise<PaymentInitState> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -114,6 +138,22 @@ export async function initializeExportOrderPaymentAction(
 
         const { usdToNgn } = await getExchangeRates();
         const totalNGN = totalUSD * usdToNgn;
+
+        //   #577 — what the buyer was shown, or nothing. A caller that does not
+        //   state a total cannot have shown one it agrees with.
+        const quoted = Number(quotedTotalNGN);
+        if (!Number.isFinite(quoted) || quoted <= 0) {
+            return { error: "This order was not priced. Please reload the cart and try again.", success: false as const, data: undefined, meta: null };
+        }
+
+        if (Math.abs(nairaToKobo(quoted) - nairaToKobo(totalNGN)) > QUOTE_TOLERANCE_KOBO) {
+            return {
+                error: `The price of this order has changed — it is now ₦${Math.round(totalNGN).toLocaleString()} (you were shown ₦${Math.round(quoted).toLocaleString()}). Nothing has been charged. Check the updated total and pay again if you are happy with it.`,
+                success: false as const,
+                data: undefined,
+                meta: { quote: { totalUSD, totalNGN, usdToNgn } },
+            };
+        }
 
         const baseUrl = await getBaseUrl();
         const callbackUrl = `${baseUrl}/export/buyer/cart/payment-callback`;

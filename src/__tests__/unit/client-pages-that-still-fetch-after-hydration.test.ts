@@ -83,7 +83,7 @@ const ROOT = process.cwd();
  *   the one exception — held back at the owner's instruction about the loan
  *   product until they released it.)
  */
-const CAP = 13;
+const CAP = 12;
 
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
@@ -200,6 +200,13 @@ const CONVERTED = [
     //   #570 — the cooperative loans screen, once the owner released the hold
     //   they had placed on the loan product.
     'src/app/cooperatives/(member)/loans/page.tsx',
+    //   #577 — the export buyer cart. IT NEVER HAD A WATERFALL, and this is
+    //   the one entry on this list that did not remove one: it came off the
+    //   ledger because the naira total it quotes is converted at an
+    //   owner-editable rate, and a browser constant is the wrong place to keep
+    //   a number that is meant to change. The server half seeds the rate; the
+    //   basket is still read from localStorage exactly as before.
+    'src/app/export/buyer/cart/page.tsx',
     //   #564 — batch 16, the cooperative member screens and the public
     //   certificate verifier.
     'src/app/cooperatives/(member)/fixed-savings/page.tsx',
@@ -288,10 +295,6 @@ const NOT_CONVERTIBLE: { page: string; because: string }[] = [
         page: 'src/app/wave/briefing/page.tsx',
         because: 'no read on mount at all — the action call is an offline-sync WRITE '
             + 'replaying a registration out of localStorage, which the server cannot see',
-    },
-    {
-        page: 'src/app/export/buyer/cart/page.tsx',
-        because: 'the cart lives in the browser; the actions fire on checkout, not on mount',
     },
     {
         page: 'src/app/marketplace/sell/create/page.tsx',

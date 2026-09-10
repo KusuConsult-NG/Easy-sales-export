@@ -83,7 +83,10 @@ function filesMentioning(name: string): string[] {
 
 const HELP = 'src/app/help/page.tsx';
 const CHECKOUT = 'src/app/marketplace/checkout/page.tsx';
-const EXPORT_CART = 'src/app/export/buyer/cart/page.tsx';
+//   #577 moved the browser half of this screen out of page.tsx so the
+//   exchange rate could be read on the server. The one-member union it is
+//   named for below moved with it.
+const EXPORT_CART = 'src/app/export/buyer/cart/ExportCartClient.tsx';
 const ORDERS = 'src/app/actions/marketplace/_payment_orders.ts';
 const PAYSTACK = 'src/lib/paystack-server.ts';
 

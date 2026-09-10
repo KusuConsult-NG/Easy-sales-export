@@ -99,9 +99,19 @@ const buyerDetails = {
     country: 'NG', portOfDestination: 'Lagos', shippingTerm: 'FOB', additionalNotes: '',
 };
 
-async function checkout(items: any[]) {
+/**
+ * #577 added a third argument: the naira total the buyer was shown, which the
+ * action refuses to charge anything but. These cases are about the LINE TOTALS,
+ * so the quote is derived from the same catalogue price the fixture sets —
+ * a mismatch is its own suite (the-price-shown-is-the-price-charged).
+ */
+function quoteFor(items: any[]): number {
+    return items.reduce((sum, i) => sum + 2_500 * Number(i.quantityMT || 0), 0) * 1650;
+}
+
+async function checkout(items: any[], quotedTotalNGN = quoteFor(items)) {
     const { initializeExportOrderPaymentAction } = await import('@/app/actions/export-payment');
-    return initializeExportOrderPaymentAction(items as any, buyerDetails as any);
+    return initializeExportOrderPaymentAction(items as any, buyerDetails as any, quotedTotalNGN);
 }
 
 describe('export checkout — neither factor of the line total is trusted', () => {

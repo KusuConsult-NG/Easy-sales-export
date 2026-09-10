@@ -139,7 +139,9 @@ describe('every Paystack initiator', () => {
 
 describe('the export cart', () => {
     const cart = readFileSync(
-        join(process.cwd(), 'src/app/export/buyer/cart/page.tsx'), 'utf-8'
+        //   #577 — the browser half of the cart lives here now; page.tsx is
+        //   the server component that seeds it the exchange rate.
+        join(process.cwd(), 'src/app/export/buyer/cart/ExportCartClient.tsx'), 'utf-8'
     );
 
     it('clears the basket only once there is somewhere to go', () => {
