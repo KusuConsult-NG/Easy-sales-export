@@ -422,7 +422,16 @@ describe('and one minimum withdrawal, not three answers', () => {
     const GUARDS: Array<[string, string]> = [
         ['src/app/api/cooperative/withdraw/route.ts', 'if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
         ['src/app/actions/cooperative/_withdrawal.ts', 'if (validatedData.amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
-        ['src/app/actions/cooperative/_coop_money.ts', 'if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+        //   #606 — spelling changed, constant unchanged. `if (amount < MIN)` let
+        //   NaN through, because every comparison with NaN is false; the guard
+        //   still enforces the same shared figure and now refuses a non-number.
+        //
+        //   THE OTHER TWO DOORS WERE ALREADY SAFE, BY ACCIDENT AND BY DESIGN: the
+        //   route's `!amount ||` catches NaN on its way past, and _withdrawal.ts
+        //   reads a zod-validated `validatedData.amount`. Three doors, three
+        //   different levels of protection, one of them none — which is exactly
+        //   what this table was built to make visible.
+        ['src/app/actions/cooperative/_coop_money.ts', 'if (!isAmountAtLeast(amount, COOPERATIVE_MINIMUM_WITHDRAWAL)) {'],
     ];
 
     it.each(GUARDS)('%s enforces it from the shared constant', (rel: string, guard: string) => {

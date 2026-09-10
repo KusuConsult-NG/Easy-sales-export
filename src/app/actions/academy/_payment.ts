@@ -23,6 +23,7 @@ import {
     academyPlanFee,
     DEFAULT_ACADEMY_PLAN,
 } from "@/lib/academy-plan";
+import { isAmountAtLeast } from "@/lib/amount";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -150,7 +151,7 @@ export async function initializeEnrollmentPaymentAction(
         }
 
         // Validate amount
-        if (amount < 1000) { return { error: "Minimum enrollment fee is ₦1, 000", success: false as const, data: null };
+        if (!isAmountAtLeast(amount, 1000)) { return { error: "Minimum enrollment fee is ₦1, 000", success: false as const, data: null };
         }
 
         // Check if already enrolled

@@ -175,7 +175,13 @@ describe('#368 — per-course purchase is half-built', () => {
         const payment = code('src/app/actions/academy/_payment.ts');
 
         // The initiator validates a floor and nothing else.
-        expect(payment).toContain('if (amount < 1000)');
+        //
+        //   #606 changed the SPELLING of that floor and not the fact. It was
+        //   `if (amount < 1000)`, which NaN and a non-numeric string both walked
+        //   past because every comparison with NaN is false. What this test is
+        //   about — that the floor is all the initiator checks, and the real
+        //   price is not read until after Paystack has charged — is unchanged.
+        expect(payment).toContain('if (!isAmountAtLeast(amount, 1000))');
         // The real price is read in the verifier, which runs post-Paystack.
         const verifier = payment.slice(payment.indexOf('verifyEnrollmentPaymentAction'));
         expect(verifier).toContain('courseData?.price');

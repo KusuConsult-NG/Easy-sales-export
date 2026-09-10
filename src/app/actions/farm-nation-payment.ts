@@ -14,6 +14,7 @@ import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getBaseUrl } from "@/lib/server-utils";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { PURCHASABLE_STATUSES, isPurchasable, statusAfterCancellation } from "@/lib/land-listing-status";
+import { isAmountAtLeast } from "@/lib/amount";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -65,7 +66,7 @@ async function _initializePropertyPaymentAction(
         //
         // The listed price is authoritative now. The `amount` parameter is kept
         // so the signature does not change and is deliberately ignored.
-        if (amount < 10000) { 
+        if (!isAmountAtLeast(amount, 10000)) { 
             return { success: false, error: "Minimum property purchase is ₦10,000", data: null };
         }
 

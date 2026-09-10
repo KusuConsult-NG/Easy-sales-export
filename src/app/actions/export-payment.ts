@@ -15,6 +15,7 @@ import { minimumOrderMT } from "@/lib/export-minimum-order";
 import { EXPORT_STOCK_FIELD, exportStockIsTracked, exportStockOf } from "@/lib/export-stock";
 import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
 import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling , markFulfilmentFailed } from "@/lib/wallet-ledger";
+import { isAmountAtLeast } from "@/lib/amount";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -497,7 +498,7 @@ export async function initializeInvestmentPaymentAction(
         }
 
         // Validate amount
-        if (investmentAmount < 50000) { return { error: "Minimum investment is ₦50, 000", success: false as const, data: undefined, meta: null };
+        if (!isAmountAtLeast(investmentAmount, 50000)) { return { error: "Minimum investment is ₦50, 000", success: false as const, data: undefined, meta: null };
         }
 
         if (investmentAmount > 10000000) { return { error: "Maximum investment is ₦10, 000, 000", success: false as const, data: undefined, meta: null };
@@ -703,7 +704,7 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
-        if (amountInNaira < 50000 || amountInNaira > 10000000) { return { error: "Invalid payment amount", success: false as const, meta: null };
+        if (!isAmountAtLeast(amountInNaira, 50000, 10000000)) { return { error: "Invalid payment amount", success: false as const, meta: null };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)

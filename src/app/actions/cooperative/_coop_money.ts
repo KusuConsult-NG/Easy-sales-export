@@ -276,6 +276,7 @@ export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiate
 // may only export async functions; this string export failed the build with
 // "A \"use server\" file can only export async functions, found string."
 import { UNPAID_CONTRIBUTION_MESSAGE } from "@/lib/server-action-values";
+import { isAmountAtLeast } from "@/lib/amount";
 
 async function _makeContributionAction(
     _prevState: MakeContributionState,
@@ -332,7 +333,7 @@ async function _submitWithdrawalAction(
         // The third door onto one minimum. /api/cooperative/withdraw refuses
         // anything under ₦1,000; this asked only that the amount be positive.
         // See lib/cooperative-limits.ts.
-        if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
+        if (!isAmountAtLeast(amount, COOPERATIVE_MINIMUM_WITHDRAWAL)) {
             return {
                 error: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}`,
                 success: false as const,

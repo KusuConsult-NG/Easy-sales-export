@@ -14,6 +14,8 @@ import { compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 import type { MemberEarnings } from "@/lib/types/wave-actions";
+import { isAmountAtLeast } from "@/lib/amount";
+import { numberOrZero } from "@/lib/numbers";
 
 /**
  * Calculate member earnings from sales
@@ -327,7 +329,7 @@ async function _withdrawEarningsAction(
         const userId = session.user.id;
         const userEmail = session.user.email || "";
 
-        if (amount < 5000) {
+        if (!isAmountAtLeast(amount, 5000)) {
             return { success: false as const, error: "Minimum withdrawal amount is ₦5,000", data: null };
         }
 
@@ -335,7 +337,14 @@ async function _withdrawEarningsAction(
         // Note: We calculate before the transaction because Firestore queries are not supported inside transactions in Node SDK.
         // The transactional lock (hasPendingWithdrawal) prevents race conditions.
         const earnings = await _calculateEarningsAction(userId);
-        if (!earnings.success || (earnings.data?.paidAmount || 0) < amount) {
+        //   #606 — the sufficiency check had the SAME shape as the minimum above:
+        //   `balance < amount` is false when either side is not a number, so a
+        //   NaN amount cleared the minimum AND the balance check, and a stored
+        //   balance that was not a number cleared it for any amount at all. The
+        //   guard on `amount` now runs first, and the balance is read as a number
+        //   rather than compared as one.
+        const availableBalance = numberOrZero(earnings.data?.paidAmount);
+        if (!earnings.success || !(availableBalance >= amount)) {
             return { success: false as const, error: earnings.error || "Insufficient available balance", data: null };
         }
 

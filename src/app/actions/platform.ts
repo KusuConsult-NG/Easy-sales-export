@@ -15,6 +15,7 @@ import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { COOPERATIVE_MINIMUM_BALANCE, formatMinimumBalance, COOPERATIVE_MINIMUM_WITHDRAWAL, formatMinimumWithdrawal } from "@/lib/cooperative-limits";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { isAmountAtLeast } from "@/lib/amount";
 
 /**
  * Server Actions for Platform Forms
@@ -165,7 +166,7 @@ export async function submitWithdrawalAction(
         //        only that the amount be positive — and it is what
         //        WithdrawalModal.tsx calls, so through the product a NGN 1
         //        withdrawal went through.
-        if (parsedAmount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
+        if (!isAmountAtLeast(parsedAmount, COOPERATIVE_MINIMUM_WITHDRAWAL)) {
             return {
                 error: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}`,
                 success: false as const,

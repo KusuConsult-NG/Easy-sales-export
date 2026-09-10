@@ -13,6 +13,7 @@ import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { revalidatePath } from "next/cache";
 import { toMillis } from "@/lib/firestore-serialize";
 import { getBaseUrl } from "@/lib/server-utils";
+import { isAmountAtLeast } from "@/lib/amount";
 
 // ============================================
 // Get User Export Investments Action
@@ -249,7 +250,7 @@ export async function investInExportAction(
 
         // Validate Minimum Investment (assuming 'amount' in window is unit price or min investment)
         const minInvestment = exportData?.amount || 50000; // Default fallback
-        if (amount < minInvestment) { return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
+        if (!isAmountAtLeast(amount, minInvestment)) { return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
         }
 
         /**

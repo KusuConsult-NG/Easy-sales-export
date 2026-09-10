@@ -12,6 +12,7 @@ import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { claimPaymentOnce, CLAIM_TYPE , markFulfilmentFailed } from '@/lib/wallet-ledger';
 import { FieldValue } from '@/lib/firestore-compat';
+import { isAmountAtLeast } from "@/lib/amount";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -33,7 +34,7 @@ export async function initializeContributionPaymentAction(
         }
 
         // Validate amount
-        if (amount < 1000) { return { error: 'Minimum contribution is ₦1, 000', success: false as const, data: undefined };
+        if (!isAmountAtLeast(amount, 1000)) { return { error: 'Minimum contribution is ₦1, 000', success: false as const, data: undefined };
         }
 
         if (amount > 1000000) { return { error: 'Maximum contribution is ₦1, 000, 000', success: false as const, data: undefined };
@@ -99,7 +100,7 @@ export async function verifyContributionPaymentAction(
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
-        if (amountInNaira < 1000 || amountInNaira > 1000000) { return { error: 'Invalid payment amount', success: false as const, data: undefined };
+        if (!isAmountAtLeast(amountInNaira, 1000, 1000000)) { return { error: 'Invalid payment amount', success: false as const, data: undefined };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
