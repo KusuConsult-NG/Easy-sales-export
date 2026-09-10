@@ -17,6 +17,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { getMembershipAction, getTransactionsAction } from "@/app/actions/cooperative";
 import BackButton from "@/components/ui/BackButton";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export type MySavingsSeed = {
     membership: Awaited<ReturnType<typeof getMembershipAction>>;
@@ -34,6 +35,15 @@ export default function MySavingsClient({ initial = null }: { initial?: MySaving
     const [loading, setLoading] = useState(initial === null);
     const [membership, setMembership] = useState<any>(null);
     const [savings, setSavings] = useState<any[]>([]);
+    /**
+     *   #588 — a read that FAILED, as opposed to one that found nothing.
+     *
+     *   This screen wrote the failure INTO the list: `catch { setSavings([]) }`
+     *   and `else { setSavings([]) }`. A member whose plans could not be read
+     *   was shown "No Savings Plans Yet — start saving today", over money they
+     *   had already locked away for a term.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     //   useCallback because it closes over the take-once seed now, so the
     //   effect genuinely depends on it.
@@ -76,13 +86,16 @@ export default function MySavingsClient({ initial = null }: { initial?: MySaving
                         targetAmount: null, // Fixed savings don't have targets
                     }));
                     setSavings(transformedPlans);
+                    setLoadFailed(false);
                 } else {
-                    setSavings([]);
+                    //   #588 — the list is left alone; the screen says it could
+                    //   not read rather than claiming there is nothing.
+                    setLoadFailed(true);
                 }
             }
         } catch (error) {
             logger.error("Failed to load savings:", error);
-            setSavings([]);
+            setLoadFailed(true);
         } finally {
             setLoading(false);
         }
@@ -334,6 +347,9 @@ export default function MySavingsClient({ initial = null }: { initial?: MySaving
                             );
                         })}
                     </div>
+                ) : loadFailed ? (
+                    /*  #588 — not "you have none", on a screen about money. */
+                    <ListLoadFailed what="your savings plans" onRetry={() => loadSavings()} />
                 ) : (
                     <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
                         <Wallet className="w-16 h-16 text-slate-400 mx-auto mb-4" />

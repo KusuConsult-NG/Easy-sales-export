@@ -12,6 +12,7 @@ import BackButton from "@/components/ui/BackButton";
 import { getUserExportInvestmentsAction, getUserExportStatsAction } from "@/app/actions/export";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { toast } from "sonner";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 interface Investment {
     id: string;
@@ -47,6 +48,15 @@ export default function ExportPortfolioClient({ initial = null }: {
         roi: 0
     });
     const [investments, setInvestments] = useState<Investment[]>([]);
+    /**
+     *   #588 — a read that FAILED, as opposed to one that found nothing.
+     *
+     *   A toast is not a state: it appears for a few seconds and goes, and what
+     *   the investor is left looking at is "No investments found" over money
+     *   they have in escrow. The toast stays — it is the right thing for a
+     *   RETRY that fails — and the table now says which of the two happened.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [lastId, setLastId] = useState<string | null>(null);
@@ -98,12 +108,15 @@ export default function ExportPortfolioClient({ initial = null }: {
                 }
                 setLastId(result.meta?.cursor || null);
                 setHasMore(!!result.meta?.cursor);
+                setLoadFailed(false);
             } else {
                 toast.error(result.error || "Failed to load investments");
+                setLoadFailed(true);
             }
         } catch (error) {
             console.error("Failed to load investments:", error);
             toast.error("Failed to load investments");
+            setLoadFailed(true);
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -210,6 +223,13 @@ export default function ExportPortfolioClient({ initial = null }: {
                                     <tr>
                                         <td colSpan={6} className="text-center py-12">
                                             <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+                                        </td>
+                                    </tr>
+                                ) : loadFailed && investments.length === 0 ? (
+                                    /*  #588 — not "you have none". */
+                                    <tr>
+                                        <td colSpan={6} className="py-8 px-4">
+                                            <ListLoadFailed what="your investments" onRetry={() => loadInvestments(true)} />
                                         </td>
                                     </tr>
                                 ) : investments.length === 0 ? (

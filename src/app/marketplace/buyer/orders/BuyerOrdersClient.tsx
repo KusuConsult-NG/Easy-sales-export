@@ -17,6 +17,7 @@ import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import { logger } from "@/lib/logger";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function BuyerOrdersClient({ initial = null }: {
     /**
@@ -32,6 +33,13 @@ export default function BuyerOrdersClient({ initial = null }: {
     const [searchQuery, setSearchQuery] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const { showToast } = useToast();
+
+    /**
+     *   #588 — a read that FAILED, as opposed to one that found nothing. A
+     *   buyer whose order list could not be read was shown "No orders found"
+     *   and a button to go shopping, over orders they had already paid for.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     // Pagination State
     const [lastId, setLastId] = useState<string | undefined>(undefined);
@@ -60,11 +68,14 @@ export default function BuyerOrdersClient({ initial = null }: {
                 setOrders(prev => isReset ? result.data.orders : [...prev, ...result.data.orders]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
+                setLoadFailed(false);
             } else if (result.error) {
                 logger.error("Failed to load orders:", { error: result.error });
+                setLoadFailed(true);
             }
         } catch (error) {
             logger.error("Failed to load orders:", { error });
+            setLoadFailed(true);
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -223,6 +234,10 @@ export default function BuyerOrdersClient({ initial = null }: {
                         <div className="min-h-[200px] flex items-center justify-center">
                             <Loader2 className="w-12 h-12 animate-spin text-primary" />
                         </div>
+                    ) : loadFailed && orders.length === 0 ? (
+                        /*  #588 — not "you have none", and not an invitation to
+                            buy something they may already own. */
+                        <ListLoadFailed what="your orders" onRetry={() => fetchOrders(true)} />
                     ) : visibleOrders.length === 0 ? (
                         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
                             <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />

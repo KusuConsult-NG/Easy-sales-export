@@ -17,12 +17,22 @@ import BackButton from "@/components/ui/BackButton";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function SellerProductsClient(
     { initial = null }: { initial?: Awaited<ReturnType<typeof getSellerProductsAction>> | null },
 ) {
     const [loading, setLoading] = useState(initial === null);
     const [products, setProducts] = useState<Product[]>([]);
+    /**
+     *   #588 — a read that FAILED, as opposed to one that found nothing.
+     *
+     *   The catch and the `else if (result.error)` below both wrote a log line
+     *   and stopped, leaving `products` at its initial `[]` — so a seller with
+     *   forty live listings was shown "No products found. Add your first
+     *   product". See components/common/ListLoadFailed.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState("all");
 
@@ -83,11 +93,14 @@ export default function SellerProductsClient(
                 setProducts(prev => isReset ? result.data.products : [...prev, ...result.data.products]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
+                setLoadFailed(false);
             } else if (result.error) {
                 logger.error("Failed to load products:", { error: result.error });
+                setLoadFailed(true);
             }
         } catch (error) {
             logger.error("Failed to load products:", { error });
+            setLoadFailed(true);
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -237,6 +250,13 @@ export default function SellerProductsClient(
                                         <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto" />
                                     </td>
                                 </tr>
+                            ) : loadFailed && products.length === 0 ? (
+                                /*  #588 — not "you have none". */
+                                <tr>
+                                    <td colSpan={7} className="px-6 py-8">
+                                        <ListLoadFailed what="your products" onRetry={() => fetchProducts(true)} />
+                                    </td>
+                                </tr>
                             ) : products.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
@@ -330,6 +350,8 @@ export default function SellerProductsClient(
                         <div className="flex justify-center p-12 bg-white rounded-xl border border-slate-200">
                             <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto" />
                         </div>
+                    ) : loadFailed && products.length === 0 ? (
+                        <ListLoadFailed what="your products" onRetry={() => fetchProducts(true)} />
                     ) : products.length === 0 ? (
                         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
                             No products found. <Link href="/marketplace/sell/create" className="text-green-600 hover:underline font-semibold">Add your first product</Link>
