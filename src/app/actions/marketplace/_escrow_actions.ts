@@ -24,6 +24,7 @@ import {
     participantSourcesFor,
 } from "@/lib/escrow-status";
 import { recordAdminAction } from "@/lib/audit-log";
+import { isPositiveAmount } from "@/lib/amount";
 import {
     PAYMENT_INSTRUCTION_SETTLED,
     PAYMENT_INSTRUCTION_SETTLED_VIA,
@@ -492,7 +493,11 @@ async function _releaseEscrowFunds(
         const data = txDoc.data()!;
 
         const escrowAmount = data.amount || data.grossAmount || 0;
-        if (escrowAmount <= 0) return { success: false as const, error: "Invalid transaction amount" };
+        //   #607 — `escrowAmount <= 0` is false for NaN, and `||` keeps a stored
+        //   amount of "abc" because a non-empty string is truthy. So a transaction
+        //   whose amount was written in the wrong shape passed the one check
+        //   standing between it and a release to the seller.
+        if (!isPositiveAmount(escrowAmount)) return { success: false as const, error: "Invalid transaction amount" };
 
         /**
          * WHAT THE SELLER IS OWED — net of the platform fee.
@@ -780,7 +785,8 @@ async function _refundEscrowToBuyer(
         }
 
         escrowAmount = preRefund.data()?.amount || preRefund.data()?.grossAmount || 0;
-        if (escrowAmount <= 0) {
+        //   #607 — the same guard on the REFUND side, defeated the same way.
+        if (!isPositiveAmount(escrowAmount)) {
             return { success: false as const, error: "Invalid transaction amount" };
         }
 

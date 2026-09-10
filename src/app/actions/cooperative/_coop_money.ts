@@ -276,7 +276,7 @@ export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiate
 // may only export async functions; this string export failed the build with
 // "A \"use server\" file can only export async functions, found string."
 import { UNPAID_CONTRIBUTION_MESSAGE } from "@/lib/server-action-values";
-import { isAmountAtLeast } from "@/lib/amount";
+import { isAmountAtLeast, isPositiveAmount } from "@/lib/amount";
 
 async function _makeContributionAction(
     _prevState: MakeContributionState,
@@ -832,7 +832,11 @@ async function _createFixedSavingsAction(
 
         const { amount, durationMonths } = validationResult.data;
 
-        if (amount <= 0) { return { error: "Amount must be positive", success: false as const, data: null };
+        //   #607 — reached only after fixedSavingsSchema has already parsed a
+        //   number, so this one was never permeable. Converted for one spelling
+        //   rather than two, and so a later edit that drops the schema does not
+        //   silently leave a guard NaN can cross.
+        if (!isPositiveAmount(amount)) { return { error: "Amount must be positive", success: false as const, data: null };
         }
 
         const membershipSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)

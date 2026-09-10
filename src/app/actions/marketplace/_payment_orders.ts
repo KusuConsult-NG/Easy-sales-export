@@ -20,6 +20,7 @@ import { validateCartItems, calculateDeliveryFee, estimateCartWeight, nairaToKob
 import { checkOrderAmountBounds } from "@/lib/order-payment-amount";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { isOfflineCheckoutEnabled, offlineCheckoutRefusal } from "@/lib/offline-checkout";
+import { isAmountAtLeast } from "@/lib/amount";
 
 /**
  * Initialize Paystack Payment for Marketplace Order
@@ -50,7 +51,19 @@ async function _initializeOrderPaymentAction(
 
         const userId = session.user.id;
 
-        if (deliveryFee < 0) { 
+        //   #607 — AND THIS ONE DEFEATS #572's PRICE PROTECTION.
+        //
+        //   `deliveryFee` is the figure the checkout screen showed the buyer, and
+        //   #572 turned it into a check: refuse if the server's own charge would
+        //   EXCEED the quote. Both halves of that check compare against it —
+        //   `calculatedDeliveryFee > deliveryFee + 1` and
+        //   `calculatedDeliveryFee < deliveryFee` — and every comparison with NaN
+        //   is false, so a quote of NaN passes both and the buyer is charged
+        //   whatever the server computes, silently. `< 0` was the guard that
+        //   should have stopped it and NaN is not less than zero.
+        //
+        //   A delivery fee of exactly 0 is legitimate, so the floor stays 0.
+        if (!isAmountAtLeast(deliveryFee, 0)) {
             return { error: "Invalid delivery fee", success: false as const, data: null };
         }
 
@@ -331,7 +344,19 @@ async function _createBankTransferOrderAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
 
-        if (deliveryFee < 0) { 
+        //   #607 — AND THIS ONE DEFEATS #572's PRICE PROTECTION.
+        //
+        //   `deliveryFee` is the figure the checkout screen showed the buyer, and
+        //   #572 turned it into a check: refuse if the server's own charge would
+        //   EXCEED the quote. Both halves of that check compare against it —
+        //   `calculatedDeliveryFee > deliveryFee + 1` and
+        //   `calculatedDeliveryFee < deliveryFee` — and every comparison with NaN
+        //   is false, so a quote of NaN passes both and the buyer is charged
+        //   whatever the server computes, silently. `< 0` was the guard that
+        //   should have stopped it and NaN is not less than zero.
+        //
+        //   A delivery fee of exactly 0 is legitimate, so the floor stays 0.
+        if (!isAmountAtLeast(deliveryFee, 0)) {
             return { error: "Invalid delivery fee", success: false as const, data: null };
         }
 

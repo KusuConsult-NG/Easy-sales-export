@@ -23,6 +23,7 @@ import { calculatePenalty } from "@/lib/calculatePenalty";
 import { installmentDueDate } from "@/lib/loan-schedule-dates";
 import type { LoanApplication, RepaymentInstallment } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication, normaliseLoanApplication } from "@/lib/loan-application-location";
+import { isPositiveAmount } from "@/lib/amount";
 
 /**
  * Get loan repayment schedule
@@ -254,7 +255,9 @@ export async function submitRepaymentAction(data: {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        if (data.amount <= 0) {
+        //   #607 — a server action's `amount: number` is erased at runtime, and
+        //   `NaN <= 0` is false, so this refused a zero and waved NaN through.
+        if (!isPositiveAmount(data.amount)) {
             return { success: false as const, error: "Invalid repayment amount", data: null };
         }
 
