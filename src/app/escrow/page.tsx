@@ -209,7 +209,19 @@ export default function EscrowDashboardPage() {
     const [selectedTab, setSelectedTab] = useState<'all' | 'farm-nation' | 'marketplace' | 'export'>('all');
 
     const loadTransactions = useCallback(async () => {
-        setTimeout(() => setLoading(true), 0);
+        //   #604 — THIS WAS `setTimeout(() => setLoading(true), 0)`, AND IT COULD
+        //   LEAVE THE SPINNER UP FOREVER WITH THE DATA ALREADY IN HAND.
+        //
+        //   A zero-delay timer is a MACROTASK; the continuation after `await` is a
+        //   MICROTASK. When the read resolves without an intervening macrotask —
+        //   a cached response, a warm server action, a test — `setLoading(false)`
+        //   runs FIRST and the timer then sets loading back to TRUE. Nothing ever
+        //   clears it: the screen spins on top of loaded data until a reload.
+        //
+        //   The deferral was there to dodge a render-phase update warning, but this
+        //   runs from an effect and a callback, never during render, so there is no
+        //   warning to dodge. The same three lines existed at three call sites.
+        setLoading(true);
         const result = await getUserEscrowTransactions();
         if (result.success && result.data?.transactions) {
             setTransactions(result.data.transactions);

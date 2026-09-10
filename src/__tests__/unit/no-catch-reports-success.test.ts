@@ -186,8 +186,15 @@ describe('#317 — the screen reads response.data, not the response', () => {
     it('assigns res.data, so the form holds settings rather than an envelope', () => {
         const src = code(SCREEN);
 
-        expect(src).toMatch(/if \(res\?\.data\) setSettings\(res\.data\)/);
+        //   #604 widened this: the screen now fills the DEFAULTS shape with
+        //   `res.data` rather than assigning it raw, because a stored document
+        //   missing a key left that input undefined and Save wrote the blank
+        //   back. What #317 pinned is unchanged and still pinned — the argument
+        //   is `res.data`, the envelope's payload, and never `res` itself.
+        expect(src).toMatch(/if \(res\?\.data\) setSettings\(fillSettings\(DEFAULTS, res\.data\)\)/);
         expect(src).not.toMatch(/setSettings\(data\)/);
+        expect(src).not.toMatch(/setSettings\(res\)/);
+        expect(src).not.toMatch(/fillSettings\(DEFAULTS, res\)/);
     });
 
     it('and still reports a refusal, which is the check #295 added', () => {

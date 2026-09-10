@@ -70,19 +70,26 @@ export default function AdminWaveMembersPage() {
             }
             
             const docs: WaveMember[] = (result.data || []).map((item: any) => {
-                const data = item.data;
+                //   #604 — `item.data` and `item.user` are the two JOINED halves of an
+                //   approved application, and both were read unguarded. One approved
+                //   application whose user record did not join threw a TypeError HERE,
+                //   inside the loader's map — so the whole register came back empty
+                //   rather than one member short. #601 and #602 found this same shape on
+                //   the three approval queues; this is the register those approvals feed.
+                const data = item?.data ?? {};
+                const user = item?.user ?? {};
                 return {
-                    id: item.user.id || item.id,
+                    id: user.id || item?.id,
                     active: true,
                     enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || null,
                     applicationId: item.id,
                     fullName: data.fullName,
                     surname: data.surname,
                     firstName: data.firstName,
-                    email: item.user.email,
-                    phone: item.user.phone,
-                    stateOfResidence: item.user.state,
-                    lgaOfResidence: item.user.lga,
+                    email: user.email,
+                    phone: user.phone,
+                    stateOfResidence: user.state,
+                    lgaOfResidence: user.lga,
                     bankName: data.bankName,
                     accountNumber: data.accountNumber,
                     farmSize: data.farmSize,
@@ -110,9 +117,18 @@ export default function AdminWaveMembersPage() {
         setFiltered(members);
     }, [members]);
 
-    const getDisplayName = (m: WaveMember) => {
+    const getDisplayName = (m: WaveMember): string => {
         if (m.surname || m.firstName) return `${m.surname || ""} ${m.firstName || ""}`.trim();
-        return m.fullName || m.id;
+        //   #604 — this returned `m.fullName || m.id`, and a member with neither
+        //   returned undefined into
+        //
+        //       {getDisplayName(member).charAt(0).toUpperCase() || "?"}
+        //
+        //   The `|| "?"` says the author expected an empty name here. It sits on
+        //   the far side of the two calls that throw on one, so it never ran —
+        //   #601's `numberOrZero(stats.bySeverity.info)` again, in a third
+        //   notation: a fallback placed after the read it was meant to survive.
+        return m.fullName || m.id || "Unnamed member";
     };
 
     async function handleExportCSV() {
@@ -132,19 +148,23 @@ export default function AdminWaveMembersPage() {
             }
 
             const exportData = result.data.map((item: any) => {
-                const data = item.data;
+                //   #604 — the SECOND hand-maintained copy of the mapping above, with the
+                //   same two unguarded joins. A single un-joined row threw here too, and
+                //   the CSV export failed wholesale with "Failed to export CSV".
+                const data = item?.data ?? {};
+                const user = item?.user ?? {};
                 return {
-                    id: item.user.id || item.id,
+                    id: user.id || item?.id,
                     enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || null,
-                    applicationId: item.id,
+                    applicationId: item?.id,
                     fullName: data.fullName,
                     surname: data.surname,
                     firstName: data.firstName,
-                    email: item.user.email,
-                    phone: item.user.phone,
-                    gender: item.user.gender || "",
-                    stateOfResidence: item.user.state,
-                    lgaOfResidence: item.user.lga,
+                    email: user.email,
+                    phone: user.phone,
+                    gender: user.gender || "",
+                    stateOfResidence: user.state,
+                    lgaOfResidence: user.lga,
                     bankName: data.bankName,
                     accountNumber: data.accountNumber,
                     farmSize: data.farmSize,
@@ -268,6 +288,29 @@ export default function AdminWaveMembersPage() {
                     <div className="p-12 text-center">
                         <Loader2 className="w-10 h-10 animate-spin text-emerald-600 mx-auto mb-4" />
                         <p className="text-slate-600">Loading WAVE members...</p>
+                    </div>
+                ) : error ? (
+                    /*
+                     *   #604 — `error` was destructured from useAdminData and never
+                     *   rendered, so a read that FAILED and a register that is genuinely
+                     *   EMPTY both came out as "No WAVE members yet. Approved
+                     *   applications will appear here automatically." That is #588's
+                     *   ledger entry — "cannot tell empty from failed" — on the screen
+                     *   that says who is enrolled in WAVE, and it is how the loader crash
+                     *   fixed above stayed invisible.
+                     */
+                    <div className="p-12 text-center">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Users className="w-8 h-8 text-red-300" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-900 mb-1">Could not load WAVE members</h3>
+                        <p className="text-slate-500">{error}</p>
+                        <button
+                            onClick={() => loadMembers()}
+                            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
+                        >
+                            Try again
+                        </button>
                     </div>
                 ) : filtered.length === 0 ? (
                     <div className="p-12 text-center">

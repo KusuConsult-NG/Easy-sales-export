@@ -61,6 +61,44 @@ export const SETTINGS_LOAD_FAILED_MESSAGE =
  * the defaults": a throw, a non-2xx, an unparseable body, `success: false`, or
  * a missing `settings` key.
  */
+/**
+ * #604 — AND A SETTINGS DOCUMENT THAT PREDATES A FIELD TOOK ITS SCREEN DOWN.
+ *
+ * #295 fixed the case where the read FAILS. This is the case where the read
+ * SUCCEEDS and answers with less than the form expects:
+ *
+ *     setSettings(result.settings);          // localization, notifications, security
+ *     ...
+ *     const enabled = settings.languages.filter(l => l.enabled).length;   // render
+ *
+ * The state was seeded with a complete DEFAULT_SETTINGS object and then
+ * REPLACED wholesale by whatever the endpoint returned. A stored document
+ * written before `languages` and `currencies` existed — which is what every
+ * migration and every partial write produces, and how #563, #573 and #589 each
+ * arrived — leaves `settings.languages` undefined, and `.filter` on it throws
+ * during render. Not a missing section: a blank Localization page.
+ *
+ * A partial answer must FILL the shape, not REPLACE it. Passing `defaults` here
+ * merges the stored document onto them, and a key whose default is an array
+ * only takes a stored value that is also an array — `?? []` would not have
+ * caught a stored `{}`, which is #603's lesson on /admin/cms.
+ *
+ * It is shallow on purpose. These three documents are flat maps of scalars and
+ * lists; a deep merge would silently repair nested shapes that nobody has
+ * verified, and inventing structure is how a form saves settings nobody chose.
+ */
+export function fillSettings<T extends object>(defaults: T, stored: unknown): T {
+    if (stored === null || typeof stored !== "object" || Array.isArray(stored)) return defaults;
+    const filled: any = { ...defaults };
+    for (const [key, value] of Object.entries(stored as Record<string, unknown>)) {
+        if (value === undefined || value === null) continue;
+        const fallback = (defaults as any)[key];
+        if (Array.isArray(fallback) && !Array.isArray(value)) continue;
+        filled[key] = value;
+    }
+    return filled as T;
+}
+
 export async function loadSettings<T>(url: string): Promise<SettingsLoad<T>> {
     let res: Response;
 

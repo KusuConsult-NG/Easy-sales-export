@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { logger } from '@/lib/logger';
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { numberOrZero } from "@/lib/numbers";
 import {
     Users,
     DollarSign,
@@ -131,6 +132,24 @@ export default function AdminDashboardPage() {
         cyan:    { bg: "bg-cyan-500",    bgLight: "bg-cyan-50",    text: "text-cyan-600" },
     };
 
+    /*
+     *   #604 — THE ADMIN DASHBOARD ITSELF THREW ON A PARTIAL STATS ANSWER.
+     *
+     *   The first two tiles read `stats.platformOverview?.totalUsers ?? 0`. The
+     *   third — Total Revenue — read `stats.platformOverview.revenueAvailable`
+     *   with no `?.` at all, and the three tiles after it read `stats.counts.x`
+     *   the same way. Adjacent lines in one array, half of them guarded.
+     *
+     *   `getDashboardStatsAction` assembles its answer from several independent
+     *   reads and returns what it managed to gather, so a partial answer is its
+     *   normal failure mode rather than an exotic one. When it came back without
+     *   `platformOverview` or `counts`, /admin — the first screen an
+     *   administrator opens, and the one they open BECAUSE something looks wrong
+     *   — threw during render and showed nothing at all.
+     *
+     *   This is #598's finding ("a partial stats object one commit after the
+     *   same fix next door") on the dashboard those screens hang off.
+     */
     const statCards = [
         {
             label: (dateRange.from || dateRange.to) ? "New Registrations" : "Total Users",
@@ -154,19 +173,19 @@ export default function AdminDashboardPage() {
             // database could answer. A zero here is a real business figure; an
             // outage rendered as ₦0 is indistinguishable from a day with no
             // sales, and reads as though the platform earned nothing.
-            value: stats.platformOverview.revenueAvailable === false
+            value: stats.platformOverview?.revenueAvailable === false
                 ? "Unavailable"
-                : `₦${(stats.platformOverview.totalRevenue ?? 0).toLocaleString()}`,
+                : `₦${numberOrZero(stats.platformOverview?.totalRevenue).toLocaleString()}`,
             icon: DollarSign,
             color: "purple",
-            change: stats.platformOverview.revenueAvailable === false
+            change: stats.platformOverview?.revenueAvailable === false
                 ? "Could not reach Paystack or the database — retry shortly"
                 : (dateRange.from || dateRange.to) ? "Payments in selected period" : "Based on transaction volume",
             href: "/admin/finance",
         },
         {
             label: "Pending Escrows",
-            value: stats.counts.pendingEscrows,
+            value: numberOrZero(stats.counts?.pendingEscrows),
             icon: Package,
             color: "amber",
             change: "Requires attention",
@@ -174,7 +193,7 @@ export default function AdminDashboardPage() {
         },
         {
             label: "Active Land Listings",
-            value: stats.counts.activeLandListings,
+            value: numberOrZero(stats.counts?.activeLandListings),
             icon: FileText,
             color: "indigo",
             change: "Verified listings",
@@ -182,7 +201,7 @@ export default function AdminDashboardPage() {
         },
         {
             label: "Pending Loans",
-            value: stats.counts.pendingLoans,
+            value: numberOrZero(stats.counts?.pendingLoans),
             icon: AlertCircle,
             color: "red",
             change: "Requires review",
@@ -190,7 +209,7 @@ export default function AdminDashboardPage() {
         },
         {
             label: "Recent Activity",
-            value: stats.platformOverview.recentActivityCount ?? 0,
+            value: numberOrZero(stats.platformOverview?.recentActivityCount),
             icon: GraduationCap,
             color: "cyan",
             change: "Actions in last 24h",
@@ -302,7 +321,7 @@ export default function AdminDashboardPage() {
                                     Review Loans
                                 </h3>
                                 <p className="text-sm text-slate-500">
-                                    {stats.counts.pendingLoans} pending applications
+                                    {numberOrZero(stats.counts?.pendingLoans)} pending applications
                                 </p>
                             </div>
                             <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
@@ -444,14 +463,14 @@ export default function AdminDashboardPage() {
                                 View All →
                             </Link>
                         </div>
-                        {stats.recentTransactions.length === 0 ? (
+                        {(stats.recentTransactions?.length ?? 0) === 0 ? (
                             <div className="text-center py-8">
                                 <DollarSign className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                                 <p className="text-sm text-slate-500">No recent transactions</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {stats.recentTransactions.slice(0, 6).map((tx: any, i: number) => (
+                                {(stats.recentTransactions ?? []).slice(0, 6).map((tx: any, i: number) => (
                                     <div
                                         key={tx.id || i}
                                         className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition"

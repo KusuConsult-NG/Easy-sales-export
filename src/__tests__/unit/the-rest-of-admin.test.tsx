@@ -3,6 +3,64 @@
  */
 
 /**
+ *   #604 FIVE OF THE TWENTY-FIVE "UNREACHED" SCREENS WERE UNREACHED BECAUSE OF
+ *        THE FIXTURE, AND THEY WERE HIDING SIX DEFECTS.
+ *
+ *   #603 closed with twenty-five of forty-eight admin screens declared
+ *   NOT_REACHED and a warning attached: "#602 found that five of seven such
+ *   screens were unreached because of MY FIXTURE, and three of those five were
+ *   hiding real defects. The list is a to-do, not an exoneration." That warning
+ *   was right for the second time running.
+ *
+ *   THE INSTRUMENT WAS BROKEN IN TWO WAYS AT ONCE, and both were mine:
+ *
+ *     THE ACTION-MODULE PROXY WAS A THENABLE. `await import("@/app/actions/x")`
+ *     reads `.then` off the module namespace first. A Proxy that answers every
+ *     name with the same async function answers one for `then` too, so the
+ *     awaited value looked like a promise, was called as `then(resolve, reject)`
+ *     by the runtime, ignored both, and never settled. Any screen that loads its
+ *     action inside the effect — /admin and /admin/settings/logs both do —
+ *     stayed on "Loading…" forever and was recorded as unreachable.
+ *
+ *     AND `__esModule` HAD TO BE `true`, NOT ABSENT. Answering `undefined` there
+ *     makes the interop wrap the Proxy as `{ default: proxy }`, so the
+ *     destructured action is undefined and nothing loads either. Fixing the
+ *     first half alone changed nothing, which is what made the second half
+ *     visible.
+ *
+ *   Widening the fixture to the shapes those screens actually read — a `reports`
+ *   object, an `activities` list, a `settings` document — reached five of the
+ *   twenty-five. What they had been covering for:
+ *
+ *     /admin                    `stats.platformOverview.revenueAvailable` and
+ *                               three `stats.counts.x` reads with no `?.`, in the
+ *                               same array as two tiles that DO guard. A partial
+ *                               stats answer blanked the admin dashboard.
+ *     wave/members              `item.user.id` inside the loader's map — and a
+ *                               second copy of the same mapping in the CSV
+ *                               export — plus `error` destructured and never
+ *                               rendered, plus `getDisplayName(m).charAt(0)`.
+ *                               Three defects; own suite.
+ *     settings/localization     `lang.code.toUpperCase()`, and `setSettings`
+ *                               REPLACING the shape rather than filling it.
+ *     settings/logs             "Invalid Date" for a row without one.
+ *     cooperatives/dashboard    the same.
+ *
+ *   THE UNREACHED ARE EIGHTEEN NOW, AND NO REASON IS CLAIMED FOR THEM. This
+ *   commit built a four-category taxonomy to replace the flat list, checked it,
+ *   and found it false: the two properties that looked like reasons — no loader
+ *   at mount, no list state — are equally true of eighteen screens the row
+ *   DOES reach. `wouldExcuse` below keeps that refutation where the next attempt
+ *   will find it. A category that explains both groups explains neither.
+ *
+ *   MUTATION-TESTED, WITH A CONTROL — table at the foot of this file. Two of the
+ *   fixes above survived this suite and were given their own: reaching a screen
+ *   proves the fixture gets in, not that the screen is right.
+ */
+
+
+
+/**
  *   #603 THIRTEEN MORE CRASHES ACROSS THE REST OF ADMIN — AND MORE THAN HALF OF
  *        WHAT THIS SUITE RENDERS STILL PROVES NOTHING.
  *
@@ -187,10 +245,19 @@ function answer() {
     for (const k of ['orders','products','applications','transactions','members','users','loans','properties',
                      'withdrawals','disputes','reviews','sellers','buyers','items','logs','events','courses',
                      'certificates','bookings','windows','investments','shipments','conversations','messages',
-                     'notifications','resources','sessions','listings','verifications','requests','plans','data']) {
+                     'notifications','resources','sessions','listings','verifications','requests','plans','records','data']) {
         rows[k] = [...ROWS];
     }
     rows.stats = {}; rows.analytics = {}; rows.summary = {}; rows.meta = {}; rows.membership = ROWS[0] ?? null;
+    //   #604 — three more shapes, each found by asking the screen rather than
+    //   guessing. `reports` is an ARRAY THAT ALSO CARRIES OBJECT KEYS because the
+    //   two screens that read it disagree: /admin/cooperatives/contributions wants
+    //   `data.reports.topContributors` and a list screen would want to map it.
+    //   Satisfying both is what stops the next fixture widening from un-reaching a
+    //   screen this one reaches.
+    rows.reports = Object.assign([...ROWS], { topContributors: [...ROWS], monthly: [...ROWS] });
+    rows.activities = [...ROWS];
+    rows.toggles = [...ROWS];
     //   #602 — the collection names are attached at the RESULT level as well as
     //   under `data`, because several screens read `result.disputes`,
     //   `result.reviews` or `result.recentTransactions` directly. Guessing one
@@ -209,9 +276,58 @@ function answer() {
     result.failedTransactions = [...ROWS];
     result.totalRevenue = 0;
     result.unavailable = [];
+    //   #604 — the settings screens read through `loadSettings`, which requires a
+    //   `settings` key and treats its absence as a failed read. Without this the
+    //   three settings screens rendered their load-error banner and the bare row
+    //   never reached a field.
+    result.settings = { languages: [...ROWS], currencies: [...ROWS] };
     return result;
 }
 const act = async () => answer();
+/**
+ * #604 — SOME READERS ANSWER WITH A BARE ARRAY, NOT A RESULT ENVELOPE.
+ *
+ * /admin/cms calls getActiveAnnouncementsAction and getActiveBannersAction and
+ * uses what comes back AS the list. A Proxy that hands every name the same
+ * envelope makes those two screens unreachable, which is a fact about the
+ * fixture. The name is available on the Proxy trap, so branch on it.
+ */
+const ARRAY_RETURNING = /^getActive(Announcements|Banners)Action$/;
+
+/**
+ * #604 — AND THE PROXY MADE EVERY ACTION MODULE A THENABLE.
+ *
+ * /admin/DashboardClient and /admin/settings/logs do not import their action at
+ * the top of the file; they load it inside the effect:
+ *
+ *     const { getDashboardStatsAction } = await import("@/app/actions/admin-analytics");
+ *
+ * `await` on a module namespace reads `.then` off it first. A Proxy that hands
+ * every name the same async function hands one back for `then` too — so the
+ * awaited value LOOKS like a promise, gets called as `then(resolve, reject)` by
+ * the runtime, ignores both arguments, and never settles. The effect hangs, the
+ * screen stays on "Loading…", and the differential test reports NOT_REACHED.
+ *
+ * Two screens were on the to-do list for that reason and neither belonged
+ * there. `then` — and the symbol keys the module machinery probes — must answer
+ * undefined, which is what a real module namespace without a `then` export does.
+ */
+function isNotAnAction(name: string | symbol): boolean {
+    return typeof name === 'symbol' || name === 'then';
+}
+
+/**
+ * And some screens read through `fetch`, not through an action at all.
+ * The same answer, as a Response.
+ */
+function installFetch() {
+    (global as any).fetch = jest.fn(async () => ({
+        ok: true, status: 200,
+        json: async () => answer(),
+        text: async () => JSON.stringify(answer()),
+    }));
+}
+
 for (const m of ['wallet','cooperative','marketplace','export-admin','export','export-products','export-booking',
                  'export-investments','academy','wave','farm-nation','land-listings','my-data','messages','health',
                  'reviews','disputes','orders','order-management','loan-actions','loan-products','audit',
@@ -223,14 +339,21 @@ for (const m of ['wallet','cooperative','marketplace','export-admin','export','e
                  'farm-nation-payment','export-status','paystack','global-aggregation','export-aggregation',
                  'admin_extensions','schema-standardization','data-export-audit','bulk-user-operations',
                  'diagnose-broadcast','ai-actions','dashboard','auth','password-reset','admin','farm-nation-admin']) {
-    jest.mock(`@/app/actions/${m}`, () => new Proxy({}, { get: () => act }));
+    jest.mock(`@/app/actions/${m}`, () => new Proxy({ __esModule: true }, {
+        get: (_t, name: string | symbol) => (
+            name === '__esModule' ? true
+                : isNotAnAction(name) ? undefined
+                    : ARRAY_RETURNING.test(String(name)) ? (async () => [...ROWS])
+                        : act
+        ),
+    }));
 }
 
 
 
 /**
- * The forty-eight rendered. Twenty-one receive the row; the twenty-seven in
- * NOT_REACHED do not, and say so.
+ * The forty-eight rendered. Thirty receive the row; the eighteen in NOT_REACHED
+ * do not, and say so.
  */
 const ADMIN_SUBJECTS: [string, string][] = [
 
@@ -288,41 +411,38 @@ const ADMIN_SUBJECTS: [string, string][] = [
  *
  * NOT AN EXONERATION — see the header. #602 found that five of seven such
  * screens were unreached because of the fixture rather than the screen, and
- * three of those were hiding defects. This is a to-do list with a number on it.
+ * three of those were hiding defects; #604 found the same of five of
+ * twenty-five. This is a to-do list with a number on it.
+ *
+ * AND NO REASON IS CLAIMED FOR THESE EIGHTEEN. #604 built a four-category
+ * taxonomy for them, checked it, and found it false — see `wouldExcuse` below,
+ * which keeps the refutation where the next person will look for it.
  */
 const NOT_REACHED = [
-    'DashboardClient',
-    'cms',
     'communications',
     'communications/broadcast',
     'communications/in-app',
     'communications/sms',
     'cooperatives',
-    'cooperatives/contributions',
-    'cooperatives/dashboard',
     'farm-nation',
-    'feature-toggles',
     'forensics',
     'marketplace',
     'orphaned-users',
     'settings/fees',
     'settings/general',
-    'settings/localization',
-    'settings/logs',
     'settings/maintenance',
     'settings/notifications',
-    'settings/password-resets',
     'settings/security',
     'system-health',
     'system-health/diagnostics',
     'wave',
     'wave/compliance',
-    'wave/members',
 ];
 
 beforeEach(() => {
     jest.clearAllMocks();
     ROWS = [ROW];
+    installFetch();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -346,12 +466,74 @@ describe('#603 — the rest of admin, against a row that carries only an id', ()
         });
     }
 
+    /**
+     * #604 — THE TAXONOMY THIS COMMIT WAS GOING TO SHIP, AND THE CHECK THAT
+     *        REFUTED IT.
+     *
+     * A flat to-do list of eighteen screen names is unsatisfying, so the plan
+     * was to replace it with named categories: a screen with no loader at mount
+     * has nothing to load, and a screen with no list state has nowhere to put a
+     * row. Both read as obviously true.
+     *
+     * Both are false, and this says so with a number. THIRTY of these
+     * forty-eight screens ARE reached by the bare row, and eighteen of those
+     * thirty satisfy one of the two "reasons" — they have no mount-time effect,
+     * or no `useState([])` — and are reached anyway, through `useAdminData`,
+     * through state seeded from a prop, through a child that loads on mount.
+     *
+     * A category that is equally true of the screens it excuses and the screens
+     * it does not excuse is not a reason; it is a comment that reads like one.
+     * The eighteen stay a to-do list, and this test is here so the next attempt
+     * at the same taxonomy is refuted in a second rather than believed.
+     */
+    function wouldExcuse(source: string): 'NO_LOADER_AT_MOUNT' | 'NO_LIST_STATE' | null {
+        if (!source.includes('useEffect(')) return 'NO_LOADER_AT_MOUNT';
+        if (!/useState(<[^>]*>)?\(\s*\[\s*\]\s*\)/.test(source)) return 'NO_LIST_STATE';
+        return null;
+    }
+
+    function sourceOf(mod: string): string {
+        const rel = mod.replace(/^@\//, '');
+        for (const ext of ['.tsx', '.ts']) {
+            try { return readFileSync(join(process.cwd(), 'src', rel + ext), 'utf8'); } catch { /* next */ }
+        }
+        throw new Error(`no source for ${mod}`);
+    }
+
+    it('AND "NO LOADER AT MOUNT" IS NOT A REASON — IT IS TRUE OF EIGHTEEN SCREENS THE ROW REACHES', () => {
+        const excusedButReached = ADMIN_SUBJECTS
+            .filter(([name]) => !NOT_REACHED.includes(name))
+            .filter(([, mod]) => wouldExcuse(sourceOf(mod)) !== null)
+            .map(([name]) => name);
+
+        //   Named, not counted, so that a screen moving between the two lists
+        //   has to be looked at rather than absorbed by a number.
+        expect(excusedButReached.sort()).toEqual([
+            'DashboardClient', 'analytics', 'content-approval', 'cooperatives/contributions',
+            'cooperatives/loan-products', 'cooperatives/members', 'disputes', 'export/catalog',
+            'farm-nation/land-verification', 'farm-nation/listings', 'marketplace/buyers',
+            'marketplace/escrow', 'marketplace/village-market', 'settings/localization',
+            'wave/registrations', 'wave/resources', 'wave/training', 'wave/withdrawals',
+        ]);
+
+        //   And the predicate really is true of every unreached screen — which is
+        //   exactly why it looked like an explanation. It explains both groups,
+        //   so it explains neither.
+        for (const name of NOT_REACHED) {
+            const mod = ADMIN_SUBJECTS.find(s => s[0] === name)![1];
+            expect({ name, excused: wouldExcuse(sourceOf(mod)) !== null }).toEqual({ name, excused: true });
+        }
+    });
+
     it('AND THE UNREACHED ARE COUNTED, NAMED, AND ALL SUBJECTS', () => {
         //   Capped in both directions: this suite's honesty is the difference
-        //   between "forty-eight screens covered" and "twenty-one covered and
-        //   twenty-seven still to do".
+        //   between "forty-eight screens covered" and "thirty covered and
+        //   eighteen still to do".
         expect(ADMIN_SUBJECTS).toHaveLength(48);
-        expect(NOT_REACHED).toHaveLength(27);
+        //   #604 — 25 → 18. Only ever downwards: this number going UP means a
+        //   screen stopped being reached, which is a regression in the fix or in
+        //   the fixture and either way is not something to absorb quietly.
+        expect(NOT_REACHED).toHaveLength(18);
         const names = new Set(ADMIN_SUBJECTS.map(s => s[0]));
         for (const n of NOT_REACHED) {
             expect({ n, isASubject: names.has(n) }).toEqual({ n, isASubject: true });
@@ -413,7 +595,37 @@ describe('#603 — the two guards that were not guards', () => {
  *     NOT_REACHED padded to excuse a screen             KILLED (2)
  *     reword this header                                SURVIVED, as intended
  *
- *   No mutant survived. The vacuity one is the load-bearing check: without it
- *   this file would report forty-eight screens covered when twenty-one are,
- *   and twenty-seven of those failures are exactly what it is for.
+ *   #604 added, against the same discipline:
+ *
+ *     dashboard: revenueAvailable unguarded again       KILLED
+ *     dashboard: stats.counts unguarded again           KILLED
+ *     localization: lang.code.toUpperCase() back        KILLED
+ *     localization: setSettings replaces, not fills     KILLED
+ *     the Proxy answers `act` for `then` again          KILLED (2 — the two
+ *                   screens that load their action inside the effect stop
+ *                   being reached, and the cap says so)
+ *     the Proxy answers undefined for `__esModule`      KILLED (2)
+ *     wouldExcuse: return null for everything           KILLED
+ *     wouldExcuse: the excused-but-reached list trimmed KILLED
+ *     reword this header                                SURVIVED, as intended
+ *
+ *   TWO MUTANTS SURVIVED AND ARE RECORDED RATHER THAN HIDDEN:
+ *
+ *     system-health: the stats guard removed            SURVIVED — /admin/system-health
+ *                   is one of the eighteen this suite cannot reach, so it was
+ *                   proving nothing about that file. Backed now by
+ *                   `a-health-report-with-half-the-answer.test.tsx`.
+ *     wave/members: the loader guards removed           SURVIVED — this suite
+ *                   reports that screen as REACHED, and the differential check
+ *                   only asks whether the output DIFFERS with a row and without
+ *                   one. A crash differs from an empty state just as loudly as a
+ *                   member does. Backed now by
+ *                   `the-wave-register-said-nobody-was-enrolled.test.tsx`, which
+ *                   found a third defect on that screen while being written.
+ *
+ *   The vacuity guard is still the load-bearing check: without it this file
+ *   would report forty-eight screens covered when thirty are. But those two
+ *   survivors are the sharper lesson — REACHED IS NOT COVERED. This suite proves
+ *   a screen renders and that the fixture got in. Whether what it rendered is
+ *   right is a different question, and it needs a different test.
  */

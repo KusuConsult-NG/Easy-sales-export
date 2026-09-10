@@ -7,7 +7,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
-import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE } from "@/lib/settings-load";
+import { humaniseUpper } from "@/lib/humanise";
+import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE, fillSettings } from "@/lib/settings-load";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Language {
@@ -98,7 +99,10 @@ export default function LocalizationSettingsPage() {
     const load = useCallback(async () => {
         const result = await loadSettings<LocalizationSettings>("/api/admin/settings/localization");
         if (result.ok) {
-            setSettings(result.settings);
+            //   #604 — `settings.languages.filter(...)` runs in the render body,
+            //   so a stored document without that key was a blank page rather
+            //   than a missing section.
+            setSettings(fillSettings(DEFAULT_SETTINGS, result.settings));
             setLoadError(null);
         } else {
             setLoadError(result.reason);
@@ -284,7 +288,13 @@ export default function LocalizationSettingsPage() {
                                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm border ${
                                             lang.enabled ? "bg-blue-100 border-blue-200 text-blue-700" : "bg-slate-100 border-slate-200 text-slate-400"
                                         }`}>
-                                            {lang.code.toUpperCase()}
+                                            {/*
+                                              *   #604 — a language row without a `code`
+                                              *   threw here and took the whole
+                                              *   Localization page with it, inside the
+                                              *   .map over stored languages.
+                                              */}
+                                            {humaniseUpper(lang.code, "??")}
                                         </div>
                                         <div>
                                             <p className="font-medium text-slate-900 text-sm">{lang.name}</p>

@@ -4,7 +4,7 @@ import { Bell, Loader2, Save } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useToast } from "@/contexts/ToastContext";
-import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE } from "@/lib/settings-load";
+import { loadSettings, fillSettings, SETTINGS_LOAD_FAILED_MESSAGE } from "@/lib/settings-load";
 
 interface NotificationSettings {
     newUserEmail: boolean;
@@ -14,15 +14,22 @@ interface NotificationSettings {
     weeklyDigest: boolean;
 }
 
+//   #604 — named so the loaded document can be merged ONTO it rather than
+//   replacing it. A stored settings document written before one of these five
+//   keys existed left that key undefined, and an undefined boolean renders the
+//   toggle in the OFF position — a notification setting silently reading as
+//   disabled when nobody disabled it.
+const DEFAULTS: NotificationSettings = {
+    newUserEmail: true,
+    exportRequestEmail: true,
+    loanApplicationEmail: true,
+    systemAlerts: true,
+    weeklyDigest: false,
+};
+
 export default function NotificationSettingsPage() {
     const { showToast } = useToast();
-    const [notifications, setNotifications] = useState<NotificationSettings>({
-        newUserEmail: true,
-        exportRequestEmail: true,
-        loanApplicationEmail: true,
-        systemAlerts: true,
-        weeklyDigest: false,
-    });
+    const [notifications, setNotifications] = useState<NotificationSettings>(DEFAULTS);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -42,7 +49,7 @@ export default function NotificationSettingsPage() {
 
     async function load() {
         const result = await loadSettings<NotificationSettings>("/api/admin/settings/notifications");
-        if (result.ok) setNotifications(result.settings);
+        if (result.ok) setNotifications(fillSettings(DEFAULTS, result.settings));
         else setLoadError(result.reason);
         setLoading(false);
     }

@@ -15,6 +15,7 @@ import {
     ArrowDown,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { formatDateOrDash } from "@/lib/date-utils";
 import {
     getCooperativeStatsAction,
     getContributionReportsAction,
@@ -280,7 +281,8 @@ export default function AdminCooperativeDashboardPage() {
                                             </p>
                                         </div>
                                         <p className="text-xs text-gray-500">
-                                            {new Date(activity.timestamp).toLocaleDateString()}
+                                            {/* #604 — same "Invalid Date" as the system-log screen. */}
+                                            {formatDateOrDash(activity.timestamp, { dateStyle: "medium" })}
                                         </p>
                                     </div>
                                 ))

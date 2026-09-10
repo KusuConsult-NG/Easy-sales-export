@@ -5,17 +5,21 @@ import { Settings, Save, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { savePlatformSettingsAction, getPlatformSettingsAction } from "@/app/actions/admin";
 import { toast } from "sonner";
+import { fillSettings } from "@/lib/settings-load";
+
+/** #604 — named so a partial stored document can be filled onto it. */
+const DEFAULTS = {
+    platformName: "Easy Sales Export",
+    supportEmail: "info@easysalesexport.com",
+    contactPhone: "+234 000 000 0000",
+    defaultCurrency: "NGN",
+    maintenanceMode: false,
+};
 
 export default function GeneralSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState({
-        platformName: "Easy Sales Export",
-        supportEmail: "info@easysalesexport.com",
-        contactPhone: "+234 000 000 0000",
-        defaultCurrency: "NGN",
-        maintenanceMode: false,
-    });
+    const [settings, setSettings] = useState(DEFAULTS);
 
     useEffect(() => {
         getPlatformSettingsAction().then((res: any) => {
@@ -38,7 +42,12 @@ export default function GeneralSettingsPage() {
             // maintenanceMode at all. This screen has never loaded or saved the
             // platform's settings. #211–#216's shape: an admin control that had
             // never done the thing it is named for.
-            if (res?.data) setSettings(res.data);
+            //   #604 — and REPLACING the shape is the other half of the same
+            //   fault. A platform_settings document written before one of these
+            //   five keys existed left that input showing `undefined` — which
+            //   React renders as an empty, UNCONTROLLED field — and Save then
+            //   wrote the blank back. Fill the shape rather than replace it.
+            if (res?.data) setSettings(fillSettings(DEFAULTS, res.data));
             setLoading(false);
         });
     }, []);

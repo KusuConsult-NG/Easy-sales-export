@@ -113,7 +113,17 @@ export default function SystemHealthPage() {
                                 <AlertTriangle className="w-5 h-5 text-orange-500" />
                                 <span className="font-medium text-sm uppercase tracking-wide">Orphaned Apps</span>
                             </div>
-                            <span className="text-4xl font-bold text-slate-900">{report.stats.orphanedApplications}</span>
+                            <span className="text-4xl font-bold text-slate-900">
+                                {/*
+                                  * #604 — #603 wrapped `report.services.redis` as
+                                  * `report.services?.redis` and left this one, four tiles
+                                  * up the same screen. A report without a `stats` object
+                                  * threw here and the health page went blank — the screen
+                                  * an administrator opens BECAUSE something is wrong.
+                                  * THE FIX REACHED SOME OF THE DOORS, again.
+                                  */}
+                                {numberOrZero(report.stats?.orphanedApplications)}
+                            </span>
                             <div className="mt-2 text-xs text-slate-500">Missing User Linkages</div>
                         </div>
 

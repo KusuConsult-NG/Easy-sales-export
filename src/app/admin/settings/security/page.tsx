@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
 import { runServiceRegistrationRecoveryAction } from "@/app/actions/data-recovery";
-import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE } from "@/lib/settings-load";
+import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE, fillSettings } from "@/lib/settings-load";
 
 interface SecuritySettings {
     sessionDurationDays: number;
@@ -45,7 +45,10 @@ export default function SecuritySettingsPage() {
     useEffect(() => {
         const load = async () => {
             const result = await loadSettings<SecuritySettings>("/api/admin/settings/security");
-            if (result.ok) setSettings(result.settings);
+            //   #604 — fill the shape, do not replace it: a stored security
+            //   document missing `enforceMfa` made the flag `undefined`, which
+            //   renders and SAVES as off.
+            if (result.ok) setSettings(fillSettings(DEFAULTS, result.settings));
             else setLoadError(result.reason);
             setIsLoading(false);
         };

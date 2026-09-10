@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Database, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
 export default function SystemLogsPage() {
     const [logs, setLogs] = useState<any[]>([]);
@@ -70,7 +71,15 @@ export default function SystemLogsPage() {
                             {logs.map((log, i) => (
                                 <tr key={i} className="hover:bg-slate-50">
                                     <td className="px-6 py-3 text-slate-500 font-mono text-xs">
-                                        {new Date(log.timestamp).toLocaleString()}
+                                        {/*
+                                          #604 — a transaction row without a date
+                                          rendered the literal words "Invalid Date" in
+                                          the timestamp column, because
+                                          `new Date(undefined)` is a Date object and
+                                          `.toLocaleString()` on it succeeds. #597's
+                                          reader answers with a dash instead.
+                                        */}
+                                        {formatDateTimeOrDash(log.timestamp)}
                                     </td>
                                     <td className="px-6 py-3 font-medium text-slate-900">{log.type}</td>
                                     <td className="px-6 py-3">

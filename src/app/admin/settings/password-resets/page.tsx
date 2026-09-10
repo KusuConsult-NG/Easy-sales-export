@@ -29,7 +29,11 @@ export default function AdminPasswordResetsPage() {
             const res = await fetch("/api/admin/password-resets");
             const data = await res.json();
             if (data.success) {
-                setRecords(data.records);
+                //   #604 — `setRecords(data.records)` with no `records` key in
+                //   the answer put `undefined` in the list state, and
+                //   `records.filter` on the next line threw during render: the
+                //   page went blank rather than showing no reset requests.
+                setRecords(Array.isArray(data.records) ? data.records : []);
             } else {
                 setError(data.error || "Failed to load records");
             }
@@ -64,7 +68,8 @@ export default function AdminPasswordResetsPage() {
     };
 
     const filtered = records.filter(r =>
-        !search || r.email.toLowerCase().includes(search.toLowerCase())
+        //   And a record without an email is one missing row, not a blank page.
+        !search || String(r.email ?? "").toLowerCase().includes(search.toLowerCase())
     );
 
     const expired = records.filter(r => Date.now() > r.expiry).length;
