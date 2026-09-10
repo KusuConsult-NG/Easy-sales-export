@@ -88,6 +88,8 @@
 
 import React from 'react';
 import { render, waitFor, fireEvent, act } from '@testing-library/react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 import { windowRaisedAmount, windowFundingGoal, windowFundedPercent } from '@/lib/export-window-funding';
 
@@ -126,12 +128,43 @@ jest.mock('sonner', () => ({ toast: { error: jest.fn(), success: jest.fn() } }))
  *
  * A FLOOR, not a cap: it may only go up. Each entry is a screen somebody has
  * actually rendered with a hostile row and watched survive.
+ *
+ *   #596 RAISED THIS FLOOR FROM FOUR TO TWENTY-THREE, and the raising is what
+ *   found the next batch of defects: nineteen more screens were rendered with a
+ *   bare row and SEVEN of them threw — including /marketplace/orders/[id],
+ *   which is where a buyer is sent the moment they finish paying, and which
+ *   read five fields off `order.deliveryAddress` with no guard at all.
+ *
+ *   Those nineteen live in a-row-with-nothing-on-it, which holds their finding,
+ *   their renders and their mutation table. They are named here too, because a
+ *   floor split across two files is a floor nobody can read, and the test below
+ *   checks that the other file still carries every one of them.
  */
 const PROVEN = [
+    //   #589's four, rendered at the foot of this file.
     'cooperatives/directory',
     'export/windows/[id]',
     'export/(app)/products',
     'export/buyer/orders',
+    //   #596's nineteen, rendered in a-row-with-nothing-on-it.
+    'cooperatives/history',
+    'wave/shipments',
+    'dashboard/reviews',
+    'farm-nation/my-purchases',
+    'marketplace/orders/[id]',
+    'marketplace/buyer/orders/[id]',
+    'marketplace/seller/orders/[id]',
+    'marketplace/buyer/orders',
+    'marketplace/seller/orders',
+    'marketplace/seller/products',
+    'dashboard/disputes',
+    'dashboard/notifications',
+    'dashboard/certificates',
+    'marketplace/village-market/seller',
+    'export/(app)/bookings',
+    'export/(app)/portfolio',
+    'cooperatives/my-savings',
+    'farm-nation/properties',
 ];
 
 beforeEach(() => {
@@ -255,15 +288,37 @@ describe('#589 — what a window has raised, read once', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#589 — the ledger of screens proven against a bare document', () => {
     it('EVERY SUBJECT IS NAMED, AND THE FLOOR ONLY GOES UP', () => {
-        //   Named rather than counted, so that "four screens are proven" cannot
+        //   Named rather than counted, so that "N screens are proven" cannot
         //   become true by deleting a test.
-        expect(PROVEN).toEqual([
+        expect(PROVEN).toHaveLength(22);
+        expect(new Set(PROVEN).size).toBe(22);
+        expect(PROVEN.slice(0, 4)).toEqual([
             'cooperatives/directory',
             'export/windows/[id]',
             'export/(app)/products',
             'export/buyer/orders',
         ]);
-        expect(PROVEN.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('AND EVERY SUBJECT THIS FILE DOES NOT RENDER IS RENDERED BY THE ONE THAT DOES', () => {
+        /**
+         *   THE HALF THAT MAKES THE OTHER HALF TRUE. This array is a claim
+         *   about screens rendered somewhere else, and a claim nobody checks is
+         *   how #578's and #588's ledgers went blind. So the sibling suite is
+         *   read from disk and every name has to appear in its subject table.
+         *
+         *   Text, not behaviour — but the behaviour is asserted there, by
+         *   rendering, and the failure mode this guards is a name being added
+         *   here without a render being added there.
+         */
+        const sibling = readFileSync(
+            join(process.cwd(), 'src/__tests__/unit/a-row-with-nothing-on-it.test.tsx'), 'utf-8',
+        );
+        //   The four this file renders itself are not expected over there.
+        for (const subject of PROVEN.slice(4)) {
+            expect({ subject, named: sibling.includes(`'${subject}'`) })
+                .toEqual({ subject, named: true });
+        }
     });
 
     it('AND THE EXPORT WINDOW DETAIL SCREEN RENDERS A WINDOW WITH NO COUNTERS', async () => {

@@ -12,6 +12,7 @@ import { getShipmentTrackingAction } from "@/app/actions/wave";
 import type { ShipmentTracking } from "@/app/actions/wave";
 import { formatDistanceToNow } from "date-fns";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { humanise } from "@/lib/humanise";
 
 export default function WaveShipmentsClient({ initial = null }: {
     /**  #552 The shipments the server already fetched. */
@@ -204,7 +205,7 @@ export default function WaveShipmentsClient({ initial = null }: {
                                                 </div>
                                             </div>
                                             <span className={`px-4 py-2 bg-white/${statusColor === 'yellow' ? '30' : '20'} rounded-lg font-bold text-sm capitalize`}>
-                                                {shipment.status.replace("_", " ")}
+                                                {humanise(shipment.status)}
                                             </span>
                                         </div>
                                     </div>

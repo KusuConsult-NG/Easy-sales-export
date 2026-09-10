@@ -16,6 +16,7 @@ import type { Order, DisputeReason } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
+import { humanise } from "@/lib/humanise";
 
 const DISPUTE_REASONS: { value: DisputeReason; label: string; description: string }[] = [
     {
@@ -251,7 +252,7 @@ function NewDisputePageContent({ initial }: { initial: Order | null }) {
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Status:</span>
                             <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded capitalize">
-                                {order.status.replace("_", " ")}
+                                {humanise(order.status)}
                             </span>
                         </div>
                     </div>

@@ -16,6 +16,7 @@ import { Loader2 } from "lucide-react";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { membershipAnswerFrom } from "@/lib/cooperative-membership-answer";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 type LoanProduct = {
     id: string;
@@ -417,7 +418,7 @@ export default function LoansClient({ initial = null }: { initial?: LoansSeed | 
                                                                 ? "text-red-700"
                                                                 : "text-blue-700"
                                                         }`}>
-                                                        {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                                                        {humaniseCapitalised(app.status)}
                                                     </span>
                                                 </div>
                                             </div>

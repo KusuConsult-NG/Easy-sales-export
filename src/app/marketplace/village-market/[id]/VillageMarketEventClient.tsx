@@ -25,6 +25,7 @@ import type { VillageMarketEvent, FlashSaleProduct, ExternalMerchant } from "@/l
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { formatCurrency } from "@/lib/utils";
+import { humanise } from "@/lib/humanise";
 
 const fmtDate = (val: any) => {
     if (!val) return "—";
@@ -410,7 +411,7 @@ export default function VillageMarketEventClient({ initial = null }: { initial?:
                                     <div key={m.id} className="bg-white rounded-xl border border-slate-200 p-4">
                                         <div className="flex items-start gap-3">
                                             <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-amber-700 font-bold text-sm">
-                                                {m.displayName.charAt(0)}
+                                                {humanise(m.displayName, "?").charAt(0)}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <h3 className="font-bold text-slate-900 text-sm">{m.displayName}</h3>

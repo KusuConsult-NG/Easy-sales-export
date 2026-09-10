@@ -15,6 +15,7 @@ import {
 import { getPendingLoanApplications, approveLoanApplication } from "@/app/actions/loan-actions";
 import { useToast } from "@/contexts/ToastContext";
 import { type LoanApplication, LoanPurpose } from "@/types/strict";
+import { humanise } from "@/lib/humanise";
 
 export default function LoanApprovalPage() {
     /**
@@ -254,7 +255,7 @@ export default function LoanApprovalPage() {
                                                 ₦{loan.amount.toLocaleString()}
                                             </h3>
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${getPurposeColor(loan.purpose)}`}>
-                                                {loan.purpose.replace('_', ' ')}
+                                                {humanise(loan.purpose)}
                                             </span>
                                         </div>
                                         <p className="text-sm text-slate-600">

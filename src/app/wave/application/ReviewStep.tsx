@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/ToastContext";
 //   which exports nothing but the page — and the type moved with the component
 //   that owns it.
 import type { WaveApplicationData } from "./WaveApplicationClient";
+import { humanise } from "@/lib/humanise";
 
 interface Props {
     data: WaveApplicationData;
@@ -169,7 +170,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         <div>
                             <p className="text-slate-600">Education Level</p>
                             <p className="font-medium text-slate-900 capitalize">
-                                {data.highestEducation.replace("_", " ")}
+                                {humanise(data.highestEducation)}
                             </p>
                         </div>
                         <div>

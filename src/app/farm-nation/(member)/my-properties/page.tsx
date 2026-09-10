@@ -12,6 +12,7 @@ import {
 import { getMyLandListings, deleteLandListing } from "@/app/actions/land-actions";
 import { useToast } from "@/contexts/ToastContext";
 import { firstImageSrc } from "@/lib/first-image";
+import { humanise } from "@/lib/humanise";
 
 export default function MyPropertiesPage() {
     const router = useRouter();
@@ -208,7 +209,7 @@ export default function MyPropertiesPage() {
                                                     : "bg-red-600 text-white"
                                                 }`}
                                         >
-                                            {property.status.replace("_", " ")}
+                                            {humanise(property.status)}
                                         </span>
                                     </div>
                                 </div>

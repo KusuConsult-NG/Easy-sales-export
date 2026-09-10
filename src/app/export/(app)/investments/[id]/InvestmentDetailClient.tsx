@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { getMyExportInvestmentsAction } from "@/app/actions/export";
 import { formatDate } from "@/lib/utils";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 type InvestmentSlot = {
     id: string;
@@ -107,7 +108,7 @@ export default function InvestmentDetailClient({ investmentId, initial = null }:
                             </div>
                         </div>
                         <span className={`px-4 py-2 rounded-full text-sm font-bold ${statusColors[investment.status] ?? "bg-slate-500"} text-white`}>
-                            {investment.status.charAt(0).toUpperCase() + investment.status.slice(1)}
+                            {humaniseCapitalised(investment.status)}
                         </span>
                     </div>
                 </div>

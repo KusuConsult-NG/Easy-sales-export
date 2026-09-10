@@ -12,6 +12,7 @@ import {
 import { getMyPurchaseRequestsAction, cancelPurchaseRequestAction } from "@/app/actions/farm-nation";
 import { useToast } from "@/contexts/ToastContext";
 import { formatLocalDate } from "@/lib/date-utils";
+import { humanise, humaniseCapitalised, humaniseUpper } from "@/lib/humanise";
 
 interface PurchaseRequest {
     id: string;
@@ -92,8 +93,8 @@ ${purchase.sellerName}
 ${purchase.sellerEmail ? `Email: ${purchase.sellerEmail}` : ""}
 ${purchase.sellerPhone ? `Phone: ${purchase.sellerPhone}` : ""}
 
-Transaction Status: ${purchase.status.replace("_", " ").toUpperCase()}
-Escrow Status: ${purchase.escrowStatus.toUpperCase()}
+Transaction Status: ${humaniseUpper(purchase.status)}
+Escrow Status: ${humaniseUpper(purchase.escrowStatus)}
 Date: ${purchase.createdAt.toLocaleDateString()}
 
 This document serves as a record of the purchase agreement initiated through Easy Sales Export platform.
@@ -149,7 +150,7 @@ This document serves as a record of the purchase agreement initiated through Eas
         return (
             <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg font-semibold text-sm ${styles[status as keyof typeof styles]}`}>
                 <Icon className="w-4 h-4" />
-                {status.replace("_", " ").toUpperCase()}
+                {humaniseUpper(status)}
             </div>
         );
     };
@@ -164,7 +165,7 @@ This document serves as a record of the purchase agreement initiated through Eas
 
         return (
             <span className={`px-2 py-1 rounded text-xs font-semibold ${styles[escrowStatus as keyof typeof styles]}`}>
-                Escrow: {escrowStatus.charAt(0).toUpperCase() + escrowStatus.slice(1)}
+                Escrow: {humaniseCapitalised(escrowStatus)}
             </span>
         );
     };

@@ -13,6 +13,7 @@ import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { getTransactionsAction } from "@/app/actions/cooperative";
 import type { CooperativeTransaction } from "@/lib/types/cooperative";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { humanise } from "@/lib/humanise";
 
 export default function CooperativeHistoryClient({ initial = null }: {
     /**  #546 Fetched by the server — see page.tsx. */
@@ -169,7 +170,7 @@ export default function CooperativeHistoryClient({ initial = null }: {
                                                 {formatCurrency(t.amount)}
                                             </p>
                                             <span className="capitalize px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
-                                                {t.type.replace('_', ' ')}
+                                                {humanise(t.type)}
                                             </span>
                                         </div>
                                         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedId === t.id ? "rotate-180" : ""}`} />

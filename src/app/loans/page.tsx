@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { getUserLoanApplications } from "@/app/actions/loan-actions";
 import { type LoanApplication, LoanStatus } from "@/types/strict";
+import { humanise, humaniseUpper } from "@/lib/humanise";
 
 export default function MyLoansPage() {
     const [loans, setLoans] = useState<LoanApplication[]>([]);
@@ -175,11 +176,11 @@ export default function MyLoansPage() {
                                             </h3>
                                             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(loan.status)}`}>
                                                 {getStatusIcon(loan.status)}
-                                                {loan.status.replace('_', ' ').toUpperCase()}
+                                                {humaniseUpper(loan.status)}
                                             </span>
                                         </div>
                                         <p className="text-sm text-slate-600">
-                                            {loan.purpose.replace('_', ' ')} • {loan.repaymentPeriod} months
+                                            {humanise(loan.purpose)} • {loan.repaymentPeriod} months
                                         </p>
                                     </div>
 

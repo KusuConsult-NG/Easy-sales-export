@@ -20,6 +20,7 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { useToast } from "@/contexts/ToastContext";
 import { checkCourseAccess, isPurchasedCourse } from "@/lib/academy-plan";
 import { formatCurrency } from "@/lib/utils";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 
 
@@ -313,7 +314,7 @@ export default function CourseDetailClient(props: {
                         <div className="flex items-start justify-between">
                             <div className="flex-1">
                                 <div className="inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-medium mb-3">
-                                    {course.level.charAt(0).toUpperCase() + course.level.slice(1)}
+                                    {humaniseCapitalised(course.level)}
                                 </div>
                                 <h1 data-testid="course-title" className="text-4xl font-bold mb-3">{course.title}</h1>
                                 <p className="text-lg text-white/90 mb-4">{course.description}</p>

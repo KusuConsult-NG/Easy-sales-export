@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getMyWithdrawals } from "@/app/actions/my-data";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 interface Withdrawal {
     id: string;
@@ -280,8 +281,7 @@ export default function WithdrawalsClient({ initial = null }: { initial?: Withdr
                                                 : "bg-red-100 text-red-700"
                                             }`}
                                     >
-                                        {withdrawal.status.charAt(0).toUpperCase() +
-                                            withdrawal.status.slice(1)}
+                                        {humaniseCapitalised(withdrawal.status)}
                                     </span>
                                 </div>
 

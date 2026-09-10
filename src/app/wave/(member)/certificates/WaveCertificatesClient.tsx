@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { Award, Download, Share2, Calendar, CheckCircle, TrendingUp, BookOpen, Star, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUserCertificatesAction, WaveCertificate } from "@/app/actions/wave";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 export default function WaveCertificatesClient({ initial = null }: {
     /**  #551 The certificates the server already fetched. */
@@ -160,7 +161,7 @@ export default function WaveCertificatesClient({ initial = null }: {
                                             {cert.programName}
                                         </h3>
                                         <p className="text-sm text-slate-600">
-                                            {cert.certificateType.charAt(0).toUpperCase() + cert.certificateType.slice(1)} Certificate
+                                            {humaniseCapitalised(cert.certificateType)} Certificate
                                         </p>
                                     </div>
                                 </div>

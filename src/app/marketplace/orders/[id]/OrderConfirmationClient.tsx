@@ -9,6 +9,7 @@ import type { Order } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { formatDeliveryEstimate } from "@/lib/delivery-estimate";
+import { humanise } from "@/lib/humanise";
 
 export default function OrderConfirmationClient({ initial = null }: {
     /**
@@ -94,6 +95,14 @@ export default function OrderConfirmationClient({ initial = null }: {
                                 Delivery Address
                             </h2>
                         </div>
+                        {/*
+                          *   #596 — every line here dereferenced
+                          *   `order.deliveryAddress` with no guard, so an order
+                          *   stored without one blanked THE WHOLE
+                          *   CONFIRMATION PAGE — the page a buyer is redirected
+                          *   to straight after paying.
+                          */}
+                        {order.deliveryAddress ? (
                         <div className="space-y-2 text-gray-600">
                             <p className="font-semibold text-gray-900">
                                 {order.deliveryAddress.recipientName}
@@ -105,6 +114,11 @@ export default function OrderConfirmationClient({ initial = null }: {
                             </p>
                             <p>{order.deliveryAddress.lga}</p>
                         </div>
+                        ) : (
+                            <p className="text-gray-500 text-sm">
+                                No delivery address was recorded on this order. Please contact support before it ships.
+                            </p>
+                        )}
                     </div>
 
                     {/* Order Status */}
@@ -119,7 +133,7 @@ export default function OrderConfirmationClient({ initial = null }: {
                             <div className="flex items-center justify-between">
                                 <span className="text-gray-600">Status:</span>
                                 <span className="px-3 py-1 bg-yellow-100 text-yellow-800 font-semibold rounded-full text-sm capitalize">
-                                    {order.status.replace("_", " ")}
+                                    {humanise(order.status)}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
@@ -149,7 +163,7 @@ export default function OrderConfirmationClient({ initial = null }: {
                         </h2>
                     </div>
                     <div className="space-y-4">
-                        {order.items.map((item, index) => (
+                        {(order.items ?? []).map((item, index) => (
                             <div
                                 key={index}
                                 className="flex items-center justify-between pb-4 border-b border-gray-200 last:border-0"

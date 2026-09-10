@@ -20,6 +20,7 @@ import BackButton from "@/components/ui/BackButton";
 import { toSafeDate } from "@/lib/utils";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 /**
  * What the server sends when it managed to walk the whole chain.
@@ -227,7 +228,7 @@ export default function WaveTrainingClient({ initial = null }: { initial?: WaveT
                                                     {event.title}
                                                 </h3>
                                                 <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getEventStatusColor(event.status)}`}>
-                                                    {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
+                                                    {humaniseCapitalised(event.status)}
                                                 </span>
                                             </div>
                                         </div>

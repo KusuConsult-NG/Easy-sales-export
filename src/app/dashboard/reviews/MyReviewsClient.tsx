@@ -16,6 +16,7 @@ import type { ProductReview } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { formatLocalDate } from "@/lib/date-utils";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { humaniseCapitalised, shortId } from "@/lib/humanise";
 
 function StarRating({ rating, onRate }: { rating: number; onRate?: (r: number) => void }) {
     const [hover, setHover] = useState(0);
@@ -203,7 +204,7 @@ export default function MyReviewsClient({ initial = null }: {
                                             <div className="flex items-center gap-3 mb-2">
                                                 <Package className="w-5 h-5 text-primary" />
                                                 <span className="font-semibold text-gray-900">
-                                                    Product: {review.productId.slice(0, 16)}...
+                                                    Product: {shortId(review.productId)}...
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -214,7 +215,7 @@ export default function MyReviewsClient({ initial = null }: {
                                                         review.status
                                                     )}`}
                                                 >
-                                                    {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
+                                                    {humaniseCapitalised(review.status)}
                                                 </span>
                                             </div>
                                         </div>

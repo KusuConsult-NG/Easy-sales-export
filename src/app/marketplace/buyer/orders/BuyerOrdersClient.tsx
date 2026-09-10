@@ -18,6 +18,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import { logger } from "@/lib/logger";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { humanise } from "@/lib/humanise";
 
 export default function BuyerOrdersClient({ initial = null }: {
     /**
@@ -305,7 +306,7 @@ export default function BuyerOrdersClient({ initial = null }: {
                                         </div>
                                         <div>
                                             <span className="text-sm text-slate-500">Payment Status</span>
-                                            <p className="font-semibold text-slate-900 capitalize">{order.paymentStatus.replace("_", " ")}</p>
+                                            <p className="font-semibold text-slate-900 capitalize">{humanise(order.paymentStatus)}</p>
                                         </div>
                                     </div>
 

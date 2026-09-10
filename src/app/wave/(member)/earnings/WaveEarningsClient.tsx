@@ -15,6 +15,7 @@ import { formatCurrency, parseCurrencyStringToFloat } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 export default function WaveEarningsClient({ initial = null }: { initial?: MemberEarnings | null }) {
     const { data: session, status } = useSession();
@@ -273,7 +274,7 @@ export default function WaveEarningsClient({ initial = null }: { initial?: Membe
                                                         ? "bg-emerald-100 text-emerald-800"
                                                         : "bg-yellow-100 text-yellow-700"
                                                 }`}>
-                                                    {txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}
+                                                    {humaniseCapitalised(txn.status)}
                                                 </span>
                                             </div>
                                             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedOrderId === txn.orderId ? "rotate-180" : ""}`} />

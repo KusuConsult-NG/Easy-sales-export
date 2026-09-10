@@ -21,6 +21,7 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { formatDeliveryEstimate } from "@/lib/delivery-estimate";
+import { humanise } from "@/lib/humanise";
 
 /**
  * What the server read before the page was sent.
@@ -318,7 +319,7 @@ export default function SellerOrderDetailClient(
                                                         {formatDateTime(update.timestamp)}
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-slate-500 mt-0.5 capitalize font-semibold">{update.status.replace("_", " ")}</p>
+                                                <p className="text-xs text-slate-500 mt-0.5 capitalize font-semibold">{humanise(update.status)}</p>
                                                 {update.note && (
                                                     <p className="text-sm text-slate-600 mt-1 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">
                                                         {update.note}
@@ -341,7 +342,8 @@ export default function SellerOrderDetailClient(
                         <h2 className="font-bold text-slate-900">Ordered Items</h2>
                     </div>
                     <div className="divide-y divide-slate-100">
-                        {order.items.map((item, idx) => (
+                        {/*  #596 — an order row with no `items` blanked the page. */}
+                        {(order.items ?? []).map((item, idx) => (
                             <div key={idx} className="px-6 py-4 flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
