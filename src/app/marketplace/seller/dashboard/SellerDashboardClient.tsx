@@ -16,6 +16,7 @@ import Link from "next/link";
 import { getSellerAnalyticsAction, getSellerOrdersAction, getSellerProductsAction } from "@/app/actions/marketplace";
 import { getFeatureTogglesAction } from "@/app/actions/health";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 import type { Order, Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { toDate } from "@/lib/date-utils";
@@ -47,6 +48,25 @@ export default function SellerDashboardClient({ initial = null }: {
     const [recentOrders, setRecentOrders] = useState<Order[]>([]);
     const [topProducts, setTopProducts] = useState<Product[]>([]);
     const [toggles, setToggles] = useState<Record<string, boolean>>({});
+    /**
+     *   #594 — the seller's half of the same defect, and the louder one.
+     *
+     *   `stats` is initialised to all zeroes and each `if (…success && …data)`
+     *   below has no else, so a seller whose analytics could not be read is
+     *   shown ₦0 total sales, ₦0/mo, 0 active listings, 0 pending orders and a
+     *   0.0 average rating — a live business rendered as a dead one, in the
+     *   largest type on the page — with "No orders yet" and "No products yet"
+     *   underneath.
+     *
+     *   Three flags, not one, for #592's reason: the reads fail independently,
+     *   and a shared flag would put a panel over a list that read fine. The
+     *   feature toggles are deliberately NOT tracked: they decide whether a
+     *   button appears, and a missing button is not a claim about the seller's
+     *   business.
+     */
+    const [statsFailed, setStatsFailed] = useState(false);
+    const [ordersFailed, setOrdersFailed] = useState(false);
+    const [productsFailed, setProductsFailed] = useState(false);
 
     const takeSeed = useServerSeed(initial);
 
@@ -69,6 +89,9 @@ export default function SellerDashboardClient({ initial = null }: {
 
                 if (analyticsRes.success && analyticsRes.data?.analytics) {
                     setStats(analyticsRes.data.analytics as any);
+                    setStatsFailed(false);
+                } else {
+                    setStatsFailed(true);
                 }
 
                 if (ordersRes.success && ordersRes.data?.orders) {
@@ -82,6 +105,9 @@ export default function SellerDashboardClient({ initial = null }: {
                         })
                         .slice(0, 5);
                     setRecentOrders(sortedOrders);
+                    setOrdersFailed(false);
+                } else {
+                    setOrdersFailed(true);
                 }
 
                 if (productsRes.success && productsRes.data?.products) {
@@ -90,10 +116,17 @@ export default function SellerDashboardClient({ initial = null }: {
                         .sort((a, b) => (b.orders || 0) - (a.orders || 0))
                         .slice(0, 3);
                     setTopProducts(sortedProducts);
+                    setProductsFailed(false);
+                } else {
+                    setProductsFailed(true);
                 }
 
             } catch (error) {
                 logger.error("Failed to load dashboard data:", error);
+                //   One Promise.all: a throw means none of the three was read.
+                setStatsFailed(true);
+                setOrdersFailed(true);
+                setProductsFailed(true);
             } finally {
                 setLoading(false);
             }
@@ -158,7 +191,11 @@ export default function SellerDashboardClient({ initial = null }: {
                 </div>
 
                 <div className="max-w-7xl mx-auto px-8 py-8">
-                    {/* ... stats grid ... */}
+                    {/* ... stats grid ... — hidden when the read failed,
+                        because five zeroes are a claim and not a blank. */}
+                    {statsFailed ? (
+                        <ListLoadFailed what="your sales figures" className="mb-8" />
+                    ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                         {/* ... */}
                         <div className="bg-white rounded-xl p-6 border border-slate-200">
@@ -213,6 +250,7 @@ export default function SellerDashboardClient({ initial = null }: {
                             <div className="text-sm text-slate-600">Average Rating</div>
                         </div>
                     </div>
+                    )}
 
                     {/* Quick Actions */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -279,7 +317,9 @@ export default function SellerDashboardClient({ initial = null }: {
                                 </Link>
                             </div>
 
-                            {recentOrders.length === 0 ? (
+                            {ordersFailed && recentOrders.length === 0 ? (
+                                <ListLoadFailed what="your recent orders" />
+                            ) : recentOrders.length === 0 ? (
                                 <div className="bg-white rounded-xl p-12 text-center border border-slate-200">
                                     <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                                     <p className="text-slate-500">No orders yet</p>
@@ -346,7 +386,9 @@ export default function SellerDashboardClient({ initial = null }: {
                                 Top Products
                             </h2>
 
-                            {topProducts.length === 0 ? (
+                            {productsFailed && topProducts.length === 0 ? (
+                                <ListLoadFailed what="your products" />
+                            ) : topProducts.length === 0 ? (
                                 <div className="bg-white rounded-xl p-12 text-center border border-slate-200">
                                     <Package className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                                     <p className="text-slate-500">No products yet</p>

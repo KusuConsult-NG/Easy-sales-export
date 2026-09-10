@@ -100,6 +100,19 @@
  *   rule turned on itself — AUDIT THE INSTRUMENT BEFORE BELIEVING THE
  *   MEASUREMENT — and the correction is deliberately narrow: see
  *   `emptyStateConsultsError`, and the measurement that rejected the wider fix.
+ *
+ * ── #594: 23 → 17, AND THE COUNTS WERE THE LOUDER HALF ──────────────────────
+ *
+ *   Six more: fixed savings, cooperative history, notifications, reviews, and
+ *   both marketplace dashboards. Their finding and mutation table are in
+ *   the-numbers-on-a-dashboard-were-zero-because-nobody-asked.
+ *
+ *   THE PREDICATE ONLY SEES LISTS, AND TWO OF THESE SCREENS LIED IN NUMBERS.
+ *   A dashboard's `stats` initialised to all zeroes is the same defect as a
+ *   list initialised to `[]` — "we could not read this" rendered as an answer —
+ *   but it has no `.length === 0` for the scan to find. Every screen this
+ *   ratchet counts is a real offender; it is not the whole class, and this note
+ *   is here so that is not mistaken for one.
  */
 
 import React from 'react';
@@ -160,9 +173,9 @@ const ROOT = process.cwd();
  *
  * 35 when this was written. 30 after the five in the first batch. 23 after
  * #592's six, and after this predicate stopped over-counting MessagesClient —
- * see the note on `emptyStateConsultsError` below.
+ * see the note on `emptyStateConsultsError` below. 17 after #594's six.
  */
-const CAP = 23;
+const CAP = 17;
 
 /**
  * An empty-state condition that consults an error is a distinction.
@@ -256,6 +269,15 @@ const FIXED = [
     //   was mis-reading it. It is here so a regression that removes `listError`
     //   fails a test rather than quietly raising the cap.
     'src/app/messages/MessagesClient.tsx',
+    //   #594's six. Two of them are dashboards, where the STAT CARDS were the
+    //   louder half of the lie: a failed read left them at the zeroes they were
+    //   initialised with, so a live business rendered as a dead one.
+    'src/app/cooperatives/(member)/fixed-savings/FixedSavingsClient.tsx',
+    'src/app/cooperatives/(member)/history/CooperativeHistoryClient.tsx',
+    'src/app/dashboard/notifications/NotificationsClient.tsx',
+    'src/app/dashboard/reviews/MyReviewsClient.tsx',
+    'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx',
+    'src/app/marketplace/seller/dashboard/SellerDashboardClient.tsx',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -296,7 +318,7 @@ describe('#588 — the screens that cannot tell are counted', () => {
          *   clothes. So: every path must exist on disk, and there must be as
          *   many as have been claimed.
          */
-        expect(FIXED).toHaveLength(12);
+        expect(FIXED).toHaveLength(18);
         for (const f of FIXED) {
             expect({ f, exists: existsSync(join(ROOT, f)) }).toEqual({ f, exists: true });
         }

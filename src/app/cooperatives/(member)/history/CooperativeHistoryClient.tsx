@@ -12,6 +12,7 @@ import { History as HistoryIcon, Download, Search, Calendar, ChevronDown, Loader
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { getTransactionsAction } from "@/app/actions/cooperative";
 import type { CooperativeTransaction } from "@/lib/types/cooperative";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function CooperativeHistoryClient({ initial = null }: {
     /**  #546 Fetched by the server — see page.tsx. */
@@ -22,6 +23,17 @@ export default function CooperativeHistoryClient({ initial = null }: {
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState("all");
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    /**
+     *   #594 — "No transactions found. You haven't made any transactions yet",
+     *   shown to a member whose cooperative history could not be READ.
+     *
+     *   The `if (res.success && res.data?.transactions)` below has no else and
+     *   the catch only writes to the logger, so a refusal or a throw leaves the
+     *   `[]` this started as. This is the record of every contribution a member
+     *   has paid in; telling them there is none of it is the worst sentence this
+     *   screen can produce.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         //   #546 Already supplied by the server.
@@ -32,9 +44,13 @@ export default function CooperativeHistoryClient({ initial = null }: {
                 const res = await getTransactionsAction();
                 if (res.success && res.data?.transactions) {
                     setTransactions(res.data.transactions);
+                    setLoadFailed(false);
+                } else {
+                    setLoadFailed(true);
                 }
             } catch (error) {
                 logger.error("Failed to load history:", error);
+                setLoadFailed(true);
             } finally {
                 setLoading(false);
             }
@@ -110,6 +126,8 @@ export default function CooperativeHistoryClient({ initial = null }: {
                         <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                         <p className="text-slate-500">Loading history...</p>
                     </div>
+                ) : loadFailed && transactions.length === 0 ? (
+                    <ListLoadFailed what="your transaction history" className="border-0 rounded-none" />
                 ) : filteredTransactions.length === 0 ? (
                     <div className="p-12 text-center">
                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">

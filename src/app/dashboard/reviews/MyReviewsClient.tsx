@@ -15,6 +15,7 @@ import { getUserReviewsAction, updateReviewAction } from "@/app/actions/reviews"
 import type { ProductReview } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { formatLocalDate } from "@/lib/date-utils";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 function StarRating({ rating, onRate }: { rating: number; onRate?: (r: number) => void }) {
     const [hover, setHover] = useState(0);
@@ -64,6 +65,15 @@ export default function MyReviewsClient({ initial = null }: {
     const [editRating, setEditRating] = useState(5);
     const [editComment, setEditComment] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    /**
+     *   #594 — a toast is not a state. `showToast("Failed to load reviews")`
+     *   goes after a few seconds and leaves "No Reviews Yet — you haven't
+     *   written any reviews yet" over reviews the member has written, with no
+     *   way to tell that anything went wrong. A member who believes it writes
+     *   the review again, and a second review on one order is the shape #521
+     *   already had to clean up.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         //   #547 Already supplied by the server.
@@ -78,10 +88,13 @@ export default function MyReviewsClient({ initial = null }: {
             const result = await getUserReviewsAction();
             if (result.success && result.data?.reviews) {
                 setReviews(result.data.reviews || []);
+                setLoadFailed(false);
             } else {
+                setLoadFailed(true);
                 showToast(result.error || "Failed to load reviews", "error");
             }
         } catch (error) {
+            setLoadFailed(true);
             showToast("Failed to load reviews", "error");
         } finally {
             setLoading(false);
@@ -171,6 +184,8 @@ export default function MyReviewsClient({ initial = null }: {
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="w-12 h-12 animate-spin text-primary" />
                     </div>
+                ) : loadFailed && reviews.length === 0 ? (
+                    <ListLoadFailed what="your reviews" onRetry={loadReviews} />
                 ) : reviews.length > 0 ? (
                     <div className="space-y-6">
                         {reviews.map((review) => {

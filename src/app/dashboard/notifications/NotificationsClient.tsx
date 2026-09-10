@@ -19,6 +19,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { isNotificationVisible, getVisibleFilterTabs, NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 /* ──────────────────────────────────────────────────────────────
  * Types
@@ -140,6 +141,21 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
      */
     const [pageSize, setPageSize] = useState(NOTIFICATION_PAGE_SIZE);
     const [reachedEnd, setReachedEnd] = useState(seed?.reachedEnd ?? false);
+    /**
+     *   #594 — "No Notifications. You're all caught up!" is the one sentence on
+     *   this screen that must never be said on a guess, and it was what a
+     *   failed read produced: the catch logged to the console and the list
+     *   stayed at whatever it held.
+     *
+     *   A notification is how this platform tells somebody an order was
+     *   disputed, a loan was approved, a withdrawal failed. "You're all caught
+     *   up" over an unread one of those is not a cosmetic error.
+     *
+     *   THIS POLLS every eight seconds, so — as on the disputes screen and the
+     *   escrow chat — the panel only replaces a list that has nothing in it. A
+     *   single failed tick over notifications already on screen leaves them.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     const userId = session?.user?.id;
     // Prevent duplicate auto-read calls on re-renders
@@ -167,9 +183,11 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
                     const next = windowOf(data, pageSize);
                     setReachedEnd(next.reachedEnd);
                     setNotifications(next.rows);
+                    setLoadFailed(false);
                 }
             } catch (error) {
                 console.error("Notification load error:", error);
+                if (!cancelled) setLoadFailed(true);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -364,10 +382,19 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 mb-1">Notifications</h1>
+                        {/*
+                          *   #594 — this subtitle is DERIVED FROM THE SAME LIST,
+                          *   so it said "All caught up!" over a read that failed
+                          *   too. The test for the empty state caught it, which
+                          *   is the argument for asserting on what the screen
+                          *   says rather than on the branch that says it.
+                          */}
                         <p className="text-gray-500 text-sm">
-                            {unreadCount > 0
-                                ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
-                                : "All caught up!"}
+                            {loadFailed && notifications.length === 0
+                                ? "We could not check just now"
+                                : unreadCount > 0
+                                    ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
+                                    : "All caught up!"}
                         </p>
                     </div>
                     {unreadCount > 0 && (
@@ -407,7 +434,9 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
                 </div>
 
                 {/* Notifications List */}
-                {filtered.length === 0 ? (
+                {loadFailed && notifications.length === 0 ? (
+                    <ListLoadFailed what="your notifications" />
+                ) : filtered.length === 0 ? (
                     <div className="bg-white rounded-xl p-12 text-center shadow-sm">
                         <Bell className="w-16 h-16 text-gray-200 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-gray-900 mb-1">No Notifications</h3>

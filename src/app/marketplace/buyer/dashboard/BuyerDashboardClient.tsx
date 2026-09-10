@@ -19,6 +19,7 @@ import { formatCurrency } from "@/lib/utils";
 import { toDate, formatLocalDate } from "@/lib/date-utils";
 import { firstImageSrcOr } from "@/lib/first-image";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function BuyerDashboardClient({ initial = null }: {
     /**
@@ -46,6 +47,27 @@ export default function BuyerDashboardClient({ initial = null }: {
     });
     const [recentOrders, setRecentOrders] = useState<Order[]>([]);
     const [recommendedProducts, setRecommendedProducts] = useState<any[]>([]);
+    /**
+     *   #594 — THREE READS, ONE CATCH, AND NOT ONE OF THEM RECORDED A FAILURE.
+     *
+     *   Each `if (result.success && result.data?.…)` below has no else, and the
+     *   single catch around the Promise.all only writes to the logger. So a
+     *   failed read leaves `stats` at the ZEROES it was initialised with and
+     *   `recentOrders` at `[]` — and this screen then states, in 36-point type,
+     *   that the buyer has no active orders, no completed orders and has spent
+     *   ₦0, next to "No orders yet. Start shopping to see your orders here".
+     *
+     *   The counts are the worse half. An empty list at least looks like an
+     *   empty list; four confident zeroes look like an answer.
+     *
+     *   Tracked separately, because #592's certificates screen is the precedent:
+     *   the three reads fail independently, and one shared flag would put a
+     *   panel over a list that read perfectly well. RECOMMENDATIONS ARE NOT
+     *   TRACKED — nothing there is the buyer's own, so an empty shelf of
+     *   suggestions makes no claim about anything they own.
+     */
+    const [statsFailed, setStatsFailed] = useState(false);
+    const [ordersFailed, setOrdersFailed] = useState(false);
 
     const takeSeed = useServerSeed(initial);
 
@@ -63,6 +85,9 @@ export default function BuyerDashboardClient({ initial = null }: {
 
                 if (statsResult.success && statsResult.data?.stats) {
                     setStats(statsResult.data.stats);
+                    setStatsFailed(false);
+                } else {
+                    setStatsFailed(true);
                 }
 
                 if (ordersResult.success && ordersResult.data?.orders) {
@@ -71,6 +96,9 @@ export default function BuyerDashboardClient({ initial = null }: {
                         return toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime();
                     });
                     setRecentOrders(sorted.slice(0, 5));
+                    setOrdersFailed(false);
+                } else {
+                    setOrdersFailed(true);
                 }
 
                 if (recommendedResult.success && recommendedResult.data?.products) {
@@ -92,6 +120,10 @@ export default function BuyerDashboardClient({ initial = null }: {
                 }
             } catch (error) {
                 logger.error("Failed to load buyer dashboard:", error);
+                //   All three are in one Promise.all: a throw means none of
+                //   them was read, not that any of them is empty.
+                setStatsFailed(true);
+                setOrdersFailed(true);
             } finally {
                 setLoading(false);
             }
@@ -156,7 +188,11 @@ export default function BuyerDashboardClient({ initial = null }: {
                 </div>
 
                 <div className="max-w-7xl mx-auto px-8 py-8">
-                    {/* Stats Grid */}
+                    {/* Stats Grid — hidden when the read failed, because four
+                        zeroes are a claim and not a blank. */}
+                    {statsFailed ? (
+                        <ListLoadFailed what="your order summary" className="mb-8" />
+                    ) : (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                         <div className="bg-white rounded-xl p-6 border border-slate-200">
                             <div className="flex items-center justify-between mb-4">
@@ -217,6 +253,7 @@ export default function BuyerDashboardClient({ initial = null }: {
                             <div className="text-sm text-slate-600">Saved Sellers</div>
                         </Link>
                     </div>
+                    )}
 
                     {/* Quick Actions */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -264,7 +301,9 @@ export default function BuyerDashboardClient({ initial = null }: {
                             </div>
 
                             <div className="space-y-4">
-                                {recentOrders.length === 0 ? (
+                                {ordersFailed && recentOrders.length === 0 ? (
+                                    <ListLoadFailed what="your recent orders" />
+                                ) : recentOrders.length === 0 ? (
                                     <div className="bg-white rounded-xl p-8 text-center border border-slate-200">
                                         <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                                         <h3 className="font-semibold text-slate-900">No orders yet</h3>

@@ -23,6 +23,7 @@ import {
 import { withdrawMaturedFixedSavingsAction } from "@/app/actions/cooperative";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
 import { useToast } from "@/contexts/ToastContext";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 type FixedSavingsPlan = {
     id: string;
@@ -82,6 +83,22 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
      *   A failure is now its own state and says so.
      */
     const [membershipCheckFailed, setMembershipCheckFailed] = useState(false);
+    /**
+     *   #594 — THE MEMBERSHIP HALF OF THIS SCREEN LEARNED THIS LESSON AND THE
+     *   PLANS HALF DID NOT.
+     *
+     *   `membershipCheckFailed` above exists because a 500 answering
+     *   { success: false } read as "not a member". Twenty lines down,
+     *   `fetchPlans` has `if (data.success) setPlans(...)` with no else at all,
+     *   and its catch only logs — so a member whose plans could not be read is
+     *   told "No Fixed Savings Plans Yet — create your first fixed savings plan"
+     *   over money that is locked up and earning. Clicking that button locks up
+     *   a second amount.
+     *
+     *   THE FIX REACHED ONE OF TWO DOORS, in the same file, for the second time
+     *   in this audit.
+     */
+    const [plansLoadFailed, setPlansLoadFailed] = useState(false);
 
     // Calculator state
     const [amount, setAmount] = useState(String(FIXED_SAVINGS_MIN_AMOUNT));
@@ -130,9 +147,13 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
 
             if (data.success) {
                 setPlans(data.plans || []);
+                setPlansLoadFailed(false);
+            } else {
+                setPlansLoadFailed(true);
             }
         } catch (error) {
             logger.error("Failed to fetch plans:", error);
+            setPlansLoadFailed(true);
         } finally {
             setIsLoading(false);
         }
@@ -678,8 +699,13 @@ export default function FixedSavingsClient({ initial = null }: { initial?: Fixed
                             </div>
                         )}
 
+                        {/* Could not read them — not "there are none". */}
+                        {plansLoadFailed && plans.length === 0 && (
+                            <ListLoadFailed what="your fixed savings plans" onRetry={fetchPlans} />
+                        )}
+
                         {/* Empty State */}
-                        {plans.length === 0 && (
+                        {!plansLoadFailed && plans.length === 0 && (
                             <div className="bg-white rounded-2xl p-12 text-center shadow-xl">
                                 <TrendingUp className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                                 <h3 className="text-xl font-bold text-slate-900 mb-2">
