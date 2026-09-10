@@ -63,11 +63,50 @@
  *   like #589's — that one covers every server-seeded member screen and this
  *   one covers a sixth of admin.
  *
+ * ── #602: THE SEVEN UNREACHED WERE SEVEN BECAUSE OF THE FIXTURE, NOT THE CODE
+ *
+ *   #601 shipped with seven of twenty subjects declared NOT_REACHED and said
+ *   each would need its own result shape. Five of the seven needed one line
+ *   between them: several screens read `result.disputes`, `result.reviews` or
+ *   `result.recentTransactions` at the RESULT level rather than under `data`,
+ *   and the shared fixture only attached them under `data`. Widening it reached
+ *   four immediately — and then three of those four turned out to be hiding
+ *   defects that "vacuous" had been covering for:
+ *
+ *     academy/applications   `const d = stdApp.data` and `stdApp.user.name`
+ *                            inside the LOADER's map, wrapped in a try/catch
+ *                            that turns the throw into `success: false`. One
+ *                            malformed application made the entire Academy
+ *                            approval queue show an error rather than lose one
+ *                            row — worse than the render-time version of this
+ *                            defect, because a crash is at least loud and this
+ *                            looked like the server being down.
+ *     marketplace/reviews    `review.userId.slice(0, 12)`
+ *     farm-nation/applications  `item.user.name` and fifteen more reads of the
+ *                            two joined halves, plus `status.replace(/_/g)` —
+ *                            and this one was ONLY visible after mocking
+ *                            `@/app/actions/farm-nation-admin`, which #601 had
+ *                            not mocked at all.
+ *
+ *   NOT_REACHED is two now, and the reason changed: /admin/withdrawals and
+ *   /admin/escrow are `redirect()` stubs, so there is no row for a row to
+ *   reach. That is a fact about those files rather than about the fixture, and
+ *   a test asserts it.
+ *
+ *   THE FIXTURE IS PART OF THE INSTRUMENT AND GOT THE SAME SCRUTINY. Widening
+ *   it introduced a bug of its own — the key list also attaches `data`, so
+ *   copying every key up to the result level REPLACED `result.data` with a
+ *   plain array and silently emptied every screen reading
+ *   `result.data.transactions`. It cost a debugging round and is commented
+ *   where it happened.
+ *
  *   MUTATION-TESTED, WITH A CONTROL — table at the foot of this file.
  */
 
 import React from 'react';
 import { render, waitFor } from '@testing-library/react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 jest.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: jest.fn() }) }));
 jest.mock('sonner', () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
@@ -93,8 +132,25 @@ function answer() {
         rows[k] = [...ROWS];
     }
     rows.stats = {}; rows.analytics = {}; rows.summary = {}; rows.meta = {}; rows.membership = ROWS[0] ?? null;
-    return { success: true, error: null, data: rows, lastDocId: undefined, hasMore: false, meta: {},
-             loans: [...ROWS], properties: [...ROWS], users: [...ROWS] };
+    //   #602 — the collection names are attached at the RESULT level as well as
+    //   under `data`, because several screens read `result.disputes`,
+    //   `result.reviews` or `result.recentTransactions` directly. Guessing one
+    //   shape and calling the rest "covered" is what NOT_REACHED exists to stop.
+    const result: any = { success: true, error: null, data: rows, lastDocId: undefined,
+                          hasMore: false, meta: { hasMore: false, lastDocId: undefined } };
+    for (const k of Object.keys(rows)) {
+        //   NOT `data`: the list above also attaches a `data` key to `rows`, and
+        //   copying it up would REPLACE `result.data` — which is `rows` itself —
+        //   with a plain array, so every screen reading `result.data.transactions`
+        //   silently saw nothing. It cost a debugging round; the fixture is part
+        //   of the instrument and gets the same scrutiny.
+        if (k !== 'data' && Number.isNaN(Number(k))) result[k] = (rows as any)[k];
+    }
+    result.recentTransactions = [...ROWS];
+    result.failedTransactions = [...ROWS];
+    result.totalRevenue = 0;
+    result.unavailable = [];
+    return result;
 }
 const act = async () => answer();
 for (const m of ['wallet','cooperative','marketplace','export-admin','export','export-products','export-booking',
@@ -107,7 +163,7 @@ for (const m of ['wallet','cooperative','marketplace','export-admin','export','e
                  'briefing-admin','briefing','resource-actions','upload','land-actions','bank-account',
                  'farm-nation-payment','export-status','paystack','global-aggregation','export-aggregation',
                  'admin_extensions','schema-standardization','data-export-audit','bulk-user-operations',
-                 'diagnose-broadcast','ai-actions','dashboard','auth','password-reset','admin','admin/index']) {
+                 'diagnose-broadcast','ai-actions','dashboard','auth','password-reset','admin','farm-nation-admin']) {
     jest.mock(`@/app/actions/${m}`, () => new Proxy({}, { get: () => act }));
 }
 
@@ -140,21 +196,23 @@ const ADMIN_SUBJECTS: [string, string][] = [
 ];
 
 /**
- * The screens where the shared fixture never reaches the render path.
+ * The two subjects a row cannot reach, AND THE REASON IS NOT THE FIXTURE.
  *
- * Rendering them still proves they do not throw on MOUNT, which is worth
- * something — but it proves nothing about a hostile ROW, and calling them
- * "covered" would be the kind of coverage claim this audit exists to catch.
- * Each would need its own result shape; that is real work, not a formality.
+ *   #602 — this list had seven entries and now has two, which is the finding.
+ *
+ *   Five of the seven were unreached because the shared fixture guessed one
+ *   result shape and several screens read another: `result.disputes`,
+ *   `result.reviews`, `result.recentTransactions` at the RESULT level rather
+ *   than under `data`. Widening the fixture reached four of them at once, and
+ *   /admin/academy/applications turned out to be a DEFECT rather than a shape.
+ *
+ *   The last two are not screens at all. /admin/withdrawals and /admin/escrow
+ *   are `redirect()` stubs — retired duplicates kept so old links still work —
+ *   so there is no row for a row to reach.
  */
 const NOT_REACHED = [
-    'marketplace/disputes',
-    'finance',
     'withdrawals',
     'escrow',
-    'academy/applications',
-    'farm-nation/applications',
-    'marketplace/reviews',
 ];
 
 beforeEach(() => {
@@ -185,11 +243,43 @@ describe('#601 — admin screens against a row that carries only an id', () => {
         });
     }
 
-    it('AND THE UNREACHED SEVEN ARE SEVEN, NAMED, AND ALL SUBJECTS', () => {
+    /**
+     * Is this subject a `redirect()` one-liner rather than a screen?
+     *
+     * A NAMED FUNCTION, not an inline assertion, and a surviving mutant is why:
+     * gutting the assertion survives — that is what an assertion is — so the
+     * thing being asserted has to be code a mutant can attack, and it is
+     * exercised against known answers below. #599 and #600 learned the same
+     * thing; this is the third time and it is the pattern now.
+     */
+    function isARedirectStub(name: string): boolean {
+        const subject = ADMIN_SUBJECTS.find(s => s[0] === name);
+        if (!subject) return false;
+        const file = join(process.cwd(), subject[1].replace('@/app/', 'src/app/') + '.tsx');
+        return readFileSync(file, 'utf-8').includes('redirect(');
+    }
+
+    it('AND THE TWO UNREACHED ARE REDIRECT STUBS, NOT SCREENS', () => {
+        //   The reason matters more than the number: "the row never reached it"
+        //   is a fact about these files rather than about the fixture, and if
+        //   either ever grows a real screen this fails and it needs a fixture.
+        for (const n of NOT_REACHED) {
+            expect({ n, isARedirect: isARedirectStub(n) }).toEqual({ n, isARedirect: true });
+        }
+
+        //   And the check can tell them apart, which the assertion alone does
+        //   not prove: a real screen is not a stub, and a name that is not a
+        //   subject at all is not one either.
+        expect(isARedirectStub('marketplace/withdrawals')).toBe(false);
+        expect(isARedirectStub('cooperatives/loans')).toBe(false);
+        expect(isARedirectStub('not-a-subject')).toBe(false);
+    });
+
+    it('AND THE UNREACHED LIST IS NAMED, CAPPED, AND ALL SUBJECTS', () => {
         //   A list that grows quietly turns "thirteen proven" into "twenty
         //   rendered and nobody counted". Its length is asserted and every
         //   entry must be a subject, so a typo cannot silently excuse a screen.
-        expect(NOT_REACHED).toHaveLength(7);
+        expect(NOT_REACHED).toHaveLength(2);
         const names = new Set(ADMIN_SUBJECTS.map(s => s[0]));
         for (const n of NOT_REACHED) {
             expect({ n, isASubject: names.has(n) }).toEqual({ n, isASubject: true });
@@ -265,8 +355,28 @@ describe('#601 — the six that threw, one assertion each', () => {
  *     a screen moved INTO NOT_REACHED to excuse it      KILLED (2)
  *     reword this header                                SURVIVED, as intended
  *
- *   No mutant survived. The two NOT_REACHED mutants are the ones that matter
- *   most here: this suite's whole honesty rests on that list being neither
- *   padded to excuse a screen nor trimmed to flatter the count, and both
- *   directions fail.
+ *   The two NOT_REACHED mutants are the ones that matter most: this suite's
+ *   honesty rests on that list being neither padded to excuse a screen nor
+ *   trimmed to flatter the count, and both directions fail.
+ *
+ * ── #602's MUTANTS ─────────────────────────────────────────────────────────
+ *
+ *     academy loader: the data/user guards removed      KILLED
+ *     reviews: the raw slice back                       KILLED
+ *     farm-nation: the applicant name unguarded again   KILLED
+ *     farm-nation: the status badge unguarded again     KILLED
+ *     fixture: `data` copied up again, emptying every
+ *              screen that reads result.data.<name>     KILLED
+ *     fixture: the result-level keys removed again      KILLED (2)
+ *     NOT_REACHED padded to excuse a screen             KILLED (3)
+ *     NOT_REACHED emptied                               KILLED (3)
+ *     the stub detector made to always say yes          KILLED  ← see below
+ *     reword the #602 note                              SURVIVED, as intended
+ *
+ *   ONE SURVIVED THE FIRST RUN AND THE FIX WAS STRUCTURAL, FOR THE THIRD TIME.
+ *   Gutting the redirect-stub assertion survived, because a mutant that deletes
+ *   an assertion always survives. It is a named `isARedirectStub` now,
+ *   exercised against a real screen, another real screen and a name that is not
+ *   a subject — so there is code for a mutant to attack. #599 and #600 each
+ *   reached the same conclusion; this is the pattern rather than an incident.
  */

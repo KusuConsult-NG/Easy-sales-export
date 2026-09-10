@@ -427,17 +427,30 @@ export default function AdminAcademyApplicationsPage() {
                 }
 
                 const apps = (result.data ?? []).map((stdApp: any) => {
-                    const d = stdApp.data;
+                    /**
+                     *   #602 — `const d = stdApp.data` then `d.personalInfo`, and
+                     *   `stdApp.user.name` beside it. One application row whose
+                     *   `data` or `user` half did not join threw HERE, inside the
+                     *   loader's map — and the catch below turns that into
+                     *   `success: false`, so the whole Academy approval queue
+                     *   showed an error rather than losing one row.
+                     *
+                     *   Worse than the render-time version of this defect, not
+                     *   better: a crash is at least loud. This looked like the
+                     *   server being down.
+                     */
+                    const d = stdApp.data ?? {};
+                    const applicant = stdApp.user ?? {};
                     const pi = d.personalInfo || {};
                     return {
                         id: stdApp.id,
                         personalInfo: {
-                            fullName: stdApp.user.name,
+                            fullName: applicant.name,
                             firstName: pi.firstName,
                             lastName: pi.lastName,
                             otherName: pi.otherName,
-                            email: stdApp.user.email,
-                            phone: pi.phone ?? d.phone ?? stdApp.user.phone ?? "",
+                            email: applicant.email,
+                            phone: pi.phone ?? d.phone ?? applicant.phone ?? "",
                         },
                         education: d.education,
                         interests: d.interests,

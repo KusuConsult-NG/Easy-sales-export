@@ -17,7 +17,7 @@ import type { ProductReview } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatLocalDate } from "@/lib/date-utils";
-import { humaniseCapitalised } from "@/lib/humanise";
+import { humaniseCapitalised, shortId } from "@/lib/humanise";
 
 function StarDisplay({ rating }: { rating: number }) {
     return (
@@ -270,7 +270,7 @@ export default function AdminReviewsPage() {
                                             )}
                                         </div>
                                         <p className="text-sm text-gray-600 mb-3">
-                                            Product: {review.productId} • User: {review.userId.slice(0, 12)} •{" "}
+                                            Product: {shortId(review.productId, 40)} • User: {shortId(review.userId, 12)} •{" "}
                                             {formatLocalDate(review.createdAt)}
                                         </p>
                                         <p className="text-gray-900 mb-4">{review.comment}</p>

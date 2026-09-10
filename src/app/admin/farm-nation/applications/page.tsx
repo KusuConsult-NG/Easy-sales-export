@@ -241,8 +241,8 @@ export default function FarmNationApplicationsPage() {
                         <Users className="w-5 h-5 text-orange-600" />
                     </div>
                     <div>
-                        <div className="font-bold text-slate-900">{item.user.name}</div>
-                        <div className="text-xs text-slate-500">{item.user.email}</div>
+                        <div className="font-bold text-slate-900">{item.user?.name}</div>
+                        <div className="text-xs text-slate-500">{item.user?.email}</div>
                     </div>
                 </div>
             )
@@ -251,7 +251,7 @@ export default function FarmNationApplicationsPage() {
             header: "Role",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <span className="text-sm text-slate-700 capitalize">
-                    {formatRole(item.data.serviceRegistrations?.farmNation?.role)}
+                    {formatRole(item.data?.serviceRegistrations?.farmNation?.role)}
                 </span>
             ),
             hideOnMobile: true
@@ -260,7 +260,7 @@ export default function FarmNationApplicationsPage() {
             header: "Gender",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <span className="text-sm text-slate-700 capitalize">
-                    {item.user.gender || (item.data as any).gender || "—"}
+                    {item.user?.gender || (item.data as any)?.gender || "—"}
                 </span>
             ),
             hideOnMobile: true
@@ -269,9 +269,9 @@ export default function FarmNationApplicationsPage() {
             header: "Location",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <div className="text-sm text-slate-600">
-                    {item.user.state && item.user.state !== "Unknown"
-                        ? `${item.user.state}${item.user.lga && item.user.lga !== "Unknown" ? `, ${item.user.lga}` : ""}`
-                        : ((item.data as any).stateOfOrigin ? `${(item.data as any).stateOfOrigin}${(item.data as any).lga ? `, ${(item.data as any).lga}` : ""}` : "—")}
+                    {item.user?.state && item.user?.state !== "Unknown"
+                        ? `${item.user?.state}${item.user?.lga && item.user?.lga !== "Unknown" ? `, ${item.user?.lga}` : ""}`
+                        : ((item.data as any)?.stateOfOrigin ? `${(item.data as any)?.stateOfOrigin}${(item.data as any)?.lga ? `, ${(item.data as any)?.lga}` : ""}` : "—")}
                 </div>
             ),
             hideOnMobile: true
@@ -282,7 +282,7 @@ export default function FarmNationApplicationsPage() {
                 const status = item.status;
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(status)}`}>
-                        {status.replace(/_/g, " ")}
+                        {humanise(status)}
                     </span>
                 );
             }
@@ -291,12 +291,12 @@ export default function FarmNationApplicationsPage() {
             header: "Submitted",
             accessor: (item: StandardPendingForm<SellerProfile>) => {
                 let date = new Date();
-                const ts = item.data.serviceRegistrations?.farmNation?.submittedAt;
+                const ts = item.data?.serviceRegistrations?.farmNation?.submittedAt;
                 if (ts?.seconds) date = new Date(ts.seconds * 1000);
                 else if (ts) date = new Date(ts as string);
-                else if (item.data.createdAt) {
-                    if ((item.data.createdAt as any).seconds) date = new Date((item.data.createdAt as any).seconds * 1000);
-                    else date = new Date(item.data.createdAt);
+                else if (item.data?.createdAt) {
+                    if ((item.data?.createdAt as any).seconds) date = new Date((item.data?.createdAt as any).seconds * 1000);
+                    else date = new Date(item.data?.createdAt);
                 }
                 
                 return (
@@ -460,31 +460,31 @@ export default function FarmNationApplicationsPage() {
                             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl text-sm">
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Name</span>
-                                    <p className="font-medium text-slate-900">{selectedSeller.user.name}</p>
+                                    <p className="font-medium text-slate-900">{selectedSeller.user?.name}</p>
                                 </div>
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Email</span>
-                                    <p className="font-medium text-slate-900">{selectedSeller.user.email}</p>
+                                    <p className="font-medium text-slate-900">{selectedSeller.user?.email}</p>
                                 </div>
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Phone</span>
                                     <p className="font-medium text-slate-900">
-                                        {selectedSeller.user.phone || selectedSeller.data.phone || "—"}
+                                        {selectedSeller.user?.phone || selectedSeller.data?.phone || "—"}
                                     </p>
                                 </div>
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Location</span>
                                     <p className="font-medium text-slate-900">
-                                        {selectedSeller.user.state && selectedSeller.user.state !== "Unknown"
-                                            ? `${selectedSeller.user.state}, ${selectedSeller.user.lga || ""}`
+                                        {selectedSeller.user?.state && selectedSeller.user?.state !== "Unknown"
+                                            ? `${selectedSeller.user?.state}, ${selectedSeller.user?.lga || ""}`
                                             : ((selectedSeller.data as any).stateOfOrigin ? `${(selectedSeller.data as any).stateOfOrigin}, ${(selectedSeller.data as any).lga || ""}` : "—")}
                                     </p>
                                 </div>
-                                {(selectedSeller.user.address && selectedSeller.user.address !== "Unknown" || (selectedSeller.data as any).residentialAddress) && (
+                                {(selectedSeller.user?.address && selectedSeller.user?.address !== "Unknown" || (selectedSeller.data as any).residentialAddress) && (
                                     <div className="col-span-2">
                                         <span className="text-slate-500 block text-xs mb-0.5">Address</span>
                                         <p className="font-medium text-slate-900">
-                                            {selectedSeller.user.address && selectedSeller.user.address !== "Unknown" ? selectedSeller.user.address : (selectedSeller.data as any).residentialAddress}
+                                            {selectedSeller.user?.address && selectedSeller.user?.address !== "Unknown" ? selectedSeller.user?.address : (selectedSeller.data as any).residentialAddress}
                                         </p>
                                     </div>
                                 )}
@@ -498,7 +498,7 @@ export default function FarmNationApplicationsPage() {
                                 <div className="flex justify-between">
                                     <span className="text-slate-500">Role Applied For</span>
                                     <span className="font-medium">
-                                        {formatRole(selectedSeller.data.serviceRegistrations?.farmNation?.role)}
+                                        {formatRole(selectedSeller.data?.serviceRegistrations?.farmNation?.role)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -511,33 +511,33 @@ export default function FarmNationApplicationsPage() {
                         </div>
 
                         {/* Farm Information */}
-                        {(selectedSeller.data.interests?.farmLocation || 
-                          (selectedSeller.data.interests?.farmDocuments && selectedSeller.data.interests.farmDocuments.length > 0) ||
-                          selectedSeller.data.interests?.latitude ||
-                          selectedSeller.data.interests?.longitude) && (
+                        {(selectedSeller.data?.interests?.farmLocation || 
+                          (selectedSeller.data?.interests?.farmDocuments && selectedSeller.data?.interests.farmDocuments.length > 0) ||
+                          selectedSeller.data?.interests?.latitude ||
+                          selectedSeller.data?.interests?.longitude) && (
                             <div>
                                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Farm Information</h4>
                                 <div className="bg-slate-50 p-4 rounded-xl text-sm space-y-3">
-                                    {selectedSeller.data.interests?.farmLocation && (
+                                    {selectedSeller.data?.interests?.farmLocation && (
                                         <div>
                                             <span className="text-slate-500 block text-xs mb-0.5">Farm Location</span>
-                                            <p className="font-medium text-slate-900">{selectedSeller.data.interests.farmLocation}</p>
+                                            <p className="font-medium text-slate-900">{selectedSeller.data?.interests.farmLocation}</p>
                                         </div>
                                     )}
-                                    {(selectedSeller.data.interests?.latitude || selectedSeller.data.interests?.longitude) && (
+                                    {(selectedSeller.data?.interests?.latitude || selectedSeller.data?.interests?.longitude) && (
                                         <div>
                                             <span className="text-slate-500 block text-xs mb-0.5">Coordinates</span>
                                             <p className="font-medium text-slate-900 font-mono text-xs">
-                                                {selectedSeller.data.interests.latitude ? `Lat: ${selectedSeller.data.interests.latitude}` : "—"}
-                                                {selectedSeller.data.interests.longitude ? `, Long: ${selectedSeller.data.interests.longitude}` : ""}
+                                                {selectedSeller.data?.interests.latitude ? `Lat: ${selectedSeller.data?.interests.latitude}` : "—"}
+                                                {selectedSeller.data?.interests.longitude ? `, Long: ${selectedSeller.data?.interests.longitude}` : ""}
                                             </p>
                                         </div>
                                     )}
-                                    {selectedSeller.data.interests?.farmDocuments && selectedSeller.data.interests.farmDocuments.length > 0 && (
+                                    {selectedSeller.data?.interests?.farmDocuments && selectedSeller.data?.interests.farmDocuments.length > 0 && (
                                         <div>
                                             <span className="text-slate-500 block text-xs mb-1.5">Uploaded Documents</span>
                                             <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg bg-white overflow-hidden">
-                                                {selectedSeller.data.interests.farmDocuments.map((doc: string, idx: number) => (
+                                                {selectedSeller.data?.interests.farmDocuments.map((doc: string, idx: number) => (
                                                     <li key={idx} className="flex items-center justify-between p-3 text-sm">
                                                         <a href={doc} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-teal-600 hover:underline font-medium">
                                                             <FileText className="w-4 h-4" />
@@ -553,23 +553,23 @@ export default function FarmNationApplicationsPage() {
                         )}
 
                         {/* Interests — shown as readable tags, not raw JSON */}
-                        {selectedSeller.data.farmNation?.interests && (
+                        {selectedSeller.data?.farmNation?.interests && (
                             <div>
                                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Farm Interests</h4>
                                 <div className="flex flex-wrap gap-2">
-                                    {Array.isArray(selectedSeller.data.farmNation.interests)
-                                        ? selectedSeller.data.farmNation.interests.map((interest: string, i: number) => (
+                                    {Array.isArray(selectedSeller.data?.farmNation.interests)
+                                        ? selectedSeller.data?.farmNation.interests.map((interest: string, i: number) => (
                                             <span key={i} className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-medium">
                                                 {interest}
                                             </span>
                                         ))
-                                        : typeof selectedSeller.data.farmNation.interests === "object"
-                                            ? Object.entries(selectedSeller.data.farmNation.interests).map(([k, v]) => (
+                                        : typeof selectedSeller.data?.farmNation.interests === "object"
+                                            ? Object.entries(selectedSeller.data?.farmNation.interests).map(([k, v]) => (
                                                 <span key={k} className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-medium capitalize">
-                                                    {k.replace(/_/g, " ")}: {String(v)}
+                                                    {humanise(k)}: {String(v)}
                                                 </span>
                                             ))
-                                            : <span className="text-sm text-slate-600">{String(selectedSeller.data.farmNation.interests)}</span>
+                                            : <span className="text-sm text-slate-600">{String(selectedSeller.data?.farmNation.interests)}</span>
                                     }
                                 </div>
                             </div>
@@ -610,7 +610,7 @@ export default function FarmNationApplicationsPage() {
                     isOpen={isRawDetailOpen}
                     onClose={() => setIsRawDetailOpen(false)}
                     data={selectedSeller.data}
-                    title={`Raw Details: ${selectedSeller.user.name}`}
+                    title={`Raw Details: ${selectedSeller.user?.name}`}
                 />
             )}
 
