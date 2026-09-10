@@ -38,9 +38,22 @@
  *
  *   TWO CANDIDATES WERE FALSE AND ARE NOT FIXED, WHICH IS WHY THEY ARE NAMED:
  *
- *     export/buyer's `product.grades[0]` — `grades` comes from a hardcoded
- *       array literal in that file, not from a document. Nothing can store it
- *       missing.
+ *     export/buyer's `product.grades[0]` — WRONG, AND CORRECTED IN #581. The
+ *       reason recorded here was that "`grades` comes from a hardcoded array
+ *       literal in that file, not from a document". That literal is only the
+ *       FALLBACK: the page has fetched /api/export/catalog since before this
+ *       suite was written, and a catalogue row can perfectly well have no
+ *       grades array — the same file's search filter reads
+ *       `...(product.grades || [])`, which is the author guarding the array in
+ *       one place and dereferencing it in another. It threw during useState,
+ *       so it took the whole grid down rather than one card. Fixed at the
+ *       boundary (lib/export-catalog-reader states the shape) and on the card.
+ *
+ *       LEFT HERE RATHER THAN DELETED, because a ratchet whose recorded
+ *       verdicts can quietly go stale is worth less than one that shows where
+ *       it was wrong. The site never matched the SCAN — the pattern is
+ *       `field[0]?.`, and this was `field[0]` with no chain at all — so what
+ *       was stale was the prose, not the measurement.
  *     `validation.error.issues[0]?.message` — zod guarantees `issues` is an
  *       array whenever `success === false`, which is the only branch that reads
  *       it. Fourteen sites, all safe.

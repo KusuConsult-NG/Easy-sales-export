@@ -374,7 +374,23 @@ describe('it agrees with the naive version everywhere the naive version is right
         // Raised rather than relaxed, on the same test as every time: that file
         // strips OTHER files with lib/testing/strip-comments — the good one —
         // and never reads its own text.
-        expect(AFFECTED.length).toBeLessThanOrEqual(19);
+        //
+        // NINETEEN became TWENTY when #578/#581 rewrote the catalogue half of
+        // repair-and-public-catalog.test.ts. TWELFTH form, and the first one I
+        // caused myself: that file's own codeOnly() helper has always carried
+        // `t.startsWith('//')` and `t.startsWith('/*')` on adjacent lines — the
+        // trap this module exists for — and what moved was the RATIO. The
+        // assertions there stopped matching the route's text and started
+        // running the reader instead, which traded about forty lines of
+        // string-matching code for a dozen of prose explaining why, and pushed
+        // the damage from under the 10% threshold to over it.
+        //
+        // Raised rather than relaxed, on the same test as every time: that file
+        // strips OTHER files — the orphaned-user repair, the catalogue reader
+        // and its route — with its own line-based codeOnly(), which is not the
+        // block-eating regex measured here, and it never reads its own text. No
+        // assertion in it can be misled by the mangling.
+        expect(AFFECTED.length).toBeLessThanOrEqual(20);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');

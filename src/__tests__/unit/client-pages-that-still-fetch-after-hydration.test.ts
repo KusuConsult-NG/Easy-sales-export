@@ -85,6 +85,71 @@ const ROOT = process.cwd();
  */
 const CAP = 12;
 
+/**
+ *   #568 `useOnce` COUNTS TOO, AND THE SCAN HAS BEEN BLIND TO
+ *        IT SINCE THIS LEDGER WAS WRITTEN.
+ *
+ *   The check was `/useEffect/` alone. useOnce is this
+ *   codebase's own wrapper — an effect with a ref guard, used by
+ *   the payment callbacks — so a page whose only mount read sat
+ *   behind it was INVISIBLE here. Two of the seven payment
+ *   callbacks were never counted, and converting a third to
+ *   useOnce in #568 silently removed it from the count, which is
+ *   how this was noticed: a change that should not have moved
+ *   the number moved it.
+ *
+ *   A ledger that a refactor can walk out of is not a ledger.
+ *   Any mount-time effect counts, whatever it is spelled.
+ */
+/**
+ *   #578 A FETCH WITHOUT AN `await` COUNTS TOO, AND THE SCAN
+ *        HAS BEEN BLIND TO IT SINCE THIS LEDGER WAS WRITTEN.
+ *
+ *   The check was `await fetch\(`. /export/buyer — the export
+ *   product catalogue, the shop window for international
+ *   buyers — reads its own API on mount as a promise chain:
+ *
+ *       fetch("/api/export/catalog").then(...).finally(...)
+ *
+ *   No `await`, so it was INVISIBLE HERE, while rendering a
+ *   full-screen spinner and nothing else until the round trip
+ *   finished. That is the waterfall in its worst form, and the
+ *   instrument could not see it.
+ *
+ *   #568 was the same fault in the other spelling — `useOnce`
+ *   rather than `useEffect` — which is what makes this worth a
+ *   second note: BOTH BLIND SPOTS WERE A SYNTAX THE SCAN
+ *   EXPECTED RATHER THAN A BEHAVIOUR IT MEASURED. Any call to
+ *   fetch counts now, awaited or not.
+ *
+ *   Measured before and after: widening it added exactly one
+ *   page, the one #578 then converted, so the cap does not move
+ *   in this change. It would have moved for anybody who added a
+ *   `.then()` fetch to a page in the meantime, which is the
+ *   point of fixing the instrument rather than the number.
+ */
+/**
+ * The three things that together are the waterfall, in one predicate.
+ *
+ *   #578 SO THAT THE SHAPE ITSELF CAN BE TESTED, and not only the corpus.
+ *
+ *   Both times this instrument was found blind — #568's `useOnce` and #578's
+ *   un-awaited `fetch` — the widening was UNFALSIFIABLE at the moment it was
+ *   made: the page that exposed the gap was converted in the same change, so
+ *   the count came out identical either way and reverting the regex broke
+ *   nothing. A check that cannot fail is the defect this audit has found most
+ *   often, and shipping one inside the instrument that counts the others would
+ *   be a poor joke.
+ *
+ *   The predicate is now exercised directly, against samples of each spelling.
+ */
+export function looksLikeAPostHydrationFetch(src: string): boolean {
+    if (!src.includes('"use client"')) return false;
+    if (!/useEffect|useOnce/.test(src)) return false;
+    if (!/(Action\s*\(|fetch\()/.test(src)) return false;
+    return true;
+}
+
 /** Every user-facing client page that fetches after hydration. */
 function pagesThatFetchAfterHydration(): string[] {
     const found: string[] = [];
@@ -97,25 +162,7 @@ function pagesThatFetchAfterHydration(): string[] {
                 if (entry !== 'admin') walk(full);
             } else if (entry === 'page.tsx') {
                 const src = readFileSync(full, 'utf-8');
-                if (!src.includes('"use client"')) continue;
-                /**
-                 *   #568 `useOnce` COUNTS TOO, AND THE SCAN HAS BEEN BLIND TO
-                 *        IT SINCE THIS LEDGER WAS WRITTEN.
-                 *
-                 *   The check was `/useEffect/` alone. useOnce is this
-                 *   codebase's own wrapper — an effect with a ref guard, used by
-                 *   the payment callbacks — so a page whose only mount read sat
-                 *   behind it was INVISIBLE here. Two of the seven payment
-                 *   callbacks were never counted, and converting a third to
-                 *   useOnce in #568 silently removed it from the count, which is
-                 *   how this was noticed: a change that should not have moved
-                 *   the number moved it.
-                 *
-                 *   A ledger that a refactor can walk out of is not a ledger.
-                 *   Any mount-time effect counts, whatever it is spelled.
-                 */
-                if (!/useEffect|useOnce/.test(src)) continue;
-                if (!/(Action\s*\(|await fetch\()/.test(src)) continue;
+                if (!looksLikeAPostHydrationFetch(src)) continue;
                 found.push(full.slice(ROOT.length + 1));
             }
         }
@@ -200,6 +247,10 @@ const CONVERTED = [
     //   #570 — the cooperative loans screen, once the owner released the hold
     //   they had placed on the loan product.
     'src/app/cooperatives/(member)/loans/page.tsx',
+    //   #578 — the export product catalogue, which the scan above could not
+    //   see until this change: a full-screen spinner until its own API
+    //   answered, on the screen international buyers land on.
+    'src/app/export/buyer/page.tsx',
     //   #577 — the export buyer cart. IT NEVER HAD A WATERFALL, and this is
     //   the one entry on this list that did not remove one: it came off the
     //   ledger because the naira total it quotes is converted at an
@@ -533,6 +584,46 @@ describe('#545 — the waterfall that is left is counted', () => {
             expect({ page, counted: pages.has(page) }).toEqual({ page, counted: true });
         }
         expect(NOT_CONVERTIBLE.every(e => e.because.length > 20)).toBe(true);
+    });
+
+    /**
+     *   THE PREDICATE, EXERCISED DIRECTLY — #578.
+     *
+     *   Reverting either widening leaves the corpus count unchanged today,
+     *   because both pages that exposed a blind spot were converted in the same
+     *   change that found it. These are the tests that fail instead.
+     */
+    it('POSITIVE CONTROL: A `.then()` FETCH IS A POST-HYDRATION FETCH', () => {
+        //   #578's spelling. `await fetch(` alone does not see this.
+        expect(looksLikeAPostHydrationFetch(
+            '"use client";\nuseEffect(() => { fetch("/api/x").then(r => r.json()); }, []);'
+        )).toBe(true);
+    });
+
+    it('POSITIVE CONTROL: SO IS AN AWAITED ONE, AND SO IS useOnce', () => {
+        expect(looksLikeAPostHydrationFetch(
+            '"use client";\nuseEffect(() => { const r = await fetch("/api/x"); }, []);'
+        )).toBe(true);
+        //   #568's spelling.
+        expect(looksLikeAPostHydrationFetch(
+            '"use client";\nuseOnce(() => { verifyPaymentAction(ref); });'
+        )).toBe(true);
+    });
+
+    it('NEGATIVE CONTROL: AND A PAGE THAT ASKS FOR NOTHING IS NOT', () => {
+        //   Without this the predicate is satisfied by returning true.
+        expect(looksLikeAPostHydrationFetch(
+            '"use client";\nuseEffect(() => { setMounted(true); }, []);'
+        )).toBe(false);
+        //   A server page, whatever it contains.
+        expect(looksLikeAPostHydrationFetch(
+            'export default async function Page() { await fetch("/api/x"); }'
+        )).toBe(false);
+        //   A client page with a fetch but no effect: it fires on an
+        //   interaction, and this ledger is about mount.
+        expect(looksLikeAPostHydrationFetch(
+            '"use client";\nfunction onClick() { fetch("/api/x"); }'
+        )).toBe(false);
     });
 
     it('AND THE SCREENS A MEMBER LANDS ON FIRST ARE AMONG THEM', () => {

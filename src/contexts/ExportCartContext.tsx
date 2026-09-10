@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 
+import { clampToMinimumOrder } from "@/lib/export-minimum-order";
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface ExportProduct {
@@ -127,9 +129,21 @@ export function ExportCartProvider({ children }: { children: React.ReactNode }) 
             setCart(prev => prev.filter(item => item.product.id !== productId));
             return;
         }
+        /**
+         *   #580 — THE MINIMUM ORDER IS HELD HERE, where both steppers meet.
+         *
+         *   The catalogue card would not let a buyer ADD less than the
+         *   product's minimum, and then the cart's own minus button stepped
+         *   straight past it in fives. Clamped in the one function both the
+         *   sidebar and the cart page call, so the rule cannot be true on one
+         *   screen and false on the other; the X button is still how a line is
+         *   removed.
+         */
         setCart(prev =>
             prev.map(item =>
-                item.product.id === productId ? { ...item, quantityMT } : item
+                item.product.id === productId
+                    ? { ...item, quantityMT: clampToMinimumOrder(item.product, quantityMT) }
+                    : item
             )
         );
     }, []);

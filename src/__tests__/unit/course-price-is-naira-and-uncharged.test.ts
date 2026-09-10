@@ -128,9 +128,12 @@ describe('#368 — the course price is shown in the currency it is charged in', 
     it('EXPORT keeps its dollar signs, because export is genuinely priced in USD', () => {
         // Vacuity guard in the other direction: a sweep that "fixed" every $ in
         // the app would have broken the one module where it is correct.
-        const buyer = code('src/app/export/buyer/page.tsx');
+        //   #578 moved the browser half of the catalogue out of page.tsx so it
+        //   could be seeded on the server; #581 reads the price through a
+        //   local that is checked for being a number first.
+        const buyer = code('src/app/export/buyer/ExportBuyerClient.tsx');
 
-        expect(buyer).toContain('${product.pricePerMT.toLocaleString()}');
+        expect(buyer).toContain('${pricePerMT.toLocaleString()}');
         // And it is converted before anybody is charged.
         expect(code('src/app/actions/export-payment.ts')).toContain('exchangeRate: usdToNgn');
     });

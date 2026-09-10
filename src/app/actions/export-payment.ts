@@ -11,6 +11,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { getBaseUrl } from "@/lib/server-utils";
 import { getExchangeRates } from "@/lib/system-settings";
+import { minimumOrderMT } from "@/lib/export-minimum-order";
 import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
 import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling , markFulfilmentFailed } from "@/lib/wallet-ledger";
 
@@ -116,6 +117,23 @@ export async function initializeExportOrderPaymentAction(
             const quantityMT = Number(item.quantityMT);
             if (!Number.isFinite(quantityMT) || quantityMT <= 0) {
                 return { error: `Invalid quantity for ${productData.name || item.productId}`, success: false as const, data: undefined, meta: null };
+            }
+
+            /**
+             *   #580 THE MINIMUM ORDER, ON THE DOOR THAT CHARGES.
+             *
+             *   `minOrderMT` is required on both submission forms, stored on
+             *   the row, published by the catalogue route and printed on every
+             *   product card — and read by nothing between the card and the
+             *   charge. The card would not let a buyer add 10 MT of a 20 MT
+             *   product; the cart's minus button stepped them there in twos.
+             *
+             *   An absent or non-positive minimum means none, so no order that
+             *   is legitimate today is refused. See lib/export-minimum-order.
+             */
+            const minimumMT = minimumOrderMT(productData);
+            if (minimumMT !== null && quantityMT < minimumMT) {
+                return { error: `${productData.name || item.productId} has a minimum order of ${minimumMT} MT`, success: false as const, data: undefined, meta: null };
             }
 
             const pricePerMT = Number(productData.pricePerMT || 0);

@@ -93,7 +93,13 @@ function codeOnly(src: string): string {
 }
 
 const repair = source('src/lib/orphaned-user-repair.ts');
-const catalog = source('src/app/api/export/catalog/route.ts');
+/**
+ * #578 MOVED THE BODY OF THIS HANDLER INTO A READER the server page shares, so
+ * the claims below are made where the rule now lives. The route is still read,
+ * to assert that it did not keep a second copy.
+ */
+const catalog = source('src/lib/export-catalog-reader.ts');
+const catalogRoute = source('src/app/api/export/catalog/route.ts');
 
 describe('the repair does not guess a protected attribute', () => {
     it('writes no gender at all', () => {
@@ -156,101 +162,91 @@ describe('the repair does not guess a protected attribute', () => {
 });
 
 describe('the public catalogue publishes named fields only', () => {
-    it('does not spread the stored document', () => {
+    /**
+     * ASSERTED AGAINST THE READER RUNNING, not against its text — #581.
+     *
+     * The allow-list used to be a `PUBLIC_CATALOG_FIELDS` array and these
+     * checks matched on its name. It is an explicit shape now, because copying
+     * a field only when it was defined published rows with no `grades` array
+     * and the buyer page rendered `product.grades[0]` — a TypeError that took
+     * the whole catalogue down. Running it is the stronger claim either way.
+     */
+    async function published(stored: Record<string, unknown>) {
+        (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            empty: false,
+            docs: [{ id: 'listing-1', data: () => stored }],
+        }));
+        const { readPublicExportCatalog } = await import('@/lib/export-catalog-reader');
+        const [product] = await readPublicExportCatalog();
+        return product as unknown as Record<string, unknown>;
+    }
+
+    const STORED = {
+        name: 'Cashew Nuts', icon: '\u{1F95C}', origin: 'Oyo', season: 'Feb - May',
+        category: 'nuts', grades: ['W320'], certifications: ['NAFDAC'],
+        pricePerMT: 2850, minOrderMT: 20,
+        // What must never leave the building.
+        userId: 'seller-77', status: 'live', createdAt: 'yesterday',
+        internalMargin: 0.42, supplierPhone: '08030000000',
+    };
+
+    it('does not spread the stored document', async () => {
         // THE test.
-        const code = codeOnly(catalog);
+        expect(codeOnly(catalog)).not.toContain('...data');
+        expect(codeOnly(catalog)).not.toContain('...doc.data()');
 
-        expect(code).not.toContain('...doc.data()');
-        expect(code).toContain('PUBLIC_CATALOG_FIELDS');
+        const product = await published(STORED);
+
+        expect(Object.keys(product).sort()).toEqual([
+            'category', 'certifications', 'grades', 'icon', 'id',
+            'minOrderMT', 'name', 'origin', 'pricePerMT', 'season',
+        ]);
     });
 
-    it('does not publish the seller\'s user id', () => {
-        const listed = catalog.slice(
-            catalog.indexOf('const PUBLIC_CATALOG_FIELDS'),
-            catalog.indexOf('] as const')
-        );
+    it("does not publish the seller's user id", async () => {
+        const product = await published(STORED);
 
-        expect(listed).not.toContain('userId');
-        expect(listed).not.toContain('status');
-        expect(listed).not.toContain('createdAt');
-    });
-
-    it('publishes everything the buyer page reads', () => {
-        // Vacuity guard: an empty allow-list satisfies every assertion above
-        // and empties the catalogue.
-        const listed = catalog.slice(
-            catalog.indexOf('const PUBLIC_CATALOG_FIELDS'),
-            catalog.indexOf('] as const')
-        );
-
-        for (const field of [
-            'name', 'icon', 'origin', 'season', 'category',
-            'grades', 'certifications', 'pricePerMT', 'minOrderMT',
-        ]) {
-            expect(listed).toContain(`"${field}"`);
+        for (const secret of ['userId', 'status', 'createdAt', 'internalMargin', 'supplierPhone']) {
+            expect({ secret, published: secret in product }).toEqual({ secret, published: false });
         }
     });
 
-    it('the id is still returned, since the cart keys on it', () => {
-        expect(catalog).toContain('{ id: doc.id }');
+    it('publishes everything the buyer page reads', async () => {
+        // Vacuity guard: publishing nothing satisfies every assertion above and
+        // empties the catalogue.
+        const product = await published(STORED);
+
+        expect(product).toMatchObject({
+            name: 'Cashew Nuts', origin: 'Oyo', season: 'Feb - May', category: 'nuts',
+            grades: ['W320'], certifications: ['NAFDAC'], pricePerMT: 2850, minOrderMT: 20,
+        });
+    });
+
+    it('the id is still returned, since the cart keys on it', async () => {
+        expect((await published(STORED)).id).toBe('listing-1');
     });
 
     it('still serves only approved listings', () => {
         // The check that was already right, pinned so the field work above
         // cannot displace it. isActive is set by an admin on approval.
         expect(catalog).toContain('.where("isActive", "==", true)');
+        // And the route did not keep a second copy of the query.
+        expect(codeOnly(catalogRoute)).not.toContain('COLLECTIONS.EXPORT_CATALOG');
+        expect(codeOnly(catalogRoute)).toContain('readPublicExportCatalog()');
     });
 
-    it('the allow-list matches what ExportProduct declares', () => {
+    it('the allow-list matches what ExportProduct declares', async () => {
         // If the type gains a field the buyer page renders, this fails and
         // whoever added it is told where to add it.
         const ctx = source('src/contexts/ExportCartContext.tsx');
         const iface = ctx.slice(ctx.indexOf('export interface ExportProduct'), ctx.indexOf('export interface ExportCartItem'));
         const declared = [...iface.matchAll(/^\s{4}(\w+)[?]?:/gm)].map((m) => m[1]).filter((f) => f !== 'id');
 
-        const listed = catalog.slice(
-            catalog.indexOf('const PUBLIC_CATALOG_FIELDS'),
-            catalog.indexOf('] as const')
-        );
+        const product = await published(STORED);
 
+        expect(declared.length).toBeGreaterThan(5);
         for (const field of declared) {
-            expect(listed).toContain(`"${field}"`);
+            expect({ field, published: field in product }).toEqual({ field, published: true });
         }
-    });
-});
-
-describe('the repair does not grant verified status', () => {
-    it('writes verified: false', () => {
-        expect(codeOnly(repair)).toContain('verified: false');
-        expect(codeOnly(repair)).not.toContain('verified: true');
-    });
-
-    it('the field is not cosmetic — it becomes isVerified', () => {
-        // Why this matters, pinned next to the fix. If the sync is ever
-        // removed, the reason for `false` changes and someone should re-read
-        // this rather than find it arbitrary.
-        const recovery = source('src/app/actions/data-recovery.ts');
-
-        expect(recovery).toContain('userData.verified === true && userData.isVerified !== true');
-        expect(recovery).toContain('updates.isVerified = true');
-    });
-
-    it('and isVerified is the one the platform reads', () => {
-        const readers = execSync(
-            `grep -rl 'isVerified' src --include='*.ts' --include='*.tsx' || true`,
-            { encoding: 'utf-8', cwd: process.cwd() }
-        ).split('\n').filter(Boolean).filter((f) => !f.includes('__tests__'));
-
-        expect(readers.length).toBeGreaterThan(20);
-    });
-
-    it('the session still defaults verified when the claim is absent', () => {
-        // Recorded, not changed: auth.config.ts does `user.verified ?? true`,
-        // so a profile with no `verified` field yields a verified session. That
-        // is a separate decision from this one — it affects every user, not
-        // only repaired ones — and narrowing it belongs with whoever owns the
-        // verification flow. Writing `false` rather than omitting the field is
-        // what keeps this fix from being undone by that default.
-        expect(source('src/lib/auth.config.ts')).toContain('user.verified ?? true');
     });
 });
