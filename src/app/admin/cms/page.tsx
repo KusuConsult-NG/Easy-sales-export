@@ -111,8 +111,12 @@ export default function CmsPage() {
                 getActiveAnnouncementsAction("all"),
                 getActiveBannersAction(),
             ]);
-            setAnnouncements(a ?? []);
-            setBanners(b ?? []);
+            //   #603 — `?? []` guards null and undefined and nothing else. A
+            //   reader that answers with an error OBJECT gets stored as the
+            //   list, and `announcements.map` is then not a function: the CMS
+            //   screen goes blank rather than showing no announcements.
+            setAnnouncements(Array.isArray(a) ? a : []);
+            setBanners(Array.isArray(b) ? b : []);
         } catch {
             showToast("Could not load CMS content", "error");
         } finally {

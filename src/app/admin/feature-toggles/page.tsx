@@ -54,8 +54,13 @@ export default function FeatureTogglesPage() {
 
     const filteredToggles = toggles.filter(toggle => {
         const metadata = FEATURE_METADATA[toggle.id];
-        const matchesSearch = toggle.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            toggle.description.toLowerCase().includes(searchQuery.toLowerCase());
+        //   #603 — a toggle row without a name or description threw here, on
+        //   every keystroke, and took the whole feature-flag screen with it.
+        const haystack = [toggle.name, toggle.description]
+            .filter((v): v is string => typeof v === "string")
+            .join(" ")
+            .toLowerCase();
+        const matchesSearch = haystack.includes(searchQuery.toLowerCase());
         const matchesCategory = categoryFilter === "ALL" || metadata?.category === categoryFilter;
         return matchesSearch && matchesCategory;
     });

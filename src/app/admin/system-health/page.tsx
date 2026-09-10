@@ -155,32 +155,32 @@ export default function SystemHealthPage() {
                                 <h2 className="font-bold text-slate-800">Infrastructure Connectivity</h2>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.redis ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services?.redis ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
                                     <Database className="w-5 h-5" />
                                     <div className="flex flex-col">
                                         <span className="text-xs font-bold uppercase">Upstash Redis</span>
-                                        <span className="text-sm">{report.services.redis ? 'Connected' : 'Disconnected'}</span>
+                                        <span className="text-sm">{report.services?.redis ? 'Connected' : 'Disconnected'}</span>
                                     </div>
                                 </div>
-                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.firestore ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services?.firestore ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
                                     <Database className="w-5 h-5" />
                                     <div className="flex flex-col">
                                         <span className="text-xs font-bold uppercase">Cloud Firestore</span>
-                                        <span className="text-sm">{report.services.firestore ? 'Active' : 'Error'}</span>
+                                        <span className="text-sm">{report.services?.firestore ? 'Active' : 'Error'}</span>
                                     </div>
                                 </div>
-                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.paystack ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services?.paystack ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
                                     <CreditCard className="w-5 h-5" />
                                     <div className="flex flex-col">
                                         <span className="text-xs font-bold uppercase">Paystack API</span>
-                                        <span className="text-sm">{report.services.paystack ? 'Configured' : 'Missing Key'}</span>
+                                        <span className="text-sm">{report.services?.paystack ? 'Configured' : 'Missing Key'}</span>
                                     </div>
                                 </div>
-                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.resend ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services?.resend ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
                                     <Mail className="w-5 h-5" />
                                     <div className="flex flex-col">
                                         <span className="text-xs font-bold uppercase">Resend Mail</span>
-                                        <span className="text-sm">{report.services.resend ? 'Ready' : 'Missing Key'}</span>
+                                        <span className="text-sm">{report.services?.resend ? 'Ready' : 'Missing Key'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -196,7 +196,7 @@ export default function SystemHealthPage() {
                                 <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-tighter font-bold">Runtime Toggles</span>
                             </div>
                             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                                {Object.entries(report.featureToggles).map(([key, enabled]) => (
+                                {Object.entries(report.featureToggles ?? {}).map(([key, enabled]) => (
                                     <div key={key} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
                                         <span className="text-xs font-medium text-slate-600 truncate mr-2" title={key}>{key.replace(/_/g, ' ')}</span>
                                         {enabled ? (
@@ -227,7 +227,7 @@ export default function SystemHealthPage() {
                                 </span>
                             </div>
                         </div>
-                        {report.issues.length === 0 ? (
+                        {report.issues?.length === 0 ? (
                             <div className="p-12 text-center text-slate-500">
                                 <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
                                 <p className="text-lg font-medium text-slate-900">Platform Synchronized!</p>
@@ -245,7 +245,7 @@ export default function SystemHealthPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {report.issues.map((issue, idx) => (
+                                        {report.issues?.map((issue, idx) => (
                                             <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-900 truncate max-w-[200px]" title={issue.email}>

@@ -166,28 +166,28 @@ export default function AdminDiagnosticsPage() {
                 <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <HealthCard
                         title="Database"
-                        ok={data?.services.firestore}
+                        ok={data?.services?.firestore}
                         probed
                         icon={Database}
                         description="Answered a bounded one-row read"
                     />
                     <HealthCard
                         title="Upstash Redis"
-                        ok={data?.services.redis}
+                        ok={data?.services?.redis}
                         probed
                         icon={Server}
                         description="Session caching and rate limiting"
                     />
                     <HealthCard
                         title="Paystack"
-                        ok={data?.services.paystack}
+                        ok={data?.services?.paystack}
                         probed={false}
                         icon={CreditCard}
                         description="Payment gateway and escrow processing"
                     />
                     <HealthCard
                         title="Resend"
-                        ok={data?.services.resend}
+                        ok={data?.services?.resend}
                         probed={false}
                         icon={Mail}
                         description="Email notifications and alerts"
@@ -247,14 +247,14 @@ export default function AdminDiagnosticsPage() {
                   * secrets are strong", and a green tick for that would be the
                   * same lie #440 removed from this page.
                   */}
-                {data && data.secretWeaknesses.length > 0 && (
+                {data && data.secretWeaknesses?.length > 0 && (
                     <div className="md:col-span-3 bg-red-50 border border-red-200 p-6 rounded-2xl">
                         <div className="flex items-center gap-2 mb-3">
                             <AlertTriangle className="w-5 h-5 text-red-600" />
                             <h2 className="font-bold text-red-900">Weak or missing production secrets</h2>
                         </div>
                         <ul className="space-y-1.5">
-                            {data.secretWeaknesses.map((weakness) => (
+                            {data.secretWeaknesses?.map((weakness) => (
                                 <li key={weakness} className="text-sm text-red-800">• {weakness}</li>
                             ))}
                         </ul>
@@ -286,8 +286,8 @@ export default function AdminDiagnosticsPage() {
                                 <p className="text-sm font-medium flex items-center gap-1.5">
                                     {data ? (
                                         <>
-                                            <span className={`w-2 h-2 rounded-full ${Object.values(data.services).some((s) => !s) ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-                                            {Object.values(data.services).filter((s) => !s).length}
+                                            <span className={`w-2 h-2 rounded-full ${Object.values(data.services ?? {}).some((s) => !s) ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                                            {Object.values(data.services ?? {}).filter((s) => !s).length}
                                         </>
                                     ) : (
                                         <>

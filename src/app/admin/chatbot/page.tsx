@@ -14,6 +14,7 @@ import {
 import { MODULE_CONFIGS, type ChatbotModule } from "@/lib/chatbot-knowledge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 const MODULE_OPTIONS: { value: string; label: string }[] = [
     { value: "", label: "All Modules" },
@@ -27,7 +28,10 @@ const MODULE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 function ModuleBadge({ module }: { module: ChatbotModule }) {
-    const cfg = MODULE_CONFIGS[module];
+    //   #603 — a session whose `module` is not one of the four known values —
+    //   an older row, a new module added server-side first — made this
+    //   `undefined` and took the whole chatbot list down on `cfg.accentColor`.
+    const cfg = MODULE_CONFIGS[module] ?? MODULE_CONFIGS.hub;
     return (
         <span
             className="px-2 py-0.5 rounded-full text-[11px] font-semibold text-white"
@@ -223,7 +227,10 @@ export default function AdminChatbotPage() {
                                             {session.messageCount}
                                         </td>
                                         <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                                            {session.lastMessageAt.toLocaleString("en-NG", {
+                                            {/*  #603 — a session row with no
+                                                 lastMessageAt took the whole
+                                                 chatbot list down. */}
+                                            {formatDateOrDash(session.lastMessageAt, {
                                                 day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
                                             })}
                                         </td>

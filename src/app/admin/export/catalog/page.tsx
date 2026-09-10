@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAdminData } from "@/hooks/useAdminData";
+import { numberOrZero } from "@/lib/numbers";
 import { 
     getAdminExportCatalogAction, 
     createExportCatalogAction, 
@@ -309,7 +310,7 @@ export default function AdminExportCatalogPage() {
                             <div>
                                 {serverTotal === null
                                     ? <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
-                                    : <p className="text-2xl font-bold text-slate-900">{serverTotal.toLocaleString()}</p>
+                                    : <p className="text-2xl font-bold text-slate-900">{numberOrZero(serverTotal).toLocaleString()}</p>
                                 }
                                 <p className="text-sm text-slate-500">Total Products</p>
                             </div>

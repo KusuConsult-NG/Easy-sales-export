@@ -638,8 +638,8 @@ export default function CooperativeMembersPage() {
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <p className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
-                                                {app.user.name || <span className="text-amber-600 italic text-xs">Incomplete</span>}
-                                                {app.data.isLegacy && (
+                                                {app.user?.name || <span className="text-amber-600 italic text-xs">Incomplete</span>}
+                                                {app.data?.isLegacy && (
                                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                                         Legacy
                                                     </span>
@@ -647,13 +647,13 @@ export default function CooperativeMembersPage() {
                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                                     {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
                                                 </span>
-                                                {app.user.gender && (
+                                                {app.user?.gender && (
                                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
-                                                        {app.user.gender}
+                                                        {app.user?.gender}
                                                     </span>
                                                 )}
                                             </p>
-                                            <p className="text-xs text-slate-500 mt-0.5">{app.user.email || "—"}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">{app.user?.email || "—"}</p>
                                         </div>
                                         <span className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.status)}`}>
                                             {app.status}
@@ -661,10 +661,10 @@ export default function CooperativeMembersPage() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 capitalize">
-                                            {app.data.membershipTier}
+                                            {app.data?.membershipTier}
                                         </span>
                                         <span className="text-xs text-slate-500">
-                                            ₦{(app.data.registrationFee || 0).toLocaleString()}
+                                            ₦{(app.data?.registrationFee || 0).toLocaleString()}
                                         </span>
                                     </div>
                                     <button
@@ -720,8 +720,8 @@ export default function CooperativeMembersPage() {
                                                     </div>
                                                     <div>
                                                         <div className="text-sm font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
-                                                            {app.user.name}
-                                                            {app.data.isLegacy && (
+                                                            {app.user?.name}
+                                                            {app.data?.isLegacy && (
                                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                                                     Legacy
                                                                 </span>
@@ -729,31 +729,31 @@ export default function CooperativeMembersPage() {
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                                                 {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
                                                             </span>
-                                                            {app.user.gender && (
+                                                            {app.user?.gender && (
                                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
-                                                                    {app.user.gender}
+                                                                    {app.user?.gender}
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="text-sm text-slate-500">{app.user.email}</div>
+                                                        <div className="text-sm text-slate-500">{app.user?.email}</div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="text-sm text-slate-900">{app.data.phone || "—"}</div>
-                                                <div className="text-xs text-slate-500">{app.data.stateOfOrigin || "—"}</div>
+                                                <div className="text-sm text-slate-900">{app.data?.phone || "—"}</div>
+                                                <div className="text-xs text-slate-500">{app.data?.stateOfOrigin || "—"}</div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border bg-blue-50 text-blue-700 border-blue-200`}>
-                                                    {app.data.membershipTier}
+                                                    {app.data?.membershipTier}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                    app.data.paymentStatus === 'completed' ? 'bg-emerald-100 text-emerald-800' :
-                                                    app.data.paymentStatus === 'failed' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                                    app.data?.paymentStatus === 'completed' ? 'bg-emerald-100 text-emerald-800' :
+                                                    app.data?.paymentStatus === 'failed' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
                                                 }`}>
-                                                    {app.data.paymentStatus || 'pending'}
+                                                    {app.data?.paymentStatus || 'pending'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">

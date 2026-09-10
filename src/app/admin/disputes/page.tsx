@@ -18,6 +18,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import type { Dispute } from "@/lib/types/marketplace";
 import { formatLocalDate } from "@/lib/date-utils";
 import { humanise } from "@/lib/humanise";
+import { humaniseUpper } from "@/lib/humanise";
 
 export default function AdminDisputesPage() {
     const { showToast } = useToast();
@@ -83,7 +84,7 @@ export default function AdminDisputesPage() {
         return (
             <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit ${bg} ${text}`}>
                 <Icon className="w-3 h-3" />
-                {status.replace(/_/g, " ").toUpperCase()}
+                {humaniseUpper(status)}
             </span>
         );
     };

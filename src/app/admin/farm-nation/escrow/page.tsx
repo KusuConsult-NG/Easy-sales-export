@@ -7,6 +7,7 @@ import {
     Shield, CheckCircle, Search, RefreshCw, XCircle, AlertCircle, FileText, ArrowRight
 } from "lucide-react";
 import { getFarmNationTransactionsAction, releaseFarmNationEscrowAction } from "@/app/actions/farm-nation-admin";
+import { shortId } from "@/lib/humanise";
 
 export default function EscrowManagementPage() {
     const { data: session } = useSession();
@@ -145,7 +146,7 @@ export default function EscrowManagementPage() {
                                     <tr key={tx.id} className="border-b border-slate-100 hover:bg-slate-50">
                                         <td className="p-4">
                                             <div className="font-medium text-slate-900">{tx.propertyName}</div>
-                                            <div className="text-xs text-slate-500 font-mono mt-1">ID: {tx.propertyId.substring(0,8)}</div>
+                                            <div className="text-xs text-slate-500 font-mono mt-1">ID: {shortId(tx.propertyId, 8)}</div>
                                         </td>
                                         <td className="p-4">
                                             <div className="font-medium text-slate-900">{tx.buyerName}</div>

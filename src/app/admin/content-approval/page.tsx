@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, Clock, Eye, FileText, Package, Home, GraduationCa
 import { getContentApprovalItemsAction, approveContentAction, rejectContentAction, type PendingContentItem, type ContentType, type ApprovalStatus } from "@/app/actions/admin-content";
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
+import { humaniseUpper } from "@/lib/humanise";
 
 export default function ContentApprovalPage() {
     const [contentFilter, setContentFilter] = useState<ContentType | "all">("all");
@@ -148,7 +149,7 @@ export default function ContentApprovalPage() {
         return (
             <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-semibold ${styles[status]}`}>
                 <Icon className="w-3 h-3" />
-                <span>{status.toUpperCase()}</span>
+                <span>{humaniseUpper(status)}</span>
             </span>
         );
     };
