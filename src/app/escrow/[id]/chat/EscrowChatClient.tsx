@@ -11,6 +11,8 @@ import { useToast } from "@/contexts/ToastContext";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { escrowStatusLabel } from "@/lib/escrow-status";
+import { formatCurrency } from "@/lib/utils";
 
 /**
  * What the server read before the page was sent.
@@ -272,6 +274,30 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
 
     const isMyMessage = (message: Message) => message.senderId === session?.user?.id;
 
+    /**
+     *   #593, the other half: `authorized` was WRITTEN AND READ BY NOTHING.
+     *
+     *   The screen computed whether this viewer is the buyer, the seller or an
+     *   admin, stored the answer, and then rendered the whole chat frame —
+     *   header, composer, send button — regardless. The redirect was the only
+     *   thing that acted on the decision.
+     *
+     *   NO MESSAGE EVER LEAKED, AND THIS IS NOT A SECURITY FIX. Both reads are
+     *   authorised on the server: getEscrowMessagesAction re-fetches the escrow
+     *   row and refuses a non-participant with "Access denied" (logging the
+     *   attempt), and getEscrowTransactionByIdAction does the same. What the
+     *   flag was worth is what a person sees in the seconds before the redirect
+     *   lands — an escrow chat shell with a working-looking composer — and a
+     *   screen that decides something should act on its own decision.
+     */
+    if (!authorized) {
+        return (
+            <div className="min-h-screen bg-linear-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-blue-300 animate-spin" />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-linear-to-br from-slate-900 via-blue-900 to-slate-900 flex flex-col">
             {/* Header */}
@@ -287,9 +313,35 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
                         <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
                             <Shield className="w-6 h-6 text-white" />
                         </div>
-                        <div>
-                            <h1 className="text-lg font-semibold text-white">Escrow Chat</h1>
-                            <p className="text-sm text-blue-200">Transaction #{escrowId.slice(0, 8)}</p>
+                        {/*
+                          *   #593 — THE ESCROW ROW WAS FETCHED, SEEDED BY THE
+                          *   SERVER, PUT IN STATE AND DRAWN NOWHERE.
+                          *
+                          *   This header said "Escrow Chat / Transaction
+                          *   #a3f19c2b" and nothing else, while `escrowData` —
+                          *   the product, the amount held and the status — sat
+                          *   unread in state one screen away. Two people
+                          *   arguing about a consignment, and an admin moving
+                          *   between chats in Admin Mode, had eight hex
+                          *   characters to tell them which transaction this is
+                          *   and how much is at stake.
+                          *
+                          *   #348's and #590's shape exactly: collected, paid
+                          *   for, and shown to nobody.
+                          */}
+                        <div className="min-w-0">
+                            <h1 className="text-lg font-semibold text-white truncate">
+                                {escrowData?.productName || "Escrow Chat"}
+                            </h1>
+                            <p className="text-sm text-blue-200 truncate">
+                                Transaction #{escrowId.slice(0, 8)}
+                                {typeof escrowData?.amount === "number" && (
+                                    <> · {formatCurrency(escrowData.amount)} held</>
+                                )}
+                                {escrowStatusLabel(escrowData?.status) && (
+                                    <> · {escrowStatusLabel(escrowData?.status)}</>
+                                )}
+                            </p>
                         </div>
                     </div>
                     {session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin") ? (

@@ -261,6 +261,43 @@ export function normaliseEscrowStatus(status: unknown): EscrowStatus | null {
 }
 
 /**
+ * What to call a status on screen.
+ *
+ *   #593 — added because the escrow chat needed to say what state a
+ *   transaction was in, and this file's whole reason for existing is that a
+ *   caller writing its own set of statuses is how the last two escrow defects
+ *   happened. The Record is EXHAUSTIVE by type, so adding a ninth status to
+ *   ESCROW_STATUSES fails to compile until it has a name a person can read.
+ *
+ *   /escrow's STEPS keeps its own four labels ON PURPOSE: they name the stages
+ *   of a stepper, not the statuses — "Complete" for `released` — and four of
+ *   the eight statuses have no stage at all. That is a different question about
+ *   the same vocabulary, not a second copy of this one.
+ */
+const ESCROW_STATUS_LABELS: Readonly<Record<EscrowStatus, string>> = {
+    pending: "Payment pending",
+    funded: "Funds held in escrow",
+    in_transit: "In transit",
+    delivered: "Delivered",
+    disputed: "Disputed",
+    released: "Released to seller",
+    refunded: "Refunded to buyer",
+    cancelled: "Cancelled",
+};
+
+/**
+ * A status as a person reads it, or null when the value is not a status at all.
+ *
+ * Null rather than the raw string: a screen that prints whatever it was given
+ * shows "undefined" or a stray database value to the person looking at it, and
+ * this codebase has fixed that twice already.
+ */
+export function escrowStatusLabel(status: unknown): string | null {
+    const normalised = normaliseEscrowStatus(status);
+    return normalised ? ESCROW_STATUS_LABELS[normalised] : null;
+}
+
+/**
  * The document id for one seller's escrow on one order.
  *
  * THE DEFECT
