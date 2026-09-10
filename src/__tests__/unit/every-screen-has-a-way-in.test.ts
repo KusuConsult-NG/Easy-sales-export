@@ -293,7 +293,9 @@ describe('#362 — the five this commit wired up', () => {
     it('all five pages sit behind the admin layout gate', () => {
         // Linking an ungated admin screen would be worse than leaving it
         // hidden. app/admin/layout.tsx is the gate all five inherit.
-        const layout = source('src/app/admin/layout.tsx');
+        //   #617 — the guard moved into AdminShell so /loans/approve could
+        //   share it rather than carry a second copy. Same check, one home.
+        const layout = source('src/components/admin/AdminShell.tsx');
 
         expect(layout).toContain('isAdmin(roles)');
         expect(layout).toContain('redirect("/dashboard")');

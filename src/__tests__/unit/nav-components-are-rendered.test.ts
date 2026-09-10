@@ -204,8 +204,8 @@ describe('#361 — /admin/system-health is reachable now', () => {
         expect(isRendered('src/components/admin/AdminSidebar.tsx')).toBe(true);
     });
 
-    it('and app/admin/layout.tsx really is what renders that table', () => {
-        expect(source('src/app/admin/layout.tsx'))
+    it('and components/admin/AdminShell really is what renders that table', () => {
+        expect(source('src/components/admin/AdminShell.tsx'))
             .toContain('from "@/components/admin/AdminSidebar"');
     });
 

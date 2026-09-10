@@ -390,7 +390,14 @@ describe('it agrees with the naive version everywhere the naive version is right
         // and its route — with its own line-based codeOnly(), which is not the
         // block-eating regex measured here, and it never reads its own text. No
         // assertion in it can be misled by the mangling.
-        expect(AFFECTED.length).toBeLessThanOrEqual(20);
+        //   #617 raised this from 20 to 21, on the same test as every time
+        //   before. an-admin-screen-wearing-the-wrong-chrome.test.ts carries its
+        //   own line-based `code()` helper — because an assertion about CODE must
+        //   not be satisfied by PROSE, which is how its first version failed
+        //   against correct code — and that helper is not the block-eating regex
+        //   measured here. It never reads its own text, so no assertion in it can
+        //   be misled by the mangling.
+        expect(AFFECTED.length).toBeLessThanOrEqual(21);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');

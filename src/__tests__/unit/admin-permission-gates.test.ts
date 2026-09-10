@@ -268,12 +268,43 @@ describe('the platform already siloed module admins — at one layer only', () =
         }
     });
 
-    it('and both the layout and the sidebar enforce it', () => {
-        // Vacuity guard: an unused rule is not a policy.
-        expect(readFileSync(join(process.cwd(), 'src/app/admin/layout.tsx'), 'utf-8'))
-            .toContain('canAccessAdminRoute');
-        expect(readFileSync(join(process.cwd(), 'src/components/admin/AdminSidebar.tsx'), 'utf-8'))
-            .toContain('canAccessAdminRoute(roles, item.href)');
+    it('ONLY THE SIDEBAR ENFORCES IT — the layout never did, and this says so', () => {
+        /*
+         *   #617 — THIS TEST WAS THE VACUITY IT WARNED ABOUT.
+         *
+         *   It was called "and both the layout and the sidebar enforce it", with
+         *   the comment "Vacuity guard: an unused rule is not a policy", and it
+         *   checked that admin/layout.tsx CONTAINED the string
+         *   `canAccessAdminRoute`. The layout imported it, computed a pathname to
+         *   pass it, AND NEVER CALLED IT. An import-level assertion passed
+         *   against a door that enforced nothing — the exact failure this file
+         *   describes elsewhere, in the file that describes it.
+         *
+         *   Extracting the layout in #617 removed the unused import and turned
+         *   this red, which is how it surfaced.
+         *
+         *   SO THE SILO IS A NAVIGATION CONVENIENCE, NOT A GUARD. AdminSidebar
+         *   consults the rule to decide which links to SHOW. Nothing consults it
+         *   to decide what may be OPENED: not the layout, not middleware. Typing
+         *   the URL is enough. Three API routes make it worse by delegating their
+         *   own authorisation to it in comments — "canAccessAdminRoute already
+         *   silos these people by module at the route layer" — which was never
+         *   true.
+         *
+         *   This asserts the state as it IS. When the route layer actually
+         *   enforces the rule, this test fails and is updated deliberately, which
+         *   is the right way for a recorded gap to close.
+         */
+        const shell = readFileSync(join(process.cwd(), 'src/components/admin/AdminShell.tsx'), 'utf-8');
+        const middleware = readFileSync(join(process.cwd(), 'src/middleware.ts'), 'utf-8');
+        const sidebar = readFileSync(join(process.cwd(), 'src/components/admin/AdminSidebar.tsx'), 'utf-8');
+
+        //   The one place it is consulted, and it decides visibility only.
+        expect(sidebar).toContain('canAccessAdminRoute(roles, item.href)');
+
+        //   And the two places that would make it a guard, where it is absent.
+        expect(shell).not.toContain('canAccessAdminRoute');
+        expect(middleware).not.toContain('canAccessAdminRoute');
     });
 
     it('so the permission gates now agree with the routes, rather than inventing a rule', () => {

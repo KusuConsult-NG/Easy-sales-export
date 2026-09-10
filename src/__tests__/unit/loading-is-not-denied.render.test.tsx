@@ -246,7 +246,7 @@ describe('#484 — and the window is removed, not merely made honest', () => {
         //   Without this the component supports a prop nobody supplies, and
         //   every assertion above passes over production behaviour that has not
         //   changed at all. Same shape as #474: the repair reaching one door.
-        const layout = readFileSync('src/app/admin/layout.tsx', 'utf-8');
+        const layout = readFileSync('src/components/admin/AdminShell.tsx', 'utf-8');
 
         expect(layout).toMatch(/<AdminSidebar\s+initialRoles=\{roles\}/);
         //   And `roles` there is the session's, not a literal.
