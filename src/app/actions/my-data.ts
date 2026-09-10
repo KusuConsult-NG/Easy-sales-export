@@ -398,13 +398,25 @@ export async function getMyActiveOrderCount(): Promise<number> {
     // payment_received and disputed — three of the five states an order is
     // actually live in — were missing. lib/order-status.ts already owns this
     // rule; this was a fifth copy of it, on the wrong field.
+    //
+    // #585 AND EXPORT ORDERS COUNT TOO.
+    //
+    // export_orders is keyed `buyerId` exactly as the marketplace's is, and the
+    // export payment callback sends the buyer HERE — "View My Dashboard" — with
+    // a tile that read one of the two collections. So the order they had just
+    // paid tens of thousands of dollars for was not among their active orders.
+    //
+    // Two statuses are export-only and both are terminal: cancelled_out_of_stock
+    // (#582) and refunded. isActiveOrderStatus is a whitelist, so neither is
+    // counted, which is right — an order awaiting a refund is not in flight.
     try {
-        const snap = await db
-            .collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", userId)
-            .get();
+        const [marketplaceSnap, exportSnap] = await Promise.all([
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS).where("buyerId", "==", userId).get(),
+            db.collection(COLLECTIONS.EXPORT_ORDERS).where("buyerId", "==", userId).get(),
+        ]);
 
-        return snap.docs.filter(d => isActiveOrderStatus(d.data().status)).length;
+        return [...marketplaceSnap.docs, ...exportSnap.docs]
+            .filter(d => isActiveOrderStatus(d.data().status)).length;
     } catch (error) {
         logger.error("[my-data] getMyActiveOrderCount failed", { userId, error });
         return 0;

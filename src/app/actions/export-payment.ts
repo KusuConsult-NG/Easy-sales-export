@@ -419,6 +419,33 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
             });
         }
 
+        /**
+         *   #585 AND TELL THE BUYER, WHO IS THE ONE WHO PAID.
+         *
+         *   This notified the admins and stopped. Every other module's payment
+         *   path notifies the person whose money moved; the export buyer got a
+         *   confirmation screen, and after they closed it there was no record
+         *   of the order on any screen they could open.
+         *
+         *   Its own failure must not fail the fulfilment: the payment is
+         *   claimed, the stock is decremented and the order is processing by
+         *   the time this runs, so a notification that cannot be written is
+         *   worth a log line and nothing more.
+         */
+        try {
+            const { createNotification } = await import("@/infrastructure/notifications/service");
+            await createNotification({
+                userId: session.user.id,
+                type: "payment",
+                title: "Export order confirmed",
+                message: `We have received your payment for order ${orderData.orderId}. Our export team will prepare your consignment and the shipping documentation.`,
+                link: "/export/buyer/orders",
+                linkText: "View my orders",
+            });
+        } catch (e: any) {
+            logger.warn("Failed to notify export buyer of their order", { error: e?.message || String(e) });
+        }
+
         // Notify Admins
         try {
             const { notifyAdmins } = await import("@/lib/admin-notifications");

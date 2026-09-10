@@ -149,11 +149,17 @@ function PaymentCallbackContent() {
                 <p className="text-sm text-slate-500">
                     Our export operations team has been notified and will contact you shortly with the shipping documentation and logistics details.
                 </p>
+                {/*
+                  * #585 — this said "View My Dashboard", and the dashboard's
+                  * Active Orders tile counted marketplace orders only, so the
+                  * order just paid for was not there. It goes to the screen
+                  * that shows it.
+                  */}
                 <Link
-                    href="/dashboard"
+                    href="/export/buyer/orders"
                     className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-500/30"
                 >
-                    View My Dashboard
+                    View My Orders
                     <ArrowRight className="w-5 h-5" />
                 </Link>
             </div>

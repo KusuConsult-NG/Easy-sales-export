@@ -381,6 +381,38 @@ export async function updateAdminExportOrderStatusAction(
 
         await orderRef.update(updateData);
 
+        /**
+         *   #585 AND THE BUYER IS TOLD, which is what this status is for.
+         *
+         *   The comment above says "Buyers' dashboards filter on these strings"
+         *   — written while NO buyer-facing screen read this collection at all.
+         *   An admin marking an order shipped, or attaching the bill of lading,
+         *   changed a value the buyer could not see and was never told about.
+         *
+         *   Read after the update so the buyer id comes from the row rather
+         *   than from a caller, and wrapped because a notification that cannot
+         *   be written must not undo a status change that already happened.
+         */
+        try {
+            const orderSnap = await orderRef.get();
+            const buyerId = orderSnap.data()?.buyerId;
+            if (buyerId) {
+                const { createNotification } = await import("@/infrastructure/notifications/service");
+                await createNotification({
+                    userId: String(buyerId),
+                    type: "info",
+                    title: `Export order ${status.replace(/_/g, " ")}`,
+                    message: documentData
+                        ? `Order ${orderSnap.data()?.orderId ?? orderId} is now "${status.replace(/_/g, " ")}", and "${documentData.name}" has been added to it.`
+                        : `Order ${orderSnap.data()?.orderId ?? orderId} is now "${status.replace(/_/g, " ")}".`,
+                    link: "/export/buyer/orders",
+                    linkText: "View my orders",
+                });
+            }
+        } catch (e: any) {
+            logger.warn("Failed to notify export buyer of a status change", { orderId, error: e?.message || String(e) });
+        }
+
         await recordAdminAction({
             action: 'export_status_update',
             userId: session.user.id,

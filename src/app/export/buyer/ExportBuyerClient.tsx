@@ -565,6 +565,19 @@ export default function ExportBuyerClient({ initial }: { initial: ExportProduct[
                             </p>
                         </div>
 
+                        <div className="flex items-center gap-3">
+                        {/*
+                          * #585 — the only way to a buyer's own orders. Without
+                          * it the screen exists and nothing points at it, which
+                          * is how the platform ended up with an admin-only view
+                          * of somebody else's purchase in the first place.
+                          */}
+                        <Link
+                            href="/export/buyer/orders"
+                            className="px-4 py-3 md:py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 rounded-xl hover:bg-white/20 transition text-sm font-semibold"
+                        >
+                            My Orders
+                        </Link>
                         {/* Cart button */}
                         <button
                             onClick={() => setIsCartOpen(true)}
@@ -577,6 +590,7 @@ export default function ExportBuyerClient({ initial }: { initial: ExportProduct[
                                 </span>
                             )}
                         </button>
+                        </div>
                     </div>
                 </div>
                 {/* Wave */}
