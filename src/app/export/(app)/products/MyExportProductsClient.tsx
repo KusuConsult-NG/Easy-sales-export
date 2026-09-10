@@ -8,6 +8,7 @@ import { getUserExportProductsAction, deleteExportProductAction } from "@/app/ac
 import { useToast } from "@/contexts/ToastContext";
 import { firstImageSrc } from "@/lib/first-image";
 import { exportStockOf } from "@/lib/export-stock";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function MyExportProductsClient({ initial = null }: {
     /**  #547 Fetched by the server — see page.tsx. */
@@ -17,6 +18,15 @@ export default function MyExportProductsClient({ initial = null }: {
     const [loading, setLoading] = useState(initial === null);
     const { showToast } = useToast();
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    /**
+     *   #592 — "No Products Yet. You haven't submitted any products for export
+     *   yet" was what an exporter saw when the READ failed. The `if (res.success
+     *   && res.data)` below had no else and the catch only wrote to the console,
+     *   so a refusal and a thrown error both left `products` at the `[]` it was
+     *   initialised with. The seller of a live listing was invited to submit it
+     *   again — and a duplicate export listing is a duplicate consignment.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         //   #547 Already supplied by the server.
@@ -27,9 +37,13 @@ export default function MyExportProductsClient({ initial = null }: {
                 const res = await getUserExportProductsAction();
                 if (res.success && res.data) {
                     setProducts(res.data);
+                    setLoadFailed(false);
+                } else {
+                    setLoadFailed(true);
                 }
             } catch (error) {
                 console.error("Failed to load products:", error);
+                setLoadFailed(true);
             } finally {
                 setLoading(false);
             }
@@ -98,7 +112,9 @@ export default function MyExportProductsClient({ initial = null }: {
                 </Link>
             </div>
 
-            {products.length === 0 ? (
+            {loadFailed && products.length === 0 ? (
+                <ListLoadFailed what="your export products" />
+            ) : products.length === 0 ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
                     <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-slate-900 mb-2">No Products Yet</h2>

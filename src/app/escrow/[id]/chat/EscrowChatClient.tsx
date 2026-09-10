@@ -10,6 +10,7 @@ import type { Message } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 /**
  * What the server read before the page was sent.
@@ -53,6 +54,23 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
     const [sending, setSending] = useState(false);
     const [escrowData, setEscrowData] = useState<EscrowTransaction | null>(null);
     const [authorized, setAuthorized] = useState(false);
+    /**
+     *   #592 — "No messages yet. Start the conversation by sending a message
+     *   below", shown when the messages could not be READ.
+     *
+     *   `loadMessages` sets the list only `if (result.success && result.data)`,
+     *   and the catch writes one logger line, so a refusal or a throw leaves the
+     *   `[]` this state started as. This is the escrow chat: it is where a buyer
+     *   and a seller agree what happened to a consignment, and it is the record
+     *   an admin reads when releasing or refunding the money. Telling either
+     *   party the conversation is empty invites them to re-state a case they
+     *   have already made, and suggests the other side never replied.
+     *
+     *   It POLLS, so — as on the disputes screen — the panel only replaces a
+     *   list that has nothing in it. A failed tick over messages already on
+     *   screen leaves them there.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -95,12 +113,15 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
             setTimeout(() => {
                 if (result.success && result.data) {
                     setMessages(result.data);
+                    setLoadFailed(false);
+                } else {
+                    setLoadFailed(true);
                 }
                 setLoading(false);
             }, 0);
         } catch (error) {
             logger.error("Failed to load messages:", error);
-            setTimeout(() => setLoading(false), 0);
+            setTimeout(() => { setLoadFailed(true); setLoading(false); }, 0);
         }
     }, [escrowId, takeMessages]);
 
@@ -290,6 +311,8 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 text-blue-300 animate-spin" />
                         </div>
+                    ) : loadFailed && messages.length === 0 ? (
+                        <ListLoadFailed what="this conversation" onRetry={loadMessages} />
                     ) : messages.length === 0 ? (
                         <div className="text-center py-20">
                             <MessageCircle className="w-16 h-16 text-blue-300 mx-auto mb-4" />

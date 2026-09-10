@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useStorage } from "@/hooks/use-storage";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 interface Certificate {
     id: string;
@@ -43,6 +44,23 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [academyCerts, setAcademyCerts] = useState<AcademyCertificate[]>([]);
     const [isLoading, setIsLoading] = useState(initial === null);
+    /**
+     *   #592 — two lists, two failures, and neither was recorded.
+     *
+     *   `fetchAll` gates each `set…` on `data.success`; a `false` there falls
+     *   through to nothing, and the single catch around both `fetch` calls only
+     *   writes to the logger. So a learner whose certificates could not be read
+     *   is told "No Academy certificates yet — complete courses in the Academy
+     *   to earn verifiable certificates", over courses they have finished, on
+     *   the tab this screen opens on.
+     *
+     *   Tracked SEPARATELY per list, because the two endpoints fail
+     *   independently — that is exactly how #563's academy half stayed empty
+     *   while the uploaded half worked. One shared flag would put the failure
+     *   panel over a list that read fine.
+     */
+    const [uploadedFailed, setUploadedFailed] = useState(false);
+    const [academyFailed, setAcademyFailed] = useState(false);
 
     //   Taken once: uploading or deleting a certificate calls fetchAll again,
     //   and those runs must read the list they just changed.
@@ -72,7 +90,12 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
                 fetch("/api/academy/certificates"),
             ]);
             const certsData = await certsRes.json();
-            if (certsData.success) setCertificates(certsData.certificates || []);
+            if (certsData.success) {
+                setCertificates(certsData.certificates || []);
+                setUploadedFailed(false);
+            } else {
+                setUploadedFailed(true);
+            }
 
             /**
              *   #563 THE ACADEMY TAB WAS ALWAYS EMPTY, AND IT IS THE TAB THIS
@@ -97,9 +120,18 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
              *   reader returns the array itself.
              */
             const acData = await acRes.json();
-            if (acData.success) setAcademyCerts(acData.data?.certificates || []);
+            if (acData.success) {
+                setAcademyCerts(acData.data?.certificates || []);
+                setAcademyFailed(false);
+            } else {
+                setAcademyFailed(true);
+            }
         } catch (error) {
             logger.error("Failed to fetch certificates:", error);
+            //   Both `fetch`es are in one Promise.all, so a throw here means
+            //   neither list was read — not that either is empty.
+            setUploadedFailed(true);
+            setAcademyFailed(true);
         } finally {
             setIsLoading(false);
         }
@@ -109,9 +141,15 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
         try {
             const response = await fetch("/api/certificates");
             const data = await response.json();
-            if (data.success) setCertificates(data.certificates || []);
+            if (data.success) {
+                setCertificates(data.certificates || []);
+                setUploadedFailed(false);
+            } else {
+                setUploadedFailed(true);
+            }
         } catch (error) {
             logger.error("Failed to fetch certificates:", error);
+            setUploadedFailed(true);
         }
     };
 
@@ -249,7 +287,10 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                                 <Award className="w-5 h-5 text-amber-500" />
-                                Academy Certificates ({academyCerts.length})
+                                {/*   #592 — as below: no count over a read that
+                                      failed. "(0)" makes the same claim the
+                                      empty state made. */}
+                                Academy Certificates{academyFailed && academyCerts.length === 0 ? "" : ` (${academyCerts.length})`}
                             </h2>
                             <Link
                                 href="/academy/dashboard"
@@ -259,7 +300,9 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
                             </Link>
                         </div>
 
-                        {academyCerts.length === 0 ? (
+                        {academyFailed && academyCerts.length === 0 ? (
+                            <ListLoadFailed what="your Academy certificates" onRetry={fetchAll} />
+                        ) : academyCerts.length === 0 ? (
                             <div className="text-center py-12">
                                 <GraduationCap className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                                 <p className="text-slate-600 font-medium mb-2">No Academy certificates yet</p>
@@ -364,9 +407,14 @@ export default function CertificatesClient({ initial = null }: { initial?: Certi
                         {/* Uploaded List */}
                         <div className="bg-white rounded-2xl p-6 shadow-xl">
                             <h2 className="text-xl font-bold text-slate-900 mb-6">
-                                Your Uploaded Documents ({certificates.length})
+                                {/*   No count over a read that failed: "(0)" is
+                                      the same claim as the empty state, in a
+                                      smaller font. */}
+                                Your Uploaded Documents{uploadedFailed && certificates.length === 0 ? "" : ` (${certificates.length})`}
                             </h2>
-                            {certificates.length === 0 ? (
+                            {uploadedFailed && certificates.length === 0 ? (
+                                <ListLoadFailed what="your uploaded documents" onRetry={fetchAll} />
+                            ) : certificates.length === 0 ? (
                                 <div className="text-center py-12">
                                     <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                                     <p className="text-slate-600">

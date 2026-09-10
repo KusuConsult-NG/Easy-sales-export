@@ -23,6 +23,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
 import { walletLedgerMovesBalance } from "@/lib/types/marketplace";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 /**
  * What the server read before the page was sent.
@@ -103,6 +104,18 @@ export default function WalletClient({ initial = null }: { initial?: WalletSeed 
     const [loading, setLoading] = useState(true);
     const [txLoading, setTxLoading] = useState(false);
     const [lastId, setLastId] = useState<string | undefined>();
+    /**
+     *   #592 — "No transactions yet. Fund your wallet to get started", shown to
+     *   somebody whose transaction history could not be READ.
+     *
+     *   `loadTransactions` had `if (res.success && res.data?.transactions)` and
+     *   no else at all: a refusal left `transactions` at `[]` and stopped the
+     *   spinner, and the screen drew its empty state. This is the wallet. A
+     *   person who has just funded it, or just been debited, and is looking for
+     *   the record of that, is told there is no record of anything — next to a
+     *   balance that says otherwise.
+     */
+    const [txLoadFailed, setTxLoadFailed] = useState(false);
 
     /* ─── Fund modal state ───────────────────────────────── */
     const [showFund, setShowFund] = useState(false);
@@ -255,14 +268,28 @@ export default function WalletClient({ initial = null }: { initial?: WalletSeed 
         const seeded = reset ? takeTransactions() : null;
         if (!seeded) setTxLoading(true);
         const cursor = reset ? undefined : lastId;
-        const res = seeded ?? await getWalletTransactionsAction({ limit: 15, startAfter: cursor });
-        if (res.success && res.data?.transactions) {
-            setTransactions(prev => reset ? res.data.transactions : [...prev, ...res.data.transactions]);
-            setHasMore(!!res.data.hasMore);
-            if (res.data.transactions.length > 0)
-                setLastId(res.data.transactions[res.data.transactions.length - 1].id);
+        /**
+         *   #592, the other half: there was no try here either, so a REJECTED
+         *   action — a dropped connection, a 500 — skipped `setTxLoading(false)`
+         *   and left the history spinning for as long as the page stayed open.
+         *   Same shape as #407 two modals down this file.
+         */
+        try {
+            const res = seeded ?? await getWalletTransactionsAction({ limit: 15, startAfter: cursor });
+            if (res.success && res.data?.transactions) {
+                setTransactions(prev => reset ? res.data.transactions : [...prev, ...res.data.transactions]);
+                setHasMore(!!res.data.hasMore);
+                if (res.data.transactions.length > 0)
+                    setLastId(res.data.transactions[res.data.transactions.length - 1].id);
+                setTxLoadFailed(false);
+            } else {
+                setTxLoadFailed(true);
+            }
+        } catch {
+            setTxLoadFailed(true);
+        } finally {
+            setTxLoading(false);
         }
-        setTxLoading(false);
     }, [lastId, takeTransactions]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -435,6 +462,12 @@ export default function WalletClient({ initial = null }: { initial?: WalletSeed 
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="w-8 h-8 animate-spin text-green-600" />
                         </div>
+                    ) : txLoadFailed && transactions.length === 0 ? (
+                        <ListLoadFailed
+                            what="your transaction history"
+                            className="border-0 rounded-none"
+                            onRetry={() => loadTransactions(true)}
+                        />
                     ) : transactions.length === 0 ? (
                         <div className="text-center py-16">
                             <Wallet className="w-14 h-14 text-slate-300 mx-auto mb-3" />

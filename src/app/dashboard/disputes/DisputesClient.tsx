@@ -15,6 +15,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { disputeStatusesForFilter } from "@/lib/dispute-status";
 import { startSupportConversationAction } from "@/app/actions/messages";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 interface Dispute {
     id: string;
@@ -74,6 +75,22 @@ export default function DisputesClient({ initial = null }: {
     const [loading, setLoading] = useState(initial === null);
     const [contactingId, setContactingId] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<"all" | Dispute["status"]>("all");
+    /**
+     *   #592 — `getMyDisputes()` throws and the catch writes one line to the
+     *   console, so the list is still the `[]` it started as and the screen
+     *   says "No Disputes. You have no disputes" with a button to open one.
+     *
+     *   A dispute is money held in escrow that has not been released. Telling
+     *   somebody who has filed one that they have not filed one invites them to
+     *   file it twice, and quietly suggests that the claim they made against a
+     *   seller was never recorded.
+     *
+     *   THIS SCREEN POLLS every ten seconds, so the flag is only allowed to
+     *   blank the list when there is nothing to show. A single failed tick over
+     *   a list already on screen must not replace it — MessagesClient's
+     *   precedent, and the reason that one is not in this count.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     const userId = session?.user?.id;
 
@@ -88,9 +105,10 @@ export default function DisputesClient({ initial = null }: {
         async function fetchDisputes() {
             try {
                 const list = await getMyDisputes();
-                if (isMounted) setDisputes(list as Dispute[]);
+                if (isMounted) { setDisputes(list as Dispute[]); setLoadFailed(false); }
             } catch (err) {
                 console.error("Disputes query failed:", err);
+                if (isMounted) setLoadFailed(true);
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -195,7 +213,9 @@ export default function DisputesClient({ initial = null }: {
                 </div>
 
                 {/* Empty state */}
-                {filtered.length === 0 ? (
+                {loadFailed && disputes.length === 0 ? (
+                    <ListLoadFailed what="your disputes" />
+                ) : filtered.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
                         <AlertTriangle className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-slate-700 mb-2">

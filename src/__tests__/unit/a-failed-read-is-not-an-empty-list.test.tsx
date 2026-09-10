@@ -86,11 +86,25 @@
  *   AND THE CAP COULD BE RAISED WITHOUT A SINGLE TEST FAILING, because
  *   `toBeLessThanOrEqual` passes for any larger number. It is exact equality
  *   now: the number in this file is the truth, in both directions.
+ *
+ * ── #592: 30 → 23, AND THE INSTRUMENT WAS OVER-COUNTING BY ONE ──────────────
+ *
+ *   Six more screens learned the difference — the wallet's transaction history,
+ *   the disputes list, the escrow chat, WAVE shipments, both certificate lists
+ *   and the exporter's own products. Their finding, their behaviour tests and
+ *   their mutation table are in six-more-screens-learned-a-failed-read.
+ *
+ *   AND ONE OF THE THIRTY WAS NEVER AN OFFENDER. MessagesClient distinguishes
+ *   with a `listError` and has for some time; the predicate below missed it
+ *   because it accepted one spelling of an error state. That is this audit's own
+ *   rule turned on itself — AUDIT THE INSTRUMENT BEFORE BELIEVING THE
+ *   MEASUREMENT — and the correction is deliberately narrow: see
+ *   `emptyStateConsultsError`, and the measurement that rejected the wider fix.
  */
 
 import React from 'react';
 import { render, waitFor } from '@testing-library/react';
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 /**
@@ -144,9 +158,38 @@ const ROOT = process.cwd();
  * The high-water mark. Lower it when a screen learns the difference; never
  * raise it.
  *
- * 35 when this was written. 30 after the five in this batch.
+ * 35 when this was written. 30 after the five in the first batch. 23 after
+ * #592's six, and after this predicate stopped over-counting MessagesClient —
+ * see the note on `emptyStateConsultsError` below.
  */
-const CAP = 30;
+const CAP = 23;
+
+/**
+ * An empty-state condition that consults an error is a distinction.
+ *
+ *   #592 AND THE INSTRUMENT WAS OVER-COUNTING, BY ONE, IN THE DIRECTION THAT
+ *   FLATTERS IT. MessagesClient keeps a `listError`, shows "This list may be out
+ *   of date" over a list it could not refresh, and draws its empty state as
+ *
+ *       conversations.length === 0 && !listError ? "No conversations yet" : …
+ *
+ *   which is precisely the reading this ratchet exists to ask for. It counted as
+ *   an offender anyway, because the check below accepted the literal spelling
+ *   `setError(` and the bare identifier `error` and nothing else.
+ *
+ *   THE OBVIOUS WIDENING WAS TRIED FIRST AND REJECTED, and the measurement is
+ *   the reason. Accepting any `set*Error(` or any `*Error &&` also excuses
+ *   ProfileClient's `setPasswordError` and FinancialStep's `setBvnError` — form
+ *   errors that say nothing about whether a list was read. Measured across
+ *   src/app, that swap trades one false positive for nineteen false negatives.
+ *
+ *   So the clause is about USE and not spelling: the condition that decides
+ *   whether to draw the empty state must itself mention an error.
+ */
+function emptyStateConsultsError(src: string): boolean {
+    const conditions = src.match(/[A-Za-z0-9_.[\]]+\.length\s*(?:===\s*0|>\s*0)?[^?\n]{0,70}\?/g) ?? [];
+    return conditions.some(c => /error/i.test(c));
+}
 
 /**
  * Does this source read a list and render an empty state without being able to
@@ -164,7 +207,7 @@ export function cannotTellEmptyFromFailed(src: string): boolean {
     if (!/\.length\s*===\s*0|\.length\s*\?|\.length\s*>\s*0\s*\?/.test(src)) return false;
     //   And it cannot say "I could not read this".
     const distinguishes = /ListLoadFailed|loadFailed|readFailed|catalogState|loadError|setError\(|\berror\s*&&/;
-    return !distinguishes.test(src);
+    return !distinguishes.test(src) && !emptyStateConsultsError(src);
 }
 
 function screensThatCannotTell(): string[] {
@@ -187,13 +230,32 @@ function screensThatCannotTell(): string[] {
     return found.sort();
 }
 
-/** The five this batch taught, named so the claim is checkable. */
+/**
+ * Every screen taught so far, named so the claim is checkable.
+ *
+ * The first five behave-tested at the foot of this file; #592's six in
+ * six-more-screens-learned-a-failed-read, which holds their finding and their
+ * mutation table. Both halves matter: this list proves they left the COUNT, and
+ * the render tests prove they actually changed what a person sees.
+ */
 const FIXED = [
+    //   #588's five.
     'src/app/marketplace/seller/products/SellerProductsClient.tsx',
     'src/app/marketplace/seller/orders/SellerOrdersClient.tsx',
     'src/app/marketplace/buyer/orders/BuyerOrdersClient.tsx',
     'src/app/cooperatives/(member)/my-savings/MySavingsClient.tsx',
     'src/app/export/(app)/portfolio/ExportPortfolioClient.tsx',
+    //   #592's six.
+    'src/app/dashboard/wallet/WalletClient.tsx',
+    'src/app/dashboard/disputes/DisputesClient.tsx',
+    'src/app/escrow/[id]/chat/EscrowChatClient.tsx',
+    'src/app/wave/(member)/shipments/WaveShipmentsClient.tsx',
+    'src/app/dashboard/certificates/CertificatesClient.tsx',
+    'src/app/export/(app)/products/MyExportProductsClient.tsx',
+    //   #592 also found this one had distinguished all along, and the predicate
+    //   was mis-reading it. It is here so a regression that removes `listError`
+    //   fails a test rather than quietly raising the cap.
+    'src/app/messages/MessagesClient.tsx',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,9 +288,20 @@ describe('#588 — the screens that cannot tell are counted', () => {
         expect(screens.every(s => !s.includes('/admin/'))).toBe(true);
     });
 
-    it('AND EVERY SCREEN THIS BATCH FIXED IS OUT OF THE COUNT', () => {
-        const screens = new Set(screensThatCannotTell());
+    it('AND EVERY SCREEN ALREADY TAUGHT IS OUT OF THE COUNT', () => {
+        /**
+         *   THE LIST IS CHECKED BEFORE IT IS USED. A loop over an emptied — or
+         *   mistyped — FIXED array passes without asserting anything, which is
+         *   this audit's own "a check that cannot fail" wearing the ledger's
+         *   clothes. So: every path must exist on disk, and there must be as
+         *   many as have been claimed.
+         */
+        expect(FIXED).toHaveLength(12);
+        for (const f of FIXED) {
+            expect({ f, exists: existsSync(join(ROOT, f)) }).toEqual({ f, exists: true });
+        }
 
+        const screens = new Set(screensThatCannotTell());
         for (const f of FIXED) {
             expect({ f, stillCannotTell: screens.has(f) }).toEqual({ f, stillCannotTell: false });
         }
@@ -258,6 +331,28 @@ describe('#588 — the predicate itself', () => {
         expect(cannotTellEmptyFromFailed(
             READS_A_LIST + '\nconst [catalogState, setCatalogState] = useState("live");'
         )).toBe(false);
+    });
+
+    it('AND SO IS AN EMPTY STATE THAT CONSULTS AN ERROR BY ANY NAME', () => {
+        //   #592: MessagesClient's own spelling, which this predicate used to
+        //   read as an offender.
+        expect(cannotTellEmptyFromFailed(`"use client";
+            useEffect(() => { getThingsAction().catch(e => setListError("no")); }, []);
+            return things.length === 0 && !listError ? <p>No things yet</p> : <List/>;`
+        )).toBe(false);
+    });
+
+    it('AND A FORM ERROR IS NOT — WHICH IS WHY IT IS THE CONDITION AND NOT THE SPELLING', () => {
+        /**
+         *   The widening that was rejected. `setPasswordError` and `setBvnError`
+         *   say nothing about whether a LIST was read, and accepting any
+         *   `set*Error(` would have excused ProfileClient and FinancialStep —
+         *   nineteen screens in all, measured across src/app.
+         */
+        expect(cannotTellEmptyFromFailed(
+            READS_A_LIST + '\nconst [passwordError, setPasswordError] = useState("");'
+                         + '\n{passwordError && <p>{passwordError}</p>}'
+        )).toBe(true);
     });
 
     it('NEGATIVE CONTROL: AND A SCREEN THAT READS NOTHING DOES NOT COUNT', () => {

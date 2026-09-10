@@ -11,6 +11,7 @@ import {
 import { getShipmentTrackingAction } from "@/app/actions/wave";
 import type { ShipmentTracking } from "@/app/actions/wave";
 import { formatDistanceToNow } from "date-fns";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function WaveShipmentsClient({ initial = null }: {
     /**  #552 The shipments the server already fetched. */
@@ -23,6 +24,14 @@ export default function WaveShipmentsClient({ initial = null }: {
     const [loading, setLoading] = useState(initial === null);
     const [selectedShipment, setSelectedShipment] = useState<ShipmentTracking | null>(null);
     const [showTrackingModal, setShowTrackingModal] = useState(false);
+    /**
+     *   #592 — this screen WROTE the failure in rather than merely failing to
+     *   record it: `setShipments([])` in the else AND in the catch. A member
+     *   whose consignments could not be read was told "No Shipments Yet — your
+     *   shipments will appear here once orders are placed", over goods that are
+     *   on a lorry.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -43,13 +52,14 @@ export default function WaveShipmentsClient({ initial = null }: {
             const result = await getShipmentTrackingAction(session.user.id);
             if (result.success ) {
                 setShipments(result.data ?? []);
+                setLoadFailed(false);
             } else {
                 logger.error("Failed to load shipments:", result.error);
-                setShipments([]);
+                setLoadFailed(true);
             }
         } catch (error) {
             logger.error("Failed to load shipments:", error);
-            setShipments([]);
+            setLoadFailed(true);
         } finally {
             setLoading(false);
         }
@@ -104,7 +114,13 @@ export default function WaveShipmentsClient({ initial = null }: {
                     </p>
                 </div>
 
-                {/* Stats Grid */}
+                {/*
+                  * Stats Grid — hidden when the read failed, because every one
+                  * of these four counts is derived from `shipments` and would
+                  * otherwise read "0 In Transit" over goods that are on a
+                  * lorry. #592: the same lie in a smaller font.
+                  */}
+                {!(loadFailed && shipments.length === 0) && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-2">
@@ -140,9 +156,12 @@ export default function WaveShipmentsClient({ initial = null }: {
                         <p className="text-sm text-green-100">Delivered</p>
                     </div>
                 </div>
+                )}
 
                 {/* Shipments List */}
-                {shipments.length === 0 ? (
+                {loadFailed && shipments.length === 0 ? (
+                    <ListLoadFailed what="your shipments" onRetry={loadShipments} />
+                ) : shipments.length === 0 ? (
                     <div className="bg-white rounded-2xl p-12 text-center shadow-xl">
                         <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-gray-900 mb-2">
