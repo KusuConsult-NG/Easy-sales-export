@@ -25,10 +25,30 @@
  *      exceed it both passed.
  *
  * verifyExportOrderPayment decremented catalog stock with an unbounded
- * increment, so an order could drive availableQuantity negative.
+ * increment, so an order could drive the stock field negative.
+ *
+ * ── AND THE STOCK FIXTURE BELOW HID #582 FOR AS LONG AS IT EXISTED ──────────
+ *
+ * These cases built an order whose items were `{ productId, quantityMT }` and
+ * asserted that the action asked for `field: 'availableQuantity'`. Both halves
+ * were written from the same reading of the same file, so the suite could only
+ * ever confirm that the code said what the code said.
+ *
+ * What it could not see is that NO EXPORT CATALOGUE ROW HAS EVER CARRIED THAT
+ * FIELD — the seller's form did not collect stock, submitExportProductAction
+ * validated a differently-named one nobody sent, and decrement_many_or_fail
+ * reads a missing field as 0. So every paid export order was cancelled as out
+ * of stock and left awaiting a manual refund, while this suite stayed green.
+ *
+ * A test that pins the shape of a call is not a test that the call can succeed.
+ * The items carry `stockTracked` now, which is the flag the order records at
+ * checkout, and the field name comes from lib/export-stock rather than from a
+ * literal repeated on both sides.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+
+import { EXPORT_STOCK_FIELD } from '@/lib/export-stock';
 
 const mockClaimPaymentOnce = jest.fn() as jest.Mock<any>;
 const mockIncrementWithinCeiling = jest.fn() as jest.Mock<any>;
@@ -160,8 +180,9 @@ describe('verifyExportOrderPaymentAction', () => {
             orderId: 'EXP-ORD-1',
             paymentReference: 'PSK-2',
             items: [
-                { productId: 'prod-a', quantityMT: 3 },
-                { productId: 'prod-b', quantityMT: 2 },
+                //   #582 — set at checkout, where the catalogue row is in hand.
+                { productId: 'prod-a', quantityMT: 3, stockTracked: true },
+                { productId: 'prod-b', quantityMT: 2, stockTracked: true },
             ],
         });
     });
@@ -175,7 +196,9 @@ describe('verifyExportOrderPaymentAction', () => {
         expect(mockDecrementManyOrFail).toHaveBeenCalledTimes(1);
         const items = mockDecrementManyOrFail.mock.calls[0][0] as any[];
         expect(items).toHaveLength(2);
-        expect(items[0]).toMatchObject({ id: 'prod-a', field: 'availableQuantity', amount: 3 });
+        //   Read from the module rather than repeated as a literal: the two
+        //   copies of this name disagreeing is #582.
+        expect(items[0]).toMatchObject({ id: 'prod-a', field: EXPORT_STOCK_FIELD, amount: 3 });
     });
 
     it('marks the order for refund when stock is short, rather than fulfilling it', async () => {

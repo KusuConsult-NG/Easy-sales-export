@@ -7,6 +7,7 @@ import { Package, Plus, Clock, CheckCircle2, XCircle, Trash2, Loader2 } from "lu
 import { getUserExportProductsAction, deleteExportProductAction } from "@/app/actions/export-products";
 import { useToast } from "@/contexts/ToastContext";
 import { firstImageSrc } from "@/lib/first-image";
+import { exportStockOf } from "@/lib/export-stock";
 
 export default function MyExportProductsClient({ initial = null }: {
     /**  #547 Fetched by the server — see page.tsx. */
@@ -185,7 +186,46 @@ export default function MyExportProductsClient({ initial = null }: {
                                     <span className="text-slate-500">Min Order:</span>
                                     <span className="font-medium text-slate-900">{product.minOrderMT} MT</span>
                                 </div>
+                                {/*
+                                  * #582 — THE STOCK NOBODY COLLECTED AND THE
+                                  * CHECKOUT DECREMENTED. Shown here because this
+                                  * is the screen a seller manages the listing
+                                  * from, and because "Not tracked" is a real
+                                  * state they should be able to see rather than
+                                  * a blank that reads as zero.
+                                  */}
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Available:</span>
+                                    {exportStockOf(product) === null ? (
+                                        <span className="font-medium text-slate-400">Not tracked</span>
+                                    ) : (
+                                        <span className={`font-medium ${exportStockOf(product) === 0 ? "text-red-600" : "text-slate-900"}`}>
+                                            {exportStockOf(product) === 0 ? "Out of stock" : `${exportStockOf(product)} MT`}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
+
+                            {/*
+                              * #583 A REJECTED LISTING TOLD ITS SELLER NOTHING.
+                              *
+                              * The admin types a reason into the content-approval
+                              * screen and rejectContentAction stores it as
+                              * `rejectionReason` on this very row. This list
+                              * returns the whole document, so the reason was
+                              * already in the browser's hands — and the card drew
+                              * a red cross and the word "Rejected" and stopped.
+                              *
+                              * The seller could not know what to change, and this
+                              * screen has no edit, so their only move was to
+                              * delete and start again from a blank form. Blind.
+                              */}
+                            {product.status === "rejected" && product.rejectionReason && (
+                                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                                    <p className="text-xs font-semibold text-red-700 mb-0.5">Why this was rejected</p>
+                                    <p className="text-sm text-red-700">{product.rejectionReason}</p>
+                                </div>
+                            )}
 
                             <div className="pt-4 border-t border-slate-100 text-sm">
                                 <p className="text-slate-500 mb-2">Certifications:</p>

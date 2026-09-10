@@ -23,6 +23,7 @@ export default function CreateExportProductPage() {
         season: "",
         pricePerMT: "",
         minOrderMT: "",
+        availableQuantityMT: "",
         grades: "",
         certifications: ""
     });
@@ -52,6 +53,16 @@ export default function CreateExportProductPage() {
                 images: imageUrls,
                 pricePerMT: Number(formData.pricePerMT),
                 minOrderMT: Number(formData.minOrderMT),
+                /**
+                 *   #582 — BLANK MEANS "NOT COUNTING", not zero.
+                 *
+                 *   Sending Number("") would store 0, and a listing at 0 is out
+                 *   of stock. The field is left off entirely instead, which is
+                 *   what every listing submitted before today looks like.
+                 */
+                availableQuantityMT: formData.availableQuantityMT.trim() === ""
+                    ? undefined
+                    : Number(formData.availableQuantityMT),
                 grades: formData.grades.split(",").map(g => g.trim()).filter(Boolean),
                 certifications: formData.certifications.split(",").map(c => c.trim()).filter(Boolean),
             };
@@ -214,6 +225,29 @@ export default function CreateExportProductPage() {
                                     placeholder="e.g. 20"
                                     className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none"
                                 />
+                            </div>
+                            <div>
+                                {/*
+                                  * #582 — the stock field the platform decremented
+                                  * and never collected. Optional on purpose: an
+                                  * empty box means "not counting", which is what
+                                  * every listing submitted before today means.
+                                  */}
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    Available Quantity (MT) <span className="text-slate-400 font-normal">— optional</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    name="availableQuantityMT"
+                                    min="0"
+                                    value={formData.availableQuantityMT}
+                                    onChange={handleChange}
+                                    placeholder="Leave blank if you are not tracking stock"
+                                    className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Orders are counted against this. Left blank, buyers can order any quantity.
+                                </p>
                             </div>
                         </div>
 

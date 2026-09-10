@@ -40,7 +40,24 @@ export async function submitExportProductAction(productData: any) { try {
             dataToSave.pricePerMT = price;
         }
 
-        if (dataToSave.availableQuantityMT !== undefined && dataToSave.availableQuantityMT !== null) {
+        /**
+         *   #582 AND A BLANK STOCK IS NOT A STOCK OF ZERO.
+         *
+         *   This validated a field NO CALLER HAD EVER SENT — the seller's form
+         *   collected no stock at all — while fulfilment decremented
+         *   `availableQuantity`, the marketplace's name, on rows that carried
+         *   neither. A missing field is 0 to decrement_many_or_fail, so every
+         *   paid export order was cancelled as out of stock. See lib/export-stock.
+         *
+         *   The form asks for it now, and it is OPTIONAL: an empty box means
+         *   "not counting", which is what every existing listing means. Storing
+         *   Number("") — 0 — would take a seller who left it blank straight to
+         *   "out of stock", which is the defect again in a new place.
+         */
+        if (dataToSave.availableQuantityMT === "" || dataToSave.availableQuantityMT === null) {
+            delete dataToSave.availableQuantityMT;
+        }
+        if (dataToSave.availableQuantityMT !== undefined) {
             const qty = Number(dataToSave.availableQuantityMT);
             if (!Number.isFinite(qty) || qty < 0) {
                 return { success: false as const, error: "Available quantity cannot be negative", data: null };
@@ -60,6 +77,43 @@ export async function submitExportProductAction(productData: any) { try {
         return { success: false as const, error: "Failed to submit product", data: null };
     }
 }
+
+/**
+ * What a seller is shown about their own listing.
+ *
+ *   #584 THIS RETURNED `{ id, ...doc.data() }` — the whole stored document.
+ *
+ *   Same shape as the public catalogue before #578, one door in: an export
+ *   catalogue row also carries `approvedBy` and `rejectedBy`, the internal user
+ *   ids of the ADMINS who reviewed it, plus deletedBy, createdBy and whatever
+ *   else submitExportProductAction stored from its unvalidated `any`. The
+ *   seller owns the listing; they do not own the reviewer's identity.
+ *
+ *   An allow-list rather than a deny-list, for the reason #578 gives: a field
+ *   added to the document later is private by default, which is the way round
+ *   that survives somebody else's change.
+ *
+ *   `rejectionReason` IS on the list, deliberately — see #583. It was already
+ *   being sent and simply never drawn; it is the one thing on a rejected
+ *   listing the seller most needs.
+ */
+const SELLER_LISTING_FIELDS = [
+    "name",
+    "icon",
+    "category",
+    "origin",
+    "season",
+    "grades",
+    "certifications",
+    "pricePerMT",
+    "minOrderMT",
+    "availableQuantityMT",
+    "images",
+    "status",
+    "isActive",
+    "rejectionReason",
+    "createdAt",
+] as const;
 
 export async function getUserExportProductsAction() { try {
         const sessionResult = await requireSession();
@@ -98,10 +152,11 @@ export async function getUserExportProductsAction() { try {
             .filter(doc => !isRetired(doc.data()))
             .map(doc => {
                 const data = doc.data();
-                return serializeValue({
-                    id: doc.id,
-                    ...data,
-                });
+                const listing: Record<string, unknown> = { id: doc.id };
+                for (const field of SELLER_LISTING_FIELDS) {
+                    if (data[field] !== undefined) listing[field] = data[field];
+                }
+                return serializeValue(listing);
             });
 
         if (indexError) {

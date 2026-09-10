@@ -12,6 +12,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { getBaseUrl } from "@/lib/server-utils";
 import { getExchangeRates } from "@/lib/system-settings";
 import { minimumOrderMT } from "@/lib/export-minimum-order";
+import { EXPORT_STOCK_FIELD, exportStockIsTracked, exportStockOf } from "@/lib/export-stock";
 import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
 import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling , markFulfilmentFailed } from "@/lib/wallet-ledger";
 
@@ -141,6 +142,26 @@ export async function initializeExportOrderPaymentAction(
                 return { error: `Product ${productData.name || item.productId} is not priced for sale`, success: false as const, data: undefined, meta: null };
             }
 
+            /**
+             *   #582 REFUSED BEFORE THE CHARGE, NOT AFTER IT.
+             *
+             *   The only stock check on this path ran at FULFILMENT, after the
+             *   payment reference was claimed — so a listing that really was
+             *   short left the buyer charged, the order cancelled and a manual
+             *   refund to arrange. Checked here too, where refusing costs
+             *   nobody anything. The atomic decrement still guards the race
+             *   between two buyers; this catches the ordinary case.
+             */
+            const stockMT = exportStockOf(productData);
+            if (stockMT !== null && quantityMT > stockMT) {
+                return {
+                    error: stockMT === 0
+                        ? `${productData.name || item.productId} is out of stock`
+                        : `${productData.name || item.productId} has only ${stockMT} MT available`,
+                    success: false as const, data: undefined, meta: null,
+                };
+            }
+
             const itemTotalUSD = pricePerMT * quantityMT;
             totalUSD += itemTotalUSD;
 
@@ -150,7 +171,20 @@ export async function initializeExportOrderPaymentAction(
                 quantityMT,
                 pricePerMT: pricePerMT,
                 totalUSD: itemTotalUSD,
-                sellerId: productData.userId || "export-operations"
+                sellerId: productData.userId || "export-operations",
+                /**
+                 *   #582 — WHETHER ANYBODY IS COUNTING THIS LISTING'S STOCK,
+                 *   decided here because this is where the catalogue row is
+                 *   already in hand.
+                 *
+                 *   Fulfilment cannot ask the question itself:
+                 *   decrement_many_or_fail reads a missing field as 0, so from
+                 *   inside Postgres "no stock recorded" and "none left" are the
+                 *   same value. Recorded on the order, so an older order
+                 *   without the flag reads as untracked — the safe direction,
+                 *   since the alternative is the refusal this finding is about.
+                 */
+                stockTracked: exportStockIsTracked(productData),
             });
         }
 
@@ -302,14 +336,31 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
             // leave the earlier items decremented when a later one fell short.
             // decrement_many_or_fail (015) locks every row, checks them all,
             // then writes, in id order so concurrent orders cannot deadlock.
-            const stock = await decrementManyOrFail(
-                (orderData.items || []).map((item: any) => ({
-                    collection: COLLECTIONS.EXPORT_CATALOG,
-                    id: item.productId,
-                    field: "availableQuantity",
-                    amount: item.quantityMT,
-                }))
-            );
+            /**
+             *   #582 ONLY THE LISTINGS SOMEBODY IS ACTUALLY COUNTING.
+             *
+             *   This decremented `availableQuantity` — the MARKETPLACE's field
+             *   name — on a collection that has never carried it, and a missing
+             *   field is 0 to decrement_many_or_fail. So every paid export
+             *   order was cancelled as out of stock and left awaiting a manual
+             *   refund. See lib/export-stock.
+             *
+             *   An unrecorded stock is not a stock of zero. A listing with a
+             *   real quantity is still counted down, and a genuine shortfall is
+             *   still refused all-or-nothing, which is #279's fix and untouched.
+             */
+            const trackedItems = (orderData.items || []).filter((item: any) => item?.stockTracked === true);
+
+            const stock = trackedItems.length === 0
+                ? { ok: true as const, failedId: undefined, reason: undefined }
+                : await decrementManyOrFail(
+                    trackedItems.map((item: any) => ({
+                        collection: COLLECTIONS.EXPORT_CATALOG,
+                        id: item.productId,
+                        field: EXPORT_STOCK_FIELD,
+                        amount: item.quantityMT,
+                    }))
+                );
 
             if (!stock.ok) {
                 // The payment is already claimed, so this will not retry. The
