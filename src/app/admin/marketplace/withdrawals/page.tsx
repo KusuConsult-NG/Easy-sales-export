@@ -14,6 +14,7 @@ import {
 import { processWalletWithdrawalAction, getAdminWalletWithdrawalsAction } from "@/app/actions/wallet";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
 const STATUS_COLORS: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
@@ -26,11 +27,8 @@ const STATUS_COLORS: Record<string, string> = {
 const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
 
-const fmtDate = (val: any) => {
-    if (!val) return "—";
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
-};
+//   #600 — one reading, in lib/date-utils.
+const fmtDate = (val: any) => formatDateTimeOrDash(val);
 
 export default function AdminWalletWithdrawalsPage() {
     const { showToast } = useToast();

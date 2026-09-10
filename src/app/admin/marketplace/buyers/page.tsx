@@ -9,6 +9,7 @@ import { getMarketplaceUsersAction, approveMarketplaceUserAction, rejectMarketpl
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { formatLocalDate } from "@/lib/date-utils";
 import { recordExport } from "@/lib/record-export";
+import { humanise } from "@/lib/humanise";
 
 type BuyerRole = "buyer_only" | "seller_only" | "both";
 
@@ -136,7 +137,7 @@ export default function MarketplaceBuyersPage() {
 
     function handleExport() {
         const headers = ["Name", "Email", "Phone", "State", "LGA", "Role", "Status", "Joined"];
-        const rows = filtered.map(u => [u.name, u.email, u.phone || "—", u.state || "—", u.lga || "—", u.buyerRole.replace("_", " "), u.status || "—", formatLocalDate(u.createdAt) || "—"]);
+        const rows = filtered.map(u => [u.name, u.email, u.phone || "—", u.state || "—", u.lga || "—", humanise(u.buyerRole, "—"), u.status || "—", formatLocalDate(u.createdAt) || "—"]);
         const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);

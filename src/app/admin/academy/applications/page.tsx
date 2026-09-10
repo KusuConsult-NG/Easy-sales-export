@@ -20,6 +20,9 @@ import { useEffect } from "react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
+import { humanise } from "@/lib/humanise";
+import { numberOrZero } from "@/lib/numbers";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -73,12 +76,12 @@ function toIso(ts: any): string | null {
     return null;
 }
 
-function fmtDate(iso: string | null | undefined) {
-    if (!iso) return "—";
-    return new Intl.DateTimeFormat("en-NG", {
+function fmtDate(iso: unknown) {
+    //   #600 — `if (!iso)` catches an absent date and nothing else.
+    return formatDateOrDash(iso, {
         year: "numeric", month: "short", day: "numeric",
-        hour: "2-digit", minute: "2-digit"
-    }).format(new Date(iso));
+        hour: "2-digit", minute: "2-digit",
+    });
 }
 
 function planBadge(plan: string | undefined) {
@@ -158,7 +161,7 @@ function ApplicationDetailModal({
                             <h2 className="text-lg font-bold text-slate-900">{app.personalInfo.fullName}</h2>
                             <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
-                                    {app.status.replace("_", " ")}
+                                    {humanise(app.status)}
                                 </span>
                                 {app.isLegacy && (
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
@@ -306,7 +309,7 @@ function ApplicationDetailModal({
                             <div className="bg-slate-50 rounded-xl px-4 py-2">
                                 <Row label="Plan" value={app.plan} />
                                 <Row label="Payment Status" value={app.paymentStatus} />
-                                <Row label="Amount Paid" value={app.paymentAmount != null ? `₦${app.paymentAmount.toLocaleString()}` : undefined} />
+                                <Row label="Amount Paid" value={app.paymentAmount != null ? `₦${numberOrZero(app.paymentAmount).toLocaleString()}` : undefined} />
                                 <Row label="Reference" value={app.paymentReference ?? undefined} />
                                 <Row label="Source" value={app.source} />
                             </div>
@@ -703,7 +706,7 @@ export default function AdminAcademyApplicationsPage() {
             <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 mb-1">Academy Applications</h1>
-                    <p className="text-slate-600">Live — {displayStats ? displayStats.totalApplications.toLocaleString() : applications.length} total applications</p>
+                    <p className="text-slate-600">Live — {displayStats ? numberOrZero(displayStats.totalApplications).toLocaleString() : applications.length} total applications</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Temporarily removed Export CSV button */}
@@ -873,7 +876,7 @@ export default function AdminAcademyApplicationsPage() {
                                                 </span>
                                             )}
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
-                                                {app.status.replace("_", " ")}
+                                                {humanise(app.status)}
                                             </span>
                                         </div>
                                         <p className="text-sm text-slate-500 truncate">
@@ -885,7 +888,7 @@ export default function AdminAcademyApplicationsPage() {
                                                 <span className="text-xs text-slate-500">{app.education.educationLevel}</span>
                                             )}
                                             {app.paymentAmount != null && (
-                                                <span className="text-xs text-green-700 font-semibold">₦{app.paymentAmount.toLocaleString()} paid</span>
+                                                <span className="text-xs text-green-700 font-semibold">₦{numberOrZero(app.paymentAmount).toLocaleString()} paid</span>
                                             )}
                                             <span className="text-xs text-slate-400">{fmtDate(app.submittedAt)}</span>
                                         </div>

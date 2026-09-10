@@ -9,6 +9,8 @@ import { getAllExportRequestsAction } from "@/app/actions/admin";
 import { updateExportStatusAction } from "@/app/actions/export";
 import { getExportRequestStatsAction } from "@/app/actions/export-admin";
 import type { ExportWindow } from "@/lib/types/firestore";
+import { humanise } from "@/lib/humanise";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function AdminExportPage() {
     const { showToast } = useToast();
@@ -170,25 +172,25 @@ export default function AdminExportPage() {
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Total Requests</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-slate-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-slate-900">{stats.total.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-slate-900">{numberOrZero(stats.total).toLocaleString()}</p>
                         )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Pending Action</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-amber-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-amber-600">{stats.pending.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-amber-600">{numberOrZero(stats.pending).toLocaleString()}</p>
                         )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">In Transit</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-blue-600">{stats.inTransit.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-blue-600">{numberOrZero(stats.inTransit).toLocaleString()}</p>
                         )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Completed</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-emerald-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-emerald-600">{stats.completed.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-emerald-600">{numberOrZero(stats.completed).toLocaleString()}</p>
                         )}
                     </div>
                 </div>
@@ -222,10 +224,10 @@ export default function AdminExportPage() {
                                             <td className="px-6 py-4 font-mono text-xs">{exp.orderId}</td>
                                             <td className="px-6 py-4 capitalize">{exp.commodity}</td>
                                             <td className="px-6 py-4">{exp.quantity}</td>
-                                            <td className="px-6 py-4 font-medium">₦{exp.amount.toLocaleString()}</td>
+                                            <td className="px-6 py-4 font-medium">₦{numberOrZero(exp.amount).toLocaleString()}</td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(exp.status)}`}>
-                                                    {exp.status.replace("_", " ")}
+                                                    {humanise(exp.status)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-slate-500">
@@ -300,7 +302,7 @@ export default function AdminExportPage() {
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Status</p>
                                         <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(selectedExport.status)}`}>
-                                            {selectedExport.status.replace("_", " ")}
+                                            {humanise(selectedExport.status)}
                                         </span>
                                     </div>
                                     <div>
@@ -313,7 +315,7 @@ export default function AdminExportPage() {
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Amount</p>
-                                        <p className="font-medium text-emerald-600">₦{selectedExport.amount.toLocaleString()}</p>
+                                        <p className="font-medium text-emerald-600">₦{numberOrZero(selectedExport.amount).toLocaleString()}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Delivery Date</p>

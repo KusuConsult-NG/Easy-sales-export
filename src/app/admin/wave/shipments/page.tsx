@@ -15,6 +15,7 @@ import {
     getStandardWaveApplicationsAction
 } from "@/app/actions/wave";
 import type { ShipmentTracking } from "@/app/actions/wave";
+import { humanise } from "@/lib/humanise";
 
 interface UserSearchRef {
     id: string;
@@ -777,7 +778,7 @@ export default function AdminWaveShipmentsPage() {
                                                             </span>
                                                         </div>
                                                         <div className="text-[10px] font-semibold text-slate-550 capitalize mt-0.5">
-                                                            Status: {update.status.replace("_", " ")}
+                                                            Status: {humanise(update.status)}
                                                         </div>
                                                         {update.note && (
                                                             <div className="text-xs text-slate-655 mt-1 bg-slate-50 p-2.5 rounded-lg border border-slate-100 italic">

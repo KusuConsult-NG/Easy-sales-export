@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { recordExport } from "@/lib/record-export";
+import { humanise } from "@/lib/humanise";
+import { numberOrZero } from "@/lib/numbers";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
@@ -173,8 +175,8 @@ export default function AdminTransactionsPage() {
             new Date(t.date).toLocaleDateString("en-NG"),
             t.userName,
             t.user?.phone || "",
-            t.type.replace(/_/g, " "),
-            t.amount.toString(),
+            humanise(t.type, ""),
+            numberOrZero(t.amount).toString(),
             t.status,
             t.description || "",
             t.reference || "",
@@ -455,7 +457,7 @@ export default function AdminTransactionsPage() {
                                                         <span
                                                             className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${getTypeColor(transaction.type)}`}
                                                         >
-                                                            {transaction.type.replace(/_/g, " ")}
+                                                            {humanise(transaction.type)}
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 text-sm font-bold text-slate-900">
@@ -505,7 +507,7 @@ export default function AdminTransactionsPage() {
                                                                     <div className="space-y-2 text-sm text-slate-600">
                                                                         <p><span className="font-medium text-slate-400">ID:</span> <span className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-xs">{transaction.id}</span></p>
                                                                         <p><span className="font-medium text-slate-400">Reference:</span> <span className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-xs">{transaction.reference || "N/A"}</span></p>
-                                                                        <p><span className="font-medium text-slate-400">Type:</span> <span className="font-semibold text-slate-900 capitalize">{transaction.type.replace(/_/g, " ")}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Type:</span> <span className="font-semibold text-slate-900 capitalize">{humanise(transaction.type)}</span></p>
                                                                         <p><span className="font-medium text-slate-400">Description:</span> <span className="text-slate-900">{transaction.description || "N/A"}</span></p>
                                                                         <p><span className="font-medium text-slate-400">Date:</span> <span className="text-slate-900">{new Date(transaction.date).toLocaleString("en-NG")}</span></p>
                                                                     </div>

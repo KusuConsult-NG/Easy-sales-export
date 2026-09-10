@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/sms-broadcast";
 import { getSMSInfo, sanitiseForGSM7, findNonGSM7Chars } from "@/lib/sms-utils";
 import { toast } from "sonner";
+import { numberOrZero } from "@/lib/numbers";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ export default function SmsBroadcastPage() {
             : '';
 
         const confirmed = confirm(
-            `You are about to send an SMS to ${preview.count.toLocaleString()} recipients.${specialCharWarning}\n\nThis cannot be undone. Continue?`
+            `You are about to send an SMS to ${numberOrZero(preview.count).toLocaleString()} recipients.${specialCharWarning}\n\nThis cannot be undone. Continue?`
         );
         if (!confirmed) return;
 
@@ -474,7 +475,7 @@ export default function SmsBroadcastPage() {
                     {preview && (
                         <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10">
                             <p className="text-white font-semibold text-sm">
-                                ~{preview.count.toLocaleString()} recipients with phone numbers
+                                ~{numberOrZero(preview.count).toLocaleString()} recipients with phone numbers
                             </p>
                             {preview.sample.length > 0 && (
                                 <div className="mt-2 space-y-1">
@@ -501,7 +502,7 @@ export default function SmsBroadcastPage() {
                             className="mt-4 px-6 py-2.5 rounded-xl font-medium text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
                         >
-                            {sending ? `Sending to ${preview.count.toLocaleString()} recipients...` : `Send SMS to ${preview.count.toLocaleString()} Recipients`}
+                            {sending ? `Sending to ${numberOrZero(preview.count).toLocaleString()} recipients...` : `Send SMS to ${numberOrZero(preview.count).toLocaleString()} Recipients`}
                         </button>
                     )}
 
@@ -511,7 +512,7 @@ export default function SmsBroadcastPage() {
                                 <div>
                                     <p className="text-emerald-400 font-semibold text-sm">✅ Broadcast Complete</p>
                                     <p className="text-white/60 text-xs mt-1">
-                                        Sent: {result.sent.toLocaleString()} · Failed: {result.failed.toLocaleString()} · Skipped: {result.skipped.toLocaleString()}
+                                        Sent: {numberOrZero(result.sent).toLocaleString()} · Failed: {numberOrZero(result.failed).toLocaleString()} · Skipped: {numberOrZero(result.skipped).toLocaleString()}
                                     </p>
                                 </div>
                             ) : (

@@ -301,7 +301,10 @@ describe('#598 — and no member-facing screen calls toLocaleString on a stored 
             for (const entry of readdirSync(dir)) {
                 const full = join(dir, entry);
                 if (statSync(full).isDirectory()) {
-                    if (entry !== 'admin') walk(full);
+                    //   #600 — ADMIN IS IN SCOPE. Thirty-two more sites lived
+                    //   there, on the audit-log counters, the SMS broadcast
+                    //   preview and every export figure an administrator acts on.
+                    walk(full);
                 } else if (entry.endsWith('.tsx')) {
                     seen += 1;
                     const rel = full.slice(ROOT.length + 1);

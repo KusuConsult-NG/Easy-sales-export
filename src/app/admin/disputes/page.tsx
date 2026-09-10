@@ -17,6 +17,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { Dispute } from "@/lib/types/marketplace";
 import { formatLocalDate } from "@/lib/date-utils";
+import { humanise } from "@/lib/humanise";
 
 export default function AdminDisputesPage() {
     const { showToast } = useToast();
@@ -245,7 +246,7 @@ export default function AdminDisputesPage() {
                                             <div className="p-3 bg-green-50 rounded-xl">
                                                 <p className="text-xs text-slate-500 mb-1">Resolution</p>
                                                 <p className="font-semibold text-green-700">
-                                                    {selected.resolution.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                                                    {humanise(selected.resolution).replace(/\b\w/g, (c: string) => c.toUpperCase())}
                                                 </p>
                                             </div>
                                         )}

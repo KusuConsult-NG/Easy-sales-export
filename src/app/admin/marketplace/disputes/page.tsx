@@ -18,6 +18,7 @@ import type { Dispute, DisputeStatus } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { humanise } from "@/lib/humanise";
 
 const DISPUTE_REASON_LABELS: Record<string, string> = {
     not_received: "Item Not Received",
@@ -268,7 +269,7 @@ export default function AdminDisputesPage() {
                                                 <span
                                                     className={`px-3 py-1 text-sm font-semibold rounded-full capitalize ${styles.badge}`}
                                                 >
-                                                    {dispute.status.replace("_", " ")}
+                                                    {humanise(dispute.status)}
                                                 </span>
                                             </div>
                                             <p className="text-sm text-gray-600 mb-1">

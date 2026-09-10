@@ -9,6 +9,7 @@ import { getCoursesAction, deleteCourseAction, startAcademyLiveSessionAction, ty
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 export default function AcademyAdminPage() {
     const router = useRouter();
@@ -173,7 +174,7 @@ export default function AcademyAdminPage() {
                                     <div className="absolute top-4 right-4 flex gap-2">
                                         {course.tier && (
                                             <span className="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                                                {course.tier.charAt(0).toUpperCase() + course.tier.slice(1)}
+                                                {humaniseCapitalised(course.tier)}
                                             </span>
                                         )}
                                         {getLevelBadge(course.level)}

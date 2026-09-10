@@ -18,6 +18,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { recordExport } from "@/lib/record-export";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 type SellerVerification = {
     id: string;
@@ -474,7 +475,7 @@ export default function AdminSellersPage() {
                                                 : standardV.status === "approved" ? "bg-green-100 text-green-700"
                                                     : "bg-red-100 text-red-700"
                                                 }`}>
-                                                {standardV.status.charAt(0).toUpperCase() + standardV.status.slice(1)}
+                                                {humaniseCapitalised(standardV.status)}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-600">

@@ -30,6 +30,7 @@ import type { AuditLogEntry, AuditSeverity } from "@/lib/audit-log";
 import { useAdminData } from "@/hooks/useAdminData";
 import { toSafeDate } from "@/lib/utils";
 import { recordExport } from "@/lib/record-export";
+import { numberOrZero } from "@/lib/numbers";
 
 const severityConfig = {
     info: { color: "blue", icon: Info, label: "Info" },
@@ -174,28 +175,28 @@ export default function AdminAuditLogsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-blue-300 mb-1">Total Logs (30 days)</div>
-                            <div className="text-3xl font-bold text-white">{stats.totalLogs.toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-white">{numberOrZero(stats.totalLogs).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-blue-300 mb-1 flex items-center space-x-2">
                                 <Info className="w-4 h-4" />
                                 <span>Info</span>
                             </div>
-                            <div className="text-3xl font-bold text-blue-400">{stats.bySeverity.info.toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-blue-400">{numberOrZero(stats.bySeverity.info).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-yellow-300 mb-1 flex items-center space-x-2">
                                 <AlertTriangle className="w-4 h-4" />
                                 <span>Warning</span>
                             </div>
-                            <div className="text-3xl font-bold text-yellow-400">{stats.bySeverity.warning.toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-yellow-400">{numberOrZero(stats.bySeverity.warning).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-red-300 mb-1 flex items-center space-x-2">
                                 <AlertCircle className="w-4 h-4" />
                                 <span>Critical</span>
                             </div>
-                            <div className="text-3xl font-bold text-red-400">{stats.bySeverity.critical.toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-red-400">{numberOrZero(stats.bySeverity.critical).toLocaleString()}</div>
                         </div>
                     </div>
                 )}

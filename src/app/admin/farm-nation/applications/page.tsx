@@ -13,6 +13,9 @@ import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFil
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { recordExport } from "@/lib/record-export";
+import { humanise } from "@/lib/humanise";
+import { numberOrZero } from "@/lib/numbers";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 interface SellerProfile {
     id: string;
@@ -298,7 +301,7 @@ export default function FarmNationApplicationsPage() {
                 
                 return (
                     <span className="text-sm text-slate-500">
-                        {new Intl.DateTimeFormat("en-NG", { dateStyle: "medium" }).format(date)}
+                        {formatDateOrDash(date, { dateStyle: "medium" })}
                     </span>
                 );
             },
@@ -355,7 +358,7 @@ export default function FarmNationApplicationsPage() {
                         Registration Applications
                     </h1>
                     <p className="text-sm sm:text-base text-slate-600">
-                        Live — {stats ? stats.totalApplications.toLocaleString() : sellers.length} total applications
+                        Live — {stats ? numberOrZero(stats.totalApplications).toLocaleString() : sellers.length} total applications
                     </p>
                 </div>
             </div>
@@ -501,7 +504,7 @@ export default function FarmNationApplicationsPage() {
                                 <div className="flex justify-between">
                                     <span className="text-slate-500">Status</span>
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${getStatusBadge(selectedSeller.status)}`}>
-                                        {selectedSeller.status.replace(/_/g, " ")}
+                                        {humanise(selectedSeller.status)}
                                     </span>
                                 </div>
                             </div>

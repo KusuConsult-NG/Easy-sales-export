@@ -77,11 +77,13 @@
  *   NO READER WAS CHANGED AND NO DOCUMENT WAS TOUCHED. Every fix is on the
  *   screen, and every field that was being drawn is still drawn.
  *
- *   THE ADMIN SCREENS ARE OUT OF SCOPE, as in #545, #588 and #589: a handful of
- *   staff, not every member. There are 26 more of these call sites under
- *   src/app/admin, and the test below asserts that number rather than letting
- *   the exclusion sit unmeasured — an excluded directory nobody counts is how a
- *   ratchet becomes decoration. They are a stated debt, not a fixed one.
+ *   THE ADMIN SCREENS WERE OUT OF SCOPE HERE, as in #545, #588 and #589 — "a
+ *   handful of staff, not every member" — and this file recorded the debt as a
+ *   number, 26, rather than letting the exclusion sit unmeasured. #600 PAID IT:
+ *   all twenty-six are fixed, admin is inside the scan, and what is left is the
+ *   two the rule cannot read. The number in that test is 2 now, and the reason
+ *   the exclusion existed at all did not survive being written down — these are
+ *   the screens where a withdrawal is approved and an escrow released.
  *
  *   NINETEEN SCREENS IS NOT EVERY SCREEN. The floor says what has been proven,
  *   never what is safe.
@@ -250,6 +252,13 @@ describe('#596 — and no member-facing screen humanises a stored field by hand'
      * copy of the rule fails a test instead of waiting for a row without the
      * field.
      */
+    /**
+     * The one file whose `.replace` sits behind a `typeof x === "string"` test
+     * the pattern cannot see. Two sites, both on a `category` that may be an
+     * array, an object or a string, and both already guarded.
+     */
+    const GUARDED_BY_A_TYPEOF = ['src/app/admin/farm-nation/land-verification/page.tsx'];
+
     function handWrittenHumanisers(src: string): string[] {
         const re = /[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+\s*\.\s*(?:replace\s*\(\s*["'/]_|charAt\s*\(\s*0\s*\))/g;
         return (src.match(re) ?? []).filter(hit => !hit.includes('?.'));
@@ -262,13 +271,18 @@ describe('#596 — and no member-facing screen humanises a stored field by hand'
             for (const entry of readdirSync(dir)) {
                 const full = join(dir, entry);
                 if (statSync(full).isDirectory()) {
-                    //   Admin is a separate pass — a handful of staff, not every
-                    //   member. Same exclusion as #545, #588 and #589.
-                    if (entry !== 'admin') walk(full);
+                    //   #600 — ADMIN IS IN SCOPE NOW. It was excluded here on
+                    //   "a handful of staff, not every member", and that reads
+                    //   differently once you notice these are the screens where
+                    //   a withdrawal is approved and an escrow released: a blank
+                    //   admin page is a seller who does not get paid.
+                    walk(full);
                 } else if (entry.endsWith('.tsx')) {
                     seen += 1;
+                    const rel = full.slice(ROOT.length + 1);
+                    if (GUARDED_BY_A_TYPEOF.includes(rel)) continue;
                     const hits = handWrittenHumanisers(readFileSync(full, 'utf-8'));
-                    if (hits.length) found.push({ file: full.slice(ROOT.length + 1), hits });
+                    if (hits.length) found.push({ file: rel, hits });
                 }
             }
         };
@@ -305,10 +319,18 @@ describe('#596 — and no member-facing screen humanises a stored field by hand'
         expect(handWrittenHumanisers('{humanise(shipment.status)}')).toHaveLength(0);
     });
 
-    it('AND THE ADMIN SCREENS ARE OUT OF SCOPE, WHICH IS RECORDED RATHER THAN HIDDEN', () => {
-        //   Excluding a directory silently is how a ratchet becomes decoration.
-        //   The number is asserted so that "admin is out of scope" stays a
-        //   stated debt with a size on it.
+    it('AND THE ADMIN DEBT THIS FILE RECORDED IS PAID', () => {
+        /**
+         *   #600. This test used to assert `hits === 26` under src/app/admin —
+         *   a stated debt with a size on it, excluded from the scan above. The
+         *   twenty-six are fixed and admin is inside the main scan now, so what
+         *   is left here is the TWO the rule cannot read: both are on
+         *   /admin/farm-nation/land-verification, both sit behind a
+         *   `typeof x === "string"` the regex cannot see, and neither can throw.
+         *
+         *   Named rather than regexed away, and capped, for the same reason
+         *   #595's NOT_A_READ_LIST is capped.
+         */
         let hits = 0;
         const walk = (dir: string) => {
             for (const entry of readdirSync(dir)) {
@@ -319,10 +341,8 @@ describe('#596 — and no member-facing screen humanises a stored field by hand'
         };
         walk(join(ROOT, 'src/app/admin'));
 
-        //   The debt, with a size on it. Exactly, in both directions: a new
-        //   hand-written humaniser in admin fails this, and so does fixing one
-        //   without lowering the number on purpose.
-        expect(hits).toBe(26);
+        expect(hits).toBe(2);
+        expect(GUARDED_BY_A_TYPEOF).toEqual(['src/app/admin/farm-nation/land-verification/page.tsx']);
     });
 });
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { numberOrZero } from "@/lib/numbers";
 import {
     previewInAppBroadcastAction,
     sendInAppBroadcastAction,
@@ -159,7 +160,7 @@ export default function InAppBroadcastPage() {
             return;
         }
         const confirmed = confirm(
-            `You are about to send an in-app notification to ${preview.count.toLocaleString()} users. They will see this the next time they open the platform (or immediately if they're online). Continue?`
+            `You are about to send an in-app notification to ${numberOrZero(preview.count).toLocaleString()} users. They will see this the next time they open the platform (or immediately if they're online). Continue?`
         );
         if (!confirmed) return;
 
@@ -425,7 +426,7 @@ export default function InAppBroadcastPage() {
                     {preview && (
                         <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10">
                             <p className="text-white font-semibold text-sm">
-                                {preview.count.toLocaleString()} users will receive this notification
+                                {numberOrZero(preview.count).toLocaleString()} users will receive this notification
                             </p>
                             {preview.sample.length > 0 && (
                                 <div className="mt-2 space-y-1">
@@ -451,8 +452,8 @@ export default function InAppBroadcastPage() {
                             style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
                         >
                             {sending
-                                ? `Sending to ${preview.count.toLocaleString()} users...`
-                                : `Deliver Notification to ${preview.count.toLocaleString()} Users`}
+                                ? `Sending to ${numberOrZero(preview.count).toLocaleString()} users...`
+                                : `Deliver Notification to ${numberOrZero(preview.count).toLocaleString()} Users`}
                         </button>
                     )}
 
@@ -462,7 +463,7 @@ export default function InAppBroadcastPage() {
                                 <div>
                                     <p className="text-emerald-400 font-semibold text-sm">✅ Notifications Delivered</p>
                                     <p className="text-white/60 text-xs mt-1">
-                                        {result.delivered.toLocaleString()} notification documents created in Firestore.
+                                        {numberOrZero(result.delivered).toLocaleString()} notification documents created in Firestore.
                                         Online users will see them instantly. Offline users will see them on next login.
                                     </p>
                                 </div>

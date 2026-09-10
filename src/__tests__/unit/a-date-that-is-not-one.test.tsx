@@ -38,6 +38,11 @@
  *     one guards nothing and is inline  — /dashboard formats `event.date`
  *                                         directly in the JSX.
  *
+ *   FIVE MORE WERE UNDER src/app/admin, excluded from this ratchet when it was
+ *   written and fixed by #600 — including /admin/marketplace/withdrawals and
+ *   /admin/marketplace/disputes/escalated, which are the screens where money is
+ *   released. Admin is inside the scan now.
+ *
  *   And `toDateOrNull` — which already knew how to read a Firestore Timestamp,
  *   a `_seconds` shape, an ISO string and a number — had been sitting in
  *   lib/date-utils the whole time. #439's lesson again: a rule stated by hand at
@@ -291,8 +296,12 @@ describe('#597 — and no member-facing screen builds a date formatter by hand',
             for (const entry of readdirSync(dir)) {
                 const full = join(dir, entry);
                 if (statSync(full).isDirectory()) {
-                    //   Admin is a separate pass, as in #545, #588, #589 and #596.
-                    if (entry !== 'admin') walk(full);
+                    //   #600 — ADMIN IS IN SCOPE. Five more hand-written
+                    //   formatters lived there, including the ones on
+                    //   /admin/marketplace/withdrawals and
+                    //   /admin/marketplace/disputes/escalated, which are the
+                    //   screens where money is released.
+                    walk(full);
                 } else if (entry.endsWith('.tsx')) {
                     seen += 1;
                     if (handWrittenFormatters(readFileSync(full, 'utf-8')).length) {

@@ -40,6 +40,8 @@ import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFil
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { recordExport } from "@/lib/record-export";
+import { humanise } from "@/lib/humanise";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -95,9 +97,10 @@ function statusBadge(status: string) {
 function formatDate(ts: any): string {
     if (!ts) return "—";
     try {
-        const d = ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
-        if (isNaN(d.getTime())) return "—";
-        return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium" }).format(d);
+        //   #600 — toDateOrNull already reads a Timestamp, a `_seconds` shape,
+        //   an ISO string and a number, and returns null rather than an
+        //   Invalid Date. This hand-written version knew about `seconds` only.
+        return formatDateOrDash(ts, { dateStyle: "medium" });
     } catch (e) {
         return "—";
     }
@@ -462,7 +465,7 @@ export default function AdminExportApplicationsPage() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${statusBadge(standardApp.status)}`}>
-                                            {standardApp.status.replace("_", " ")}
+                                            {humanise(standardApp.status)}
                                         </span>
                                         {app.rejectionReason && (
                                             <p className="text-xs text-slate-500 mt-1 max-w-[200px] truncate" title={app.rejectionReason}>
@@ -623,7 +626,7 @@ export default function AdminExportApplicationsPage() {
                                 <div>
                                     <p className="text-xs text-slate-400 uppercase mb-0.5">Status</p>
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadge(selectedApp.status)}`}>
-                                        {selectedApp.status.replace("_", " ")}
+                                        {humanise(selectedApp.status)}
                                     </span>
                                 </div>
                                 <div>

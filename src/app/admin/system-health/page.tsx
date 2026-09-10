@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { runSystemHealthDiagnostic, type HealthReport, type HealthIssue } from "@/app/actions/health";
 import { Activity, AlertTriangle, CheckCircle, RefreshCw, ShieldAlert, Server, Database, CreditCard, Mail, ToggleLeft, ToggleRight, Search } from "lucide-react";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function SystemHealthPage() {
     const [loading, setLoading] = useState(true);
@@ -86,7 +87,7 @@ export default function SystemHealthPage() {
                                 <Activity className="w-5 h-5 text-blue-500" />
                                 <span className="font-medium text-sm uppercase tracking-wide">Scanned</span>
                             </div>
-                            <span className="text-4xl font-bold text-slate-900">{report.totalScanned.toLocaleString()}</span>
+                            <span className="text-4xl font-bold text-slate-900">{numberOrZero(report.totalScanned).toLocaleString()}</span>
                             <div className="mt-2 text-xs text-slate-500">Sample Size (Recent Users)</div>
                         </div>
 

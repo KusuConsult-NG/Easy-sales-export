@@ -12,6 +12,7 @@ import { formatDate } from "@/lib/utils";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import { recordExport } from "@/lib/record-export";
+import { humanise } from "@/lib/humanise";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -440,7 +441,7 @@ export default function AdminWaveApplicationsPage() {
                                         </div>
                                     </div>
                                     <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(app.status as ApplicationStatus)}`}>
-                                        {app.status.replace('_', ' ')}
+                                        {humanise(app.status)}
                                     </span>
                                 </div>
 

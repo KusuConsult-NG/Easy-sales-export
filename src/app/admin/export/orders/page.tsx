@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { getAdminExportOrdersAction, updateAdminExportOrderStatusAction } from "@/app/actions/export-admin";
 import { Ship, DollarSign, Package, CheckCircle, Clock, AlertCircle, FileText, Upload } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { humaniseUpper } from "@/lib/humanise";
 
 export default function AdminExportOrdersPage() {
     const [orders, setOrders] = useState<any[]>([]);
@@ -197,7 +198,7 @@ export default function AdminExportOrdersPage() {
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                                                {order.status.replace("_", " ").toUpperCase()}
+                                                {humaniseUpper(order.status)}
                                             </span>
                                             {order.documents && order.documents.length > 0 && (
                                                 <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">

@@ -19,11 +19,12 @@ import { getAdminUsersAction, assignDisputeAction } from "@/app/actions/admin-us
 import type { Dispute } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { humanise } from "@/lib/humanise";
+import { formatDateTimeOrDash } from "@/lib/date-utils";
 
+//   #600 — one reading, in lib/date-utils.
 function fmtDate(val: any) {
-    if (!val) return "—";
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
+    return formatDateTimeOrDash(val);
 }
 
 interface AdminUser {
@@ -176,7 +177,7 @@ export default function EscalatedDisputesPage() {
                                                         : dispute.status === "under_review" ? "bg-blue-100 text-blue-800"
                                                             : "bg-yellow-100 text-yellow-800"
                                                     }`}>
-                                                    {dispute.status.replace("_", " ")}
+                                                    {humanise(dispute.status)}
                                                 </span>
                                                 {isUrgent && (
                                                     <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-800 flex items-center gap-1">

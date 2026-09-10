@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { logger } from '@/lib/logger';
+import { numberOrZero } from "@/lib/numbers";
 
 interface OrphanedUser {
     uid: string;
@@ -211,7 +212,7 @@ export default function OrphanedUsersPage() {
                 <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-md text-sm">
                     <h3 className="font-semibold mb-1">This is a partial scan</h3>
                     <p className="text-amber-900">
-                        {scan.scanned.toLocaleString()} Firebase Auth accounts were checked, and there
+                        {numberOrZero(scan.scanned).toLocaleString()} Firebase Auth accounts were checked, and there
                         are more. Anything below — including <strong>Repair All</strong> — covers only
                         those accounts. Continue with{' '}
                         <code className="font-mono">?pageToken=</code> from the API response.
@@ -235,8 +236,8 @@ export default function OrphanedUsersPage() {
                 <div className="p-6 text-center text-gray-500 bg-white border border-gray-200 rounded-md">
                     {scan
                         ? scan.complete
-                            ? `No orphaned users among all ${scan.scanned.toLocaleString()} Auth accounts`
-                            : `None among the ${scan.scanned.toLocaleString()} accounts scanned so far`
+                            ? `No orphaned users among all ${numberOrZero(scan.scanned).toLocaleString()} Auth accounts`
+                            : `None among the ${numberOrZero(scan.scanned).toLocaleString()} accounts scanned so far`
                         : 'No orphaned users detected'}
                 </div>
             )}

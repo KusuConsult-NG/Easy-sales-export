@@ -16,6 +16,7 @@ import RecordRepaymentModal from "@/components/admin/RecordRepaymentModal";
 import { formatLocalDate } from "@/lib/date-utils";
 import { guarantorBlocksApproval } from "@/lib/loan-approval-policy";
 import { recordExport } from "@/lib/record-export";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 type LoanApplication = {
     id: string;
@@ -382,7 +383,7 @@ export default function AdminLoansPage() {
                                                     : app.status === "rejected" ? "bg-red-100 text-red-700"
                                                         : "bg-blue-100 text-blue-700"
                                                 }`}>
-                                                {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                                                {humaniseCapitalised(app.status)}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-600">
@@ -532,7 +533,7 @@ export default function AdminLoansPage() {
                                     : ["approved", "disbursed", "active"].includes(selectedApplication.status) ? "bg-green-100 text-green-700"
                                         : "bg-red-100 text-red-700"
                                     }`}>
-                                    {selectedApplication.status.charAt(0).toUpperCase() + selectedApplication.status.slice(1)}
+                                    {humaniseCapitalised(selectedApplication.status)}
                                 </span>
                                 {selectedApplication.rejectionReason && (
                                     <div className="mt-2 p-3 bg-red-50 rounded-lg">

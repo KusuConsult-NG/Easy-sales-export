@@ -17,6 +17,7 @@ import type { ProductReview } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatLocalDate } from "@/lib/date-utils";
+import { humaniseCapitalised } from "@/lib/humanise";
 
 function StarDisplay({ rating }: { rating: number }) {
     return (
@@ -260,7 +261,7 @@ export default function AdminReviewsPage() {
                                                         : "bg-red-100 text-red-800"
                                                     }`}
                                             >
-                                                {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
+                                                {humaniseCapitalised(review.status)}
                                             </span>
                                             {review.verified && (
                                                 <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">

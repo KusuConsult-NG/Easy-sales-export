@@ -30,6 +30,7 @@ import type { Dispute, Order, DisputeResolution } from "@/lib/types/marketplace"
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate, formatLocalDateTime, toDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
+import { humanise, humaniseUpper } from "@/lib/humanise";
 
 const DISPUTE_REASON_LABELS: Record<string, string> = {
     not_received: "Item Not Received",
@@ -264,7 +265,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                     : "bg-green-100 text-green-800"
                                 }`}
                         >
-                            {dispute.status.replace("_", " ").toUpperCase()}
+                            {humaniseUpper(dispute.status)}
                         </span>
                         {isEscrowDispute && (
                             <span className="px-3 py-1 rounded-xl font-semibold text-xs bg-purple-100 text-purple-800 flex items-center gap-1">
@@ -330,7 +331,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-600 mb-1">Order Status</p>
-                                    <p className="capitalize text-gray-900">{order.status.replace("_", " ")}</p>
+                                    <p className="capitalize text-gray-900">{humanise(order.status)}</p>
                                 </div>
                             </div>
                             <div className="mt-4 pt-4 border-t border-gray-200">
