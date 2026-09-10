@@ -104,11 +104,17 @@ async function _updateResourceAction(
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
-        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).updateExisting({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
             _version: FieldValue.increment(1),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That resource no longer exists", data: null };
+        }
 
         await createAdminAuditLog({
             action: "resource_update",
@@ -149,7 +155,10 @@ async function _deleteResourceAction(
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
-        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).updateExisting({
             // `deleted: true` alone was read by NOTHING — not the listings, not the
             // download guard — so this button removed a resource from nowhere. Both
             // spellings now, because two readers query `isActive` in SQL and cannot
@@ -160,6 +169,9 @@ async function _deleteResourceAction(
             updatedAt: FieldValue.serverTimestamp(),
             _version: FieldValue.increment(1),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That resource no longer exists", data: null };
+        }
 
         await createAdminAuditLog({
             action: "resource_delete",
@@ -294,11 +306,17 @@ async function _updateTrainingEventAction(
             };
         }
 
-        await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).updateExisting({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
             _version: FieldValue.increment(1),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That training event no longer exists", data: null };
+        }
 
         await createAdminAuditLog({
             action: "wave_training_updated",

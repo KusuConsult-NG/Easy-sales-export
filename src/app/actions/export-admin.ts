@@ -195,10 +195,16 @@ export async function deleteExportCatalogAction(productId: string): Promise<
         }
 
         const db = getAdminDb();
-        await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(productId).update({ isActive: false, 
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(productId).updateExisting({ isActive: false, 
             deletedAt: new Date(),
             deletedBy: session.user.id
         });
+        if (!wrote) {
+            return { success: false as const, error: "That catalogue product no longer exists", data: null };
+        }
 
         await recordAdminAction({
             action: 'export_catalog_delete',

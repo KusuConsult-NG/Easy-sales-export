@@ -149,7 +149,10 @@ async function _startWaveLiveSessionAction(
             // A row written before #188 has no roomKey; an existing minted one
             // is kept, so re-starting does not eject whoever is already in.
             roomKey = roomKeyFor(sessionQuery.docs[0].data()?.roomKey);
-            await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS).doc(docId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+            const wrote = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS).doc(docId).updateExisting({
                 scheduledAt: new Date(),
                 isActive: true,
                 durationMinutes,
@@ -157,6 +160,9 @@ async function _startWaveLiveSessionAction(
                 customMeetingLink: customMeetingLink || null,
                 updatedAt: new Date(),
             });
+            if (!wrote) {
+                return { success: false as const, error: "That session no longer exists", data: null };
+            }
         }
 
         await createAdminAuditLog({

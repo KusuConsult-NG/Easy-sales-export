@@ -933,10 +933,21 @@ async function _approveMarketplaceUserAction(userId: string): Promise<ActionResp
         // to super_admin, admin and marketplace_admin only.
         if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:approve_sellers")) return { success: false as const, error: "Unauthorized", data: null };
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        //   #612 — THIS REPORTED SUCCESS FOR A USER WHO WAS NOT THERE.
+        //
+        //   `update()` on a missing document is a silent no-op in the Supabase
+        //   shim; its own comment says so and calls it "how 'the save button did
+        //   nothing' bugs reach production". Nothing here read that warning, so a
+        //   mistyped or already-deleted id returned success AND wrote an
+        //   audit-log entry recording an approval that never happened. An audit
+        //   trail that records work not done is worse than no audit trail.
+        const approved = await db.collection(COLLECTIONS.USERS).doc(userId).updateExisting({
             status: "active",
             updatedAt: FieldValue.serverTimestamp()
         });
+        if (!approved) {
+            return { success: false as const, error: "That account no longer exists", data: null };
+        }
 
         await createAdminAuditLog({
             action: "approve_marketplace_user",
@@ -975,18 +986,30 @@ async function _rejectMarketplaceUserAction(options: { userId: string; reason: s
         // marketplace:suspend_sellers — see the note on the approve path above.
         if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:suspend_sellers")) return { success: false as const, error: "Unauthorized", data: null };
 
-        await db.collection(COLLECTIONS.USERS).doc(options.userId).update({
+        //   #612 — and the reason, which the SCREEN refuses to submit empty and
+        //   this action accepted. A rejection with no reason is a decision with
+        //   no record of why, on the row a rejected seller is shown.
+        const reason = String(options.reason ?? "").trim();
+        if (!reason) {
+            return { success: false as const, error: "A rejection reason is required", data: null };
+        }
+
+        //   #612 — same silent no-op as the approve path above.
+        const rejected = await db.collection(COLLECTIONS.USERS).doc(options.userId).updateExisting({
             status: "rejected",
-            rejectionReason: options.reason,
+            rejectionReason: reason,
             updatedAt: FieldValue.serverTimestamp()
         });
+        if (!rejected) {
+            return { success: false as const, error: "That account no longer exists", data: null };
+        }
 
         await createAdminAuditLog({
             action: "reject_marketplace_user",
             userId: sessionResult.session.user.id,
             targetId: options.userId,
             targetType: "user",
-            metadata: { role: "buyer", reason: options.reason },
+            metadata: { role: "buyer", reason },
         });
 
         revalidatePath("/admin/marketplace/buyers");

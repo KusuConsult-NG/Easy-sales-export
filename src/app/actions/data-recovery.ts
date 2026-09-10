@@ -361,11 +361,22 @@ export async function runServiceRegistrationRecoveryAction(
                 }
 
                 try {
-                    await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+                    const wrote = await db.collection(COLLECTIONS.USERS).doc(userId).updateExisting({
                         ...updates,
                         _dataIntegrityRemediated: true,
                         _lastIntegrityAuditAt: FieldValue.serverTimestamp()
                     });
+                    //   NOT a return: this runs INSIDE the loop over every user the
+                    //   sweep is repairing, and bailing out would abandon the rest of
+                    //   the run because one row had gone. The loop already has a way
+                    //   to say a user could not be fixed, and this is one of those.
+                    if (!wrote) {
+                        stats.errors.push(`User ${userId}: no longer exists`);
+                        continue;
+                    }
                     stats.fixedCount++;
                 } catch (e: any) {
                     logger.error(`[DataRecovery] Failed to fix user ${userId}:`, e);

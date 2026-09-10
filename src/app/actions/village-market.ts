@@ -377,10 +377,16 @@ export async function addExternalMerchantAction(
         const merchantId = `ext_${Date.now()}`;
         const newMerchant: ExternalMerchant = { id: merchantId, ...merchant };
 
-        await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId).updateExisting({
             externalMerchants: FieldValue.arrayUnion(newMerchant),
             updatedAt: FieldValue.serverTimestamp(),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That event no longer exists", data: null };
+        }
 
         await recordAdminAction({
             action: 'village_market_merchant_added',
@@ -416,10 +422,16 @@ export async function updateVillageMarketEventStatusAction(
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
-        await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId).updateExisting({
             status,
             updatedAt: FieldValue.serverTimestamp(),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That event no longer exists", data: null };
+        }
 
         await recordAdminAction({
             action: 'village_market_event_status_update',

@@ -212,6 +212,21 @@ function createMockDb() {
              */
             get: () => withAccess(descriptor, () => global.mockFirestoreGet(id, collection)),
             update: (fields) => withAccess(descriptor, () => global.mockFirestoreUpdate(id, fields)),
+            /**
+             *   #612 — the adapter's write that says whether it wrote. `update()`
+             *   on a missing document is a silent no-op there, so fourteen actions
+             *   reported success for work they did not do; this variant answers
+             *   false instead. The harness must know it or those actions get
+             *   "updateExisting is not a function", their catch turns it into a
+             *   generic failure, and the test's assertions cannot fail — the exact
+             *   shape recorded on `delete()` a few lines below.
+             */
+            updateExisting: async (fields) => {
+                const snap = await withAccess(descriptor, () => global.mockFirestoreGet(id, collection));
+                if (!snap || !snap.exists) return false;
+                await withAccess(descriptor, () => global.mockFirestoreUpdate(id, fields));
+                return true;
+            },
             set: (data, options) => withAccess(
                 Object.assign({}, descriptor, { merge: options && options.merge }),
                 () => { global.mockFirestoreSet(id, data); return Promise.resolve(); },

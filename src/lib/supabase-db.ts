@@ -1475,6 +1475,31 @@ export class SupabaseDocumentReference {
         await invalidateCacheForCollection(this._collection, this.id);
     }
 
+    /**
+     *   #612 THE SAME WRITE, WITH AN ANSWER.
+     *
+     *   `update()` on a missing document is a no-op that logs a warning and
+     *   returns void, so every caller reports SUCCESS for work that did not
+     *   happen. The comment inside it already names the consequence — "this is
+     *   how 'the save button did nothing' bugs reach production" — and nothing
+     *   could act on it, because there was nothing to act on.
+     *
+     *   Fourteen admin actions take a document id FROM THE CALLER and update it
+     *   without ever establishing that it exists. Approving a marketplace user
+     *   who is not there returns success and writes an audit-log entry saying it
+     *   was done.
+     *
+     *   This returns whether a row was actually there. It does not change what
+     *   `update()` does, because changing that under load is the risk the
+     *   original note was avoiding — a caller opts in.
+     */
+    async updateExisting(data: Record<string, any>): Promise<boolean> {
+        const snap = await this.get();
+        if (!snap.exists) return false;
+        await this.update(data);
+        return true;
+    }
+
     async update(data: Record<string, any>): Promise<void> {
         // Increments are pulled out and applied in SQL, not resolved here.
         //

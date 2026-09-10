@@ -494,6 +494,8 @@ interface LiveRef {
     __collection: string;
     path: string;
     update(patch: Doc): Promise<void>;
+    /** #612 — the adapter's write that reports whether the document was there. */
+    updateExisting(patch: Doc): Promise<boolean>;
     set(data: Doc, options?: { merge?: boolean }): Promise<void>;
     delete(): Promise<void>;
     get(): Promise<ReturnType<typeof docSnapshot>>;
@@ -517,6 +519,18 @@ function liveRef(collection: string, id: string): LiveRef {
         __collection: collection,
         path: `${collection}/${id}`,
         update: async (patch: Doc) => { ops?.doUpdate(collection, id, patch); },
+        /**
+         *   #612 — the adapter's write that says whether it wrote. A missing
+         *   document is a silent no-op in `update`, so fourteen actions reported
+         *   success for work they did not do; this reports false instead and the
+         *   harness must behave the same way or those actions are untestable.
+         */
+        updateExisting: async (patch: Doc) => {
+            const snap = docSnapshot(id, ops?.read(collection, id), collection);
+            if (!snap.exists) return false;
+            ops?.doUpdate(collection, id, patch);
+            return true;
+        },
         set: async (data: Doc, options?: { merge?: boolean }) => {
             ops?.doSet(collection, id, data, options?.merge);
         },
@@ -801,6 +815,13 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
             update: (patch: Doc) => {
                 doSet(collection, id, patch ?? {}, true);
                 return Promise.resolve();
+            },
+            //   #612 — see the note on the sibling reference above.
+            updateExisting: (patch: Doc) => {
+                const snap = docSnapshot(id, collectionOf(collection).get(id), collection);
+                if (!snap.exists) return Promise.resolve(false);
+                doSet(collection, id, patch ?? {}, true);
+                return Promise.resolve(true);
             },
             set: (next: Doc, opts?: { merge?: boolean }) => {
                 doSet(collection, id, next ?? {}, opts?.merge);

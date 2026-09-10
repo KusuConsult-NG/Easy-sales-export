@@ -635,7 +635,10 @@ export async function updateMemberProfileDetailsAction(
         }
 
         // Update Central User Profile Doc (updates both nested and dot-notation keys)
-        await db.collection(COLLECTIONS.USERS).doc(userId).update(normalizeUserUpdate({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.USERS).doc(userId).updateExisting(normalizeUserUpdate({
             gender: normalizedGender,
             stateOfOrigin: normalizedState,
             state: normalizedState,
@@ -678,6 +681,9 @@ export async function updateMemberProfileDetailsAction(
                 stateOfOrigin: normalizedState,
                 updatedAt: FieldValue.serverTimestamp()
             });
+        if (!wrote) {
+            return { success: false as const, error: "That account no longer exists", data: null };
+        }
         }
 
         // Invalidate cache and revalidate paths

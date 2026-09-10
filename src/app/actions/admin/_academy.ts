@@ -477,12 +477,18 @@ async function _markAcademyApplicationUnderReviewAction(
             return { error: "Unauthorized: academy:approve_applications required", success: false as const };
         }
 
-        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).updateExisting({
             status: "under_review",
             reviewedBy: session.user.id,
             reviewStartedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That application no longer exists" };
+        }
 
         await createAdminAuditLog({
             action: "academy_under_review",

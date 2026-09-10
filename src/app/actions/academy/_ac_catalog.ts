@@ -319,10 +319,16 @@ async function _updateCourseAction(courseId: string, data: Partial<Course>): Pro
             };
         }
 
-        await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).updateExisting({
             ...validation.data,
             updatedAt: FieldValue.serverTimestamp(),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That course no longer exists", data: null };
+        }
 
         await createAdminAuditLog({
             action: "course_updated",
@@ -371,10 +377,16 @@ async function _updateCourseModulesAction(courseId: string, modules: CourseModul
 
         logger.info(`[updateCourseModulesAction] Saving ${modules?.length} modules for course ${courseId}`);
 
-        await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).update({
+        //   #612 — `update()` on a missing document is a silent no-op in the
+        //   Supabase shim, so this reported success for work it did not do. The
+        //   id comes from the caller and nothing established that it exists.
+        const wrote = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).updateExisting({
             modules,
             updatedAt: FieldValue.serverTimestamp(),
         });
+        if (!wrote) {
+            return { success: false as const, error: "That course no longer exists", data: null };
+        }
 
         await createAdminAuditLog({
             action: "course_updated",
