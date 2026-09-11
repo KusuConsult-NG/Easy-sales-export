@@ -29,6 +29,21 @@ export default function CourseManagerPage() {
 
     const [isLoading, setIsLoading] = useState(true);
     const [course, setCourse] = useState<Course | null>(null);
+    /**
+     *   #620 A THROWN READ LEFT THIS SCREEN COMPLETELY BLANK.
+     *
+     *        "Course not found" redirects to the course list, which is right —
+     *        that is an ANSWER. A thrown read is not: it only showed a toast
+     *        that fades in seconds, then fell to `if (!course) return null` and
+     *        rendered nothing at all. White page, no heading, no retry, and no
+     *        way to tell whether the course was deleted or the read failed.
+     *
+     *        The sibling screen, admin/marketplace/disputes/[id], has the same
+     *        `if (!x) return null` line and is safe — because ITS catch
+     *        redirects too. Same shape, one door weaker, which is the pattern
+     *        this audit keeps finding.
+     */
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [modules, setModules] = useState<CourseModuleWithState[]>([]);
 
     const [editingLesson, setEditingLesson] = useState<{ moduleId: string; lesson: LessonWithState } | null>(null);
@@ -70,6 +85,7 @@ export default function CourseManagerPage() {
 
     async function loadCourse() {
         try {
+            setLoadError(null);
             const dataReq = await getCourseByIdAction(courseId);
             if (dataReq.success && dataReq.data) {
                 const data = dataReq.data;
@@ -88,7 +104,12 @@ export default function CourseManagerPage() {
                 router.push("/admin/academy");
             }
         } catch (error) {
+            //   NOT a redirect. "We could not read this" is not "this does not
+            //   exist", and sending an admin back to the list on a transient
+            //   failure tells them the course is gone. The screen says what
+            //   happened and offers the read again.
             toast.error("Failed to load course");
+            setLoadError(error instanceof Error ? error.message : "The course could not be loaded.");
         } finally {
             setIsLoading(false);
         }
@@ -339,7 +360,48 @@ export default function CourseManagerPage() {
         );
     }
 
-    if (!course) return null;
+    if (!course) {
+        /*
+         *   #620 THIS WAS `return null` — a blank white page.
+         *
+         *   Reached two ways, and they are not the same thing, so this says
+         *   which. A failed read offers the read again; anything else says the
+         *   course could not be opened and gives a way back to the list. Either
+         *   way there is a heading on the screen, which is the part that was
+         *   missing: an admin staring at nothing cannot tell a broken course
+         *   from a broken app, and reports the app.
+         */
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+                <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center">
+                    <h1 className="text-lg font-semibold text-slate-900 mb-2">
+                        {loadError ? "Could not load this course" : "Course unavailable"}
+                    </h1>
+                    <p className="text-sm text-slate-600 mb-6">
+                        {loadError
+                            ? "The course could not be read. This is usually temporary — try again."
+                            : "This course could not be opened."}
+                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                        {loadError && (
+                            <button
+                                onClick={() => { setIsLoading(true); loadCourse(); }}
+                                className="px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 transition"
+                            >
+                                Try again
+                            </button>
+                        )}
+                        <Link
+                            href="/admin/academy"
+                            className="px-5 py-2 border border-slate-300 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition"
+                        >
+                            Back to courses
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 py-8 px-4">
