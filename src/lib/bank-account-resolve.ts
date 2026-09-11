@@ -33,8 +33,28 @@ import { paystackBaseUrl } from "@/lib/paystack-host";
  * `reason` they can show, and `status` so an HTTP caller can pass it through.
  */
 
+/**
+ * Why a resolution failed, in a form a caller can branch on.
+ *
+ *   #646 `reason` is prose for the account holder and changes when somebody
+ *   improves the wording; Paystack's own message is prose from a third party
+ *   and changes when THEY do. A caller that wants to say something friendlier
+ *   than either had to match on those strings, which is a branch that breaks
+ *   silently and in production.
+ */
+export type BankResolutionCode =
+    | "missing_fields"
+    | "bad_account_number"
+    | "bad_bank_code"
+    | "not_configured"
+    | "unreachable"
+    | "provider_error"
+    | "unresolvable";
+
 export interface BankAccountResolution {
     ok: boolean;
+    /** Present only when !ok. Branch on this, never on `reason`. */
+    code?: BankResolutionCode;
     /** The holder's name as the bank gives it. Present only when ok. */
     accountName?: string;
     accountNumber?: string;
@@ -50,22 +70,43 @@ export function isPlausibleAccountNumber(value: unknown): boolean {
     return typeof value === "string" && /^\d{10}$/.test(value);
 }
 
+/**
+ * Paystack bank codes are three to six digits — #646.
+ *
+ * The same reasoning as the account number above, and it was applied at one of
+ * the two doors: actions/paystack.ts refused a malformed code before spending a
+ * request, and the route sent it to Paystack to be refused there. Both doors ask
+ * this now.
+ */
+export function isPlausibleBankCode(value: unknown): boolean {
+    return typeof value === "string" && /^\d{3,6}$/.test(value);
+}
+
 export async function resolveBankAccount(
     accountNumber: unknown,
     bankCode: unknown,
 ): Promise<BankAccountResolution> {
     if (!accountNumber || !bankCode) {
-        return { ok: false, reason: "accountNumber and bankCode are required", status: 400 };
+        return { ok: false, code: "missing_fields", reason: "accountNumber and bankCode are required", status: 400 };
     }
 
     if (!isPlausibleAccountNumber(accountNumber)) {
-        return { ok: false, reason: "Account number must be exactly 10 digits", status: 400 };
+        return { ok: false, code: "bad_account_number", reason: "Account number must be exactly 10 digits", status: 400 };
+    }
+
+    if (!isPlausibleBankCode(bankCode)) {
+        return {
+            ok: false,
+            code: "bad_bank_code",
+            reason: "Invalid bank code. Please select a valid bank from the dropdown.",
+            status: 400,
+        };
     }
 
     const paystackKey = process.env.PAYSTACK_SECRET_KEY;
     if (!paystackKey) {
         logger.error("CRITICAL: PAYSTACK_SECRET_KEY not found. Failing bank account verification securely.");
-        return { ok: false, reason: "Verification service currently unavailable.", status: 503 };
+        return { ok: false, code: "not_configured", reason: "Verification service currently unavailable.", status: 503 };
     }
 
     const url = `${paystackBaseUrl()}/bank/resolve`
@@ -79,11 +120,11 @@ export async function resolveBankAccount(
         if (!response.ok) {
             const reason = data?.message || "Bank account verification failed";
             logger.error("Paystack bank resolve error", { status: response.status, message: reason });
-            return { ok: false, reason, status: response.status };
+            return { ok: false, code: "provider_error", reason, status: response.status };
         }
 
         if (!data?.status || !data?.data?.account_name) {
-            return { ok: false, reason: "Could not resolve account details", status: 422 };
+            return { ok: false, code: "unresolvable", reason: "Could not resolve account details", status: 422 };
         }
 
         return {
@@ -95,6 +136,6 @@ export async function resolveBankAccount(
     } catch (error) {
         // A network fault is not a pass. Same rule as the missing key above.
         logger.error("Bank resolve request failed", error);
-        return { ok: false, reason: "Verification is unavailable right now. Please try again.", status: 503 };
+        return { ok: false, code: "unreachable", reason: "Verification is unavailable right now. Please try again.", status: 503 };
     }
 }

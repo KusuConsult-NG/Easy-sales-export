@@ -263,13 +263,29 @@ fallback path as well as the Redis one** — which is the half that matters toda
 because `UPSTASH_REDIS_REST_URL` is unset and the fallback is therefore the live
 path.
 
-### ☐ Two implementations of the Paystack bank-resolve call
+### ✅ (#646) The Paystack bank-resolve call has one implementation
 
-#346 built `lib/bank-account-resolve` so callers would stop writing their own.
-`actions/paystack.ts::verifyBankAccount` still writes its own `fetch`. Recorded
-during #642 and deliberately not folded into it: the meter was what had a live
-consequence, and the action's error strings are pinned by two suites, so
-consolidating is its own read.
+**There were THREE, not two.** Sweeping for `/bank/resolve` rather than trusting
+the count found `lib/paystack-transfer.ts::resolveAccountNumber` — the worst of
+them: both parameters interpolated raw, no `encodeURIComponent`, no plausibility
+check on either. Nothing calls it, which is how it survived three passes over
+this area; the payout pipeline's own note already recorded that it is "exported
+and this never called it". A dead duplicate is what somebody copies next, so it
+delegates now rather than being deleted.
+
+The resolution moved and **the wording stayed**: the shared module answers with a
+machine-readable `code` and the action turns that into the sentences a member can
+act on. Adopting Paystack's blunter message would have been a regression wearing
+the clothes of a cleanup — "Could not resolve account name" is a third party
+talking to a developer; "verify your account number and selected bank are
+correct" tells a member what to do next.
+
+The action also stopped branching on `data.message?.toLowerCase().includes(…)` —
+a third party's prose, which breaks silently on a day nobody deployed anything.
+
+And the stricter of the two checks won: `isPlausibleBankCode` was the action's
+rule and is now the module's, so **both** doors refuse a malformed code before
+spending a request.
 
 ### ✅ (#644) The `api` bucket had no consumer because a SECOND table did
 

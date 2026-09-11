@@ -8,6 +8,7 @@
  */
 
 import { logger } from "@/lib/logger";
+import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import {
     isResolvedBankAccount,
     UNRESOLVED_ACCOUNT_REFUSAL,
@@ -86,29 +87,39 @@ function isDuplicateReference(message: string): boolean {
 
 // ─── Step 1: Resolve account number (verify it exists) ───────────────────────
 
+/**
+ *   #646 THE THIRD IMPLEMENTATION OF ONE CALL, AND THE ONLY ONE WITH NO
+ *   ENCODING.
+ *
+ *   Found by sweeping for `/bank/resolve` across the application rather than by
+ *   trusting that there were two. This wrote
+ *
+ *       `${PAYSTACK_BASE}/bank/resolve?account_number=${accountNumber}
+ *        &bank_code=${bankCode}`
+ *
+ *   with both values interpolated raw — no `encodeURIComponent`, no
+ *   plausibility check on either parameter. lib/bank-account-resolve has had
+ *   both since #346, and actions/paystack.ts had the bank-code rule; this one
+ *   had neither.
+ *
+ *   NOTHING CALLS IT, which is why it survived three passes over this area: the
+ *   note on the payout pipeline below already records that "resolveAccountNumber
+ *   is exported and this never called it". A dead duplicate is still a
+ *   duplicate — it is what somebody copies next.
+ *
+ *   It is NOT deleted. It delegates, so a future caller gets the checked
+ *   implementation instead of the raw one, and the return shape is unchanged so
+ *   nothing has to be rewritten to adopt it.
+ */
 export async function resolveAccountNumber(
     accountNumber: string,
     bankCode: string
 ): Promise<{ success: boolean; accountName?: string; error?: string }> {
-    try {
-        const res = await fetch(
-            `${PAYSTACK_BASE}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
-            {
-                headers: {
-                    Authorization: `Bearer ${getPaystackSecret()}`,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
-        const data = await res.json();
-        if (!res.ok || !data.status) {
-            return { success: false, error: data.message || "Could not resolve account" };
-        }
-        return { success: true, accountName: data.data.account_name };
-    } catch (err: any) {
-        logger.error("[PaystackTransfer] resolveAccountNumber error:", err);
-        return { success: false, error: err.message };
+    const resolution = await resolveBankAccount(accountNumber, bankCode);
+    if (!resolution.ok) {
+        return { success: false, error: resolution.reason || "Could not resolve account" };
     }
+    return { success: true, accountName: resolution.accountName };
 }
 
 // ─── Step 2: Create a transfer recipient ─────────────────────────────────────

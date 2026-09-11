@@ -354,17 +354,38 @@ describe('#346 — the resolver fails closed, every way it can fail', () => {
         expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('the account number and bank code are URL-ENCODED into the query', async () => {
-        // They reach a URL by string concatenation; an unencoded value is a
-        // query-parameter injection into the Paystack request.
-        const fetchMock = jest.fn(async () => ({
-            ok: true,
-            json: async () => ({ status: true, data: { account_name: 'ADA OBI' } }),
-        })) as any;
+    it('A BANK CODE THAT COULD BE AN INJECTION NEVER REACHES THE REQUEST', async () => {
+        /*
+         *   This used to prove the value was URL-ENCODED into the query —
+         *   `058&foo=bar` becoming `058%26foo%3Dbar`. #646 added
+         *   `isPlausibleBankCode`, the sibling of the ten-digit account rule
+         *   that actions/paystack.ts had and this module did not, so the value
+         *   is now refused before any request exists to inject into.
+         *
+         *   The stronger property replaces the weaker one rather than sitting
+         *   beside it: an encoded injection is safe, and one that was never sent
+         *   is safer.
+         */
+        const fetchMock = jest.fn() as any;
         global.fetch = fetchMock;
 
-        await (await resolver())('0123456789', '058&foo=bar');
+        const result = await (await resolver())('0123456789', '058&foo=bar');
 
-        expect(String(fetchMock.mock.calls[0][0])).toContain('058%26foo%3Dbar');
+        expect(result.ok).toBe(false);
+        expect(result.code).toBe('bad_bank_code');
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('AND THE ENCODING IS STILL THERE, because the plausibility rule is not the only guard', async () => {
+        /*
+         *   Defence in depth, asserted on the source: both parameters are
+         *   constrained to digits now, so nothing that reaches the URL has a
+         *   character worth encoding — which is exactly the argument that would
+         *   justify deleting the encoding, and exactly why it should not be.
+         *   The plausibility rule is one edit away from being loosened.
+         */
+        const src = readFileSync('src/lib/bank-account-resolve.ts', 'utf-8');
+        expect(src).toContain('encodeURIComponent(String(accountNumber))');
+        expect(src).toContain('encodeURIComponent(String(bankCode))');
     });
 });

@@ -163,13 +163,21 @@ describe('#642 — both doors onto the oracle have the same meter', () => {
         expect(rateLimitConfig.bankVerification.interval).toBe(60 * 60 * 1000);
     });
 
-    it('AND BOTH DOORS STILL ASK PAYSTACK THE SAME QUESTION', () => {
-        //   The other half: "the route is rate limited" is also satisfied by a
-        //   route that no longer does anything.
+    it('AND BOTH DOORS NOW ASK THE SAME RESOLVER', () => {
+        /*
+         *   The other half: "the route is rate limited" is also satisfied by a
+         *   route that no longer does anything.
+         *
+         *   #646 CLOSED THE ITEM THIS TEST RECORDED AS OPEN. When #642 was
+         *   written the action still wrote its own fetch to /bank/resolve, and
+         *   this asserted that literal to prove the two doors reached the same
+         *   Paystack endpoint. They reach it through one module now, which is
+         *   the stronger statement of the same fact.
+         */
         expect(code(ROUTE)).toContain('resolveBankAccount(accountNumber, bankCode)');
-        //   The action reaches the same Paystack endpoint by its own fetch —
-        //   which is what makes one meter the right answer for both.
-        expect(code(ACTION)).toContain('/bank/resolve?account_number=');
+        expect(code(ACTION)).toContain('resolveBankAccount(accountNumber, bankCode)');
+        //   And the second implementation is gone, not merely unused.
+        expect(code(ACTION)).not.toContain('/bank/resolve?account_number=');
     });
 });
 
