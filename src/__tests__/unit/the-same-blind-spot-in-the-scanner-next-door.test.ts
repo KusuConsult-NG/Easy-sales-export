@@ -250,13 +250,18 @@ describe('#639 — and both surfaces are pinned at zero', () => {
          *   above pass over 123 unread routes — which is, precisely, the defect
          *   this file is about, so it is not left to chance.
          *
-         *   Measured by planting a known-bad handler INSIDE the real tree and
-         *   confirming the same call finds it, then removing it.
+         *   Measured on a THROWAWAY TREE shaped like the real one. The first
+         *   version planted the probe inside src/app/api and deleted it
+         *   afterwards; it passed alone and failed in the full run, because jest
+         *   runs suites in parallel workers and a neighbour that scans the write
+         *   surface counted the probe while it existed. A test that mutates the
+         *   tree its neighbours are reading is a flake generator.
          */
-        const planted = join(ROOT, 'src/app/api/__fakeguard_probe__');
+        const dir = mkdtempSync(join(tmpdir(), 'fakeguard-walk-'));
         try {
-            mkdirSync(planted, { recursive: true });
-            writeFileSync(join(planted, 'route.ts'), `
+            const api = join(dir, 'src', 'app', 'api', 'thing');
+            mkdirSync(api, { recursive: true });
+            writeFileSync(join(api, 'route.ts'), `
                 export async function POST(req: Request) {
                     const { thingId, ownerId } = await req.json();
                     const doc = await db.collection("things").doc(thingId).get();
@@ -265,10 +270,10 @@ describe('#639 — and both surfaces are pinned at zero', () => {
                     return Response.json({ ok: true });
                 }
             `);
-            const leads = scanForFakeGuards(join(ROOT, 'src/app/api'), join(ROOT, 'src'));
-            expect(leads.map((l) => l.file)).toEqual(['app/api/__fakeguard_probe__/route.ts']);
+            const leads = scanForFakeGuards(join(dir, 'src/app/api'), join(dir, 'src'));
+            expect(leads.map((l) => `${l.file}::${l.fn}`)).toEqual(['app/api/thing/route.ts::POST']);
         } finally {
-            rmSync(planted, { recursive: true, force: true });
+            rmSync(dir, { recursive: true, force: true });
         }
     });
 });

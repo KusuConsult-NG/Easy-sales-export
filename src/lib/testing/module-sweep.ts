@@ -40,7 +40,7 @@
  * then read the outlier.
  */
 import { readFileSync, readdirSync, statSync } from "fs";
-import { join, relative } from "path";
+import { join, relative, dirname } from "path";
 import * as ts from "typescript";
 import { scanDirectory } from "@/lib/testing/action-auth-scan";
 import { scanForOwnership } from "@/lib/testing/ownership-scan";
@@ -48,8 +48,17 @@ import { scanForFakeGuards } from "@/lib/testing/fake-guard-scan";
 
 const ROOT = process.cwd();
 
-/** Every server action file and every API route handler. */
-function entryFiles(): string[] {
+/**
+ * Every server action file and every API route handler, under the given roots.
+ *
+ *   #640 THE ROOTS ARE AN ARGUMENT NOW. They were `join(ROOT, …)` literals, so
+ *   the only way to sweep a sample tree was to write files into the real one —
+ *   which is what the first version of this finding's test did, and it raced
+ *   with the suites running in parallel workers that read the same tree. A
+ *   scanner that can only be pointed at one directory cannot be tested without
+ *   disturbing it.
+ */
+function entryFiles(surfaces: string[]): string[] {
     const out: string[] = [];
     const walk = (dir: string) => {
         for (const entry of readdirSync(dir)) {
@@ -58,8 +67,7 @@ function entryFiles(): string[] {
             else if (entry.endsWith(".ts") || entry.endsWith(".tsx")) out.push(full);
         }
     };
-    walk(join(ROOT, "src/app/actions"));
-    walk(join(ROOT, "src/app/api"));
+    for (const dir of surfaces) walk(dir);
     return out;
 }
 
@@ -97,9 +105,11 @@ interface Entry {
 
 const MONEY_COLLECTIONS = /WALLET|PAYMENT|ESCROW|LOAN|CONTRIBUTION|WITHDRAWAL|TRANSACTION|PAYOUT|REVENUE|SAVINGS/;
 
-function analyse(file: string): Entry[] {
+function analyse(file: string, srcDir: string): Entry[] {
     const src = readFileSync(file, "utf-8");
-    const rel = relative(ROOT, file).split(/[\\/]/).join("/");
+    //   Relative to the PARENT of the source root, so paths read `src/app/…`
+    //   whichever tree is being swept — the real one or a sample.
+    const rel = relative(dirname(srcDir), file).split(/[\\/]/).join("/");
     const isRoute = rel.includes("/api/");
     if (!isRoute && !src.includes('"use server"') && !src.includes("'use server'")) return [];
 
@@ -272,13 +282,51 @@ export function isLead(e: Entry): boolean {
     );
 }
 
-export function sweepByModule(): ModuleGroup[] {
-    const all = entryFiles().flatMap(analyse);
+export interface SweepRoots {
+    /** Directories holding entry points. Defaults to this repository's two. */
+    surfaces?: string[];
+    /** The directory paths are reported relative to. Defaults to `src`. */
+    src?: string;
+}
 
-    const ownership = new Set(scanForOwnership("src/app/actions", "src").map((l) => `${l.file}::${l.name}`));
-    const fake = new Set(scanForFakeGuards("src/app/actions", "src").map((l: any) => `${l.file}::${l.name}`));
+export function sweepByModule(roots: SweepRoots = {}): ModuleGroup[] {
+    const SURFACES = roots.surfaces
+        ?? [join(ROOT, "src/app/actions"), join(ROOT, "src/app/api")];
+    const SRC = roots.src ?? join(ROOT, "src");
+
+    const all = entryFiles(SURFACES).flatMap((f) => analyse(f, SRC));
+
+    /*
+     *   #640 THE THREE COLUMNS THIS SWEEP COMPOSES WERE READING HALF A TABLE,
+     *   AND ONE OF THEM WAS READING A FIELD THAT DOES NOT EXIST.
+     *
+     *   `entryFiles()` walks src/app/actions AND src/app/api — both surfaces,
+     *   deliberately, since the whole idea is to stand an endpoint beside its
+     *   siblings. The three lead sets it joined against were computed over
+     *   src/app/actions ALONE, so no route handler could ever carry
+     *   `ownership-lead`, `fake-guard` or `baseline-unguarded`. Every API entry
+     *   in every module was listed with three columns permanently blank, and
+     *   nothing said so.
+     *
+     *   AND THE FAKE-GUARD COLUMN WAS BLANK EVERYWHERE. Its key was built from
+     *   `l.name`, and a FakeGuardLead has no `name` — the field is `fn`. Every
+     *   key was the string "…::undefined", which matches no entry, so the
+     *   `fake-guard` clause of isLead() had never fired for anything. A cast to
+     *   `any` is what let it compile; #638 and #639 had just finished teaching
+     *   that scanner to see route handlers at all, and this is where its answer
+     *   was going to be thrown away.
+     *
+     *   Both halves are the same defect as the two before it: a sweep whose
+     *   silence cannot be told apart from a clean result.
+     */
+    const ownership = new Set(
+        SURFACES.flatMap((dir) => scanForOwnership(dir, SRC)).map((l) => `${l.file}::${l.name}`)
+    );
+    const fake = new Set(
+        SURFACES.flatMap((dir) => scanForFakeGuards(dir, SRC)).map((l) => `${l.file}::${l.fn}`)
+    );
     const unguarded = new Set(
-        scanDirectory(join(ROOT, "src/app/actions"), join(ROOT, "src")).map((f: any) => `${f.file}::${f.name}`)
+        SURFACES.flatMap((dir) => scanDirectory(dir, SRC)).map((f: any) => `${f.file}::${f.name}`)
     );
 
     const byModule = new Map<string, Entry[]>();
