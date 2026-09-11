@@ -245,7 +245,37 @@ jobs:
           head -c 4000 /tmp/body.json || true
           echo
 
+          # ── #631 SAY WHICH KIND OF FAILURE THIS IS ────────────────────
+          #
+          # These jobs failed 779 times and then the schedule was switched off.
+          # The message every one of them printed was
+          #
+          #     /api/cron/process-email-queue returned HTTP 404
+          #
+          # which reads as "that route is missing" — a code problem. It was not.
+          # The body said so and nobody was looking at it:
+          #
+          #     {"status":"error","code":404,"message":"Application not found",
+          #      "request_id":"f848Mjx0QTKK88Wun6XIxQ"}
+          #
+          # That is the HOST's error page, not this application's: there was no
+          # app deployed at PRODUCTION_URL at all. A configuration problem
+          # wearing the costume of a routing one, for three weeks, ending in the
+          # schedule being commented out — which silenced the alarm rather than
+          # answering it.
+          #
+          # A 404 from the edge and a 404 from the app need different people to
+          # do different things, so they are no longer told apart by reading the
+          # body by hand.
           if [ "$http_code" -ge 400 ]; then
-            echo "::error::/api/cron/$JOB_PATH returned HTTP $http_code"
+            if grep -qi 'Application not found\|no application\|not_found_error' /tmp/body.json 2>/dev/null; then
+              echo "::error::NOTHING IS DEPLOYED AT PRODUCTION_URL. The host answered, and said it has no application at that address — so every scheduled job is failing for one reason and it is not this route. Check the PRODUCTION_URL repository secret against the URL your app is actually served on."
+            elif [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+              echo "::error::THE APP REFUSED THE CRON SECRET. /api/cron/$JOB_PATH answered $http_code, which is what it returns when the Authorization header does not match its own CRON_SECRET. The secret is SET — it does not match the one the running app checks."
+            elif [ "$http_code" = "404" ]; then
+              echo "::error::THE APP IS THERE AND THE ROUTE IS NOT. /api/cron/$JOB_PATH returned 404 from the application itself, so this endpoint is missing from the deployed build — most likely the deployed build is older than the route."
+            else
+              echo "::error::/api/cron/$JOB_PATH returned HTTP $http_code"
+            fi
             exit 1
           fi
