@@ -245,7 +245,15 @@ describe('#346 — the server resolves the account it is about to record', () =>
         expect(route).toContain('resolveBankAccount(accountNumber, bankCode)');
         expect(route).not.toContain('bank/resolve?account_number');
         expect(route).toContain('requireSession');
-        expect(route).toContain('withRateLimit');
+        //   #642 The route is rate-limited by its OWN bucket now, not by the
+        //   generic `withRateLimit` wrapper. That wrapper defaults to two
+        //   hundred a minute, and this endpoint resolves any NUBAN to its
+        //   holder's real name — the control written for that operation,
+        //   `bankVerification` at ten an hour, had been applied only to the
+        //   server action doing the same lookup. Asserted as the named bucket
+        //   rather than as "some limiter", because "some limiter" is what
+        //   twelve thousand an hour also is.
+        expect(route).toContain('bankVerifyLimiter.check(session.user.id)');
     });
 });
 

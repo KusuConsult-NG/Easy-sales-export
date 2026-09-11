@@ -143,7 +143,15 @@ describe('#284 — the marketplace bank step asks Paystack', () => {
         const ep = codeOnly(ENDPOINT);
 
         expect(ep).toContain('requireSession');
-        expect(ep).toContain('withRateLimit');
+        //   #642 The route is rate-limited by its OWN bucket now, not by the
+        //   generic `withRateLimit` wrapper. That wrapper defaults to two
+        //   hundred a minute, and this endpoint resolves any NUBAN to its
+        //   holder's real name — the control written for that operation,
+        //   `bankVerification` at ten an hour, had been applied only to the
+        //   server action doing the same lookup. Asserted as the named bucket
+        //   rather than as "some limiter", because "some limiter" is what
+        //   twelve thousand an hour also is.
+        expect(ep).toContain('bankVerifyLimiter.check(session.user.id)');
     });
 });
 

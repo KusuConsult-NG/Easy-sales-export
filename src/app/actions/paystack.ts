@@ -4,10 +4,10 @@ import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { ActionResponse } from '@/lib/safe-action';
 import { paystackBaseUrl } from "@/lib/paystack-host";
-import { rateLimit } from '@/lib/rate-limiter';
-import { rateLimitConfig } from '@/lib/rate-limits.config';
-
-const bankVerifyLimiter = rateLimit(rateLimitConfig.bankVerification);
+//   #642 One counter, shared with /api/kyc/verify-bank-account — which asks
+//   Paystack for the same answer and carried only the generic 200/minute
+//   wrapper. Two instances of one config would be two budgets.
+import { bankVerifyLimiter, BANK_VERIFY_RATE_LIMITED } from '@/lib/bank-verify-rate-limit';
 
 /** Last four digits only — a full NUBAN in an application log is a leak. */
 function maskAccount(accountNumber: string): string {
@@ -97,7 +97,7 @@ export async function verifyBankAccount(
         if (sessionUserId) {
             const rl = await bankVerifyLimiter.check(sessionUserId);
             if (!rl.success) {
-                return { success: false, error: 'Too many account verification attempts. Please try again later.', data: null };
+                return { success: false, error: BANK_VERIFY_RATE_LIMITED, data: null };
             }
         }
 
