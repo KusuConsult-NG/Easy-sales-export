@@ -39,6 +39,27 @@
  *   #274, #527 and #642 — and the third where the phrase that fits is the one
  *   #527 used: the strict limit went to the quiet door.
  *
+ * ── A CORRECTION TO THAT, FOUND WHILE WRITING #644 ──────────────────────────
+ *
+ *   It was not simply a repair that failed to reach here. `rate-limit-namespaces
+ *   .test.ts` carried a block titled "the other limiter module is deliberately
+ *   untouched", saying the callers "all share the platform-wide API budget on
+ *   purpose, so there is nothing to separate".
+ *
+ *   So somebody looked at this and decided it. The decision is reversed, and
+ *   the disagreement is with its PREMISE rather than its reasoning: "nothing to
+ *   separate" holds if the twelve callers are one operation, and MFA enrolment,
+ *   a loan application and three KYC submissions are not one operation. They
+ *   differ in cost and in the rate a real person reaches them, and the failure
+ *   when they collide is the one that file's own header describes — silent, and
+ *   expressed as a refusal of something the member has not been doing.
+ *
+ *   The reversal is recorded there, where the decision was written down, rather
+ *   than quietly rewritten. And one more thing came out of it: that block did
+ *   NOT fail when #643 changed the key, because it pinned the prefix and the
+ *   config shape and not the key. An assertion that records a decision has to
+ *   assert the thing the decision is about.
+ *
  * ── WHAT THIS CHANGES, AND WHAT IT DOES NOT ─────────────────────────────────
  *
  *   The scope enters the KEY, not the size. No route becomes more restricted

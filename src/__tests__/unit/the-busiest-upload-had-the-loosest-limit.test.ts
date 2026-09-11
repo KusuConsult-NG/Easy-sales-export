@@ -62,7 +62,17 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
-import { rateLimitConfig as platformApiConfig } from '@/lib/security';
+
+/**
+ *   #644 THE PLATFORM API TIER IS IN THE SAME TABLE NOW.
+ *
+ *   This used to import a SECOND object, also called `rateLimitConfig`, from
+ *   lib/security.ts — which is what made this comparison possible to write and
+ *   easy to get wrong. The two tables are one: the `api` bucket carries the
+ *   env-driven values lib/rate-limit.ts was using, and `windowMs` is `interval`
+ *   like every other limit here.
+ */
+const platformApiConfig = rateLimitConfig.api;
 
 const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: p });
@@ -76,7 +86,7 @@ describe('#527 — the tier, measured against what it replaced', () => {
         //   THE measurement. The old limit was the API tier applied per MINUTE;
         //   the new one is per hour, so the comparison has to be normalised or
         //   it flatters the fix.
-        const apiPerHour = platformApiConfig.maxRequests * (3_600_000 / platformApiConfig.windowMs);
+        const apiPerHour = platformApiConfig.maxRequests * (3_600_000 / platformApiConfig.interval);
         const uploadPerHour =
             rateLimitConfig.mediaUpload.maxRequests * (3_600_000 / rateLimitConfig.mediaUpload.interval);
 

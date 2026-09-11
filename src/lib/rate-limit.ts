@@ -1,7 +1,21 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { redis, isRedisConfigured } from './redis';
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimitConfig } from './security';
+//   #644 ONE NAME, TWO TABLES.
+//
+//   This imported a DIFFERENT object called `rateLimitConfig`, from
+//   lib/security.ts, while the other twenty-one importers in the codebase get
+//   the named-bucket table from lib/rate-limits.config.ts. Same identifier, two
+//   meanings, and the one this module used is the one that governs twelve
+//   routes — so the declaration a reader finds (`api: 100 a minute`) was not the
+//   limit in force (200).
+//
+//   The `api` bucket now carries the env-driven values this module was using, so
+//   the number is written down once, in the table where every other limit is.
+import { rateLimitConfig } from './rate-limits.config';
+
+/** The generic tier, from the one table. */
+const apiLimit = rateLimitConfig.api;
 import { checkFallbackLimit, resetFallbackLimit } from './rate-limiter-fallback';
 import { auth } from '@/lib/auth';
 import { clientIpFromHeaders } from './client-ip';
@@ -12,7 +26,7 @@ import { clientIpFromHeaders } from './client-ip';
  */
 const rateLimiter = new Ratelimit({
     redis: redis,
-    limiter: Ratelimit.slidingWindow(rateLimitConfig.maxRequests, `${rateLimitConfig.windowMs} ms`),
+    limiter: Ratelimit.slidingWindow(apiLimit.maxRequests, `${apiLimit.interval} ms`),
     analytics: true,
     prefix: "@upstash/ratelimit",
 });
@@ -118,7 +132,7 @@ export async function rateLimit(
 function apiFallbackDecision(
     key: string
 ): { success: boolean; remaining?: number; error?: string } {
-    const fallback = checkFallbackLimit(key, rateLimitConfig.maxRequests, rateLimitConfig.windowMs);
+    const fallback = checkFallbackLimit(key, apiLimit.maxRequests, apiLimit.interval);
 
     if (fallback.success) {
         return {
@@ -162,7 +176,7 @@ export function withRateLimit(
                     status: 429,
                     headers: {
                         'Retry-After': '60',
-                        'X-RateLimit-Limit': rateLimitConfig.maxRequests.toString(),
+                        'X-RateLimit-Limit': apiLimit.maxRequests.toString(),
                         'X-RateLimit-Remaining': '0',
                     }
                 }
@@ -172,7 +186,7 @@ export function withRateLimit(
         const response = await handler(req);
 
         // Add rate limit headers
-        response.headers.set('X-RateLimit-Limit', rateLimitConfig.maxRequests.toString());
+        response.headers.set('X-RateLimit-Limit', apiLimit.maxRequests.toString());
         response.headers.set('X-RateLimit-Remaining', (limitResult.remaining || 0).toString());
 
         return response;

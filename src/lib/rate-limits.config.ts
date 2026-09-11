@@ -58,10 +58,31 @@ const LIMITS = {
         maxRequests: 5, // 5 attempts per 15 minutes
     },
 
-    // API routes - moderate limits
+    /**
+     *   The generic tier every `withRateLimit` route runs on — #644.
+     *
+     *   This declared 100 a minute and was consumed by NOTHING. The number
+     *   actually in force for those routes came from a SECOND object, also
+     *   called `rateLimitConfig`, in lib/security.ts, reading
+     *   `RATE_LIMIT_MAX_REQUESTS` with a default of 200. Twenty-one files
+     *   import the table below; one imported the other object under the
+     *   identical name.
+     *
+     *   So the declaration a reader finds said 100 and the limit in force was
+     *   200, and nothing connected them.
+     *
+     *   Resolved in the direction the evidence supports: the DECLARATION moves
+     *   to match what has been running, not the other way round. Halving a live
+     *   limit on twelve routes because a number nobody applied said so would be
+     *   a behaviour change with nothing behind it.
+     *
+     *   The environment overrides are kept — tuning this without a deploy is a
+     *   real capability — and now they are visible from the table where every
+     *   other limit is written down.
+     */
     api: {
-        interval: 60 * 1000, // 1 minute
-        maxRequests: 100, // 100 requests per minute
+        interval: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
+        maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "200", 10),
     },
 
     // Webhooks - high limits (legitimate traffic)

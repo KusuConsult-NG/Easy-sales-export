@@ -68,6 +68,20 @@ function source(rel: string): string {
     return readFileSync(join(ROOT, rel), 'utf-8');
 }
 
+/** Every .ts/.tsx under a directory, tests excluded — #644 needs a sweep. */
+function sourceFiles(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) {
+            if (entry === '__tests__' || entry === 'testing') continue;
+            sourceFiles(full, out);
+        } else if (/\.tsx?$/.test(entry) && !/\.d\.ts$/.test(entry)) {
+            out.push(full);
+        }
+    }
+    return out;
+}
+
 function code(rel: string): string {
     return source(rel)
         .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -221,17 +235,145 @@ describe('the premise: many configs, one identifier', () => {
     });
 });
 
-describe('the other limiter module is deliberately untouched', () => {
-    it('lib/rate-limit.ts keeps its single global bucket', () => {
-        // Different module, different prefix, and ONE config — its callers all
-        // share the platform-wide API budget on purpose, so there is nothing to
-        // separate. Named so the asymmetry reads as a decision.
+/*
+ *   #643/#644 THE OTHER MODULE IS NO LONGER UNTOUCHED, AND THIS BLOCK RECORDED
+ *   THE OPPOSITE DECISION.
+ *
+ *   It read: "its callers all share the platform-wide API budget on purpose, so
+ *   there is nothing to separate. Named so the asymmetry reads as a decision."
+ *
+ *   THAT DECISION IS REVERSED, and the reason is the premise rather than the
+ *   conclusion. "Nothing to separate" holds if the twelve callers are one
+ *   operation. They are not:
+ *
+ *     MFA setup, enable, disable, status, verify
+ *     QR verification
+ *     the cooperative loan application
+ *     BVN, NIN and business KYC submissions
+ *     two admin password-reset endpoints, and the Paystack reconciliation
+ *
+ *   Those differ in cost and in the rate a real person legitimately reaches
+ *   them, and the failure when they collide is the one this file's own header
+ *   describes three paragraphs up: silent, and expressed as a refusal of
+ *   something the member has not been doing. Enrolling in MFA could refuse a
+ *   loan application.
+ *
+ *   Recording it as a reversal rather than quietly rewriting the assertions,
+ *   because the earlier note was a decision somebody made and this file is
+ *   where it was written down. #643 changed the key without noticing this block
+ *   — it pinned the PREFIX and the config SHAPE, not the key, so it did not
+ *   fail. That is itself worth keeping: an assertion that records a decision has
+ *   to assert the thing the decision is about.
+ */
+describe('#643/#644 — the other limiter module now separates its callers too', () => {
+    it('ITS PREFIX IS STILL ITS OWN', () => {
+        //   The two modules keep distinct Upstash prefixes, which is what stops
+        //   a scope here colliding with a named bucket there.
         const other = code('src/lib/rate-limit.ts');
         expect(other).toContain('prefix: "@upstash/ratelimit"');
         expect(other).not.toContain('ratelimit_custom');
     });
 
-    it('and it takes no per-call config, which is why', () => {
-        expect(code('src/lib/rate-limit.ts')).toContain('Ratelimit.slidingWindow(rateLimitConfig.maxRequests');
+    it('AND THE KEY CARRIES A PER-ROUTE SCOPE — the decision this block reverses', () => {
+        const other = code('src/lib/rate-limit.ts');
+        expect(other).toContain('const key = `${scope}:${identity}`;');
+        //   Required, so the pooling cannot come back by omission.
+        expect(other).not.toMatch(/scope\?: string/);
+    });
+
+    it('AND THE VALUES COME FROM THAT TABLE, not a literal beside the import', () => {
+        /*
+         *   Added because a mutant survived: keeping the import and defining
+         *   `const apiLimit = { maxRequests: 200, interval: 60000 }` beside it
+         *   satisfied "imports the right module" completely. An import is not a
+         *   use — #629's sentence, in the file that reversed a decision about
+         *   where a number lives.
+         */
+        expect(code('src/lib/rate-limit.ts'))
+            .toContain('const apiLimit = rateLimitConfig.api;');
+    });
+
+    it('AND NOTHING ELSE EXPORTS A `rateLimitConfig` TO BE CONFUSED WITH', () => {
+        /*
+         *   The collision itself, asserted as an absence. A mutant that put the
+         *   second export back in lib/security.ts survived every other
+         *   assertion here — nothing was checking that the NAME is unique, only
+         *   that this one module imports the right one.
+         */
+        const owners = sourceFiles(join(process.cwd(), 'src'))
+            .map((f) => f.replace(process.cwd() + '/', ''))
+            .filter((f) => /export const rateLimitConfig\b/.test(code(f)));
+        expect(owners).toEqual(['src/lib/rate-limits.config.ts']);
+    });
+
+    it('AND THE GENERIC TIER IS STILL TUNABLE WITHOUT A DEPLOY', () => {
+        /*
+         *   The capability that had to survive moving the number. lib/security's
+         *   object read RATE_LIMIT_WINDOW_MS and RATE_LIMIT_MAX_REQUESTS;
+         *   replacing it with the hardcoded 100 the `api` bucket used to declare
+         *   would have halved a live limit on twelve routes AND removed the
+         *   knob. Both env vars are read, in the table, with the defaults that
+         *   have been running.
+         */
+        const cfg = code('src/lib/rate-limits.config.ts');
+        const apiBucket = cfg.slice(cfg.indexOf('    api: {'), cfg.indexOf('    webhook: {'));
+        expect(apiBucket).toContain('process.env.RATE_LIMIT_WINDOW_MS');
+        expect(apiBucket).toContain('process.env.RATE_LIMIT_MAX_REQUESTS');
+
+        expect(rateLimitConfig.api.maxRequests)
+            .toBe(parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '200', 10));
+        expect(rateLimitConfig.api.interval)
+            .toBe(parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10));
+    });
+
+    it('AND IT READS THE ONE TABLE, not a second object under the same name', () => {
+        /*
+         *   #644. This asserted `rateLimitConfig.maxRequests`, which was the
+         *   giveaway nobody read: every other importer of `rateLimitConfig` gets
+         *   a table of named buckets, and that field does not exist on it. Two
+         *   objects, one identifier, and the declaration a reader finds
+         *   (`api: 100 a minute`) was not the limit in force (200).
+         */
+        const other = code('src/lib/rate-limit.ts');
+        expect(other).toContain("from './rate-limits.config'");
+        expect(other).not.toContain("from './security'");
+        expect(other).toContain('Ratelimit.slidingWindow(apiLimit.maxRequests');
     });
 });
+
+/*
+ * ── #644 MUTATION TESTING ───────────────────────────────────────────────────
+ *
+ *   Baseline green, one anchored swap at a time, restored and diffed after each.
+ *
+ *     MUTANT                                                        RESULT
+ *     THE DEFECT: the module reads a second table again              KILLED
+ *     the api bucket goes back to a number nobody applies            KILLED
+ *     the env override is dropped from the window                    KILLED
+ *     security.ts exports a colliding rateLimitConfig again          KILLED
+ *     the two modules share one Upstash prefix                       KILLED
+ *     the scope stops reaching the key                               KILLED
+ *
+ *     CONTROL — SHOULD SURVIVE
+ *     reword the reversal note                                       SURVIVED ✓
+ *
+ * ── THREE SURVIVED THE FIRST RUN, AND ALL THREE WERE MISSING ASSERTIONS ─────
+ *
+ *   Recorded because the pattern is now four findings old:
+ *
+ *     the module reads a second table again    Keeping the import and defining
+ *                                              `const apiLimit = { … }` beside
+ *                                              it satisfied "imports the right
+ *                                              module". An import is not a use.
+ *     the env override is dropped              Nothing asserted that the `api`
+ *                                              bucket reads the environment —
+ *                                              the capability that had to
+ *                                              survive moving the number.
+ *     security.ts exports it again             Nothing asserted the NAME is
+ *                                              unique. The collision could come
+ *                                              straight back while every other
+ *                                              assertion stayed green.
+ *
+ *   None was a redundant rule. A surviving mutant is a question about the tests
+ *   before it is a question about the code.
+ */

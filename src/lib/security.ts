@@ -66,10 +66,22 @@ export function validatePassword(password: string): PasswordValidationResult {
 /**
  * Rate Limiting Configuration
  */
-export const rateLimitConfig = {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10), // 1 minute (was 15 min)
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '200', 10), // 200 requests per minute
-};
+/*
+ *   #644 `rateLimitConfig` USED TO LIVE HERE TOO, UNDER THE SAME NAME.
+ *
+ *   Twenty-one files import `rateLimitConfig` from lib/rate-limits.config.ts —
+ *   the table of named buckets. One file, lib/rate-limit.ts, imported this
+ *   object instead: a different shape (`windowMs`/`maxRequests` rather than a
+ *   bucket per operation) under an identical identifier, governing the twelve
+ *   routes that wrapper guards.
+ *
+ *   Two tables with one name is a trap rather than a defect on its own, and it
+ *   became one: rate-limits.config declared `api: 100 a minute` and nothing
+ *   consumed it, while 200 was what actually applied.
+ *
+ *   Both env vars are still read — they are `rateLimitConfig.api` now, in the
+ *   table where every other limit is written down. Nothing else imported this.
+ */
 
 /**
  * Session Configuration

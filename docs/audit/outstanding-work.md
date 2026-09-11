@@ -271,12 +271,29 @@ during #642 and deliberately not folded into it: the meter was what had a live
 consequence, and the action's error strings are pinned by two suites, so
 consolidating is its own read.
 
-### ☐ The `api` and `webhook` rate-limit buckets have no consumers
+### ✅ (#644) The `api` bucket had no consumer because a SECOND table did
 
-Found in the same sweep as `kyc` (#642) and **not yet triaged**. `kyc` was read
-and deliberately left unwired, with a conditional ratchet. These two have not
-been read at all — they may be the same story or they may be a limit somebody
-meant to apply.
+Triaged, and it was the more interesting of the two. **Twenty-two files import
+`rateLimitConfig`. Twenty-one get the table of named buckets from
+`lib/rate-limits.config.ts`; one — `lib/rate-limit.ts`, which guards twelve
+routes — imported a completely different object of the same name from
+`lib/security.ts`.**
+
+So `api: 100 a minute` was the declaration a reader would find, and 200 was the
+limit in force. Nothing connected them, and the identical identifier is what hid
+it.
+
+Resolved in the direction the evidence supports: the DECLARATION moved to match
+what has been running. Halving a live limit on twelve routes because a number
+nobody applied said so would be a behaviour change with nothing behind it. The
+env overrides are kept and are now visible in the table where every other limit
+is written down; `lib/security.ts` no longer exports the colliding name.
+
+### ☐ The `webhook` bucket still has no consumer
+
+1000/minute, declared, consumed by nothing. Not yet read. The webhook routes
+verify a signature or a shared secret, so this may be the `kyc` story again — a
+bucket waiting for something — or a limit somebody meant to apply.
 
 ---
 
@@ -345,3 +362,4 @@ Recorded so nobody re-reads them, and so that "no finding" is a measurement.
 | `rateLimitConfig.kyc` | Unwired on purpose while `IDENTITY_PROVIDER === 'none'`, with a conditional ratchet (#642). |
 | `/api/cooperative/withdraw` | No in-app caller, kept anyway — it may serve a client this repository cannot see. Pinned so a caller appearing is noticed (#641). |
 | 107 orphan symbols | Six triaged, one real (#629). Most of the rest are deliberate decisions with their reasons already written down. Falling return. |
+| A pending-queue sweep that did not work | Asked "which collections are written with a pending status and mentioned by no ADMIN file". Ten leads; the five checked were all false positives, because most pending work in this platform is resolved by MEMBER and SELLER screens (land inquiries at `/farm-nation/inquiries`, quotes at `/marketplace/seller/quotes`) and the actions behind admin screens live in files whose paths do not say "admin". The premise was wrong, not the code. Recorded so nobody rebuilds the same sweep: the useful version asks whether a reader is reachable from a rendered screen, which is a call-graph question. |
