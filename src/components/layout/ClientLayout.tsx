@@ -40,8 +40,40 @@ function getSidebarMode(pathname: string): SidebarMode {
         pathname === "/"
     ) return "none";
 
-    // Hub dashboard and Admin panel render their own custom navigation layouts internally
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname.startsWith("/messages")) return "none";
+    /*
+     * Hub dashboard and Admin panel render their own custom navigation layouts
+     * internally, so this must not put a second one around them.
+     *
+     *   #619 /loans/approve WAS THE ONE ROUTE WEARING BOTH.
+     *
+     *        It is the admin business-loan queue, the single admin screen that
+     *        does not live under /admin. #617 gave it the admin chrome by adding
+     *        a layout that renders AdminShell — and stopped there. This function
+     *        still answered "module" for it, because the path matches none of
+     *        the prefixes above, so the global ModuleSidebar was wrapped around
+     *        the admin one.
+     *
+     *        THE FIX REACHED ONE OF TWO DOORS, which is the defect this audit
+     *        keeps finding, committed one commit after finding it again. The
+     *        report that started it — "the sidebar was showing the global
+     *        sidebar, Messages, profile, logout and the user email, instead of
+     *        the admin sidebar" — describes exactly what ModuleSidebar draws
+     *        here: detectModuleKey() does not know /loans, so it falls to
+     *        "dashboard", whose nav list is empty, leaving Messages, Profile and
+     *        Back to Hub over an admin queue.
+     *
+     *        Measured, not reasoned: every one of the 247 routes in the app was
+     *        rendered through this layout and paired with the app-router layout
+     *        that governs it. This was the only route in the app with two sets
+     *        of chrome, and two-sets-of-chrome-on-one-screen now sweeps all 247
+     *        on every run so the next one cannot reach a user first.
+     */
+    if (
+        pathname.startsWith("/dashboard") ||
+        pathname.startsWith("/admin") ||
+        pathname.startsWith("/messages") ||
+        pathname.startsWith("/loans/approve")
+    ) return "none";
 
     // Module root landing pages (exact match only — not /academy/dashboard)
     const MODULE_ROOTS = [
