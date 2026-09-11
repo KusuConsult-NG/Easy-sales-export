@@ -363,4 +363,4 @@ async function paystackSyncHandler(_req: NextRequest) {
  * permission could run that as fast as they could issue requests, against a
  * third-party API with its own rate limits and a bill attached.
  */
-export const GET = withRateLimit(paystackSyncHandler);
+export const GET = withRateLimit(paystackSyncHandler, "admin-paystack-sync");

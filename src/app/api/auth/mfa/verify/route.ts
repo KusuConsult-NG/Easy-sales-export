@@ -157,4 +157,4 @@ async function verifyMFAHandler(request: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(verifyMFAHandler);
+export const POST = withRateLimit(verifyMFAHandler, "mfa-verify");

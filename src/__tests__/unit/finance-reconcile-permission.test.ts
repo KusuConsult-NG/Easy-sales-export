@@ -140,7 +140,13 @@ describe('replaying fulfilment needs a write permission', () => {
 
 describe('and a rate limit, on a handler that pages an entire payment history', () => {
     it('is wrapped', () => {
-        expect(source(SYNC)).toContain('export const GET = withRateLimit(paystackSyncHandler)');
+        //   #643 The wrapper takes a SCOPE now, so this route's budget is its
+        //   own. It used to share one counter with eleven other routes — a
+        //   member's MFA setup and their KYC submissions spent the same
+        //   allowance — which is the failure rate-limits.config.ts documents
+        //   for the other limiter and had been repaired only there.
+        expect(source(SYNC)).toContain(
+            'export const GET = withRateLimit(paystackSyncHandler, "admin-paystack-sync")');
     });
 
     it('the guard runs before the Paystack fan-out', () => {

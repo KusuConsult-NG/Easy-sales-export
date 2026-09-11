@@ -22,7 +22,18 @@ const rateLimiter = new Ratelimit({
  */
 export async function rateLimit(
     request: NextRequest,
-    identifier?: string
+    /**
+     *   #643 The scope is REQUIRED here too, not only on the wrapper.
+     *
+     *   An optional parameter on the low-level function is a door the pooling
+     *   can come back through: one future caller reaching past `withRateLimit`
+     *   and omitting it puts that route back in everybody else's budget, and
+     *   nothing would say so. `identifier` stays optional because the fallback
+     *   chain below has a real answer for its absence; a missing key space does
+     *   not.
+     */
+    scope: string,
+    identifier?: string,
 ): Promise<{ success: boolean; remaining?: number; error?: string }> {
     let userId: string | undefined;
     try {
@@ -40,11 +51,37 @@ export async function rateLimit(
     //
     // 'anonymous' groups everyone we cannot identify into ONE bucket. That
     // over-limits, which is the safe direction; a caller-named key does not.
-    const key =
+    const identity =
         identifier ||
         userId ||
         clientIpFromHeaders(request.headers) ||
         'anonymous';
+
+    /**
+     *   #643 ONE COUNTER FOR TWELVE ROUTES.
+     *
+     *   Every `withRateLimit` route shared this key — the identity alone, under
+     *   the single Upstash prefix `@upstash/ratelimit` and the same string in
+     *   the in-memory fallback. So one member's MFA setup, QR verification,
+     *   loan application and three KYC submissions all drew from ONE budget of
+     *   `RATE_LIMIT_MAX_REQUESTS` per window.
+     *
+     *   rate-limits.config.ts documents this exact failure in its own header,
+     *   for the other rate-limiting module:
+     *
+     *       without it every limiter built here shared one key per identifier
+     *       … and the failure was silent: a member was refused a withdrawal
+     *       because they had used the app
+     *
+     *   That repair made `name` a REQUIRED field of a limiter's config and put
+     *   it in the prefix. It reached `lib/rate-limiter.ts` and not this file —
+     *   the fourth time in this area that a control reached one of two doors,
+     *   after #274, #527 and #642.
+     *
+     *   The scope changes the KEY SPACE, not the limit. No route becomes more
+     *   restricted; they stop spending each other's budget.
+     */
+    const key = `${scope}:${identity}`;
 
     // See the note in consumeLoginAttempt: with no Upstash configured, the
     // limiter below cannot work and threw once per request.
@@ -102,11 +139,21 @@ function apiFallbackDecision(
  */
 export function withRateLimit(
     handler: (req: NextRequest) => Promise<NextResponse>,
+    /**
+     *   #643 What this limit is FOR, and therefore its own key space.
+     *
+     *   Required, not optional, for the reason rate-limits.config.ts gives for
+     *   the same field on the other limiter: an optional name is a name nobody
+     *   passes, and the failure is silent — the routes keep working and quietly
+     *   spend one another's budget until a member is refused something they
+     *   have not done.
+     */
+    scope: string,
     getIdentifier?: (req: NextRequest) => string
 ) {
     return async (req: NextRequest): Promise<NextResponse> => {
         const identifier = getIdentifier ? getIdentifier(req) : undefined;
-        const limitResult = await rateLimit(req, identifier);
+        const limitResult = await rateLimit(req, scope, identifier);
 
         if (!limitResult.success) {
             return NextResponse.json(

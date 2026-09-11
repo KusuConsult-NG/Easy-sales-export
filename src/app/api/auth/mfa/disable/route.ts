@@ -94,4 +94,4 @@ async function disableMFAHandler(request: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(disableMFAHandler);
+export const POST = withRateLimit(disableMFAHandler, "mfa-disable");

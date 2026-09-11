@@ -236,10 +236,9 @@ named in `kyc-validators`.
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
 
-### ☐ `lib/rate-limit.ts` pools fourteen routes into one budget
+### ✅ (#643) `lib/rate-limit.ts` no longer pools its routes into one budget
 
-The newest item, and the largest of the open ones. There are TWO rate-limiting
-modules:
+**Closed the same day it was recorded.** There are TWO rate-limiting modules:
 
 | | |
 |---|---|
@@ -252,9 +251,17 @@ failure in its own header — "every limiter built here shared one key per
 identifier… a member was refused a withdrawal because they had used the app" —
 and the repair reached one of the two modules.
 
-Doable here: give `withRateLimit` a required route name that enters the key, as
-`rateLimit()` already does. It changes key spaces, not limits, so no member
-becomes more restricted.
+`withRateLimit` takes a required route scope now, and so does the `rateLimit`
+function beneath it — an optional parameter on the low-level call is a door the
+pooling can come back through. Thirteen call sites across twelve routes, each
+with its own key space; the typechecker named every one of them, which is what
+made the change complete rather than partial.
+
+It changes key spaces, not limits: no route became more restricted, they stopped
+spending each other's budget. The scope enters the key on the **in-memory
+fallback path as well as the Redis one** — which is the half that matters today,
+because `UPSTASH_REDIS_REST_URL` is unset and the fallback is therefore the live
+path.
 
 ### ☐ Two implementations of the Paystack bank-resolve call
 

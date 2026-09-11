@@ -93,4 +93,4 @@ async function enableMFAHandler(request: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(enableMFAHandler);
+export const POST = withRateLimit(enableMFAHandler, "mfa-enable");

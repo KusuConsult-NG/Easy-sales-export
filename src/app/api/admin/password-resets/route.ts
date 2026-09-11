@@ -42,7 +42,7 @@ async function getPasswordResetsHandler(_req: NextRequest) {
     }
 }
 
-export const GET = withRateLimit(getPasswordResetsHandler);
+export const GET = withRateLimit(getPasswordResetsHandler, "admin-password-resets-read");
 
 /** DELETE /api/admin/password-resets — purge expired and used tokens */
 async function deletePasswordResetsHandler(_req: NextRequest) {
@@ -97,4 +97,4 @@ async function deletePasswordResetsHandler(_req: NextRequest) {
     }
 }
 
-export const DELETE = withRateLimit(deletePasswordResetsHandler);
+export const DELETE = withRateLimit(deletePasswordResetsHandler, "admin-password-resets-delete");

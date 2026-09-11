@@ -80,4 +80,4 @@ async function verifyHandler(request: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(verifyHandler);
+export const POST = withRateLimit(verifyHandler, "qr-verify");

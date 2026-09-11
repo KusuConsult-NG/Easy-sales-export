@@ -90,4 +90,4 @@ async function verifyNINHandler(req: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(verifyNINHandler);
+export const POST = withRateLimit(verifyNINHandler, "kyc-verify-nin");

@@ -53,4 +53,4 @@ async function getMFAStatusHandler(request: NextRequest) {
     }
 }
 
-export const GET = withRateLimit(getMFAStatusHandler);
+export const GET = withRateLimit(getMFAStatusHandler, "mfa-status");

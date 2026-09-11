@@ -75,4 +75,4 @@ async function verifyBusinessHandler(req: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(verifyBusinessHandler);
+export const POST = withRateLimit(verifyBusinessHandler, "kyc-verify-business");

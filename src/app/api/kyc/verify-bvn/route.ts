@@ -90,4 +90,4 @@ async function verifyBVNHandler(req: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(verifyBVNHandler);
+export const POST = withRateLimit(verifyBVNHandler, "kyc-verify-bvn");

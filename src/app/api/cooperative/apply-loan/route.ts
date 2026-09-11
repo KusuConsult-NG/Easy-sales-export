@@ -298,4 +298,4 @@ async function applyLoanHandler(request: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(applyLoanHandler);
+export const POST = withRateLimit(applyLoanHandler, "coop-apply-loan");

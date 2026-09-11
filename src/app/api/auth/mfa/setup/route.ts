@@ -88,4 +88,4 @@ async function setupMFAHandler(request: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(setupMFAHandler);
+export const POST = withRateLimit(setupMFAHandler, "mfa-setup");
