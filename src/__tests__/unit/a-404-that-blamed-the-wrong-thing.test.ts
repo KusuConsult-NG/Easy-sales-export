@@ -63,25 +63,40 @@ const WORKFLOW = '.github/workflows/scheduled-jobs.yml';
 function classifierScript(): string {
     const yaml = readFileSync(join(process.cwd(), WORKFLOW), 'utf8');
 
-    const start = yaml.indexOf('if [ "$http_code" -ge 400 ]; then');
+    /*
+     *   BOTH GUARDS, AS ONE BLOCK. The first version of this sliced to the first
+     *   `exit 1`, which used to be the end of everything — and stopped being so
+     *   the moment #632 added the redirect check in front. Four cases then ran
+     *   against a script that no longer contained the branch they were about.
+     *
+     *   The ORDER of the two is part of what is tested: the redirect guard must
+     *   not shadow the classifier behind it.
+     */
+    const start = yaml.indexOf('if [ "$http_code" -ge 300 ] && [ "$http_code" -lt 400 ]; then');
     expect(start).toBeGreaterThan(-1);
-    const end = yaml.indexOf('exit 1', start);
-    expect(end).toBeGreaterThan(start);
 
-    //   The block is indented inside the YAML `run:` scalar; bash does not mind
-    //   the leading spaces, but the `exit 1` is dropped so a case can be run
-    //   without killing the shell that is inspecting it.
-    return yaml.slice(start, end).replace(/\n\s*$/, '\n') + '\nfi\n';
+    const secondGuard = yaml.indexOf('if [ "$http_code" -ge 400 ]; then', start);
+    expect(secondGuard).toBeGreaterThan(start);
+
+    const lastExit = yaml.indexOf('exit 1', secondGuard);
+    expect(lastExit).toBeGreaterThan(secondGuard);
+    const end = yaml.indexOf('fi', lastExit) + 2;
+
+    //   `exit` is neutralised rather than trimmed, so a case can run the whole
+    //   chain without killing the shell inspecting it — and so the second guard
+    //   is genuinely reachable when the first does not fire.
+    return yaml.slice(start, end).replace(/\bexit 1\b/g, 'true');
 }
 
 /** Run the classifier for one HTTP code and one response body. */
-function classify(httpCode: string, body: string): string {
+function classify(httpCode: string, body: string, redirectUrl = ''): string {
     const dir = mkdtempSync(join(tmpdir(), 'cron-classify-'));
     const bodyFile = join(dir, 'body.json');
     writeFileSync(bodyFile, body);
 
     const script = [
         `http_code="${httpCode}"`,
+        `redirect_url="${redirectUrl}"`,
         `JOB_PATH="process-email-queue"`,
         classifierScript().replace(/\/tmp\/body\.json/g, bodyFile),
     ].join('\n');
@@ -149,6 +164,114 @@ describe('#631 — the failure says which of three things is wrong', () => {
     });
 });
 
+describe('#632 — a redirect is not a success', () => {
+    /*
+     *   THE CHECK USED TO BE `if [ "$http_code" -ge 400 ]`, AND A 3xx IS NOT
+     *   GREATER THAN 400. A redirect therefore made the step PASS while the
+     *   endpoint was never invoked — eight scheduled jobs reporting green, for
+     *   ever, having done nothing. The alarm that exists to say the jobs are not
+     *   running would have said they were.
+     *
+     *   Reachable by one character: the middleware answers 308 from the apex to
+     *   canonicalise the host, so PRODUCTION_URL set to
+     *   https://easysalesexport.com instead of https://www.easysalesexport.com
+     *   is enough to do it.
+     */
+    it.each(['301', '302', '307', '308'])('A %s FAILS THE RUN', (code) => {
+        const out = classify(code, '', 'https://www.easysalesexport.com/api/cron/process-email-queue');
+
+        expect(out).toContain('PRODUCTION_URL REDIRECTS, SO THE JOB DID NOT RUN');
+        expect(out).toContain('a redirect is not a run');
+    });
+
+    it('AND IT NAMES WHERE IT WAS SENT, so the fix is the message', () => {
+        const out = classify('308', '', 'https://www.easysalesexport.com/api/cron/process-email-queue');
+        expect(out).toContain('https://www.easysalesexport.com/api/cron/process-email-queue');
+    });
+
+    it('AND SAYS SOMETHING USEFUL EVEN WHEN THE LOCATION IS MISSING', () => {
+        //   curl leaves %{redirect_url} empty on a 3xx with no Location. The
+        //   message must still be actionable rather than trailing off.
+        const out = classify('308', '');
+        expect(out).toContain('an unnamed location');
+    });
+
+    it('AND A 200 STILL PASSES — the guard on the guard', () => {
+        /*
+         *   The way this fix becomes an outage: a comparison that caught
+         *   everything would fail every healthy run, and the first response
+         *   would be to switch the schedule off again, which is exactly how the
+         *   779 failures ended.
+         */
+        expect(classify('200', '{"success":true,"processed":12}')).toBe('');
+    });
+
+    it('AND A 4xx IS STILL CLASSIFIED, not swallowed by the redirect branch', () => {
+        //   The two guards run in order; the redirect one must not shadow the
+        //   one after it.
+        expect(classify('404', EDGE_404)).toContain('NOTHING IS DEPLOYED AT PRODUCTION_URL');
+        expect(classify('500', '{}')).toContain('returned HTTP 500');
+    });
+});
+
+describe('#632 — and the values the classifier reads are the ones curl writes', () => {
+    /*
+     *   THE CLASSIFIER WAS TESTED AND ITS PLUMBING WAS NOT. Every case above
+     *   sets `http_code` and `redirect_url` itself, so a mutant that stopped
+     *   curl from EMITTING the redirect target survived them all — the messages
+     *   would silently degrade to "an unnamed location" on every redirect, which
+     *   is precisely the field that tells somebody what to fix.
+     *
+     *   curl cannot be run against a live host from here, so what is checked is
+     *   the CONTRACT between the two lines: the format string writes exactly the
+     *   values the `read` destructures, in that order.
+     */
+    function curlFormat(): string {
+        const yaml = readFileSync(join(process.cwd(), WORKFLOW), 'utf8');
+        const m = /-w '([^']+)'/.exec(yaml);
+        expect(m).not.toBeNull();
+        return m![1];
+    }
+
+    function readVariables(): string[] {
+        const yaml = readFileSync(join(process.cwd(), WORKFLOW), 'utf8');
+        const m = /read -r ([\w ]+) <<</.exec(yaml);
+        expect(m).not.toBeNull();
+        return m![1].trim().split(/\s+/);
+    }
+
+    it('CURL WRITES ONE VALUE FOR EACH VARIABLE THE SHELL READS', () => {
+        const placeholders = [...curlFormat().matchAll(/%\{(\w+)\}/g)].map(x => x[1]);
+        const variables = readVariables();
+
+        expect(placeholders).toEqual(['http_code', 'redirect_url']);
+        expect(variables).toEqual(['http_code', 'redirect_url']);
+        //   The count is the part that breaks silently: one fewer value and the
+        //   last variable is simply empty, with nothing to say so.
+        expect(placeholders).toHaveLength(variables.length);
+    });
+
+    it('AND THE PARSE REALLY DOES SPLIT THEM — run, not assumed', () => {
+        //   The `read <<<` line executed against what curl would produce.
+        const sample = '308 https://www.easysalesexport.com/api/cron/process-email-queue';
+        const out = execFileSync('bash', ['-c',
+            `read -r ${readVariables().join(' ')} <<< "${sample}"; echo "[$http_code][$redirect_url]"`,
+        ], { encoding: 'utf8' }).trim();
+
+        expect(out).toBe('[308][https://www.easysalesexport.com/api/cron/process-email-queue]');
+    });
+
+    it('AND A 200 WITH NO REDIRECT LEAVES THE SECOND EMPTY, not unset-and-noisy', () => {
+        //   curl emits an empty redirect_url on a non-3xx, so the trailing space
+        //   is normal and must parse cleanly rather than tripping `read`.
+        const out = execFileSync('bash', ['-c',
+            `read -r ${readVariables().join(' ')} <<< "200 "; echo "[$http_code][$redirect_url]"`,
+        ], { encoding: 'utf8' }).trim();
+
+        expect(out).toBe('[200][]');
+    });
+});
+
 describe('#631 — and the schedule that produced them is still on', () => {
     it('THE BLOCK IS LIVE, so these messages can still be reached', () => {
         //   #623 enabled it. A failure message nobody will ever see because the
@@ -165,25 +288,41 @@ describe('#631 — and the schedule that produced them is still on', () => {
  *   Baseline green, one anchored swap at a time, restored and diffed after each.
  *
  *     MUTANT                                                        RESULT
- *     THE DEFECT: every failure is the generic message again         KILLED
- *     the edge 404 is classified as a missing route                  KILLED
- *     the refused-secret case is dropped                             KILLED
- *     the app-404 case is dropped                                    KILLED
- *     the generic fallback is dropped (a 500 reports nothing)        KILLED
- *     the edge check matches EVERYTHING                              KILLED
+ *     #631 every failure is the generic message again                KILLED
+ *     #631 the edge 404 is classified as a missing route             KILLED
+ *     #631 the refused-secret case is dropped                        KILLED
+ *     #631 the app-404 case is dropped                               KILLED
+ *     #631 the generic fallback is dropped                           KILLED
+ *     #631 the edge check matches EVERYTHING                         KILLED
+ *     #632 a 3xx passes again (job never runs, reports green)        KILLED
+ *     #632 the redirect guard swallows healthy runs too              KILLED
+ *     #632 the redirect guard shadows the 4xx classifier             KILLED
+ *     #632 the redirect message stops naming the location            KILLED
+ *     #632 curl stops capturing the redirect target                  KILLED
  *     the schedule is commented out again                            KILLED
  *
  *     CONTROL — SHOULD SURVIVE
  *     reword this header                                             SURVIVED ✓
  *
- *   The sixth is the way this fix becomes its own misdiagnosis in the other
- *   direction: a check that matches every body would tell somebody the app is
- *   not deployed while it is running perfectly and merely missing a route.
- *   Naming the wrong cause CONFIDENTLY is what cost three weeks the first time,
- *   so it is tested in both directions.
+ *   "The redirect guard swallows healthy runs too" is the way #632 becomes an
+ *   outage rather than a fix: a comparison that caught every response would fail
+ *   every healthy run, and the first response to that would be to switch the
+ *   schedule off — which is exactly how the 779 failures ended.
  *
- *   The seventh is not about this change at all and is here on purpose: every
- *   message in this file is unreachable if the schedule is off again. That is
- *   how the original failure ended, and a fix to the wording of an alarm nobody
- *   will hear is not a fix.
+ * ── TWO OF THESE ONLY DIED AFTER THE TEST WAS REPAIRED ──────────────────────
+ *
+ *   The extraction sliced to the FIRST `exit 1`, which was the end of everything
+ *   until #632 put a new guard in front of it. Four cases then ran against a
+ *   script that no longer contained the branch they were named for — and said
+ *   nothing, because an empty branch produces no output and every assertion was
+ *   `not.toContain`. It spans both guards now, with `exit` neutralised so the
+ *   second is genuinely reachable.
+ *
+ *   And the classifier was tested while its PLUMBING was not: every case set
+ *   `http_code` and `redirect_url` by hand, so a mutant that stopped curl
+ *   emitting the redirect target survived all of them. The messages would have
+ *   degraded to "an unnamed location" on every redirect — the one field that
+ *   tells somebody what to fix. The format string and the `read` that consumes
+ *   it are now pinned to each other, and the parse is executed rather than
+ *   assumed.
  */

@@ -234,16 +234,43 @@ jobs:
 
           # -sS so curl is quiet but still reports errors; --max-time because a
           # hung request must not hold a runner for six hours.
-          http_code=$(curl -sS -o /tmp/body.json -w '%{http_code}' \
+          # %{redirect_url} is empty unless the answer was a 3xx — see the
+          # redirect check below, which is why both are captured.
+          read -r http_code redirect_url <<< "$(curl -sS -o /tmp/body.json \
+            -w '%{http_code} %{redirect_url}' \
             --max-time 600 \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "$PRODUCTION_URL/api/cron/$JOB_PATH")
+            "$PRODUCTION_URL/api/cron/$JOB_PATH")"
 
           echo "HTTP $http_code"
           # The body is the job's own report. Print it — a scheduled job whose
           # output nobody can see is barely better than one that never runs.
           head -c 4000 /tmp/body.json || true
           echo
+
+          # ── #632 A REDIRECT IS NOT A SUCCESS ──────────────────────────
+          #
+          # This check used to be `if [ "$http_code" -ge 400 ]`, and a 3xx is
+          # not greater than 400. So a redirect made the step PASS while the
+          # endpoint was never invoked: eight scheduled jobs reporting green,
+          # for ever, having done nothing.
+          #
+          # It is not hypothetical. The middleware answers 308 from the apex to
+          # canonicalise the host, so setting PRODUCTION_URL to
+          # https://easysalesexport.com rather than https://www.easysalesexport.com
+          # — the natural thing to type, and one character shorter — is enough.
+          # The alarm that exists to say the jobs are not running would have said
+          # they were.
+          #
+          # NOT FOLLOWED WITH -L, deliberately. curl drops the Authorization
+          # header across a host change, so following would turn a silent no-op
+          # into a 401 and blame the secret; and following quietly would hide a
+          # misconfiguration that somebody should fix once rather than tolerate
+          # on every run.
+          if [ "$http_code" -ge 300 ] && [ "$http_code" -lt 400 ]; then
+            echo "::error::PRODUCTION_URL REDIRECTS, SO THE JOB DID NOT RUN. /api/cron/$JOB_PATH answered $http_code pointing at ${redirect_url:-an unnamed location}. Set the PRODUCTION_URL secret to the host the application is actually served on, including the www prefix if that is the canonical one — a redirect is not a run."
+            exit 1
+          fi
 
           # ── #631 SAY WHICH KIND OF FAILURE THIS IS ────────────────────
           #
