@@ -57,6 +57,16 @@ import { join } from 'path';
 import { isAdmin, isPlatformAdmin, isUnscopedAdmin, UNSCOPED_ADMIN_ROLES } from '@/lib/admin-permissions';
 
 const SERVICE = 'src/infrastructure/messaging/service.ts';
+/**
+ *   #635 MOVED THE RULE BOTH DOORS ASK INTO ITS OWN MODULE.
+ *
+ *   #633's fix put isUnscopedAdmin into the two hand-written copies inside the
+ *   service. #635 found that those copies had ALSO drifted apart on the module
+ *   branches — the list carried a seventh, matching a module keyword inside a
+ *   participant's email address, that the reader did not — and made them one
+ *   function. The assertions below follow it there rather than being deleted.
+ */
+const SCOPE = 'src/lib/conversation-scope.ts';
 
 const code = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -108,14 +118,19 @@ describe('#633 — whoever can see the inbox can open it', () => {
          */
         const src = code(SERVICE);
 
-        //   The reader, and the list's own filter.
-        expect(src).toContain('if (isUnscopedAdmin(roles)) {');
-        expect(src).toContain('if (isUnscopedAdmin(roles)) return true;');
+        //   #635 The reader and the list's filter are the SAME CALL now — not
+        //   two copies kept in step, which is what they were when #633 repaired
+        //   one of them and what let them drift again.
+        expect(src).toContain('return mayAccessConversation(conversation, userId, roles);');
+        expect(src).toContain('filter(c => mayAccessConversation(c, userId, roles))');
         //   And the gate, which #356 already fixed.
         expect(src).toContain('if (!isAdmin(roles)) {');
 
         //   The hand-written test is gone from ALL THREE.
         expect(src).not.toMatch(/roles\.some\(r => r === "admin" \|\| r === "super_admin"\)/);
+        //   …and the rule it was replaced by lives in exactly one place.
+        expect(code(SCOPE)).toContain('if (isUnscopedAdmin(roles)) return true;');
+        expect(src).not.toContain('isUnscopedAdmin');
     });
 
     it.each(['support', 'moderator'])('A %s CAN NOW OPEN A CONVERSATION THEY CAN SEE', async (role) => {
@@ -226,10 +241,15 @@ describe('#633 — and the module scoping is untouched', () => {
          *   deleted as newly-redundant: it still decides for anyone the platform
          *   later grants a module role WITHOUT admin standing.
          */
-        const src = code(SERVICE);
-        expect(src).toContain('cooperative_admin');
-        expect(src).toContain('marketplace_admin');
-        expect(src).toContain('conversation.context');
+        //   #635 They live in lib/conversation-scope now, as a table rather
+        //   than as branches — twice over, in two functions that had already
+        //   stopped agreeing. Followed here rather than dropped.
+        const scope = code(SCOPE);
+        expect(scope).toContain('cooperative_admin');
+        expect(scope).toContain('marketplace_admin');
+        expect(scope).toContain('conversation.context');
+        //   And the service does not keep a second copy of any of it.
+        expect(code(SERVICE)).not.toContain('cooperative_admin');
     });
 
     it('AND THE READER IS STILL CONSULTED BY BOTH DOORS IT GUARDS', () => {

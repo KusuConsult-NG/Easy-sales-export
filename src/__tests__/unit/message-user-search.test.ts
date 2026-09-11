@@ -62,9 +62,23 @@ jest.mock('@/lib/supabase', () => ({
 }));
 jest.mock('@/infrastructure/messaging/service', () => ({
     getConversations: jest.fn(async () => []),
-    getAllConversationsAdmin: jest.fn(async (roles: string[]) => {
-        const ok = roles.some((r) => r === 'admin' || r === 'super_admin' || r.endsWith('_admin'));
-        if (!ok) throw new Error('Access denied: Admin privileges required');
+    /*
+     *   #635 The list takes the CALLER as well as their roles now — it has to,
+     *   because a conversation the admin is a participant of belongs in their
+     *   inbox whatever its context, and the list and the thread view ask one
+     *   function. A stub still on the old arity received a userId where roles
+     *   were expected and threw, which is how this mock was found.
+     *
+     *   And the gate is asked rather than re-typed: this stub used to spell out
+     *   `r === 'admin' || r === 'super_admin' || r.endsWith('_admin')`, which is
+     *   the exact test #356 and #633 removed from the real service — a test
+     *   double keeping its own copy of the thing under test, #612's shape.
+     */
+    getAllConversationsAdmin: jest.fn(async (_userId: string, roles: string[]) => {
+        const { isAdmin } = jest.requireActual(
+            '@/lib/admin-permissions',
+        ) as typeof import('@/lib/admin-permissions');
+        if (!isAdmin(roles)) throw new Error('Access denied: Admin privileges required');
         return [];
     }),
     getMessages: jest.fn(async () => []),

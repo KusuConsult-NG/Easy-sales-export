@@ -27,6 +27,17 @@ export default function AdminMessagesPage() {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
+    /**
+     *   #635 A THREAD THAT COULD NOT BE READ SAID "no messages yet".
+     *
+     *   getMessagesAction RESOLVES with `{ error, messages: [] }` for a refusal
+     *   — it does not throw — and this screen read `result.messages` and
+     *   discarded `result.error`. So a refused conversation rendered the empty
+     *   state, which reads as "these two have not spoken", and the admin had no
+     *   way to know they had been turned away. #307/#408's class, and the exact
+     *   thing that hid #633's locked doors for as long as it did.
+     */
+    const [threadError, setThreadError] = useState<string | null>(null);
     const [messageInput, setMessageInput] = useState("");
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
@@ -66,6 +77,7 @@ export default function AdminMessagesPage() {
     useEffect(() => {
         if (!activeConversationId || !adminId) {
             if (!activeConversationId) setMessages([]);
+            setThreadError(null);
             return;
         }
 
@@ -74,7 +86,14 @@ export default function AdminMessagesPage() {
             try {
                 const { getMessagesAction } = await import("@/app/actions/messages");
                 const result = await getMessagesAction(activeConversationId!, 100);
-                if (isMounted && result.messages) {
+                if (!isMounted) return;
+                if (result.error) {
+                    setThreadError(result.error);
+                    setMessages([]);
+                    return;
+                }
+                setThreadError(null);
+                if (result.messages) {
                     // Sort chronologically
                     const sorted = [...result.messages].sort((a, b) => {
                         // toMillis handles both shapes. This was
@@ -99,6 +118,7 @@ export default function AdminMessagesPage() {
                 }
             } catch (error) {
                 console.error("Failed to poll historical messages", error);
+                if (isMounted) setThreadError("We could not load this conversation. Retrying…");
             }
         }
 
@@ -307,7 +327,15 @@ export default function AdminMessagesPage() {
 
                             {/* Messages */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                {messages.length === 0 ? (
+                                {threadError ? (
+                                    <div className="text-center py-12">
+                                        <MessageCircle size={40} className="text-amber-500/60 mx-auto mb-3" />
+                                        <p className="text-amber-300 text-sm font-semibold">
+                                            We could not open this conversation
+                                        </p>
+                                        <p className="text-slate-400 text-xs mt-1">{threadError}</p>
+                                    </div>
+                                ) : messages.length === 0 ? (
                                     <div className="text-center py-12">
                                         <MessageCircle size={40} className="text-slate-700 mx-auto mb-3" />
                                         <p className="text-slate-500 text-sm">No messages yet in this conversation</p>

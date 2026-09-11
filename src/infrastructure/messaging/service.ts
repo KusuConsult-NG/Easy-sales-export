@@ -13,84 +13,25 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
-import { MODULE_ADMIN_ROLE, isAdmin, isUnscopedAdmin } from "@/lib/admin-permissions";
+import { isAdmin } from "@/lib/admin-permissions";
+import { mayAccessConversation } from "@/lib/conversation-scope";
 
 /**
- * Enforces strict role-based and context-based boundaries on conversations.
- * Ensures module-specific admins can only view conversations related to their domain.
+ *   #635 THE RULE THE LIST AND THE OPENER SHARE — and this time they share it.
+ *
+ *   This function and getAllConversationsAdmin's filter each wrote out six
+ *   module branches by hand, and they had drifted: the list carried a seventh
+ *   branch matching a module keyword inside a PARTICIPANT'S EMAIL ADDRESS, and
+ *   this one did not. So every direct member-to-member conversation — they are
+ *   all contextless — was listed to a module admin whose keyword appeared in
+ *   somebody's address, complete with both names and the last message's text,
+ *   and then refused when they clicked it.
+ *
+ *   Both now ask mayAccessConversation in lib/conversation-scope, where the
+ *   whole finding is written up.
  */
 function validateConversationAccess(conversation: Conversation, userId: string, roles: string[]): boolean {
-    // 1. Is direct participant?
-    if (conversation.participants.includes(userId)) {
-        return true;
-    }
-
-    /*
-     *   2. Is this an administrator at all?
-     *
-     *   #633 #356 FIXED THE LIST AND NOT THE READER.
-     *
-     *        Its note is thirty lines below, on getAllConversationsAdmin: that
-     *        function refused `moderator` and `support` — "the two roles whose
-     *        job this screen is" — and was changed to ask isAdmin(). This
-     *        function, which decides whether any one of those conversations can
-     *        be OPENED or REPLIED TO, kept the hand-written test.
-     *
-     *        So a support agent opened the support inbox, was handed every
-     *        conversation on the platform by the list, clicked one, and was
-     *        refused. Then could not reply either — sendMessage asks this same
-     *        function. A list where nothing opens.
-     *
-     *        Asking isAdmin() here is not a new decision about privilege; it is
-     *        #356's decision, applied to the door it did not reach. The people
-     *        who can already SEE the whole list are the people who can now open
-     *        it, and no other role changes: the module-admin branches below are
-     *        untouched, and a non-admin still has to be a participant.
-     */
-    if (isUnscopedAdmin(roles)) {
-        return true;
-    }
-
-    // 3. Is module-specific admin matching conversation context?
-    const hasCoopAdmin = roles.includes("cooperative_admin");
-    if (hasCoopAdmin && (conversation.context === "cooperative_broadcast" || conversation.context === "cooperative_support" || conversation.orderId?.startsWith("coop_"))) {
-        return true;
-    }
-
-    const hasMarketAdmin = roles.includes("marketplace_admin");
-    if (hasMarketAdmin && (conversation.context === "marketplace_support" || conversation.productId || conversation.orderId)) {
-        return true;
-    }
-
-    const hasAcademyAdmin = roles.includes("academy_admin");
-    if (hasAcademyAdmin && (conversation.context === "academy_support" || conversation.orderId?.startsWith("academy_"))) {
-        return true;
-    }
-
-    const hasWaveAdmin = roles.includes("wave_admin");
-    if (hasWaveAdmin && (conversation.context === "wave_support" || conversation.orderId?.startsWith("wave_"))) {
-        return true;
-    }
-
-    const hasExportAdmin = roles.includes("export_admin");
-    if (hasExportAdmin && (conversation.context === "export_support" || conversation.orderId?.startsWith("export_"))) {
-        return true;
-    }
-
-    // `farm_nation_admin`, not "farmnation_admin".
-    //
-    // The role tested here does not exist. Nothing in the codebase writes it;
-    // the role is farm_nation_admin, in the canonical list and in the permission
-    // matrix. So a real Farm Nation admin passed the endsWith("_admin") gate in
-    // getAllConversationsAdmin, matched none of these module filters, and saw an
-    // empty conversation list — and this function refused them every individual
-    // conversation for the same reason. See MODULE_ADMIN_ROLE.
-    const hasFarmNationAdmin = roles.includes(MODULE_ADMIN_ROLE.farmnation);
-    if (hasFarmNationAdmin && (conversation.context === "farmnation_support" || conversation.orderId?.startsWith("farm_"))) {
-        return true;
-    }
-
-    return false;
+    return mayAccessConversation(conversation, userId, roles);
 }
 
 /**
@@ -109,7 +50,7 @@ export async function getConversations(userId: string) {
 /**
  * Admin: Get all conversations
  */
-export async function getAllConversationsAdmin(roles: string[]) {
+export async function getAllConversationsAdmin(userId: string, roles: string[]) {
     /**
      *   #356 THIS REFUSED moderator AND support, THE TWO ROLES WHOSE JOB THIS
      *        SCREEN IS.
@@ -131,42 +72,20 @@ export async function getAllConversationsAdmin(roles: string[]) {
         .get();
 
     const allConversations = serializeDocs(snapshot.docs) as unknown as Conversation[];
-    
-    // Filter out conversations based on module admin boundaries
-    return allConversations.filter(c => {
-        //   #633 THE THIRD COPY, and the one that made the screen empty. The
-        //   gate above admits `support` and `moderator` — #356 — and this line
-        //   then dropped every conversation for them, so the support inbox
-        //   answered with NOTHING rather than with "Access denied". An empty
-        //   list reads as "there are no messages", which is a worse lie than a
-        //   refusal.
-        if (isUnscopedAdmin(roles)) return true;
-        
-        // Modules matching
-        if (roles.includes("cooperative_admin") && (c.context === "cooperative_broadcast" || c.context === "cooperative_support" || c.orderId?.startsWith("coop_"))) return true;
-        if (roles.includes("marketplace_admin") && (c.context === "marketplace_support" || c.productId || c.orderId)) return true;
-        if (roles.includes("academy_admin") && (c.context === "academy_support" || c.orderId?.startsWith("academy_"))) return true;
-        if (roles.includes("wave_admin") && (c.context === "wave_support" || c.orderId?.startsWith("wave_"))) return true;
-        if (roles.includes("export_admin") && (c.context === "export_support" || c.orderId?.startsWith("export_"))) return true;
-        if (roles.includes(MODULE_ADMIN_ROLE.farmnation) && (c.context === "farmnation_support" || c.orderId?.startsWith("farm_"))) return true;
-        
-        // Fallback for uncategorized legacy support chats using email keyword matching
-        if (!c.context) {
-            const details = Object.values(c.participantDetails || {});
-            const hasKeywordMatch = details.some(d => {
-                const email = (d.email || "").toLowerCase();
-                if (roles.includes("wave_admin") && email.includes("wave")) return true;
-                if (roles.includes("cooperative_admin") && email.includes("coop")) return true;
-                if (roles.includes("academy_admin") && email.includes("academy")) return true;
-                if (roles.includes("export_admin") && email.includes("export")) return true;
-                return false;
-            });
 
-            if (hasKeywordMatch) return true;
-        }
-        
-        return false;
-    });
+    /*
+     *   #635 THE SAME QUESTION THE THREAD VIEW ASKS, rather than a second copy
+     *   of it. This filter used to restate the six module branches and add a
+     *   seventh of its own — a module keyword matched inside a participant's
+     *   email address — so it listed conversations that could not be opened,
+     *   and listed private member-to-member threads to a module admin on the
+     *   strength of a substring. lib/conversation-scope has the write-up.
+     *
+     *   Taking `userId` is part of the repair: the list is the inbox, and a
+     *   conversation this admin is personally a participant of belongs in it
+     *   whatever its context.
+     */
+    return allConversations.filter(c => mayAccessConversation(c, userId, roles));
 }
 
 /**

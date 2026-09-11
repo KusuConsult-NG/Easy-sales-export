@@ -46,7 +46,10 @@ export async function getAllConversationsAdminAction() {
         }
         const { session } = sessionResult;
 
-        const conversations = await messagingService.getAllConversationsAdmin(session.user.roles || []);
+        const conversations = await messagingService.getAllConversationsAdmin(
+            session.user.id,
+            session.user.roles || [],
+        );
         return { conversations, error: null };
     } catch (error) {
         logger.error("getAllConversationsAdminAction error", error);
