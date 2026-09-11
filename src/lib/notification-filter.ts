@@ -1,167 +1,129 @@
 /**
- * Notification Module Filter
+ * Notification filter tabs, and the window both notification badges read.
  *
- * Determines which notification types a user should see based on their
- * module subscriptions (serviceRegistrations).
+ *   #634 A NOTIFICATION ADDRESSED TO YOU WAS HIDDEN FROM YOU.
  *
- * Rules:
- *  - "Universal" types (system, general, info, success, warning, error,
- *    payment, payout, transaction, order, marketplace) always show.
- *  - Module-specific types only show when the user has an approved / active
- *    registration for that module.
- *  - Admins see everything (detected via roles array).
+ *   This module used to export `isNotificationVisible(type, serviceRegistrations,
+ *   roles)`, and four places asked it before showing a member their own mail: the
+ *   header bell, the notifications screen, the screen's unread tally, and the
+ *   server-side badge count. Its rule was
+ *
+ *       a module-specific type is shown only if the member holds an
+ *       approved / active / paid registration for that module
+ *
+ *   which sounds like tidiness and is, in practice, a way to lose mail. Every
+ *   notification in this codebase is written TO ONE userId by the code that knows
+ *   why that person should get it. Twenty-five writes carry a module type, and
+ *   every one of them is addressed to a party of the transaction it is about:
+ *
+ *     escrow    ×18   buyerId / sellerId / otherPartyId
+ *     dispute    ×6   initiatorId / respondentId
+ *     export     ×1   booking.userId
+ *     land       ×1   buyerId of the released reservation
+ *
+ *   None is a broadcast. So the filter could never suppress a notification that
+ *   had reached the wrong person — there were none — and could only suppress ones
+ *   that had reached the right person. It did:
+ *
+ *     an export booking      createBookingAction requires a session and nothing
+ *                            else, so anybody may book. When the export team
+ *                            confirmed or cancelled it, the notification was
+ *                            typed "export" and needed an APPROVED export
+ *                            registration to be seen. A member who simply booked
+ *                            a slot has none, and was told nothing — which is the
+ *                            defect #311 was fixed to prevent, one step later.
+ *     a marketplace escrow   "Payment Confirmed", "Escrow Funded", "Funds
+ *                            Released" need marketplace or farmNation. A seller
+ *                            whose verification is still `pending`, or who has
+ *                            been `suspended` mid-transaction, holds neither
+ *                            status — and those are the people most in need of
+ *                            hearing that money moved.
+ *     a dispute              the same, for "A dispute has been opened against
+ *                            you". A respondent who cannot see it cannot answer
+ *                            it.
+ *     a land reservation     `land` needs farmNation approved/active/paid, and
+ *                            paying for Farm Nation writes `status: "pending"`.
+ *                            The whole wait for approval was silent.
+ *
+ *   AND THE BADGE AGREED WITH THE PANEL ABOUT THE WRONG NUMBER. #416 made both
+ *   badges apply this same filter so they would stop disagreeing; they did stop
+ *   disagreeing, on zero. A member with five unread escrow rows saw no bell
+ *   count, opened the panel, and read "No notifications yet".
+ *
+ *   THE RULE NOW: a notification written to you is shown to you. There is no
+ *   visibility predicate left to get wrong, which is the point — see the note on
+ *   the tabs below for the half of the original feature that was sound.
+ *
+ *   (It also carried #633's shape. Two hand-written copies of
+ *   `r === "admin" || r === "super_admin" || r === "academy_admin"` decided who
+ *   "bypasses all filters" — three of this platform's ten admin roles, so a
+ *   moderator, a support agent or a wave_admin was filtered by their own consumer
+ *   subscriptions. Both copies are gone rather than repaired: with no filter to
+ *   bypass, nobody needs an exemption from it.)
  */
-
-import type { UserRole } from "@/lib/types/roles";
-
-export type NotifType =
-    | "info" | "success" | "warning" | "error"
-    | "loan" | "payment" | "wave" | "withdrawal"
-    | "land" | "escrow" | "dispute"
-    | "order" | "academy" | "cooperative" | "system"
-    | "export" | "payout" | "farm_nation" | "marketplace"
-    | "general" | "transaction" | "event" | "withdrawal";
-
-/** Types that are always visible regardless of subscriptions */
-const UNIVERSAL_TYPES = new Set<string>([
-    "system",
-    "general",
-    "info",
-    "success",
-    "warning",
-    "error",
-    "payment",
-    "payout",
-    "transaction",
-    "order",
-    "marketplace",
-    "withdrawal",
-]);
 
 /**
- * Maps notification type → serviceRegistrations key(s).
- * A notification is shown if ANY of the listed keys has an approved/active status.
+ * Which notification types each filter tab collects.
+ *
+ * ONE TABLE, because there were two: `getVisibleFilterTabs` decided which tabs to
+ * DRAW from a list of module keys, and NotificationsClient decided what each tab
+ * SHOWS from a hand-written if-chain beside it. They already disagreed — the
+ * chain folded `land` into the Farm Nation tab and the tab list did not, and
+ * `escrow`, the single largest type this platform writes, had no tab at all and
+ * was reachable only under All.
+ *
+ * "all" and "unread" are not here: they are not type filters, they are the
+ * absence of one, and they are always drawn.
  */
-const MODULE_TYPE_MAP: Record<string, string[]> = {
+export const FILTER_TAB_TYPES: Record<string, readonly string[]> = {
+    payment:     ["payment", "payout", "transaction", "withdrawal"],
+    order:       ["order", "transaction"],
     wave:        ["wave"],
+    cooperative: ["cooperative"],
     academy:     ["academy"],
-    cooperative: ["cooperative", "cooperatives"],
-    loan:        ["cooperative", "cooperatives"],   // loan notifications come from cooperative module
-    farm_nation: ["farmNation", "farm_nation"],
-    land:        ["farmNation", "farm_nation"],
-    escrow:      ["farmNation", "farm_nation", "marketplace"],
-    dispute:     ["farmNation", "farm_nation", "marketplace", "cooperative", "cooperatives"],
+    loan:        ["loan"],
     export:      ["export"],
-    event:       ["wave", "academy"],               // training/academy events
+    farm_nation: ["farm_nation", "land"],
+    escrow:      ["escrow"],
+    dispute:     ["dispute"],
 };
 
-/** Statuses that count as "subscribed" for a given module */
-const ACTIVE_STATUSES = new Set(["approved", "active", "paid"]);
+/** Tabs that are drawn whatever is in the inbox, in the order they appear. */
+export const ALWAYS_VISIBLE_TABS: readonly string[] = ["all", "unread"];
 
 /**
- * Returns true if the user has an active subscription for ANY of the given
- * serviceRegistration keys.
- */
-function isSubscribed(serviceRegistrations: Record<string, any>, keys: string[]): boolean {
-    return keys.some((key) => {
-        const reg = serviceRegistrations?.[key];
-        if (!reg) return false;
-        return ACTIVE_STATUSES.has(reg.status);
-    });
-}
-
-/**
- * Returns whether a notification type should be shown to this user.
+ * Does this notification belong under this tab?
  *
- * @param type               The notification's type field.
- * @param serviceRegistrations  From session.user.serviceRegistrations (or Firestore profile).
- * @param roles              From session.user.roles — admins bypass all filters.
+ * The one answer both the tab row and the list use, so a tab can never be drawn
+ * over an empty list or filter out rows it was drawn for.
  */
-export function isNotificationVisible(
-    type: string,
-    serviceRegistrations: Record<string, any> | null | undefined,
-    roles: string[] | null | undefined
-): boolean {
-    // Admins always see everything
-    const isAdmin = (roles || []).some((r) =>
-        r === "admin" || r === "super_admin" || r === "academy_admin"
-    );
-    if (isAdmin) return true;
-
-    // Universal types always show
-    if (UNIVERSAL_TYPES.has(type)) return true;
-
-    /**
-     *   #417 THE "FUTURE-PROOF" CLAUSE COULD NOT BE REACHED BY THE PEOPLE IT
-     *   WAS WRITTEN FOR.
-     *
-     *   These three tests used to run in the other order:
-     *
-     *       if (!serviceRegistrations) return false;   // "hide all
-     *                                                  //  module-specific"
-     *       const requiredKeys = MODULE_TYPE_MAP[type];
-     *       if (!requiredKeys) return true;            // "unknown type — show
-     *                                                  //  it (future-proof)"
-     *
-     *   The early return does not do what its comment says. It hides every
-     *   non-universal type, INCLUDING the ones that are not module-specific at
-     *   all — so for anyone with no serviceRegistrations, which is every
-     *   account before it joins a module, an unclassifiable notification was
-     *   dropped without trace. The line three below, stating the opposite
-     *   policy, could never run for them.
-     *
-     *   Deciding what a type belongs to does not depend on the subscriptions,
-     *   so it is decided first. A type nothing recognises is shown — which is
-     *   what the comment always claimed, and is the same principle as #307/#408:
-     *   when we cannot classify something, do not silently answer "nothing".
-     *
-     *   LATENT, AND SAYING SO. Every type this codebase writes today is in one
-     *   of the two sets — checked against the union in createNotificationAction
-     *   and against notificationService — so nothing produced now reaches the
-     *   clause either way. What DOES reach it is a row with no `type` at all
-     *   (legacy or imported), which used to vanish from the panel entirely.
-     */
-    const requiredKeys = MODULE_TYPE_MAP[type];
-    if (!requiredKeys) return true; // unknown or unclassifiable type — show it
-
-    // A module-specific type, and nothing to check it against.
-    if (!serviceRegistrations) return false;
-
-    return isSubscribed(serviceRegistrations, requiredKeys);
+export function notificationMatchesTab(type: string, tab: string): boolean {
+    if (tab === "all") return true;
+    const types = FILTER_TAB_TYPES[tab];
+    if (!types) return type === tab;   // a tab nothing has classified — match it literally
+    return types.includes(type);
 }
 
 /**
- * Returns an array of filter-tab keys that should be VISIBLE for this user.
- * Always includes "all" and "unread".
+ * Which filter tabs to draw, given the types actually in the member's inbox.
+ *
+ * THE HALF OF THE ORIGINAL FEATURE THAT WAS SOUND, rebuilt on a fact instead of
+ * a proxy. A tab is a shortcut to rows that exist; drawing ten of them for an
+ * account with four notifications is noise, which is what the subscription list
+ * was really there to prevent.
+ *
+ * Subscriptions were a poor stand-in for it in both directions: a member
+ * subscribed to WAVE with no WAVE notifications got an empty tab, and a member
+ * with escrow notifications and no marketplace registration got neither the tab
+ * nor — before #634 — the notifications. Asking the inbox cannot be wrong about
+ * either, and it needs neither registrations nor roles to answer.
  */
-export function getVisibleFilterTabs(
-    serviceRegistrations: Record<string, any> | null | undefined,
-    roles: string[] | null | undefined
-): string[] {
-    const always = ["all", "unread", "payment", "order"];
+export function getVisibleFilterTabs(notificationTypes: Iterable<string>): string[] {
+    const present = new Set(notificationTypes);
+    const visible = [...ALWAYS_VISIBLE_TABS];
 
-    const isAdmin = (roles || []).some((r) =>
-        r === "admin" || r === "super_admin" || r === "academy_admin"
-    );
-    if (isAdmin) {
-        return ["all", "unread", "payment", "order", "wave", "cooperative", "academy", "loan", "export", "farm_nation", "dispute"];
-    }
-
-    const conditional: Array<{ tab: string; keys: string[] }> = [
-        { tab: "wave",        keys: ["wave"] },
-        { tab: "cooperative", keys: ["cooperative", "cooperatives"] },
-        { tab: "academy",     keys: ["academy"] },
-        { tab: "loan",        keys: ["cooperative", "cooperatives"] },
-        { tab: "export",      keys: ["export"] },
-        { tab: "farm_nation", keys: ["farmNation", "farm_nation"] },
-        { tab: "dispute",     keys: ["farmNation", "farm_nation", "marketplace", "cooperative", "cooperatives"] },
-    ];
-
-    const visible = [...always];
-    for (const { tab, keys } of conditional) {
-        if (isSubscribed(serviceRegistrations || {}, keys)) {
-            visible.push(tab);
-        }
+    for (const [tab, types] of Object.entries(FILTER_TAB_TYPES)) {
+        if (types.some((type) => present.has(type))) visible.push(tab);
     }
     return visible;
 }
@@ -169,10 +131,10 @@ export function getVisibleFilterTabs(
 /**
  *   #416 THE WINDOW BOTH NOTIFICATION BADGES READ.
  *
- *   NotificationCenter fetches this many and counts the unread visible ones for
- *   its bell; getMyUnreadNotificationCount reads the same many for the nav
- *   badge. Two numbers describing the same fact have to describe the same set,
- *   so the number lives here rather than in either of them.
+ *   NotificationCenter fetches this many and counts the unread ones for its bell;
+ *   getMyUnreadNotificationCount reads the same many for the nav badge. Two
+ *   numbers describing the same fact have to describe the same set, so the number
+ *   lives here rather than in either of them.
  *
  *   It is NOT in my-data.ts because that module carries "use server", and a
  *   "use server" module may export only async functions — a plain const there

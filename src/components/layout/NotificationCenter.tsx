@@ -8,7 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useSession } from "next-auth/react";
 import { getMyNotifications } from "@/app/actions/my-data";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
-import { isNotificationVisible, NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
+import { NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
 import { toDate } from "@/lib/date-utils";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
@@ -30,10 +30,6 @@ export default function NotificationCenter() {
     const pendingReadRef = useRef<Set<string>>(new Set());
 
     const userId = session?.user?.id;
-
-    // Subscription data for module-based filtering
-    const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
-    const roles = (session?.user as any)?.roles as string[] | undefined;
 
     useEffect(() => {
         if (!userId) setLoading(false);
@@ -75,12 +71,15 @@ export default function NotificationCenter() {
         }
     }, 10000, { enabled: !!userId, restartKey: userId ?? "" });
 
-    // Filter to only show notifications for subscribed modules
-    const visibleNotifications = notifications.filter((n) =>
-        isNotificationVisible(n.type, serviceRegistrations, roles)
-    );
-
-    const unreadCount = visibleNotifications.filter((n) => !n.read).length;
+    /**
+     *   #634 There is no subscription filter between this panel and the member's
+     *   own mail any more. Every row here was written to this userId on purpose;
+     *   `isNotificationVisible` could only ever drop one of those, and did — an
+     *   escrow buyer or an export booker saw an empty bell and "No notifications
+     *   yet" over rows that existed. The filter's write-up is in
+     *   lib/notification-filter.
+     */
+    const unreadCount = notifications.filter((n) => !n.read).length;
 
     /**
      *   #406 THE ROLLBACK WAS WRITTEN FOR A FAILURE THAT NEVER ARRIVES.
@@ -150,7 +149,7 @@ export default function NotificationCenter() {
     useEffect(() => {
         if (!isOpen || !session?.user?.id) return;
 
-        const unreadVisible = visibleNotifications.filter(n => !n.read);
+        const unreadVisible = notifications.filter(n => !n.read);
         if (unreadVisible.length === 0) return;
 
         // Filter out IDs already in-flight to avoid duplicate writes
@@ -302,7 +301,7 @@ export default function NotificationCenter() {
                                             Loading notifications...
                                         </p>
                                     </div>
-                                ) : loadFailed && visibleNotifications.length === 0 ? (
+                                ) : loadFailed && notifications.length === 0 ? (
                                     /* #416 — a failed read is not an empty inbox. */
                                     <div className="px-6 py-8 text-center">
                                         <Bell className="w-12 h-12 mx-auto text-amber-300 mb-3" />
@@ -314,7 +313,7 @@ export default function NotificationCenter() {
                                             still trying.
                                         </p>
                                     </div>
-                                ) : visibleNotifications.length === 0 ? (
+                                ) : notifications.length === 0 ? (
                                     <div className="px-6 py-8 text-center">
                                         <Bell className="w-12 h-12 mx-auto text-slate-300 mb-3" />
                                         <p className="text-sm text-slate-500">
@@ -322,7 +321,7 @@ export default function NotificationCenter() {
                                         </p>
                                     </div>
                                 ) : (
-                                    visibleNotifications.map((notification) => (
+                                    notifications.map((notification) => (
                                         <Menu.Item key={notification.id}>
                                             {({ active }) => (
                                                 <div
@@ -378,7 +377,7 @@ export default function NotificationCenter() {
                             </div>
 
                             {/* Footer */}
-                            {visibleNotifications.length > 0 && (
+                            {notifications.length > 0 && (
                                 <div className="px-6 py-3 border-t border-slate-200">
                                     <a
                                         href="/dashboard/notifications"

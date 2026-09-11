@@ -16,7 +16,7 @@ import { useToast } from "@/contexts/ToastContext";
 // #534 NOTIFICATION_PAGE_SIZE comes from here, not from the notifications
 // service: this is a "use client" file, and importing the service pulled
 // supabase-db into the client bundle. #382's ratchet caught it.
-import { isNotificationVisible, getVisibleFilterTabs, NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
+import { getVisibleFilterTabs, notificationMatchesTab, NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
@@ -113,6 +113,11 @@ const ALL_FILTER_TABS: { key: string; label: string }[] = [
     { key: "loan",        label: "Loans" },
     { key: "export",      label: "Export" },
     { key: "farm_nation", label: "Farm Nation" },
+    //   #634 Escrow is the type this platform writes more of than any other —
+    //   eighteen of the twenty-five module-typed notifications — and it had no
+    //   tab at all, reachable only under All. It is drawn for the members who
+    //   have escrow notifications, like every other tab here.
+    { key: "escrow",      label: "Escrow" },
     { key: "dispute",     label: "Disputes" },
 ];
 
@@ -174,10 +179,6 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
     // Prevent duplicate auto-read calls on re-renders
     const autoReadDoneRef = useRef(false);
 
-    /* ── Subscription data from session (synced live via auth.config) ── */
-    const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
-    const roles = (session?.user as any)?.roles as string[] | undefined;
-
     /* ── Real-time Firestore listener ── */
     useEffect(() => {
         if (status === "unauthenticated") { router.push("/auth/login"); return; }
@@ -229,38 +230,41 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
         };
     }, [userId, status, router, pageSize, takeSeed]);
 
-    /* ── Which tabs to show based on user's module subscriptions ── */
+    /* ──  #634 Which tabs to show — from what is actually in the inbox.
+     *
+     *   This read the member's serviceRegistrations, which is a proxy for their
+     *   mail rather than their mail: it drew a WAVE tab over nothing for a
+     *   subscriber with no WAVE notifications, and drew no tab at all over the
+     *   escrow and dispute rows of a marketplace buyer, who holds no marketplace
+     *   registration. Asking the notifications cannot be wrong about either.
+     * ── */
     const visibleTabs = useMemo(() => {
-        const visibleKeys = new Set(getVisibleFilterTabs(serviceRegistrations, roles));
+        const visibleKeys = new Set(getVisibleFilterTabs(notifications.map(n => n.type)));
         return ALL_FILTER_TABS.filter(t => visibleKeys.has(t.key));
-    }, [serviceRegistrations, roles]);
+    }, [notifications]);
 
     const visibleTabKeys = useMemo(
         () => new Set(visibleTabs.map(t => t.key)),
         [visibleTabs]
     );
 
-    /* ── Filtered + subscription-gated list ── */
+    /* ──  #634 The list under the selected tab.
+     *
+     *   The subscription gate that stood at the top of this — hiding a member's
+     *   own escrow, dispute, export and land notifications from them — is gone.
+     *   And the tab-to-type chain that followed it is gone too: it was a second
+     *   hand-written copy of the table getVisibleFilterTabs draws from, and the
+     *   two had already drifted, so a tab could be drawn over rows this chain
+     *   then filtered out. One table, asked twice.
+     * ── */
     const filtered = notifications.filter(n => {
-        // Subscription gate — hide module notifications the user isn't subscribed to
-        if (!isNotificationVisible(n.type, serviceRegistrations, roles)) return false;
-
-        // Tab filter
-        if (filter === "all") return true;
         if (filter === "unread") return !n.read;
-        if (filter === "payment") return n.type === "payment" || n.type === "payout" || n.type === "transaction";
-        if (filter === "order") return n.type === "order" || n.type === "transaction";
-        if (filter === "farm_nation") return n.type === "farm_nation" || n.type === "land";
-        if (filter === "dispute") return n.type === "dispute";
-        if (filter === "export") return n.type === "export";
-        return n.type === filter;
+        return notificationMatchesTab(n.type, filter);
     });
 
-    const unreadCount = notifications.filter(n =>
-        !n.read && isNotificationVisible(n.type, serviceRegistrations, roles)
-    ).length;
+    const unreadCount = notifications.filter(n => !n.read).length;
 
-    /* ── If current tab is now hidden (subscription changed), reset to "all" ── */
+    /* ── If the selected tab no longer has anything behind it, reset to "all" ── */
     useEffect(() => {
         if (filter !== "all" && !visibleTabKeys.has(filter)) {
             setFilter("all");
@@ -271,9 +275,7 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
     useEffect(() => {
         if (autoReadDoneRef.current || !userId || notifications.length === 0) return;
 
-        const unreadVisible = notifications.filter(n =>
-            !n.read && isNotificationVisible(n.type, serviceRegistrations, roles)
-        );
+        const unreadVisible = notifications.filter(n => !n.read);
         if (unreadVisible.length === 0) return;
 
         autoReadDoneRef.current = true;
@@ -290,7 +292,7 @@ export default function NotificationsClient({ initial = null }: { initial?: any[
                 // Non-fatal — onSnapshot will self-heal on next open
             });
         });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [notifications, userId]);
 
     /* ── Actions ── */

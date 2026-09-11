@@ -401,10 +401,23 @@ describe('#356 — THE RATCHET: one admin test, not six', () => {
              *   than silently shortening the array, because this list is the
              *   ratchet and a list that quietly changes size protects nothing.
              */
+            /*
+             *   #634 'src/lib/notification-filter.ts' LEFT THIS LIST TOO, and
+             *   for a better reason than being widened.
+             *
+             *   It held two copies of the narrow test, both deciding who
+             *   "bypasses all filters" on a member's own notifications — so a
+             *   moderator, a support agent or a wave_admin had their own mail
+             *   filtered by their consumer subscriptions. The repair was not to
+             *   widen the test: the filter it exempted people from was itself
+             *   the defect, hiding escrow, dispute, export and land
+             *   notifications from the transaction parties they were addressed
+             *   to. With no filter there is nothing to be exempt from, and both
+             *   copies went with it.
+             */
             // isAdmin() itself, which is where the list is SUPPOSED to be
             // written out once.
             'src/lib/admin-permissions.ts',
-            'src/lib/notification-filter.ts',
         ]);
     });
 

@@ -32,7 +32,7 @@ import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize
 import { toDate } from "@/lib/date-utils";
 import { isActiveOrderStatus } from "@/lib/order-status";
 import { logger } from "@/lib/logger";
-import { isNotificationVisible, NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
+import { NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
 import { isOnTheList } from "@/lib/notification-ageing";
 
 /** The signed-in user's id, or null when unauthenticated. */
@@ -318,10 +318,17 @@ export async function getMyNotifications(max = 200): Promise<any[]> {
  *   #390's class, with a symptom you can see: one rule stated twice, the copies
  *   differing in both the filter and the window.
  *
- *   The rule is stated once now — the same window, the same
- *   isNotificationVisible, against the same registrations and roles the panel
- *   reads off the session. Both badges agree by construction, and both cap at
- *   the same 50.
+ *   The rule is stated once now — the same window, and the same set. Both badges
+ *   agree by construction, and both cap at the same 50.
+ *
+ *   #634 AND THE SET THEY AGREED ON WAS THE WRONG ONE. Making both badges apply
+ *   `isNotificationVisible` stopped them disagreeing — on zero. The filter hid
+ *   module-typed notifications from members with no active registration for that
+ *   module, which is most of the people those notifications are written to: an
+ *   escrow buyer, an export booker, a dispute respondent. So a member with five
+ *   unread escrow rows had no bell count, opened the panel, and read "No
+ *   notifications yet". The filter is gone; the shared window is the whole of
+ *   what makes these two numbers one number, and it is still shared.
  */
 export async function getMyUnreadNotificationCount(): Promise<number> {
     let session: Awaited<ReturnType<typeof requireSession>>["session"] = null;
@@ -344,12 +351,11 @@ export async function getMyUnreadNotificationCount(): Promise<number> {
             .limit(NOTIFICATION_BADGE_WINDOW)
             .get();
 
-        const registrations = (session!.user as any).serviceRegistrations ?? null;
-        const roles = (session!.user as any).roles ?? null;
-
-        return snap.docs.filter((doc) =>
-            isNotificationVisible(String(doc.data()?.type ?? ""), registrations, roles)
-        ).length;
+        //   Every row this query returned is unread and belongs to this user —
+        //   that IS the count. #634: nothing is subtracted from it for a module
+        //   the member is not registered for, because the notification was
+        //   addressed to them regardless.
+        return snap.docs.length;
     } catch (error) {
         logger.error("[my-data] getMyUnreadNotificationCount failed", { userId, error });
         return 0;

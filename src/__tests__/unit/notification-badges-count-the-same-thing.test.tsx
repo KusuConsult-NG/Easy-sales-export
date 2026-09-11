@@ -57,7 +57,7 @@ import { join, relative } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { getMyUnreadNotificationCount } from '@/app/actions/my-data';
-import { NOTIFICATION_BADGE_WINDOW, isNotificationVisible } from '@/lib/notification-filter';
+import { NOTIFICATION_BADGE_WINDOW, FILTER_TAB_TYPES } from '@/lib/notification-filter';
 
 jest.mock('@/app/actions/my-data', () => ({
     getMyUnreadNotificationCount: jest.fn(),
@@ -91,12 +91,28 @@ beforeEach(() => { asMock.mockReset(); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#416 — one rule, one window, two badges', () => {
-    it('THE COUNT APPLIES THE SAME VISIBILITY FILTER THE PANEL DOES', () => {
+    it('THE COUNT READS THE SAME WINDOW THE PANEL DOES', () => {
         const src = code(ACTION);
-        // Not a bare .count() over every unread row any more.
+        // Not a bare .count() over every unread row any more — that was the
+        // half of #416 that made the nav badge exceed the bell and stay up.
         expect(src).not.toMatch(/where\("read", "==", false\)\s*\.count\(\)/);
-        expect(src).toMatch(/isNotificationVisible\(/);
         expect(src).toMatch(/\.limit\(NOTIFICATION_BADGE_WINDOW\)/);
+
+        /*
+         *   #634 AND SUBTRACTS NOTHING FROM IT.
+         *
+         *   The other half of #416's repair was to make both badges apply
+         *   `isNotificationVisible`, so the two would stop disagreeing. They
+         *   did stop disagreeing — on zero. That filter hid module-typed
+         *   notifications from members without an active registration for the
+         *   module, which is most of the people they are addressed to, so a
+         *   buyer with five unread escrow rows had no bell count at all.
+         *
+         *   Asserted as an absence, because the finding is that there is no
+         *   predicate here to get wrong.
+         */
+        expect(src).not.toMatch(/isNotificationVisible/);
+        expect(src).toMatch(/return snap\.docs\.length;/);
     });
 
     it('and the panel reads the same window from the same constant', () => {
@@ -104,31 +120,25 @@ describe('#416 — one rule, one window, two badges', () => {
         expect(NOTIFICATION_BADGE_WINDOW).toBe(50);
     });
 
-    it('and the filter it shares actually discriminates — otherwise none of this matters', () => {
-        /**
-         * The premise. If isNotificationVisible admitted everything, the two
-         * counts would have agreed all along and the finding would be wrong.
+    it('and BOTH count the same thing over it — unread rows belonging to this user', () => {
+        /*
+         * The property #416 is actually about, now that neither side filters.
+         * The action's query is scoped to the session's own id and to unread,
+         * and capped at the window; the panel counts `!n.read` over the same
+         * window it fetched. Two ways of writing one number.
          */
-        const noSubscriptions = undefined;
-        const wave = { wave: { status: 'approved' } };
-        // A module-specific type is hidden without the subscription…
-        // ('wave' — the map is keyed on the coarse type, not on an event name.)
-        expect(isNotificationVisible('wave', noSubscriptions, [])).toBe(false);
-        expect(isNotificationVisible('wave', { academy: { status: 'approved' } }, [])).toBe(false);
-        // …and shown with it.
-        expect(isNotificationVisible('wave', wave, [])).toBe(true);
-        // An admin sees everything, which is why the count reads roles too.
-        expect(isNotificationVisible('wave', noSubscriptions, ['admin'])).toBe(true);
-        // And a universal type is never filtered.
-        expect(isNotificationVisible('payment', noSubscriptions, [])).toBe(true);
+        const action = code(ACTION);
+        expect(action).toMatch(/\.where\("userId", "==", userId\)/);
+        expect(action).toMatch(/\.where\("read", "==", false\)/);
+        expect(code(PANEL)).toMatch(/notifications\.filter\(\(n\) => !n\.read\)\.length/);
     });
 
-    it('and the count reads registrations AND roles off the session, not a parameter', () => {
-        // Rule 1 of this module: never accept a userId from the browser.
+    it('and the count takes no userId from the browser', () => {
+        // Rule 1 of this module: never accept a userId from the browser. It
+        // takes no parameters at all, and reads the id off the session.
         const src = code(ACTION);
         expect(src).toMatch(/export async function getMyUnreadNotificationCount\(\): Promise<number>/);
-        expect(src).toMatch(/serviceRegistrations \?\? null/);
-        expect(src).toMatch(/\.roles \?\? null/);
+        expect(src).toMatch(/const userId = session\?\.user\?\.id;/);
     });
 });
 
@@ -189,7 +199,7 @@ describe('#416 — a failed read is not an empty inbox', () => {
         const src = code(PANEL);
         expect(src).toMatch(/setLoadFailed\(true\)/);
         expect(src).toMatch(/setLoadFailed\(false\)/);
-        expect(src).toMatch(/loadFailed && visibleNotifications\.length === 0/);
+        expect(src).toMatch(/loadFailed && notifications\.length === 0/);
         expect(src).toMatch(/We could not load your notifications/);
         // …and the empty state is still there for the case that really is empty.
         expect(src).toMatch(/No notifications yet/);
@@ -240,48 +250,58 @@ describe('#416 — the push hook has no feature behind it', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#417 — the filter\'s own "future-proof" clause was unreachable', () => {
-    it('AN UNCLASSIFIABLE NOTIFICATION IS SHOWN, NOT SILENTLY DROPPED', () => {
-        /**
-         *   The three tests used to run in the order
+describe('#417/#634 — the clause, and then the rule it belonged to', () => {
+    /*
+     *   #417 WAS A REAL FINDING INSIDE A RULE THAT SHOULD NOT HAVE EXISTED.
+     *
+     *   isNotificationVisible ran its three tests in the order
+     *
+     *       if (!serviceRegistrations) return false;   // "hide all
+     *                                                  //  module-specific"
+     *       if (!MODULE_TYPE_MAP[type]) return true;   // "unknown type —
+     *                                                  //  show it"
+     *
+     *   so for anyone with no serviceRegistrations — every account before it
+     *   joins a module — the second line could never run, and a notification
+     *   with no recognisable type was dropped without trace. Reordering the
+     *   tests fixed that, and left the other clause doing exactly what it said:
+     *   dropping a member's escrow, dispute, export and land notifications
+     *   because they hold no registration for the module those came from.
+     *
+     *   #634 removed the predicate. A notification is written to one userId by
+     *   the code that knows why that person should receive it; there is nothing
+     *   left for a subscription to overrule.
+     *
+     *   Pinned as an absence so it cannot come back by a different name — a
+     *   file that has no visibility rule and a file that has one nobody calls
+     *   look the same from the outside, and only one of them is safe.
+     */
+    it('NOTHING DECIDES WHETHER A MEMBER MAY SEE THEIR OWN NOTIFICATION', () => {
+        const filter = code('src/lib/notification-filter.ts');
+        expect(filter).not.toMatch(/isNotificationVisible/);
+        expect(filter).not.toMatch(/MODULE_TYPE_MAP/);
+        expect(filter).not.toMatch(/serviceRegistrations/);
+
+        // And no caller kept a copy of the rule after the export went away.
+        const files = walk(join(ROOT, 'src'));
+        const holders = files
+            .map((f) => relative(ROOT, f))
+            .filter((f) => /isNotificationVisible/.test(code(f)));
+        expect({ holders }).toEqual({ holders: [] });
+    });
+
+    it('and the type vocabulary is still accounted for — every type has a home or is plainly unclassified', () => {
+        /*
+         * #417's other assertion, kept and re-aimed. The union in
+         * createNotificationAction is this platform's notification vocabulary.
+         * It used to be checked against the filter's two tables; it is checked
+         * against the TAB table now, so a new type that no tab collects shows
+         * up here rather than becoming a row reachable only under "All".
          *
-         *       if (!serviceRegistrations) return false;   // "hide all
-         *                                                  //  module-specific"
-         *       if (!MODULE_TYPE_MAP[type]) return true;   // "unknown type —
-         *                                                  //  show it"
-         *
-         *   so for anyone with no serviceRegistrations — every account before
-         *   it joins a module — the second line could never run, and a type
-         *   nothing recognises was dropped without trace. Found by #416: the
-         *   count started applying this filter and an existing fixture of
-         *   notifications with NO type went to zero.
-         */
-        expect(isNotificationVisible('welcome', undefined, [])).toBe(true);
-        expect(isNotificationVisible('', undefined, [])).toBe(true);
-        expect(isNotificationVisible('some_future_type', null, null)).toBe(true);
-    });
-
-    it('and a MODULE type with no subscriptions is still hidden — the rule that was meant', () => {
-        expect(isNotificationVisible('wave', undefined, [])).toBe(false);
-        expect(isNotificationVisible('escrow', null, [])).toBe(false);
-    });
-
-    it('and the ordering is the fix, not a new special case', () => {
-        const src = code('src/lib/notification-filter.ts');
-        const mapLookup = src.indexOf('const requiredKeys = MODULE_TYPE_MAP[type]');
-        const noRegs = src.indexOf('if (!serviceRegistrations) return false');
-        expect(mapLookup).toBeGreaterThan(-1);
-        expect(noRegs).toBeGreaterThan(-1);
-        // The classification happens BEFORE the subscription check.
-        expect(mapLookup).toBeLessThan(noRegs);
-    });
-
-    it('and it is latent today — every type this codebase writes is in one of the two sets', () => {
-        /**
-         * Stated as a fact that can go stale rather than as prose: the union in
-         * createNotificationAction is the vocabulary, and every member of it is
-         * either universal or mapped. A twelfth type added there without a home
-         * fails here, which is exactly when somebody should think about it.
+         * Not every type needs a tab — `info`, `success`, `warning`, `error`,
+         * `system`, `general` are the panel's own chrome and are listed as the
+         * exceptions, by name, so adding a twelfth type does not quietly join
+         * them.
          */
         const src = code('src/app/actions/notifications.ts');
         const m = src.match(/type:\s*((?:"[a-z_]+"\s*\|\s*)+"[a-z_]+");/);
@@ -289,24 +309,12 @@ describe('#417 — the filter\'s own "future-proof" clause was unreachable', () 
         const written = m![1].split('|').map((s) => s.trim().replace(/"/g, ''));
         expect(written.length).toBeGreaterThanOrEqual(11);
 
-        /**
-         * Read against the filter's own two tables rather than through its
-         * behaviour: after #417 an UNCLASSIFIED type and a UNIVERSAL one both
-         * answer `true` for a user with no registrations, so behaviour alone
-         * cannot tell them apart — an assertion built on it would be a check
-         * that cannot fail, which is #331's shape and was the first draft here.
-         */
-        const filter = code('src/lib/notification-filter.ts');
-        const universal = new Set(
-            [...filter.matchAll(/^\s{4}"([a-z_]+)",$/gm)].map((x) => x[1]),
-        );
-        const mapped = new Set(
-            [...filter.matchAll(/^\s{4}([a-z_]+):\s*\[/gm)].map((x) => x[1]),
-        );
-        expect(universal.size).toBeGreaterThanOrEqual(12);
-        expect(mapped.size).toBeGreaterThanOrEqual(10);
-
-        const homeless = written.filter((type) => !universal.has(type) && !mapped.has(type));
+        const NO_TAB_BY_DESIGN = ['info', 'success', 'warning', 'error', 'system', 'general'];
+        const collected = new Set(Object.values(FILTER_TAB_TYPES).flat());
+        const homeless = written.filter((t) => !collected.has(t) && !NO_TAB_BY_DESIGN.includes(t));
         expect({ homeless }).toEqual({ homeless: [] });
+
+        // …and the exceptions list is not a way to empty the check.
+        expect(collected.size).toBeGreaterThanOrEqual(12);
     });
 });
