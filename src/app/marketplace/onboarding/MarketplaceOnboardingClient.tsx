@@ -12,6 +12,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { restoredStepIndex } from "@/lib/draft-step";
 import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
@@ -170,7 +171,15 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                             if (saved) {
                                 const parsed = JSON.parse(saved);
                                 if (parsed.data) setFormData(parsed.data);
-                                if (parsed.step) setCurrentStep(parsed.step);
+                                //   #625 — refused if it is not a step this
+                                //   flow has. Six steps for a seller and four
+                                //   otherwise, so a draft saved as a seller and
+                                //   restored as a buyer could already land past
+                                //   the end. The widest is used here because the
+                                //   seller flag is not settled at restore time;
+                                //   the render switch covers 1..6.
+                                const savedStep = restoredStepIndex(parsed.step, 6, 1);
+                                if (savedStep !== null) setCurrentStep(savedStep);
                             }
                         } catch { /* non-blocking */ }
                     }

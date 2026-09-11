@@ -12,6 +12,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { restoredStepIndex } from "@/lib/draft-step";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -215,7 +216,15 @@ export default function WaveApplicationClient(
             if (saved) {
                 const { step, data } = JSON.parse(saved);
                 if (data) setFormData({ ...INITIAL_DATA, ...data });
-                if (typeof step === "number") setCurrentStep(step);
+                //   #625 A SAVED STEP OUTSIDE THE RANGE RENDERED AN EMPTY
+                //   CARD WITH NO BUTTONS AT ALL — the nav block is itself
+                //   conditional on `currentStep < 6` — and reloading restored
+                //   the same dead step, so the user could not reach this form
+                //   again. Refused rather than clamped: a position that cannot
+                //   be trusted is not evidence of how far somebody got. The
+                //   DATA above is restored either way.
+                const savedStep = restoredStepIndex(step, STEPS.length);
+                if (savedStep !== null) setCurrentStep(savedStep);
                 showToast("Your previous progress has been restored.", "success");
             }
         } catch {

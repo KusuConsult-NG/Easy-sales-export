@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { restoredStepId } from "@/lib/draft-step";
 import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
@@ -147,7 +148,11 @@ export default function ExportOnboardingClient(
                             if (saved) {
                                 const parsed = JSON.parse(saved);
                                 if (parsed.data) setFormData(parsed.data);
-                                if (parsed.step) setCurrentStepId(parsed.step);
+                                //   #625 — an id this flow does not have made
+                                //   `steps.findIndex` return -1 and the render
+                                //   switch match nothing: an empty card.
+                                const savedStep = restoredStepId(parsed.step, ONBOARDING_STEPS.map(s => s.id));
+                                if (savedStep !== null) setCurrentStepId(savedStep);
                             }
                         } catch { /* non-blocking */ }
                     }

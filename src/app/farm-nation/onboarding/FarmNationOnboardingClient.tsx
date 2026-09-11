@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { restoredStepId } from "@/lib/draft-step";
 import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
@@ -132,7 +133,10 @@ export default function FarmNationOnboardingClient({ initial = null }: {
                                 if (saved) {
                                     const parsed = JSON.parse(saved);
                                     if (parsed.data) setFormData(parsed.data);
-                                    if (parsed.step) setCurrentStepId(parsed.step);
+                                    //   #625 — see draft-step. An unknown id
+                                    //   rendered an empty card here too.
+                                    const savedStep = restoredStepId(parsed.step, ONBOARDING_STEPS.map(s => s.id));
+                                    if (savedStep !== null) setCurrentStepId(savedStep);
                                 }
                             } catch { /* non-blocking */ }
                         }
