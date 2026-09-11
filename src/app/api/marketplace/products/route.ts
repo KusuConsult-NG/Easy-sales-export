@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
+import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
 import { logger } from "@/lib/logger";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
         // is the kind of duplication that drifts back apart.
         let baseQuery: import("@/lib/supabase-db").SupabaseQuery = db
             .collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "active");
+            .where("status", "in", [...PRODUCT_VISIBLE_STATUSES]);
 
         // Apply category filter at DB level (replaces the compound query)
         if (category && category !== "all") {

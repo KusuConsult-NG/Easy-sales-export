@@ -86,7 +86,36 @@ export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
  */
 export const PRODUCT_INITIAL_STATUS: ProductStatus = "active";
 
-/** Statuses a buyer can see a product in. */
+/**
+ * Statuses a buyer can see a product in.
+ *
+ *   #624 THIS WAS A DECLARED RULE THAT NOTHING CONSULTED.
+ *
+ *        `isVisibleProductStatus` had ZERO callers, and every buyer-facing read
+ *        hand-wrote `where("status", "==", "active")` instead — fifteen copies
+ *        across four files. So the one place that states what a buyer may see
+ *        decided nothing, and changing it changed nothing: exactly the shape of
+ *        #618's silo rule, which only drew sidebar links, and #623's
+ *        `finance:refund`, which gated no door.
+ *
+ *        All fifteen ask this list now. The VALUE is unchanged, so no buyer
+ *        sees anything today that they did not see yesterday — what changes is
+ *        that the next edit to this line reaches the marketplace.
+ *
+ *   AND `out_of_stock` STAYS OUT, DELIBERATELY, WITH ITS REASON.
+ *
+ *        The note above records that a product marked out_of_stock vanishes
+ *        from the marketplace rather than showing as unavailable. Adding it
+ *        here would now genuinely change what buyers see — and that would be
+ *        WORSE, not better, until the product card and the checkout say "out of
+ *        stock" and refuse the purchase. A listing a buyer can add to a basket
+ *        and pay for, which cannot be fulfilled, is a bigger defect than one
+ *        that is hidden.
+ *
+ *        Nothing writes out_of_stock today, so the trap is latent. Making this
+ *        list real is what turns finishing it into a one-line change here plus
+ *        the presentation, instead of a fifteen-site sweep.
+ */
 export const PRODUCT_VISIBLE_STATUSES: readonly ProductStatus[] = ["active"];
 
 /** A live listing can be pulled; a pending or rejected one can be released. */

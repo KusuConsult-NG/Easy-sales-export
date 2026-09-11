@@ -1,6 +1,7 @@
 "use server";
 
 import { logger } from '@/lib/logger';
+import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
 import { supabaseDb as db } from "@/lib/supabase-db";
 // Use Admin DB
 // import { uploadFileToStorage } from "@/lib/storage-admin";
@@ -39,7 +40,7 @@ async function _getMarketplaceProductsAction(params: {
     try {
         const { category, search, location, sortBy, limit: limitCount = 20, lastId } = params;
 
-        let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active") as import("@/lib/supabase-db").SupabaseQuery;
+        let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "in", [...PRODUCT_VISIBLE_STATUSES]) as import("@/lib/supabase-db").SupabaseQuery;
 
         /**
          * Every stored spelling of the category, not just the one asked for.
@@ -102,7 +103,7 @@ async function _getMarketplaceProductsAction(params: {
                 logger.warn("Marketplace products search failed due to missing index. Falling back.", { error: e.message });
                 indexError = true;
                 
-                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "in", [...PRODUCT_VISIBLE_STATUSES]);
                 if (category && category !== "all") {
                     const mapped = categorySpellings(category);
                     fallbackQuery = mapped.length > 1
@@ -341,7 +342,7 @@ export const getProductAction = getProductByIdAction;
 async function _getRecommendedProductsAction(limitCount: number = 3): Promise<ActionResponse<{ products: Product[] }>> { 
     try {
         const query = db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "active")
+            .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
             .orderBy("createdAt", "desc")
             .limit(limitCount);
 
@@ -354,7 +355,7 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
                 logger.warn("Get recommended products failed due to missing index. Falling back.", { error: e.message });
                 indexError = true;
                 const fallbackQuery = db.collection(COLLECTIONS.PRODUCTS)
-                    .where("status", "==", "active")
+                    .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
                     .limit(limitCount);
                 snapshot = await fallbackQuery.get();
             } else {
@@ -412,7 +413,7 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4): 
 
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("category", "==", product.category)
-            .where("status", "==", "active")
+            .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
             .where("availableQuantity", ">", 0)
             .limit(limit + 1)
             .get();
@@ -454,7 +455,7 @@ async function _searchProductsAction(params: { query?: string;
     try {
         const limit = params.limit || 12;
         let query = db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "active")
+            .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
             .where("availableQuantity", ">", 0);
 
         if (params.category && params.category !== "All Categories") {
@@ -508,7 +509,7 @@ async function _searchProductsAction(params: { query?: string;
                 indexError = true;
                 
                 // Fallback: simple query with status and category
-                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "in", [...PRODUCT_VISIBLE_STATUSES]);
                 if (params.category && params.category !== "All Categories") {
                     const mapped = categorySpellings(params.category);
                     if (mapped.length > 1) {

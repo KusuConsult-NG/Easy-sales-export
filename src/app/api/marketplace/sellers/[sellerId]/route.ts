@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -74,7 +75,7 @@ export async function GET(
             const prodSnap = await db
                 .collection(COLLECTIONS.PRODUCTS)
                 .where("sellerId", "==", sellerId)
-                .where("status", "==", "active")
+                .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
                 .orderBy("createdAt", "desc")
                 .limit(20)
                 .get();

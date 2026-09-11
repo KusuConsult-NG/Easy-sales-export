@@ -1,5 +1,6 @@
 "use server";
 import { requireSession } from "@/lib/session-guard";
+import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -70,7 +71,7 @@ export interface ProductFilters {
  */
 async function _getProductsAction(filters?: ProductFilters): Promise<ActionResponse<{ products: Product[] }>> { 
     try {
-        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "in", [...PRODUCT_VISIBLE_STATUSES]);
 
         // Apply Firestore-supported filters
         if (filters?.category && filters.category !== "all") { 
@@ -105,7 +106,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                 indexError = true;
                 
                 // Fallback: only filter by status and category at DB level
-                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "in", [...PRODUCT_VISIBLE_STATUSES]);
                 if (filters?.category && filters.category !== "all") {
                     const mapped = categorySpellings(filters.category);
                     if (mapped.length > 1) {
@@ -216,7 +217,7 @@ async function _getFeaturedProductsAction(): Promise<ActionResponse<{ products: 
         let indexError = false;
         try {
             snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-                .where("status", "==", "active")
+                .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
                 .orderBy("orders", "desc")
                 .limit(8)
                 .get();
@@ -225,7 +226,7 @@ async function _getFeaturedProductsAction(): Promise<ActionResponse<{ products: 
                 logger.warn("Get featured products failed due to missing index. Falling back.", { error: e.message });
                 indexError = true;
                 snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-                    .where("status", "==", "active")
+                    .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
                     .limit(50) // limit more since we'll sort in memory and slice
                     .get();
             } else {
@@ -265,7 +266,7 @@ async function _getProductsByCategoryAction(category: string): Promise<ActionRes
         // from getProductsAction for the same category name.
         const mapped = categorySpellings(category);
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "active")
+            .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
             .where("category", mapped.length > 1 ? "in" : "==", mapped.length > 1 ? mapped : mapped[0])
             .limit(PRODUCT_QUERY_CAP)
             .get();
@@ -543,7 +544,7 @@ export const cancelOrderAction = withSafeAction("cancelOrderAction", _cancelOrde
 async function _getMarketplaceStatsAction(): Promise<ActionResponse<{ productsCount: number; tradersCount: number }>> {
     try {
         const [productsSnap, sellersSnap] = await Promise.all([
-            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
+            db.collection(COLLECTIONS.PRODUCTS).where("status", "in", [...PRODUCT_VISIBLE_STATUSES]).count().get(),
             db.collection(COLLECTIONS.USERS).where("sellerVerificationStatus", "==", "approved").count().get()
         ]);
         return {
