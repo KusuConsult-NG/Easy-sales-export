@@ -96,6 +96,12 @@ const SESSION_GUARDS = new Set([
 const ROLE_CHECKS = new Set([
     "isAdmin", "hasRole", "hasAdminPermission", "requireAdmin",
     "hasPermission", "isSuperAdmin", "needsDualControl",
+    //   #638 `callerHasPermission(actorId, "marketplace:approve_sellers")` is
+    //   the async form the marketplace uses, and it was missing — so
+    //   setSellerBadge, which asks the shared permission matrix before touching
+    //   anybody, appeared as a lead. A scan whose false positives are correct
+    //   code asking the right question trains people to stop reading it.
+    "callerHasPermission",
 ]);
 
 /** Calls that write. */
@@ -247,6 +253,18 @@ function insideRecordingCall(node: ts.Node): boolean {
     return false;
 }
 
+/**
+ * An expression whose value the CALLER supplied — #638.
+ *
+ * The request body, the query string, the form payload and a dynamic route's
+ * params. Everything a route handler can be handed without a session saying so.
+ */
+const CALLER_SUPPLIED_SOURCE =
+    /\b(?:req|request)\b[\s\S]*?\.(?:json|formData|text)\(\)|\bawait\s+params\b|\bsearchParams\b/;
+
+/** A binding or key that names an identifier rather than a value. */
+const ID_LIKE_NAME = /(?:^|_)ids?$|Ids?$|^ids?$|ref$/i;
+
 function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
     const facts: FnFacts = {
         guarded: false, writes: false, reads: false, decides: false,
@@ -263,6 +281,20 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
             if (/\bid\b|id[:?)]|ids\b|\bref\b/.test(t)) facts.takesId = true;
         }
     }
+
+    /*
+     *   Names bound to a REQUEST PAYLOAD — `const form = await req.formData()`.
+     *   Collected first so a `.get("memberId")` on one of them is recognised
+     *   wherever it appears, rather than depending on walk order.
+     */
+    const payloadNames = new Set<string>();
+    (function collectPayloads(n: ts.Node) {
+        if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer
+            && CALLER_SUPPLIED_SOURCE.test(n.initializer.getText())) {
+            payloadNames.add(n.name.text);
+        }
+        ts.forEachChild(n, collectPayloads);
+    })(node);
 
     function visit(n: ts.Node) {
         if (ts.isCallExpression(n)) {
@@ -294,6 +326,65 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
                 }
             }
         }
+        /*
+         *   #638 AN ID THAT ARRIVES IN THE BODY IS STILL AN ID THE CALLER CHOSE.
+         *
+         *   `takesId` above reads PARAMETERS, which is the whole story for a
+         *   server action and half of it for a route handler. A route takes
+         *   `(req)` and reads the id out of the request:
+         *
+         *       const { userId } = await req.json();
+         *       await db.collection("wallets").doc(userId).update({ ... });
+         *
+         *   — no id-ish parameter, so `takesId` stayed false and the function
+         *   was never a lead. Run over src/app/api the scan reported ZERO, and
+         *   a planted route of exactly that shape was also reported as clean:
+         *   "could not tell" answering as "nothing wrong", over 123 route files.
+         *
+         *   A dynamic route WAS visible, because `{ params }: { params:
+         *   Promise<{ userId: string }> }` puts the word in a parameter — so the
+         *   scan could see one of the two ways an id reaches a handler and
+         *   nobody could tell which one they were reading.
+         */
+        if (ts.isVariableDeclaration(n) && n.initializer && CALLER_SUPPLIED_SOURCE.test(n.initializer.getText())) {
+            if (ts.isObjectBindingPattern(n.name)) {
+                for (const element of n.name.elements) {
+                    if (ts.isIdentifier(element.name) && ID_LIKE_NAME.test(element.name.text)) {
+                        facts.takesId = true;
+                    }
+                }
+            } else if (ts.isIdentifier(n.name) && ID_LIKE_NAME.test(n.name.text)) {
+                facts.takesId = true;
+            }
+        }
+
+        /*
+         *   `searchParams.get("userId")`, `formData.get("sellerId")` — the
+         *   doors where the id is named by a string rather than by a binding.
+         *
+         *   The receiver is matched against the payload names collected above
+         *   as well as against the obvious spellings, because a handler
+         *   routinely gives the payload its own name:
+         *
+         *       const form = await req.formData();
+         *       const memberId = form.get("memberId");
+         *
+         *   and a rule that only recognised the word `formData` read that as
+         *   clean. Written from the shapes in front of me rather than from the
+         *   shape of the thing, which is the same narrowing this whole finding
+         *   is about — caught by its own test before it shipped.
+         */
+        if (ts.isCallExpression(n) && calleeName(n) === "get") {
+            const key = n.arguments[0];
+            const receiver = ts.isPropertyAccessExpression(n.expression) ? n.expression.expression.getText() : "";
+            const receiverRoot = receiver.split(/[^\w$]/).filter(Boolean).pop() ?? "";
+            if (key && ts.isStringLiteral(key) && ID_LIKE_NAME.test(key.text)
+                && (/searchParams|formData|params|body|query/i.test(receiver)
+                    || payloadNames.has(receiver) || payloadNames.has(receiverRoot))) {
+                facts.takesId = true;
+            }
+        }
+
         if (ts.isBinaryExpression(n) && looksLikeIdentityComparison(n)) {
             facts.decides = true;
         }
