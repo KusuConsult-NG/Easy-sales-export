@@ -1,4 +1,5 @@
 
+import { academyVerificationPath } from "@/lib/academy-certificate";
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 
@@ -202,7 +203,11 @@ export const CertificateDocument = ({
                     Easy Sales Export Academy  •  easysalesexport.com
                 </Text>
                 <Text style={styles.certId}>
-                    Verify at: https://easysalesexport.com/verify/{certificateId}
+                    {/*   #636 `/verify/{id}` is not a route. The verifier is at
+                          /academy/verify, and the host comes from the request the
+                          PDF was generated for rather than from a literal — this
+                          platform serves www.easysalesexport.com. */}
+                    Verify at: {baseUrl}{academyVerificationPath(certificateId)}
                 </Text>
             </View>
         </Page>

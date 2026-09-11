@@ -1,5 +1,6 @@
 "use server";
 
+import { academyVerificationPath } from "@/lib/academy-certificate";
 import { ActionResponse } from "@/lib/safe-action";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -161,7 +162,7 @@ async function _generateCertificateAction(
             // /api/academy/verify/[certificateId], which now looks in this
             // collection too; the path keeps its historical name because the
             // academy certificate URLs already in circulation use it.
-            verificationUrl: `/academy/verify/${certId}`
+            verificationUrl: academyVerificationPath(certId)
         };
 
         await db.collection(COLLECTIONS.WAVE_CERTIFICATES).doc(certId).set({

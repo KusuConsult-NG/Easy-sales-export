@@ -8,7 +8,7 @@ import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft, Linkedin } fr
 import Image from "next/image";
 import { getCourseByIdAction, getUserProgressAction, type Course, type UserProgress } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
-import { academyCertificateNumber, completionDateOf } from "@/lib/academy-certificate";
+import { academyCertificateNumber, completionDateOf , academyVerificationPath } from "@/lib/academy-certificate";
 
 export default function CertificateClient({ initial = null }: {
     /**
@@ -93,7 +93,7 @@ export default function CertificateClient({ initial = null }: {
         const certId = encodeURIComponent(
             academyCertificateNumber(session?.user?.id ?? "", courseId, completionDate)
         );
-        const certUrl = encodeURIComponent(`${window.location.origin}/academy/verify/${certId}`);
+        const certUrl = encodeURIComponent(`${window.location.origin}${academyVerificationPath(certId)}`);
 
         const linkedInUrl =
             `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME` +
@@ -305,7 +305,10 @@ export default function CertificateClient({ initial = null }: {
                                 Easy Sales Export Academy • www.easysalesexport.com
                             </p>
                             <p className="text-xs text-slate-400 mt-1">
-                                Verify this certificate at: www.easysalesexport.com/verify/{certNumber}
+                                {/*   #636 This said `/verify/{certNumber}`, which is not a
+                                      page — the verifier is at /academy/verify. The one
+                                      path, from lib/academy-certificate. */}
+                                Verify this certificate at: www.easysalesexport.com{academyVerificationPath(certNumber)}
                             </p>
                         </div>
                     </div>

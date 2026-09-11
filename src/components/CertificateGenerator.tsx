@@ -1,5 +1,6 @@
 "use client";
 
+import { academyVerificationPath } from "@/lib/academy-certificate";
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import { Download } from 'lucide-react';
 import { useState } from 'react';
@@ -125,7 +126,7 @@ const CertificateDocument = ({
                     </View>
                     <View>
                         <Text style={styles.certificateId}>Certificate ID: {certificateId}</Text>
-                        <Text style={styles.certificateId}>easysalesexport.com/verify/{certificateId}</Text>
+                        <Text style={styles.certificateId}>easysalesexport.com{academyVerificationPath(certificateId)}</Text>
                     </View>
                     <View>
                         <Text style={styles.signature}>_____________________</Text>

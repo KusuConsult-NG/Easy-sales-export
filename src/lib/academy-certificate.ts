@@ -101,6 +101,48 @@ export function completionDateOf(value: unknown): Date | null {
 }
 
 /**
+ *   #636 THE ADDRESS PRINTED ON THE CERTIFICATE WAS NOT A PAGE.
+ *
+ *   The public verifier lives at `/academy/verify/[certificateId]`. Three of the
+ *   four places that tell somebody where to check a credential said
+ *
+ *       easysalesexport.com/verify/{certificateNumber}
+ *
+ *   — the certificate page's own footer, the PDF's footer, and the unused
+ *   CertificateGenerator. There is no `/verify/:id` route and no redirect to
+ *   one; `/verify-id` and `/verify-status` are different pages entirely. So the
+ *   line a third party actually reads off a printed certificate, and the line on
+ *   the screen the holder is looking at, both lead to a 404.
+ *
+ *   Only the LinkedIn button had it right, which is why it went unnoticed: the
+ *   one path that is clicked rather than typed was the one path that worked.
+ *
+ *   This is the failure this chain has already been repaired for twice — #430's
+ *   "the LinkedIn verify link lands on Certificate not found", and the WAVE
+ *   writer's `/wave/verify-certificate/{n}`, "a route with no page and no
+ *   handler anywhere in the app". Both were fixed at their own call site. The
+ *   path is one exported string now, so the fourth site cannot be wrong on its
+ *   own.
+ *
+ *   CERTIFICATES ALREADY IN THE WORLD KEEP WORKING. A PDF downloaded last month
+ *   carries the old address and cannot be reissued, so next.config redirects
+ *   `/verify/:certificateId` to this path permanently. Correcting the string
+ *   alone would have fixed only the certificates not yet printed.
+ */
+export const ACADEMY_VERIFY_PATH = "/academy/verify";
+
+/**
+ * Where to send somebody who wants to check this credential.
+ *
+ * Takes the certificate NUMBER — `ACAD-{year}-{course}-{user}`, the one string a
+ * holder is ever shown — which the verifier resolves alongside the document id
+ * since #430.
+ */
+export function academyVerificationPath(certificateNumber: string): string {
+    return `${ACADEMY_VERIFY_PATH}/${certificateNumber}`;
+}
+
+/**
  * The completion bar a certificate is issued against.
  *
  * The certificate page refuses to render below 100%; the PDF route applied no

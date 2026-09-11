@@ -397,7 +397,19 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   against correct code — and that helper is not the block-eating regex
         //   measured here. It never reads its own text, so no assertion in it can
         //   be misled by the mangling.
-        expect(AFFECTED.length).toBeLessThanOrEqual(21);
+        //   #636 raised this from 21 to 22, on the same test as every time
+        //   before. a-certificate-that-named-a-page-that-was-not-there.test.ts
+        //   quotes the printed lines it is about — `easysalesexport.com/verify/`
+        //   inside quotes and inside regexes — which is the `//`-in-a-string
+        //   trap this describe measures.
+        //
+        //   Raised rather than relaxed, and with a stronger reason than usual:
+        //   that file strips other files with lib/testing/strip-comments — the
+        //   good one — BECAUSE of this suite. Its first draft carried the naive
+        //   regex and ran a negative sweep with it over all of src, which is the
+        //   combination the third test below exists to warn about; it was
+        //   changed before it was committed. It never reads its own text.
+        expect(AFFECTED.length).toBeLessThanOrEqual(22);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');

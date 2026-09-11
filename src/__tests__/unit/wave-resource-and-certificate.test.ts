@@ -32,6 +32,7 @@
  * read four field names, none of which the writer used.
  */
 
+import { academyVerificationPath } from '@/lib/academy-certificate';
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -235,7 +236,13 @@ describe('the verification link resolves', () => {
         const src = code(CERTIFICATES);
 
         expect(src).not.toContain('/wave/verify-certificate/');
-        expect(src).toContain('verificationUrl: `/academy/verify/${certId}`');
+        //   #636 The path is one exported string now — three other places
+        //   printed `/verify/{n}`, which is not a route, and this one was right
+        //   on its own. Following it to the helper rather than pinning the
+        //   literal, since the literal was the thing that could be wrong in four
+        //   places independently.
+        expect(src).toContain('verificationUrl: academyVerificationPath(certId)');
+        expect(academyVerificationPath('CERT-1')).toBe('/academy/verify/CERT-1');
     });
 
     it('and the verifier looks in the WAVE collection', () => {

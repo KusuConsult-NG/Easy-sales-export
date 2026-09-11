@@ -107,6 +107,23 @@ const nextConfig: NextConfig = {
         destination: '/auth/register',
         permanent: true,
       },
+      {
+        //   #636 CERTIFICATES ALREADY IN THE WORLD.
+        //
+        //   The certificate page's footer, the PDF's footer and
+        //   CertificateGenerator all printed `easysalesexport.com/verify/{n}`,
+        //   and there has never been a route there — the public verifier is
+        //   /academy/verify/[certificateId]. Every certificate downloaded or
+        //   printed before this change carries that address, and a PDF in
+        //   somebody's file cannot be reissued, so correcting the string alone
+        //   would have fixed only the credentials not yet printed.
+        //
+        //   Two segments, so /verify-id and /verify-status — real, unrelated
+        //   pages — are untouched.
+        source: '/verify/:certificateId',
+        destination: '/academy/verify/:certificateId',
+        permanent: true,
+      },
     ];
   },
 
