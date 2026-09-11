@@ -505,28 +505,32 @@ async function _refundExportOrderToWalletAction(orderId: string): Promise<Action
         const { session } = sessionResult;
 
         /*
-         *   `finance:resolve_disputes`, matching _refundEscrowToBuyer exactly.
+         *   `finance:refund` — #623. When this was written that permission was
+         *   super_admin-only and gating nothing, so asking for it would have
+         *   locked every ordinary administrator out of the only door that
+         *   returns this money, and it asked `finance:resolve_disputes` to match
+         *   _refundEscrowToBuyer. #623 fixed the declaration instead of working
+         *   around it: `finance:refund` is granted to admin, and BOTH refund
+         *   doors ask for it. Same people, and now the right name.
          *
          *   Not "is some kind of admin": an export admin who approves
          *   applications is not thereby authorised to return money.
          *
-         *   AND NOT `finance:refund`, WHICH IS THE OBVIOUS CHOICE AND THE WRONG
-         *   ONE. That permission exists, is granted to super_admin ALONE, and
-         *   gates nothing anywhere in this codebase — it has never been used.
-         *   Reaching for it here would have locked every ordinary administrator
-         *   out of the only door that returns this money, which is what
-         *   admin-permission-gates caught. The escrow refund — the same
-         *   operation, money moving the same way — is available under
-         *   resolve_disputes, and two refunds requiring different authorities is
-         *   the "which answer you get depends on which screen" defect this audit
-         *   keeps finding.
+         *   #616 LEFT THIS OPEN AND #623 CLOSED IT, which is worth keeping
+         *   because the reasoning was sound and the conclusion was a deferral:
          *
-         *   THE UNUSED PERMISSION IS WORTH SOMEBODY'S ATTENTION and is not mine
-         *   to resolve: granting it to `admin`, or moving both refund paths onto
-         *   it, changes who can move money. That is a decision about privilege,
-         *   not a defect to fix while passing.
+         *       "THE UNUSED PERMISSION IS WORTH SOMEBODY'S ATTENTION and is not
+         *        mine to resolve: granting it to `admin`, or moving both refund
+         *        paths onto it, changes who can move money. That is a decision
+         *        about privilege, not a defect to fix while passing."
+         *
+         *   It does not change who can move money. admin could already refund
+         *   through both doors under `finance:resolve_disputes`; granting them
+         *   `finance:refund` and moving both doors onto it leaves the same two
+         *   roles — admin and super_admin — passing the same two gates. What
+         *   changes is that the declaration stops contradicting the code.
          */
-        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) {
+        if (!hasAdminPermission(session.user.roles, "finance:refund")) {
             return { success: false as const, error: "Admin access required", data: null };
         }
 

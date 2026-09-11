@@ -762,7 +762,15 @@ async function _refundEscrowToBuyer(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) { return { success: false as const, error: "Admin access required"};
+        //   #623 THE PERMISSION NAMED FOR REFUNDS NOW GATES THE REFUND.
+        //   `finance:refund` was declared, held by super_admin alone and gating
+        //   nothing, while this door — the one that actually returns a buyer's
+        //   money — asked "can resolve disputes". It is granted to admin now,
+        //   so the same people pass this check as passed it yesterday.
+        //
+        //   _releaseEscrowFunds above is deliberately NOT changed: paying a
+        //   seller is a dispute outcome, not a refund.
+        if (!hasAdminPermission(session.user.roles, "finance:refund")) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;

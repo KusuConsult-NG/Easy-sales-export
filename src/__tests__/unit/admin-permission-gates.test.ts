@@ -52,10 +52,17 @@
  * authorization check has an obvious failure mode: pick a permission that the
  * plain `admin` role does not hold and you lock out the role that does nearly
  * all the work — a fix that reads as correct and takes the platform's own
- * administrators offline. `admin` lacks seven permissions that super_admin has
+ * administrators offline. `admin` lacks six permissions that super_admin has
  * (users:create, users:delete, users:impersonate, content:delete,
- * finance:refund, config:rollback, cooperatives:manage_products), and none of
- * them may appear in one of these gates. That invariant is asserted below
+ * config:rollback, cooperatives:manage_products), and none of them may appear
+ * in one of these gates.
+ *
+ * finance:refund WAS A SEVENTH AND IS NOT ANY MORE — #623. It was withheld from
+ * admin while gating nothing at all, so it constrained nobody; both refund doors
+ * asked finance:resolve_disputes, which admin holds. Both ask finance:refund now
+ * and admin holds it, so the same two roles can return money as could before.
+ * The count is corrected here rather than left, because this paragraph is what
+ * somebody reads when choosing a permission for a new gate. That invariant is asserted below
  * against every permission string in every gate, so a later gate cannot
  * introduce the failure either.
  */
@@ -623,11 +630,17 @@ describe('no gate locks out the role that does the work', () => {
     it('and there really are permissions admin does not hold, so that is a real constraint', () => {
         // Vacuity guard: if `admin` held everything, the assertion above would
         // pass for any mapping at all.
+        //   `finance:refund` USED TO BE IN THIS LIST and is not any more — #623.
+        //   It was withheld from admin while gating nothing at all, so it was a
+        //   declaration that contradicted the code: both refund doors asked
+        //   `finance:resolve_disputes`, which admin holds. Both ask
+        //   `finance:refund` now and admin holds that, so the same two roles can
+        //   refund as could yesterday. Five withheld permissions still make this
+        //   guard bite, and the sixth was never a real constraint on anything.
         for (const withheld of [
             'users:delete',
             'users:impersonate',
             'content:delete',
-            'finance:refund',
             'config:rollback',
             'cooperatives:manage_products',
         ] as const) {

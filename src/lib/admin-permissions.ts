@@ -159,7 +159,35 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "users:export",
         "content:read", "content:approve", "content:reject",
         "announcements:manage",
+        /*
+         *   #623 `finance:refund` IS GRANTED HERE NOW, AND IT CHANGES NOTHING
+         *        ANYBODY CAN DO. That is the point.
+         *
+         *        It was declared, held by super_admin alone, and gated NOTHING
+         *        anywhere in the codebase. Both doors that actually return money
+         *        — _refundEscrowToBuyer and _refundExportOrderToWalletAction —
+         *        asked `finance:resolve_disputes` instead, which admin already
+         *        holds. #616 chose that deliberately and said why: asking for
+         *        `finance:refund` would have locked every ordinary administrator
+         *        out of the only door that returns this money.
+         *
+         *        So the declaration said refunds were super_admin business and
+         *        the code said they were not. A permission that contradicts the
+         *        policy it names is worse than no permission: it is what someone
+         *        reads when deciding who may do what.
+         *
+         *        The policy is the code's. Refunding a customer is routine
+         *        service work on a platform this size, not an escalation — so
+         *        the permission named for it is granted to the people who do it,
+         *        and both refund doors now ask for it. admin and super_admin
+         *        hold it, which is exactly who could refund yesterday.
+         *
+         *        RELEASING escrow to a SELLER is untouched and still asks
+         *        `finance:resolve_disputes`. Paying a seller and refunding a
+         *        buyer are different acts, and only one of them is a refund.
+         */
         "finance:read", "finance:reconcile", "finance:process_withdrawals", "finance:resolve_disputes",
+        "finance:refund",
         "config:read", "config:update", "config:feature_toggles",
         "marketplace:approve_sellers", "marketplace:suspend_sellers",
         "marketplace:moderate_reviews", "marketplace:manage_village_market",

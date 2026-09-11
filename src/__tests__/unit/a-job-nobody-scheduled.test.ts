@@ -147,25 +147,68 @@ describe('#614 — every cron endpoint is on the schedule that invokes them', ()
     });
 });
 
-describe('#614 — and the file is honest about not running', () => {
-    it('THE SCHEDULE IS STILL DISABLED, AND SAYS WHY', () => {
-        //   Asserted rather than assumed, because the whole point of this commit
-        //   is that the jobs are ON the list and still do not run. If somebody
-        //   enables the schedule this test fails and they update it deliberately
-        //   — which is the moment to check the two secrets really are set.
+describe('#623 — the schedule is on, and cannot go quiet', () => {
+    /*
+     *   #614 PINNED THIS FILE AS DISABLED, deliberately: "if somebody enables
+     *   the schedule this test fails and they update it deliberately — which is
+     *   the moment to check the two secrets really are set." That is exactly
+     *   what happened, and this block is that deliberate update.
+     *
+     *   WHY IT WAS ENABLED WITH THE SECRETS STILL UNSET. Commenting the block
+     *   out prevented failing runs and, in doing so, left eight jobs not running
+     *   — which is the defect this workflow was written to fix, preserved by the
+     *   fix for it. Of the two costs, silence is the worse: a red run gets
+     *   noticed, a job that never fires does not. With the block live, setting
+     *   the two secrets is now the ONLY remaining step; nobody has to remember
+     *   to come back and edit YAML.
+     */
+    it('THE SCHEDULE BLOCK IS LIVE, NOT COMMENTED OUT', () => {
         const src = workflow();
-        expect(src).toContain('# Automatic schedule disabled');
-        expect(src).toMatch(/^#\s*schedule:/m);
+        expect(src).toMatch(/^on:\n\s+schedule:/m);
+        expect(src).not.toContain('# Automatic schedule disabled');
+        //   And the crons themselves are real lines, not commented ones.
+        expect(src).toMatch(/^\s+- cron: '\*\/15 \* \* \* \*'/m);
+    });
+
+    it('AND A SCHEDULED RUN WITHOUT THE SECRETS CALLS NOTHING', () => {
+        //   The reason it is safe to leave on. Skipped, not fired blindly: a
+        //   run that called the endpoints without a secret would 401 eight ways
+        //   and teach everyone to ignore this workflow.
+        const src = workflow();
+        expect(src).toContain("configured=false");
+        expect(src).toContain("if: needs.preflight.outputs.configured == 'true'");
+    });
+
+    it('AND IT STILL SAYS SO LOUDLY — once a day, not ninety-six times', () => {
+        /*
+         *   "A scheduler that quietly no-ops is how this situation arose" — the
+         *   workflow's own words, and still true. The answer is not to fail every
+         *   fifteen minutes, which produces a red that everyone mutes; it is to
+         *   fail ONCE A DAY with the reason. Bounded noise is read; unbounded
+         *   noise is filtered.
+         */
+        const src = workflow();
+        expect(src).toContain('config-check');
+        expect(src).toContain("github.event.schedule == '0 3 * * *'");
+        expect(src).toContain('Eight scheduled jobs are not running');
         expect(src).toContain('CRON_SECRET');
         expect(src).toContain('PRODUCTION_URL');
     });
 
-    it('AND A RUN WITHOUT THE SECRETS FAILS LOUDLY RATHER THAN NO-OPPING', () => {
-        //   "A scheduler that quietly no-ops is how this situation arose" — the
-        //   workflow's own words, and the reason the preflight exists.
+    it('AND A MANUAL RUN WITHOUT THEM STILL FAILS HARD', () => {
+        //   A person pressed the button and is waiting. A green tick over a job
+        //   that never ran is the worst of the three outcomes.
         const src = workflow();
-        expect(src).toContain('Fail loudly if the schedule cannot work');
-        expect(src).toContain('every scheduled job will 401'.replace('every', 'Every'));
+        expect(src).toContain('if [ "$EVENT" = "workflow_dispatch" ]');
+        expect(src).toContain('Nothing was called.');
+    });
+
+    it('AND THE DAILY CHECK RIDES AN EXISTING CRON, so the four lists still agree', () => {
+        //   A ninth cron line would put a name in the schedule block that is not
+        //   an endpoint on disk, and the ratchet above compares those two lists
+        //   exactly. Stated here so the next person does not "tidy" it into its
+        //   own schedule entry and break a test three describes up.
+        expect(scheduledJobs(workflow())).toEqual(endpointsOnDisk());
     });
 });
 

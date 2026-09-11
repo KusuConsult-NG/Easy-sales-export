@@ -70,31 +70,46 @@ name: Scheduled Jobs
 # acceptable for all four: every one of them is idempotent and catch-up by
 # design, so a late or skipped run costs latency rather than correctness.
 #
-# REQUIRED SECRETS — this workflow does nothing until both are set:
+# REQUIRED SECRETS — the jobs do nothing until both are set:
 #   CRON_SECRET     must equal the CRON_SECRET the running app checks
 #   PRODUCTION_URL  base URL, no trailing slash, e.g. https://app.example.com
 #
-# Until then every run fails loudly at the preflight step rather than silently
-# doing nothing — a scheduler that quietly no-ops is how this situation arose.
+# #623 THE SCHEDULE IS ON. It was commented out "to prevent failing runs when
+# secrets are unset", which is a real cost — but it meant eight jobs this file
+# exists to run were not running, which is the exact defect the file was written
+# to fix, left in place by the fix for it. Silence is the worse of the two.
+#
+# The noise is bounded instead of the schedule being disabled:
+#
+#   a SCHEDULED run with no secrets   annotates a warning and stops. It does not
+#                                     call anything and does not fail.
+#   the DAILY config check            fails loudly, once a day, naming what is
+#                                     missing. Bounded, so it cannot be muted
+#                                     the way 96 failures a day would be.
+#   a MANUAL run with no secrets      fails hard. A person asked for this one
+#                                     and is owed a real answer.
+#
+# So the moment both secrets exist, all eight jobs begin running with no further
+# edit to this file — and until then it says so once a day rather than silently
+# doing nothing, which is how this situation arose.
 
 # The repo default is already read-only, but an org-level change would
 # silently widen every workflow. Declared here so it cannot.
 permissions:
   contents: read
 
-# Automatic schedule disabled to prevent failing runs when secrets are unset.
-# Uncomment once CRON_SECRET and PRODUCTION_URL are configured in GitHub repository secrets.
-# on:
-#   schedule:
-#     - cron: '*/15 * * * *'   # process-email-queue  — every 15 minutes
-#     - cron: '17 * * * *'     # release-escrow       — hourly, off the hour
-#     - cron: '43 */6 * * *'   # reconcile-paystack   — every 6 hours
-#     - cron: '51 */6 * * *'   # reconcile-fulfilment — every 6 hours, after it
-#     - cron: '0 3 * * *'      # gdpr-purge           — daily at 03:00 UTC
-#     - cron: '7 * * * *'      # close-export-windows — hourly, off the hour
-#     - cron: '23 * * * *'     # release-stale-reservations — hourly
-#     - cron: '13 4 * * *'     # age-notifications    — daily, after gdpr-purge
+# Automatic schedule ENABLED — #623. See the note above for how a run behaves
+# while CRON_SECRET and PRODUCTION_URL are still unset.
 on:
+  schedule:
+    - cron: '*/15 * * * *'   # process-email-queue  — every 15 minutes
+    - cron: '17 * * * *'     # release-escrow       — hourly, off the hour
+    - cron: '43 */6 * * *'   # reconcile-paystack   — every 6 hours
+    - cron: '51 */6 * * *'   # reconcile-fulfilment — every 6 hours, after it
+    - cron: '0 3 * * *'      # gdpr-purge           — daily at 03:00 UTC
+    - cron: '7 * * * *'      # close-export-windows — hourly, off the hour
+    - cron: '23 * * * *'     # release-stale-reservations — hourly
+    - cron: '13 4 * * *'     # age-notifications    — daily, after gdpr-purge
   workflow_dispatch:
     inputs:
       job:
@@ -115,11 +130,18 @@ on:
 # scheduler is most contended and delays are longest.
 
 jobs:
-  preflight:
-    name: Check required secrets
+  # Once a day, and only once, say out loud that this is not configured. A
+  # failure every fifteen minutes is a failure nobody reads; one a day is a
+  # failure somebody fixes. Rides the existing gdpr-purge schedule rather than
+  # adding a ninth cron line, which would put a name in the schedule block that
+  # is not an endpoint and break the four-list ratchet in
+  # a-job-nobody-scheduled.test.ts.
+  config-check:
+    name: Daily check that the schedule can actually work
+    if: github.event_name == 'schedule' && github.event.schedule == '0 3 * * *'
     runs-on: ubuntu-latest
     steps:
-      - name: Fail loudly if the schedule cannot work
+      - name: Fail loudly if the secrets are missing
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
@@ -133,12 +155,53 @@ jobs:
             echo "::error::PRODUCTION_URL is not set. There is nothing to call."
             missing=1
           fi
-          [ "$missing" -eq 0 ] || exit 1
-          echo "Secrets present."
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Eight scheduled jobs are not running. Set both secrets in repository settings."
+            exit 1
+          fi
+          echo "Secrets present. The schedule is live."
+
+  preflight:
+    name: Check required secrets
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Decide whether this run can do anything
+        id: check
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          missing=""
+          [ -z "$CRON_SECRET" ]    && missing="$missing CRON_SECRET"
+          [ -z "$PRODUCTION_URL" ] && missing="$missing PRODUCTION_URL"
+
+          if [ -z "$missing" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Secrets present."
+            exit 0
+          fi
+
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+
+          # A person pressed the button and is waiting for an answer. Give them
+          # a real one rather than a green tick over a job that never ran.
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "::error::Not configured — missing:$missing. Nothing was called."
+            exit 1
+          fi
+
+          # A scheduled run. Annotated and skipped, not failed: the daily
+          # config-check above is what makes this impossible to miss, and it
+          # fails once a day instead of ninety-six times.
+          echo "::warning::Not configured — missing:$missing. Skipping this run."
 
   run-job:
     name: Invoke cron endpoint
     needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Resolve which endpoint this run is for

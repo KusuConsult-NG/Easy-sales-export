@@ -127,19 +127,35 @@ describe('#616 — and the action that can refund does it for real', () => {
     });
 
     it('AND ASKS FOR THE SAME AUTHORITY THE ESCROW REFUND ASKS FOR', () => {
-        //   `finance:refund` is the obvious choice and the wrong one: it is
-        //   granted to super_admin alone and gates nothing anywhere, so using it
-        //   would have locked every ordinary administrator out of the only door
-        //   that returns this money. admin-permission-gates caught that.
-        //
-        //   Two refunds requiring different authorities is the "which answer you
-        //   get depends on which screen" defect this audit keeps finding, so this
-        //   matches _refundEscrowToBuyer exactly.
-        expect(body()).toContain('"finance:resolve_disputes"');
+        /*
+         *   #616 ASKED `finance:resolve_disputes` HERE AND SAID WHY: the
+         *   obvious choice, `finance:refund`, was granted to super_admin alone
+         *   and gated nothing anywhere, so using it would have locked every
+         *   ordinary administrator out of the only door that returns this money.
+         *   Matching _refundEscrowToBuyer mattered more — two refunds requiring
+         *   different authorities is the "which answer you get depends on which
+         *   screen" defect this audit keeps finding.
+         *
+         *   #623 FIXED THE DECLARATION INSTEAD OF WORKING AROUND IT. admin holds
+         *   `finance:refund` now and BOTH refund doors ask for it, so the pairing
+         *   this test exists to protect is intact and the permission is the one
+         *   named for the act. Same two roles pass as passed before.
+         */
+        expect(body()).toContain('"finance:refund"');
         expect(body()).not.toContain('isAdmin(session.user.roles)');
 
         const escrow = read('src/app/actions/marketplace/_escrow_actions.ts');
-        expect(escrow).toContain('"finance:resolve_disputes"');
+        expect(escrow).toContain('"finance:refund"');
+
+        //   And the pairing is asserted behaviourally, not only as two strings:
+        //   whoever can refund one way can refund the other.
+        const { hasAdminPermission } = require('@/lib/admin-permissions');
+        for (const role of ['admin', 'super_admin']) {
+            expect(hasAdminPermission([role], 'finance:refund')).toBe(true);
+        }
+        for (const role of ['moderator', 'support', 'export_admin', 'marketplace_admin']) {
+            expect(hasAdminPermission([role], 'finance:refund')).toBe(false);
+        }
     });
 
     it('AND A FAILED NOTIFICATION DOES NOT UNDO A COMPLETED REFUND', () => {
