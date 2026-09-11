@@ -1,12 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle, ArrowRight, ArrowLeft, Upload, Loader2, Trash2, FileText } from "lucide-react";
 import { useStorage } from "@/hooks/use-storage";
 
 interface InterestsStepProps {
     onNext: (data: any) => void;
     onBack: () => void;
+    /**
+     *   #627 THIS STEP DECLARED `onChange` AND NEVER CALLED IT.
+     *
+     *        Its sibling steps call it on every edit; the parent merges that
+     *        into its form state AND writes the localStorage draft. The prop was
+     *        here, in the interface, unused — so nothing this step collected
+     *        existed outside its own useState until Next was pressed.
+     *
+     *        PRESSING BACK THEREFORE THREW IT ALL AWAY. The parent renders one
+     *        step at a time from a switch, so going back UNMOUNTS this and
+     *        coming forward re-mounts it from `initialData` — which never
+     *        received the edits. Property types, budget, acreage, the uploaded
+     *        document reference: gone, with no warning, for a user who went back
+     *        to check one answer. The draft did not have them either.
+     */
     initialData?: any;
     role: "buyer" | "seller" | "both";
     onChange?: (data: any) => void;
@@ -40,7 +55,7 @@ const ACREAGE_RANGES = [
     "Over 100 acres",
 ];
 
-export default function InterestsStep({ onNext, onBack, initialData, role }: InterestsStepProps) {
+export default function InterestsStep({ onNext, onBack, onChange, initialData, role }: InterestsStepProps) {
     const isBuyer = role === "buyer" || role === "both";
     const isSeller = role === "seller" || role === "both";
     const { uploadFile, uploadState } = useStorage();
@@ -63,6 +78,18 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    /*
+     *   Reported on every change rather than inside each of the six setters:
+     *   this step has togglers for buyer types, seller types and listing types
+     *   as well as plain fields, and a copy of the call in each is six chances
+     *   for the next one to be forgotten — which is how this step came to be
+     *   the only one without it.
+     */
+    useEffect(() => {
+        onChange?.({ interests: formData });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData]);
 
     const toggleBuyerPropertyType = (type: string) => {
         setFormData((prev) => ({

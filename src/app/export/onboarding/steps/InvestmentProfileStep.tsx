@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TrendingUp, DollarSign, Target } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -18,6 +18,9 @@ interface InvestmentProfileStepProps {
 
 export function InvestmentProfileStep({
     onNext,
+    //   #627 — declared in the props and never destructured, so the call that
+    //   should have reported every edit could not even be written.
+    onChange,
     initialData,
 }: InvestmentProfileStepProps) {
     const [minInvestment, setMinInvestment] = useState(
@@ -30,6 +33,20 @@ export function InvestmentProfileStep({
     const [riskTolerance, setRiskTolerance] = useState(
         initialData?.riskTolerance || ""
     );
+
+    /*
+     *   #627 THIS TOOK `onChange` AND NEVER CALLED IT — the same loss as
+     *   farm-nation's InterestsStep, one module along, with the prop already in
+     *   place. The parent writes its draft from what onChange reports, so a user
+     *   who set an investment range and goals and then pressed Back lost every
+     *   one of them, and the draft never held them either.
+     */
+    useEffect(() => {
+        onChange?.({
+            profile: { minInvestment, maxInvestment, investmentGoals: goals, riskTolerance },
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [minInvestment, maxInvestment, goals, riskTolerance]);
     const { showToast } = useToast();
 
     const INVESTMENT_GOALS = [
