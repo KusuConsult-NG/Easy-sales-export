@@ -268,7 +268,7 @@ describe('the platform already siloed module admins — at one layer only', () =
         }
     });
 
-    it('ONLY THE SIDEBAR ENFORCES IT — the layout never did, and this says so', () => {
+    it('THE SIDEBAR DRAWS IT AND MIDDLEWARE ENFORCES IT', () => {
         /*
          *   #617 — THIS TEST WAS THE VACUITY IT WARNED ABOUT.
          *
@@ -299,12 +299,21 @@ describe('the platform already siloed module admins — at one layer only', () =
         const middleware = readFileSync(join(process.cwd(), 'src/middleware.ts'), 'utf-8');
         const sidebar = readFileSync(join(process.cwd(), 'src/components/admin/AdminSidebar.tsx'), 'utf-8');
 
-        //   The one place it is consulted, and it decides visibility only.
+        //   #618 CLOSED IT. Middleware asks `adminSiloRedirect` about the
+        //   request's own pathname, so the rule now decides what may be OPENED
+        //   and not merely what is drawn. The layout still does not — and
+        //   deliberately: it is not given a pathname, which is why its attempt
+        //   read `x-invoke-path` and never worked.
+        //
+        //   THE DECISION IS BEHIND A NAMED FUNCTION, exercised against known
+        //   roles and routes in a-silo-that-only-hid-the-links. What is asserted
+        //   HERE is only that the middleware reaches it — a string in this file
+        //   pins a phrase, not a behaviour, which is the lesson #618 learned
+        //   when `const isAnyAdmin = true` survived a mutation of its inline
+        //   predecessor.
         expect(sidebar).toContain('canAccessAdminRoute(roles, item.href)');
-
-        //   And the two places that would make it a guard, where it is absent.
+        expect(middleware).toContain('adminSiloRedirect(req.auth?.user?.roles, pathname)');
         expect(shell).not.toContain('canAccessAdminRoute');
-        expect(middleware).not.toContain('canAccessAdminRoute');
     });
 
     it('so the permission gates now agree with the routes, rather than inventing a rule', () => {

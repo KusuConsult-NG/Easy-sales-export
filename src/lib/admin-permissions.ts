@@ -632,6 +632,70 @@ export function requireAdminPermission(
 }
 
 /**
+ * Where a refused admin lands.
+ *
+ * Named because two files have to agree on it: the middleware redirects here,
+ * and canAccessAdminRoute has to allow it. When they disagree the result is not
+ * a wrong page, it is an infinite redirect.
+ */
+export const ADMIN_REFUSAL_LANDING = "/admin";
+
+/**
+ * The whole admin-silo decision for one request: the path to redirect to, or
+ * null to let it through.
+ *
+ *   #618 THIS IS A FUNCTION BECAUSE THE MIDDLEWARE IS NOT TESTABLE AND THIS IS.
+ *
+ *        The decision lived inline in middleware.ts, asserted by reading the
+ *        file and matching strings. Mutation testing showed exactly what that
+ *        is worth: `const isAnyAdmin = true` and `if (false && isAnyAdmin &&
+ *        ...)` BOTH SURVIVED, because the assertion pinned the variable name
+ *        and the mutants left the name alone. An assertion that a file contains
+ *        a phrase constrains the phrase, not the behaviour.
+ *
+ *        Exercised against known roles and known paths instead, every one of
+ *        those mutants dies. This is the same repair this audit has had to make
+ *        to its own tests four times: turn the assertion into a named function
+ *        and ask it questions with known answers.
+ *
+ *   THE FOUR WAYS IT RETURNS null ARE EACH DELIBERATE:
+ *
+ *     not an /admin path      nothing to silo.
+ *     not an admin at all     AdminShell refuses them, and answering here too
+ *                             would be two copies of one contract.
+ *     the rule allows it      the ordinary case.
+ *     the rule ALSO refuses   the landing page — so redirecting would loop. Let
+ *                             the request through; AdminShell is still there.
+ */
+export function adminSiloRedirect(
+    userRoles: string[] | undefined,
+    pathname: string,
+    /*
+     *   THE RULE IS A PARAMETER SO THE LOOP GUARD BELOW CAN BE EXERCISED.
+     *
+     *   Every admin role is allowed the landing page today, which is what makes
+     *   the last line unreachable — and a line that cannot run is a line that
+     *   cannot be tested. Mutation testing said so plainly: deleting the loop
+     *   guard changed no answer this rule can currently produce, so the mutant
+     *   survived a sweep of all ten roles over fourteen routes.
+     *
+     *   Deleting it instead would be the wrong read. It is not redundant, it is
+     *   REDUNDANT TODAY — it stops being so the moment somebody narrows the
+     *   landing page, and the failure it prevents is not a wrong page but every
+     *   admin of that role locked out of the whole portal. Defaulted, so no
+     *   caller passes it and nothing about production changes; a test can hand
+     *   in a rule that refuses everything and watch the guard work.
+     */
+    rule: (roles: string[] | undefined, route: string) => boolean = canAccessAdminRoute
+): string | null {
+    if (!pathname.startsWith("/admin")) return null;
+    if (!isAdmin(userRoles)) return null;
+    if (rule(userRoles, pathname)) return null;
+    if (!rule(userRoles, ADMIN_REFUSAL_LANDING)) return null;
+    return ADMIN_REFUSAL_LANDING;
+}
+
+/**
  * Check if user can access admin route based on role
  */
 export function canAccessAdminRoute(
@@ -641,6 +705,33 @@ export function canAccessAdminRoute(
     // Super admins have universal access to all admin routes
     if (isSuperAdmin(userRoles)) {
         return true;
+    }
+
+    /*
+     *   #618 THE BASE DASHBOARD IS REACHABLE BY EVERY ADMIN.
+     *
+     *   This allowance used to live inside the module-admin branch below, with
+     *   the reason written beside it: "Allow access to base dashboard so they
+     *   don't think the system is broken." Sound, and it reached six of the ten
+     *   admin roles. `moderator` and `support` fell through to the default
+     *   branch — `r === "admin" || r === "super_admin"` — which is one more
+     *   copy of the narrow hand-written test #356 swept out of six files, and
+     *   it answered NO for two roles that isAdmin() calls admins.
+     *
+     *   While the rule only decided which SIDEBAR LINKS to draw, that cost a
+     *   moderator the Dashboard link on a page they could still open. #618
+     *   makes the rule decide what may be OPENED, and a refusal lands on
+     *   /admin — so the same disagreement becomes an infinite redirect between
+     *   two refusals, locking both roles out of the entire portal.
+     *
+     *   Stated honestly, because it is a widening: moderator and support now
+     *   see the Dashboard link. They could always open the page — nothing
+     *   enforced this rule anywhere — so this makes the sidebar agree with what
+     *   was already true rather than granting new reach. Every OTHER route
+     *   keeps the answer it gave before.
+     */
+    if (route === "/admin" || route === "/admin/dashboard") {
+        return isAdmin(userRoles);
     }
 
     // Super admin routes (only super_admin)
@@ -707,10 +798,13 @@ export function canAccessAdminRoute(
         if (isExportAdmin && route.startsWith("/admin/export")) return true;
         if (isFarmAdmin && route.startsWith("/admin/farm-nation")) return true;
         if (isAcadAdmin && route.startsWith("/admin/academy")) return true;
-        
-        // Allow access to base dashboard so they don't think the system is broken
-        if (route === "/admin" || route === "/admin/dashboard") return true;
-        
+
+        //   The base-dashboard allowance that used to sit here has moved to the
+        //   top of the function, where it reaches all ten admin roles instead of
+        //   these six — see #618 there. Left as a comment and not as an
+        //   unreachable `if`: a dead branch is the thing somebody edits believing
+        //   it still decides something.
+
         return false; // Strictly block from Analytics, Audit Logs, and Content Approval
     }
 

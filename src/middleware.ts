@@ -25,6 +25,7 @@ const { auth } = NextAuth(authConfig);
 
 import { HUB_MODULES } from "@/config/modules.config";
 import { canonicalHostFor } from "@/lib/canonical-host";
+import { adminSiloRedirect } from "@/lib/admin-permissions";
 
 // Derive maps from HUB_MODULES
 const DOMAIN_MAP: Record<string, string> = Object.values(HUB_MODULES).reduce((acc, mod) => {
@@ -123,6 +124,74 @@ const authMiddleware = auth((req: any) => {
         const loginUrl = new URL(targetPath, req.nextUrl.origin);
         loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
         return NextResponse.redirect(loginUrl);
+    }
+
+    /*
+     * ── 1.15. ADMIN ROUTE ISOLATION ────────────────────────────────────
+     *
+     *   #618 THE MODULE-ADMIN SILO WAS A NAVIGATION CONVENIENCE, NOT A GUARD.
+     *
+     *   `canAccessAdminRoute` implements strict silo isolation — a
+     *   cooperative_admin reaches /admin/cooperatives and nothing else — and
+     *   until now it was consulted in EXACTLY ONE PLACE: AdminSidebar, to decide
+     *   which links to draw. Nothing consulted it to decide what could be
+     *   OPENED. Typing the URL was enough.
+     *
+     *   admin/layout.tsx imported it, computed a pathname to pass it, and never
+     *   called it. A test named "and both the layout and the sidebar enforce it"
+     *   asserted only that the layout CONTAINED the string, so an import-level
+     *   assertion passed against a door that enforced nothing. #617 removed the
+     *   dead import while extracting the layout, which is how this surfaced.
+     *
+     *   Three API routes made it worse by delegating their own authorisation to
+     *   it in comments — "canAccessAdminRoute already silos these people by
+     *   module at the route layer" — which was never true of any layer.
+     *
+     *   MIDDLEWARE IS THE RIGHT LAYER, and the reason the check was never wired
+     *   is visible in what the layout had to do to attempt it: an App Router
+     *   layout is not given the pathname and was reading `x-invoke-path`, a
+     *   framework internal. Middleware is handed `req.nextUrl.pathname` as a
+     *   matter of course.
+     *
+     *   WHAT THIS DOES NOT DO. It does not decide whether somebody is an admin
+     *   at all — AdminShell already refuses everyone `isAdmin` rejects, and
+     *   duplicating that here would be two copies of one contract. This answers
+     *   only the narrower question the silo asks: this IS an admin, may they be
+     *   on THIS admin route. A refusal lands on /admin, which the rule allows
+     *   module admins precisely "so they don't think the system is broken" —
+     *   ejecting them to /dashboard would look like the portal rejecting them.
+     *
+     *   AND IT DOES NOT COVER /loans/approve, the one admin screen outside
+     *   /admin. That path is not in canAccessAdminRoute's vocabulary, so it
+     *   would fall to the default branch and refuse a cooperative_admin — while
+     *   the sidebar shows them the link, because they hold
+     *   cooperatives:approve_loans. Extending the rule to cover it is a decision
+     *   about who may approve a business loan, not a defect to fix in passing,
+     *   so that screen keeps AdminShell's isAdmin check and this says so rather
+     *   than quietly inventing a policy.
+     */
+    if (isLoggedIn) {
+        /*
+         *   #356's RATCHET CAUGHT MY FIRST DRAFT OF THIS, and it was right to.
+         *   I had written the admin test out by hand — `r === "admin" || r ===
+         *   "super_admin" || r.endsWith("_admin") || r === "moderator" || r ===
+         *   "support"` — the SEVENTH copy of the shape #356 swept out of six
+         *   files, suffix and all. It then went further wrong: that draft would
+         *   have bounced `moderator` and `support` between two refusals for
+         *   ever, because both are admins by isAdmin and neither was allowed
+         *   the page the refusal redirects to.
+         *
+         *   THE DECISION IS A FUNCTION, NOT FIVE LINES HERE, because middleware
+         *   cannot be exercised in a test and a function can. The version that
+         *   lived inline was asserted by matching strings in this file, and
+         *   mutation testing showed what that was worth: `const isAnyAdmin =
+         *   true` and `if (false && ...)` both survived, since the assertions
+         *   pinned a variable name the mutants left alone.
+         */
+        const siloRedirect = adminSiloRedirect(req.auth?.user?.roles, pathname);
+        if (siloRedirect) {
+            return NextResponse.redirect(new URL(siloRedirect, req.nextUrl.origin));
+        }
     }
 
     // ── 1.2. Gender-based WAVE Program Restriction ─────────────────────
