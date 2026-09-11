@@ -10,20 +10,58 @@ interface SellerPageProps {
     params: Promise<{ sellerId: string }>;
 }
 
-async function fetchSellerData(sellerId: string) {
+/**
+ *   #621 A SELLER'S SHOP SAID "NOT FOUND" WHENEVER THE READ FAILED.
+ *
+ *        The endpoint behind this page is careful: 404 when the seller does not
+ *        exist, 400 for a bad id, 500 when something broke. This page collapsed
+ *        all three into `return null`, and `null` meant `notFound()`.
+ *
+ *        So a transient failure took a real seller's public storefront off the
+ *        air with "This page could not be found" — and because notFound() sets
+ *        an HTTP 404, a crawler following that link is told the shop is
+ *        permanently GONE, while a 5xx would simply be retried. The shop can be
+ *        de-indexed by a database blip.
+ *
+ *        #514 SETTLED THIS EXACT PRINCIPLE ON THIS EXACT PAGE — "an absence is
+ *        not a fact. Where it is unknown this page says so" — for `products`
+ *        and `reviews`, whose nulls it carefully keeps apart from empty lists.
+ *        It did not apply it to the read of the SELLER, one level up. The fix
+ *        reached the inner doors and not the outer one.
+ */
+type SellerFetch =
+    | { status: "ok"; data: any }
+    | { status: "not_found" }
+    | { status: "unreadable"; reason: string };
+
+async function fetchSellerData(sellerId: string): Promise<SellerFetch> {
     const port = process.env.PORT || "3000";
     const baseUrl = `http://127.0.0.1:${port}`;
-    const res = await fetch(`${baseUrl}/api/marketplace/sellers/${sellerId}`, {
-        next: { revalidate: 60 },
-    });
-    if (!res.ok) return null;
-    return res.json();
+    try {
+        const res = await fetch(`${baseUrl}/api/marketplace/sellers/${sellerId}`, {
+            next: { revalidate: 60 },
+        });
+        //   The ONLY status that means "there is no such seller".
+        if (res.status === 404) return { status: "not_found" };
+        if (!res.ok) return { status: "unreadable", reason: `HTTP ${res.status}` };
+        return { status: "ok", data: await res.json() };
+    } catch (error) {
+        //   A refused connection or a timeout is the least knowable outcome of
+        //   all, and was previously the one that propagated as a raw crash.
+        return { status: "unreadable", reason: error instanceof Error ? error.message : "request failed" };
+    }
 }
 
 export async function generateMetadata({ params }: SellerPageProps) {
     const { sellerId } = await params;
-    const data = await fetchSellerData(sellerId);
-    if (!data) return { title: "Seller not found | Easy Sales Export" };
+    const result = await fetchSellerData(sellerId);
+
+    //   Metadata must never throw — a failure here would take down a page that
+    //   is otherwise able to render. It reports the same three outcomes.
+    if (result.status === "not_found") return { title: "Seller not found | Easy Sales Export" };
+    if (result.status === "unreadable") return { title: "Seller unavailable | Easy Sales Export" };
+
+    const { data } = result;
     return {
         title: `${data.seller.businessName} | Easy Sales Export`,
         description: data.seller.businessDescription || `Browse products from ${data.seller.businessName} on Easy Sales Export.`,
@@ -32,10 +70,26 @@ export async function generateMetadata({ params }: SellerPageProps) {
 
 export default async function SellerStorefrontPage({ params }: SellerPageProps) {
     const { sellerId } = await params;
-    const data = await fetchSellerData(sellerId);
+    const result = await fetchSellerData(sellerId);
 
-    if (!data) notFound();
+    //   A real answer: this seller does not exist. 404 is correct and permanent.
+    if (result.status === "not_found") notFound();
 
+    if (result.status === "unreadable") {
+        /*
+         *   THROWN, NOT RENDERED, AND THE HTTP STATUS IS THE REASON.
+         *
+         *   marketplace/error.tsx catches this and shows the module's own error
+         *   screen, and Next serves it as a 5xx — which is what a shop that
+         *   might be back in a minute must return. A friendly panel rendered at
+         *   200 would tell a crawler the page is fine and this IS the content;
+         *   notFound() tells it the shop is gone. Both are lies about a seller
+         *   who is trading.
+         */
+        throw new Error(`Seller storefront could not be read (${result.reason})`);
+    }
+
+    const data = result.data;
     const { seller } = data;
 
     /**
