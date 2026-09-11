@@ -83,6 +83,33 @@ export async function validateCartItems(clientItems: CartItem[]): Promise<{ subt
     let subtotal = 0;
     const validatedItems = [];
 
+    /**
+     *   #652 HOW MUCH OF EACH PRODUCT THIS CART ASKS FOR, ACROSS ALL ITS LINES.
+     *
+     *   #647's stock check compared each LINE against the stock, which is the
+     *   same mistake decrement_many_or_fail was making one layer down: two
+     *   lines of three against a stock of five passed twice, and six units left
+     *   a shelf holding five.
+     *
+     *   Migration 035 is the real guard and it aggregates now, so the money is
+     *   safe either way. This exists so the member is told BEFORE they are sent
+     *   to Paystack, which is the whole point of #647's check — being refused
+     *   at the reservation after paying is the outcome that costs a refund.
+     *
+     *   Keyed by collection as well as id, because a flash-sale row and a
+     *   product row are different documents that may share an id.
+     */
+    const requested = new Map<string, number>();
+    for (const item of clientItems) {
+        const col = item.isFlashSale === true
+            ? COLLECTIONS.FLASH_SALE_PRODUCTS
+            : COLLECTIONS.PRODUCTS;
+        const quantity = Number(item.quantity);
+        if (!Number.isInteger(quantity) || quantity <= 0) continue;
+        const key = `${col}:${item.id}`;
+        requested.set(key, (requested.get(key) ?? 0) + quantity);
+    }
+
     for (const item of clientItems) {
         const isFlashSale = item.isFlashSale === true;
         const col = isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
@@ -171,8 +198,10 @@ export async function validateCartItems(clientItems: CartItem[]): Promise<{ subt
          *   This catches the ordinary case, where refusing costs nobody
          *   anything.
          */
+        //   #652 — the WHOLE cart's demand for this product, not this line's.
+        const wanted = requested.get(`${col}:${item.id}`) ?? quantity;
         const stock = stockOf(productData);
-        if (stock !== null && quantity > stock) {
+        if (stock !== null && wanted > stock) {
             throw new Error(
                 stock <= 0
                     ? `${productName} is out of stock`

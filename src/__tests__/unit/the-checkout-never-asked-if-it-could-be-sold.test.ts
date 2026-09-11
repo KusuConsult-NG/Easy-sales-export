@@ -313,6 +313,71 @@ describe('#647 — and it is refused BEFORE the charge when there is not enough'
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#652 — and the cart is asked as a whole, not a line at a time', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSession(BUYER);
+        mockInitPaystack.mockResolvedValue({
+            status: true, data: { authorization_url: 'https://pay', reference: 'ref-1' },
+        });
+    });
+
+    it('TWO LINES FOR ONE PRODUCT ARE REFUSED WHEN THEIR TOTAL EXCEEDS THE STOCK', async () => {
+        /*
+         *   #647's check — mine — compared each LINE against the stock, which is
+         *   exactly the mistake decrement_many_or_fail was making one layer
+         *   down: two lines of three against a stock of five passed twice, and
+         *   six units left a shelf holding five.
+         *
+         *   Migration 035 is the real guard and refuses this now whatever the
+         *   cart does. This is the half that matters to the member: refused
+         *   BEFORE Paystack rather than after the money moved, which is the
+         *   entire reason #647's check exists.
+         */
+        setProduct({ ...SELLABLE, availableQuantity: 5 });
+
+        const r: any = await checkout([
+            { id: PRODUCT, title: 'Cocoa', quantity: 3, unit: 'kg', selectedTier: 'retail', sellerId: SELLER },
+            { id: PRODUCT, title: 'Cocoa', quantity: 3, unit: 'kg', selectedTier: 'retail', sellerId: SELLER },
+        ]);
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/only 5/i);
+        expect(mockInitPaystack).not.toHaveBeenCalled();
+    });
+
+    it('AND ALLOWED WHEN THE TOTAL FITS — the control', async () => {
+        //   A check that refused any repeated product would pass the case above
+        //   and stop a legitimate two-line cart buying anything at all.
+        setProduct({ ...SELLABLE, availableQuantity: 5 });
+
+        const r: any = await checkout([
+            { id: PRODUCT, title: 'Cocoa', quantity: 2, unit: 'kg', selectedTier: 'retail', sellerId: SELLER },
+            { id: PRODUCT, title: 'Cocoa', quantity: 2, unit: 'kg', selectedTier: 'retail', sellerId: SELLER },
+        ]);
+
+        expect(r.success).toBe(true);
+    });
+
+    it('AND THE REAL GUARD SUMS PER ROW TOO — migration 035', () => {
+        /*
+         *   The cart check is a courtesy; the SQL is the guarantee, because
+         *   three other doors reach the reservation without passing through
+         *   this function at all. Its proof is executed against a real
+         *   PostgreSQL in __tests__/pg/the-guard-against-overselling-oversold.
+         */
+        const sql = readFileSync(
+            join(ROOT, 'supabase/migrations/035_decrement_many_or_fail_aggregates_duplicates.sql'),
+            'utf8',
+        );
+        expect(sql).toContain('SUM((value ->> \'amount\')::numeric)');
+        expect((sql.match(/GROUP BY 1, 2, 3/g) ?? []).length).toBe(2);
+        //   And the lock order that stops two orders deadlocking is still there.
+        expect(sql).toContain('ORDER BY 2');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('#647 — visible and sellable are two different questions', () => {
     it('out_of_stock IS VISIBLE NOW, AND IS NOT SELLABLE', () => {
         /*

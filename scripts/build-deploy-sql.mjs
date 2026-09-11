@@ -163,6 +163,22 @@ const EXPECTED = [
              "code without this leaves the dashboard exactly as it was, because it " +
              "reads the RPC. CREATE OR REPLACE over 029, transaction-safe.",
     },
+    {
+        n: "035",
+        why: "decrement_many_or_fail, AGGREGATING DUPLICATES — #652. The guard " +
+             "against overselling oversold: pass 1 compared each LINE against the " +
+             "undecremented value, so two lines of 3 against a stock of 5 both " +
+             "passed and pass 2 subtracted 3 twice — ok: true, stock -1, measured " +
+             "against a real PostgreSQL. Every caller maps order lines to " +
+             "decrement items one for one and nothing between the cart and the " +
+             "function merges them. Amounts are summed per row before anything is " +
+             "locked; the id-order locking that stops concurrent orders " +
+             "deadlocking is unchanged. CREATE OR REPLACE over 015, " +
+             "transaction-safe, and it takes effect the moment it is applied — " +
+             "the code needs no change to benefit, though marketplace-cart.ts " +
+             "aggregates too so a member is refused before Paystack rather than " +
+             "after.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

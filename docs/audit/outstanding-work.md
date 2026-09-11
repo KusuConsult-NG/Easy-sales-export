@@ -1,19 +1,19 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`79ae414e`, `77bdf37c` and now at `1fb946fd`.** Every line below was checked against the
+`77bdf37c`, `1fb946fd` and now at `f686d529`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 704 suites / 12,837 tests green.** The
-version before this one said 12,829 across 703.
+**Gate at this revision: build clean, 704 suites / 12,840 tests green.** The
+version before this one said 12,837 across 704.
 
 **And the Postgres suites were run for real** against PostgreSQL 16 with the
-schema and all 33 migrations (#651): 10 suites, 126 passed, 23 skipped for want
-of a PostgREST. `money-functions` and `fake-db-matches-postgres` both pass. A status document that
+schema and all 34 migrations: 11 suites, 137 passed, 23 skipped for want of a
+PostgREST. `money-functions` and `fake-db-matches-postgres` both pass. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
 
@@ -271,6 +271,46 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#652) The guard against overselling oversold
+
+`decrement_many_or_fail` is the single thing standing between two buyers and the
+last unit of stock. Every marketplace purchase door reserves through it, and so
+do the export catalogue and `actions/orders.ts`.
+
+**It was tested by nothing.** `money-functions.test.ts` proves six SQL functions
+and this is not among them; the db-integration suites cover `claim_payment_once`
+and the bounded counters, not this. Every unit suite that touches it **mocks**
+it — including the two I wrote for #647 and #649.
+
+**And it oversold whenever one call named the same row twice.** Pass 1 compared
+each *line* against the undecremented value, so two lines of 3 against a stock of
+5 both passed — 3 ≤ 5, twice — and pass 2 subtracted 3 twice:
+
+```
+stock 5, two lines of 3   ->   ok: true, stock: -1
+```
+
+Measured against a real PostgreSQL 16, not reasoned about. Six units off a shelf
+holding five, reported as **success**, so the order completes, escrow is written
+and the seller is credited for goods they cannot ship. Every caller maps order
+lines to decrement items one for one and nothing between the cart and the
+function merges them; `negative-price-cart.test.ts` already exercises a two-line
+cart for one product, so the shape is not hypothetical.
+
+Migration **035** sums the amounts per row before anything is locked. The
+id-order locking that stops concurrent orders deadlocking is unchanged, and a
+non-positive amount now raises before the first row is held rather than
+part-way through. Eleven executed cases now cover the function, including the
+two-buyers race and the opposite-order deadlock case — neither of which anything
+had ever demonstrated.
+
+⚠️ **#647's cart check had the same blind spot, and it was mine.** The pre-charge
+stock check I added three findings ago compared each cart *line* against the
+stock — precisely the mistake the SQL was making one layer down. It aggregates
+per product now. The same error was made independently in SQL and in TypeScript,
+by different people, years apart, because *"check each item can afford it"* reads
+as complete and is not.
 
 ### ✅ (#651) The suite holding the money layer's concurrency proofs ran nowhere
 
