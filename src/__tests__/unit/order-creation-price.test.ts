@@ -86,6 +86,10 @@ function setProduct(tierPrice: number | undefined, extra: Record<string, any> = 
     const data = {
         title: 'Cocoa Beans',
         sellerId: SELLER,
+        //   #647 — the purchase doors read the status now and refuse anything
+        //   that is not sellable. These fixtures predate that and carried none,
+        //   which is a row no catalogue query has ever been able to serve.
+        status: 'active',
         availableQuantity: 500,
         pricingTiers: tierPrice === undefined
             ? [{ type: 'retail', minQuantity: 1 }]

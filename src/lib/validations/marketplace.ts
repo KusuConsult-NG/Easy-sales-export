@@ -2,6 +2,7 @@ import { z } from "zod";
 import { OFFLINE_CHECKOUT_METHODS } from "@/lib/offline-checkout";
 import { PRODUCT_CATEGORY_ALIASES } from "@/lib/product-search";
 import { nationalIdField } from '@/lib/kyc-validators';
+import { PRODUCT_STATUSES } from "@/lib/product-status";
 
 /**
  * Marketplace Zod Schemas
@@ -110,7 +111,23 @@ export const ProductSchema = z.object({
      * two-writers-disagree shape as the status defect.)
      */
     certifications: z.array(z.string()).default([]),
-    status: z.enum(["draft", "active", "suspended", "out_of_stock", "deleted", "pending", "rejected"]).default("draft"),
+    /**
+     *   #647 THIS WAS THE THIRD HAND-WRITTEN COPY OF ONE VOCABULARY, AND THE
+     *        COPIES HAD ALREADY DRIFTED.
+     *
+     *        lib/product-status declares PRODUCT_STATUSES; this enum restated
+     *        it; and both product-delete doors write a value that appears in
+     *        NEITHER — `archived`.
+     *
+     *        The consequence was not theoretical. LenientProductSchema heals a
+     *        row that fails a field by falling back to its DEFAULT, so an
+     *        archived product reached every screen calling itself a DRAFT, and
+     *        the seller's products page — `configs[status] || configs.active` —
+     *        labelled a deleted listing "Active".
+     *
+     *        Derived now. One list, in the file named after it.
+     */
+    status: z.enum(PRODUCT_STATUSES).default("draft"),
     bulkAvailable: z.boolean().default(false),
     exportReady: z.boolean().default(false),
     views: z.number().default(0),

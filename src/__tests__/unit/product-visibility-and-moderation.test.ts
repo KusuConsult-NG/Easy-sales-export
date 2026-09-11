@@ -99,7 +99,14 @@ describe('one initial status for both creators', () => {
     });
 
     it('buyer-facing readers agree on what visible means', () => {
-        expect([...PRODUCT_VISIBLE_STATUSES]).toEqual(['active']);
+        /*
+         *   #647 — this asserted `['active']` exactly. out_of_stock joined it
+         *   when the checkout learned to refuse a listing it cannot sell; the
+         *   pair had to land together and did. Visible is no longer the same
+         *   question as sellable, and PRODUCT_SELLABLE_STATUSES is the one a
+         *   purchase asks — see the-checkout-never-asked-if-it-could-be-sold.
+         */
+        expect([...PRODUCT_VISIBLE_STATUSES]).toEqual(['active', 'out_of_stock']);
         expect(isVisibleProductStatus('pending')).toBe(false);
         expect(isVisibleProductStatus('draft')).toBe(false);
         expect(isVisibleProductStatus('suspended')).toBe(false);

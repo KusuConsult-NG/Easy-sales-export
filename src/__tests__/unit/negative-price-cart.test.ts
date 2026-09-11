@@ -104,8 +104,18 @@ function setSession(id: string, roles: string[] = []) {
     }));
 }
 
-/** One product in the database, at whatever price the test needs. */
-function setProduct(data: Record<string, any>) {
+/**
+ * One product in the database, at whatever price the test needs.
+ *
+ *   #647 — `status: "active"` is the DEFAULT here rather than written into each
+ *   case. validateCartItems reads the status now and refuses anything that is
+ *   not sellable, and these fixtures predate that: they modelled a row with no
+ *   status at all, which no catalogue query has ever been able to serve, so no
+ *   buyer could have had one in a cart. A case that wants a different status
+ *   passes one and it wins.
+ */
+function setProduct(input: Record<string, any>) {
+    const data = { status: 'active', ...input };
     const snap = {
         exists: true, empty: false,
         docs: [{ id: PRODUCT, ref: { id: PRODUCT }, data: () => data }],

@@ -1,15 +1,15 @@
 # Outstanding work
 
-**Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5` and now
-at `a3d179d5`.** Every line below was checked against the tree, not carried
-forward.
+**Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
+`a3d179d5` and now at `54589818`.** Every line below was checked against the
+tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 696 suites / 12,704 tests green.** The
-version before this one said 12,474 across 680. A status document that
+**Gate at this revision: build clean, 700 suites / 12,774 tests green.** The
+version before this one said 12,704 across 696. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
 
@@ -192,17 +192,49 @@ Nothing is deleted — the intent to write those pages is real — but a resourc
 with no destination is now plain text marked "Coming soon", with no anchor for a
 keyboard to land on and then ignore.
 
-### ☐ `out_of_stock` presentation
+### ✅ (#647) `out_of_stock` presentation — both halves landed, and the checkout
+### turned out to be worse than the latent problem
 
-A product with this status currently vanishes from the marketplace instead of
-showing as unavailable. **Nothing writes the status today**, so it is latent and
-harmless.
+The open item asked for one line in `PRODUCT_VISIBLE_STATUSES` plus a card and a
+checkout that refuse the purchase. Building the second half is what found the
+live defect underneath it.
 
-✅ #624 made the visibility rule real, so finishing this is now one line in
-`PRODUCT_VISIBLE_STATUSES` **plus** the card and checkout saying "out of stock"
-and refusing the purchase. Both halves must land together: adding the status
-alone would make an unfulfillable listing *purchasable*, which is worse than
-hiding it, and it moves money.
+`validateCartItems` — the function **every** marketplace purchase passes through
+— read the product document to take the price from it and **never looked at the
+status or the stock**. So:
+
+| written by | status | was it purchasable? |
+|---|---|---|
+| admin review screen | `suspended`, `rejected` | yes |
+| both seller-delete doors | `archived` | yes |
+| a seller pulling a flash item | `removed` | yes |
+
+Not a theoretical endpoint: the cart lives in `localStorage` and is never
+re-read against the database, and `/marketplace/products/<id>` serves any id
+whatever its status — the seller's own edit screen shares that read — so a
+shared link kept selling a listing an admin had pulled. The flash branch of that
+read built its product with a **hard-coded `status: "active"`**, so a removed
+flash row arrived at the page as a live one.
+
+And the stock half is #582 in the module that never got it. The export cart
+refuses before charging; the marketplace's Paystack door reserved stock *after*
+the money moved and wrote `paid_awaiting_refund` when it came up short — under a
+message saying the item "sold out before your payment completed", which
+describes a race. Nothing raced: the checkout stepper enforces a minimum and no
+maximum, so 500 against 3 in stock went straight through to Paystack.
+
+Fixed: an **allow-list** — `PRODUCT_SELLABLE_STATUSES` — consulted by all four
+purchase doors before anything is charged, and a pre-charge stock check that
+treats an unrecorded quantity as untracked rather than as zero. `archived` is
+declared (two doors wrote a status neither list knew), `ProductSchema` derives
+its enum from `PRODUCT_STATUSES` instead of restating it, and the detail page
+tells a member a listing is unavailable instead of offering Add to Cart.
+
+`out_of_stock` is in the visible list now and not in the sellable one, which is
+exactly the pair #624 said had to land together. The presentation was already
+written — all three cards and the detail page test for it — and could never
+fire, because every query that might have produced such a row filtered it out
+first.
 
 ---
 

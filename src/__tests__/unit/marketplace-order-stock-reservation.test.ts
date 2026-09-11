@@ -96,6 +96,9 @@ function setDocs(overrides: Record<string, any> = {}) {
             pricingTiers: [{ type: 'retail', price: 1000 }],
             availableQuantity: 40,
             allowsPaymentOnDelivery: true,
+            //   #647 — validateCartItems reads the status now. See the note on
+            //   the same change in order-creation-price.test.ts.
+            status: 'active',
             ...overrides,
         }),
     };

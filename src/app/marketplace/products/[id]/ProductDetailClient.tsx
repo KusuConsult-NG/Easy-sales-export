@@ -14,6 +14,7 @@ import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 import { firstImageSrc } from "@/lib/first-image";
+import { isSellableProductStatus } from "@/lib/product-status";
 
 export default function ProductDetailClient({ initial = null }: {
     /**
@@ -145,6 +146,28 @@ export default function ProductDetailClient({ initial = null }: {
     }
 
     const isFS = (product as any).isFlashSale === true;
+
+    /**
+     *   #647 THIS PAGE OFFERED "ADD TO CART" ON A LISTING THAT HAD BEEN PULLED.
+     *
+     *   The three conditions below all tested `status === "out_of_stock"` alone
+     *   — a status nothing has ever written — while the read behind this page
+     *   serves a product BY ID whatever its state, because the seller's own edit
+     *   screen shares that read and needs their suspended listing back.
+     *
+     *   So an admin suspending a counterfeit listing removed it from the browse
+     *   results and left this page selling it to anyone holding the link. The
+     *   checkout refuses it now; this is the other half — a member should be
+     *   told before they get there, not after.
+     *
+     *   The two reasons are kept apart deliberately. "Out of stock" invites
+     *   coming back later, which is true of a sold-out listing and false of a
+     *   withdrawn one.
+     */
+    const notForSale = !isSellableProductStatus(product.status);
+    const soldOut = !notForSale && (product.availableQuantity === 0 || product.status === "out_of_stock");
+    const cannotBuy = notForSale || soldOut;
+
     const allImages = product.images && product.images.length > 0 ? product.images : ["/images/placeholder-product.jpg"];
     const mainImage = allImages[selectedImageIndex] || allImages[0];
     // #442. The ternary above already proves the array is non-empty, so this
@@ -327,7 +350,12 @@ export default function ProductDetailClient({ initial = null }: {
                         </div>
 
                         {/* CTA Buttons */}
-                        {product.availableQuantity === 0 || product.status === "out_of_stock" ? (
+                        {notForSale ? (
+                            <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl font-bold flex items-center gap-2 mb-6">
+                                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                                <span>This listing is no longer available for purchase.</span>
+                            </div>
+                        ) : soldOut ? (
                             <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl font-bold flex items-center gap-2 mb-6">
                                 <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
                                 <span>This product is currently out of stock.</span>
@@ -342,7 +370,7 @@ export default function ProductDetailClient({ initial = null }: {
                         <div className="flex flex-col sm:flex-row gap-4">
                             <button 
                                 onClick={handleAddToCart}
-                                disabled={isAddingToCart || product.availableQuantity === 0 || product.status === "out_of_stock"}
+                                disabled={isAddingToCart || cannotBuy}
                                 className={`flex-1 flex items-center justify-center gap-2 px-8 py-4 text-white font-bold text-lg rounded-xl transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${
                                     isFS
                                         ? "bg-red-600 hover:bg-red-700 shadow-red-600/10"
@@ -354,7 +382,7 @@ export default function ProductDetailClient({ initial = null }: {
                                 ) : (
                                     <ShoppingCart className="w-5 h-5" />
                                 )}
-                                {isAddingToCart ? "Adding..." : (product.availableQuantity === 0 || product.status === "out_of_stock") ? "Out of Stock" : isFS ? "Buy Flash Deal" : "Add to Cart"}
+                                {isAddingToCart ? "Adding..." : notForSale ? "Unavailable" : soldOut ? "Out of Stock" : isFS ? "Buy Flash Deal" : "Add to Cart"}
                             </button>
                             <button 
                                 onClick={() => setShowQuoteModal(true)}

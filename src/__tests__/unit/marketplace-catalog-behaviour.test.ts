@@ -192,6 +192,11 @@ describe('a single product page', () => {
             flashPrice: 3500,
             availableQuantity: 10,
             unit: 'bag',
+            //   #647 — every flash row carries a status: addFlashSaleProductAction
+            //   writes "active" and removeFlashSaleProductAction writes "removed".
+            //   These fixtures predate the read consulting it, and a row with none
+            //   was never servable by any other flash read either.
+            status: 'active',
         });
 
         const { getProductByIdAction } = await actions();
@@ -210,7 +215,30 @@ describe('the flash-sale mapping', () => {
             title: 'Flash Maize',
             flashPrice: 3500,
             availableQuantity: 10,
+            status: 'active',
         });
+    });
+
+    it('#647 AND A ROW THE SELLER HAS REMOVED IS NOT SERVED AT ALL', async () => {
+        /*
+         *   The mapping below built its product with a hard-coded
+         *   `status: "active"`, so a removed flash-sale row reached the public
+         *   page as a live listing — Add to Cart enabled, and a checkout that
+         *   did not read the status either.
+         *
+         *   Every other read of this collection already filtered on
+         *   `status == "active"`. This was the one door that did not.
+         */
+        store.seed(COLLECTIONS.FLASH_SALE_PRODUCTS, 'flash-gone', {
+            sellerId: 'seller-1', title: 'Pulled Maize',
+            flashPrice: 3500, availableQuantity: 10, status: 'removed',
+        });
+
+        const { getProductByIdAction } = await actions();
+        const result = await getProductByIdAction('flash-gone');
+
+        expect(result.success).toBe(false);
+        expect(String(result.error)).toMatch(/not found/i);
     });
 
     it('shows a rating of ZERO, not a perfect five nobody earned', async () => {
@@ -267,7 +295,7 @@ describe('the flash-sale mapping', () => {
     it('preferring flashPrice to the ordinary price', async () => {
         store.seed(COLLECTIONS.FLASH_SALE_PRODUCTS, 'flash-2', {
             sellerId: 'seller-1', title: 'Both Prices',
-            price: 9000, flashPrice: 4500, availableQuantity: 5,
+            price: 9000, flashPrice: 4500, availableQuantity: 5, status: 'active',
         });
 
         const { getProductByIdAction } = await actions();
@@ -279,7 +307,7 @@ describe('the flash-sale mapping', () => {
     it('and using imageUrl when there is no images array', async () => {
         store.seed(COLLECTIONS.FLASH_SALE_PRODUCTS, 'flash-3', {
             sellerId: 'seller-1', title: 'One Image',
-            flashPrice: 100, imageUrl: 'https://cdn.test/one.jpg',
+            flashPrice: 100, imageUrl: 'https://cdn.test/one.jpg', status: 'active',
         });
 
         const { getProductByIdAction } = await actions();

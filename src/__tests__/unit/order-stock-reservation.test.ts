@@ -37,9 +37,17 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 const BUYER = 'buyer-1';
 
 const mockDecrement = jest.fn() as jest.Mock<any>;
+/**
+ *   #647 — the reversal was mocked as a bare jest.fn() in the module object and
+ *   never observed. A refusal that runs AFTER the reservation has to give the
+ *   units back, or the listing bleeds stock on every attempt, so it is a
+ *   recorded call now rather than a name in the mock.
+ */
+const mockRestore = jest.fn() as jest.Mock<any>;
 
 jest.mock('@/lib/wallet-ledger', () => ({
     decrementManyOrFail: (...a: any[]) => mockDecrement(...a),
+    restoreReservedStock: (...a: any[]) => mockRestore(...a),
     claimPaymentOnce: jest.fn(), creditWalletOnce: jest.fn(), debitWalletOnce: jest.fn(),
     debitWalletLocked: jest.fn(), debitJsonbBalance: jest.fn(), debitJsonbBalanceWithFloor: jest.fn(),
     claimVersionedUpdate: jest.fn(), claimIdempotencyKey: jest.fn(),
@@ -60,12 +68,15 @@ function setSession(id: string) {
 }
 
 /** One product, `stock` units, one pricing tier. */
-function setProduct(stock: number) {
+function setProduct(stock: number, status = 'active') {
     const doc = {
         exists: true, empty: false, docs: [],
         data: () => ({
             title: 'Yams', sellerId: 'seller-1', availableQuantity: stock,
             pricingTiers: [{ type: 'retail', price: 1000 }],
+            //   #647 — createOrderAction reads the status now. See the note on
+            //   the same change in order-creation-price.test.ts.
+            status,
         }),
     };
     (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve(doc));
@@ -144,6 +155,43 @@ describe('_createOrderAction stock handling', () => {
 
         expect(r.success).toBe(true);
         expect(mockDecrement).toHaveBeenCalledTimes(1);
+    });
+
+    it('#647 REFUSES A LISTING THAT MAY NOT BE SOLD, and puts the stock back', async () => {
+        /*
+         *   The fourth purchase door. The three marketplace doors share
+         *   validateCartItems and the check lives there; this one builds its own
+         *   order and read the product's status nowhere, so a suspended,
+         *   rejected or archived listing could be ordered through it.
+         *
+         *   No screen calls this action — and every export of a "use server"
+         *   module is a reachable endpoint whether the app calls it or not.
+         *
+         *   Written as BEHAVIOUR rather than as a source check, because that is
+         *   what the first version was: `expect(src).toContain(...)`, which a
+         *   mutant defeated by keeping the text and appending `&& false`. It
+         *   survived. A check on the shape of a line is not a check on what the
+         *   line does.
+         */
+        setProduct(5, 'suspended');
+
+        const r: any = await order(1);
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/no longer available/i);
+        //   #613's reversal is what makes throwing here safe: the reservation
+        //   happens first, so a refusal after it must give the units back or
+        //   the listing bleeds stock on every attempt.
+        expect(mockRestore).toHaveBeenCalled();
+        expect((global as any).mockFirestoreTxSet).not.toHaveBeenCalled();
+    });
+
+    it('AND STILL SELLS AN ACTIVE ONE — the control for the case above', async () => {
+        setProduct(5, 'active');
+
+        const r: any = await order(1);
+
+        expect(r.success).toBe(true);
     });
 
     it('reserves before writing the order rows', async () => {

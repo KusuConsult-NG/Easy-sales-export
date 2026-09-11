@@ -1,7 +1,7 @@
 "use server";
 
 import { logger } from '@/lib/logger';
-import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
+import { PRODUCT_VISIBLE_STATUSES, isSellableFlashSaleStatus } from "@/lib/product-status";
 import { supabaseDb as db } from "@/lib/supabase-db";
 // Use Admin DB
 // import { uploadFileToStorage } from "@/lib/storage-admin";
@@ -208,6 +208,28 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
             // Fallback to flash_sale_products
             doc = await db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS).doc(productId).get();
             if (doc.exists) {
+                /**
+                 *   #647 A REMOVED FLASH-SALE ROW WAS SERVED AS A LIVE LISTING.
+                 *
+                 *   The mapping below sets `status: "active"` as a LITERAL, so
+                 *   whatever the stored row said, this page was handed an active
+                 *   product — Add to Cart enabled, and a checkout that did not
+                 *   read the status either.
+                 *
+                 *   `removed` is what a seller pulling a flash item writes, and
+                 *   every other read of this collection already filters on
+                 *   `status == "active"`. This one is the odd door out.
+                 *
+                 *   Refused rather than mapped: the ordinary-product branch
+                 *   below must keep serving pulled listings, because the
+                 *   seller's own edit screen shares this read and needs their
+                 *   suspended product back. A flash-sale row has no such screen
+                 *   — it is edited from the village-market page — so there is
+                 *   nobody left who should see a removed one.
+                 */
+                if (!isSellableFlashSaleStatus(doc.data()?.status)) {
+                    return { success: false as const, error: "Product not found", data: null };
+                }
                 data = doc.data();
                 isFlashSale = true;
             } else {

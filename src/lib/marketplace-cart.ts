@@ -35,6 +35,26 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CartItem } from "@/lib/types/marketplace";
 import { deliveryFeeFor, type DeliveryFees } from "@/lib/delivery-fee";
+import { isSellableProductStatus, isSellableFlashSaleStatus } from "@/lib/product-status";
+
+/**
+ * How many units this listing records, or null when nobody is counting.
+ *
+ *   #582's rule, in the module that did not get it. A missing field reads as
+ *   zero everywhere downstream — `decrement_many_or_fail` cannot tell "no stock
+ *   recorded" from "none left" — so treating absent as zero here would take
+ *   every untracked listing off sale. Absent means UNTRACKED and is not
+ *   refused; the atomic decrement still guards the race between two buyers.
+ *
+ *   Flash-sale rows are explicitly nullable: village-market stores
+ *   `availableQuantity: null` when the seller leaves the field empty.
+ */
+function stockOf(productData: Record<string, any> | undefined): number | null {
+    const raw = productData?.availableQuantity;
+    if (raw === undefined || raw === null || raw === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+}
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 export function nairaToKobo(naira: number): number { 
@@ -90,8 +110,78 @@ export async function validateCartItems(clientItems: CartItem[]): Promise<{ subt
         }
 
         const productData = productDoc.data();
+        const productName = productData?.title || item.title;
+
+        /**
+         *   #647 MAY THIS BE SOLD? NOTHING ASKED.
+         *
+         *   This function reads the product document to take the price from it,
+         *   and never looked at what state the listing was in. Four answers are
+         *   written by live doors today: `suspended` and `rejected` by the admin
+         *   review screen, `archived` by both of the seller's delete doors, and
+         *   `removed` by a seller pulling a flash-sale item.
+         *
+         *   #624 made PRODUCT_VISIBLE_STATUSES decide what a buyer may SEE and
+         *   fifteen catalogue queries ask it. No purchase door asked anything.
+         *   The cart lives in localStorage and is never re-read against the
+         *   database, and the product page serves any id whatever its status —
+         *   so an admin pulling a counterfeit listing took it out of the browse
+         *   results and left the shared link selling it.
+         *
+         *   AN ALLOW-LIST, not a list of bad states: `archived` and `removed`
+         *   were both invented after the checks around this one were written,
+         *   and a deny-list would have missed them exactly as this code did.
+         *   A row with no status recorded is refused for the same reason — every
+         *   catalogue query selects `status IN (...)`, so such a row has never
+         *   been browsable, and what cannot be browsed cannot honestly be in a
+         *   cart.
+         *
+         *   Flash-sale rows are a different collection with their own
+         *   vocabulary, so they are asked their own question.
+         */
+        const sellable = isFlashSale
+            ? isSellableFlashSaleStatus(productData?.status)
+            : isSellableProductStatus(productData?.status);
+        if (!sellable) {
+            throw new Error(`${productName} is no longer available`);
+        }
+
+        /**
+         *   #647 AND IS THERE ANY OF IT? REFUSED BEFORE THE CHARGE, NOT AFTER.
+         *
+         *   This is #582, in the module that did not get it. Its words there:
+         *
+         *       The only stock check on this path ran at FULFILMENT, after the
+         *       payment reference was claimed — so a listing that really was
+         *       short left the buyer charged, the order cancelled and a manual
+         *       refund to arrange.
+         *
+         *   The marketplace's Paystack door reserved stock in _payment_verify,
+         *   AFTER the money moved, and wrote `paid_awaiting_refund` when it came
+         *   up short. Its message says the item "sold out before your payment
+         *   completed", which describes a race — and nothing raced: the checkout
+         *   stepper enforces a minimum and no maximum, so five hundred against
+         *   three in stock went straight through to Paystack.
+         *
+         *   (The bank-transfer and pay-on-delivery doors reserve before they
+         *   create anything, so they were already safe. The door that takes the
+         *   money first was the one with no check.)
+         *
+         *   The atomic decrement still decides the real race between two buyers.
+         *   This catches the ordinary case, where refusing costs nobody
+         *   anything.
+         */
+        const stock = stockOf(productData);
+        if (stock !== null && quantity > stock) {
+            throw new Error(
+                stock <= 0
+                    ? `${productName} is out of stock`
+                    : `${productName} has only ${stock} ${item.unit || "units"} left`,
+            );
+        }
+
         let dbPrice = 0;
-        
+
         if (isFlashSale) {
             dbPrice = productData?.flashPrice || productData?.price || 0;
         } else {

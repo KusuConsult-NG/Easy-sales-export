@@ -14,6 +14,7 @@ import { deliveryFeeFor } from "@/lib/delivery-fee";
 import { withOptimisticLock } from "@/lib/data-integrity";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { pickOrderEscrow } from "@/lib/escrow-status";
+import { isSellableProductStatus } from "@/lib/product-status";
 
 /**
  * Server Actions for Order Management
@@ -119,6 +120,28 @@ async function _createOrderAction(
                 }
 
                 const product = productDoc.data() as Product;
+
+                /**
+                 *   #647 THE FOURTH PURCHASE DOOR, AND IT ASKS TOO.
+                 *
+                 *   The three marketplace doors share validateCartItems and the
+                 *   check lives there. This one builds its own order and never
+                 *   read the product's status either, so a suspended, rejected
+                 *   or archived listing could be ordered through it.
+                 *
+                 *   No screen calls this action — and every export of a
+                 *   "use server" module is a reachable endpoint whether the app
+                 *   calls it or not, which this codebase records in
+                 *   marketplace-cart.ts and in _enrollInWaveAction. "Nothing
+                 *   calls it" has never been a control.
+                 *
+                 *   Throwing here is safe rather than sloppy: #613's catch puts
+                 *   the reserved units back, which is exactly the machinery this
+                 *   failure needs.
+                 */
+                if (!isSellableProductStatus((product as any).status)) {
+                    throw new Error(`${product.title || item.productId} is no longer available`);
+                }
 
                 // Kept for the message, not as the guard. The reservation above
                 // already decided; this read cannot be authoritative because it

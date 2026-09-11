@@ -74,6 +74,24 @@ export const PRODUCT_STATUSES = [
     "suspended",
     "out_of_stock",
     "deleted",
+    /**
+     *   #647 WRITTEN BY TWO DOORS AND DECLARED BY NEITHER LIST.
+     *
+     *   Both product deletes retire the row rather than destroying it — #301
+     *   fixed that pair together — and both write `status: "archived"`, which
+     *   was in neither this union nor ProductSchema.
+     *
+     *   So a status the code writes was not a status the code knew. The seller's
+     *   own products page reads it through `configs[status] || configs.active`
+     *   and labelled a deleted listing "Active"; the schema's enum rejected it,
+     *   and the healing parse handed the screens the DEFAULT — "draft" — for a
+     *   row that says archived.
+     *
+     *   Declared here, not sellable, not visible. Nothing about what is stored
+     *   changes; what changes is that the rest of the code can now say what it
+     *   is looking at.
+     */
+    "archived",
 ] as const;
 
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
@@ -115,8 +133,69 @@ export const PRODUCT_INITIAL_STATUS: ProductStatus = "active";
  *        Nothing writes out_of_stock today, so the trap is latent. Making this
  *        list real is what turns finishing it into a one-line change here plus
  *        the presentation, instead of a fifteen-site sweep.
+ *
+ *   #647 AND THAT IS DONE, SO out_of_stock IS IN THE LIST NOW.
+ *
+ *        The condition #624 set was a checkout that refuses. There is one:
+ *        validateCartItems consults PRODUCT_SELLABLE_STATUSES below, before the
+ *        buyer is sent to Paystack, and out_of_stock is not in it. So the pair
+ *        lands together, which is what that note asked for.
+ *
+ *        The PRESENTATION was already written and could never fire. All three
+ *        product cards and the detail page test `status === "out_of_stock"` —
+ *        and every query that could have produced such a row filtered it out
+ *        first. A rule nothing consults was #624; a treatment nothing can reach
+ *        is the same defect seen from the other end.
+ *
+ *        Nothing writes the status even now, so no buyer sees anything today
+ *        that they did not see yesterday. What changes is that the day somebody
+ *        does write it, the listing shows as unavailable instead of vanishing.
  */
-export const PRODUCT_VISIBLE_STATUSES: readonly ProductStatus[] = ["active"];
+export const PRODUCT_VISIBLE_STATUSES: readonly ProductStatus[] = ["active", "out_of_stock"];
+
+/**
+ * Statuses a buyer can BUY a product in.
+ *
+ *   #647 NOTHING ASKED THIS QUESTION AT ALL.
+ *
+ *        #624 made the VISIBLE rule real across fifteen catalogue queries. Not
+ *        one purchase door consulted anything: `validateCartItems` — the
+ *        function every marketplace order passes through — read the product
+ *        document to take the price from it and never looked at its status.
+ *
+ *        So an admin suspending a counterfeit listing removed it from the browse
+ *        results and left it for sale. The cart lives in localStorage and is
+ *        never re-read against the database, and the product page serves any id
+ *        whatever its status, so a shared link kept selling it.
+ *
+ *        VISIBLE AND SELLABLE ARE GENUINELY DIFFERENT QUESTIONS, which is why
+ *        this is a second list rather than a reuse of the first: out_of_stock is
+ *        visible and unbuyable, and that combination is the whole point of it.
+ *        The reverse — sellable but invisible — has no meaning, and the test
+ *        pins that direction shut.
+ */
+export const PRODUCT_SELLABLE_STATUSES: readonly ProductStatus[] = ["active"];
+
+/**
+ * Flash-sale rows are a DIFFERENT COLLECTION with a different vocabulary.
+ *
+ * village-market writes `status: "active"` on create and `status: "removed"`
+ * when a seller pulls an item — "removed" is not a ProductStatus and never was.
+ * The two sets agree today at one value; they are stated separately because
+ * they are maintained by different code, and assuming they agree is how a
+ * removed flash-sale item stayed purchasable.
+ */
+export const FLASH_SALE_SELLABLE_STATUSES: readonly string[] = ["active"];
+
+/** May a buyer put this product in an order? */
+export function isSellableProductStatus(status: unknown): boolean {
+    return PRODUCT_SELLABLE_STATUSES.includes(String(status) as ProductStatus);
+}
+
+/** May a buyer put this flash-sale row in an order? */
+export function isSellableFlashSaleStatus(status: unknown): boolean {
+    return FLASH_SALE_SELLABLE_STATUSES.includes(String(status));
+}
 
 /** A live listing can be pulled; a pending or rejected one can be released. */
 export const PRODUCT_APPROVABLE_FROM: readonly ProductStatus[] = [

@@ -424,6 +424,10 @@ describe('getProductByIdAction', () => {
             sellerId: SELLER, title: 'Flash Yam', price: 5000, flashPrice: 3000,
             availableQuantity: 4, imageUrl: 'https://example.com/y.jpg',
             createdAt: new Date().toISOString(),
+            //   #647 — the by-id read consults the flash row's status now, and
+            //   every writer of this collection sets one. A row with none was
+            //   already invisible to every other flash read.
+            status: 'active',
         });
 
         // ProductSchema strips what it does not know, and it knows nothing
@@ -443,7 +447,8 @@ describe('getProductByIdAction', () => {
         // literal true, on every flash-sale product.
         store.seed(USERS, SELLER, { name: 'Ada Farms', isVerifiedBadge: false });
         store.seed(COLLECTIONS.FLASH_SALE_PRODUCTS, 'f1', {
-            sellerId: SELLER, title: 'Flash Yam', price: 5000, flashPrice: 3000, availableQuantity: 4,
+            sellerId: SELLER, title: 'Flash Yam', price: 5000, flashPrice: 3000,
+            availableQuantity: 4, status: 'active',
         });
 
         const res = await byId('f1');

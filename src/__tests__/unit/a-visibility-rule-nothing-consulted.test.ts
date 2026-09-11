@@ -43,12 +43,28 @@
  *   one-line change here plus the presentation, rather than another fifteen-site
  *   sweep.
  *
+ * ── #647 — AND IT IS IN THE LIST NOW ────────────────────────────────────────
+ *
+ *   The paragraph above set a condition, and #647 met it: every purchase door
+ *   consults PRODUCT_SELLABLE_STATUSES before a buyer is charged, so the status
+ *   is visible and unbuyable exactly as intended. The cards and the detail page
+ *   turned out to have been rendering it all along — a treatment nothing could
+ *   reach, which is this finding's own shape seen from the other end.
+ *
+ *   The assertions below were rewritten rather than deleted, and the reversal is
+ *   recorded where the decision was made. See #644 for why that matters: a block
+ *   that pins a DECISION has to be edited, visibly, by whoever reverses it.
+ *
  *   MUTATION-TESTED, WITH A CONTROL — table at the foot of this file.
  */
 
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { PRODUCT_VISIBLE_STATUSES, isVisibleProductStatus } from '@/lib/product-status';
+import {
+    PRODUCT_VISIBLE_STATUSES,
+    PRODUCT_SELLABLE_STATUSES,
+    isVisibleProductStatus,
+} from '@/lib/product-status';
 
 const ROOT = process.cwd();
 
@@ -159,20 +175,38 @@ describe('#624 — the visibility rule now decides what is selected', () => {
 });
 
 describe('#624 — and the catalogue is unchanged by it', () => {
-    it('THE LIST IS STILL EXACTLY ["active"]', () => {
-        //   The claim that makes this safe to ship: no buyer sees anything today
-        //   that they did not see yesterday.
-        expect([...PRODUCT_VISIBLE_STATUSES]).toEqual(['active']);
+    /*
+     * ── #647 — THE CONDITION THIS BLOCK SET HAS BEEN MET ────────────────────
+     *
+     *   These three assertions pinned `["active"]` exactly, and out_of_stock's
+     *   absence from it, WITH the reason: adding the status while no checkout
+     *   refused it would have made an unfulfillable listing purchasable.
+     *
+     *   That reason is spent. validateCartItems consults
+     *   PRODUCT_SELLABLE_STATUSES before the buyer is sent to Paystack, and
+     *   out_of_stock is not in it — so the status is visible and unbuyable,
+     *   which is what the note asked for and what the presentation (already
+     *   written, and until now unreachable) has always rendered.
+     *
+     *   The reversal is recorded HERE, where the decision was written down,
+     *   rather than quietly rewritten. #644's rule.
+     */
+    it('THE LIST IS "active" AND out_of_stock — and nothing else', () => {
+        //   The claim that makes it safe: nothing writes out_of_stock, so no
+        //   buyer sees anything today that they did not see yesterday. What
+        //   changes is the day somebody does.
+        expect([...PRODUCT_VISIBLE_STATUSES]).toEqual(['active', 'out_of_stock']);
     });
 
-    it('AND out_of_stock IS DELIBERATELY NOT IN IT', () => {
+    it('AND out_of_stock IS VISIBLE BUT NOT SELLABLE — both halves, together', () => {
         /*
-         *   Pinned WITH its reason, because this is the line somebody will edit
-         *   when they come to finish the feature — and adding the status here
-         *   alone would make an unfulfillable listing purchasable. The
-         *   presentation has to land in the same change.
+         *   The condition, restated as the thing it guards rather than as the
+         *   absence it used to be. If the sellable list ever gains this status
+         *   the original defect is back — a listing a buyer can pay for and
+         *   nobody can fulfil — so it is the SELLABLE side that is pinned now.
          */
-        expect([...PRODUCT_VISIBLE_STATUSES]).not.toContain('out_of_stock');
+        expect([...PRODUCT_VISIBLE_STATUSES]).toContain('out_of_stock');
+        expect([...PRODUCT_SELLABLE_STATUSES]).not.toContain('out_of_stock');
         expect(readFileSync(join(ROOT, 'src/lib/product-status.ts'), 'utf8'))
             .toContain('refuse the purchase');
     });
@@ -181,7 +215,8 @@ describe('#624 — and the catalogue is unchanged by it', () => {
         //   isVisibleProductStatus is the reason this was found: it had no
         //   callers at all. It stays, and it stays correct.
         expect(isVisibleProductStatus('active')).toBe(true);
-        for (const hidden of ['draft', 'pending', 'rejected', 'suspended', 'out_of_stock', 'deleted']) {
+        expect(isVisibleProductStatus('out_of_stock')).toBe(true);
+        for (const hidden of ['draft', 'pending', 'rejected', 'suspended', 'deleted', 'archived']) {
             expect(isVisibleProductStatus(hidden)).toBe(false);
         }
         //   And it does not answer true for something that is not a status.
