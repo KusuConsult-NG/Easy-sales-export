@@ -51,7 +51,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { Client } from 'pg';
-import { dbDescribe, PG_URL } from '@/lib/testing/pg-harness';
+import { dbDescribe, PG_URL, waitUntilBlocked } from '@/lib/testing/pg-harness';
 
 let client: Client | null = null;
 
@@ -254,12 +254,19 @@ dbDescribe('#652 — two buyers, one unit', () => {
             await b.query('BEGIN');
 
             const items = JSON.stringify([ITEM('652-race', 1)]);
-            //   A goes first and holds the row lock until it commits; B blocks
-            //   inside the function on the same FOR UPDATE.
-            const first = a.query('select * from decrement_many_or_fail($1::jsonb)', [items]);
+            /*
+             *   A goes first and holds the row lock; B is then issued and WAITED
+             *   FOR, so A's commit lands while B is genuinely blocked.
+             *
+             *   #653 — both halves of that matter. Firing both at once and
+             *   awaiting A first deadlocks the TEST whenever B wins the race;
+             *   issuing B and committing A without waiting removes the race
+             *   altogether, and a mutant that deleted FOR UPDATE survived it.
+             */
+            const bPid = Number((await b.query('select pg_backend_pid() as pid')).rows[0].pid);
+            const firstRow = (await a.query('select * from decrement_many_or_fail($1::jsonb)', [items])).rows[0];
             const second = b.query('select * from decrement_many_or_fail($1::jsonb)', [items]);
-
-            const firstRow = (await first).rows[0];
+            await waitUntilBlocked(client!, bPid);
             await a.query('COMMIT');
             const secondRow = (await second).rows[0];
             await b.query('COMMIT');
@@ -276,44 +283,73 @@ dbDescribe('#652 — two buyers, one unit', () => {
         expect(await stockOf('652-race')).toBe(0);
     });
 
-    it('AND TWO ORDERS NAMING THE SAME PRODUCTS IN OPPOSITE ORDER DO NOT DEADLOCK', async () => {
+    it('AND IT TAKES ITS LOCKS IN ID ORDER, WHATEVER ORDER IT WAS ASKED IN', async () => {
         /*
-         *   The reason pass 1 walks `ORDER BY id`, stated in the function's own
-         *   comment and in wallet-ledger's — and asserted nowhere. Without it,
-         *   one caller locks X then waits for Y while the other holds Y and
-         *   waits for X, and Postgres kills one with a deadlock error rather
-         *   than refusing it honestly.
+         *   The property that stops two orders deadlocking, demonstrated rather
+         *   than raced for.
+         *
+         *   RACING FOR IT DOES NOT WORK, and finding that out cost two attempts.
+         *   Firing two opposite-order callers and awaiting one hangs whenever
+         *   the other wins; committing each on resolution fixes the hang but
+         *   makes the test FLAKY, because whether the interleaving produces the
+         *   crossed wait is the scheduler's business. Mutating the ordering away
+         *   was caught on one run in three — a test that reports a broken
+         *   guarantee a third of the time is worse than none, and this suite
+         *   runs in CI now.
+         *
+         *   So the ordering is shown directly. A holds the LOWER id. B calls the
+         *   function naming the HIGHER id first. If the walk followed the array
+         *   it would take the higher row's lock before blocking on the lower
+         *   one; if it follows the id it blocks immediately and never touches
+         *   the higher row. A third connection asks with NOWAIT which of those
+         *   happened.
          */
         await seed('652-x', 10);
         await seed('652-y', 10);
 
-        const a = new Client({ connectionString: PG_URL });
-        const b = new Client({ connectionString: PG_URL });
-        await a.connect();
-        await b.connect();
+        const holder = new Client({ connectionString: PG_URL });
+        const caller = new Client({ connectionString: PG_URL });
+        const prober = new Client({ connectionString: PG_URL });
+        await holder.connect();
+        await caller.connect();
+        await prober.connect();
         try {
-            await a.query('BEGIN');
-            await b.query('BEGIN');
-            await a.query("SET LOCAL lock_timeout = '10s'");
-            await b.query("SET LOCAL lock_timeout = '10s'");
+            //   A holds 652-x, the LOWER id.
+            await holder.query('BEGIN');
+            await holder.query(
+                `select 1 from document_collections
+                  where id = '652-x' and collection_name = $1 for update`, [PRODUCTS]);
 
-            const forward = JSON.stringify([ITEM('652-x', 1), ITEM('652-y', 1)]);
-            const reverse = JSON.stringify([ITEM('652-y', 1), ITEM('652-x', 1)]);
+            //   B asks for 652-y FIRST and 652-x second, and blocks.
+            const callerPid = Number(
+                (await caller.query('select pg_backend_pid() as pid')).rows[0].pid);
+            const pending = caller.query(
+                'select * from decrement_many_or_fail($1::jsonb)',
+                [JSON.stringify([ITEM('652-y', 1), ITEM('652-x', 1)])]);
+            await waitUntilBlocked(client!, callerPid);
 
-            const first = a.query('select * from decrement_many_or_fail($1::jsonb)', [forward]);
-            const second = b.query('select * from decrement_many_or_fail($1::jsonb)', [reverse]);
+            //   THE MEASUREMENT: is 652-y locked? It must not be — the walk
+            //   reached 652-x first and stopped there.
+            await prober.query('BEGIN');
+            let higherWasLocked = false;
+            try {
+                await prober.query(
+                    `select 1 from document_collections
+                      where id = '652-y' and collection_name = $1 for update nowait`, [PRODUCTS]);
+            } catch {
+                higherWasLocked = true;
+            }
+            await prober.query('ROLLBACK');
 
-            expect((await first).rows[0].ok).toBe(true);
-            await a.query('COMMIT');
-            expect((await second).rows[0].ok).toBe(true);
-            await b.query('COMMIT');
+            expect({ higherWasLocked }).toEqual({ higherWasLocked: false });
+
+            await holder.query('ROLLBACK');
+            expect((await pending).rows[0].ok).toBe(true);
         } finally {
-            await a.end().catch(() => {});
-            await b.end().catch(() => {});
+            await holder.end().catch(() => {});
+            await caller.end().catch(() => {});
+            await prober.end().catch(() => {});
         }
-
-        expect(await stockOf('652-x')).toBe(8);
-        expect(await stockOf('652-y')).toBe(8);
     });
 });
 
@@ -333,7 +369,19 @@ dbDescribe('#652 — two buyers, one unit', () => {
  *   the start, and which nothing had ever provided. Ten of them are a
  *   description of a contract nobody had written down; one is the finding.
  *
- *   The aggregation and the lock order are separately mutated in the unit suite
+ *   AND THE LOCK ORDER IS PROVED HERE NOW — #653. Two further mutants, applied
+ *   to the live function and restored:
+ *
+ *     the lock walk is reversed (ORDER BY 2 DESC)                     KILLED
+ *     the lock walk follows the array, not the id                     KILLED
+ *     the row lock is dropped                                         KILLED
+ *
+ *   Each killed on three consecutive runs, which is the point: the first version
+ *   of that test RACED two opposite-order callers, and a mutant survived one run
+ *   in three. A test that reports a broken guarantee a third of the time is
+ *   worse than none — and this suite runs in CI now.
+ *
+ *   The aggregation is separately mutated in the unit suite
  *   (the-checkout-never-asked-if-it-could-be-sold), which can assert on the
  *   migration's text in the default run where no database exists. Two halves:
  *   what the SQL DOES is proved here, that the SQL SAYS it is shipped is proved

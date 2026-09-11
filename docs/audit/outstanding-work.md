@@ -1,7 +1,7 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`77bdf37c`, `1fb946fd` and now at `f686d529`.** Every line below was checked against the
+`1fb946fd`, `f686d529` and now at `a96f6546`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
@@ -12,8 +12,8 @@ successful scheduled run since 22 August. See §1.
 version before this one said 12,837 across 704.
 
 **And the Postgres suites were run for real** against PostgreSQL 16 with the
-schema and all 34 migrations: 11 suites, 137 passed, 23 skipped for want of a
-PostgREST. `money-functions` and `fake-db-matches-postgres` both pass. A status document that
+schema and all 34 migrations: **12 suites, 164 passed**, 23 skipped for want of
+a PostgREST. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
 
@@ -271,6 +271,51 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#653) Four more money functions nothing had ever run
+
+#652's question, asked of the rest of the money SQL. Four more have no proof of
+any kind, and all four are live:
+
+| function | called by |
+|---|---|
+| `debit_jsonb_balance_with_floor` | cooperative withdrawal, loan repayment, coop money, export booking release |
+| `debit_jsonb_balance` | coop money, WAVE earnings, fixed savings |
+| `debit_wallet_once` | the wallet debit |
+| `claim_versioned_update` | optimistic locking, platform-wide |
+
+**No defect was found in any of them.** Said plainly, because after #652 the
+expectation was that there would be. They lock the row and read under the lock,
+check before they write, refuse a non-positive amount, distinguish a missing row
+from a zero balance, and `claim_versioned_update` writes `_version` *after* the
+caller's patch so a patch cannot forge it. Dotted paths, string-valued balances
+and the missing-collection case were all probed by hand first, and all behave.
+
+Twenty-seven executed cases; **eleven mutants applied to the live function
+bodies, all killed** — including the three concurrency proofs that only this
+harness can do.
+
+⚠️ **Two survived the first run, and the cause was my own test.** A chain of
+three attempts, each of which looked right:
+
+1. *fire both callers, await the first* — **deadlocks the test** whenever the
+   second wins the lock. The suite hung for ten minutes.
+2. *run A, issue B, commit A* — deterministic, and it **quietly removed the
+   race**: nothing made B reach its statement before A committed, so deleting
+   `FOR UPDATE` changed nothing and both lock mutants survived.
+3. *run A, issue B, **wait until B is blocked**, commit A* — the lock decides
+   again, and both die.
+
+Version 2 is the dangerous one: it passes, it looks like a concurrency test, and
+it asserts nothing about concurrency. Mutation testing is the only reason anyone
+would know. The wait is now one shared helper in `pg-harness`.
+
+⚠️ **And #652's deadlock test was passing by luck.** Racing two opposite-order
+callers cannot prove lock ordering — whether the interleaving produces the
+crossed wait is the scheduler's business, and a mutant survived one run in three.
+It is a *deterministic demonstration* now: one connection holds the lower id, the
+caller asks for the higher id first and blocks, and a third connection asks with
+`NOWAIT` whether the higher row was ever locked. Killed three times out of three.
 
 ### ✅ (#652) The guard against overselling oversold
 

@@ -149,6 +149,42 @@ export async function assertRestReachable(): Promise<void> {
 }
 
 /**
+ * Wait until `pid` is genuinely blocked on a lock, using `probe` to ask.
+ *
+ *   #653 — THE SYNCHRONISATION POINT FOR EVERY TWO-CALLER TEST, AND IT IS
+ *   LOAD-BEARING. Found by a surviving mutant, twice.
+ *
+ *   A race written as "fire both, await the first" DEADLOCKS THE TEST whenever
+ *   the second caller wins the lock: the first is being awaited, it waits for
+ *   the second, and the second's commit never comes because nobody is awaiting
+ *   it. The obvious repair — run A, then issue B, then commit A — is
+ *   deterministic and quietly removes the race, because nothing makes B reach
+ *   its statement before A commits. B then reads already-committed data and
+ *   refuses for the ordinary reason, so deleting `FOR UPDATE` from the function
+ *   changes nothing and the test goes on passing.
+ *
+ *   Polling pg_stat_activity is the honest arrangement: it waits for B to be
+ *   actually blocked — on the row lock where there is one, on the UPDATE where
+ *   there is not — so A's commit always lands while B is mid-flight. That is the
+ *   only shape in which the lock is the thing under test.
+ */
+export async function waitUntilBlocked(
+    probe: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> },
+    pid: number,
+): Promise<void> {
+    for (let i = 0; i < 200; i++) {
+        const { rows } = await probe.query(
+            `select 1 from pg_stat_activity
+              where pid = $1 and state = 'active' and wait_event_type = 'Lock'`,
+            [pid],
+        );
+        if (rows.length > 0) return;
+        await new Promise((r) => setTimeout(r, 25));
+    }
+    throw new Error(`backend ${pid} never blocked on a lock — the race did not happen`);
+}
+
+/**
  * What a run is about to do, printed once by whichever suite loads first.
  *
  * A skipped suite that says nothing is how `npm run test:db` reported
