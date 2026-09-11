@@ -21,12 +21,12 @@ import { rateLimitConfig } from "@/lib/rate-limits.config";
  *   `withRateLimit` — the generic wrapper in lib/rate-limit.ts, which is
  *   `RATE_LIMIT_MAX_REQUESTS` at a default of 200 PER MINUTE.
  *
- *   (The two doors reach that endpoint by different code — the route through
- *   lib/bank-account-resolve, the action through its own fetch. #346 built the
- *   shared resolver so callers would stop writing their own, and reached one of
- *   the two. Recorded here rather than repaired in the same change: the meter is
- *   what has a live consequence, and consolidating a resolver whose error
- *   strings are pinned by two suites is a separate read.)
+ *   (When this was written the two doors reached that endpoint by different
+ *   code — the route through lib/bank-account-resolve, the action through its
+ *   own fetch — and that was recorded here rather than repaired in the same
+ *   change. #646 CLOSED IT, and found a THIRD implementation in
+ *   lib/paystack-transfer with no URL encoding at all. All three go through the
+ *   one module now.)
  *
  *   Twelve thousand an hour against a control sized at ten. The oracle had a
  *   meter on one door and a turnstile on the other.

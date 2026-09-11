@@ -24,11 +24,14 @@
  *   `withRateLimit`, the generic wrapper in lib/rate-limit.ts, defaulting to
  *   TWO HUNDRED A MINUTE.
  *
- *   (I first wrote that the two doors shared `resolveBankAccount`. They do not:
- *   the route uses that helper and the action still writes its own fetch, so
- *   #346's consolidation reached one of two call sites. Corrected here and
- *   asserted below, because the comparison only means something if both doors
- *   really do reach the same Paystack endpoint.)
+ *   (I first wrote that the two doors shared `resolveBankAccount`. At the time
+ *   they did not: the route used that helper and the action wrote its own
+ *   fetch, so #346's consolidation had reached one of two call sites. That was
+ *   corrected here and left as an open item — and #646 then closed it, finding
+ *   a THIRD implementation in lib/paystack-transfer along the way. All three
+ *   delegate now, which is what the assertion below checks; the comparison in
+ *   this file only means something if both doors really do reach the same
+ *   Paystack endpoint.)
  *
  *   Twelve thousand an hour against a control sized at ten. A meter on one door
  *   and a turnstile on the other, for one operation.
