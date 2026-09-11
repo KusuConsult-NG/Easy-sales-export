@@ -386,7 +386,21 @@ describe('#356 — THE RATCHET: one admin test, not six', () => {
             'src/app/actions/cooperative/_loans_applications.ts',
             'src/app/actions/export-aggregation.ts',
             'src/app/actions/marketplace/_mp_products.ts',
-            'src/infrastructure/messaging/service.ts',
+            /*
+             *   #633 'src/infrastructure/messaging/service.ts' LEFT THIS LIST,
+             *   which is what progress looks like here.
+             *
+             *   It held TWO of these narrow gates, and they were not a scope
+             *   decision — they were the same hand-written test #356 removed
+             *   from the gate twenty lines away, left behind on the two places
+             *   that decide what a conversation READER and the list FILTER may
+             *   see. Support and moderator passed the gate and were then dropped
+             *   by both, so the support inbox answered with an empty list.
+             *
+             *   Both ask isUnscopedAdmin() now. Recording the removal rather
+             *   than silently shortening the array, because this list is the
+             *   ratchet and a list that quietly changes size protects nothing.
+             */
             // isAdmin() itself, which is where the list is SUPPOSED to be
             // written out once.
             'src/lib/admin-permissions.ts',

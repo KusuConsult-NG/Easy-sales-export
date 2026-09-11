@@ -492,6 +492,39 @@ export const MODULE_ADMIN_ROLE: Readonly<Record<string, AdminRole>> = {
 };
 
 /**
+ * An admin whose remit is the whole platform rather than one module.
+ *
+ *   #633 NEITHER EXISTING PREDICATE MEANT THIS, and reaching for the nearest
+ *        one would have been a defect either way:
+ *
+ *          isAdmin()          too wide — true for the six MODULE admins, so
+ *                             using it to decide "may see everything" hands a
+ *                             cooperative_admin every conversation on the
+ *                             platform and deletes the module scoping.
+ *          isPlatformAdmin()  too narrow — derived from who holds
+ *                             `config:update`, which is super_admin and admin
+ *                             only. It excludes `moderator` and `support`, the
+ *                             two roles #356 established ARE administrators and
+ *                             whose job the support inbox is.
+ *
+ *   DERIVED, not written out. The four names are exactly the admin roles that
+ *   are not module-scoped, so adding a seventh module admin removes it from here
+ *   automatically — the failure mode a hand-written list has, and the reason
+ *   ALL_ADMIN_ROLES and PLATFORM_ADMIN_ROLES above are derived too.
+ *
+ *   Holding a module role as WELL as an unscoped one still counts as unscoped:
+ *   an `admin` who is also `wave_admin` administers the platform.
+ */
+export const UNSCOPED_ADMIN_ROLES: readonly AdminRole[] = ALL_ADMIN_ROLES
+    .filter((role) => !Object.values(MODULE_ADMIN_ROLE).includes(role));
+
+export function isUnscopedAdmin(userRoles: string[] | undefined): boolean {
+    if (!userRoles) return false;
+    return canonicalRoles(userRoles)
+        .some((role) => (UNSCOPED_ADMIN_ROLES as readonly string[]).includes(role));
+}
+
+/**
  * Where an admin lands, and the order that decides it when they hold several
  * module roles.
  *

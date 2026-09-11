@@ -13,7 +13,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
-import { MODULE_ADMIN_ROLE, isAdmin } from "@/lib/admin-permissions";
+import { MODULE_ADMIN_ROLE, isAdmin, isUnscopedAdmin } from "@/lib/admin-permissions";
 
 /**
  * Enforces strict role-based and context-based boundaries on conversations.
@@ -25,9 +25,29 @@ function validateConversationAccess(conversation: Conversation, userId: string, 
         return true;
     }
 
-    // 2. Is super admin or global admin?
-    const isGlobalAdmin = roles.some(r => r === "admin" || r === "super_admin");
-    if (isGlobalAdmin) {
+    /*
+     *   2. Is this an administrator at all?
+     *
+     *   #633 #356 FIXED THE LIST AND NOT THE READER.
+     *
+     *        Its note is thirty lines below, on getAllConversationsAdmin: that
+     *        function refused `moderator` and `support` — "the two roles whose
+     *        job this screen is" — and was changed to ask isAdmin(). This
+     *        function, which decides whether any one of those conversations can
+     *        be OPENED or REPLIED TO, kept the hand-written test.
+     *
+     *        So a support agent opened the support inbox, was handed every
+     *        conversation on the platform by the list, clicked one, and was
+     *        refused. Then could not reply either — sendMessage asks this same
+     *        function. A list where nothing opens.
+     *
+     *        Asking isAdmin() here is not a new decision about privilege; it is
+     *        #356's decision, applied to the door it did not reach. The people
+     *        who can already SEE the whole list are the people who can now open
+     *        it, and no other role changes: the module-admin branches below are
+     *        untouched, and a non-admin still has to be a participant.
+     */
+    if (isUnscopedAdmin(roles)) {
         return true;
     }
 
@@ -114,8 +134,13 @@ export async function getAllConversationsAdmin(roles: string[]) {
     
     // Filter out conversations based on module admin boundaries
     return allConversations.filter(c => {
-        const isGlobalAdmin = roles.some(r => r === "admin" || r === "super_admin");
-        if (isGlobalAdmin) return true;
+        //   #633 THE THIRD COPY, and the one that made the screen empty. The
+        //   gate above admits `support` and `moderator` — #356 — and this line
+        //   then dropped every conversation for them, so the support inbox
+        //   answered with NOTHING rather than with "Access denied". An empty
+        //   list reads as "there are no messages", which is a worse lie than a
+        //   refusal.
+        if (isUnscopedAdmin(roles)) return true;
         
         // Modules matching
         if (roles.includes("cooperative_admin") && (c.context === "cooperative_broadcast" || c.context === "cooperative_support" || c.orderId?.startsWith("coop_"))) return true;
