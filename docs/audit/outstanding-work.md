@@ -1,15 +1,15 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a3d179d5`, `54589818` and now at `c1e69157`.** Every line below was checked against the
+`a3d179d5`, `c1e69157` and now at `79ae414e`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 701 suites / 12,792 tests green.** The
-version before this one said 12,774 across 700. A status document that
+**Gate at this revision: build clean, 702 suites / 12,810 tests green.** The
+version before this one said 12,792 across 701. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
 
@@ -267,6 +267,40 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#649) The job that gives a parcel back is executed now — and it was right
+
+`cron/release-stale-reservations` is 269 lines that run unattended over the land
+listings collection, and **no test had ever called it.** It was named in a cron
+manifest and a route-count list and run by nothing.
+
+That matters here more than almost anywhere, because of what #140 records: **a
+reservation hold has no other exit.** Both reservation paths release on their own
+failure, the buyer can cancel, and #137 deliberately stopped an admin approval
+from overwriting `pending`. Every one of those guards is right, and together they
+leave this job as the only way a walked-away hold ever comes back. A defect here
+is a parcel off the market permanently.
+
+**No defect was found.** Stated plainly rather than dressed up: it was correct on
+every axis the suite could reach — both hold clocks, the payment check that stops
+a paid-for parcel being put back on sale, its fail-safe direction on a database
+error, the restore-to-`previousStatus` rule, the per-row failure isolation and
+the secret. Eighteen executed cases now hold it there; ten mutants, all killed.
+
+⚠️ **The first run looked like a defect and was my instrument.** Every release
+case failed with `TypeError: fetch failed` — the CAS claim is a Postgres function
+called over HTTP, which the fake database does not intercept. The nine that
+passed were the refusal paths, none of which reach the claim; that split is what
+gave it away.
+
+⚠️ **And one mutant survived: the route's own first guard.** It claims
+`fromAny: [heldStatus]` — the status the row was actually in when read — and
+widening that to any hold status passed everything, because no case moved a
+listing between the read and the write. That is the exact scenario the route's
+header is about, so the suite was silent on the property the code was most
+careful to have. A case that moves the listing during the payment check closes
+it. Third time in this audit that a suite exercising every branch was silent on
+the thing that mattered.
 
 ### ✅ (#648) The role editor offered a checkbox the validator refused
 
