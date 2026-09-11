@@ -35,7 +35,14 @@ export default function CooperativePaymentClient(
     useEffect(() => {
         if (sessionStatus === "loading") return;
         if (sessionStatus === "unauthenticated") {
-            router.replace(`/auth/login?callbackUrl=${prefix || "/"}/payment`);
+            //   #637 `${prefix || "/"}/payment` is `//payment` on the dedicated
+            //   cooperative host, where prefix is "" — two slashes, which a
+            //   browser reads as a HOST. The fallback was added for the empty
+            //   case and the `/` that follows it already covers that case, so it
+            //   only ever fired where it was wrong. `${prefix}/payment` is
+            //   /cooperatives/payment on the main domain and /payment on the
+            //   dedicated one, which the middleware rewrites back.
+            router.replace(`/auth/login?callbackUrl=${prefix}/payment`);
             return;
         }
 

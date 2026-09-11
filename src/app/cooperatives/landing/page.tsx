@@ -256,7 +256,7 @@ export default function CooperativeLandingPage() {
                         {/* Desktop CTAs */}
                         <div className="hidden lg:flex items-center gap-4">
                             <Link
-                                href={`/auth/register?callbackUrl=${prefix || "/"}/onboarding`}
+                                href={`/auth/register?callbackUrl=${prefix}/onboarding`}
                                 className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 transition shadow-lg shadow-purple-200"
                             >
                                 Become a Member
@@ -287,7 +287,7 @@ export default function CooperativeLandingPage() {
                             ))}
                             <div className="mt-4 px-4">
                                 <Link
-                                    href={`/auth/register?callbackUrl=${prefix || "/"}/onboarding`}
+                                    href={`/auth/register?callbackUrl=${prefix}/onboarding`}
                                     className="block w-full text-center bg-linear-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-lg font-semibold"
                                 >
                                     Become a Member

@@ -409,7 +409,14 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   regex and ran a negative sweep with it over all of src, which is the
         //   combination the third test below exists to warn about; it was
         //   changed before it was committed. It never reads its own text.
-        expect(AFFECTED.length).toBeLessThanOrEqual(22);
+        //   #637 raised this from 22 to 23. safe-redirect-path.test.ts now
+        //   carries the hostile shapes it is about — `//evil.example`,
+        //   `/\evil.example` — and the sweep regexes that look for them, so its
+        //   own text is full of slashes inside quotes. Same mechanism, same
+        //   reason for raising rather than relaxing: that file strips other
+        //   files with its own line-based codeOnly(), not the block-eating
+        //   regex measured here, and it never reads its own text.
+        expect(AFFECTED.length).toBeLessThanOrEqual(23);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');

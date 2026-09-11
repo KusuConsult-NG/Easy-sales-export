@@ -4,6 +4,7 @@ import { useState, useMemo, Suspense, useEffect } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { safeInternalPath } from "@/lib/safe-redirect";
 import {
     Mail,
     Lock,
@@ -66,7 +67,17 @@ function ModuleRegisterContent({
     // CRITICAL FIX: Do NOT default to module root (/${platforms[0]})
     // Leaving this empty allows determinePostRegistrationRedirect() in server action
     // to route users to the correct onboarding page instead of the public landing page
-    const callbackUrl = searchParams.get("callbackUrl") || "";
+    //   #637 Guarded here too, though the only use below is a hidden field that
+    //   registerAction re-checks with the same rule. Two reasons: a value that
+    //   has been through the rule cannot become a navigation by somebody adding
+    //   one later — which is exactly how RegisterForm came to hard-navigate to
+    //   whatever the query string said — and the sweep in the #262/#637 ratchet
+    //   asks every reader of this parameter, so an exemption here would be a
+    //   hole the size of one file.
+    //
+    //   The empty-string fallback is kept: it is what lets the server action
+    //   choose the module's own onboarding page rather than a module root.
+    const callbackUrl = safeInternalPath(searchParams.get("callbackUrl"), "");
 
     const [formData, setFormData] = useState({
         fullName: "",

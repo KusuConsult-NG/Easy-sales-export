@@ -9,6 +9,7 @@ import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
 import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
 import { useSearchParams, useRouter } from "next/navigation";
+import { safeInternalPath } from "@/lib/safe-redirect";
 import { signIn, useSession } from "next-auth/react";
 
 const initialState = { error: "", success: false, redirectUrl: "" };
@@ -16,7 +17,32 @@ const initialState = { error: "", success: false, redirectUrl: "" };
 export default function RegisterForm() {
     const { showToast } = useToast();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+    /**
+     *   #637 THE GUARD #262 ADDED TO THE LOGIN FORM WAS NEVER ADDED TO THIS ONE.
+     *
+     *   `callbackUrl` arrives in the query string, so an attacker writes it, and
+     *   `router.replace(callbackUrl)` forty lines below acted on the raw value
+     *   for anyone who opened the page already signed in.
+     *
+     *   `//evil.example` is what gets through a `startsWith("/")` check, and this
+     *   had no check at all. Next 16's app router resolves it with
+     *   `new URL(href, location.href)` → `https://evil.example/`, finds
+     *   `url.origin !== location.origin`, and performs a HARD navigation — so
+     *   easysalesexport.com/auth/register?callbackUrl=//evil.example is a link on
+     *   the real domain that lands somebody on somebody else's page.
+     *
+     *   #262 fixed the login form and wrote the rule down once. The ratchet it
+     *   left catches a guard written the WRONG way; it could not catch a door
+     *   with no guard on it, which is what this was. That ratchet is widened in
+     *   safe-redirect-path.test.ts to sweep for the parameter rather than for
+     *   the mistake.
+     *
+     *   The server half was already right: registerAction asks isSafeInternalPath
+     *   before it puts this value in `redirectUrl`, which is what
+     *   `window.location.href` acts on after a successful registration. One of
+     *   the two halves being safe is how this looked fine.
+     */
+    const callbackUrl = safeInternalPath(searchParams.get("callbackUrl"), "/dashboard");
     const { status } = useSession();
     const router = useRouter();
 
