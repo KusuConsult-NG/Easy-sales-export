@@ -107,12 +107,15 @@ import { supabaseDb as db, aggregateProjection } from '@/lib/supabase-db';
 import { AggregateField } from '@/lib/firestore-compat';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { NATIVE_COLUMNS, FIELD_TO_COLUMN } from '@/lib/supabase-table-map';
+import { dbDescribe as sharedDbDescribe, restDescribe, HAS_REST, assertRestReachable } from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
 
 let client: Client | null = null;
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 
 beforeAll(async () => {
     if (!REQUESTED) return;
@@ -150,7 +153,13 @@ async function wipe() {
 beforeEach(async () => { if (REQUESTED) await wipe(); });
 
 // ─────────────────────────────────────────────────────────────────────────────
-dbDescribe('#455 — the aggregate sums the column, and gets the same answer', () => {
+//   #651 — these go through lib/supabase-db, which speaks PostgREST.
+//   local-postgres.sh serves Postgres alone and says so; asking for the
+//   adapter there produced `TypeError: fetch failed` on every one of them.
+restDescribe('#455 — the aggregate sums the column, and gets the same answer', () => {
+    //   #651 — one legible failure if the declared stack is not up.
+    beforeAll(assertRestReachable);
+
     it('SUMS A NATIVE COLUMN CORRECTLY', async () => {
         // The document carries a DIFFERENT number from the column on purpose.
         // If the aggregate silently fell back to raw_data this would be 999000,
@@ -448,8 +457,22 @@ describe('#455 — the instrument itself', () => {
         //   a real remote URL — the reads SUCCEED, and a suite that deletes
         //   rows by prefix runs against somebody's data.
         //
-        // Only meaningful when the suite is actually running.
-        if (!REQUESTED) return;
+        /*
+         *   Only meaningful when the suite is actually running THROUGH THE
+         *   ADAPTER.
+         *
+         *   #651 — this was gated on `REQUESTED`, which asks whether a DATABASE
+         *   was requested, while everything it checks is about PostgREST. With a
+         *   Postgres and no stack the adapter tests skip, no row is touched
+         *   through the adapter, and there is nothing to point anywhere — but
+         *   this still ran and failed on `new URL('')`.
+         *
+         *   The guard itself is untouched and is not weakened: it is the thing
+         *   standing between a suite that deletes rows by prefix and somebody's
+         *   real data. What changes is that it asks about the capability it is
+         *   actually guarding.
+         */
+        if (!HAS_REST) return;
 
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
         expect(url).not.toContain('placeholder');

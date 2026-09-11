@@ -55,12 +55,15 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
 import { categorizeUser } from '@/lib/broadcast-logic';
+import { dbDescribe as sharedDbDescribe, restDescribe } from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
 
 let client: Client | null = null;
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 
 const TAG = 'seg-473';
 

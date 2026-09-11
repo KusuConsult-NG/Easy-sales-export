@@ -1,15 +1,19 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`c1e69157`, `79ae414e` and now at `77bdf37c`.** Every line below was checked against the
+`79ae414e`, `77bdf37c` and now at `1fb946fd`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 703 suites / 12,829 tests green.** The
-version before this one said 12,810 across 702. A status document that
+**Gate at this revision: build clean, 704 suites / 12,837 tests green.** The
+version before this one said 12,829 across 703.
+
+**And the Postgres suites were run for real** against PostgreSQL 16 with the
+schema and all 33 migrations (#651): 10 suites, 126 passed, 23 skipped for want
+of a PostgREST. `money-functions` and `fake-db-matches-postgres` both pass. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
 
@@ -267,6 +271,52 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#651) The suite holding the money layer's concurrency proofs ran nowhere
+
+Three harnesses cover different things. The unit run mocks `@/lib/supabase-db`
+globally and **cannot execute one line of the SQL**. `jest.config.db.js` goes
+through PostgREST and tests the adapter. `jest.config.pg.js` is the only one that
+can do what every money path depends on — **two connections to one database,
+firing the same claim at once, proving exactly one wins.**
+
+`test:integration` and `test:db` each got a CI job *and* a guard turning a silent
+skip into a failure. **`test:pg` got neither** — it appears in `package.json`, in
+a local helper's echo, and in no workflow at all. So:
+
+| never running in CI | what it is |
+|---|---|
+| `money-functions.test.ts` | the concurrency proofs for `claim_status_transition`, `debit_wallet_locked`, `credit_wallet_once`… |
+| `fake-db-matches-postgres.test.ts` | **the contract test** `lib/testing/fake-db` cites as why its claims are *"measured rather than asserted"* — every suite calling `installFakeDb` rests on it |
+
+**Both were run here, against a real PostgreSQL 16 with all 33 migrations. Both
+pass.** The claims were sound; what was missing was anything that would notice if
+they stopped being.
+
+**And it could not have been wired up as it stood.** Run exactly as its own
+documentation instructs it was **red**: 22 tests across 5 suites, every one named
+"THE ADAPTER", failing with `TypeError: fetch failed` — they go through
+PostgREST, which `local-postgres.sh` says in its own header it deliberately does
+not serve. A suite that cannot pass in its own harness is a suite nobody runs.
+The two capabilities are asked for separately now.
+
+One more was red for a different reason, and it is this audit's favourite shape:
+`AND READS KEEP WORKING WHILE ONE IS HELD` asserted `count(*) > 0` on `users`, so
+it needed **a database somebody had already used** — and it measured the wrong
+thing, since the claim is that the read is not *blocked*. It inserts its own row
+now.
+
+Measured: **before** 6 suites failed / 22 tests; **after** 10 suites pass, 126
+passed, 23 honestly skipped. The CI step is the one piece that could not be
+executed from here — Actions cannot run locally — so the YAML is parse-validated
+and every piece it depends on is asserted in the default run.
+
+⚠️ **Two mutants survived the first run and both were mine.** One replaced the CI
+step with `echo skipping` and the suite stayed green, because the paragraph I had
+just written *above* the step says `npm run test:pg` in prose — my own write-up
+satisfied the assertion about the code. The other disarmed the guard with
+`|| true` while leaving the text the assertion looked for in place. Both are
+anchored on the whole guard now, over comment-stripped YAML.
 
 ### ✅ (#650) The last unexecuted cron — and the claim underneath it, checked
 

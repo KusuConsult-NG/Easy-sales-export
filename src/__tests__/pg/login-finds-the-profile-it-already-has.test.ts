@@ -60,12 +60,15 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
 import { readFileSync } from 'fs';
+import { dbDescribe as sharedDbDescribe, restDescribe, assertRestReachable } from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
 
 let client: Client | null = null;
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 
 const TAG = 'lookup-476';
 const WANTED = `${TAG}-ada@example.com`;
@@ -189,7 +192,13 @@ dbDescribe('#476 — and it does not match a different account', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-dbDescribe('#476 — asked through the adapter the login actually calls', () => {
+//   #651 — these go through lib/supabase-db, which speaks PostgREST.
+//   local-postgres.sh serves Postgres alone and says so; asking for the
+//   adapter there produced `TypeError: fetch failed` on every one of them.
+restDescribe('#476 — asked through the adapter the login actually calls', () => {
+    //   #651 — one legible failure if the declared stack is not up.
+    beforeAll(assertRestReachable);
+
     it('findProfilesByEmail RESOLVES THE BADLY-STORED ROW', async () => {
         //   Source scanning cannot show this: the RPC has to exist, be visible
         //   to PostgREST, and come back in the shape auth.ts consumes. #473

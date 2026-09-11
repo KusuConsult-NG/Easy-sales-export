@@ -175,15 +175,28 @@ if [ "$code" != "200" ]; then
 fi
 echo "   ok"
 
+# LOCAL_PG_URL is exported alongside them — #651.
+#
+# The stack already runs a PostgreSQL, and this script has just applied the
+# schema and every migration to it. `npm run test:pg` needs exactly that, and it
+# was invoked by no workflow at all: test:integration and test:db each got a CI
+# job, and the suite holding the money SQL's concurrency proofs and the fake
+# database's contract test got neither.
+#
+# Exporting it here rather than adding a second Postgres to the job means the pg
+# suites run with BOTH capabilities present, so the adapter tests among them run
+# too instead of skipping.
 if [ -n "${GITHUB_ENV:-}" ]; then
     {
         echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
         echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
         echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY"
+        echo "LOCAL_PG_URL=$DB_URL"
     } >> "$GITHUB_ENV"
     echo "== wrote credentials to \$GITHUB_ENV"
 else
     echo "export NEXT_PUBLIC_SUPABASE_URL=$API_URL"
     echo "export NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
     echo "export SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY"
+    echo "export LOCAL_PG_URL=$DB_URL"
 fi

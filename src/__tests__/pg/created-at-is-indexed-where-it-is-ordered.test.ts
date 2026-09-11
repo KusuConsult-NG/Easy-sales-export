@@ -43,12 +43,15 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
 import { readFileSync } from 'fs';
+import { dbDescribe as sharedDbDescribe, restDescribe } from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
 
 let client: Client | null = null;
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 
 beforeAll(async () => {
     if (!REQUESTED) return;
@@ -297,18 +300,48 @@ dbDescribe('#469 — asked of the database, not read off the file', () => {
     });
 
     it('AND READS KEEP WORKING WHILE ONE IS HELD', async () => {
-        // ShareLock is only good news if ACCESS SHARE does not conflict with it.
-        // Rather than trust the table, hold one and read through it.
+        /*
+         *   ShareLock is only good news if ACCESS SHARE does not conflict with
+         *   it. Rather than trust the table, hold one and read through it.
+         *
+         *   #651 — THIS ASSERTED `count(*) > 0` AND SO NEEDED A DATABASE
+         *   SOMEBODY HAD ALREADY USED. On a cluster made a minute ago by
+         *   ./scripts/local-postgres.sh — the exact command this suite's own
+         *   header tells you to run — `users` is empty, the read returns 0, and
+         *   the test fails having proved nothing was wrong.
+         *
+         *   It also measured the wrong thing. The claim is "the read is not
+         *   blocked"; a row count is evidence of that only by accident, and
+         *   would go on being "true" if the query returned stale nonsense. What
+         *   proves it is that the read COMPLETES, promptly, while the lock is
+         *   held — so the reader now inserts its own row first and then asserts
+         *   it can see exactly that row through the lock.
+         *
+         *   A test that passes only on a database with history is a test that is
+         *   red in CI and green on the laptop of whoever wrote it, which is one
+         *   of the reasons this suite ran nowhere.
+         */
         const reader = new Client({ connectionString: URL, connectionTimeoutMillis: 5000 });
         await reader.connect();
+        const probeId = `probe-469-${Date.now()}`;
         try {
+            await client!.query(
+                `insert into public.users (id, raw_data) values ($1, '{}'::jsonb)
+                 on conflict (id) do nothing`,
+                [probeId],
+            );
+
             await client!.query('BEGIN');
             await client!.query('LOCK TABLE public.users IN SHARE MODE');
 
-            const { rows } = await reader.query('select count(*)::int as n from public.users');
-            expect(rows[0].n).toBeGreaterThan(0);
+            const { rows } = await reader.query(
+                'select count(*)::int as n from public.users where id = $1', [probeId],
+            );
+            expect(rows[0].n).toBe(1);
         } finally {
             await client!.query('ROLLBACK');
+            await client!.query('delete from public.users where id = $1', [probeId])
+                .catch(() => {});
             await reader.end().catch(() => {});
         }
     });

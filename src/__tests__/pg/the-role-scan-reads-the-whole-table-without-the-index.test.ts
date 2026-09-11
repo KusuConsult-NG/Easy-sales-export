@@ -76,12 +76,15 @@
 
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
+import { dbDescribe as sharedDbDescribe, restDescribe, assertRestReachable } from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
 
 let client: Client | null = null;
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 
 const TAG = 'scale-472';
 const SMALL = 20_000;
@@ -217,7 +220,13 @@ dbDescribe('#472 — the unindexed query reads the whole table and the indexed o
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-dbDescribe('#472 — and the answer is the same either way', () => {
+//   #651 — these go through lib/supabase-db, which speaks PostgREST.
+//   local-postgres.sh serves Postgres alone and says so; asking for the
+//   adapter there produced `TypeError: fetch failed` on every one of them.
+restDescribe('#472 — and the answer is the same either way', () => {
+    //   #651 — one legible failure if the declared stack is not up.
+    beforeAll(assertRestReachable);
+
     /**
      * An index that changed the ANSWER would be a far worse defect than the one
      * it fixed. The adapter is driven here rather than raw SQL, because the

@@ -46,13 +46,16 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { Client } from 'pg';
 import { DEDICATED_TABLE_MAP, FIELD_TO_COLUMN, getTableName } from '@/lib/supabase-db';
+import { dbDescribe as sharedDbDescribe, restDescribe } from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
 
 let client: Client | null = null;
 
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 const dbIt = it;
 
 beforeAll(async () => {

@@ -44,12 +44,15 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
 import { readFileSync } from 'fs';
 import { stripComments } from '@/lib/testing/strip-comments';
+import { dbDescribe as sharedDbDescribe, restDescribe, assertRestReachable } from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
 
 let client: Client | null = null;
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 
 const TAG = 'blank-479';
 
@@ -98,7 +101,13 @@ const migration032 = async (): Promise<boolean> => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-dbDescribe('#479 — a blank email must not match another blank email', () => {
+//   #651 — these go through lib/supabase-db, which speaks PostgREST.
+//   local-postgres.sh serves Postgres alone and says so; asking for the
+//   adapter there produced `TypeError: fetch failed` on every one of them.
+restDescribe('#479 — a blank email must not match another blank email', () => {
+    //   #651 — one legible failure if the declared stack is not up.
+    beforeAll(assertRestReachable);
+
     it('THE ADAPTER DOES NOT WIDEN A BLANK SEARCH', async () => {
         //   The assertion the guard exists for. Through the real adapter and
         //   real PostgREST: a whitespace-only address must behave exactly as it

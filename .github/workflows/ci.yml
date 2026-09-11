@@ -198,6 +198,48 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm run test:db
 
+      # The money SQL, against that same database — #651.
+      #
+      # WHY THIS STEP DID NOT EXIST
+      # ---------------------------
+      # `npm run test:pg` was invoked by no workflow. The two steps above each
+      # got a CI job AND a guard that turns a silent skip into a failure; this
+      # one got neither, and it is the only harness that can do what the money
+      # layer actually depends on — two connections to one database, firing the
+      # same claim at once, proving exactly one wins. jest.config.pg.js says so
+      # in its own header, and says why neither of the other two can.
+      #
+      # Two suites in it matter more than the rest:
+      #
+      #   money-functions.test.ts          the concurrency proofs for
+      #                                    claim_status_transition,
+      #                                    debit_wallet_locked, credit_wallet_once
+      #                                    and the rest.
+      #   fake-db-matches-postgres.test.ts the contract test lib/testing/fake-db
+      #                                    cites as the reason its claims are
+      #                                    "measured rather than asserted" — and
+      #                                    every suite that calls installFakeDb
+      #                                    rests on it.
+      #
+      # AND IT COULD NOT HAVE BEEN ADDED BEFORE. Run as its own documentation
+      # instructs it was RED: 22 tests named "THE ADAPTER" went through
+      # PostgREST, which the plain-Postgres harness deliberately does not serve.
+      # Those ask for that capability separately now, so here — where the stack
+      # provides both — every one of them runs.
+      #
+      # LOCAL_PG_URL comes from ci-integration-db.sh via $GITHUB_ENV. If it were
+      # ever missing the suites would SKIP rather than fail, so it is asserted
+      # first: a check that passes by not running is the shape this audit keeps
+      # removing, and this file already says so twice.
+      - name: The money SQL, against the same database
+        if: ${{ !cancelled() }}
+        run: |
+          test -n "$LOCAL_PG_URL" || {
+            echo "LOCAL_PG_URL is empty, so the pg suites would skip silently." >&2
+            exit 1
+          }
+          npm run test:pg
+
       - name: Stop Supabase
         if: always()
         run: npx --yes supabase@latest stop --no-backup || true

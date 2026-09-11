@@ -36,6 +36,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import { Client } from 'pg';
+import { dbDescribe as sharedDbDescribe, restDescribe } from '@/lib/testing/pg-harness';
 
 /**
  * jest.config.pg.js deliberately does NOT load jest.setup.js — a test that opens
@@ -60,7 +61,9 @@ jest.mock('@/lib/supabase-db', () => {
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 
 let client: Client | null = null;
 

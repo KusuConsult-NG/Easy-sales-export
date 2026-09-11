@@ -44,6 +44,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { Client } from 'pg';
+import { dbDescribe as sharedDbDescribe, restDescribe } from '@/lib/testing/pg-harness';
 
 /**
  * Decided synchronously, at module scope, so `describe.skip` can be used and
@@ -55,7 +56,9 @@ const URL = process.env.LOCAL_PG_URL ?? '';
 let client: Client | null = null;
 
 /** describe when a database was asked for, describe.skip when it was not. */
-const dbDescribe: typeof describe = (REQUESTED ? describe : describe.skip) as typeof describe;
+//   #651 — one definition, in lib/testing/pg-harness. This line was
+//   written out identically in all ten suites.
+const dbDescribe = sharedDbDescribe;
 const dbIt = it;
 
 beforeAll(async () => {
