@@ -1,16 +1,17 @@
 # Outstanding work
 
-**Rewritten 2026-09-11 at `0ba8cd92`, updated the same day at `d846ec45`.**
-Every line below was checked against the tree, not carried forward.
+**Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5` and now
+at `a3d179d5`.** Every line below was checked against the tree, not carried
+forward.
 
-**The cron change since then is verified, not assumed:** run 780 of Scheduled
-Jobs, 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the
-first successful scheduled run since 22 August. See §1.
+**The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
+2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
+successful scheduled run since 22 August. See §1.
 
-The version this replaces was last updated 2026-08-14 and said "2,058 tests
-passing". There are now **12,474 across 680 suites**, build clean. A status
-document that contradicts the repository is worse than none — it is read and
-believed — so it was replaced rather than appended to.
+**Gate at this revision: build clean, 696 suites / 12,704 tests green.** The
+version before this one said 12,474 across 680. A status document that
+contradicts the repository is worse than none — it is read and believed — so
+these numbers are re-read from a full run each time this file is touched.
 
 Gate for every item marked done: `npm run build` then `npm run test`, green, with
 the change mutation-tested against a control.
@@ -133,6 +134,28 @@ cannot be checked from inside the repository.
 
 ---
 
+## 1b. Since the last revision of this file (`e10f19b5` → `a3d179d5`)
+
+Ten findings. Four are defects a member or an administrator could meet; four are
+defects in this audit's own instruments, which matter because a broken
+instrument reports "clean"; two are both.
+
+| | |
+|---|---|
+| ✅ #633 | The support inbox listed every conversation and opened none. #356 fixed the gate and left the hand-written admin test on the two functions that decide what may be READ. |
+| ✅ #634 | **A notification addressed to you was hidden from you.** A subscription filter stood between members and their own mail: escrow, dispute, export and land notifications were dropped for anyone without an active registration for that module — which is most of the people they are written to. Both badges agreed, on zero. |
+| ✅ #635 | **The admin inbox listed doors it had locked.** The list and the opener kept two copies of the conversation rule and had drifted; the list's extra branch matched a module keyword inside a PARTICIPANT'S EMAIL, so private member-to-member threads were shown to a module admin, last message included, and then refused on click. |
+| ✅ #636 | **Every certificate this platform prints named a page that does not exist.** The verifier is `/academy/verify/:id`; the screen footer, the PDF footer and CertificateGenerator all printed `/verify/:id`, which 404s. Measured against a built server. Certificates already in circulation are rescued by a permanent redirect. |
+| ✅ #637 | **An open redirect on the registration form.** `router.replace(searchParams.get("callbackUrl"))` — Next 16 hard-navigates `//evil.example` off-site. #262 fixed the login form beside it; its ratchet swept for a guard written the WRONG way and could not see a door with no guard at all. Also: three cooperative links built `//onboarding` on the dedicated host. |
+| ✅ #638 | The ownership scanner read PARAMETERS, so it could not see an id arriving in a request BODY. Over `src/app/api` it reported zero across 123 route files — a silence indistinguishable from a clean result. Repaired; still zero, now pinned at zero. |
+| ✅ #639 | The same blind spot in `fake-guard-scan`, which had never been pointed at `src/app/api` at all. The vocabulary is shared now rather than corrected twice. Zero fake guards on both surfaces. |
+| ✅ #640 | `module-sweep` composes three scanners: two were pointed at half the surface and the third was keyed on a field that does not exist, so its column had **never** fired. |
+| ✅ #641 | **The withdrawal rate limit guarded the one door nobody uses.** "Very strict (financial security)" had a single consumer — a route with no callers — while the three screens a member presses had none. Each request debits savings, locks funds and queues admin work. |
+| ✅ #642 | **The bank-account name oracle had a meter on one door and a turnstile on the other.** 10/hour on the action, 200/**minute** on the route asking Paystack the same question. |
+
+
+---
+
 ## 2. UI
 
 ### ✅ Done
@@ -213,6 +236,41 @@ named in `kyc-validators`.
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
 
+### ☐ `lib/rate-limit.ts` pools fourteen routes into one budget
+
+The newest item, and the largest of the open ones. There are TWO rate-limiting
+modules:
+
+| | |
+|---|---|
+| `lib/rate-limiter.ts` + `rate-limits.config.ts` | named buckets, each with its own key space. Repaired for exactly this. |
+| `lib/rate-limit.ts` + `security.ts` | ONE generic bucket — `RATE_LIMIT_MAX_REQUESTS`, default 200/minute — under a single un-named prefix, applied by `withRateLimit` to **14 routes**. |
+
+So MFA setup, file upload, QR verify, loan application and three KYC endpoints
+all draw from one counter per user. `rate-limits.config.ts` documents this exact
+failure in its own header — "every limiter built here shared one key per
+identifier… a member was refused a withdrawal because they had used the app" —
+and the repair reached one of the two modules.
+
+Doable here: give `withRateLimit` a required route name that enters the key, as
+`rateLimit()` already does. It changes key spaces, not limits, so no member
+becomes more restricted.
+
+### ☐ Two implementations of the Paystack bank-resolve call
+
+#346 built `lib/bank-account-resolve` so callers would stop writing their own.
+`actions/paystack.ts::verifyBankAccount` still writes its own `fetch`. Recorded
+during #642 and deliberately not folded into it: the meter was what had a live
+consequence, and the action's error strings are pinned by two suites, so
+consolidating is its own read.
+
+### ☐ The `api` and `webhook` rate-limit buckets have no consumers
+
+Found in the same sweep as `kyc` (#642) and **not yet triaged**. `kyc` was read
+and deliberately left unwired, with a conditional ratchet. These two have not
+been read at all — they may be the same story or they may be a limit somebody
+meant to apply.
+
 ---
 
 ## 4. Recurring defect classes this audit keeps finding
@@ -254,3 +312,29 @@ new, and because two of them were found in **my own work** during this session.
 6. **Audit the instrument before believing the measurement.** One sweep reported
    47, then 121, then 57 "defects", every one of them a fault in the probe. Had
    any been believed, they would have been reported as application bugs.
+
+   **This class produced four findings of its own in #638–#640**, all in the
+   audit's own tooling, all with the same signature: a scanner reporting ZERO
+   over a surface it could not read. The repair each time was to point it at a
+   known-bad sample first and only then believe its answer about the tree.
+
+7. **A surviving mutant is a question about the TESTS before it is a question
+   about the code.** Three findings running (#638, #639, #641/#642) had a mutant
+   survive that turned out to be a missing case or an under-stated property, not
+   a redundant rule. Each one made the assertion stronger rather than being
+   explained away.
+
+---
+
+## 5. Read, and deliberately not acted on
+
+Recorded so nobody re-reads them, and so that "no finding" is a measurement.
+
+| | |
+|---|---|
+| `module-sweep` MONEY leads | 66 leads over 654 entries. The route ones were read in #640 — a webhook signature, two cron secrets, two public routes, two cooperative money routes. ~50 remaining are the `MONEY`-with-no-role-check class: a member moving their OWN money, which is the largest documented false-positive class this sweep has. Not individually read. |
+| `_confirmWalletFundingAction` | No session, correctly: the authority is the payment. Verified against Paystack, amount taken from what was actually charged, `creditWalletOnce` claims the reference atomically so a replay answers "already processed". |
+| `joinVillageMarketEventAction` | `eventId` is caller-supplied and addresses the event; the value written is the session's own id, and the caller's seller status is checked first. No ownership question to answer. |
+| `rateLimitConfig.kyc` | Unwired on purpose while `IDENTITY_PROVIDER === 'none'`, with a conditional ratchet (#642). |
+| `/api/cooperative/withdraw` | No in-app caller, kept anyway — it may serve a client this repository cannot see. Pinned so a caller appearing is noticed (#641). |
+| 107 orphan symbols | Six triaged, one real (#629). Most of the rest are deliberate decisions with their reasons already written down. Falling return. |
