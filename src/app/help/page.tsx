@@ -224,18 +224,47 @@ const faqs = [
     },
 ];
 
-const resources = [
+/**
+ *   #628 THREE CARDS THAT LOOKED CLICKABLE AND WENT NOWHERE.
+ *
+ *        All three rendered as `<Link href="#">` inside a card with a hover
+ *        lift and a shadow — every signal a user reads as "this opens
+ *        something". Clicking did nothing at all: no navigation, no message,
+ *        not even a 404 to explain itself. On a HELP page, which is where
+ *        somebody goes when they are already stuck, that is the worst place on
+ *        the platform to put a control that ignores you.
+ *
+ *        The note beside "API Documentation" — removed earlier for pointing at
+ *        a route that does not exist — called these three "a content gap, real
+ *        pages someone intends to write" and left them for the owner. That was
+ *        right about the CONTENT and wrong about the CARD: waiting for the
+ *        pages to be written is a decision about content, but shipping a dead
+ *        control while waiting is not.
+ *
+ *        They are not deleted, because the intent to write them is real and
+ *        deleting it loses that. `link: null` marks a resource as announced but
+ *        not yet available; the card below then renders as plain, unlifted,
+ *        un-hoverable text with "Coming soon" on it. It tells the truth and
+ *        stops pretending to be a button.
+ */
+const resources: {
+    title: string;
+    description: string;
+    icon: typeof Book;
+    /** null = announced, not yet written. Renders as text, not a link. */
+    link: string | null;
+}[] = [
     {
         title: "Getting Started Guide",
         description: "Complete walkthrough for new users",
         icon: Book,
-        link: "#"
+        link: null
     },
     {
         title: "Video Tutorials",
         description: "Watch step-by-step guides",
         icon: Youtube,
-        link: "#"
+        link: null
     },
     // "API Documentation" was removed rather than relinked. It pointed at
     // /help/api-docs, which is not a route — there is no /help segment beyond
@@ -245,14 +274,17 @@ const resources = [
     //
     // Deliberately NOT changed to "#" like its three siblings: an inert card
     // that looks clickable is the same defect this audit removed from the admin
-    // and cooperative screens. Those three placeholders are a content gap —
-    // real pages someone intends to write — and are left for the owner rather
-    // than quietly deleted here.
+    // and cooperative screens.
+    //
+    //   #628 AND THE THREE SIBLINGS ARE NOT "#" ANY MORE EITHER. The same
+    //   sentence applied to them and they were left anyway, because the pages
+    //   behind them are a content gap. The gap is still the owner's; the dead
+    //   control was not.
     {
         title: "Community Forum",
         description: "Connect with other users",
         icon: Users,
-        link: "#"
+        link: null
     },
 ];
 
@@ -312,21 +344,44 @@ export default function HelpCenterPage() {
 
                 {/* Resources Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                    {resources.map((resource) => (
-                        <Link
-                            key={resource.title}
-                            href={resource.link}
-                            className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 border border-slate-200"
-                        >
-                            <resource.icon className="w-10 h-10 text-primary mb-3" />
-                            <h3 className="font-bold text-slate-900 mb-2">
-                                {resource.title}
-                            </h3>
-                            <p className="text-sm text-slate-600">
-                                {resource.description}
-                            </p>
-                        </Link>
-                    ))}
+                    {resources.map((resource) => {
+                        const body = (
+                            <>
+                                <resource.icon className={`w-10 h-10 mb-3 ${resource.link ? "text-primary" : "text-slate-400"}`} />
+                                <h3 className={`font-bold mb-2 ${resource.link ? "text-slate-900" : "text-slate-500"}`}>
+                                    {resource.title}
+                                </h3>
+                                <p className="text-sm text-slate-600">
+                                    {resource.description}
+                                </p>
+                                {!resource.link && (
+                                    <span className="mt-3 inline-block text-xs font-semibold uppercase tracking-wide text-slate-500 bg-slate-100 rounded-full px-3 py-1">
+                                        Coming soon
+                                    </span>
+                                )}
+                            </>
+                        );
+
+                        //   #628 A RESOURCE WITHOUT A DESTINATION IS NOT A LINK.
+                        //   No hover lift, no pointer, no anchor for a keyboard
+                        //   or a screen reader to land on and then do nothing.
+                        return resource.link ? (
+                            <Link
+                                key={resource.title}
+                                href={resource.link}
+                                className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 border border-slate-200"
+                            >
+                                {body}
+                            </Link>
+                        ) : (
+                            <div
+                                key={resource.title}
+                                className="bg-white/70 rounded-2xl p-6 shadow-sm border border-dashed border-slate-300"
+                            >
+                                {body}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {/* FAQs */}

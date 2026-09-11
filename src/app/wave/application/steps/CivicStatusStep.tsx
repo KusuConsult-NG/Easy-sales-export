@@ -124,12 +124,16 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Voter's Card Number (PVC) */}
                 <div>
+{/*
+                          *   #628 — see KYCForm. The cap was 19 and the example
+                          *   beside it is twenty characters, so the field could not
+                          *   accept its own placeholder. kyc-validators decided
+                          *   against a ceiling on purpose; this input kept one.
+                          */}
                     <IdInput
                         label="Voter's Card Number (PVC)"
                         value={data?.votersCardNumber || ""}
                         onChange={(v) => updateData({ votersCardNumber: v })}
-                        maxLength={19}
-                        showCount
                         placeholder="e.g. 90F5B123456789012345"
                         hint="Enter the Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                         accentColor="emerald"

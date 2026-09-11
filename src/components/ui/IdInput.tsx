@@ -4,8 +4,22 @@
  * Standardised identity number input used across all 6 modules.
  * Width auto-sizes to the expected data length via CSS `ch` units:
  *   - maxLength={11}  → input is ~14ch wide (perfect for NIN / BVN)
- *   - maxLength={20}  → input is ~23ch wide (Voter's Card)
  *   - no maxLength    → fills available space (flex-1)
+ *
+ *   #628 THE SECOND EXAMPLE USED TO READ `maxLength={20}` → Voter's Card, and
+ *        it is gone rather than corrected to 19, because BOTH numbers are
+ *        wrong for that field: a voter's card must have NO ceiling here.
+ *
+ *        kyc-validators settled it and wrote down why — "the platform does not
+ *        agree with itself about how long a voter's card is, there is no live
+ *        database to settle it, and a rule that refuses a real member is worse
+ *        than the defect it fixes." Both call sites capped it at 19 anyway,
+ *        against a placeholder of twenty characters, so the field could not
+ *        accept its own example.
+ *
+ *        This comment is what somebody reads when adding the next identity
+ *        field, so leaving a length in it that nothing should use is how the
+ *        cap would come back.
  */
 
 'use client';

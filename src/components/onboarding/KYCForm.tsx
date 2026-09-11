@@ -521,12 +521,33 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
             {/* ── Voter's Card — collect number only, no verification required ── */}
             <div className="pt-4 border-t border-slate-100">
+{/*
+                 *   #628 NO maxLength. It was 19, and the placeholder
+                 *   beside it — 90F5B123456789012345 — is TWENTY
+                 *   characters, so THE FIELD COULD NOT ACCEPT ITS OWN
+                 *   EXAMPLE. With showCount on, a member with a
+                 *   twenty-character VIN watched the counter stop at 19/19
+                 *   with a digit of their card still in hand.
+                 *
+                 *   kyc-validators had already reasoned this out and
+                 *   decided AGAINST a ceiling: "the platform does not agree
+                 *   with itself about how long a voter's card is, there is
+                 *   no live database to settle it, and a rule that refuses
+                 *   a real member is worse than the defect it fixes." Its
+                 *   own note even says "the form truncates its own
+                 *   example". The validator was fixed; these two inputs
+                 *   kept the ceiling anyway — one of N doors.
+                 *
+                 *   Junk is still refused, by the rule that owns the
+                 *   question: a floor of nine, alphanumeric only, and no
+                 *   single character repeated. showCount goes with the
+                 *   cap, because a count toward a limit we have decided not
+                 *   to set is a number with no meaning.
+                 */}
                 <IdInput
                     label="Voter's Card Number (PVC / VIN)"
                     value={formData.votersCard || ''}
                     onChange={(v) => handleChange('votersCard', v)}
-                    maxLength={19}
-                    showCount
                     placeholder="e.g. 90F5B123456789012345"
                     hint="The Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                     accentColor="orange"
