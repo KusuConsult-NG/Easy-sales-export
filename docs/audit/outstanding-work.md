@@ -1,7 +1,11 @@
 # Outstanding work
 
-**Rewritten 2026-09-11 at `0ba8cd92`.** Every line below was checked against the
-tree on that commit, not carried forward from the previous version.
+**Rewritten 2026-09-11 at `0ba8cd92`, updated the same day at `d846ec45`.**
+Every line below was checked against the tree, not carried forward.
+
+**The cron change since then is verified, not assumed:** run 780 of Scheduled
+Jobs, 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the
+first successful scheduled run since 22 August. See §1.
 
 The version this replaces was last updated 2026-08-14 and said "2,058 tests
 passing". There are now **12,474 across 680 suites**, build clean. A status
@@ -51,7 +55,42 @@ anywhere, but treat them as disclosed.
 **Do not rotate `MFA_SECRET_KEY`.** It encrypts users' recovery codes at rest;
 rotating it destroys them.
 
-### 🔑 Set `CRON_SECRET` and `PRODUCTION_URL` as repository secrets
+### ✅ The scheduled jobs are running again — verified
+
+**This item was wrong when it was written, and the correction is the finding.**
+
+It said the two secrets were unset. They were not: the workflow's "Check
+required secrets" job exits 1 if either is empty and had SUCCEEDED on every
+run. The owner said so; the Actions history agreed with the owner.
+
+What had actually been failing was the call after it — 779 times, ending
+2026-08-22 — and every one of those runs printed
+
+    /api/cron/process-email-queue returned HTTP 404
+
+which reads as a missing route. The body said otherwise and nobody was
+reading it: `{"status":"error","code":404,"message":"Application not
+found",...}` is the HOSTING PLATFORM's error page. There was no app at the
+address the secret then held. The response at the time was to comment the
+schedule out, which silenced the alarm rather than answering it.
+
+Two fixes came out of that, and then the proof:
+
+  #631  the workflow now says WHICH of three things failed — nothing deployed
+        at that host, the secret refused, or the app 404ing its own route.
+        Three different people, three different actions.
+  #632  a 3xx is now a failure. The check was `-ge 400`, and a redirect is
+        not, so a redirect made the step PASS while the endpoint was never
+        invoked. One character — the apex instead of `www` — was enough to
+        make eight jobs report green for ever while doing nothing.
+
+  VERIFIED  run 780, 2026-09-11 12:30 UTC, `HTTP 200
+            {"success":true,"processed":0}`. First success since 22 August,
+            and a genuine 200 rather than a redirect counted as one.
+
+Nothing further is needed here. The other seven jobs fire on their own crons.
+
+### 🔑 (superseded) Set `CRON_SECRET` and `PRODUCTION_URL` as repository secrets
 
 ✅ **The schedule itself is now on** (#623). It had been commented out, which
 left eight jobs idle — escrow auto-release, Paystack reconciliation, fulfilment
@@ -106,19 +145,29 @@ cannot be checked from inside the repository.
 | ✅ | **Every route has an error boundary above it** (#622), proven by deleting a real one and watching the assertion fire. |
 | ✅ | **Dead internal links** — covered by three pre-existing suites. |
 
-### ☐ Interaction paths through multi-step flows
+### ✅ Interaction paths — nine of nine flows
 
-Everything above tests a screen's **first** state. What happens when someone
-clicks *through* the loan wizard, checkout, or KYC is covered only where a
-specific test already exists. This is the largest remaining UI gap and the next
-thing I would build.
+Everything above tested a screen's **first** state. These test what happens when
+somebody uses it. All nine multi-step flows are covered, three ways:
 
-### ☐ Three placeholder cards on `/help` that lead nowhere
+| | |
+|---|---|
+| #625 | **arriving** — a saved draft outside the step range left the WAVE application with ZERO buttons, and reloading restored the same dead step. Four flows; guarded once in `lib/draft-step`. |
+| #626 | **advancing** — `CivicStatusStep.validateForm` was `setErrors({}); return true`, a check that could not fail, in the step that collects the NIN. Plus three steps that crashed outright on a missing list. |
+| #627 | **going back** — two steps declared `onChange` and never called it, so everything typed on them was discarded by Back, silently, and was not in the draft either. |
+| #630 | seller verification let you through all four steps empty, then refused the whole thing with "Missing required fields", naming none of eleven. |
 
-Community Forum and two siblings have `link: "#"`. The file's own comment notes
-that an inert card which looks clickable is a defect this audit removed
-elsewhere, and left these as a content gap. They should become a visibly
-non-clickable "coming soon" state rather than looking like working links.
+Checked and sound, recorded so the absence of a finding is a measurement:
+cooperatives onboarding, academy application, the loan wizard, the onboarding
+tour. Double-submit was checked across six flows and is correctly guarded
+everywhere.
+
+### ✅ (#628) Three placeholder cards on `/help` that led nowhere
+
+They rendered as `<Link href="#">` inside a hover-lifting card and did nothing.
+Nothing is deleted — the intent to write those pages is real — but a resource
+with no destination is now plain text marked "Coming soon", with no anchor for a
+keyboard to land on and then ignore.
 
 ### ☐ `out_of_stock` presentation
 
@@ -145,12 +194,18 @@ hiding it, and it moves money.
 | ✅ | **#623** — `finance:refund` was declared, held by super_admin alone, and gated no door; both real refund paths asked a different permission. The declaration now matches the code, with no change to who can refund. |
 | ✅ | **#624** — `PRODUCT_VISIBLE_STATUSES` was consulted by nothing; fifteen hand-written copies decided what buyers see. All fifteen ask the rule now, with the value unchanged. |
 
-### ☐ Nigerian VIN length: 19 or 20 characters
+### ✅ (#628) Nigerian VIN length — no longer a question that needs answering
 
-`CivicStatusStep` and `KYCForm` both use `maxLength={19}`; `IdInput`'s
-documentation mentions 20 for a Voter's Card. A factual question about the
-document format, not a code defect — but if 19 is wrong, valid numbers are being
-truncated at entry.
+Both fields capped input at 19 beside a placeholder of `90F5B123456789012345`,
+which is TWENTY characters: **the field could not accept its own example**, and
+with `showCount` on, a member watched the counter stop at 19/19.
+
+`kyc-validators` had already decided against a ceiling — "a rule that refuses a
+real member is worse than the defect it fixes" — and the two inputs kept one
+anyway. The cap is gone; the floor, the alphanumeric rule and the
+repeated-character rule all remain. The true length is still unknown and no
+longer matters: the field accepts either, and the one place to add a ceiling is
+named in `kyc-validators`.
 
 ### ☐ Module apex domains have no apex → www redirect
 
@@ -167,7 +222,26 @@ new, and because two of them were found in **my own work** during this session.
 
 1. **A declared rule that nothing consults.** #618 (silo drew links only), #623
    (`finance:refund` gated nothing), #624 (`isVisibleProductStatus` had zero
-   callers). Three in one session.
+   callers), #629 (`isDisputeSettled`, whose docstring called itself "the rule
+   the screens and the guards share"). Four in one session.
+
+   **The sweep for the rest came back mostly clean, and that is the useful
+   result.** Every value export under `src/lib` was counted against every
+   reference in the application — 1,047 exports, 108 that nothing mentions — and
+   the security- and status-shaped ones were triaged by hand:
+
+   | | |
+   |---|---|
+   | `isDisputeSettled` | REAL. Fixed in #629. |
+   | `isSettledEscrowStatus` | The sibling checks mean something else — routing two statuses to dedicated actions, deliberately excluding a third. |
+   | `ORDER_TERMINAL_STATUSES` | The hand-written `delivered \|\| completed` means **fulfilled**, not terminal. Folding in `cancelled` would offer a review on a cancelled order. |
+   | `DECISION_LOCKED_STATUSES` | Documents in its own header why it is declarative and not the guard. |
+   | `lib/permissions.ts` | Settled in **#353** — a known second, incomplete matrix, deliberately kept, with `one-permission-authority` as its ratchet. |
+   | `requireAdminPermission` | An unused convenience wrapper. No correctness consequence. |
+
+   Six checked, one real. Most of the 108 are deliberate decisions with their
+   reasons already written down, so the remaining list is **not** a backlog of
+   107 defects — and grinding through it one at a time has a falling return.
 2. **The fix reached one of N doors.** #619 found #617 doing exactly this, one
    commit later.
 3. **"Could not tell" rendered as "no".** #620 (blank page), #621 (500 shown as
