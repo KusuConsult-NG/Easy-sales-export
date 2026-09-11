@@ -87,6 +87,12 @@ import { readFileSync } from "fs";
 import { relative } from "path";
 import * as ts from "typescript";
 import { collectActionFiles } from "./action-auth-scan";
+import {
+    CALLER_SUPPLIED_SOURCE,
+    ID_LIKE_NAME,
+    callerPayloadNames,
+    isPayloadGet,
+} from "./caller-supplied";
 
 const SESSION_GUARDS = new Set([
     "requireSession", "auth", "getServerSession", "getSession",
@@ -253,18 +259,6 @@ function insideRecordingCall(node: ts.Node): boolean {
     return false;
 }
 
-/**
- * An expression whose value the CALLER supplied — #638.
- *
- * The request body, the query string, the form payload and a dynamic route's
- * params. Everything a route handler can be handed without a session saying so.
- */
-const CALLER_SUPPLIED_SOURCE =
-    /\b(?:req|request)\b[\s\S]*?\.(?:json|formData|text)\(\)|\bawait\s+params\b|\bsearchParams\b/;
-
-/** A binding or key that names an identifier rather than a value. */
-const ID_LIKE_NAME = /(?:^|_)ids?$|Ids?$|^ids?$|ref$/i;
-
 function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
     const facts: FnFacts = {
         guarded: false, writes: false, reads: false, decides: false,
@@ -282,19 +276,10 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
         }
     }
 
-    /*
-     *   Names bound to a REQUEST PAYLOAD — `const form = await req.formData()`.
-     *   Collected first so a `.get("memberId")` on one of them is recognised
-     *   wherever it appears, rather than depending on walk order.
-     */
-    const payloadNames = new Set<string>();
-    (function collectPayloads(n: ts.Node) {
-        if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer
-            && CALLER_SUPPLIED_SOURCE.test(n.initializer.getText())) {
-            payloadNames.add(n.name.text);
-        }
-        ts.forEachChild(n, collectPayloads);
-    })(node);
+    //   #639 The payload vocabulary lives in caller-supplied.ts now, because
+    //   fake-guard-scan needed the same four shapes and a second copy of a
+    //   contract is the defect this audit has found most often.
+    const payloadNames = callerPayloadNames(node);
 
     function visit(n: ts.Node) {
         if (ts.isCallExpression(n)) {
@@ -358,31 +343,11 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
             }
         }
 
-        /*
-         *   `searchParams.get("userId")`, `formData.get("sellerId")` — the
-         *   doors where the id is named by a string rather than by a binding.
-         *
-         *   The receiver is matched against the payload names collected above
-         *   as well as against the obvious spellings, because a handler
-         *   routinely gives the payload its own name:
-         *
-         *       const form = await req.formData();
-         *       const memberId = form.get("memberId");
-         *
-         *   and a rule that only recognised the word `formData` read that as
-         *   clean. Written from the shapes in front of me rather than from the
-         *   shape of the thing, which is the same narrowing this whole finding
-         *   is about — caught by its own test before it shipped.
-         */
-        if (ts.isCallExpression(n) && calleeName(n) === "get") {
-            const key = n.arguments[0];
-            const receiver = ts.isPropertyAccessExpression(n.expression) ? n.expression.expression.getText() : "";
-            const receiverRoot = receiver.split(/[^\w$]/).filter(Boolean).pop() ?? "";
-            if (key && ts.isStringLiteral(key) && ID_LIKE_NAME.test(key.text)
-                && (/searchParams|formData|params|body|query/i.test(receiver)
-                    || payloadNames.has(receiver) || payloadNames.has(receiverRoot))) {
-                facts.takesId = true;
-            }
+        //   `searchParams.get("userId")`, `form.get("sellerId")` — the doors
+        //   where the id is named by a string rather than by a binding.
+        if (ts.isCallExpression(n)) {
+            const key = isPayloadGet(n, payloadNames);
+            if (key !== null && ID_LIKE_NAME.test(key)) facts.takesId = true;
         }
 
         if (ts.isBinaryExpression(n) && looksLikeIdentityComparison(n)) {

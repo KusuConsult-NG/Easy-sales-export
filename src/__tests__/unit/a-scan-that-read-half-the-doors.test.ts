@@ -163,6 +163,29 @@ describe('#638 — a route handler is a door the scan can read', () => {
         `)).toEqual(['POST']);
     });
 
+    it('AND ONE READ INLINE, WITHOUT EVER BEING GIVEN A NAME', () => {
+        /*
+         *   #639 Added because a mutant survived: emptying the receiver pattern
+         *   that recognises `searchParams`, `formData`, `body` and `params`
+         *   changed nothing in any test here. Every case written bound the value
+         *   to a variable first, and a variable's INITIALIZER is matched by the
+         *   source pattern instead — so the receiver rule was doing no work.
+         *
+         *   It earns its place when there is no variable at all, which is how a
+         *   one-line handler reads the id. A surviving mutant is a question
+         *   about the tests before it is a question about the code.
+         */
+        expect(scanRoute(`
+            export async function POST(req: NextRequest) {
+                ${GUARD}
+                await db.collection("wallets")
+                    .doc(req.nextUrl.searchParams.get("userId"))
+                    .update({ balance: 0, updatedBy: session.user.id });
+                return Response.json({ ok: true });
+            }
+        `)).toEqual(['POST']);
+    });
+
     it('AND THE DYNAMIC-SEGMENT DOOR STILL WORKS — it was the half that did', () => {
         expect(scanRoute(`
             export async function POST(req: Request, { params }: { params: Promise<{ userId: string }> }) {

@@ -48,6 +48,7 @@ import { readFileSync } from "fs";
 import { relative } from "path";
 import * as ts from "typescript";
 import { collectActionFiles } from "./action-auth-scan";
+import { callerSuppliedNames } from "./caller-supplied";
 
 /** Field names whose comparison is plausibly an authorisation decision. */
 const IDENTITY_FIELD = /\b(userid|ownerid|sellerid|buyerid|memberid|initiatorid|createdby|uid|accountid|customerid)\b/i;
@@ -118,19 +119,29 @@ function sessionDerivedNames(fn: ts.Node): Set<string> {
     return names;
 }
 
-/** Parameter names, including the object parameter itself (`data`). */
+/**
+ * Names holding a value the CALLER supplied.
+ *
+ *   #639 THIS WAS `parameterNames`, AND IT HAD NEVER BEEN RUN OVER src/app/api.
+ *
+ *   Both halves of that mattered. This scanner had only ever been pointed at
+ *   src/app/actions, and when pointed at the 123 route files it answered zero —
+ *   because a route handler takes `(req)` and reads the untrusted value out of
+ *   the request body, so nothing it compares is a PARAMETER. The route form of
+ *   this scanner's own reference defect:
+ *
+ *       const { listingId, ownerId } = await req.json();
+ *       if (listingData.ownerId !== ownerId) return 403;
+ *
+ *   was planted and reported clean. A check that reads as authorisation and is
+ *   not is worse than no check at all, and the scanner written to find them
+ *   could not see them on the surface that faces the internet directly.
+ *
+ *   Exactly #638's shape, in the scanner next door. The vocabulary is shared
+ *   now — see caller-supplied.ts — rather than corrected twice.
+ */
 function parameterNames(fn: ts.Node): Set<string> {
-    const names = new Set<string>();
-    const params = (fn as any).parameters as ts.NodeArray<ts.ParameterDeclaration> | undefined;
-    for (const p of params ?? []) {
-        if (ts.isIdentifier(p.name)) names.add(p.name.text);
-        if (ts.isObjectBindingPattern(p.name)) {
-            for (const el of p.name.elements) {
-                if (ts.isIdentifier(el.name)) names.add(el.name.text);
-            }
-        }
-    }
-    return names;
+    return callerSuppliedNames(fn);
 }
 
 /**
