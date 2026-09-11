@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { logger } from "@/lib/logger";
 import { getAdminDb } from "@/lib/supabase-db";
+
+/**
+ * Constant-time comparison of two shared secrets — #645.
+ *
+ * `timingSafeEqual` throws when the buffers differ in length, so the length is
+ * checked first. That leaks the length of the expected secret, which is the same
+ * trade lib/paystack-server makes for the same reason: it is not the part an
+ * attacker is short of.
+ */
+function secretsMatch(provided: string, expected: string): boolean {
+    const a = Buffer.from(provided, "utf8");
+    const b = Buffer.from(expected, "utf8");
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +37,28 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: "Configuration Error" }, { status: 500 });
         }
 
-        if (!providedSecret || providedSecret !== expectedSecret) {
+        /**
+         *   #645 COMPARED WITH `!==`, WHERE ITS SIBLING USES timingSafeEqual.
+         *
+         *   `verifyPaystackWebhook` in lib/paystack-server does the equivalent
+         *   check with `crypto.timingSafeEqual` under a comment reading "Prevent
+         *   timing attacks". This one, guarding the other end of the same kind
+         *   of door, used a plain string comparison — which returns as soon as
+         *   two bytes differ.
+         *
+         *   Over a network this is a poor oracle and the practical risk is low.
+         *   It is corrected anyway, because the idiom already exists in this
+         *   codebase, the fix costs nothing, and "the strict version went to one
+         *   of the two doors" is the defect this audit has found more than any
+         *   other.
+         *
+         *   RECORDED AND NOT FIXED: the secret arrives in the QUERY STRING, so
+         *   it lands in access logs, proxy logs and any Referer that leaks. The
+         *   transport is Africa's Talking's configuration, not this
+         *   repository's, so moving it to a header is the owner's call with the
+         *   provider.
+         */
+        if (!providedSecret || !secretsMatch(providedSecret, expectedSecret)) {
             logger.warn("[africastalking-webhook] Unauthorized webhook attempt. Missing or invalid secret.");
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }

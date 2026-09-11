@@ -289,11 +289,28 @@ nobody applied said so would be a behaviour change with nothing behind it. The
 env overrides are kept and are now visible in the table where every other limit
 is written down; `lib/security.ts` no longer exports the colliding name.
 
-### ☐ The `webhook` bucket still has no consumer
+### ✅ (#645) The `webhook` bucket is unwired because the signature comes first
 
-1000/minute, declared, consumed by nothing. Not yet read. The webhook routes
-verify a signature or a shared secret, so this may be the `kyc` story again — a
-bucket waiting for something — or a limit somebody meant to apply.
+Triaged. A webhook has no session; what it has is a signature or a shared
+secret, and that check is cheap. A receiver that performs it BEFORE touching the
+database is not made safer by a rate limit — a volumetric flood belongs at the
+edge. All four receivers were read and all four authorise first, including the
+retired identity-provider one, which does nothing at all behind a 410.
+
+**That reasoning was asserted nowhere**, so it is pinned now: move one database
+read above a signature check and the endpoint becomes an unauthenticated write
+amplifier, and no test would have noticed.
+
+One thing was wrong and is fixed: `verifyPaystackWebhook` compares with
+`crypto.timingSafeEqual` under a comment reading "Prevent timing attacks", and
+the Africa's Talking receiver — the other end of the same kind of door — used
+`!==`. Low practical risk over a network; corrected because the idiom already
+exists here and "the strict version reached one of the two doors" is the defect
+found most often in this audit.
+
+🔑 **Recorded and not fixable here:** the Africa's Talking secret arrives in the
+QUERY STRING, so it lands in access logs, proxy logs and any leaked Referer.
+Moving it to a header is a change to the provider's configuration.
 
 ---
 
