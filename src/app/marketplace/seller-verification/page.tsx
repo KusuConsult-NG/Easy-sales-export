@@ -50,7 +50,70 @@ export default function SellerVerificationPage() {
         setDocuments(prev => ({ ...prev, [field]: file }));
     };
 
+    /**
+     *   #630 THIS STEP GATE LET EVERYTHING THROUGH.
+     *
+     *        `handleNext` advanced on any data at all, and the only client-side
+     *        check anywhere in this flow was `handleSubmit` refusing a missing
+     *        product sample — a file the SERVER does not even require.
+     *
+     *        The server requires ELEVEN text fields and THREE documents. So a
+     *        seller filled four steps, uploaded their CAC certificate and their
+     *        ID, pressed Submit, and got:
+     *
+     *            "Missing required fields"
+     *
+     *        which names none of them, on a form whose other three steps are no
+     *        longer on screen. There is no way to act on that message except to
+     *        walk back through every step guessing. The inputs carry `required`
+     *        attributes, but the Next button is a plain button and never submits
+     *        a form, so the browser's own validation never runs either.
+     *
+     *        THE LIST BELOW IS THE SERVER'S LIST, split by the step that
+     *        collects each field. Keeping the two the same is the point: a
+     *        client that asks for less produces the message above, and one that
+     *        asks for more refuses a seller the server would have accepted.
+     *        a-gate-that-let-everything-through pins them to each other.
+     */
+    const REQUIRED_BY_STEP: Record<VerificationStep, { label: string; filled: () => boolean }[]> = {
+        1: [
+            { label: "Business name", filled: () => !!formData.businessName.trim() },
+            { label: "Business type", filled: () => !!formData.businessType },
+            { label: "Business description", filled: () => !!formData.businessDescription.trim() },
+        ],
+        2: [
+            { label: "Phone number", filled: () => !!formData.phone.trim() },
+            { label: "Email address", filled: () => !!formData.email.trim() },
+            { label: "Address", filled: () => !!formData.address.trim() },
+            { label: "State", filled: () => !!formData.state },
+            { label: "LGA", filled: () => !!formData.lga.trim() },
+        ],
+        3: [
+            { label: "Business registration document", filled: () => !!documents.businessDoc },
+            { label: "Means of identification", filled: () => !!documents.idDoc },
+            { label: "Proof of address", filled: () => !!documents.addressProof },
+        ],
+        4: [
+            { label: "Bank name", filled: () => !!formData.bankName.trim() },
+            { label: "Account number", filled: () => !!formData.accountNumber.trim() },
+            { label: "Account name", filled: () => !!formData.accountName.trim() },
+        ],
+    };
+
+    /** What this step is still missing, named so the seller can act on it. */
+    function missingOnStep(step: VerificationStep): string[] {
+        return REQUIRED_BY_STEP[step].filter(f => !f.filled()).map(f => f.label);
+    }
+
     function handleNext() {
+        const missing = missingOnStep(currentStep);
+        if (missing.length > 0) {
+            //   Named fields, not "missing required fields". The seller is
+            //   looking at this step; the message tells them what to type.
+            setToast({ type: "error", message: `Please complete: ${missing.join(", ")}` });
+            return;
+        }
+
         if (currentStep < 4) {
             setCurrentStep((currentStep + 1) as VerificationStep);
         }
@@ -63,6 +126,20 @@ export default function SellerVerificationPage() {
     };
 
     async function handleSubmit() {
+        /*
+         *   #630 THE LAST STEP CHECKS EVERY STEP, not only its own. A seller can
+         *   reach step 4 from a restored session or by pressing Back and
+         *   forward, and the server refuses the whole submission — so refusing
+         *   here with the field named is the difference between a fixable error
+         *   and "Missing required fields".
+         */
+        const incomplete = ([1, 2, 3, 4] as VerificationStep[])
+            .flatMap(step => missingOnStep(step));
+        if (incomplete.length > 0) {
+            setToast({ type: "error", message: `Still needed: ${incomplete.join(", ")}` });
+            return;
+        }
+
         // Validate product samples are provided
         if (!documents.productSample1) {
             setToast({ type: "error", message: "At least one product sample image is required. Please upload a photo of your product." });
