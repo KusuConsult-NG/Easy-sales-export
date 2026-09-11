@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PASSWORD_RULES } from "@/lib/password-policy";
 import { nationalIdField } from '@/lib/kyc-validators';
+import { ALL_USER_ROLES } from "@/lib/types/roles";
 
 // ============================================
 // STRICT UNIFIED PII VALIDATORS (Anti-Abuse)
@@ -303,22 +304,33 @@ export const LoanApplicationReviewSchema = z.object({
 // ROLE MANAGEMENT SCHEMAS
 // ============================================
 
-const UserRoleSchema = z.enum([
-    "general_user",
-    "buyer",
-    "marketplace_buyer",
-    "seller",
-    "land_owner",
-    "farmer",
-    "investor",
-    "export_participant",
-    "cooperative_member",
-    "wave_participant",
-    "academy_participant",
-    "field_officer",
-    "admin",
-    "super_admin"
-]);
+/**
+ *   #648 THIS WAS THE FIFTH OF THE SIX DISAGREEING ROLE LISTS, AND THE ONE THE
+ *        REPAIR DID NOT REACH.
+ *
+ *        `lib/types/roles.ts` exists because "what is a valid role?" had six
+ *        answers. Its header names this one — "14 — has marketplace_buyer, not
+ *        marketplace_seller" — and ALL_USER_ROLES was built as the single list,
+ *        with a compile-time check in both directions. It reached
+ *        add-roles/route.ts, write-guard.ts, bulk-user-operations.ts and
+ *        admin-permissions.ts. It did not reach here.
+ *
+ *        SEVEN ROLES WERE MISSING: the six module admins and
+ *        `marketplace_seller`. This enum backs `UpdateUserRolesSchema`, which
+ *        the admin users screen's role editor parses through, and it REFUSES
+ *        rather than strips — so:
+ *
+ *          · the screen's `academy_admin` checkbox, the only module-admin box it
+ *            has ever offered, made every save fail;
+ *          · and because that screen sends back the roles it does NOT offer, so
+ *            as not to strip them, no user holding any of the seven could have
+ *            ANY of their roles changed through it.
+ *
+ *        Derived now. The grant policy is unchanged and lives where it belongs:
+ *        `includesPrivilegedRole` in the action, which is what stops a plain
+ *        admin handing out a role carrying a permission `admin` does not have.
+ */
+const UserRoleSchema = z.enum(ALL_USER_ROLES);
 
 export const UpdateUserRolesSchema = z.object({
     userId: z.string().min(1),

@@ -102,6 +102,52 @@ export function isUserRole(value: unknown): value is UserRole {
 }
 
 /**
+ * The roles an ADMIN hands out directly, on /admin/users.
+ *
+ *   #648 THIS WAS A SEVENTH HAND-WRITTEN LIST, AND IT HAD FIVE MEMBERS.
+ *
+ *        `ROLES_LIST` sat in the screen's own file:
+ *
+ *            ["general_user", "field_officer", "admin", "super_admin",
+ *             "academy_admin"]
+ *
+ *        Four of those are staff roles and the fifth was one of the SIX module
+ *        admins, alone, with no reason recorded for why its five siblings were
+ *        absent. And `academy_admin` was the one role in the list that
+ *        `UserRoleSchema` refused — so the only module-admin checkbox the
+ *        platform has ever offered made every save fail.
+ *
+ * ── THE RULE, WHICH IS WHAT THIS IS RATHER THAN A LIST ──────────────────────
+ *
+ *   An admin assigns STAFF roles. Module participation is EARNED by completing
+ *   that module's own flow — the academy grants `academy_participant` when a
+ *   payment is verified, the marketplace grants `seller` at the end of
+ *   onboarding — and a checkbox that hands out `academy_participant` gives
+ *   somebody paid course access without a payment.
+ *
+ *   That rule explains four of the five that were there, and it is why all six
+ *   module admins belong: either the set is "roles an admin grants" or it is
+ *   not, and one module admin out of six is not a rule.
+ *
+ *   WIDENING IT GRANTS NOBODY ANYTHING NEW. `includesPrivilegedRole` counts all
+ *   six, so updateUserRolesAction still refuses any resulting role set holding
+ *   one unless a super_admin is asking — a rule that was simply unreachable
+ *   through that door, because the parse failed before it ran.
+ */
+export const ADMIN_ASSIGNABLE_ROLES = [
+    "general_user",
+    "field_officer",
+    "cooperative_admin",
+    "academy_admin",
+    "wave_admin",
+    "marketplace_admin",
+    "farm_nation_admin",
+    "export_admin",
+    "admin",
+    "super_admin",
+] as const satisfies readonly UserRole[];
+
+/**
  * Legacy role type for backward compatibility
  * @deprecated Use UserRole instead
  */

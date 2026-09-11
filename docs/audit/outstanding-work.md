@@ -1,15 +1,15 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a3d179d5` and now at `54589818`.** Every line below was checked against the
+`a3d179d5`, `54589818` and now at `c1e69157`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 700 suites / 12,774 tests green.** The
-version before this one said 12,704 across 696. A status document that
+**Gate at this revision: build clean, 701 suites / 12,792 tests green.** The
+version before this one said 12,774 across 700. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
 
@@ -267,6 +267,48 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#648) The role editor offered a checkbox the validator refused
+
+`lib/types/roles.ts` exists because "what is a valid role?" had **six answers
+and no two agreed**. Its header names them, including this one:
+
+> `schemas.ts UserRoleSchema` — 14 — has marketplace_buyer, not marketplace_seller
+
+`ALL_USER_ROLES` was built as the single list, with compile-time exhaustiveness
+in both directions. The repair reached `add-roles/route.ts`, `write-guard.ts`,
+`bulk-user-operations.ts` and `admin-permissions.ts` — and **not `schemas.ts`**,
+which backs the admin users screen's role editor. The evidence sat in the new
+file's own header the whole time.
+
+Seven roles were missing: the six module admins and `marketplace_seller`. The
+schema **refuses** rather than strips, so:
+
+- `/admin/users` offers an `academy_admin` checkbox — the only module-admin box
+  the platform has ever had — and ticking it made every save fail with a raw Zod
+  message. **That checkbox has never worked.**
+- The screen sends back the roles it does not offer, deliberately, so as not to
+  strip them. So a user holding `export_admin`, `wave_admin`, `cooperative_admin`,
+  `marketplace_admin`, `farm_nation_admin` or `marketplace_seller` could have
+  **none** of their roles changed through that screen.
+
+The enum derives from `ALL_USER_ROLES` now, and the screen's `ROLES_LIST` — a
+*seventh* hand-written list, five members, one module admin out of six with no
+reason recorded — is replaced by `ADMIN_ASSIGNABLE_ROLES`, stated as a rule: an
+admin assigns **staff** roles; module participation is **earned** by completing
+that module's flow.
+
+**This widens nothing.** `/api/admin/add-roles` already validated against
+`ALL_USER_ROLES` and gated on `includesPrivilegedRole`, so everything now
+permitted was already permitted at the other door onto the same operation.
+
+⚠️ **I assumed the wrong policy while writing this and a positive control caught
+it.** I asserted that a plain admin cannot grant any module-admin role;
+`PRIVILEGED_ROLES` is **derived** — "a role that can do something a plain admin
+cannot" — and today computes to `admin`, `super_admin` and `cooperative_admin`
+alone. The other five module admins hold no permission `admin` lacks, so
+granting one gives away nothing the granter has. The assertion was wrong, not
+the code.
 
 ### ✅ (#643) `lib/rate-limit.ts` no longer pools its routes into one budget
 

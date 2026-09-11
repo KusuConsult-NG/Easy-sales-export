@@ -10,11 +10,22 @@ import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
 import { buildUserColumns, type User } from "./_columns";
+import { ADMIN_ASSIGNABLE_ROLES } from "@/lib/types/roles";
 
 
-const ROLES_LIST = [
-    "general_user", "field_officer", "admin", "super_admin", "academy_admin"
-];
+/**
+ *   #648 — this was a SEVENTH hand-written role list, with five members: four
+ *   staff roles and ONE of the six module admins, alone and unexplained. And
+ *   that one — `academy_admin` — was the single role in it that
+ *   UpdateUserRolesSchema refused, so the only module-admin checkbox this
+ *   platform has ever offered made every save fail.
+ *
+ *   The rule it is drawn from is stated in lib/types/roles.ts: an admin assigns
+ *   STAFF roles, and module participation is EARNED by completing that module's
+ *   own flow. Granting `academy_participant` from a checkbox would hand somebody
+ *   paid course access without a payment.
+ */
+const ROLES_LIST = ADMIN_ASSIGNABLE_ROLES as readonly string[];
 
 // Major Nigerian states
 const NIGERIAN_STATES = [
