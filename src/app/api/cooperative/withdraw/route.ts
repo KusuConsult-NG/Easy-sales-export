@@ -16,12 +16,18 @@ import {
     availableAboveFloor,
 } from "@/lib/cooperative-limits";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
-import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
-import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { createRateLimitResponse } from '@/lib/rate-limiter';
+import { withdrawalLimiter } from '@/lib/withdrawal-rate-limit';
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
-// Rate limiter for withdrawal requests (very strict for financial security)
-const withdrawalLimiter = rateLimit(rateLimitConfig.withdrawal);
+//   #641 The same counter the member-facing actions use.
+//
+//   This built its own limiter from the same config, which was harmless only
+//   because it was the sole consumer — and it was the sole consumer because
+//   NOTHING CALLS THIS ROUTE. The three screens a member presses call server
+//   actions, and none of them had a limit at all. Now that they do, two
+//   instances would be two budgets for one rule, so there is one instance and
+//   every door shares it. See lib/withdrawal-rate-limit.ts.
 
 /**
  * Withdrawal Request API

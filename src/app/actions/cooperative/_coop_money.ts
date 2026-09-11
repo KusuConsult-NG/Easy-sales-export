@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { checkWithdrawalRateLimit } from "@/lib/withdrawal-rate-limit";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { autoProvisionZereCooperative } from "@/lib/cooperative-provisioning";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
@@ -1008,6 +1009,15 @@ async function _withdrawMaturedFixedSavingsAction(planId: string): Promise<Actio
             return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         }
         const userId = sessionResult.session.user.id;
+
+        //   #641 The withdrawal limit, on the door a member actually presses.
+        //   It guarded only /api/cooperative/withdraw, which nothing calls. See
+        //   lib/withdrawal-rate-limit.ts — before anything moves, because a
+        //   limiter that runs after the debit has not limited anything.
+        const limit = await checkWithdrawalRateLimit(userId);
+        if (!limit.allowed) {
+            return { success: false as const, error: limit.message, data: null };
+        }
 
         if (!planId || typeof planId !== "string") {
             return { success: false as const, error: "Which plan?", data: null };

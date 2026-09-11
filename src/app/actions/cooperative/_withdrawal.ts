@@ -21,6 +21,7 @@ import {
 } from "@/lib/cooperative-limits";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { revalidatePath } from 'next/cache';
+import { checkWithdrawalRateLimit } from "@/lib/withdrawal-rate-limit";
 
 interface WithdrawalRequestData { amount: number;
     bankName: string;
@@ -42,6 +43,15 @@ async function _submitWithdrawalRequestAction(
 
         const userId = session.user.id;
         const userEmail = session.user.email || "";
+
+        //   #641 The withdrawal limit, on the door a member actually presses.
+        //   It guarded only /api/cooperative/withdraw, which nothing calls. See
+        //   lib/withdrawal-rate-limit.ts — before anything moves, because a
+        //   limiter that runs after the debit has not limited anything.
+        const limit = await checkWithdrawalRateLimit(userId);
+        if (!limit.allowed) {
+            return { success: false as const, error: limit.message, data: null };
+        }
 
         const { withdrawalSchema } = await import("@/lib/schemas");
         const submissionSchema = withdrawalSchema.omit({ cooperativeId: true });

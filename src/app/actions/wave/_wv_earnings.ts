@@ -1,6 +1,7 @@
 "use server";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { checkWithdrawalRateLimit } from "@/lib/withdrawal-rate-limit";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -340,6 +341,15 @@ async function _withdrawEarningsAction(
         const session = sessionResult.session!;
         const userId = session.user.id;
         const userEmail = session.user.email || "";
+
+        //   #641 The withdrawal limit, on the door a member actually presses.
+        //   It guarded only /api/cooperative/withdraw, which nothing calls. See
+        //   lib/withdrawal-rate-limit.ts — before anything moves, because a
+        //   limiter that runs after the debit has not limited anything.
+        const limit = await checkWithdrawalRateLimit(userId);
+        if (!limit.allowed) {
+            return { success: false as const, error: limit.message, data: null };
+        }
 
         if (!isAmountAtLeast(amount, 5000)) {
             return { success: false as const, error: "Minimum withdrawal amount is ₦5,000", data: null };
