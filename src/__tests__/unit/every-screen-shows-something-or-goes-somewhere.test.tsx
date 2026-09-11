@@ -73,18 +73,17 @@ import { render, act } from '@testing-library/react';
 import { readdirSync, statSync, readFileSync } from 'fs';
 import { join, relative } from 'path';
 
-jest.mock('@/lib/redis', () => ({ redis: null, getRedis: () => null, isRedisConfigured: () => false }));
-jest.mock('@upstash/redis', () => ({ Redis: class {} }));
-
-jest.mock('next-auth/react', () => ({
-    useSession: () => ({
-        data: { user: { id: 'u1', name: 'Test Admin', email: 'admin@example.com', roles: ['admin'] } },
-        status: 'authenticated',
-    }),
-    SessionProvider: ({ children }: any) => children,
-    signIn: jest.fn(),
-    signOut: jest.fn(),
-}));
+/*
+ *   #622 THE STUB LIST MOVED TO sweep-stubs, because this file and the server
+ *   sweep had begun keeping two hand-maintained copies of it — the defect this
+ *   audit keeps finding. Each sweep discovers the next untransformed ESM
+ *   dependency as a page that "failed to load" and looks like a defect; the
+ *   list is kept once so the next sweep inherits the answers.
+ */
+jest.mock('@/lib/redis', () => require('@/lib/testing/sweep-stubs').libRedis());
+jest.mock('@upstash/redis', () => require('@/lib/testing/sweep-stubs').upstashRedis());
+jest.mock('next-auth/react', () => require('@/lib/testing/sweep-stubs').nextAuthReact());
+jest.mock('isomorphic-dompurify', () => require('@/lib/testing/sweep-stubs').dompurify());
 
 /*
  *   STABLE across calls, like the real hooks. A fresh object per call re-runs
