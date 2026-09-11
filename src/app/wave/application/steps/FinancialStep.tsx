@@ -97,7 +97,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
         if (!data.bankName?.trim()) {
             newErrors.bankName = "Bank name is required";
         }
-        if (!data.accountNumber?.trim() || data.accountNumber.length !== 10) {
+        if (!data.accountNumber?.trim() || (data.accountNumber || "").length !== 10) {
             newErrors.accountNumber = "Valid 10-digit account number required";
         }
 

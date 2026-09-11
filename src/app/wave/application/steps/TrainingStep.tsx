@@ -26,7 +26,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (data.supportNeeded.length === 0) {
+        if ((data.supportNeeded || []).length === 0) {
             newErrors.supportNeeded = "Please select at least one type of support";
         }
         if (!data.willingToUndergoTraining) {
@@ -59,6 +59,14 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
         }
     };
 
+    /*
+     *   #626 THE TWO READS IN THE RENDER BELOW WERE UNGUARDED while this one,
+     *   in the same file, was not — `(data.supportNeeded || []).includes(...)` against
+     *   `data.supportNeeded || []` here. An application row carrying null for
+     *   that field therefore crashed the step outright rather than showing it
+     *   with nothing selected, and a crashed step is one an applicant cannot
+     *   get past. AgriInterestStep guards the same shape correctly throughout.
+     */
     const toggleSupport = (support: "training" | "inputs" | "mechanization" | "finance" | "market_access") => {
         const current = data.supportNeeded || [];
         if (current.includes(support)) {
@@ -94,14 +102,14 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                         ].map((support) => (
                             <label
                                 key={support.value}
-                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.supportNeeded.includes(support.value)
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${(data.supportNeeded || []).includes(support.value)
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
                                     type="checkbox"
-                                    checked={data.supportNeeded.includes(support.value)}
+                                    checked={(data.supportNeeded || []).includes(support.value)}
                                     onChange={() => toggleSupport(support.value)}
                                     className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
                                 />

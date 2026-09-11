@@ -21,14 +21,54 @@ interface Props {
 
 import { useToast } from "@/contexts/ToastContext";
 import { getWards, getPollingUnits } from "@/lib/locations";
+import { nationalIdField } from "@/lib/kyc-validators";
 
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    /**
+     *   #626 THIS RETURNED `true` UNCONDITIONALLY.
+     *
+     *        `setErrors({}); return true;` — a check that cannot fail. Every
+     *        line below it was therefore unreachable: handleNext's `else`
+     *        branch, its "Please correct the errors in the form" toast, and its
+     *        scroll-to-the-first-error, none of which could ever run. The NIN
+     *        input above is already wired with `error={errors.nin}`, so the
+     *        field was built to show a message that nothing could produce.
+     *
+     *        THE SERVER DOES CHECK IT — #501 put `nationalIdField('NIN')` on
+     *        the submit schema, so a bad NIN was never stored. What it cost was
+     *        an applicant's time: type it wrong on step 2, fill in five more
+     *        steps, and be refused at the end of a seven-step form.
+     *
+     *        #357 FOUND THIS EXACT SHAPE IN KYCForm — "this component imported
+     *        isObviouslyFakeId and never called it" — and fixed it there. This
+     *        is the same finding one door along, which is the pattern this audit
+     *        keeps finding.
+     *
+     *   THE SAME RULE THE SERVER USES, not a second copy of it. Two
+     *   hand-maintained copies of one contract is the other pattern this audit
+     *   keeps finding, and the copy that drifts would be this one — the client
+     *   would start accepting what the server refuses, which is how you get a
+     *   form that submits and fails.
+     *
+     *   ONLY `nin` IS CHECKED, because it is the only field in Section B the
+     *   schema constrains; the voter's card, ward, polling unit and year are all
+     *   optional there. Validating them here would refuse applicants the server
+     *   would have accepted, which is a worse defect than the one being fixed.
+     *   And an EMPTY nin still passes, because the server's rule is optional.
+     */
     const validateForm = (): boolean => {
-        setErrors({});
-        return true;
+        const next: Record<string, string> = {};
+
+        const ninResult = nationalIdField('NIN').safeParse(data?.nin ?? "");
+        if (!ninResult.success) {
+            next.nin = ninResult.error.issues[0]?.message ?? "Please check your NIN.";
+        }
+
+        setErrors(next);
+        return Object.keys(next).length === 0;
     };
 
     function handleNext() {

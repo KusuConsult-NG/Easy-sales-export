@@ -192,11 +192,11 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                                 {data.involvedInAgriculture ? "Yes" : "No"}
                             </p>
                         </div>
-                        {data.involvedInAgriculture && data.agricultureTypes.length > 0 && (
+                        {data.involvedInAgriculture && (data.agricultureTypes || []).length > 0 && (
                             <div className="md:col-span-2">
                                 <p className="text-slate-600">Agriculture Types</p>
                                 <p className="font-medium text-slate-900 capitalize">
-                                    {data.agricultureTypes.join(", ")}
+                                    {(data.agricultureTypes || []).join(", ")}
                                 </p>
                             </div>
                         )}
@@ -221,13 +221,13 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         <div>
                             <p className="text-slate-600">Value Chain Areas</p>
                             <p className="font-medium text-slate-900 capitalize">
-                                {data.valueChainAreas.map((area) => area.replace(/_/g, " ")).join(", ")}
+                                {(data.valueChainAreas || []).map((area) => area.replace(/_/g, " ")).join(", ")}
                             </p>
                         </div>
                         <div>
                             <p className="text-slate-600">Preferred Commodities</p>
                             <p className="font-medium text-slate-900 capitalize">
-                                {data.preferredCommodities.join(", ")}
+                                {(data.preferredCommodities || []).join(", ")}
                                 {data.preferredCommodityOther && ` (Others: ${data.preferredCommodityOther})`}
                             </p>
                         </div>
@@ -306,7 +306,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         <div>
                             <p className="text-slate-600">Support Needed</p>
                             <p className="font-medium text-slate-900 capitalize">
-                                {data.supportNeeded.map((support) => support.replace(/_/g, " ")).join(", ")}
+                                {(data.supportNeeded || []).map((support) => support.replace(/_/g, " ")).join(", ")}
                             </p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
