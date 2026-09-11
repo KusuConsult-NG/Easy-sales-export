@@ -1,15 +1,15 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a3d179d5`, `c1e69157` and now at `79ae414e`.** Every line below was checked against the
+`c1e69157`, `79ae414e` and now at `77bdf37c`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 702 suites / 12,810 tests green.** The
-version before this one said 12,792 across 701. A status document that
+**Gate at this revision: build clean, 703 suites / 12,829 tests green.** The
+version before this one said 12,810 across 702. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
 
@@ -267,6 +267,39 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#650) The last unexecuted cron — and the claim underneath it, checked
+
+`cron/age-notifications` was the eighth and last scheduled job with no test that
+calls it. It exists for #615, the other half of #534's pile: one notification row
+per admin per application, and nothing ever aged one out.
+
+**The premise was the part worth checking.** The route's header states a fact
+about code it does not own — *"the reader that feeds the list and the bell skips
+archived rows"* — and if that were false the whole job would be a no-op on the
+only surface it was built for: `archived: true` written onto rows that keep
+appearing. That is #618's silo rule, #623's `finance:refund` and #624's
+visibility list exactly.
+
+**It looked false.** `infrastructure/notifications/service.ts` holds the paged
+reader and the unread count, and **neither filters archived rows**. `isOnTheList`
+— the shared predicate the ageing module exports for this — has **one caller in
+the whole codebase**.
+
+**It is true, and that one caller is why.** Both the bell and
+`/dashboard/notifications` read `getMyNotifications` in `actions/my-data.ts`,
+which filters through it; the two service functions are orphans with no callers.
+So the premise held for one reason, in one place, with nothing asserting it.
+
+**No defect in the route.** Both windows (30 days read, 180 unread), the undated
+and already-archived paths, all four date shapes, the #612 vanished-row count and
+the secret were correct. Nineteen executed cases; twelve mutants, all killed.
+
+A trap found on the way is guarded rather than rewritten: the service's paged
+reader *looks* canonical — it carries #534's entire write-up — and is safe only
+because nothing calls it. That property expires the moment somebody wires it up,
+so the rule is asserted as the disjunction it is: **that reader must either stay
+unused or consult `isOnTheList`.**
 
 ### ✅ (#649) The job that gives a parcel back is executed now — and it was right
 
