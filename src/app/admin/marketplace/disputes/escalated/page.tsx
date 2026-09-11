@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { isDisputeSettled } from "@/lib/dispute-status";
 import { useRouter } from "next/navigation";
 import {
     AlertTriangle,
@@ -130,7 +131,8 @@ export default function EscalatedDisputesPage() {
                     {[
                         { label: "Unassigned", count: disputes.filter(d => !(d as any).assignedAdminId).length, color: "orange" },
                         { label: "Assigned", count: disputes.filter(d => !!(d as any).assignedAdminId).length, color: "blue" },
-                        { label: "Resolved", count: disputes.filter(d => d.status === "resolved").length, color: "green" },
+                        //   #629 — settled, not one spelling of it. See the sibling screen.
+                        { label: "Resolved", count: disputes.filter(d => isDisputeSettled(d.status)).length, color: "green" },
                     ].map(({ label, count, color }) => (
                         <div key={label} className={`bg-white border-2 border-${color}-200 rounded-2xl p-5`}>
                             <p className={`text-sm font-semibold text-${color}-700 mb-1`}>{label}</p>

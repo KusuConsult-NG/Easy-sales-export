@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { isDisputeSettled } from "@/lib/dispute-status";
 import { useRouter } from "next/navigation";
 import {
     AlertTriangle,
@@ -74,7 +75,16 @@ export default function AdminDisputesPage() {
     const stats = {
         open: filteredDisputes.filter((d) => d.status === "open").length,
         under_review: filteredDisputes.filter((d) => d.status === "under_review").length,
-        resolved: filteredDisputes.filter((d) => d.status === "resolved").length,
+        /*
+         *   #629 COUNTED ONE SPELLING OF TWO. These three numbers are a
+         *   three-way split of FOUR statuses, so a dispute stored as `closed`
+         *   appeared in none of them and the totals silently under-counted.
+         *
+         *   dispute-status says exactly why the constant exists: `"closed"` is
+         *   "included so that asking for settled disputes never silently omits
+         *   one". This tally omitted one.
+         */
+        resolved: filteredDisputes.filter((d) => isDisputeSettled(d.status)).length,
     };
 
     const getStatusStyles = (status: DisputeStatus): { badge: string; icon: string } => {

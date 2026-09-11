@@ -133,8 +133,32 @@ describe('#420 — no screen offers a choice that cannot match', () => {
     });
 
     it('and the resolver STILL refuses an already-closed dispute — a guard, not a filter', () => {
+        /*
+         *   #629 THE GUARD IS UNCHANGED; THE WAY IT IS WRITTEN IS NOT.
+         *
+         *   This pinned the literal `status === "resolved" || x.status ===
+         *   "closed"` — which was the hand-written copy of `isDisputeSettled`,
+         *   twice over, in the one file that also imported the rule's sibling
+         *   for its filter. #629 replaced both with the rule.
+         *
+         *   The INTENT this test protects is intact and still worth protecting:
+         *   the resolver refuses a dispute that is already settled, including
+         *   the spelling nothing writes today. Asserted through the rule now, so
+         *   that widening what "settled" means reaches this guard automatically
+         *   instead of leaving it behind — which is exactly how it came to be a
+         *   hand-written copy in the first place.
+         */
         const src = code('src/app/actions/disputes.ts');
-        expect(src).toMatch(/status === "resolved" \|\| \w+\.status === "closed"/);
+
+        //   Both sites: the read, and the re-read inside the transaction.
+        expect(src.match(/isDisputeSettled\(/g) ?? []).toHaveLength(2);
+        expect(src).not.toMatch(/status === "resolved" \|\| \w+\.status === "closed"/);
+
+        //   And the rule really does cover the closed spelling, or this would be
+        //   a guard that no longer guards what the test is named for.
+        const { isDisputeSettled } = require('@/lib/dispute-status');
+        expect(isDisputeSettled('closed')).toBe(true);
+        expect(isDisputeSettled('resolved')).toBe(true);
     });
 
     it('and the premise holds: resolution writes "resolved", nothing writes "closed"', () => {

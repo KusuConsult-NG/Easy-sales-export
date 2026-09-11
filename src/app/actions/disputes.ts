@@ -6,7 +6,7 @@
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { disputeStatusesForFilter } from "@/lib/dispute-status";
+import { disputeStatusesForFilter, isDisputeSettled } from "@/lib/dispute-status";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -627,7 +627,14 @@ async function _updateDisputeStatusAction(
 
         const dispute = disputeDoc.data() as Dispute;
 
-        if (dispute.status === "resolved" || dispute.status === "closed") { return { success: false as const, error: `Dispute is already '${dispute.status}'` };
+        /*
+         *   #629 THIS WAS THE RULE WRITTEN OUT BY HAND. `isDisputeSettled` says
+         *   the same thing and its own docstring calls itself "the rule the
+         *   screens and the guards share" — while nothing shared it. The FILTER
+         *   beside it learned the rule (disputeStatusesForFilter, used twice);
+         *   the guards and the counts did not.
+         */
+        if (isDisputeSettled(dispute.status)) { return { success: false as const, error: `Dispute is already '${dispute.status}'` };
         }
 
         // Query the active escrow transaction prior to transaction block
@@ -670,7 +677,8 @@ async function _updateDisputeStatusAction(
         if (!freshDisputeDoc.exists) throw new Error("Dispute not found");
 
         const freshDispute = freshDisputeDoc.data() as Dispute;
-        if (freshDispute.status === "resolved" || freshDispute.status === "closed") {
+        //   #629 — the second hand-written copy, re-read inside the transaction.
+        if (isDisputeSettled(freshDispute.status)) {
             throw new Error(`Dispute is already '${freshDispute.status}'`);
         }
 
