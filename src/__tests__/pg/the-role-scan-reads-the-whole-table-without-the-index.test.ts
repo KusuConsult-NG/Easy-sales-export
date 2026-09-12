@@ -104,6 +104,23 @@ afterAll(async () => {
     if (!client) return;
     await client.query(`delete from public.users where id like $1`, [`${TAG}-%`]).catch(() => {});
     await client.query('create index if not exists idx_users_roles on public.users using gin (roles)').catch(() => {});
+    /**
+     *   #673 AND THE STATISTICS, WHICH THE DELETE ABOVE DOES NOT TOUCH.
+     *
+     *        This suite seeds tens of thousands of rows and analyses as it
+     *        goes, then removes the rows — and left `pg_class.reltuples` still
+     *        claiming they were there. The next suite to read a query plan was
+     *        therefore measuring a table that no longer existed.
+     *
+     *        That residue is what
+     *        created-at-is-indexed-where-it-is-ordered had been passing on for
+     *        months: it asserts the planner picks an index, which is only true
+     *        of a populated table, and it never seeded one. It went red the
+     *        day an unrelated change reordered the run and put it FIRST.
+     *
+     *        A suite leaves the database as it found it, statistics included.
+     */
+    await client.query('analyze public.users').catch(() => {});
     await client.end().catch(() => {});
 }, 300_000);
 

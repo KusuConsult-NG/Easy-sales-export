@@ -81,6 +81,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
     await client?.query(`delete from public.users where id like $1`, [`${TAG}-%`]).catch(() => {});
+    //   #673 The statistics too — a delete does not update them, so without
+    //   this the next suite to read a query plan measures rows that are gone.
+    //   See the note on the same line in
+    //   the-role-scan-reads-the-whole-table-without-the-index.
+    await client?.query('analyze public.users').catch(() => {});
     await client?.end().catch(() => {});
 });
 
