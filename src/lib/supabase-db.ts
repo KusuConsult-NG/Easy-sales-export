@@ -67,22 +67,76 @@ const UNBOUNDED_CEILING = Math.max(
 const _unknownCollectionsWarned = new Set<string>();
 const _limitReachedWarned = new Set<string>();
 
+/**
+ * The SHAPE of a collection path, with document ids masked.
+ *
+ *   #658 A DIAGNOSTIC THAT GREW WITH THE USER TABLE. This set is keyed on the
+ *   collection name so the warning fires once instead of on every query — and
+ *   two of the names in this codebase contain a MEMBER ID:
+ *
+ *       user_progress/<uid>/courses        user_activity_logs/<uid>/days
+ *
+ *   so "once" meant once per member. Measured rather than reasoned about: fifty
+ *   ids through getTableName produced fifty warnings and left fifty entries in
+ *   a Set that nothing empties, in a process that is not restarted between
+ *   requests.
+ *
+ *   A Firestore path alternates collection and document — `a/b/c/d/e` — so the
+ *   odd segments are ids. Masking them bounds the key space by the number of
+ *   CODE PATHS rather than by the number of members, and it stops a member's id
+ *   being written into the application log because they opened a lesson.
+ *
+ *   This is a LOG KEY and nothing else. Resolution still matches the whole path
+ *   — see #202, where a client-side copy took `split('/')[0]` and resolved
+ *   `users/u1/notes` to the `users` table.
+ */
+function collectionShape(collection: string): string {
+    const parts = collection.split('/');
+    if (parts.length < 3) return collection;
+    return parts.map((part, i) => (i % 2 === 1 ? '*' : part)).join('/');
+}
+
 export function getTableName(collection: string): string {
     if (collection in DEDICATED_TABLE_MAP) {
         return DEDICATED_TABLE_MAP[collection];
     }
 
-    if (!_unknownCollectionsWarned.has(collection)) {
-        _unknownCollectionsWarned.add(collection);
-        logger.warn(`[supabase-db] Collection '${collection}' is not in DEDICATED_TABLE_MAP. Falling back to document_collections table.`);
-        if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
-            import('@sentry/nextjs').then(Sentry => {
-                Sentry.addBreadcrumb({
-                    category: 'database',
-                    message: `Unmapped collection fallback: ${collection}`,
-                    level: 'warning',
-                });
-            }).catch(() => {});
+    const shape = collectionShape(collection);
+
+    if (!_unknownCollectionsWarned.has(shape)) {
+        _unknownCollectionsWarned.add(shape);
+
+        if (shape !== collection || collection.includes('/')) {
+            /**
+             *   #658 A subcollection, and it CANNOT be mapped.
+             *
+             *   The warning below reads as a configuration gap — somebody
+             *   forgot to add this collection. Subcollections are flattened
+             *   into the collection name BY DESIGN; collectionGroup() in this
+             *   same file documents it and #202 established that
+             *   document_collections is the correct home rather than a
+             *   fallback. Advice nobody can act on, in the channel that exists
+             *   to carry advice, is how a log becomes unreadable — which is
+             *   exactly how #657's real error sat in one unnoticed.
+             *
+             *   Still said, once per shape, at a level that does not claim
+             *   something is wrong.
+             */
+            logger.debug(
+                `[supabase-db] '${shape}' is a subcollection and is stored in document_collections, `
+                + `as subcollections are. Nothing to map.`,
+            );
+        } else {
+            logger.warn(`[supabase-db] Collection '${shape}' is not in DEDICATED_TABLE_MAP. Falling back to document_collections table.`);
+            if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+                import('@sentry/nextjs').then(Sentry => {
+                    Sentry.addBreadcrumb({
+                        category: 'database',
+                        message: `Unmapped collection fallback: ${shape}`,
+                        level: 'warning',
+                    });
+                }).catch(() => {});
+            }
         }
     }
 
