@@ -73,13 +73,68 @@ const redis = (redisUrl && redisToken && !isTestRun)
  */
 export const isRedisConfigured = !!(redisUrl && redisToken && !isTestRun);
 
+/**
+ * Which of the three states this deployment is in — #661.
+ *
+ *   "NOT SET" WAS BEING SAID TO SOMEBODY WHO HAD SET ONE OF THEM.
+ *
+ *   `isRedisConfigured` is `url && token`, so a deployment with the TOKEN set
+ *   and the URL missing is reported, logged and rendered exactly like one that
+ *   never had Upstash at all. This platform's deployment is in that state
+ *   today: the audit's own owner-side list records "only the token is set".
+ *
+ *   Those two situations are not the same thing and want different answers:
+ *
+ *     neither  — a choice. Local work, a preview, a deployment that does not
+ *                want a shared cache. The warning below is right for it.
+ *     one      — a MISTAKE. Nobody sets half of a credential pair on purpose.
+ *                Somebody believed they had configured Upstash, and every rate
+ *                limiter on the platform is quietly using a per-instance
+ *                in-memory fallback that shares no state between instances.
+ *     both     — configured.
+ *
+ *   The middle one is the whole finding, and it was invisible: the message told
+ *   the operator to set two variables when they had set one, and never said
+ *   which was missing. "Could not tell" rendered as "no", which is the class
+ *   #620 and #621 are filed under.
+ */
+export type RedisConfigState = 'configured' | 'half-configured' | 'absent';
+
+export function redisConfigState(env: NodeJS.ProcessEnv = process.env): RedisConfigState {
+    const url = env.UPSTASH_REDIS_REST_URL;
+    const token = env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (url && token) return 'configured';
+    if (url || token) return 'half-configured';
+    return 'absent';
+}
+
+/** The variable that is missing when exactly one was set, for a message that can be acted on. */
+export function missingRedisVariable(env: NodeJS.ProcessEnv = process.env): string | null {
+    if (redisConfigState(env) !== 'half-configured') return null;
+    return env.UPSTASH_REDIS_REST_URL ? 'UPSTASH_REDIS_REST_TOKEN' : 'UPSTASH_REDIS_REST_URL';
+}
+
 if (!isRedisConfigured && !isTestRun) {
     // Once, at module load — not once per request.
-    console.warn(
-        '[Redis] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are not set. ' +
-        'Caching is disabled and every rate limiter is using its per-instance ' +
-        'in-memory fallback, which does NOT share state between server instances.'
-    );
+    const missing = missingRedisVariable();
+
+    if (missing) {
+        //   An error, not a warning: somebody set one of these on purpose and
+        //   believes the platform has a shared cache. It does not.
+        console.error(
+            `[Redis] ${missing} IS NOT SET, and its partner is. Upstash is HALF-CONFIGURED, ` +
+            'so it is not being used at all: caching is disabled and every rate limiter is ' +
+            'using its per-instance in-memory fallback, which does NOT share state between ' +
+            'server instances. This is almost certainly a mistake — set the missing variable.'
+        );
+    } else {
+        console.warn(
+            '[Redis] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are not set. ' +
+            'Caching is disabled and every rate limiter is using its per-instance ' +
+            'in-memory fallback, which does NOT share state between server instances.'
+        );
+    }
 }
 
 export { redis };

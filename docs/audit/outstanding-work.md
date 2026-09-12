@@ -1,15 +1,15 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a`, `c3da88ea` and now at `c2f415f9`.** Every line below was
+`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a`, `c3da88ea`, `c2f415f9` and now at `d8f73a01`.** Every line below was
 checked against the tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 709 suites / 12,894 tests green.** The
-version before this one said 12,878 across 708.
+**Gate at this revision: build clean, 712 suites / 12,930 tests green.** The
+version before this one said 12,894 across 709.
 
 **And every database suite was run for real**, against the local stack
 `scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
@@ -42,6 +42,13 @@ the change mutation-tested against a control.
 The 🔑 items are the only ones that are not mine to finish. Everything marked ☐
 is mine.
 
+**Four entries left this column in one pass (#660–#662).** Three of them were
+never blocked on a credential at all — they were blocked on an artefact nobody
+had committed, a question the application had already been able to answer since
+#470, and a misconfiguration the code could not describe. The lesson is worth
+recording: *"needs the owner" is a claim that ages, and this list had been
+carrying it unexamined.*
+
 ---
 
 ## 1. Server and operations — the highest-stakes column
@@ -57,9 +64,17 @@ Rotating is the only fix. Rewriting history does not help once a clone exists.
 Rotate and update the deployment environment **in the same sitting** — the old
 key dies the moment the new one is issued, so a gap is an outage.
 
-✅ Prevention is in place: `gitleaks` runs in CI on a pinned action SHA
-(`.github/workflows/ci.yml`), with `.gitleaks.toml` configured. No secret is
-tracked in the working tree today — verified by scan.
+✅ Prevention is in place **at both ends** (#662). `gitleaks` runs in CI on a
+pinned action SHA with `fetch-depth: 0`, so the whole history is scanned — but
+CI runs *after* the push, and by then rotation is the only remedy again. A
+pre-commit guard now refuses a commit that stages one of the provider-assigned
+shapes this platform actually holds: `sk_live_`/`sk_test_`, `AKIA…`, a PRIVATE
+KEY block, and a JWT whose **decoded payload** says `role: service_role`. It
+deliberately does not match the *words* password/secret/token — a check that
+fires on correct code is a check somebody passes `--no-verify` to.
+
+Proven end to end against the real git index: staging a fake `sk_live_` key is
+refused with exit 1, naming the file and line.
 
 ### 🔑 Rotate the Supabase keys and the Railway token
 
@@ -123,26 +138,75 @@ nobody has to remember to come back and edit YAML. Until they are set:
 Without them every rate limiter and cache uses a **per-instance in-memory
 fallback that does not share state between server instances**.
 
-✅ The code already handles this properly and says so loudly: a one-time warning
-at module load, an honest `isRedisConfigured` flag that callers check, and a red
-**Disconnected** tile on `/admin/system-health`. No code work is outstanding —
-only the credentials.
+⚠️ **The code was NOT handling this properly, and #661 is that finding.** Only
+the token is set on this deployment — and `isRedisConfigured` is `url && token`,
+so the half-configured state was reported, logged and rendered exactly like
+never having heard of Upstash. The startup line said *"UPSTASH_REDIS_REST_URL /
+UPSTASH_REDIS_REST_TOKEN are not set"* to somebody who had set one of them, and
+named neither as the missing one. The tile said **Disconnected**.
 
-### 🔑 Confirm migrations `034` and `035` are applied
+Those are different situations: **neither** set is a choice (a laptop, a
+preview), **one** set is a mistake — nobody configures half a credential pair on
+purpose, and meanwhile every rate limiter is per-container rather than per
+platform. "Could not tell" rendered as "no", the class #620 and #621 are under.
 
-**34 migration files** are in `supabase/migrations/`. Whether the production
-database has them cannot be determined from here.
+✅ Now: three named states, an **error** rather than a warning for the
+half-configured one, the missing variable named, and the tile reading
+*"Half-configured — UPSTASH_REDIS_REST_URL is missing"*. `isRedisConfigured` is
+deliberately unchanged — half a pair cannot reach Upstash, so the fallback is
+still correct.
 
-`035` is the one that matters most and is new: it is **#652's overselling fix**,
-and until it is applied a cart carrying the same product on two lines can take
-more stock than exists. It is `CREATE OR REPLACE` over `015`, transaction-safe,
-and takes effect the moment it is applied — no code change is needed for it to
-start working.
+**What is left for you: set `UPSTASH_REDIS_REST_URL`** to the URL that goes with
+the token already configured.
 
-### 🔑 Confirm what production is actually serving
+### ☐ Apply `supabase/deploy.sql` — the question "are they applied?" is retired
 
-If the deployed build predates this branch, everything below is academic. This
-cannot be checked from inside the repository.
+**This stopped being a research task (#660).** The answer used to require
+running `node scripts/build-deploy-sql.mjs` and pasting the output, which is a
+toolchain the person doing the pasting does not have. The generated bundle is
+**committed** now — `supabase/deploy.sql`, all 33 migrations in dependency
+order — and a ratchet regenerates it on every test run and compares byte for
+byte, so it cannot drift from the migrations.
+
+And the question does not need answering, because **re-running it is provably
+free**. Measured, not claimed: a fresh PostgreSQL 16 with `supabase/schema.sql`,
+then `deploy.sql` applied **three times**. Every run exited clean and the
+definitions of all 45 functions were byte-identical (`md5(pg_get_functiondef)`)
+after the third. `decrement_many_or_fail` carries `035`'s aggregate.
+
+**So: open `supabase/deploy.sql`, paste it into the Supabase SQL Editor of the
+production project, run it.** That applies `035` — #652's overselling fix, the
+one defect on this list that is live in production — along with anything else
+missing, and does nothing where nothing is missing.
+
+Two things to know before pasting, both stated in the file itself:
+
+- **The last section, `004`, turns row-level security ON.** It is the only part
+  that changes behaviour rather than replacing a function with itself, and its
+  failure mode is *silent* (zero rows, not an error). Its precondition — that
+  nothing in the browser reads the database directly — was re-verified for this
+  entry, and the full 362-test Playwright suite passes against a database with
+  RLS on. Stop before that section if you would rather do it separately.
+- **`022` is deliberately excluded** and the file now says so, with the reason.
+  `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block. It is a
+  performance migration, applied on its own, and only if its own `EXPLAIN
+  ANALYZE` shows the indexes are worth having.
+
+### ✅ Confirm what production is actually serving — **already answerable**
+
+This was listed as needing a dashboard. It does not: **#470 built the answer
+into the application** and this entry never caught up.
+
+    GET https://<your-domain>/api/health
+
+returns the commit SHA and branch the running container was built from, read
+from `RAILWAY_GIT_COMMIT_SHA` at runtime by a `force-dynamic` route — so it
+describes what is *serving*, not what was once built. Compare it with the head
+of `main`. Unauthenticated, so it can be opened in a browser.
+
+A `buildTime` alone could not answer it, for the reasons `lib/deployment-facts`
+records: a failed build leaves the previous image serving under a plausible
+timestamp, and redeploying an old commit produces a new one.
 
 ### 🔑 Two decisions with no code consequence until made
 

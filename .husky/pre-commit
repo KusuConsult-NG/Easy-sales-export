@@ -23,4 +23,10 @@
 # branches into a type-broken tree is not caught locally at all — CI catches it
 # on the PR. If that ever proves too late, put the check back in pre-push
 # rather than trying to widen this one.
+#   #662 — before anything else, and cheaply: a credential that reaches a
+#   commit has to be rotated whether or not it is ever pushed, because removing
+#   it later leaves it in the history. This repository already carries one such
+#   key. CI scans the full history with gitleaks, but CI runs after the push.
+node scripts/no-credentials-in-staged.mjs || exit 1
+
 npx lint-staged

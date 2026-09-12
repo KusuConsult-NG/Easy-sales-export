@@ -170,7 +170,23 @@ export default function SystemHealthPage() {
                                     <Database className="w-5 h-5" />
                                     <div className="flex flex-col">
                                         <span className="text-xs font-bold uppercase">Upstash Redis</span>
-                                        <span className="text-sm">{report.services?.redis ? 'Connected' : 'Disconnected'}</span>
+                                        {/*
+                                          *   #661 — "Disconnected" was shown for
+                                          *   two different situations: nobody
+                                          *   configured Upstash, and somebody
+                                          *   configured HALF of it. This
+                                          *   deployment is the second — the token
+                                          *   is set, the URL is not — and the tile
+                                          *   could not say so, which is a screen
+                                          *   rendering "could not tell" as "no".
+                                          */}
+                                        <span className="text-sm">
+                                            {report.services?.redis
+                                                ? 'Connected'
+                                                : report.services?.redisConfig === 'half-configured'
+                                                    ? `Half-configured — ${report.services.redisMissingVariable} is missing`
+                                                    : 'Disconnected — not configured'}
+                                        </span>
                                     </div>
                                 </div>
                                 <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services?.firestore ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>

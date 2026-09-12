@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db, getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS, User } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { getRedisClientStatus } from "@/lib/redis";
+import { getRedisClientStatus, redisConfigState, missingRedisVariable } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 import { DEFAULT_TOGGLES } from "@/lib/feature-toggles";
 import { validateProductionSecrets } from "@/lib/security-checks";
@@ -22,6 +22,16 @@ export interface HealthReport {
     issues: HealthIssue[];
     services: {
         redis: boolean;
+        /**
+         *   #661 — WHICH KIND OF "no" THE TILE IS SHOWING.
+         *
+         *   `redis: false` meant both "nobody configured Upstash" and "somebody
+         *   configured half of it", and this deployment is in the second state:
+         *   the token is set and the URL is not. A screen that renders both as
+         *   "Disconnected" cannot tell an operator they are one variable away.
+         */
+        redisConfig: 'configured' | 'half-configured' | 'absent';
+        redisMissingVariable: string | null;
         firestore: boolean;
         paystack: boolean;
         resend: boolean;
@@ -218,6 +228,10 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
             issues: issues,
             services: {
                 redis: redisStatus,
+                //   #661 — reachability and CONFIGURATION are different
+                //   questions, and only the second can name what to do.
+                redisConfig: redisConfigState(),
+                redisMissingVariable: missingRedisVariable(),
                 firestore: databaseStatus,
                 // Configuration, not reachability. Both are true statements;
                 // the screen is what has to say which, and it does now.
