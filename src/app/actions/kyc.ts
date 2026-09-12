@@ -364,7 +364,27 @@ async function _saveKYCProfileAction(payload: { firstName: string;
         // ── Cross-module PII sync ──────────────────────────────────────────────
         // Propagate the latest phone / name / address to all module sub-collections
         // so that queries against those collections (SMS broadcast, admin views) are
-        // always consistent. We use a Firestore batch for atomicity and efficiency.
+        // consistent.
+        //
+        //   #679 THIS SAID "We use a Firestore batch for atomicity and
+        //        efficiency". THE BATCH IS NOT ATOMIC.
+        //
+        //        `SupabaseWriteBatch.commit()` is a `for` loop awaiting each
+        //        write in turn, with no rollback — see the note on the class.
+        //        So a failure partway through leaves the member's new phone
+        //        number in the module collections written so far and the old
+        //        one in the rest, which is the exact inconsistency the sentence
+        //        above says this block exists to prevent.
+        //
+        //        The consequence is bounded and recoverable: a later KYC save
+        //        re-runs the whole sync, and the root user document — the
+        //        record everything else is derived from — is written before
+        //        this block by atomicUpdateUser. So the mechanism is left
+        //        alone and the claim is corrected, because what is dangerous
+        //        here is believing the sync cannot half-apply.
+        //
+        //        If it must not half-apply, the database has to enforce it; a
+        //        batch in this adapter cannot.
         try { const batch = db.batch();
 
             // 1. academy_applications — find by userId

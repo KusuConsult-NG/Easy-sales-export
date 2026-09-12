@@ -459,7 +459,39 @@ export async function joinCooperativeAction(
             return { error: "You are already a member of this cooperative", success: false as const, data: null };
         }
 
-        // Atomic batch: all 3-4 writes committed together so no partial state on crash.
+        /**
+         *   #679 THIS SAID "Atomic batch: all 3-4 writes committed together so
+         *        no partial state on crash." NONE OF THAT IS TRUE.
+         *
+         *        IT IS NOT ATOMIC. `SupabaseWriteBatch.commit()` is a `for`
+         *        loop that awaits each operation in turn, with no rollback — so
+         *        a failure partway through leaves everything before it applied
+         *        and everything after it not. That is already written down for
+         *        `runTransaction`, which this codebase has been bitten by three
+         *        times (the sync engine, the WhatsApp invite, order
+         *        management); the write batch had no such note and read exactly
+         *        like Firestore's, which IS atomic.
+         *
+         *        AND THERE ARE TWO WRITES, NOT THREE OR FOUR.
+         *
+         *        THE PARTIAL STATE IT PROMISES TO PREVENT IS HARMLESS ANYWAY.
+         *        The second write increments `cooperatives.memberCount`, and
+         *        the note six lines below records that the field has one writer
+         *        and NO READER. So the comment offered protection against a
+         *        consequence that does not exist, using a mechanism that does
+         *        not work.
+         *
+         *        LEFT AS A BATCH, because two writes in a loop is what it
+         *        already does and changing the mechanism would be a change with
+         *        no beneficiary. What is removed is the false assurance — the
+         *        danger was never today's two writes, it was the third one
+         *        somebody adds tomorrow while trusting this sentence.
+         *
+         *        If a write that MATTERS is added here, it needs the database
+         *        to enforce it: `claim_status_transition` and the wallet
+         *        functions are what this platform uses when an operation has to
+         *        be all-or-nothing.
+         */
         const batch = db.batch();
 
         const newMemberRef = membershipsRef.doc();

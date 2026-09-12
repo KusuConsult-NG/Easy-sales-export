@@ -2489,6 +2489,39 @@ export class SupabaseTransaction {
 
 // ─── WriteBatch ───────────────────────────────────────────────────────────────
 
+/**
+ * A batch of writes — APPLIED IN ORDER, NOT ATOMICALLY.
+ *
+ *   #679 THIS READ EXACTLY LIKE FIRESTORE'S WriteBatch, WHICH IS ATOMIC. IT IS
+ *        NOT.
+ *
+ *        `commit()` is a `for` loop that awaits each operation in turn. There
+ *        is no transaction around it and no rollback, so a failure partway
+ *        through leaves every earlier write applied and every later one not —
+ *        and the caller gets a rejected promise with no way to know how far it
+ *        got.
+ *
+ *        The same is true of `runTransaction` here, and THAT is written down —
+ *        twice in this file, and in three separate findings where a comment
+ *        promised atomicity the code could not deliver (the sync engine, the
+ *        WhatsApp invite, order management). The batch had no note at all,
+ *        which made it the more dangerous of the two: it carries a name from an
+ *        API where the guarantee is real.
+ *
+ *        A caller found saying otherwise — "Atomic batch: all 3-4 writes
+ *        committed together so no partial state on crash", in cooperative
+ *        registration — is corrected in #679, and a sweep now fails if another
+ *        appears.
+ *
+ *   WHAT TO USE WHEN IT MUST BE ALL-OR-NOTHING. The database, not this class:
+ *   `claim_status_transition` for a status move, the wallet functions for
+ *   money. Those are SQL and they hold a row lock; this is a convenience for
+ *   writes that are independent of each other.
+ *
+ *   WHY IT IS NOT MADE ATOMIC HERE. PostgREST gives no cross-request
+ *   transaction, so honest atomicity would mean a function per operation shape.
+ *   Saying what it does is the repair; pretending is what caused the finding.
+ */
 export class SupabaseWriteBatch {
     private _operations: Array<() => Promise<void>> = [];
 
