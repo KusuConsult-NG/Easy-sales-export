@@ -281,10 +281,40 @@ export default function BankAccountVerification({
                                         <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
                                     )}
                                 </div>
+                                {/*
+                                  *   #667 — THE REASON, NOT JUST A BUTTON.
+                                  *
+                                  *   This branched on `banksError` and rendered
+                                  *   none of it: a bare "Retry loading banks"
+                                  *   link with no explanation, on the screen
+                                  *   where a member sets the account their money
+                                  *   is paid into.
+                                  *
+                                  *   getBankList distinguishes four failures and
+                                  *   TWO OF THEM CANNOT BE FIXED BY RETRYING —
+                                  *   an expired session needs a fresh sign-in,
+                                  *   an unset PAYSTACK_SECRET_KEY needs an
+                                  *   operator. Both were shown the same button,
+                                  *   which does nothing, with no way to learn
+                                  *   which they were in.
+                                  *
+                                  *   The sibling copy of this component, used by
+                                  *   export onboarding, has always shown the
+                                  *   message. One screen of two.
+                                  */}
                                 {banksError && (
-                                    <button onClick={loadBanks} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                                        <RefreshCw className="w-3 h-3" /> Retry loading banks
-                                    </button>
+                                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-amber-800">{banksError}</p>
+                                            <button
+                                                onClick={loadBanks}
+                                                className="mt-1 text-xs text-amber-900 hover:underline inline-flex items-center gap-1"
+                                            >
+                                                <RefreshCw className="w-3 h-3" /> Retry loading banks
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
 

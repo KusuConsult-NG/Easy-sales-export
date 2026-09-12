@@ -8,7 +8,7 @@ checked against the tree, not carried forward.
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 715 suites / 12,979 tests green** — and
+**Gate at this revision: build clean, 717 suites / 12,991 tests green** — and
 green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
 world after #663's enforcement date. The version before this one said 12,930
 across 712.
@@ -158,8 +158,17 @@ half-configured one, the missing variable named, and the tile reading
 deliberately unchanged — half a pair cannot reach Upstash, so the fallback is
 still correct.
 
-**What is left for you: set `UPSTASH_REDIS_REST_URL`** to the URL that goes with
-the token already configured.
+**CORRECTED 2026-09-12: the owner reports `UPSTASH_REDIS_REST_URL` IS set on
+Railway.** The "only the token is set" line above came from an earlier session
+and is no longer a measurement — it is repeated here only because it is what
+#661 was found from. #661's fix stands either way: the reporting was wrong
+regardless of which state the deployment was in, and a half-configured Redis
+will now say so instead of looking like an absent one.
+
+**To confirm from the application rather than from the dashboard:** open
+`/admin/system-health`. The Upstash tile reads **Connected** when both variables
+resolve. Once #661 is deployed it will also distinguish *"Half-configured — X is
+missing"* from *"Disconnected — not configured"*.
 
 ### ☐ Apply `supabase/deploy.sql` — the question "are they applied?" is retired
 
@@ -458,6 +467,42 @@ And #645's own ratchet asserted the local `timingSafeEqual` it had added.
 one is case-insensitive. Five doubles were written that way and seven already
 lowercased — a hidden coupling to one route's casing rather than a model of the
 real thing. All five corrected.
+
+### ✅ (#667) The member was offered a retry button and not told why
+
+The last of the four Paystack paths the captured server log named:
+`[ERROR] getBankList error: {"error":"Paystack API error: 403"}`.
+
+`getBankList` is careful about its refusals and returns a **different message
+for each** way it can fail — an expired session, an unset `PAYSTACK_SECRET_KEY`,
+an upstream refusal, a `status:false` answer.
+
+**There are two copies of the screen that calls it, and they disagree:**
+
+| | |
+|---|---|
+| `components/onboarding/` | renders the message in an alert, with a retry. Used by export onboarding. |
+| `components/shared/` | set `banksError`, branched on it, and rendered a **bare "Retry loading banks" link**. The text was never shown. Used by marketplace onboarding and **`/profile/bank-account`**. |
+
+So the copy that threw the reason away is the one on the screen where a member
+sets **the account their money is paid into**.
+
+**Why a bare retry is worse than no retry:** two of those four failures cannot
+be fixed by retrying. An expired session needs a fresh sign-in; a missing
+Paystack key needs an operator. Both were shown the same red link, pressed it,
+watched nothing happen, and had no way to learn which they were in. The
+information existed, was computed deliberately, crossed the boundary into the
+component, and was dropped at the last step.
+
+⚠️ **A mutant survived**: the assertion that the action distinguishes its four
+refusals read the whole file, and `verifyBankAccount` further down returns
+"Payment service not configured" too — so collapsing `getBankList`'s version
+left the string in place. Scoped to that function's own body.
+
+**Recorded and not fixed:** there are still two copies of this screen, differing
+in more than this. Merging them is a change to the form a member types their
+payout account into, with a blast radius this finding does not need. The test
+asserts the two together, so a fix applied to one fails until it reaches both.
 
 ### ✅ (#666) A count taken on the wrong machine
 
