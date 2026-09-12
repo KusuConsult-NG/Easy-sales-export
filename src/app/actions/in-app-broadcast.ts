@@ -65,6 +65,17 @@ export type InAppBroadcastPreview = ActionResponse<{
 export type InAppBroadcastResult = ActionResponse<{
     delivered: number;
     logId?: string;
+    /**
+     * The value stamped on every notification this broadcast produced — #676.
+     *
+     * It is the log row's own id, so the row describing a send and the
+     * notifications it produced are linked by construction. Previously this was
+     * `BROADCAST-${Date.now()}` evaluated once PER NOTIFICATION, which gave
+     * every row in one broadcast a different value and two broadcasts started
+     * in the same millisecond the same one — a grouping key that grouped
+     * nothing.
+     */
+    broadcastId?: string;
 }>;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -513,12 +524,68 @@ export async function sendInAppBroadcastAction(
     linkText?: string
 ): Promise<InAppBroadcastResult> { const authCheck = await requireAdmin("announcements:manage");
     if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
-    try { const db = getAdminDb();
+    const db = getAdminDb();
+    /**
+     *   #676 THE RECORD OF A BROADCAST WAS WRITTEN AFTER THE BROADCAST.
+     *
+     *        Both channels delivered first and logged second, and both catch
+     *        blocks return `{ success: false, error }` having written NOTHING.
+     *        So a broadcast that reached forty thousand members and then failed
+     *        on the logging write left no log row, no audit row, and an error
+     *        message on the admin's screen.
+     *
+     *        The consequence is not just a missing record. The admin is told
+     *        the broadcast FAILED, so the reasonable thing to do is send it
+     *        again — and sending it again delivers to everybody who already
+     *        received it. On the SMS channel that is also a second charge for
+     *        every message. It is #668's shape in a different channel: the one
+     *        case where you must not retry was the case that told you to.
+     *
+     *        The row is claimed BEFORE delivery and updated after. If the
+     *        process dies in between, what survives says `sending` and names
+     *        the recipient count — which is exactly what somebody deciding
+     *        whether to re-send needs to see.
+     */
+    const logRef = db.collection("inapp_broadcast_logs").doc();
+    /**
+     *   #676 AND ONE BROADCAST NOW HAS ONE ID.
+     *
+     *        `broadcastId: \`BROADCAST-${Date.now()}\`` was evaluated INSIDE
+     *        the per-notification loop, so every notification in a single
+     *        broadcast carried a DIFFERENT id — and two broadcasts started in
+     *        the same millisecond carried the same one. The field's own comment
+     *        says it exists so a notification can be traced back to the
+     *        broadcast that produced it, and it could not: there was no value
+     *        that identified the group.
+     *
+     *        The log document's own id is used, so the notifications and the
+     *        row describing them are linked by construction rather than by a
+     *        timestamp that had to be unique and was not.
+     */
+    const broadcastId = logRef.id;
+
+    try {
         const recipients = await collectRecipientUserIds(filters);
 
         if (recipients.length === 0) {
             return { success: false, error: "No recipients matched the selected filters.", data: null };
         }
+
+        await logRef.set({
+            title,
+            message,
+            type,
+            link: link || null,
+            linkText: linkText || null,
+            audience: filters.audience,
+            filters,
+            sentBy: authCheck.userId,
+            broadcastId,
+            totalRecipients: recipients.length,
+            delivered: 0,
+            status: "sending",
+            startedAt: FieldValue.serverTimestamp(),
+        });
 
         let delivered = 0;
 
@@ -536,35 +603,30 @@ export async function sendInAppBroadcastAction(
                     link: link || null,
                     linkText: linkText || null,
                     read: false,
-                    // `broadcastId` lets us track that this notification originated from an admin broadcast
-                    broadcastId: `BROADCAST-${Date.now()}`,
+                    //   `broadcastId` lets us track that this notification
+                    //   originated from an admin broadcast — and #676 made it
+                    //   capable of that. One value, computed once above, equal
+                    //   to the id of the log row describing this send.
+                    broadcastId,
                     createdAt: FieldValue.serverTimestamp() });
             });
             await batch.commit();
             delivered += chunk.length;
         }
 
-        // Write a log entry
-        const logRef = await db.collection("inapp_broadcast_logs").add({ title,
-            message,
-            type,
-            link: link || null,
-            linkText: linkText || null,
-            audience: filters.audience,
-            filters,
-            /**
-             * WHICH admin, not the literal string "admin".
-             *
-             * Every row this log has ever written says `sentBy: "admin"`. The
-             * one question a broadcast log exists to answer — who sent this to
-             * every member — was the one it could not. Same family as #129,
-             * #159 and #178, where an audit row named the wrong actor or none.
-             */
-            sentBy: authCheck.userId,
+        /**
+         * Close the row that was claimed before delivery.
+         *
+         * WHICH admin, not the literal string "admin" — every row this log ever
+         * wrote said `sentBy: "admin"`, so the one question a broadcast log
+         * exists to answer was the one it could not. That is set above, when
+         * the row is claimed; this records only what happened.
+         */
+        await logRef.update({
             sentAt: FieldValue.serverTimestamp(),
-            totalRecipients: recipients.length,
             delivered,
-            status: "done" });
+            status: "done",
+        });
 
         // Recorded platform-wide too. Gated on requireAdmin(), so the #66
         // ratchet — which matches hasAdminPermission() — never saw this write.
@@ -576,7 +638,24 @@ export async function sendInAppBroadcastAction(
             metadata: { channel: 'in_app', title, type, delivered, recipients: recipients.length, filters },
         });
 
-        return { success: true, error: null, data: { delivered, logId: logRef.id } };
-    } catch (error: any) { return { success: false, error: error.message, data: null };
+        return { success: true, error: null, data: { delivered, logId: logRef.id, broadcastId } };
+    } catch (error: any) {
+        /**
+         *   #676 A FAILURE AFTER DELIVERY SAYS SO, RATHER THAN LOOKING LIKE A
+         *        BROADCAST THAT NEVER HAPPENED.
+         *
+         *        Best-effort by design: if the database is what failed, this
+         *        write fails too, and the row claimed BEFORE delivery is what
+         *        survives — still reading `sending`, which is already the
+         *        honest answer. Nothing here may throw, or it would replace the
+         *        real error with its own.
+         */
+        await logRef.update({
+            status: "interrupted",
+            error: String(error?.message ?? error),
+            interruptedAt: FieldValue.serverTimestamp(),
+        }).catch(() => { /* the claimed row already says `sending` */ });
+
+        return { success: false, error: error.message, data: null };
     }
 }

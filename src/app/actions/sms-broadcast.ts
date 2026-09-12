@@ -789,11 +789,53 @@ export async function sendSmsBroadcastAction(
         logger.warn("[SmsBroadcast] AT_USERNAME is 'sandbox' — SMS will hit the sandbox API and NOT reach real phones. Set AT_USERNAME to your live Africa's Talking username in production env.");
     }
 
+    const db = getAdminDb();
+    /**
+     *   #676 THE RECORD OF A BROADCAST WAS WRITTEN AFTER THE BROADCAST, AND
+     *        THIS IS THE CHANNEL WHERE THAT COSTS MONEY.
+     *
+     *        The log row was written once the whole send loop had finished, and
+     *        the catch below returned `{ success: false, error }` having written
+     *        nothing at all. So a broadcast that put an SMS on forty thousand
+     *        phones and then failed on the logging write left NO log row, NO
+     *        audit row, and an error on the admin's screen.
+     *
+     *        The admin is then told the broadcast FAILED, and the reasonable
+     *        response to that is to send it again — charging for every message
+     *        a second time and delivering it twice to everyone who already had
+     *        it. That is #668's shape in another channel: the one case where
+     *        you must not retry was the case that told you to.
+     *
+     *        The row is claimed BEFORE the first message goes out and updated
+     *        after the last. If the process dies in between, what survives says
+     *        `sending` and carries the recipient count — which is what somebody
+     *        deciding whether to re-send actually needs.
+     */
+    const logRef = db.collection("sms_broadcast_logs").doc();
+    const sandboxMode = atUsername.toLowerCase() === "sandbox";
+
     try {
         const recipients = await collectSmsRecipients(filters);
         if (recipients.length === 0) {
             return { success: false, error: "No recipients with valid phone numbers matched your filters.", data: null };
         }
+
+        const adminId = (authCheck as any).session?.user?.id || (authCheck as any).userId || "admin";
+
+        await logRef.set({
+            message,
+            audience: filters.audience,
+            filters,
+            sentBy: adminId,
+            sandboxMode,
+            broadcastId: logRef.id,
+            totalRecipients: recipients.length,
+            sent: 0,
+            failed: 0,
+            skipped: 0,
+            status: "sending",
+            startedAt: FieldValue.serverTimestamp(),
+        });
 
         let sent = 0;
         let failed = 0;
@@ -825,17 +867,10 @@ export async function sendSmsBroadcastAction(
             if (i + BATCH < recipients.length) await sleep(1000);
         }
 
-        // FIX: Log real admin userId from auth session, not hardcoded "admin"
-        const db = getAdminDb();
-        const adminId = (authCheck as any).session?.user?.id || (authCheck as any).userId || "admin";
-        const logRef = await db.collection("sms_broadcast_logs").add({
-            message,
-            audience: filters.audience,
-            filters,
-            sentBy: adminId,
-            sandboxMode: atUsername.toLowerCase() === "sandbox",
+        //   Close the row claimed before the first message went out. The admin
+        //   who sent it is recorded there, not here — #676.
+        await logRef.update({
             sentAt: FieldValue.serverTimestamp(),
-            totalRecipients: recipients.length,
             sent,
             failed,
             skipped,
@@ -868,7 +903,6 @@ export async function sendSmsBroadcastAction(
          * sandboxMode is in the row: a broadcast that went to the sandbox
          * reached nobody, and the audit trail should say which it was.
          */
-        const sandboxMode = atUsername.toLowerCase() === "sandbox";
         await recordAdminAction({
             action: 'broadcast_sent',
             userId: authCheck.userId,
@@ -883,6 +917,21 @@ export async function sendSmsBroadcastAction(
             data: { sent, failed, skipped, logId: logRef.id, sandboxMode },
         };
     } catch (error: any) {
+        /**
+         *   #676 A FAILURE AFTER THE MESSAGES WENT OUT SAYS SO.
+         *
+         *        Best-effort by design: if the database is what failed, this
+         *        write fails too, and the row claimed BEFORE the first message
+         *        is what survives — still reading `sending`, which is already
+         *        the honest answer. Nothing here may throw, or it would replace
+         *        the real error with its own.
+         */
+        await logRef.update({
+            status: "interrupted",
+            error: String(error?.message ?? error),
+            interruptedAt: FieldValue.serverTimestamp(),
+        }).catch(() => { /* the claimed row already says `sending` */ });
+
         return { success: false, error: error.message, data: null };
     }
 }

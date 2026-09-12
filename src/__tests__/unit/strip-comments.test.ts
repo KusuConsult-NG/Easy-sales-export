@@ -239,6 +239,42 @@ describe('it agrees with the naive version everywhere the naive version is right
         return out;
     }
 
+    /**
+     * The files the naive stripper mangles, as measured — #676.
+     *
+     * Generated from the sweep below rather than believed in advance: the first
+     * version of this suite expected `csp.ts` alone and found ten. Pinned as a
+     * SET so that a file joining or leaving the list both fail, and the failure
+     * names the file instead of a count.
+     */
+    const KNOWN_AFFECTED: string[] = [
+        'src/__tests__/unit/a-certificate-that-named-a-page-that-was-not-there.test.ts',
+        'src/__tests__/unit/admin-approval-audit.test.ts',
+        'src/__tests__/unit/admin-permission-gates.test.ts',
+        'src/__tests__/unit/admin-route-authority.test.ts',
+        'src/__tests__/unit/an-admin-screen-wearing-the-wrong-chrome.test.ts',
+        'src/__tests__/unit/broadcast-access.test.ts',
+        'src/__tests__/unit/client-reads-the-answer.test.ts',
+        'src/__tests__/unit/cooperative-withdrawal-doors.test.ts',
+        'src/__tests__/unit/export-window-expiry.test.ts',
+        'src/__tests__/unit/finance-reconcile-permission.test.ts',
+        'src/__tests__/unit/harness-covers-adapter.test.ts',
+        'src/__tests__/unit/kyc-route-bypass.test.ts',
+        'src/__tests__/unit/loan-application-refusal-is-visible.test.ts',
+        'src/__tests__/unit/mfa-enforcement-decided.test.ts',
+        'src/__tests__/unit/paystack-host-cannot-be-redirected.test.ts',
+        'src/__tests__/unit/repair-and-public-catalog.test.ts',
+        'src/__tests__/unit/revalidate-tag-profile-is-real.test.ts',
+        'src/__tests__/unit/safe-redirect-path.test.ts',
+        'src/__tests__/unit/sms-sandbox-reporting.test.ts',
+        'src/__tests__/unit/storage-backend-single-rule.test.ts',
+        'src/__tests__/unit/strip-comments.test.ts',
+        'src/__tests__/unit/the-audit-log-had-two-vocabularies.test.ts',
+        'src/__tests__/unit/the-export-sweep-only-walked-the-browser.test.ts',
+        'src/app/api/id-card/pdf/route.ts',
+        'src/lib/csp.ts',
+    ];
+
     /** Files where the naive stripper loses code the shared one keeps. */
     const AFFECTED: string[] = [];
 
@@ -426,10 +462,41 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   file strips nothing with the naive regex. It reads raw source on
         //   purpose, because what it asserts about the routes is the presence
         //   of a call, and it never reads its own text.
-        expect(AFFECTED.length).toBeLessThanOrEqual(24);
-        expect(AFFECTED).toContain('src/lib/csp.ts');
-        expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
-        expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');
+        //   #676 A NAMED LIST, NOT A CEILING.
+        //
+        //   This had been raised four times — 21→22→23→24 — each time with a
+        //   paragraph explaining why the new file was harmless. A fifth was due
+        //   today: sms-sandbox-reporting.test.ts crossed the 10% threshold
+        //   because PROSE WAS ADDED TO IT, which is the mechanism the note
+        //   about harness-covers-adapter above already describes.
+        //
+        //   Four bumps in a row is the signal, not the noise. A ceiling only
+        //   answers "how many", and every one of those paragraphs exists
+        //   because the reader's real question was WHICH — and a ceiling also
+        //   says nothing when a file silently drops OFF the list, which is the
+        //   direction that would matter if a suite quietly stopped asserting.
+        //
+        //   #670 settled this shape for the lead-list drift check: replace the
+        //   number with the membership. The list is generated from the
+        //   measurement, so it is a record of what IS rather than of what
+        //   somebody believed; what it adds is that a change in either
+        //   direction names the file.
+        //
+        //   MEMBERSHIP IS ABOUT WHICH FILES THE NAIVE STRIPPER MANGLES, not
+        //   about which files are read with it — that distinction is the
+        //   existing framing of this whole describe, and the test below is the
+        //   one that narrows the actual risk.
+        //
+        //   MUTATION-TESTED: dropping a file from the list and adding one the
+        //   sweep does not find are both KILLED. A third mutant — replacing
+        //   this line with `expect(AFFECTED.length).toBeGreaterThan(0)` —
+        //   SURVIVED, and is recorded rather than chased: it does not mutate
+        //   the subject, it substitutes a weaker assertion for this one, and no
+        //   assertion can detect its own replacement. #670 met the same class
+        //   and its cure — extract the decision as a named function with
+        //   known answers — has nothing to bite on here, where the decision is
+        //   "these two lists are equal".
+        expect([...AFFECTED].sort()).toEqual(KNOWN_AFFECTED);
     });
 
     it('only two of them are application source, which is what narrows the risk', () => {

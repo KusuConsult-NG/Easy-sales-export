@@ -77,7 +77,12 @@ describe('the sender is told when nothing was delivered', () => {
         // caller could see.
         const code = codeOnly(source(ACTION));
 
-        expect(code).toContain('sandboxMode: atUsername.toLowerCase() === "sandbox"');
+        //   #676 The expression is hoisted to a `const` above the try, because
+        //   the log row is now CLAIMED BEFORE the first message goes out and
+        //   the flag has to be on it from the start. Same value, computed once
+        //   rather than twice — what this test is about is that it is computed
+        //   at all and reaches the caller.
+        expect(code).toContain('const sandboxMode = atUsername.toLowerCase() === "sandbox"');
         // Returned to the caller, not merely computed: the flag must sit in the
         // same data object as logId — the success return, not the catch below it.
         const logIdAt = code.indexOf('logId: logRef.id');
@@ -119,7 +124,18 @@ describe('what the fix deliberately does not do', () => {
         const code = codeOnly(source(ACTION));
 
         expect(code).toContain('sent,');
-        expect(code).not.toContain('sent: 0,');
+        /*
+         *   #676 SCOPED TO THE CLOSING UPDATE. `sent: 0` now appears once, in
+         *   the row CLAIMED BEFORE the broadcast starts — an opening value, not
+         *   a reported one. The thing this test guards is that the number the
+         *   admin is finally shown is the real count, so it asks about the
+         *   write that sets it.
+         */
+        const closingAt = code.indexOf('await logRef.update({');
+        expect(closingAt).toBeGreaterThan(-1);
+        const closing = code.slice(closingAt, code.indexOf('});', closingAt));
+        expect(closing).toContain('sent,');
+        expect(closing).not.toContain('sent: 0');
     });
 
     it('still keeps the server-side warning', () => {

@@ -261,10 +261,32 @@ describe('sending writes one notification per recipient', () => {
     });
 
     it('stamping a broadcastId so an admin send is distinguishable afterwards', async () => {
-        await send({ audience: 'all' }, 'T', 'M');
-        for (const doc of notifications()) {
-            expect(String(doc.broadcastId)).toMatch(/^BROADCAST-\d+$/);
-        }
+        /*
+         *   #676 AND ONE BROADCAST NOW HAS ONE ID, WHICH IS WHAT THIS TEST WAS
+         *   ALWAYS FOR.
+         *
+         *   It used to assert the shape `/^BROADCAST-\d+$/`, and every
+         *   notification matched it — because the value was
+         *   `BROADCAST-${Date.now()}` evaluated INSIDE the per-notification
+         *   loop. Each row carried a DIFFERENT id, and two broadcasts started
+         *   in the same millisecond carried the same one. A grouping key that
+         *   grouped nothing, passing a test about its format.
+         *
+         *   The format is no longer the question. These assert the property the
+         *   field exists for: one value, shared by every notification of this
+         *   send, and equal to the id of the log row describing it.
+         */
+        const result = await send({ audience: 'all' }, 'T', 'M');
+
+        const ids = new Set(notifications().map((d) => String(d.broadcastId)));
+
+        expect(ids.size).toBe(1);
+        expect([...ids][0]).toBeTruthy();
+        //   Linked to the record of the send, not merely internally consistent:
+        //   a constant would satisfy the line above and group every broadcast
+        //   ever sent into one.
+        expect([...ids][0]).toBe(result.data?.broadcastId);
+        expect(result.data?.broadcastId).toBe(result.data?.logId);
     });
 
     it('every recipient getting their own document, none shared', async () => {
@@ -285,7 +307,51 @@ describe('sending writes one notification per recipient', () => {
         await send({ audience: 'all' }, 'Logged', 'Body');
         const logs = store.all('inapp_broadcast_logs');
         expect(logs).toHaveLength(1);
-        expect(logs[0][1]).toMatchObject({ title: 'Logged' });
+        expect(logs[0][1]).toMatchObject({ title: 'Logged', status: 'done' });
+    });
+
+    it('claiming that log row BEFORE delivering, so a failure after it leaves a record', async () => {
+        /*
+         *   #676 THE RECORD OF A BROADCAST WAS WRITTEN AFTER THE BROADCAST.
+         *
+         *   Both broadcast channels delivered first and logged second, and both
+         *   catch blocks returned `{ success: false, error }` HAVING WRITTEN
+         *   NOTHING. So a send that reached every member and then failed on the
+         *   logging write left no log row, no audit row, and an error message
+         *   on the admin's screen.
+         *
+         *   The consequence is not a missing record. The admin is told the
+         *   broadcast FAILED, so the reasonable thing to do is send it again —
+         *   and that delivers a second time to everyone who already had it. On
+         *   the SMS channel it also pays for every message twice. #668's shape
+         *   in another channel: the one case where you must not retry was the
+         *   case that told you to.
+         *
+         *   MODELLED THROUGH THE REAL FAILURE POINT rather than a hook invented
+         *   for the test: recordAdminAction runs after the notifications are
+         *   written, so making it throw is exactly "it broke after delivery".
+         */
+        for (let i = 0; i < 3; i++) store.seed(COLLECTIONS.USERS, `u${i}`, {});
+        (global as any).mockRecordAdminAction.mockImplementationOnce(() => {
+            throw new Error('audit write failed');
+        });
+
+        const result = await send({ audience: 'all' }, 'Half done', 'Body');
+
+        //   It failed …
+        expect(result.success).toBe(false);
+        //   … the members were messaged anyway …
+        expect(store.size(COLLECTIONS.NOTIFICATIONS)).toBeGreaterThan(0);
+        //   … and THE PLATFORM KNOWS. This is the whole finding: before #676
+        //   there was no row at all here, so nothing recorded that three
+        //   notifications had gone out.
+        const logs = store.all('inapp_broadcast_logs');
+        expect(logs).toHaveLength(1);
+        expect(logs[0][1]).toMatchObject({
+            title: 'Half done',
+            status: 'interrupted',
+            totalRecipients: 3,
+        });
     });
 });
 

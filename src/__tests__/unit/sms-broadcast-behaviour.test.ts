@@ -765,3 +765,64 @@ describe('approved and not_approved are exact complements', () => {
         }
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#676 — the record of a broadcast survives a failure after the messages go out', () => {
+    /*
+     *   THE CHANNEL WHERE THIS COSTS MONEY.
+     *
+     *   The log row was written once the whole send loop had finished, and the
+     *   catch returned `{ success: false, error }` having written nothing at
+     *   all. So a broadcast that put an SMS on forty thousand phones and then
+     *   failed on the logging write left NO log row, NO audit row, and an error
+     *   message on the admin's screen.
+     *
+     *   The admin is then told the broadcast FAILED, and the reasonable
+     *   response to that is to send it again — charging for every message a
+     *   second time and delivering it twice to everyone who already had it.
+     *   #668's shape in another channel: the one case where you must not retry
+     *   was the case that told you to.
+     *
+     *   THE SMS HALF OF THIS FIX WAS UNTESTED UNTIL A MUTANT SAID SO. Both
+     *   channels were repaired together and only the in-app one had a
+     *   behavioural test, so the mutant that put the SMS log back after the
+     *   loop SURVIVED. Fixing N doors and testing one of them is the same
+     *   defect wearing the repair's clothes.
+     */
+    it('THE ROW IS CLAIMED BEFORE THE FIRST MESSAGE, SO AN INTERRUPTED SEND IS VISIBLE', async () => {
+        store.seed(COLLECTIONS.USERS, 'u1', { phone: '08030000001' });
+        store.seed(COLLECTIONS.USERS, 'u2', { phone: '08030000002' });
+
+        //   recordAdminAction runs after the last message — making it throw is
+        //   exactly "it broke after delivery", not a hook invented for this.
+        (global as never as { mockRecordAdminAction: { mockImplementationOnce: (f: () => never) => void } })
+            .mockRecordAdminAction.mockImplementationOnce(() => {
+                throw new Error('audit write failed');
+            });
+
+        const result = await send({ audience: 'all' }, 'the message');
+
+        //   It failed …
+        expect(result.success).toBe(false);
+        //   … the messages were paid for and delivered anyway …
+        expect(sendSMS).toHaveBeenCalledTimes(2);
+        //   … and the platform has a record, which before #676 it did not.
+        const logs = store.all('sms_broadcast_logs');
+        expect(logs).toHaveLength(1);
+        expect(logs[0][1]).toMatchObject({ status: 'interrupted', totalRecipients: 2 });
+    });
+
+    it('AND A SEND THAT COMPLETES CLOSES THE SAME ROW RATHER THAN WRITING A SECOND', async () => {
+        //   The control. Claiming a row up front is only an improvement if the
+        //   successful path still produces exactly one record — two rows per
+        //   broadcast would double every count an operator reads.
+        store.seed(COLLECTIONS.USERS, 'u1', { phone: '08030000001' });
+
+        const result = await send({ audience: 'all' }, 'the message');
+
+        expect(result.success).toBe(true);
+        const logs = store.all('sms_broadcast_logs');
+        expect(logs).toHaveLength(1);
+        expect(logs[0][1]).toMatchObject({ status: 'done', sent: 1, totalRecipients: 1 });
+    });
+});
