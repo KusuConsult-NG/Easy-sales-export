@@ -82,7 +82,9 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { stripComments } from '@/lib/testing/strip-comments';
-import { findFarmNationApplications } from '@/lib/farm-nation-application-lookup';
+import { findFarmNationApplications, deterministicIdsFor } from '@/lib/farm-nation-application-lookup';
+import { MODULE_ERASURE_TARGETS } from '@/lib/module-application-erasure';
+import { COLLECTIONS } from '@/lib/types/firestore';
 import { backfillDecision, isBlankEmail, maskAddress } from '@/lib/missing-email-backfill';
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
@@ -233,6 +235,42 @@ describe('#671 — a Farm Nation application is looked for everywhere the produc
     it('AND NOTHING ANYWHERE IS THE ONLY STATE THAT MEANS "no application record"', async () => {
         expect(await findFarmNationApplications(collection({}), { userId: 'u1', email: 'ada@example.com' }))
             .toEqual([]);
+    });
+
+    it('AND THE DOCUMENT-ID DOORS COME FROM THE LIST THE ERASURE SWEEP ALREADY KEEPS', () => {
+        /*
+         *   #671's FIX NEARLY REPEATED #671's DEFECT.
+         *
+         *   The finding is a lookup that knew about fewer keys than the rest of
+         *   the product, and reported 45 farmers as having no application. The
+         *   first version of the repair hand-wrote `legacy_${userId}` — correct
+         *   for this collection today, and a SECOND STATEMENT of something
+         *   `module-application-erasure.ts` already declares as data, per
+         *   collection, because the shapes differ: academy rows also live under
+         *   `manual_<uid>`, and the cooperative and seller rows under the bare
+         *   uid.
+         *
+         *   Two hand-maintained copies of one contract is this audit's
+         *   fourth-most-common finding. Writing a fresh one while repairing an
+         *   instance of it would have been the same mistake with a newer date.
+         *
+         *   The two lists are asserted EQUAL rather than the lookup merely
+         *   importing something: an import that is then ignored is how a fix
+         *   reaches nothing.
+         */
+        const forFarmNation = MODULE_ERASURE_TARGETS
+            .find((t) => t.collection === COLLECTIONS.FARM_NATION_APPLICATIONS)!
+            .deterministicIds('u1');
+
+        expect(deterministicIdsFor(COLLECTIONS.FARM_NATION_APPLICATIONS, 'u1')).toEqual(forFarmNation);
+        //   Positive control: the helper must not answer the same for every
+        //   collection, or it is a constant wearing a lookup's clothes. Academy
+        //   genuinely has a second shape.
+        expect(deterministicIdsFor(COLLECTIONS.ACADEMY_APPLICATIONS, 'u1')).toContain('manual_u1');
+        expect(forFarmNation).not.toContain('manual_u1');
+        //   And a collection nobody has declared yields nothing, rather than a
+        //   guess that would send a point read at an id no writer uses.
+        expect(deterministicIdsFor('a_collection_nobody_declared', 'u1')).toEqual([]);
     });
 
     it('AND IT WRITES NOTHING, BECAUSE A SCAN THAT REPAIRS WHAT IT MEASURES CANNOT BE RUN TWICE', () => {
@@ -536,6 +574,10 @@ describe('#671 — and the check that was right is left alone', () => {
  *     the lookup heals the row it matched                             KILLED
  *     the lookup returns only the first row for a userId match        KILLED
  *     the lookup stops being keyed on the scanned user                KILLED
+ *     the document-id list is hand-written a second time              KILLED
+ *     the lookup stops consulting the erasure sweep's list            KILLED
+ *     an undeclared collection gets a guessed id                      KILLED
+ *     academy loses its manual_ shape                                 KILLED
  *     an absent application is dropped from the findings              KILLED
  *     the drift check stops failing altogether                        KILLED
  *     the sentence stops separating compared from absent              KILLED

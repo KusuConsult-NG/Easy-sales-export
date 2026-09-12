@@ -61,6 +61,24 @@
  *   matched by address counts only if it is unclaimed or already this user's.
  */
 
+import { MODULE_ERASURE_TARGETS } from "@/lib/module-application-erasure";
+import { COLLECTIONS } from "@/lib/types/firestore";
+
+const FARM_NATION_COLLECTION = COLLECTIONS.FARM_NATION_APPLICATIONS;
+
+/**
+ * The document ids this collection's writers derive from a user id.
+ *
+ * Read from `MODULE_ERASURE_TARGETS`, which already declares them per
+ * collection so the erasure sweep can find every row belonging to somebody who
+ * asked to be forgotten. A collection with no entry there yields none, which is
+ * the honest answer rather than a guess.
+ */
+export function deterministicIdsFor(collection: string, userId: string): string[] {
+    const target = MODULE_ERASURE_TARGETS.find((t) => t.collection === collection);
+    return target ? target.deterministicIds(userId) : [];
+}
+
 /** Which row answered, under which key — the key is reported, not just the fact. */
 export interface FarmNationApplicationMatch {
     id: string;
@@ -123,12 +141,33 @@ export async function findFarmNationApplications(
         }
     }
 
-    //   3. The document id the legacy importer writes. `_applications.ts` falls
-    //      back to exactly this id, so rows under it are reachable by the
-    //      product and must be reachable here.
-    const legacy = await applications.doc(`legacy_${userId}`).get();
-    if (legacy.exists) {
-        return [{ id: legacy.id ?? `legacy_${userId}`, data: legacy.data() ?? {}, via: "legacyDocId" }];
+    /*
+     *   3. THE DOCUMENT IDS THIS COLLECTION'S WRITERS DERIVE FROM THE USER ID,
+     *      TAKEN FROM THE ONE PLACE THAT ALREADY LISTS THEM.
+     *
+     *      This was a hand-written `legacy_${userId}` — correct today, and a
+     *      SECOND STATEMENT of something `module-application-erasure.ts`
+     *      already declares as data, per collection, because the id shapes
+     *      differ by collection and by writer (academy also has `manual_<uid>`;
+     *      the cooperative and seller rows are keyed by the bare uid).
+     *
+     *      Two hand-maintained copies of one contract is the defect this audit
+     *      files fourth-most-often, and #671 — the finding this module exists
+     *      to fix — WAS ONE: a lookup that knew about fewer keys than the rest
+     *      of the product, reporting 45 farmers as having no application.
+     *      Writing a fresh copy of the key list while repairing that would have
+     *      been the same mistake with a newer date on it.
+     *
+     *      So the erasure module's list is the source. If a writer starts
+     *      putting farm nation applications under another deterministic id,
+     *      the sweep that has to find them for a deletion request and the
+     *      lookup that has to find them for a forensic move together.
+     */
+    for (const candidate of deterministicIdsFor(FARM_NATION_COLLECTION, userId)) {
+        const byDocId = await applications.doc(candidate).get();
+        if (byDocId.exists) {
+            return [{ id: byDocId.id ?? candidate, data: byDocId.data() ?? {}, via: "legacyDocId" }];
+        }
     }
 
     const email = typeof keys.email === "string" ? keys.email.trim().toLowerCase() : "";

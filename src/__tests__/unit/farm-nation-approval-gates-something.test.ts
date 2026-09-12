@@ -296,7 +296,12 @@ describe('#486 — the forensic check compares two things that should agree', ()
         const lookup = code('src/lib/farm-nation-application-lookup.ts');
         expect(lookup).toContain('.where("userId", "==", userId)');
         expect(lookup).toContain('applications.doc(keys.applicationId)');
-        expect(lookup).toContain('applications.doc(`legacy_${userId}`)');
+        //   #671 The document-id door is driven by the per-collection list
+        //   module-application-erasure already keeps, rather than a second
+        //   hand-written `legacy_${userId}` — but it is still keyed on the user
+        //   this scan is asking about, which is what this test is for.
+        expect(lookup).toContain('deterministicIdsFor(FARM_NATION_COLLECTION, userId)');
+        expect(lookup).toContain('applications.doc(candidate)');
     });
 
     it('and the population it scans is stated, so a pass cannot be read as more than it is', () => {
