@@ -60,7 +60,13 @@ import { logger } from "@/lib/logger";
 /** What happened to one profile, and why. Never a bare count — #658. */
 export interface EmailBackfillOutcome {
     profileId: string;
-    result: "filled" | "no-auth-account" | "auth-has-no-email" | "already-had-one" | "write-failed";
+    result:
+        | "filled"
+        | "no-auth-account"
+        | "auth-has-no-email"
+        | "already-had-one"
+        | "profile-vanished"
+        | "write-failed";
     /** The address written, masked. Absent unless something was written. */
     filled?: string;
     detail?: string;
@@ -171,7 +177,43 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
 
     let filled = 0;
     for (const profile of profiles) {
-        const decision = backfillDecision(profile.data.email, authEmailById.has(profile.id) ? authEmailById.get(profile.id) : null);
+        /**
+         * RE-READ, rather than trusting the query that selected this row.
+         *
+         *   The header above promises the blank is checked "immediately before
+         *   the write", and the first version of this loop did not do it — it
+         *   passed `profile.data.email`, the value captured when the selection
+         *   query ran, several round trips and one batched Auth read earlier.
+         *
+         *   A behavioural test written against that promise is what found it.
+         *   The window is real: #479 has the LOGIN repair the same field, so a
+         *   person signing in between the selection and the write is exactly
+         *   the case that fills a row underneath this loop — and the whole
+         *   safety claim of this module is that an address already present is
+         *   never overwritten.
+         *
+         *   It is one point read per row, on a job that is already doing one
+         *   write per row.
+         */
+        let current: unknown = profile.data.email;
+        try {
+            const fresh = await db.collection(COLLECTIONS.USERS).doc(profile.id).get();
+            if (!fresh.exists) {
+                //   Deleted between the selection and now. Nothing to repair,
+                //   and creating the row would resurrect an account somebody
+                //   removed.
+                outcomes.push({ profileId: profile.id, result: "profile-vanished" });
+                continue;
+            }
+            current = (fresh.data() ?? {}).email;
+        } catch {
+            //   Could not confirm the row is still blank, so it is not written.
+            //   Reported as its own outcome rather than guessed either way.
+            outcomes.push({ profileId: profile.id, result: "write-failed", detail: "could not re-read the profile" });
+            continue;
+        }
+
+        const decision = backfillDecision(current, authEmailById.has(profile.id) ? authEmailById.get(profile.id) : null);
 
         if (!decision.write) {
             outcomes.push({ profileId: profile.id, result: decision.result });
