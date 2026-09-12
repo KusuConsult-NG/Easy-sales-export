@@ -1,7 +1,7 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`1fb946fd`, `f686d529` and now at `a96f6546`.** Every line below was checked against the
+`f686d529`, `a96f6546` and now at `78e267f7`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
@@ -12,7 +12,7 @@ successful scheduled run since 22 August. See §1.
 version before this one said 12,837 across 704.
 
 **And the Postgres suites were run for real** against PostgreSQL 16 with the
-schema and all 34 migrations: **12 suites, 164 passed**, 23 skipped for want of
+schema and all 34 migrations: **13 suites, 176 passed**, 23 skipped for want of
 a PostgREST. A status document that
 contradicts the repository is worse than none — it is read and believed — so
 these numbers are re-read from a full run each time this file is touched.
@@ -271,6 +271,44 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#654) A rule the database enforces by itself, that nothing tested
+
+`trg_enforce_member_active_on_paid` is a **live, enabled BEFORE INSERT OR UPDATE
+trigger on `cooperative_members`**. It refuses to move a member who is `active`
+or `paid` back to `pending` when they have a cooperative contribution on record,
+unless the update carries a `statusChangeReason`.
+
+It fires on every write to that table and **nothing exercised it**. It is also
+invisible to this audit's own instruments: they read TypeScript, and the whole
+of `src/` does not contain its name.
+
+**Three ways the application could collide with it were followed to the end, and
+all three came back clean:**
+
+1. **The admin status setter** writes `membershipStatus` unconditionally — but
+   its type is `"active" | "approved" | "suspended"`, so it cannot produce
+   `pending`.
+2. **The two synthesise-from-payment paths.** `_dashboard.ts` carries a note
+   saying this once demoted an ACTIVE member on a page load; `_coop_identity.ts`
+   has the same code *without* that guard, which looked exactly like this audit's
+   most repeated shape. **It is not** — it has a direct `doc(userId)` lookup
+   first, so the merge only ever inserts, and the trigger never blocks inserts.
+3. **The column.** The trigger reads native `status` while the app writes
+   `membershipStatus` — but `native_column_map` mirrors both onto that column.
+
+So it is a correct backstop whose refusals are unreachable today. Twelve executed
+cases now pin it; seven mutants against the live function, six killed.
+
+⚠️ **Its escape hatch exists only in SQL.** When the guard fires it tells the
+operator to set `statusChangeReason` — a string that appears nowhere in the
+application. The one documented way through the rule is something the product
+cannot do. Recorded rather than built, since nothing can currently trip it;
+the test asserts the fact so it stops being true the day somebody adds a writer.
+
+ℹ️ **`atomic_profile_sync` is orphaned SQL** — no TypeScript caller, no SQL
+caller, no trigger, no test, from migration 003. **Left in place**, per the
+standing rule that nothing is deleted; recorded so nobody re-derives it.
 
 ### ✅ (#653) Four more money functions nothing had ever run
 
