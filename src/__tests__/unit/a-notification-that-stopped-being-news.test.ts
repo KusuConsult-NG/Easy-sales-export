@@ -162,8 +162,13 @@ describe('#615 — the job that applies it', () => {
     });
 
     it('AND REFUSES A CALLER WITHOUT THE CRON SECRET, LIKE ITS SIBLINGS', () => {
-        expect(route).toContain('CRON_SECRET not configured');
-        expect(route).toContain('Bearer ${cronSecret}');
+        //   #659 RE-ANCHORED. "Like its siblings" is now literally true: the
+        //   eight siblings each wrote this check out by hand, all with `!==`
+        //   and in four subtly different shapes, and they share one gate. The
+        //   behaviour this asserted — 500 with no secret, 401 with a wrong one —
+        //   is exercised against the gate itself in
+        //   the-strict-comparison-reached-one-door.
+        expect(route).toContain('refuseUnauthorisedCron(');
     });
 
     it('AND ONE BAD ROW DOES NOT END THE SWEEP', () => {

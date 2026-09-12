@@ -62,28 +62,13 @@ export const dynamic = 'force-dynamic';
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 import { envVarStatuses, dataLayerTarget } from "@/lib/env-validator";
+//   #659 — this file held one of the two hand-written `secretsMatch`
+//   implementations. It was the careful one, and it is the one lib/secret-compare
+//   is built from; the webhook's copy short-circuited on a length mismatch.
+import { secretsMatch } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
-
-function secretsMatch(provided: string | null, expected: string): boolean {
-    if (!provided) return false;
-    const a = Buffer.from(provided, "utf8");
-    const b = Buffer.from(expected, "utf8");
-    // timingSafeEqual throws on a length mismatch, which would itself be an
-    // oracle. Compare a fixed-length digest-free pair by padding to the longer
-    // of the two and folding the length difference into the result.
-    if (a.length !== b.length) {
-        // Still do the comparison so the work is the same either way.
-        const pad = Buffer.alloc(Math.max(a.length, b.length));
-        const a2 = Buffer.concat([a, pad]).subarray(0, pad.length);
-        const b2 = Buffer.concat([b, pad]).subarray(0, pad.length);
-        timingSafeEqual(a2, b2);
-        return false;
-    }
-    return timingSafeEqual(a, b);
-}
 
 export async function GET(req: NextRequest) {
     const secret = process.env.NEXTAUTH_SECRET;

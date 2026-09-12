@@ -93,10 +93,25 @@ const CONTROLS: Array<{ name: string; pattern: RegExp }> = [
     { name: 'getServerSession', pattern: /getServerSession\s*\(/ },
     { name: 'getToken', pattern: /getToken\s*\(/ },
     { name: 'session.user', pattern: /session\??\.user/ },
-    // A shared secret compared against the environment — the cron routes, the
-    // Africa's Talking webhook and the cache revalidator all use this shape,
-    // and all three fail closed when the variable is unset.
+    // A shared secret compared against the environment — the Africa's Talking
+    // webhook and the cache revalidator use this shape, and both fail closed
+    // when the variable is unset.
     { name: 'shared secret', pattern: /process\.env\.[A-Z0-9_]*SECRET/ },
+    /**
+     * The shared cron gate — #659.
+     *
+     *   The eight cron routes used to read `process.env.CRON_SECRET` and
+     *   compare it themselves, four lines at a time, which is what the pattern
+     *   above matched. They now call one function, and this ratchet FAILED when
+     *   they stopped mentioning the variable — correctly: it noticed seven
+     *   routes lose a recognisable control on the same commit.
+     *
+     *   That is what it is for, so the answer is to teach it the new
+     *   convention rather than to loosen the sweep. `refuseUnauthorisedCron`
+     *   returns a 500 when CRON_SECRET is unset and a 401 when the bearer token
+     *   does not match it, and lib/cron-auth's own tests pin both.
+     */
+    { name: 'shared cron gate', pattern: /refuseUnauthorisedCron\s*\(/ },
     // Provider webhook signatures.
     { name: 'svix', pattern: /new Webhook\s*\(/ },
     { name: 'hmac', pattern: /createHmac\s*\(/ },

@@ -5,6 +5,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { ageingDecision, archivedFields, NOTIFICATION_ARCHIVE_AFTER_DAYS } from "@/lib/notification-ageing";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 /**
  * Take notifications off the list once they have stopped being news.
@@ -45,16 +46,9 @@ import { ageingDecision, archivedFields, NOTIFICATION_ARCHIVE_AFTER_DAYS } from 
 const MAX_PER_RUN = 1000;
 
 export async function GET(request: NextRequest) {
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) {
-        return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-    }
-    if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-        return NextResponse.json(
-            { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
-            { status: 401 },
-        );
-    }
+    //   #659 — one gate, shared. See lib/cron-auth.
+    const refusal = refuseUnauthorisedCron(request, "age-notifications");
+    if (refusal) return refusal;
 
     const now = new Date();
     let archived = 0;

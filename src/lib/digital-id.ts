@@ -1,5 +1,6 @@
 import { encryptData, decryptData, hashData } from './security';
 import QRCode from 'qrcode';
+import { secretsMatch } from "@/lib/secret-compare";
 
 /**
  * Digital ID & QR Code System
@@ -180,7 +181,16 @@ export function verifyDigitalIDQR(encryptedData: string): QRVerificationResult {
         const signatureData = `${payload.userId}${payload.memberNumber}${payload.timestamp}${payload.expiresAt}${secretKey}`;
         const expectedSignature = hashData(signatureData);
 
-        if (payload.signature !== expectedSignature) {
+        /**
+         *   #659 — the codebase's idiom, applied to the third door. The
+         *   practical risk here is lower than at the cron and webhook gates:
+         *   the payload arrives ENCRYPTED with the same key the signature is
+         *   built from, so anyone who reaches this line already holds the key
+         *   and can compute the expected value outright. It is changed for the
+         *   same reason #645 gave — the idiom exists and costs nothing — and
+         *   not because a timing oracle here would buy an attacker anything.
+         */
+        if (!secretsMatch(payload.signature, expectedSignature)) {
             return {
                 valid: false,
                 error: 'Invalid QR code signature',

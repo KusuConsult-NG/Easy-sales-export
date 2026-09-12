@@ -15,6 +15,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 // have. This route is already gated by CRON_SECRET, so it calls the service
 // directly — the same layer the action delegates to.
 import { createNotification as createNotificationAction } from "@/infrastructure/notifications/service";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 export const dynamic = 'force-dynamic';
 
@@ -48,16 +49,11 @@ export async function GET(req: NextRequest) {
         // process-email-queue, reconcile-paystack and reconcile-fulfilment all
         // already refuse when the secret is missing. Two of five did not — the
         // same shape as the vendor writers and the escrow confirm.
-        const cronSecret = process.env.CRON_SECRET;
-        if (!cronSecret) {
-            logger.error('[release-escrow] CRON_SECRET is not configured; refusing to run');
-            return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
-        }
-
-        const authHeader = req.headers.get('authorization');
-        if (authHeader !== `Bearer ${cronSecret}`) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        //
+        // #659 — and that rule now lives in lib/cron-auth rather than here,
+        // because it was written out eight times and the eight had drifted.
+        const refusal = refuseUnauthorisedCron(req, 'release-escrow');
+        if (refusal) return refusal;
 
         const now = Timestamp.now();
         const results = await Promise.allSettled([

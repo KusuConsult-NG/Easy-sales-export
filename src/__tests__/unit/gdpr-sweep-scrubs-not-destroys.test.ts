@@ -129,7 +129,11 @@ const SECRET = 'test-cron-secret';
 async function runSweep() {
     const { GET } = await import('@/app/api/cron/gdpr-purge/route');
     const res: any = await GET({
-        headers: { get: (h: string) => (h === 'Authorization' ? `Bearer ${SECRET}` : null) },
+        //   #659 — `Headers.get` is CASE-INSENSITIVE and this double was not, so it
+        //   answered only the exact spelling the route happened to use. Five doubles
+        //   modelled it that way and seven already lowercased; the five were a hidden
+        //   coupling to one route's casing rather than a model of the real thing.
+        headers: { get: (h: string) => (h.toLowerCase() === 'authorization' ? `Bearer ${SECRET}` : null) },
     } as any);
     return { status: res.status ?? 200, body: await res.json() };
 }

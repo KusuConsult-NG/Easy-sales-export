@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 /**
  * Fulfilment reconciliation — did the thing the payment paid for happen?
@@ -177,16 +178,9 @@ const CHECKS: Check[] = [
 const CHECKED_TYPES = new Set(CHECKS.map((c) => c.paymentType));
 
 export async function GET(request: NextRequest) {
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) {
-        return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-    }
-    if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-        return NextResponse.json(
-            { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
-            { status: 401 }
-        );
-    }
+    //   #659 — one gate, shared. See lib/cron-auth.
+    const refusal = refuseUnauthorisedCron(request, "reconcile-fulfilment");
+    if (refusal) return refusal;
 
     const startedAt = new Date();
 

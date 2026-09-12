@@ -9,6 +9,7 @@ import { Timestamp, FieldValue } from "@/lib/firestore-compat";
 import { userErasurePatch, erasureRetentionRecord, erasedOwnerMarker } from "@/lib/user-erasure";
 import { eraseModuleApplications } from "@/lib/module-application-erasure";
 import { purgeChatbotDataOlderThan } from "@/lib/chatbot-db";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 // The maximum number of accounts scrubbed in one invocation. Each account
 // writes three documents (retention record, user row, membership row), so this
@@ -28,10 +29,8 @@ const BATCH_LIMIT = 400;
  */
 export async function GET(request: NextRequest) {
     try {
-        // Enforce Authorization: Only Railway cron or explicit admin keys can trigger this
-        const authHeader = request.headers.get("Authorization");
-        const cronSecret = process.env.CRON_SECRET;
-
+        // Enforce Authorization: Only Railway cron or explicit admin keys can trigger this.
+        //
         // WHAT WAS WRONG HERE
         // -------------------
         // The gate read "validate in production, or whenever a secret exists",
@@ -44,15 +43,11 @@ export async function GET(request: NextRequest) {
         //
         // No secret now means no run, in every environment. A destructive job
         // that cannot authenticate its caller must not guess.
-        if (!cronSecret) {
-            logger.error("[gdpr-purge] CRON_SECRET is not configured; refusing to run");
-            return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-        }
-
-        if (authHeader !== `Bearer ${cronSecret}`) {
-            logger.warn("Unauthorized attempt to trigger GDPR cron");
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        //
+        // #659 — and that rule now lives in lib/cron-auth rather than here,
+        // because it was written out eight times and the eight had drifted.
+        const refusal = refuseUnauthorisedCron(request, "gdpr-purge");
+        if (refusal) return refusal;
 
         logger.info("Initializing GDPR Retention Sweep...");
 

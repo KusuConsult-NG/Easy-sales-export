@@ -10,6 +10,7 @@ import {
     EXPORT_WINDOW_CLOSED_STATUS,
     exportWindowHasExpired,
 } from "@/lib/export-window-status";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 /**
  * Close export windows whose investment period has ended.
@@ -77,16 +78,9 @@ import {
 const MAX_PER_RUN = 500;
 
 export async function GET(request: NextRequest) {
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) {
-        return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-    }
-    if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-        return NextResponse.json(
-            { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
-            { status: 401 },
-        );
-    }
+    //   #659 — one gate, shared. See lib/cron-auth.
+    const refusal = refuseUnauthorisedCron(request, "close-export-windows");
+    if (refusal) return refusal;
 
     const now = new Date();
 

@@ -7,6 +7,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { paystackBaseUrl } from "@/lib/paystack-host";
 import { eachPaystackSuccess } from "@/lib/paystack-sweep";
 import { logger } from "@/lib/logger";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 /**
  * Automated Paystack ↔ Firebase Reconciliation
@@ -25,22 +26,9 @@ import { logger } from "@/lib/logger";
  */
 export async function GET(request: NextRequest) {
     // ── Auth gate ────────────────────────────────────────────────────────────────
-    const authHeader = request.headers.get("Authorization");
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret) {
-        return NextResponse.json(
-            { error: "CRON_SECRET not configured" },
-            { status: 500 }
-        );
-    }
-
-    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json(
-            { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
-            { status: 401 }
-        );
-    }
+    //   #659 — one gate, shared. See lib/cron-auth.
+    const refusal = refuseUnauthorisedCron(request, "reconcile-paystack");
+    if (refusal) return refusal;
 
     const startedAt = new Date();
     const results: {

@@ -121,7 +121,11 @@ function seedHold(id: string, over: Record<string, unknown> = {}): void {
 
 const cron = async (auth: string | null = `Bearer ${SECRET}`) => {
     const { GET } = await import('@/app/api/cron/release-stale-reservations/route');
-    const req = { headers: { get: (k: string) => (k === 'authorization' ? auth : null) } };
+    //   #659 — `Headers.get` is CASE-INSENSITIVE and this double was not, so it
+    //   answered only the exact spelling the route happened to use. Five doubles
+    //   modelled it that way and seven already lowercased; the five were a hidden
+    //   coupling to one route's casing rather than a model of the real thing.
+    const req = { headers: { get: (k: string) => (k.toLowerCase() === 'authorization' ? auth : null) } };
     const res = await GET(req as any);
     return { status: res.status, body: await res.json() as any };
 };

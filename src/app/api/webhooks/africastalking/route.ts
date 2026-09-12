@@ -1,22 +1,13 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import { logger } from "@/lib/logger";
 import { getAdminDb } from "@/lib/supabase-db";
+import { secretsMatch } from "@/lib/secret-compare";
 
-/**
- * Constant-time comparison of two shared secrets — #645.
- *
- * `timingSafeEqual` throws when the buffers differ in length, so the length is
- * checked first. That leaks the length of the expected secret, which is the same
- * trade lib/paystack-server makes for the same reason: it is not the part an
- * attacker is short of.
- */
-function secretsMatch(provided: string, expected: string): boolean {
-    const a = Buffer.from(provided, "utf8");
-    const b = Buffer.from(expected, "utf8");
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-}
+//   #659 — this was a local `secretsMatch` that returned false as soon as the
+//   LENGTHS differed, while api/auth/health's copy of the same function padded
+//   and compared anyway. One contract, two statements of it, disagreeing about
+//   the thing the function exists to control. Both import lib/secret-compare
+//   now, which does not short-circuit.
 
 export const dynamic = 'force-dynamic';
 

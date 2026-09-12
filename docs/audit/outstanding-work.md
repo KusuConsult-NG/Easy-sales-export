@@ -1,15 +1,15 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a` and now at `c3da88ea`.** Every line below was
+`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a`, `c3da88ea` and now at `c2f415f9`.** Every line below was
 checked against the tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 707 suites / 12,870 tests green.** The
-version before this one said 12,859 across 706.
+**Gate at this revision: build clean, 709 suites / 12,894 tests green.** The
+version before this one said 12,878 across 708.
 
 **And every database suite was run for real**, against the local stack
 `scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
@@ -286,6 +286,140 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#659) The constant-time comparison reached one door of eleven
+
+**#645 changed the Africa's Talking webhook from `!==` to `timingSafeEqual`, and
+wrote its own reason down:**
+
+> "the idiom already exists in this codebase, the fix costs nothing, and *'the
+> strict version went to one of the two doors'* is the defect this audit has
+> found more than any other."
+
+**It named the other door in the same sentence.** The sweep in
+`every-api-route-has-a-door` records: *"africastalking and revalidate-cache came
+back 'no auth'. Both compare a shared secret from process.env."* Only the first
+was hardened.
+
+A sweep for the shape found **eight more behind it** — every cron route in the
+application, all comparing `Authorization` against `` `Bearer ${cronSecret}` ``
+with plain `!==`:
+
+    age-notifications      close-export-windows      gdpr-purge
+    process-email-queue    reconcile-fulfilment      reconcile-paystack
+    release-escrow         release-stale-reservations
+
+Those are the triggers that **release escrow, pay sellers, purge accounts and
+reconcile Paystack**. The eleventh — `lib/digital-id` — compares a QR signature
+the same way.
+
+⚠️ **My sweep missed the eight that mattered, first time.** It excluded
+comparisons whose right-hand side began with a backtick, to skip literal string
+checks — and every cron route compares against a **template literal**. So it
+returned `revalidate-cache` and `digital-id` and not the eight routes that guard
+the money, and I would have reported a two-door finding. *Audit the instrument
+before believing the measurement* — this time the fault was hiding the important
+half rather than inventing a false one.
+
+**And the two strict copies disagreed with each other.** There were two
+hand-written `secretsMatch` functions and they were not the same function:
+`api/auth/health` padded both buffers and compared anyway, so a wrong *length*
+cost the same as a wrong byte; `webhooks/africastalking` returned false the
+moment the lengths differed. One contract, two statements of it, disagreeing
+about the thing the function exists to control. `lib/secret-compare` is the
+non-short-circuiting one.
+
+**And eight copies of the cron gate, already drifting:**
+
+| | |
+|---|---|
+| the refusal is **logged** | by `gdpr-purge` and `release-escrow`. The other six refused silently — an unauthorised attempt on the escrow trigger left no trace |
+| the **body** | three shapes, one of them **plain text** where the others answered JSON, so a caller parsing it got a parse error instead of a reason |
+| the **header name** | `"authorization"` in six, `"Authorization"` in two |
+| a redundant null check | in `reconcile-paystack` alone |
+
+None was a defect on its own. Together they are why a rule stated eight times
+gets corrected in some of them. `lib/cron-auth` is the one gate; all eight call
+it and none still reads `CRON_SECRET` itself.
+
+**What is not claimed:** nobody is extracting `CRON_SECRET` through a
+byte-by-byte comparison over the internet. The argument is that the idiom
+exists, the fix costs nothing, and eleven copies of a security check that differ
+from each other are how the next real difference goes unnoticed.
+
+⚠️ **A mutant survived, and it was the point of the module.** "secretsMatch
+short-circuits on a length mismatch" survived because both versions return
+`false` — the difference is only in how long they take. It is also the exact
+difference between the two copies being replaced. Asserted **behaviourally**:
+`crypto.timingSafeEqual` is wrapped and the test asks whether the comparison
+actually ran, over buffers padded to the longer length. Grepping for the absence
+of an early `return false` would have been a check on the presence of a line —
+what #649's and #651's surviving mutants were both about.
+
+**Four existing ratchets failed on this change, and all four were right to.**
+`every-api-route-has-a-door` noticed seven routes lose a recognisable control on
+one commit — it was taught the new convention, not loosened. Two source
+assertions pinned the literal text that moved into the shared gate and were
+re-anchored on it, with the *behaviour* now exercised by running the gate.
+And #645's own ratchet asserted the local `timingSafeEqual` it had added.
+
+**A fifth thing broke, and it was a test double.** `gdpr-sweep` modelled
+`Headers.get` as **case-sensitive**, answering only `"Authorization"`. The real
+one is case-insensitive. Five doubles were written that way and seven already
+lowercased — a hidden coupling to one route's casing rather than a model of the
+real thing. All five corrected.
+
+### ✅ (#658) A diagnostic that could not be acted on, once per member, forever
+
+From the same captured server log that produced #657. Among the
+DEDICATED_TABLE_MAP warnings:
+
+    [WARN] [supabase-db] Collection
+    'user_activity_logs/c6c84683-4d86-4bd6-bb80-deedf80236ab/days' is not in
+    DEDICATED_TABLE_MAP. Falling back to document_collections table.
+
+**A user id, in the collection name.** Two subcollection paths carry one —
+`user_progress/<uid>/courses` (4 call sites) and `user_activity_logs/<uid>/days`
+(2 call sites, written on every lesson completed).
+
+`getTableName` remembers what it has already warned about in a module-level Set
+keyed on the collection name, so the warning fires once rather than on every
+query. For these two it is **a different string for every member**. So the Set
+grows by one entry per member in a process that is not restarted between
+requests and that nothing ever empties; the warning is emitted once per member;
+and in production each one also dynamically imports `@sentry/nextjs` to add a
+breadcrumb.
+
+**Measured before it was believed:** fifty distinct ids through `getTableName`
+produced **fifty** warnings and fifty permanent entries. Run and counted, not
+read off the code.
+
+**And the advice was wrong, which is the worse half.** "is not in
+DEDICATED_TABLE_MAP" reads as a configuration gap. A subcollection *cannot* be
+mapped: `collectionGroup()` in that same file documents that subcollections are
+flattened into the collection name by design, and **#202** fixed a client-side
+copy that tried to resolve one to its parent's table — establishing that
+`document_collections` is the correct home, not a fallback anyone should act on.
+So the channel that exists to say "a collection is missing a mapping" carried an
+unbounded stream of entries that were never missing anything. This audit had
+just spent #657 on a real error sitting unread in that same log, and a warning
+nobody can act on is how a log gets that way.
+
+**What changed.** The Set is keyed on the *shape* of the path with document ids
+masked — a Firestore path alternates collection and document, so the odd
+segments are ids — which bounds the key space by the number of code paths rather
+than by the number of members. And the two cases are told apart:
+
+| | |
+|---|---|
+| a top-level name with no mapping | **WARN** — actionable. Unchanged. |
+| a subcollection path | **DEBUG** — by design, said once per shape instead of once per member |
+
+**Resolution is untouched**: both still return `document_collections`, and
+#202's whole-path matching is exactly as it was. A mutant that reintroduces
+`split('/')[0]` is killed by this finding's own test. The masked shape is also
+what gets printed, so a member's id stops being written into the application log
+because they opened a lesson.
 
 ### ✅ (#657) The server shipped class instances to the browser, and said so in a log nobody read
 

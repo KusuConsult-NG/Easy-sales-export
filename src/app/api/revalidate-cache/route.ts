@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { secretsMatch } from '@/lib/secret-compare';
 
 /**
  * Cache Revalidation Route
@@ -27,7 +28,22 @@ export async function GET(request: NextRequest) {
     const queryToken = request.nextUrl.searchParams.get('token');
     const providedToken = bearerToken ?? queryToken;
 
-    if (!providedToken || providedToken !== secret) {
+    /**
+     *   #659 COMPARED WITH `!==`, AND NAMED BY #645 WITHOUT BEING FIXED.
+     *
+     *   The sweep in every-api-route-has-a-door recorded "africastalking and
+     *   revalidate-cache came back 'no auth'. Both compare a shared secret from
+     *   process.env" — and #645 hardened the first of the two. This is the
+     *   second, and eight cron routes were behind it.
+     *
+     *   RECORDED AND NOT CHANGED: the token is also accepted from the QUERY
+     *   STRING, where it lands in access logs, proxy logs and any Referer that
+     *   leaks. Nothing in this repository calls this route, so the query
+     *   fallback exists for a caller that cannot be seen from here — the same
+     *   reason #641 kept /api/cooperative/withdraw. Removing it is the owner's
+     *   call once they know who calls this.
+     */
+    if (!secretsMatch(providedToken, secret)) {
         logger.warn('[Revalidate] Unauthorized cache revalidation attempt rejected.');
         return NextResponse.json({ revalidated: false, message: 'Unauthorized' }, { status: 401 });
     }

@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { NextResponse } from "next/server";
 import { claimStatusTransition } from "@/lib/status-transition";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Extend timeout for processing
@@ -16,11 +17,11 @@ export const maxDuration = 60; // Extend timeout for processing
  * Schedule: Every 10 minutes (configurable in vercel.json)
  */
 export async function GET(request: Request) {
-    // Check Authorization (Vercel Cron Header)
-    const CRON_SECRET = process.env.CRON_SECRET;
-    const authHeader = request.headers.get('authorization');
-    if (!CRON_SECRET) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
-    if (authHeader !== `Bearer ${CRON_SECRET}`) return new NextResponse('Unauthorized', { status: 401 });
+    //   #659 — one gate, shared. See lib/cron-auth. This route's refusal was
+    //   the odd one out: PLAIN TEXT where the other seven answered JSON, so a
+    //   caller parsing the body got a parse error rather than a reason.
+    const refusal = refuseUnauthorisedCron(request, "process-email-queue");
+    if (refusal) return refusal;
 
     try {
         logger.info("[CRON] Starting Email Queue Processing...");

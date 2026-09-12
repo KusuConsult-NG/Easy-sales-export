@@ -160,9 +160,22 @@ describe('#645 — every webhook decides before it works', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#645 — and the two shared-secret comparisons agree', () => {
     it('BOTH ARE CONSTANT-TIME', () => {
+        /*
+         *   #659 RE-ANCHORED, AND THE FINDING GREW. This asserted a LOCAL
+         *   `crypto.timingSafeEqual(a, b)` inside the webhook. #645 hardened
+         *   that door and named `revalidate-cache` in the same breath without
+         *   fixing it; a sweep then found eight cron routes behind them, every
+         *   one comparing `Authorization` with `!==`.
+         *
+         *   There is one implementation now — lib/secret-compare — and
+         *   the-strict-comparison-reached-one-door asserts that it is the ONLY
+         *   one and that every door asks it. What is kept here is the claim this
+         *   file makes: both of these two compare in constant time.
+         */
         expect(code('src/lib/paystack-server.ts')).toContain('crypto.timingSafeEqual(');
         expect(code('src/app/api/webhooks/africastalking/route.ts'))
-            .toContain('crypto.timingSafeEqual(a, b);');
+            .toContain('secretsMatch(providedSecret, expectedSecret)');
+        expect(code('src/lib/secret-compare.ts')).toContain('timingSafeEqual(a, b)');
     });
 
     it('AND THE PLAIN COMPARISON IS GONE', () => {
@@ -176,8 +189,18 @@ describe('#645 — and the two shared-secret comparisons agree', () => {
         //   timingSafeEqual raises on differing lengths, so a missing guard
         //   turns a wrong secret into a 500 instead of a 401 — and a 500 on a
         //   webhook is a retry storm.
-        const src = code('src/app/api/webhooks/africastalking/route.ts');
-        expect(src).toContain('if (a.length !== b.length) return false;');
+        //
+        //   #659 — the guard is in lib/secret-compare, and it is no longer an
+        //   early `return false`. THAT IS THE CORRECTION: this file's copy
+        //   short-circuited on a length mismatch while api/auth/health's copy of
+        //   the same function padded and compared anyway. One contract, two
+        //   statements of it, disagreeing about the thing it exists to control.
+        //   The shared one does the work either way, which is asserted by
+        //   RUNNING it in the-strict-comparison-reached-one-door rather than by
+        //   looking for a line.
+        const src = code('src/lib/secret-compare.ts');
+        expect(src).toContain('if (a.length !== b.length) {');
+        expect(src).not.toContain('if (a.length !== b.length) return false;');
     });
 });
 

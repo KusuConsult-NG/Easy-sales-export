@@ -165,7 +165,12 @@ describe('the scheduled twin, which was always guarded correctly', () => {
     const CRON = 'src/app/api/cron/reconcile-paystack/route.ts';
 
     it('requires the shared secret', () => {
-        expect(source(CRON)).toContain('Bearer ${cronSecret}');
+        //   #659 RE-ANCHORED, AND THE CLAIM IS UNCHANGED. This asserted the
+        //   literal `Bearer ${cronSecret}` in this file. All eight cron routes
+        //   wrote that comparison out by hand, all eight used `!==`, and the
+        //   eight copies had drifted in four ways — so the rule moved into
+        //   lib/cron-auth and the text moved with it.
+        expect(source(CRON)).toContain('refuseUnauthorisedCron(');
     });
 
     it('fails closed when the secret is not configured', () => {
@@ -176,9 +181,14 @@ describe('the scheduled twin, which was always guarded correctly', () => {
         //   chain in this file; all three reconciliation doors dispatch through
         //   infrastructure/payments/payment-router now, so the thing that has to
         //   come after the secret check is the dispatch, not a processor name.
+        //   #659 re-anchored again, for the reason above. The BEHAVIOUR — an
+        //   unset secret is a 500 and the job does not run — is asserted by
+        //   running the gate in the-strict-comparison-reached-one-door, which is
+        //   a stronger statement than the presence of a string ever was. What
+        //   this file still owns is the ORDER: the gate comes before the money.
         const src = source(CRON);
-        expect(src).toContain('CRON_SECRET not configured');
-        expect(src.indexOf('CRON_SECRET not configured'))
+        expect(src).toContain('refuseUnauthorisedCron(');
+        expect(src.indexOf('refuseUnauthorisedCron('))
             .toBeLessThan(src.indexOf('dispatchPaystackPayment('));
     });
 

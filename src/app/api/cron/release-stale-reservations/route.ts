@@ -12,6 +12,7 @@ import {
     releasedReservationFields,
 } from "@/lib/land-reservation-expiry";
 import { createNotification } from "@/infrastructure/notifications/service";
+import { refuseUnauthorisedCron } from "@/lib/cron-auth";
 
 /**
  * Give back a property reservation the buyer walked away from.
@@ -85,16 +86,9 @@ import { createNotification } from "@/infrastructure/notifications/service";
 const MAX_PER_RUN = 500;
 
 export async function GET(request: NextRequest) {
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) {
-        return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-    }
-    if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-        return NextResponse.json(
-            { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
-            { status: 401 },
-        );
-    }
+    //   #659 — one gate, shared. See lib/cron-auth.
+    const refusal = refuseUnauthorisedCron(request, "release-stale-reservations");
+    if (refusal) return refusal;
 
     const now = new Date();
 
