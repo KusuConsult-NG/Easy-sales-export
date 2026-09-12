@@ -34,6 +34,10 @@
 --   Confirm the project. These statements create functions and enable RLS on
 --   the database they are pasted into. There is no undo button.
 --
+-- BEFORE OR AFTER, TO ASK WHAT A DATABASE ALREADY HAS
+--   supabase/status.sql — read-only, one paste, and it names which migrations
+--   are present and whether row-level security took. #664.
+--
 -- AFTER YOU RUN THIS
 --   The verification block at the end lists what should exist. Run it.
 --   Then run `npm run test:db` against the same database.

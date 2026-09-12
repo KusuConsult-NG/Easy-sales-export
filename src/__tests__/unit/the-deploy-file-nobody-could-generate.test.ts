@@ -182,6 +182,29 @@ describe('#660 — and it says what a person needs to know before pasting it', (
         expect(deploy).toContain('applied TWICE MORE');
     });
 
+    it('AND WHERE TO ASK WHAT A DATABASE ALREADY HAS — #664', () => {
+        /*
+         *   deploy.sql answers "apply everything". It cannot answer "what is
+         *   there now", and that is the question the owner-side list carried
+         *   unanswered for weeks. supabase/status.sql is read-only and one
+         *   paste; the bundle points at it so the two are found together.
+         *
+         *   The status query was validated against BOTH controls before being
+         *   committed — a complete database (every row YES) and one missing
+         *   033, 034 and 035 (those three NO, RLS 0 of 9). A status query that
+         *   always says YES is worse than no status query.
+         */
+        expect(read(DEPLOY)).toContain('supabase/status.sql');
+
+        const status = read('supabase/status.sql');
+        expect(status).toContain('035 overselling fix applied');
+        expect(status).toContain('RLS: tables with it ON');
+        //   Read-only, and it says so: this is pasted into a production SQL
+        //   editor by somebody who is right to be nervous.
+        expect(status).toContain('READ-ONLY');
+        expect(status).not.toMatch(/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE)\b/);
+    });
+
     it('AND THAT THE ROW-LEVEL SECURITY SECTION IS THE ONE THAT CHANGES BEHAVIOUR', () => {
         /*
          *   Everything else in the bundle replaces a function with the same
