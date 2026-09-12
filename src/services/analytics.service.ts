@@ -482,6 +482,21 @@ export class AnalyticsService implements AnalyticsServiceContract {
         // False when neither Paystack nor the database could give a figure, so the
         // dashboard can say "unavailable" rather than render a confident zero.
         let revenueAvailable: boolean;
+        /**
+         *   #665 TRUE WHEN THE FIGURE IS A FLOOR RATHER THAN A TOTAL.
+         *
+         *   getPlatformMetrics has returned this all along, beside
+         *   revenueAvailable, under a comment reading "an admin reading this
+         *   figure needs to know it is a floor, not a total. Surfaced on the
+         *   payload below, not only logged."
+         *
+         *   IT WAS LOST HERE, not at the screen. Both branches below copy
+         *   `revenueAvailable` out of that same object and neither copied this,
+         *   so it never reached platformOverview — and the dashboard's type
+         *   therefore did not have the field, which is why nothing read it. The
+         *   compiler was enforcing its absence.
+         */
+        let revenueIsPartial = false;
 
         if (isDateFiltered) {
             const [newUsersSnap, metricsResult, pendingRes] = await Promise.allSettled([
@@ -498,6 +513,8 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 totalRevenue = metricsResult.value.totalRevenue;
                 totalTransactions = metricsResult.value.totalTransactions;
                 revenueAvailable = metricsResult.value.revenueAvailable;
+                //   #665 — copied beside its sibling, which is where it was dropped.
+                revenueIsPartial = metricsResult.value.revenueIsPartial;
             } else {
                 // A rejected metrics call is not zero revenue, it is no answer.
                 totalRevenue = 0;
@@ -531,6 +548,8 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 totalTransactions = metricsResult.value.totalTransactions;
                 totalRevenue = metricsResult.value.totalRevenue;
                 revenueAvailable = metricsResult.value.revenueAvailable;
+                //   #665 — copied beside its sibling, which is where it was dropped.
+                revenueIsPartial = metricsResult.value.revenueIsPartial;
             } else {
                 logger.error("[DashboardStats] platform metrics failed", {
                     reason: String(metricsResult.reason),
@@ -763,6 +782,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 monthlyRevenue,
                 totalTransactions,
                 revenueAvailable,
+                revenueIsPartial,
                 pendingApprovals,
                 recentActivityCount: recentActivity,
             },

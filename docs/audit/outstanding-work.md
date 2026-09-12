@@ -8,7 +8,7 @@ checked against the tree, not carried forward.
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 713 suites / 12,965 tests green** — and
+**Gate at this revision: build clean, 715 suites / 12,979 tests green** — and
 green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
 world after #663's enforcement date. The version before this one said 12,930
 across 712.
@@ -458,6 +458,55 @@ And #645's own ratchet asserted the local `timingSafeEqual` it had added.
 one is case-insensitive. Five doubles were written that way and seven already
 lowercased — a hidden coupling to one route's casing rather than a model of the
 real thing. All five corrected.
+
+### ✅ (#665) The screen warned you the chart was truncated and not that the total was
+
+Followed from the captured server log's four Paystack fallback paths. Three
+turned out to be well built, each carrying an honesty signal on its payload. The
+question that mattered was whether anything **reads** them:
+
+| signal | computed in | rendered? |
+|---|---|---|
+| `revenueAvailable` | getPlatformMetrics | ✅ "Unavailable", not ₦0 |
+| `unavailableMonths` | getDashboardStats | ✅ names the months |
+| `monthlyRevenueIsPartial` | getDashboardStats | ✅ "under-reported" |
+| `unavailable[]` | getFinancialOverview | ✅ an amber banner |
+| **`revenueIsPartial`** | **both of the first two** | ❌ **nothing, on any of three screens** |
+
+`revenueIsPartial` is set when the Paystack sweep stops at its ceiling —
+`MAX_REVENUE_PAGES × 100` = **ten thousand transactions** — and returned under
+comments saying *"an admin reading this figure needs to know it is a floor, not
+a total. Surfaced on the payload below, not only logged."* True of the payload,
+true of no screen. Past ten thousand transactions, `/admin`, `/admin/finance`
+and `/admin/analytics` all showed a **floor labelled "Total Revenue"**.
+
+**This is the sharpest instance of the shape yet:** `/admin` renders
+`monthlyRevenueIsPartial` as a warning under the revenue *chart*, and the Total
+Revenue *card* directly above it ignores `revenueIsPartial`. The same page tells
+you the chart is incomplete while presenting an incomplete total as a total.
+
+**Two mechanisms, one outcome**, and the second is worse:
+
+- `AnalyticsData` **had no such field**, so `getDashboardStats` dropped it while
+  copying `revenueAvailable` out of the same object two lines away — the
+  compiler enforced the silence all the way to the screen.
+- `FinancialOverview` **had it**, declared and documented *"the admin surface
+  should show it when set"*. The admin surface did not.
+
+⚠️ **Five mutants survived the first run and all five were my assertions**, plus
+a sixth on the second run. The first fix wrote the branch inline into all three
+screens and checked it with `toContain('revenueIsPartial')` — each screen
+mentions the flag twice, so removing one mention left the other to be found. The
+sixth passed because the contract assertion was matching a *different*
+interface's field of the same name.
+
+The repair is the one `middleware.ts` already records for `adminSiloRedirect`:
+**make the decision a function**. `lib/revenue-display` returns one of three
+states — exact, partial, unavailable — and all three screens ask it. That is
+also the fix for three screens deciding separately, so the weak assertion and
+the duplicated contract had the same cure. `unavailable` beats `partial`: a
+figure nobody could read is not a floor, and "at least ₦0" would be a worse lie
+than the one this fixes.
 
 ### ✅ (#658) A diagnostic that could not be acted on, once per member, forever
 

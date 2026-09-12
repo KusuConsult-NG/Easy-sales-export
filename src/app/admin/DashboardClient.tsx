@@ -19,6 +19,7 @@ import {
     ArrowRight,
 } from "lucide-react";
 import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
+import { revenueDisplay, revenuePrefix, revenueNote } from "@/lib/revenue-display";
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
 import UserSegmentsChart from "@/components/admin/UserSegmentsChart";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
@@ -151,6 +152,12 @@ export default function AdminDashboardPage() {
      *   This is #598's finding ("a partial stats object one commit after the
      *   same fix next door") on the dashboard those screens hang off.
      */
+
+    //   #665 — one decision, three screens.
+    const revenueState = revenueDisplay(
+        stats?.platformOverview?.revenueAvailable,
+        stats?.platformOverview?.revenueIsPartial,
+    );
     const statCards = [
         {
             label: (dateRange.from || dateRange.to) ? "New Registrations" : "Total Users",
@@ -174,14 +181,18 @@ export default function AdminDashboardPage() {
             // database could answer. A zero here is a real business figure; an
             // outage rendered as ₦0 is indistinguishable from a day with no
             // sales, and reads as though the platform earned nothing.
-            value: stats.platformOverview?.revenueAvailable === false
+            //   #665 — the decision is revenueDisplay(), shared with
+            //   /admin/finance and /admin/analytics. Written inline first, in
+            //   all three screens, and five mutants survived assertions that
+            //   looked for the identifier: each screen mentions it twice, so
+            //   removing one mention left the other to be found.
+            value: `${revenuePrefix(revenueState)}${revenueState === "unavailable"
                 ? "Unavailable"
-                : `₦${numberOrZero(stats.platformOverview?.totalRevenue).toLocaleString()}`,
+                : `₦${numberOrZero(stats.platformOverview?.totalRevenue).toLocaleString()}`}`,
             icon: DollarSign,
             color: "purple",
-            change: stats.platformOverview?.revenueAvailable === false
-                ? "Could not reach Paystack or the database — retry shortly"
-                : (dateRange.from || dateRange.to) ? "Payments in selected period" : "Based on transaction volume",
+            change: revenueNote(revenueState)
+                ?? ((dateRange.from || dateRange.to) ? "Payments in selected period" : "Based on transaction volume"),
             href: "/admin/finance",
         },
         {

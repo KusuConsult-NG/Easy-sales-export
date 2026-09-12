@@ -65,6 +65,32 @@ export interface AnalyticsData {
          * false — a confident zero is indistinguishable from a day with no sales.
          */
         revenueAvailable: boolean;
+        /**
+         * True when `totalRevenue` is a FLOOR rather than a total — the Paystack
+         * sweep stopped at its ceiling (MAX_REVENUE_PAGES × 100 = ten thousand
+         * transactions) and reported what it had.
+         *
+         *   #665 THIS FIELD DID NOT EXIST, AND THAT IS WHY NOTHING RENDERED IT.
+         *
+         *   getPlatformMetrics has computed and returned `revenueIsPartial`
+         *   throughout, under a comment reading "an admin reading this figure
+         *   needs to know it is a floor, not a total. Surfaced on the payload
+         *   below, not only logged." It was true of that payload and of no
+         *   other: getDashboardStats copied `revenueAvailable` out of the same
+         *   object and dropped this one, because THIS INTERFACE had no field to
+         *   put it in — so the compiler enforced its absence all the way to the
+         *   screen.
+         *
+         *   `monthlyRevenueIsPartial` below is the same idea for the chart, was
+         *   added to this contract, and IS rendered. One of the two made it into
+         *   the type. Render the figure as a floor — "at least ₦X" — when this
+         *   is set; do NOT render "unavailable", which throws away a real number
+         *   that is merely too low.
+         *
+         *   Optional so existing callers compile unchanged, matching the field
+         *   below.
+         */
+        revenueIsPartial?: boolean;
         pendingApprovals: number;
         recentActivityCount: number;
     };

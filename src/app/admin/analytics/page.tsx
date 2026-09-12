@@ -19,6 +19,7 @@ import { formatCurrency } from "@/lib/utils";
 import { getDashboardStatsAction } from "@/app/actions/admin-analytics";
 import dynamic from "next/dynamic";
 import { formatDateOrDash } from "@/lib/date-utils";
+import { revenueDisplay, revenuePrefix, revenueNote } from "@/lib/revenue-display";
 
 const AnalyticsCharts = dynamic(() => import("@/components/admin/AnalyticsCharts"), {
     ssr: false,
@@ -87,6 +88,8 @@ export default function AdminAnalyticsPage() {
     }
 
     const { platformOverview, revenueByMonth, userGrowthByMonth, moduleUsage, recentTransactions } = analytics;
+    //   #665 — one decision, three screens.
+    const revenueState = revenueDisplay(platformOverview?.revenueAvailable, platformOverview?.revenueIsPartial);
 
     const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4"];
 
@@ -101,8 +104,14 @@ export default function AdminAnalyticsPage() {
         },
         {
             label: "Total Revenue",
-            value: formatCurrency(platformOverview?.totalRevenue ?? 0),
-            sub: `${formatCurrency(platformOverview?.monthlyRevenue ?? 0)} this month`,
+            //   #665 — THE THIRD DOOR. /admin, /admin/finance and this page all
+            //   render the same figure, and none of them said when it was a
+            //   floor. The Paystack sweep stops at ten thousand transactions
+            //   and reports what it has; the flag has been on the payload the
+            //   whole time.
+            value: `${revenuePrefix(revenueState)}${formatCurrency(platformOverview?.totalRevenue ?? 0)}`,
+            sub: revenueNote(revenueState)
+                ?? `${formatCurrency(platformOverview?.monthlyRevenue ?? 0)} this month`,
             icon: DollarSign,
             bgClass: "from-emerald-500 to-green-600",
             href: "/admin/finance",

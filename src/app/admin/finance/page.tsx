@@ -26,6 +26,7 @@ import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
 import { recordExport } from "@/lib/record-export";
 import { numberOrZero } from "@/lib/numbers";
 import { formatDateOrDash } from "@/lib/date-utils";
+import { revenueDisplay, revenuePrefix, revenueNote } from "@/lib/revenue-display";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -115,6 +116,15 @@ export default function AdminFinancePage() {
      *   number, so an outage looked like a quiet day.
      */
     const [unavailable, setUnavailable] = useState<string[]>([]);
+    //   #665 — true when the Paystack sweep stopped at its ceiling, so
+    //   totalRevenue is a floor rather than a total. The service has returned
+    //   this on the payload all along, under a comment saying an admin reading
+    //   the figure is the person who needs to know it is incomplete. Nothing
+    //   read it, on this page or on /admin.
+    const [revenueIsPartial, setRevenueIsPartial] = useState(false);
+    //   #665 — one decision, three screens. This page never learns that the
+    //   figure could not be read at all, so `available` is left unstated.
+    const revenueState = revenueDisplay(undefined, revenueIsPartial);
 
     async function loadFinanceData(silent = false) {
         if (!silent) setLoading(true);
@@ -129,6 +139,7 @@ export default function AdminFinancePage() {
                 setTotalAbandonedCount(res.totalAbandonedCount ?? null);
                 setTotalFailedCount(res.totalFailedCount ?? null);
                 setUnavailable(res.unavailable ?? []);
+                setRevenueIsPartial(res.revenueIsPartial === true);
             } else {
                 //   A refusal is not zero revenue. This branch fell through
                 //   silently and left the initial state on screen.
@@ -319,8 +330,17 @@ export default function AdminFinancePage() {
                             </div>
                             <p className="text-sm font-medium opacity-90">Total Revenue</p>
                         </div>
-                        <p className="text-3xl font-bold">{formatCurrency(totalRevenue)}</p>
-                        <p className="text-xs opacity-75 mt-1">{totalSuccessfulCount ?? transactions.length} successful payments</p>
+                        {/*
+                          *   #665 — the same decision the other two revenue
+                          *   screens make, taken by the same function.
+                          */}
+                        <p className="text-3xl font-bold">
+                            {revenuePrefix(revenueState)}{formatCurrency(totalRevenue)}
+                        </p>
+                        <p className="text-xs opacity-75 mt-1">
+                            {revenueNote(revenueState)
+                                ?? `${totalSuccessfulCount ?? transactions.length} successful payments`}
+                        </p>
                     </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-lg">
