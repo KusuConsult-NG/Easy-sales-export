@@ -749,6 +749,36 @@ async function _onboardLegacyMemberAction(
          * The zeroes are correct for a member who does not exist yet — a new
          * record starts at zero — so they are applied only then. `existing`
          * below is read once per collection and decides it.
+         *
+         *   #684 AND THAT REACHED THREE PROVISIONING BLOCKS OF TEN.
+         *
+         *        The MONEY half landed where it mattered — savingsBalance,
+         *        loanBalance, totalContributions and points are all guarded.
+         *        The DATES were not. Six blocks went on writing
+         *        `createdAt: serverTimestamp()` unconditionally, and the
+         *        academy application also rewrote `submittedAt`:
+         *
+         *            seller_verifications      createdAt
+         *            vendor_settings           createdAt
+         *            academy_applications      createdAt, submittedAt
+         *            export_applications       createdAt
+         *            wave_applications         createdAt
+         *            farm_nation_applications  createdAt
+         *
+         *        This comment already named "a fresh `createdAt`" and "their
+         *        join dates" as part of the defect, so the rule was stated and
+         *        then applied to a third of the places it names — which is the
+         *        shape this audit files more often than any other.
+         *
+         *        WHAT IT COSTS. `submittedAt` is what the Farm Nation and WAVE
+         *        registrant screens ORDER BY, so re-importing a member to
+         *        correct a phone number moved their application to the front of
+         *        somebody's review queue. `createdAt` is tenure: it is what
+         *        "member since" reads, and #673 has just finished paying for a
+         *        query that ordered by it.
+         *
+         *        None of this loses money. It rewrites history, silently, on a
+         *        screen whose whole purpose is to be re-run.
          */
         const readExisting = async (collection: string, id: string) => {
             const snap = await db.collection(collection).doc(id).get();
@@ -765,6 +795,17 @@ async function _onboardLegacyMemberAction(
         const existingCoopMember = (data.services?.cooperative || data.roles.includes("cooperative_member"))
             ? await readExisting(COLLECTIONS.COOPERATIVE_MEMBERS, userRecord.uid)
             : null;
+
+        //   #684 The six that the original repair did not reach. Read here
+        //   beside the first so the list is in one place and a seventh block
+        //   cannot be added without meeting it.
+        const legacyId = `legacy_${userRecord.uid}`;
+        const existingSellerVerification = await readExisting(COLLECTIONS.SELLER_VERIFICATIONS, legacyId);
+        const existingVendorSettings = await readExisting(COLLECTIONS.VENDOR_SETTINGS, userRecord.uid);
+        const existingAcademyApp = await readExisting(COLLECTIONS.ACADEMY_APPLICATIONS, legacyId);
+        const existingExportApp = await readExisting(COLLECTIONS.EXPORT_APPLICATIONS, legacyId);
+        const existingWaveApp = await readExisting(COLLECTIONS.WAVE_APPLICATIONS, legacyId);
+        const existingFarmApp = await readExisting(COLLECTIONS.FARM_NATION_APPLICATIONS, legacyId);
 
         const batch = db.batch();
         batch.set(db.collection(COLLECTIONS.USERS).doc(userRecord.uid), userDoc, { merge: true });
@@ -843,9 +884,14 @@ async function _onboardLegacyMemberAction(
                     accountName: data.accountName || data.fullName || "",
                     bankCode: data.bankCode || "",
                 } : undefined,
-                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
+                //   #684 The dates a re-run must not rewrite. `merge` protects
+                //   fields the payload OMITS, so naming them unconditionally reset
+                //   them on every re-import.
+                ...initialOnly(existingSellerVerification, {
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
             }, { merge: true });
 
             batch.set(db.collection(COLLECTIONS.VENDOR_SETTINGS).doc(userRecord.uid), {
@@ -865,8 +911,13 @@ async function _onboardLegacyMemberAction(
                     newOrders: true,
                     payments: true
                 },
-                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                //   #684 The dates a re-run must not rewrite. `merge` protects
+                //   fields the payload OMITS, so naming them unconditionally reset
+                //   them on every re-import.
+                ...initialOnly(existingVendorSettings, {
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
             }, { merge: true });
         }
 
@@ -915,10 +966,15 @@ async function _onboardLegacyMemberAction(
                 },
                 reviewedBy: session.user.id,
                 reviewedAt: FieldValue.serverTimestamp(),
-                submittedAt: FieldValue.serverTimestamp(),
-                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
+                //   #684 The dates a re-run must not rewrite. `merge` protects
+                //   fields the payload OMITS, so naming them unconditionally reset
+                //   them on every re-import.
+                ...initialOnly(existingAcademyApp, {
+                    submittedAt: FieldValue.serverTimestamp(),
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
             }, { merge: true });
 
             await academyBatch.commit();
@@ -951,9 +1007,14 @@ async function _onboardLegacyMemberAction(
                 lga: data.lga || "",
                 approvedAt: FieldValue.serverTimestamp(),
                 approvedBy: session.user.id,
-                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
+                //   #684 The dates a re-run must not rewrite. `merge` protects
+                //   fields the payload OMITS, so naming them unconditionally reset
+                //   them on every re-import.
+                ...initialOnly(existingExportApp, {
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
             }, { merge: true });
             await exportBatch.commit();
         }
@@ -976,9 +1037,14 @@ async function _onboardLegacyMemberAction(
                 applicationDate: FieldValue.serverTimestamp(),
                 approvedAt: FieldValue.serverTimestamp(),
                 approvedBy: session.user.id,
-                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
+                //   #684 The dates a re-run must not rewrite. `merge` protects
+                //   fields the payload OMITS, so naming them unconditionally reset
+                //   them on every re-import.
+                ...initialOnly(existingWaveApp, {
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
             }, { merge: true });
             
             // WAVE Member Profile
@@ -1025,9 +1091,14 @@ async function _onboardLegacyMemberAction(
                 },
                 approvedAt: FieldValue.serverTimestamp(),
                 approvedBy: session.user.id,
-                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
+                //   #684 The dates a re-run must not rewrite. `merge` protects
+                //   fields the payload OMITS, so naming them unconditionally reset
+                //   them on every re-import.
+                ...initialOnly(existingFarmApp, {
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
             }, { merge: true });
             await farmBatch.commit();
         }

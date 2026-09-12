@@ -955,3 +955,115 @@ describe('re-onboarding an existing member (finding #84)', () => {
         expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'old-uid')).toBeUndefined();
     });
 });
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#684 — a re-import does not rewrite the dates it already wrote', () => {
+    /*
+     *   The repair that stopped this screen re-initialising somebody reached
+     *   THREE provisioning blocks of ten. The MONEY half landed where it
+     *   mattered — savingsBalance, loanBalance, totalContributions and points
+     *   are all guarded. The DATES were not: six blocks went on writing
+     *   `createdAt: serverTimestamp()` unconditionally, and the academy
+     *   application also rewrote `submittedAt`.
+     *
+     *   The comment stating the rule already named "a fresh `createdAt`" and
+     *   "their join dates" as part of the defect, and was then applied to a
+     *   third of the places it names. That is the shape this audit files more
+     *   often than any other.
+     *
+     *   WHAT IT COSTS. `submittedAt` is what the registrant screens ORDER BY,
+     *   so re-importing a member to correct a phone number moved their
+     *   application to the front of somebody's review queue. `createdAt` is
+     *   tenure — what "member since" reads. No money moves; history is
+     *   rewritten silently, on a screen whose whole purpose is to be re-run.
+     */
+    const ORIGINAL = '2023-01-15T09:00:00.000Z';
+
+    it.each([
+        ['seller verification', COLLECTIONS.SELLER_VERIFICATIONS, 'legacy_real-uid', ['seller']],
+        ['vendor settings', COLLECTIONS.VENDOR_SETTINGS, 'real-uid', ['seller']],
+        ['academy application', COLLECTIONS.ACADEMY_APPLICATIONS, 'legacy_real-uid', ['academy_participant']],
+        ['export application', COLLECTIONS.EXPORT_APPLICATIONS, 'legacy_real-uid', ['export_participant']],
+        ['wave application', COLLECTIONS.WAVE_APPLICATIONS, 'legacy_real-uid', ['wave_participant']],
+        ['farm nation application', COLLECTIONS.FARM_NATION_APPLICATIONS, 'legacy_real-uid', ['farmer']],
+    ])('KEEPS THE ORIGINAL createdAt ON THE %s', async (_name, collection, docId, roles) => {
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', { email: 'ada@example.com' });
+        store.seed(collection as string, docId as string, { userId: 'real-uid', createdAt: ORIGINAL });
+
+        expect((await onboard(form({ roles }))).success).toBe(true);
+
+        expect(store.get(collection as string, docId as string)!.createdAt).toBe(ORIGINAL);
+    });
+
+    it('AND THE ACADEMY APPLICATION KEEPS ITS submittedAt, WHICH THE REVIEW QUEUE ORDERS BY', async () => {
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', { email: 'ada@example.com' });
+        store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'legacy_real-uid', {
+            userId: 'real-uid', submittedAt: ORIGINAL, createdAt: ORIGINAL,
+        });
+
+        await onboard(form({ roles: ['academy_participant'] }));
+
+        expect(store.get(COLLECTIONS.ACADEMY_APPLICATIONS, 'legacy_real-uid')!.submittedAt).toBe(ORIGINAL);
+    });
+
+    it('AND A NEW RECORD STILL GETS ITS DATES — right for somebody who does not exist yet', async () => {
+        /*
+         *   THE control, and the reason `initialOnly` is not simply "never
+         *   write these". A first import has to stamp them, or every legacy
+         *   member arrives with no creation date and every screen that orders
+         *   by one loses them.
+         */
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', { email: 'ada@example.com' });
+
+        await onboard(form({ roles: ['academy_participant'] }));
+
+        const app = store.get(COLLECTIONS.ACADEMY_APPLICATIONS, 'legacy_real-uid')!;
+        expect(app.createdAt).toBeDefined();
+        expect(app.submittedAt).toBeDefined();
+    });
+
+    it('AND EVERY PROVISIONING BLOCK THAT STAMPS A DATE GUARDS IT', () => {
+        /*
+         *   The ratchet. The original repair was applied by hand to the blocks
+         *   somebody happened to look at, and a seventh block added tomorrow
+         *   would inherit the same omission.
+         *
+         *   Sound because it is narrow: it reads ONE file, splits it on the
+         *   `.set(` calls that provision a document, and asks of each whether a
+         *   date it stamps sits inside an `initialOnly`. The answer set is ten
+         *   and every one has been read by hand.
+         */
+        const { readFileSync } = require('fs') as typeof import('fs');
+        const { join } = require('path') as typeof import('path');
+        const src = readFileSync(join(process.cwd(), 'src/app/actions/admin/_legacy.ts'), 'utf8');
+
+        const DATES = ['createdAt', 'submittedAt', 'joinDate', 'enrolledAt'];
+        const blocks = [...src.matchAll(/\b\w*[Bb]atch\.set\([\s\S]*?\}, \{ merge: true \}\);/g)]
+            .map((m) => m[0])
+            //   The migration mover is not a provisioning block: it copies a
+            //   document wholesale and stamps nothing of its own.
+            .filter((b) => !b.includes('...docSnap.data()'));
+
+        //   The control: a regex that matched no blocks would report no
+        //   offenders and mean nothing.
+        expect(blocks.length).toBeGreaterThanOrEqual(9);
+
+        const offenders: string[] = [];
+        for (const block of blocks) {
+            const guardAt = block.indexOf('...initialOnly(');
+            for (const field of DATES) {
+                const at = block.indexOf(`${field}: FieldValue.serverTimestamp()`);
+                if (at < 0) continue;
+                if (guardAt < 0 || at < guardAt) {
+                    offenders.push(`${field} in ${block.slice(0, 60).replace(/\s+/g, ' ')}`);
+                }
+            }
+        }
+
+        expect({ offenders }).toEqual({ offenders: [] });
+    });
+});
