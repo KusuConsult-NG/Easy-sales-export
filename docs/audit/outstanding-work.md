@@ -8,7 +8,7 @@ checked against the tree, not carried forward.
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 718 suites / 13,003 tests green** — and
+**Gate at this revision: build clean, 719 suites / 13,012 tests green** — and
 green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
 world after #663's enforcement date. The version before this one said 12,930
 across 712.
@@ -467,6 +467,50 @@ And #645's own ratchet asserted the local `timingSafeEqual` it had added.
 one is case-insensitive. Five doubles were written that way and seven already
 lowercased — a hidden coupling to one route's casing rather than a model of the
 real thing. All five corrected.
+
+### ✅ (#669) The money tables, audited — and the answer is that they are sound
+
+The captured log showed `wave_withdrawals`, `wallet_transactions` and
+`fixed_savings_plans` resolving to `document_collections` rather than to
+dedicated tables. The worry that follows is specific: this platform's money
+rests on SQL concurrency functions, and a function written for a dedicated table
+does not necessarily reach a JSONB one. **If the guarantees stopped at the table
+boundary, every balance in those three collections would be moving without
+them.**
+
+They do not. Four questions, four clean answers:
+
+1. **Do the withdrawal transitions claim?** Yes — every branch of the WAVE
+   withdrawal admin path goes through `claimStatusTransition`, with its own note
+   recording what it replaced.
+2. **Does the CAS reach `document_collections`?** Yes, and carefully. Read out
+   of the **live function** rather than the migration: it appends `AND
+   collection_name = $5` for that table and **refuses** a claim that arrives
+   without one. That matters more than it looks — document ids here are often
+   the *payment reference*, so the same id exists in `transactions` and in
+   `processed_payments`. Without the filter a claim could advance the wrong row.
+   It fails closed instead.
+3. **Is any money field written from JavaScript arithmetic?** **No.** Every
+   balance movement goes through `FieldValue.increment` or a wallet function.
+4. **The one status still derived from a read** — loan repayment *labels* — is
+   deliberate and documented: `paidAmount` moves by increment, and "money first,
+   labels best-effort: the reverse is what lost the payment."
+
+**A no-finding, kept as a ratchet.** Answer 3 is only true today, and a
+`current + delta` write is what the whole SQL layer exists to prevent — one line
+to reintroduce. The sweep that produced it is now a test, with the two probes
+that validated it kept as fixtures, so the instrument is checked on every run
+rather than on the day it was written.
+
+⚠️ **And the mutation run found two holes in that sweep.** It read the value
+from the line's **first colon**, so a money write hidden behind a type
+annotation was thrown away by the type-position guard; and the
+`FieldValue.increment` exclusion was dead against a fixture whose amount held no
+arithmetic. Both fixed, and the case that makes the first one matter is now a
+fixture: `update({ fee: FieldValue.increment(1), balance: current + d })` — an
+object that increments one field and writes another by hand. **The correct half
+was hiding the broken one**, which is the realistic shape of this defect and the
+reason it would survive review.
 
 ### ✅ (#668) Told to pay again, after paying
 
