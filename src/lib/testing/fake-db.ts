@@ -246,6 +246,19 @@ function resolveSentinel(type: string, s: any, existing: any, now: string): any 
  */
 function applyPatch(target: Doc, patch: Doc, now: string, deep: boolean): void {
     for (const [key, raw] of Object.entries(patch)) {
+        /**
+         *   #686 An undefined value means "no value for this field", and the
+         *   field is left as it was. Removing one is FieldValue.delete()'s job,
+         *   on the next line.
+         *
+         *   This fake had it RIGHT, in the sense that mattered most: it
+         *   reproduced the adapter's behaviour exactly, undefined deleting the
+         *   key along with it. The adapter was the one that was wrong, and
+         *   buildWritePatch is where it was fixed. This line keeps the two in
+         *   step, which is the only property this file promises.
+         */
+        if (raw === undefined) continue;
+
         const type = sentinelType(raw);
         if (type === 'FieldValue.delete') { deletePath(target, key); continue; }
         if (type) { setPath(target, key, resolveSentinel(type, raw, getPath(target, key), now)); continue; }

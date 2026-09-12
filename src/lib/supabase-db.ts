@@ -524,6 +524,12 @@ function flattenForMerge(
     prefix: string,
     out: Record<string, any>,
 ): void {
+    //   #686 An undefined LEAF is not a value either, and a dotted path holding
+    //   one is worse than useless: the RPC drops it when the body is serialised,
+    //   and the JavaScript fallback writes the key as undefined. Skipping it
+    //   here means the two paths agree, and agree on leaving the field alone.
+    if (value === undefined) return;
+
     const isPlainObject =
         value !== null &&
         typeof value === 'object' &&
@@ -573,6 +579,34 @@ function buildWritePatch(
     const deletes: string[] = [];
 
     for (const [key, rawValue] of Object.entries(data)) {
+        /**
+         *   #686 A PLAIN `undefined` MEANS "I HAVE NO VALUE FOR THIS FIELD",
+         *        NOT "REMOVE WHAT IS THERE".
+         *
+         *   It used to fall through to the bottom of this loop, where
+         *   `resolved === undefined` pushes the key onto `deletes` — so every
+         *   optional field a caller left unset ERASED the stored one.
+         *
+         *   Firestore, which this adapter shims, does one of two things with an
+         *   undefined value and neither is this: it throws, or — with
+         *   ignoreUndefinedProperties, which is how the Admin SDK is normally
+         *   configured and how every caller here reads — it IGNORES the field.
+         *   Removing a value has always required FieldValue.delete(), which is
+         *   handled explicitly on the next lines and is unaffected.
+         *
+         *   The cost was measured on the legacy import, whose user document
+         *   carries `nextOfKin`, `bankDetails` and `documents` as
+         *   `condition ? {...} : undefined`. Re-importing an existing member
+         *   without retyping their bank account deleted the account payouts go
+         *   to, and deleted the record pointing at their uploaded ID — while
+         *   the asset itself stayed in Cloudinary, unreachable because the only
+         *   thing that knew its URL was the field that had just been removed.
+         *
+         *   NOTHING IN THIS REPOSITORY EVER RELIED ON THE OLD BEHAVIOUR. Every
+         *   test that asserts a removal asks for it with FieldValue.delete().
+         */
+        if (rawValue === undefined) continue;
+
         const fvType = getFieldValueType(rawValue);
 
         if (fvType === 'FieldValue.delete') {

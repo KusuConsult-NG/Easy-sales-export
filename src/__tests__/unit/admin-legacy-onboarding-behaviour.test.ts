@@ -1255,3 +1255,130 @@ describe('#685 — an import adds roles, it does not remove them', () => {
  *   admin has to say so. The same default sits under every test in this file
  *   that does not pass a second argument.
  */
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#686 — a re-import does not delete the details it was not given', () => {
+    /*
+     *   The behavioural half of the adapter finding in
+     *   lib/__tests__/an-absent-value-is-not-a-deletion.test.ts, and the reason
+     *   that one matters. This user document carries three optional maps:
+     *
+     *       nextOfKin:    (name || phone)      ? { … } : undefined
+     *       bankDetails:  accountNumber        ? { … } : undefined
+     *       documents:    (validId || photo …) ? { … } : undefined
+     *
+     *   written with `batch.set(ref, userDoc, { merge: true })`. `undefined`
+     *   used to reach the database as a DELETION, so whatever the admin did not
+     *   retype was removed from the member's record.
+     *
+     *   THE FORM IS WHY THIS IS THE ORDINARY CASE RATHER THAN AN EDGE ONE.
+     *   ImportLegacyModal opens empty every time — it never reads the person
+     *   being imported, which is the same root as #685 — so an admin correcting
+     *   somebody's phone number re-submitted blank document URLs and a blank
+     *   next of kin along with it.
+     *
+     *   THE ID DOCUMENTS ARE THE WORST OF THE THREE. The Cloudinary asset
+     *   survives, because #675 guards that, but the only record of its URL was
+     *   the field being deleted. An asset nobody can find again is barely
+     *   better off than a destroyed one, and it is harder to notice — the
+     *   storage bill still says it is there.
+     */
+    const withDetails = () => {
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', {
+            email: 'ada@example.com',
+            roles: ['cooperative_member'],
+            bankDetails: { accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi' },
+            nextOfKin: { name: 'Chidi Obi', phone: '08099999999', relationship: 'Brother' },
+            documents: {
+                validId: { url: 'https://res.cloudinary.com/x/id.jpg', name: 'ID Document' },
+                passportPhoto: { url: 'https://res.cloudinary.com/x/photo.jpg', name: 'Passport Photo' },
+            },
+        });
+    };
+
+    /**
+     *   The modal's untouched form, reproduced exactly. ImportLegacyModal sends
+     *   `...(formData.accountNumber ? { accountNumber: … } : {})` for every one
+     *   of these — it OMITS the key rather than sending a blank string, which
+     *   it must, because the schema marks them `.optional()` and would reject
+     *   `""` against `/^\d{10}$/` and against `z.string().url()`.
+     *
+     *   So the value the action sees is `undefined`, and `undefined` is what
+     *   used to reach the database as a deletion. Building this by DELETING
+     *   keys rather than blanking them is the whole point: my first version
+     *   passed empty strings, the schema refused the write, and three tests
+     *   failed for a reason that had nothing to do with the finding.
+     */
+    const OPTIONAL_KEYS = [
+        'accountNumber', 'accountName', 'bankName', 'bankCode',
+        'nextOfKinName', 'nextOfKinPhone', 'nextOfKinRelationship', 'nextOfKinAddress',
+        'validIdUrl', 'passportPhotoUrl', 'proofOfAddressUrl',
+    ];
+    const blankForm = (overrides: Record<string, unknown> = {}): any => {
+        const f = form();
+        for (const k of OPTIONAL_KEYS) delete f[k];
+        return { ...f, ...overrides };
+    };
+
+    it('KEEPS THE BANK ACCOUNT PAYOUTS GO TO', async () => {
+        withDetails();
+        expect((await onboard(blankForm())).success).toBe(true);
+
+        expect(store.get(COLLECTIONS.USERS, 'real-uid')!.bankDetails)
+            .toEqual({ accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi' });
+    });
+
+    it('KEEPS THE NEXT OF KIN A COOPERATIVE LOAN IS GUARANTEED AGAINST', async () => {
+        withDetails();
+        expect((await onboard(blankForm())).success).toBe(true);
+
+        expect(store.get(COLLECTIONS.USERS, 'real-uid')!.nextOfKin)
+            .toMatchObject({ name: 'Chidi Obi', phone: '08099999999' });
+    });
+
+    it('KEEPS THE RECORD POINTING AT THE UPLOADED ID', async () => {
+        //   The standing rule for this codebase is that nothing is destroyed.
+        //   Deleting the URL is how an asset gets destroyed in practice without
+        //   anything being deleted in Cloudinary.
+        withDetails();
+        expect((await onboard(blankForm())).success).toBe(true);
+
+        const docs = store.get(COLLECTIONS.USERS, 'real-uid')!.documents;
+        expect(docs?.validId?.url).toBe('https://res.cloudinary.com/x/id.jpg');
+        expect(docs?.passportPhoto?.url).toBe('https://res.cloudinary.com/x/photo.jpg');
+    });
+
+    it('AND STILL WRITES THEM WHEN THE ADMIN DOES SUPPLY THEM', async () => {
+        /*
+         *   THE control. "Never write these fields" would satisfy all three
+         *   assertions above and break the screen — this is the form an admin
+         *   uses to ATTACH a member's documents in the first place.
+         */
+        withDetails();
+        expect((await onboard(blankForm({
+            accountNumber: '9876543210',
+            bankName: 'GTB',
+            validIdUrl: 'https://res.cloudinary.com/x/new-id.jpg',
+        }))).success).toBe(true);
+
+        const after = store.get(COLLECTIONS.USERS, 'real-uid')!;
+        expect(after.bankDetails.accountNumber).toBe('9876543210');
+        expect(after.documents.validId.url).toBe('https://res.cloudinary.com/x/new-id.jpg');
+        //   And the merge keeps the half the new payload did not name.
+        expect(after.documents.passportPhoto.url).toBe('https://res.cloudinary.com/x/photo.jpg');
+    });
+
+    it('AND A BRAND-NEW MEMBER WITH NO DETAILS GETS NO EMPTY SHELLS', async () => {
+        //   The other control: skipping undefined must not become "write {}".
+        //   An empty map reads as truthy, so a screen doing `if (user.documents)`
+        //   would render a documents panel with nothing in it.
+        existingAuthRecord('fresh-uid');
+        await onboard(blankForm());
+
+        const after = store.get(COLLECTIONS.USERS, 'fresh-uid')!;
+        expect(after.bankDetails).toBeUndefined();
+        expect(after.nextOfKin).toBeUndefined();
+        expect(after.documents).toBeUndefined();
+    });
+});
