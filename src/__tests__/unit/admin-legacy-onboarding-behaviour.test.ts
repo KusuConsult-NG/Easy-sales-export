@@ -1067,3 +1067,191 @@ describe('#684 — a re-import does not rewrite the dates it already wrote', () 
         expect({ offenders }).toEqual({ offenders: [] });
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#685 — an import adds roles, it does not remove them', () => {
+    /*
+     *   `roles: data.roles` is written with `set(..., { merge: true })`, and
+     *   merge protects fields the payload OMITS — an array it NAMES is replaced
+     *   outright. ImportLegacyModal builds that array from its own checkboxes,
+     *   whose initial state ticks ONLY THE MODULE THE ADMIN OPENED IT FROM. It
+     *   never reads the person being imported.
+     *
+     *   So importing an existing cooperative member from the WAVE screen
+     *   rewrote their roles to ["general_user", "wave_participant"].
+     *
+     *   WHAT IT COSTS, measured against the readers rather than assumed: their
+     *   MONEY IS SAFE — canTransactAsMember reads the membership ROW's status,
+     *   and checkModuleAccess Layer 2 reads serviceRegistrations, which is
+     *   deep-merged and survives. What they lose is being COUNTED and CONTACTED
+     *   as that kind of member: the broadcast audiences and the forensic
+     *   samples both key on `roles array-contains cooperative_member`.
+     *
+     *   user-migration.ts already merges roles by UNION, precisely so a
+     *   migration cannot remove what somebody already holds. Two paths, one
+     *   contract, disagreeing.
+     */
+    it('KEEPS A ROLE THE FORM DID NOT TICK', async () => {
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', {
+            email: 'ada@example.com',
+            roles: ['general_user', 'cooperative_member', 'academy_participant'],
+        });
+
+        //   The WAVE screen: only wave is ticked.
+        expect((await onboard(form({ roles: ['general_user', 'wave_participant'] }))).success).toBe(true);
+
+        const roles = store.get(COLLECTIONS.USERS, 'real-uid')!.roles as string[];
+        expect([...roles].sort()).toEqual(
+            ['academy_participant', 'cooperative_member', 'general_user', 'wave_participant'],
+        );
+    });
+
+    it('AND STILL APPLIES THE ONES IT WAS ASKED FOR', async () => {
+        /*
+         *   THE control on the line above. A "fix" that simply kept whatever
+         *   was already there would satisfy "keeps a role the form did not
+         *   tick" and leave the screen unable to grant anything — which is the
+         *   whole reason an admin opens it.
+         *
+         *   A DISJOINT request, so the union has to carry both sides rather
+         *   than getting the answer right by overlap.
+         */
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', {
+            email: 'ada@example.com',
+            roles: ['cooperative_member'],
+        });
+
+        expect((await onboard(form({ roles: ['wave_participant'] }))).success).toBe(true);
+
+        const roles = store.get(COLLECTIONS.USERS, 'real-uid')!.roles as string[];
+        expect([...roles].sort()).toEqual(['cooperative_member', 'wave_participant']);
+    });
+
+    it('AND A NEW MEMBER GETS EXACTLY WHAT WAS TICKED', async () => {
+        //   Nothing to preserve, so the union is the request. Without this, a
+        //   bug that always returned the existing roles would pass the first
+        //   test and give every new import an empty role set.
+        existingAuthRecord('new-uid');
+
+        await onboard(form({ roles: ['general_user', 'farmer'] }));
+
+        const roles = store.get(COLLECTIONS.USERS, 'new-uid')!.roles as string[];
+        expect([...roles].sort()).toEqual(['farmer', 'general_user']);
+    });
+
+    it('AND THE UNION CANNOT SMUGGLE IN A PRIVILEGED ROLE', async () => {
+        /*
+         *   The security half. The escalation guard tests `data.roles` — what
+         *   was REQUESTED — and the union only ever adds what the target
+         *   already holds, so it cannot grant anything. Asserted rather than
+         *   reasoned about, because "the union preserves an existing admin" and
+         *   "the union grants admin" look the same from one test.
+         *
+         *   Requesting super_admin as a plain admin is still refused.
+         *
+         *   NOTE ON THE HARNESS, which cost me a red run: actAs() defaults its
+         *   second argument to ['super_admin']. A test that means "a plain
+         *   admin" must say so, or it asserts the opposite of what it reads
+         *   like — the guard permits, correctly, and the test blames the union.
+         */
+        actAs('admin-2', ['admin']);
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', { email: 'ada@example.com', roles: ['general_user'] });
+
+        const result = await onboard(form({ roles: ['general_user', 'super_admin'] }));
+
+        expect(result.success).toBe(false);
+        expect(String((result as any).error)).toMatch(/super admin/i);
+        //   And nothing was written.
+        expect((store.get(COLLECTIONS.USERS, 'real-uid')!.roles as string[])).toEqual(['general_user']);
+    });
+
+    it('AND A CORRUPT roles FIELD DOES NOT TRAVEL INTO THE UNION', async () => {
+        /*
+         *   The union reads whatever is on the record, and this platform has
+         *   records written by three different generations of importer. A
+         *   `roles` holding a null or an object is not hypothetical tidiness:
+         *   every reader of this field does `array-contains`, and the writers
+         *   compare with `includes` — a non-string sails through both and then
+         *   sits in the array forever, because the union preserves it on every
+         *   subsequent import.
+         *
+         *   PRESERVING IS THE WHOLE POINT OF THIS FIX, so what it preserves has
+         *   to be sound. Without the filter this test found nothing — which is
+         *   how the line came to be written and left unmeasured.
+         */
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', {
+            email: 'ada@example.com',
+            roles: ['cooperative_member', null, { role: 'admin' }, 42],
+        });
+
+        expect((await onboard(form({ roles: ['wave_participant'] }))).success).toBe(true);
+
+        const roles = store.get(COLLECTIONS.USERS, 'real-uid')!.roles as string[];
+        expect([...roles].sort()).toEqual(['cooperative_member', 'wave_participant']);
+    });
+
+    it('AND PRESERVING A PRIVILEGED ROLE THE MEMBER ALREADY HELD IS NOT ESCALATION', async () => {
+        /*
+         *   The other side of the same coin, and the reason the line above is
+         *   worth asserting rather than reasoning about: "the union preserved
+         *   an admin who was already an admin" and "the union granted admin"
+         *   produce the same final role set, and only the starting state tells
+         *   them apart.
+         *
+         *   A plain admin re-importing an existing super admin does not strip
+         *   them — which is exactly the removal this finding is about, and it
+         *   would be the most consequential instance of it. The guard reads
+         *   what was REQUESTED, so this is permitted, and the union keeps what
+         *   was already there.
+         */
+        actAs('admin-2', ['admin']);
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', {
+            email: 'ada@example.com',
+            roles: ['general_user', 'super_admin'],
+        });
+
+        expect((await onboard(form({ roles: ['general_user', 'wave_participant'] }))).success).toBe(true);
+
+        const roles = store.get(COLLECTIONS.USERS, 'real-uid')!.roles as string[];
+        expect([...roles].sort()).toEqual(['general_user', 'super_admin', 'wave_participant']);
+    });
+});
+
+/*
+ * ── #685 MUTATION TESTING ───────────────────────────────────────────────────
+ *
+ *   Baseline green, one anchored swap at a time, restored and diffed after each.
+ *
+ *     MUTANT                                                        RESULT
+ *     THE DEFECT: the form's checkboxes are written wholesale again   KILLED
+ *     the union drops the roles that were actually requested          KILLED
+ *     the existing roles are read from the payload, not the record    KILLED
+ *     a brand-new member is seeded with a role nobody ticked          KILLED
+ *     non-string entries in a corrupt roles array carry through       KILLED
+ *     the escalation guard is removed                                 KILLED
+ *     the guard tests the MERGED set, so preserving an existing
+ *       super admin becomes a refusal                                 KILLED
+ *
+ *     CONTROL — SHOULD SURVIVE
+ *     reword the log line                                             SURVIVED ✓
+ *
+ *   ONE MUTANT WAS WITHDRAWN AS EQUIVALENT, recorded rather than chased:
+ *   making a missing record yield `data.roles` as the "existing" set. The union
+ *   of the requested roles with themselves is the requested roles, so there is
+ *   no observable difference and no test could have killed it. The replacement
+ *   above — seeding a missing record with `['admin']` — probes the same line
+ *   with an observable consequence.
+ *
+ *   AND THE FIRST VERSION OF THE ESCALATION TEST WAS WRONG, WHICH IS WORTH
+ *   RECORDING. It called requireAdmin's mock and expected a refusal, and got a
+ *   success. The guard was right and the test was wrong: actAs() defaults its
+ *   roles argument to ['super_admin'], so "the acting admin" in that test was a
+ *   super admin, who may indeed grant super_admin. A test that means a PLAIN
+ *   admin has to say so. The same default sits under every test in this file
+ *   that does not pass a second argument.
+ */

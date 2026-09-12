@@ -646,6 +646,61 @@ async function _onboardLegacyMemberAction(
             serviceRegistrations.farm_nation = farmNationState;
         }
 
+        /**
+         *   #685 A RE-IMPORT REPLACED THE MEMBER'S ROLES WITH WHATEVER THE FORM
+         *        HAD TICKED.
+         *
+         *        `roles: data.roles` is written with `set(..., { merge: true })`,
+         *        and merge protects fields the payload OMITS — an array it
+         *        NAMES is replaced outright. ImportLegacyModal builds that array
+         *        from its own checkboxes, whose initial state ticks ONLY THE
+         *        MODULE THE ADMIN OPENED IT FROM:
+         *
+         *            services: { cooperative: module === "cooperative",
+         *                        academy:     module === "academy", ... }
+         *
+         *        It never reads the person being imported. So importing an
+         *        existing cooperative member from the WAVE screen rewrote their
+         *        roles to ["general_user", "wave_participant"], and their
+         *        cooperative_member role was gone.
+         *
+         *   WHAT IT DOES AND DOES NOT COST — measured against the readers.
+         *
+         *        Their MONEY IS SAFE. canTransactAsMember reads the membership
+         *        ROW's status, not the role, and checkModuleAccess Layer 2 reads
+         *        serviceRegistrations, which is deep-merged and survives.
+         *
+         *        What they lose is being COUNTED and CONTACTED as that kind of
+         *        member: the broadcast audiences and the forensic samples both
+         *        key on `roles array-contains cooperative_member`. They quietly
+         *        stop receiving cooperative messages and stop appearing in the
+         *        checks meant to notice problems with their account.
+         *
+         *   THE PLATFORM ALREADY HAS THE ANSWER. user-migration.ts merges roles
+         *   by UNION — `Array.from(new Set([...activeRoles, ...legacyRoles]))`,
+         *   minus anything privileged — precisely so a migration cannot remove
+         *   what somebody already holds. Two paths, one contract, disagreeing.
+         *
+         *   REMOVING A ROLE IS NOT THIS SCREEN'S JOB. updateUserRolesAction
+         *   exists for that, with its own gate and its own audit row. An import
+         *   adds what it is importing.
+         */
+        const existingUserSnap = await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).get();
+        const existingRoles: string[] = (() => {
+            const raw = existingUserSnap.exists ? (existingUserSnap.data() ?? {}).roles : undefined;
+            return Array.isArray(raw) ? raw.filter((r: unknown): r is string => typeof r === 'string') : [];
+        })();
+        const requestedRoles = data.roles as unknown as string[];
+        const mergedRoles = Array.from(new Set([...existingRoles, ...requestedRoles])) as typeof data.roles;
+
+        const kept = existingRoles.filter((r) => !requestedRoles.includes(r));
+        if (kept.length > 0) {
+            logger.info(
+                `[Legacy Onboarding] Kept ${kept.join(', ')} on ${userRecord.uid} — an import adds ` +
+                `roles, it does not remove them (#685).`,
+            );
+        }
+
         // 7. Create User Document
         const userDoc: any = {
             uid: userRecord.uid,
@@ -658,7 +713,8 @@ async function _onboardLegacyMemberAction(
             gender: data.gender,
             dateOfBirth: data.dateOfBirth,
             occupation: data.occupation,
-            roles: data.roles,
+            //   #685 The union, not the form's checkboxes. See the note above.
+            roles: mergedRoles,
             isVerified: true,
             verified: true,
             stateOfOrigin: data.state,
