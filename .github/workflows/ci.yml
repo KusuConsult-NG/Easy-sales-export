@@ -296,9 +296,48 @@ jobs:
       - name: Start an ephemeral Supabase and load the schema
         run: ./scripts/ci-integration-db.sh
 
-      # playwright.config.ts starts `npm run dev` itself and waits for the port.
+      # playwright.config.ts builds and starts the app itself and waits for the
+      # port — a PRODUCTION build, for the reasons its webServer block gives.
       - name: Run public-route smoke tests
         run: npx playwright test --project=smoke
+        env:
+          NEXTAUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
+          AUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
+          NEXTAUTH_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      # The 362 authenticated journeys — #656.
+      #
+      # WHY THIS STEP DID NOT EXIST
+      # ---------------------------
+      # The job above runs `--project=smoke`, which is testMatch'd to ONE file:
+      # tests/e2e/public-routes.spec.ts. The `chromium` project has no testMatch,
+      # so it is every spec under testDir — and it was invoked by no workflow.
+      # Twenty-five of the twenty-six spec files in this repository had never
+      # run in CI, including every one that signs in:
+      #
+      #   rbac-security, rbac-admin-gate, auth-module-access, api-auth-contract
+      #   escrow, financial-workflow, payment-callback
+      #   marketplace-critical-flows, complete-flow, loans, cooperative
+      #
+      # This file's own comment records that 23 specs "had been in the
+      # repository for a month and no workflow referenced any of them, so not
+      # one had ever run", and the job added then covered a single file. The fix
+      # reached one project of two.
+      #
+      # MEASURED BEFORE WIRING IT UP, against the local stack that
+      # scripts/local-stack/up.sh brings up: 362 tests, 8.9 minutes, all green —
+      # after three stale specs were repaired. They were stale precisely BECAUSE
+      # they never ran: one asserted "BVN verified successfully", the sentence
+      # #522 removed from the screen when it found that nothing checked the BVN.
+      #
+      # Same stack, same step budget: this reuses the Supabase the step above
+      # started rather than paying for another one. `!cancelled()` so a smoke
+      # failure does not hide this result, and the reverse — two suites, two
+      # answers, which is the idiom the integration job already uses.
+      - name: Run the full authenticated suite
+        if: ${{ !cancelled() }}
+        run: npx playwright test --project=chromium
         env:
           NEXTAUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
           AUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret

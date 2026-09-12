@@ -50,8 +50,13 @@ test.describe('System Health Diagnostic Suite', () => {
         // links there. Asserted on the link so the panel cannot silently
         // disappear the way the number silently lied.
         await expect(page.locator('text=Cross-module checks')).toBeVisible();
-        await expect(page.getByRole('link', { name: /forensic scan/i })).toHaveAttribute(
-            'href', '/admin/forensics');
+        //   #656 — `.first()`. Two links now match /forensic scan/i: the admin
+        //   sidebar's "Forensic Scan" and this panel's own "Run the forensic
+        //   scan →". BOTH point at /admin/forensics, so the assertion's intent
+        //   holds; what failed was strict mode, and only because this spec had
+        //   never run to notice the second link arriving.
+        await expect(page.getByRole('link', { name: /forensic scan/i }).first())
+            .toHaveAttribute('href', '/admin/forensics');
         
         // Verify Feature Toggles
         await expect(page.locator('text=Feature Activation States')).toBeVisible();

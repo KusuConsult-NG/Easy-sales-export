@@ -1,15 +1,15 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a96f6546`, `78e267f7` and now at `cdc7af71`.** Every line below was checked against the
-tree, not carried forward.
+`a96f6546`, `78e267f7`, `cdc7af71` and now at `cc99f65a`.** Every line below was
+checked against the tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 705 suites / 12,847 tests green.** The
-version before this one said 12,840 across 704.
+**Gate at this revision: build clean, 706 suites / 12,859 tests green.** The
+version before this one said 12,847 across 705.
 
 **And every database suite was run for real**, against the local stack
 `scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
@@ -20,6 +20,7 @@ schema, all 34 migrations, RLS on:
 | `test:pg` | **13 suites, 199 passed, 0 skipped** |
 | `test:db` | **17 suites, 161 passed** |
 | `test:integration` | **5 suites, 31 passed** |
+| Playwright, full | **26 spec files, 362 passed, 8.9 minutes**, against a production build |
 
 A status document that contradicts the repository is worse than none — it is
 read and believed — so these numbers are re-read from a full run each time this
@@ -286,6 +287,58 @@ named in `kyc-validators`.
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
 
+### ✅ (#656) CI ran one spec file of twenty-six
+
+The `e2e-smoke` job invokes `npx playwright test --project=smoke`. That project
+carries a `testMatch` of **one file** — `tests/e2e/public-routes.spec.ts`. The
+`chromium` project has no `testMatch`, so it is every spec under `testDir`, and
+**it was invoked by no workflow in this repository.**
+
+Twenty-five of the twenty-six spec files had never run in CI, including every
+one that signs a user in: `rbac-security`, `rbac-admin-gate`,
+`auth-module-access`, `api-auth-contract`, `escrow`, `financial-workflow`,
+`payment-callback`, `marketplace-critical-flows`, `complete-flow`, `loans`,
+`cooperative`.
+
+The job's own comment records that 23 specs "had been in the repository for a
+month and no workflow referenced any of them, so not one had ever run". The job
+added in answer to that covered a single file. **The fix reached one door of
+two** — class 2, and the most frequent shape in this audit.
+
+**Run for real before wiring it up**, against the stack `scripts/local-stack/up.sh`
+brings up and a production build: **362 tests, 9.4 minutes, three failed.** All
+three were stale specs, and stale *precisely because they had never run*:
+
+| | |
+|---|---|
+| `e2e/wave-submission.spec.ts` | Waited for `"BVN verified successfully"` — the exact sentence **#522 deliberately removed** from `FinancialStep` when it found that nothing checked the BVN. `IDENTITY_PROVIDER` is `'none'`, so the honest message is the one a member sees. Now accepts **either** truthful sentence, so it keeps passing the day a provider is configured. |
+| `e2e/courses.spec.ts` | Clicked the enrolled-course card, which is a `<div>` whose inner Continue/Start `<Link>` navigates. The run never left the list, where `module-item` does not exist and `progress-bar` matches once per course — a strict-mode violation, not a missing element. Rewritten as the journey it is named for. |
+| `tests/e2e/health-check.spec.ts` | Two links now match `/forensic scan/i` — the sidebar's and the panel's. **Both point at `/admin/forensics`**, so the assertion's intent was unharmed; `.first()` is the honest fix. |
+
+Not one was an application defect, and that is the finding: a suite nobody runs
+decays into one that *cannot* be turned on, and every month it sits makes the
+day someone tries more expensive. All three repaired; the full suite is now
+**362 passed, 8.9 minutes, zero failures**, and CI runs it — as a step in the
+same job, reusing the Supabase and the Chromium it already paid for, with
+`if: !cancelled()` so a smoke failure cannot hide the result.
+
+Ratcheted by `one-project-of-two.test.ts`: the step exists, the smoke step
+survives beside it, the database and browser come first, and — the assertion
+that actually carries it — **the `chromium` project still has no `testMatch` of
+its own.** Without that last one, somebody narrows the project and the workflow
+line stays there, green, running one file again.
+
+**Two instrument faults, both caught by controls.** A mutant that changed the
+rendered BVN message SURVIVED, because the *toast* forty lines above says the
+same words and satisfied a `toContain` — the element the spec's locator matches
+had stopped saying it while the string was still in the file. And before that, a
+positive control failed on green code: this file's own hand-rolled comment
+stripper **ate the glob it was about to assert on**, because the recursive glob
+in `testMatch` is a complete block comment to anything that does not track
+strings. `lib/testing/strip-comments` exists *because of that exact trap*, so
+the copy was deleted and the shared one used — and the YAML stripper #651 wrote
+inline moved in beside it, since one contract in two places is class 4.
+
 ### ✅ (#655) The local stack told you to run the suites, and the suites skipped
 
 `scripts/local-stack/up.sh` brings up a complete local backend with **no Docker**
@@ -331,7 +384,9 @@ assertion that the stale message is gone read the guard's raw text and found the
 sentence in **the comment explaining its removal** — my own prose breaking an
 assertion about code, after doing the reverse in #651 and #654. Three times in
 five findings is a rule, not luck: a source assertion strips comments, every
-time, in every file format.
+time, in every file format. **#656 made it a shared module** rather than a rule
+each suite re-implements — including the YAML half, which #651 had written
+inline.
 
 ### ✅ (#654) A rule the database enforces by itself, that nothing tested
 
@@ -733,7 +788,8 @@ new, and because two of them were found in **my own work** during this session.
    reasons already written down, so the remaining list is **not** a backlog of
    107 defects — and grinding through it one at a time has a falling return.
 2. **The fix reached one of N doors.** #619 found #617 doing exactly this, one
-   commit later.
+   commit later. **#656 is the largest instance**: the job that answered "no
+   workflow runs these specs" covered one of the twenty-six.
 3. **"Could not tell" rendered as "no".** #620 (blank page), #621 (500 shown as
    404).
 4. **Two hand-maintained copies of one contract.** Found in the sweep stubs

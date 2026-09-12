@@ -75,6 +75,8 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
+import { stripYamlComments } from '@/lib/testing/strip-comments';
+
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 
@@ -89,11 +91,13 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
  *   My own write-up satisfied the assertion about the code. That is the trap
  *   this audit strips comments for everywhere else, met here in a file format
  *   where I had not thought to.
+ *
+ *   #656 needed the same thing for a different step in the same workflow, so
+ *   the filter moved into lib/testing/strip-comments beside the TypeScript one
+ *   rather than becoming a second copy. Behaviour is unchanged — whole-line
+ *   comments only.
  */
-const CI = read('.github/workflows/ci.yml')
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('#'))
-    .join('\n');
+const CI = stripYamlComments(read('.github/workflows/ci.yml'));
 const PG_DIR = 'src/__tests__/pg';
 const PG_SUITES = readdirSync(join(ROOT, PG_DIR))
     .filter((f) => f.endsWith('.test.ts'))

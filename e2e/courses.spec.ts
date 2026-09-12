@@ -46,14 +46,29 @@ test.describe('Course Enrollment Flow', () => {
         const enrolledCourses = page.locator('[data-testid="enrolled-course"]');
 
         if (await enrolledCourses.first().isVisible({ timeout: 5000 })) {
-            // Click on first enrolled course
-            await enrolledCourses.first().click();
+            const card = enrolledCourses.first();
 
-            // Verify progress bar or indicator
-            const progressIndicator = page.locator('[data-testid="progress-bar"]');
-            await expect(progressIndicator).toBeVisible({ timeout: 5000 });
+            /*
+             *   #656 — THE PROGRESS BAR IS ON THIS PAGE, AND THE MODULES ARE ON
+             *   THE NEXT ONE. This spec had never run, and asserted both in one
+             *   place after clicking the card body.
+             *
+             *   Two things were wrong with that and neither is an app defect.
+             *   `progress-bar` is rendered ONCE PER ENROLLED COURSE on the list,
+             *   so a bare locator matching two is a strict-mode violation rather
+             *   than a missing element. And the card is a <div> whose Continue /
+             *   Start LINK is what navigates — clicking the card body does
+             *   nothing, so the run never left the list and `module-item`, which
+             *   lives on CourseDetailClient, was never going to be there.
+             *
+             *   Written as the journey it is named for: the bar on the list,
+             *   then the link, then the modules on the course.
+             */
+            await expect(card.locator('[data-testid="progress-bar"]')).toBeVisible({ timeout: 5000 });
 
-            // Check for module list
+            await card.getByRole('link', { name: /continue|start/i }).click();
+            await page.waitForURL(/\/academy\/[^/]+$/);
+
             const modules = page.locator('[data-testid="module-item"]');
             await expect(modules.first()).toBeVisible();
 

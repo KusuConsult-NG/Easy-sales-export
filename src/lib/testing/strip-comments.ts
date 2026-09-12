@@ -46,6 +46,25 @@
 /** Thrown when stripping destroyed the file rather than its comments. */
 export class StripperAteTheFileError extends Error {}
 
+/**
+ * The same discipline for YAML, which the workflow tests need.
+ *
+ * #651 found a mutant surviving because the PROSE ABOVE a CI step satisfied an
+ * assertion about the step — `expect(CI).toContain('npm run test:pg')` passed
+ * after the step was replaced, because the paragraph explaining why the step
+ * had never existed says `npm run test:pg` in English. #656 then read the same
+ * workflow for a different step and would have been the second occurrence.
+ *
+ * Lives here rather than in each suite because that is the OTHER defect this
+ * audit keeps finding: two hand-maintained copies of one contract.
+ *
+ * Whole-line comments only. A `#` inside a quoted value is not a comment, and
+ * dropping only lines whose first non-blank character is `#` never touches one.
+ */
+export function stripYamlComments(src: string): string {
+    return src.split("\n").filter((line) => !line.trim().startsWith("#")).join("\n");
+}
+
 export interface StripOptions {
     /** Named in the error, so a failure says which file. */
     label?: string;

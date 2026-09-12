@@ -83,7 +83,27 @@ test.describe('WAVE Application Flow', () => {
         await page.fill('label:has-text("Account Number") + input', '1234567890');
         await page.fill('input[placeholder="Enter BVN"]', randomBvn);
         await page.click('button:has-text("Verify")');
-        await expect(page.locator('p:has-text("BVN verified successfully")')).toBeVisible({ timeout: 15000 });
+        /*
+         *   #656 — THIS ASSERTED A CLAIM #522 DELIBERATELY REMOVED.
+         *
+         *   It waited for "BVN verified successfully". FinancialStep shows that
+         *   sentence only when `bvnChecked` is true — when a provider actually
+         *   confirmed the number — and shows "BVN recorded — our team will
+         *   confirm it during review" when it did not. #522's whole point was
+         *   that nothing checked this BVN and the screen said it had.
+         *
+         *   IDENTITY_PROVIDER is the constant 'none' today, so the honest
+         *   message is the one a member sees. The spec had never run, so the fix
+         *   that corrected the screen left the test asserting the old lie.
+         *
+         *   Written as "either message, and the step moves on" so it keeps
+         *   passing the day a provider IS configured — the thing being tested
+         *   here is that the application flow continues, not which of the two
+         *   truthful sentences appeared.
+         */
+        await expect(
+            page.locator('p:has-text("BVN verified successfully"), p:has-text("BVN recorded")'),
+        ).toBeVisible({ timeout: 15000 });
 
         await page.check('label:has-text("No") input[name="isMemberOfCooperative"]');
         await page.check('label:has-text("Yes") input[name="willingToJoinCooperative"]');
