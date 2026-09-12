@@ -101,9 +101,26 @@ describe('the server stores the figure it will pay', () => {
     });
 
     it('and the list route hands it back untouched', () => {
-        // `...data` spread, so every stored field including projectedProfit.
-        expect(code(LIST_ROUTE)).toContain('...data,');
+        //   A SPREAD OF THE WHOLE ROW, so every stored field including
+        //   projectedProfit — not a whitelist that would have to name it.
+        //
+        //   #657 CHANGED THE SPELLING AND NOT THE MEANING. It was `...data,`;
+        //   it is now `...serializeValue(data),`, because the adapter returns
+        //   Timestamp instances and Next refuses to pass a class instance to a
+        //   Client Component. serializeValue converts values and adds and
+        //   removes no keys, so the claim this test makes is untouched.
+        //
+        //   Re-anchored on the shape rather than the exact characters: what
+        //   matters here is that the row is spread, whatever it is spread
+        //   through. Asserting the literal text made a correct, necessary edit
+        //   look like a regression.
+        //   `[^(]*` for the type argument, not `<[^>]*>`: the generic is
+        //   `Record<string, any>` and its own `>` closes the outer one early.
+        expect(code(LIST_ROUTE)).toMatch(/\.\.\.\s*(serializeValue[^(]*\()?data\s*\)?,/);
         expect(code(LIST_ROUTE)).toContain('COLLECTIONS.FIXED_SAVINGS_PLANS');
+        //   And still not a whitelist: no field list stands between the row and
+        //   the caller.
+        expect(code(LIST_ROUTE)).not.toMatch(/projectedProfit:\s*data\./);
     });
 });
 

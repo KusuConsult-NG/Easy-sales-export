@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { fixedSavingsPlanStatus } from "@/lib/cooperative-savings";
 import { normaliseLoanApplication } from "@/lib/loan-application-location";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
  * A cooperative member's own records, read once and defined once.
@@ -35,6 +36,30 @@ import { normaliseLoanApplication } from "@/lib/loan-application-location";
  *
  *   Both routes now call these too. One definition, more callers.
  *
+ * ── EVERYTHING HERE CROSSES THE SERVER→CLIENT BOUNDARY ──────────────────────
+ *
+ *   #657 These are read by Server Components and handed to Client Components,
+ *   and Next refuses to pass a class instance across that line. The adapter
+ *   returns Timestamps — measured against the local stack, four of them on a
+ *   cooperative_loans row and three on a cooperative_members row — so a
+ *   document spread into a returned object carries them along.
+ *
+ *   The server said so on every render of /cooperatives/loans, three times:
+ *
+ *     ⨯ Error: Only plain objects, and a few built-ins, can be passed to
+ *       Client Components from Server Components.
+ *
+ *   because readMyLoanApplications converted `appliedAt` — the field it sorts
+ *   on and the one the screen prints — and spread the other three raw.
+ *
+ *   Every spread of a document goes through serializeValue now, which is the
+ *   helper lib/firestore-serialize exists for and whose own header states this
+ *   rule. NOT a list of timestamp fields: a list has to be maintained by hand
+ *   against a schema nobody edits with this file open, and the three that
+ *   leaked are exactly what that costs. The explicit `.toDate()` conversions
+ *   stay where they are — after the spread — because the screens are written
+ *   against Dates on those fields.
+ *
  * ── AND THEY ARE STILL SESSION-SCOPED ───────────────────────────────────────
  *
  *   Each function takes a user id and reads only that member's rows, exactly as
@@ -62,7 +87,11 @@ export async function readCooperativeMembership(userId: string): Promise<Coopera
     return {
         isMember: true,
         status: membershipData?.membershipStatus || "pending",
-        data: membershipData ?? {},
+        //   #657 — the whole member row, and it carries three Timestamps. Two
+        //   of the three callers flatten to { isMember, status } and never
+        //   expose it; a reader that is safe only because of what its callers
+        //   happen to do is one refactor from the defect this fixed.
+        data: serializeValue<Record<string, any>>(membershipData ?? {}),
     };
 }
 
@@ -77,7 +106,9 @@ export async function readFixedSavingsPlans(userId: string): Promise<Record<stri
         const data = doc.data();
         return {
             id: doc.id,
-            ...data,
+            //   #657 — serialized, not raw. `updatedAt` is on every dedicated
+            //   table and was not in the list below.
+            ...serializeValue<Record<string, any>>(data),
             //   #419 — after the spread, deliberately. See the header.
             status: fixedSavingsPlanStatus(data),
             startDate: data.startDate?.toDate?.() || new Date(),
@@ -154,14 +185,21 @@ export async function readMyLoanApplications(userId: string): Promise<Record<str
             .get(),
     ]);
 
+    //   #657 — THE spread this finding is about. `appliedAt` was converted and
+    //   createdAt, updatedAt and approvedAt went to the browser as Timestamp
+    //   instances, which Next refuses and logged three times per render.
+    //   serializeValue first, then the explicit Date the screen is written
+    //   against, so nothing about `appliedAt` changes.
     return [
         ...generalSnap.docs.map(doc => ({
             id: doc.id,
-            ...doc.data(),
+            ...serializeValue<Record<string, any>>(doc.data()),
             appliedAt: doc.data().appliedAt?.toDate?.() || new Date(),
         })),
         ...coopSnap.docs.map(doc => ({
-            ...normaliseLoanApplication(doc.data(), COLLECTIONS.COOPERATIVE_LOANS),
+            ...serializeValue<Record<string, any>>(
+                normaliseLoanApplication(doc.data(), COLLECTIONS.COOPERATIVE_LOANS),
+            ),
             id: doc.id,
             appliedAt: doc.data().appliedAt?.toDate?.() || doc.data().createdAt?.toDate?.() || new Date(),
         })),

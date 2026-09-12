@@ -1,15 +1,15 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a96f6546`, `78e267f7`, `cdc7af71` and now at `cc99f65a`.** Every line below was
+`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a` and now at `c3da88ea`.** Every line below was
 checked against the tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 706 suites / 12,859 tests green.** The
-version before this one said 12,847 across 705.
+**Gate at this revision: build clean, 707 suites / 12,870 tests green.** The
+version before this one said 12,859 across 706.
 
 **And every database suite was run for real**, against the local stack
 `scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
@@ -286,6 +286,85 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#657) The server shipped class instances to the browser, and said so in a log nobody read
+
+**Found with an instrument this audit had not used before**: the 362 e2e
+journeys run against a production build with the **server's own stdout
+captured**. Every test passed. The server said this three times while they did:
+
+    ⨯ Error: Only plain objects, and a few built-ins, can be passed to Client
+      Components from Server Components. Classes or null prototypes are not
+      supported.
+      {id: ..., amount: 20000, ..., createdAt: {_seconds: ...,
+       _nanoseconds: 313000000, seconds: ..., nanoseconds: ...}, ...}
+
+Once each for `createdAt`, `updatedAt` and `approvedAt`, on
+**/cooperatives/loans**, on every render.
+
+**Why three and not four.** `readMyLoanApplications` spreads the whole document
+and then converts one field:
+
+```ts
+...doc.data(),
+appliedAt: doc.data().appliedAt?.toDate?.() || new Date(),
+```
+
+`appliedAt` is what it sorts on and the only one the screen prints — so it is
+the one whose shape somebody had to think about. **The fix reached one field of
+four**, the most frequent shape in this audit, in its smallest form yet.
+
+**Measured, not inferred.** The adapter was asked directly what it returns,
+against the local stack with the real schema:
+
+| | |
+|---|---|
+| `cooperative_loans` | `appliedAt`, `createdAt`, `updatedAt`, `approvedAt` — all `Timestamp` |
+| `cooperative_members` | `joinedAt`, `createdAt`, `updatedAt` |
+| `users` | `createdAt`, `updatedAt`, `serviceRegistrations.marketplace.registeredAt` |
+
+Every dedicated table hands back instances of the `Timestamp` class. So any
+reader that spreads a document into something a Client Component receives has
+this defect unless it names every timestamp on the row — a list maintained by
+hand against a schema nobody edits with that file open.
+
+**And the tool for it already existed.** `lib/firestore-serialize.ts` opens by
+stating this exact rule, and `cooperative-readers.ts` — the module written
+(#570) specifically to be read by Server Components — never imported it. A
+declared rule with a working implementation, and the one module that most needed
+it going its own way.
+
+Three of the four readers had the shape; `readActiveLoanProducts` did not,
+because it copies six named fields instead of spreading — and that is the
+positive control that makes this a defect rather than a style. `readFixedSavingsPlans`
+was never observed failing only because the seed has no plans in it.
+
+The ratchet asserts **Next's own rule**, not a field list: walk everything a
+reader returns and refuse any value that is not a plain object, an array, a Date
+or a primitive. A field added to any of these tables tomorrow is covered without
+touching the test.
+
+⚠️ **Three mutants survived the first run and all three were one gap in the
+tests.** Every one was an edit to the `loan_applications` branch — which the
+suite did not seed; it tested the `cooperative_loans` half alone.
+`readMyLoanApplications` reads two collections for the reason #570 records: an
+application filed on the loans page went into one and the list read the other,
+so a member saw "submitted" and then nothing. A suite covering one of two doors,
+in a file whose subject is a fix that reached one field of four. Both doors now.
+
+**Confirmed the same way it was found**, which is the only evidence that settles
+it — a unit test proves the reader, not the boundary:
+
+| | |
+|---|---|
+| before | **3** × "Only plain objects…", /cooperatives/loans, every render |
+| after | **0**, over the same 146-test page crawl, the same page visited |
+
+**Scope, stated honestly.** Forty-nine pages seed a Client Component from the
+server (`seedOrNull` / `rawSeed`). The full run visited ~205 pages as nine
+personas and only this one logged the error — which is evidence about the seeded
+data, not proof about the other forty-eight. What is fixed is the module that
+was proven to leak and the two siblings that share its shape.
 
 ### ✅ (#656) CI ran one spec file of twenty-six
 
@@ -789,7 +868,9 @@ new, and because two of them were found in **my own work** during this session.
    107 defects — and grinding through it one at a time has a falling return.
 2. **The fix reached one of N doors.** #619 found #617 doing exactly this, one
    commit later. **#656 is the largest instance**: the job that answered "no
-   workflow runs these specs" covered one of the twenty-six.
+   workflow runs these specs" covered one of the twenty-six. **#657 is the
+   smallest**: a reader converted one timestamp field of four on the same row,
+   and the three it missed went to the browser as class instances.
 3. **"Could not tell" rendered as "no".** #620 (blank page), #621 (500 shown as
    404).
 4. **Two hand-maintained copies of one contract.** Found in the sweep stubs
@@ -800,6 +881,18 @@ new, and because two of them were found in **my own work** during this session.
 6. **Audit the instrument before believing the measurement.** One sweep reported
    47, then 121, then 57 "defects", every one of them a fault in the probe. Had
    any been believed, they would have been reported as application bugs.
+
+   **Three more sweeps were run and thrown away in the session that found
+   #657**, and they are recorded because a discarded sweep is also a
+   measurement. A `Promise.allSettled` sweep reported 49 of 69 call sites
+   ignoring rejections; the window was 4,000 characters and the `forEach` that
+   reads them sits two hundred lines below the call. Rewritten to bind the
+   variable name and search the whole file: **22 inspected, 0 uninspected**. A
+   silent-`catch` sweep over 1,542 catch bodies found 11, every one a validator
+   or auth path failing closed — validated with an injected silent catch
+   (found) and the same catch with a logger (excluded). And a sweep for server
+   pages that read the database without serializing returned five, of which two
+   were false positives: one only redirects and one passes scalars.
 
    **This class produced four findings of its own in #638–#640**, all in the
    audit's own tooling, all with the same signature: a scanner reporting ZERO
