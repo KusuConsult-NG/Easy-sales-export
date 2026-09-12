@@ -12,6 +12,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { chooseProfileForAuthAccount } from "@/lib/profile-choice";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { LegacyOnboardingSchema } from "@/lib/schemas";
 import { sendLegacyMemberWelcomeEmail, sendEmailNotification } from "@/lib/email-notifications";
@@ -269,29 +270,108 @@ async function _onboardLegacyMemberAction(
             .where("email", "==", data.email)
             .get();
 
+        /**
+         *   #681 LEGACY IMPORT DELETED A MEMBER'S OTHER PROFILE DOCUMENTS, AND
+         *        PICKED THE SURVIVOR ARBITRARILY.
+         *
+         *        Three sites in this block called every user document sharing
+         *        the email — other than the one it had settled on — a
+         *        "duplicate stub" or "ghost document", and did
+         *        `cleanBatch.delete(doc.ref)`. Nothing checked whether those
+         *        rows carried roles, balances, module registrations or a
+         *        payment history. "We can safely delete duplicate stubs" was
+         *        asserted, never established.
+         *
+         *        IT CONTRADICTS FOUR THINGS THIS PLATFORM HAS ALREADY SETTLED:
+         *
+         *          · the standing instruction that nothing here is deleted or
+         *            destroyed — #292, and #675 which guards the Cloudinary
+         *            half of it;
+         *          · #300, where erasure MARKS a row and keeps its status,
+         *            dates and balances, precisely so a payout still owed can
+         *            still be found;
+         *          · #490, which found 95 addresses in production holding more
+         *            than one profile and recorded that TWO ROWS PER MIGRATED
+         *            PERSON IS BY DESIGN — `migrateLegacyUserData` copies the
+         *            profile forward and TOMBSTONES the original. This was
+         *            deleting the tombstones that design depends on;
+         *          · #490 again: "This does not decide which row is the person,
+         *            and must not: that is a judgement about somebody's records,
+         *            and the platform has no basis for it."
+         *
+         *        AND THE SURVIVOR WAS `docs[0]` OF AN UNORDERED QUERY. Whichever
+         *        row the database happened to return first became the person. In
+         *        the branch below that copies data forward it took `stubs[0]` as
+         *        the source and then deleted the rest, so a member with three
+         *        profiles kept whatever was in one of them and lost the other
+         *        two. #476 and #477 built `chooseProfileForAuthAccount` for
+         *        exactly this question and it was not used here.
+         *
+         *   WHAT IT DOES NOW. It chooses by evidence, through the shared
+         *   chooser, and it SUPERSEDES the rows it does not choose instead of
+         *   removing them — `_migratedTo`, the same tombstone
+         *   `migrateLegacyUserData` writes and `profile-choice.ts` already knows
+         *   how to skip. So the login path, the ghost scan and the forensic all
+         *   behave as they already do for a migrated member, because this is
+         *   not a new contract; it is the one that existed.
+         */
         if (!emailCheck.empty) {
+            /** Mark a row as superseded by `winner`. Never removes it — #681. */
+            const supersede = async (docs: { id: string; ref: any }[], winner: string) => {
+                if (docs.length === 0) return;
+                const batch = db.batch();
+                for (const doc of docs) {
+                    batch.update(doc.ref, {
+                        _migratedTo: winner,
+                        _supersededAt: FieldValue.serverTimestamp(),
+                        _supersededBy: "legacy-import",
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                }
+                await batch.commit();
+                logger.info(
+                    `[Legacy Onboarding] Superseded ${docs.length} profile row(s) for ${winner} — `
+                    + `marked with _migratedTo, not deleted (#681).`,
+                );
+            };
+
             if (targetUid) {
                 // If Auth user exists, the Firestore document ID MUST match targetUid.
                 const matchingDoc = emailCheck.docs.find(doc => doc.id === targetUid);
-                
-                // If there are other documents with the same email but different UIDs:
-                // These are duplicate stubs/ghost documents.
-                const stubs = emailCheck.docs.filter(doc => doc.id !== targetUid);
-                if (stubs.length > 0) {
+                const others = emailCheck.docs.filter(doc => doc.id !== targetUid);
+
+                if (others.length > 0) {
                     if (matchingDoc) {
-                        // The primary document is already aligned. We can safely delete duplicate stubs.
-                        const cleanBatch = db.batch();
-                        stubs.forEach(doc => cleanBatch.delete(doc.ref));
-                        await cleanBatch.commit();
-                        logger.info(`[Legacy Onboarding] Deleted ${stubs.length} duplicate stubs for aligned user ${targetUid}`);
+                        //   The row carrying the auth id is the person by
+                        //   identity, not by inference. The rest are pointed at
+                        //   it and kept.
+                        await supersede(others, targetUid);
                     } else {
-                        // Auth user exists (targetUid), but no Firestore document exists with targetUid.
-                        // We choose the first stub/legacy document to serve as the source of data.
-                        const sourceDoc = stubs[0];
+                        /*
+                         *   No row carries the auth id yet. WHICH ROW'S DATA
+                         *   MOVES FORWARD IS A REAL QUESTION, and `stubs[0]`
+                         *   was not an answer to it — it was whatever the
+                         *   database listed first.
+                         *
+                         *   `chooseProfileForAuthAccount` ranks by evidence and
+                         *   reports `ambiguous` when nothing identifies the
+                         *   account outright, which is logged so the operator
+                         *   can see a judgement was made on their behalf.
+                         */
+                        const choice = chooseProfileForAuthAccount(others, targetUid);
+                        const sourceDoc = choice.chosen ?? others[0];
                         oldUidToMigrate = sourceDoc.id;
-                        
+
+                        if (choice.ambiguous) {
+                            logger.warn(
+                                `[Legacy Onboarding] No profile identifies itself with ${targetUid}. `
+                                + `Chose ${sourceDoc.id} from ${choice.candidates} row(s) by evidence `
+                                + `(#477) — these rows need reconciling.`,
+                            );
+                        }
+
                         logger.info(`[Legacy Onboarding] Firestore data conflict detected for ${data.email}. Migrating doc ${oldUidToMigrate} to match Auth UID ${targetUid}`);
-                        
+
                         // Migrate user document to targetUid
                         const userData = sourceDoc.data();
                         await db.collection(COLLECTIONS.USERS).doc(targetUid).set({
@@ -300,25 +380,35 @@ async function _onboardLegacyMemberAction(
                             updatedAt: FieldValue.serverTimestamp()
                         }, { merge: true });
 
-                        // Clean up all the old stubs matching this email
-                        const cleanBatch = db.batch();
-                        stubs.forEach(doc => cleanBatch.delete(doc.ref));
-                        await cleanBatch.commit();
+                        //   Every row that was not copied forward is kept and
+                        //   pointed at the winner — including the source, whose
+                        //   data now lives under targetUid as well.
+                        await supersede(others, targetUid);
                     }
                 }
             } else {
-                // No Auth user exists yet. We adopt the UID of the first Firestore document.
-                const primaryDoc = emailCheck.docs[0];
+                /*
+                 *   No Auth user exists yet, so there is no identity to match
+                 *   and evidence is all there is. It took `docs[0]`; it asks
+                 *   the shared chooser now, and says when the answer was a
+                 *   judgement rather than a fact.
+                 */
+                const choice = chooseProfileForAuthAccount(emailCheck.docs, "");
+                const primaryDoc = choice.chosen ?? emailCheck.docs[0];
                 targetUid = primaryDoc.id;
-                
-                // Delete any additional duplicate stubs matching this email
-                const stubs = emailCheck.docs.filter(doc => doc.id !== targetUid);
-                if (stubs.length > 0) {
-                    const cleanBatch = db.batch();
-                    stubs.forEach(doc => cleanBatch.delete(doc.ref));
-                    await cleanBatch.commit();
-                    logger.info(`[Legacy Onboarding] Deleted ${stubs.length} duplicate stubs for unaligned user ${targetUid}`);
+
+                if (choice.ambiguous && emailCheck.docs.length > 1) {
+                    logger.warn(
+                        `[Legacy Onboarding] ${emailCheck.docs.length} profiles share ${data.email} and none `
+                        + `carries an auth id. Adopted ${targetUid} by evidence (#477) — these rows need `
+                        + `reconciling.`,
+                    );
                 }
+
+                await supersede(
+                    emailCheck.docs.filter(doc => doc.id !== targetUid),
+                    targetUid,
+                );
             }
         }
 

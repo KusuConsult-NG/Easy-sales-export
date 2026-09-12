@@ -275,23 +275,112 @@ describe('onboardLegacyMemberAction — resolving the identity', () => {
         expect(props.uid).toBe('legacy-uid');
     });
 
-    it('deletes duplicate stubs sharing the email, keeping the aligned one', async () => {
+    it('AND KEEPS THEM WHEN THERE IS NO AUTH RECORD EITHER — the branch that copied nothing', async () => {
+        /*
+         *   #681 THE MOST DESTRUCTIVE OF THE THREE SITES, AND THE ONE NOTHING
+         *   COVERED. A mutant that restored the delete here SURVIVED the first
+         *   run.
+         *
+         *   With no auth record there is no identity to match, so the old code
+         *   took `emailCheck.docs[0]` as the person and deleted every other row
+         *   OUTRIGHT — no merge, no copy, unlike the branch above it. Whichever
+         *   row the database listed first became the member; the rest were
+         *   gone, with whatever they held.
+         *
+         *   The existing coverage for this branch seeded exactly ONE document,
+         *   so the deletion never had anything to delete.
+         */
+        store.seed(COLLECTIONS.USERS, 'aaa-first', { email: 'ada@example.com' });
+        store.seed(COLLECTIONS.USERS, 'bbb-history', {
+            email: 'ada@example.com',
+            savingsHistoryNote: 'REAL MONEY',
+        });
+
+        expect((await onboard()).success).toBe(true);
+
+        const first = store.get(COLLECTIONS.USERS, 'aaa-first');
+        const history = store.get(COLLECTIONS.USERS, 'bbb-history');
+
+        expect(first).toBeDefined();
+        expect(history).toBeDefined();
+        //   Nothing was destroyed, and the row that did not win says which one did.
+        expect(history!.savingsHistoryNote).toBe('REAL MONEY');
+        const winner = store.get(COLLECTIONS.USERS, 'aaa-first')!._migratedTo
+            ? 'bbb-history' : 'aaa-first';
+        const loser = winner === 'aaa-first' ? 'bbb-history' : 'aaa-first';
+        expect(store.get(COLLECTIONS.USERS, loser)!._migratedTo).toBe(winner);
+    });
+
+    it('SUPERSEDES duplicate rows sharing the email rather than deleting them', async () => {
+        /*
+         *   #681 THIS USED TO ASSERT THE DELETION, AND THE ASSERTION PASSED
+         *   BECAUSE THE FIXTURE WAS EMPTY.
+         *
+         *   The old expectation was `store.get(..., 'stub-a')` is undefined —
+         *   the rows were removed with `cleanBatch.delete(doc.ref)`, and
+         *   NOTHING IN THAT BRANCH COPIED THEIR CONTENTS ANYWHERE FIRST. The
+         *   test agreed because `stub-a` and `stub-b` were seeded as
+         *   `{ email }` and there was nothing in them to lose.
+         *
+         *   MEASURED: seeding `stub-a` with a savings note and a
+         *   cooperative_member role and running the OLD code, the test still
+         *   passed and the data was gone. A control whose verdict depends on
+         *   the fixture being harmless is not a control.
+         *
+         *   So the fixture carries data now, and the rows are kept. They are
+         *   marked `_migratedTo` — the same tombstone `migrateLegacyUserData`
+         *   writes (#490) and `profile-choice.ts` already knows to skip, so the
+         *   login path, the ghost scan and the forensic behave exactly as they
+         *   do for any migrated member. This is not a new contract.
+         *
+         *   #300 settled the principle for erasure: a related row is MARKED and
+         *   keeps its status, dates and balances, precisely so a payout still
+         *   owed can still be found. The standing instruction for this codebase
+         *   is the same, and it is the reason #675 exists.
+         */
         existingAuthRecord('real-uid');
         store.seed(COLLECTIONS.USERS, 'real-uid', { email: 'ada@example.com', fullName: 'Real' });
-        store.seed(COLLECTIONS.USERS, 'stub-a', { email: 'ada@example.com' });
+        store.seed(COLLECTIONS.USERS, 'stub-a', {
+            email: 'ada@example.com',
+            savingsHistoryNote: 'REAL MONEY',
+            roles: ['cooperative_member'],
+        });
         store.seed(COLLECTIONS.USERS, 'stub-b', { email: 'ada@example.com' });
 
         expect((await onboard()).success).toBe(true);
 
+        //   The row carrying the auth id is still the one that wins.
         expect(store.get(COLLECTIONS.USERS, 'real-uid')).toBeDefined();
-        expect(store.get(COLLECTIONS.USERS, 'stub-a')).toBeUndefined();
-        expect(store.get(COLLECTIONS.USERS, 'stub-b')).toBeUndefined();
+
+        //   And the others survive, pointing at it.
+        const a = store.get(COLLECTIONS.USERS, 'stub-a');
+        const b = store.get(COLLECTIONS.USERS, 'stub-b');
+        expect(a).toBeDefined();
+        expect(b).toBeDefined();
+        expect(a!._migratedTo).toBe('real-uid');
+        expect(b!._migratedTo).toBe('real-uid');
+        //   THE assertion the old test could not make: nothing was destroyed.
+        expect(a!.savingsHistoryNote).toBe('REAL MONEY');
+        expect(a!.roles).toEqual(['cooperative_member']);
     });
 
-    it('MIGRATES an unaligned document onto the auth UID, then deletes it', async () => {
-        // The auth record exists but no Firestore document carries its uid. The
-        // legacy document's data is moved rather than dropped — losing it would
-        // lose the member's history.
+    it('MIGRATES an unaligned document onto the auth UID, and keeps the original', async () => {
+        /*
+         *   The auth record exists but no Firestore document carries its uid.
+         *   The legacy document's data is moved — losing it would lose the
+         *   member's history, which the previous version of this test already
+         *   said.
+         *
+         *   #681 AND THE ORIGINAL IS NOW KEPT TOO. It was deleted once its data
+         *   had been copied, which is defensible for ONE row and was not what
+         *   the code did: it deleted every row sharing the address, having
+         *   copied only the one it picked — and it picked `stubs[0]`, whichever
+         *   the database listed first.
+         *
+         *   Keeping the tombstone is also what makes the copy auditable. "This
+         *   row's contents were moved to that one" is a statement somebody can
+         *   check later; a missing row is not.
+         */
         existingAuthRecord('real-uid');
         store.seed(COLLECTIONS.USERS, 'old-uid', {
             email: 'ada@example.com', savingsHistoryNote: 'kept', fullName: 'Old',
@@ -300,7 +389,43 @@ describe('onboardLegacyMemberAction — resolving the identity', () => {
         expect((await onboard()).success).toBe(true);
 
         expect(store.get(COLLECTIONS.USERS, 'real-uid')!.savingsHistoryNote).toBe('kept');
-        expect(store.get(COLLECTIONS.USERS, 'old-uid')).toBeUndefined();
+
+        const original = store.get(COLLECTIONS.USERS, 'old-uid');
+        expect(original).toBeDefined();
+        expect(original!._migratedTo).toBe('real-uid');
+        expect(original!.savingsHistoryNote).toBe('kept');
+    });
+
+    it('AND CHOOSES THE SURVIVOR BY EVIDENCE, NOT BY WHICHEVER ROW CAME BACK FIRST', async () => {
+        /*
+         *   #681 The branch above took `stubs[0]` of an unordered query as the
+         *   source of truth and deleted the rest, so a member with three
+         *   profiles kept whatever happened to be in one of them.
+         *
+         *   #476 and #477 built `chooseProfileForAuthAccount` for exactly this
+         *   question — it prefers a row that IDENTIFIES itself with the account
+         *   (`supabaseAuthId`, `_migratedTo`) over one that merely shares an
+         *   address — and this path was not using it.
+         *
+         *   Seeded so the identifying row is NOT first: `aaa-empty` sorts ahead
+         *   of it by id and carries nothing, which is what the old code would
+         *   have copied forward.
+         */
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'aaa-empty', { email: 'ada@example.com' });
+        store.seed(COLLECTIONS.USERS, 'zzz-real', {
+            email: 'ada@example.com',
+            supabaseAuthId: 'real-uid',
+            savingsHistoryNote: 'the real history',
+        });
+
+        expect((await onboard()).success).toBe(true);
+
+        //   The identifying row's data moved forward, not the empty one's.
+        expect(store.get(COLLECTIONS.USERS, 'real-uid')!.savingsHistoryNote).toBe('the real history');
+        //   And both originals survive.
+        expect(store.get(COLLECTIONS.USERS, 'aaa-empty')).toBeDefined();
+        expect(store.get(COLLECTIONS.USERS, 'zzz-real')).toBeDefined();
     });
 
     it('and migrates the module documents that hung off the old UID', async () => {
