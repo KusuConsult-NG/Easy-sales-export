@@ -53,13 +53,103 @@ let client: Client | null = null;
 //   written out identically in all ten suites.
 const dbDescribe = sharedDbDescribe;
 
+/**
+ *   #673 THE PLANNER TEST BELOW WAS PASSING ON ANOTHER SUITE'S LEFTOVERS.
+ *
+ *        It asks the planner to choose `idx_users_created_at` for
+ *        `order by created_at desc limit 20`. THE PLANNER IS ONLY WRONG TO
+ *        REFUSE THAT ON A TABLE WITH ROWS IN IT: against an empty `users` a
+ *        sequential scan is the correct plan, and Postgres picking it is the
+ *        database working, not the index missing.
+ *
+ *        The suite never seeded anything. It measured whatever the suite
+ *        before it happened to leave behind — and `--runInBand` orders files
+ *        by a heuristic, so ADDING AN UNRELATED TEST TO AN UNRELATED FILE
+ *        reorders the run and changes the answer. That is precisely what
+ *        happened: #671 added an assertion to
+ *        a-rule-the-database-enforces-by-itself.test.ts, this file moved, and
+ *        CI went red on a test nothing had touched in months.
+ *
+ *        REPRODUCED BEFORE BEING BELIEVED, and the first hypothesis was
+ *        wrong. "The table is empty" is NOT enough — against a freshly
+ *        created, never-analysed table the planner still takes the index, and
+ *        the suite passes. The condition is empty AND ANALYSED, i.e. the
+ *        planner KNOWS there are no rows. A sibling suite
+ *        (the-role-scan-reads-the-whole-table-without-the-index) runs
+ *        `analyze public.users` and deletes its rows, which produces exactly
+ *        that state.
+ *
+ *        Measured on a scratch database built from schema.sql + deploy.sql:
+ *
+ *            empty, never analysed     the planner uses the index   PASS
+ *            empty, analysed           sequential scan + sort       FAIL
+ *
+ *        AND THE MUTATION RUN IS THE FINDING IN THREE LINES. Removing the
+ *        seed this file now performs:
+ *
+ *            mutant, pristine empty+analysed database    1 FAILED   killed
+ *            mutant, the 50,000-row local database       18 PASSED  survived
+ *            the fix, pristine empty+analysed database   18 PASSED
+ *
+ *        The same test, the same mutant, two databases, two answers. Running
+ *        `npm run test:pg` locally proves nothing about CI unless the local
+ *        database resembles CI's, and a developer's does not — mine held
+ *        50,023 users. That is #666's lesson arriving a second time: a control
+ *        only rules out what it VARIES, and every control anyone had run here
+ *        held the host fixed.
+ *
+ *        The scratch database needs rebuilding between measurements, too. The
+ *        first attempt at the table above reused one, and the seed-and-delete
+ *        from the previous run left dead tuples and pages behind — enough to
+ *        change the planner's mind and let the mutant survive. A control is
+ *        only pristine the first time it is used.
+ *
+ *        So the suite creates the condition it is asserting about, and puts
+ *        the database back afterwards — INCLUDING the statistics, because
+ *        leaving those wrong is how this reached the next suite in the first
+ *        place.
+ */
+const TAG = 'plan-probe-467';
+
+/** Enough rows that an index scan genuinely beats a sequential one. */
+const PROBE_ROWS = 5_000;
+
+const clearProbeRows = async () => {
+    await client!.query('delete from public.users where id like $1', [`${TAG}-%`]);
+    //   Re-analysed, not merely deleted. The suite that taught this file the
+    //   lesson removes its rows and leaves the statistics claiming they are
+    //   still there; the next suite to read a query plan then measures a table
+    //   that does not exist.
+    await client!.query('analyze public.users');
+};
+
+/** Put enough rows in `users` that the question this file asks is meaningful. */
+const seedProbeRows = async () => {
+    await client!.query(
+        `insert into public.users (id, email, created_at, raw_data)
+         select $1 || '-' || g,
+                $1 || '-' || g || '@example.com',
+                now() - (g || ' minutes')::interval,
+                jsonb_build_object('fullName', 'Probe ' || g)
+           from generate_series(1, $2::int) g`,
+        [TAG, PROBE_ROWS],
+    );
+    await client!.query('analyze public.users');
+};
+
 beforeAll(async () => {
     if (!REQUESTED) return;
     const c = new Client({ connectionString: URL, connectionTimeoutMillis: 5000 });
     await c.connect();
     client = c;
-});
-afterAll(async () => { await client?.end().catch(() => {}); });
+    //   A previous interrupted run may have left them.
+    await clearProbeRows();
+}, 300_000);
+
+afterAll(async () => {
+    if (client) await clearProbeRows().catch(() => {});
+    await client?.end().catch(() => {});
+}, 300_000);
 
 /** Every dedicated table the adapter routes a collection to. */
 const DEDICATED = [
@@ -103,6 +193,13 @@ dbDescribe('#467 — every dedicated table can be ordered by created_at cheaply'
         // The assertion that actually matters. A btree can exist and be ignored:
         // migration 022 records exactly that outcome for a different query
         // shape, which is why this asks the planner rather than pg_indexes.
+        //
+        //   #673 SEEDED HERE, because the question is only meaningful about a
+        //   table with rows in it — see the header. Without this the suite
+        //   asserted against whatever the previous file left behind, and went
+        //   red the day an unrelated test changed the file ordering.
+        await seedProbeRows();
+
         const { rows } = await client!.query(
             `explain (analyze, format json)
              select id, raw_data from users order by created_at desc limit 20`,
