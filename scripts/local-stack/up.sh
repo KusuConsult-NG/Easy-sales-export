@@ -228,6 +228,24 @@ cat > .env.development.local <<EOF
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:${GATEWAY_PORT}
 NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
 SUPABASE_SERVICE_ROLE_KEY=${SERVICE_KEY}
+
+# The PostgreSQL this script just started, named so the money-SQL suite can
+# find it — #672.
+#
+# This stack brings up EXACTLY the database jest.config.pg.js needs, and did
+# not tell it where. Without LOCAL_PG_URL every dbDescribe block SKIPS, so on
+# the documented local setup \`npm run test:pg\` reported
+#
+#     Tests: 166 skipped, 34 passed, 200 total          exit 0
+#
+# — success, having run none of the concurrency, locking, wallet or
+# claim-transition tests that are the only reason that harness exists. A check
+# that passes by not running, on the money layer, on the setup this repository
+# tells people to use.
+#
+# scripts/local-stack/jest-env.js already copies every key of this file into
+# process.env before the pg suite loads, so naming it here is the whole fix.
+LOCAL_PG_URL=${DB_URL}
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=local-stack-development-secret-not-for-production
 NEXT_PUBLIC_APP_URL=http://localhost:3000

@@ -47,6 +47,22 @@
 #   the-app-can-still-be-built.test.ts      catches both of the shapes that
 #                                           actually broke it, in seconds, and
 #                                           does run here.
+#
+# WHAT THIS HOOK DID NOT RUN, AND WHAT THAT COST — #672
+#
+# CI runs TWO Jest suites: the unit run below, and `npm run test:pg` (the
+# money SQL — concurrency, row locks, wallet debits, claim_status_transition).
+# This hook ran the first. So a red pg suite is invisible at push time, and it
+# was: SEVEN consecutive pushes went to main with CI failing, every one of them
+# on the same single test, and each push printed "✅ Unit tests passed" on the
+# way out.
+#
+# It runs both now — but only when a database is actually reachable, because a
+# push-time gate that fails on a laptop with no cluster gets bypassed, and a
+# bypassed gate protects nothing. When there is no database it says so, in the
+# one place the person pushing is already looking, rather than staying silent
+# and letting "tests passed" mean less than it appears to.
+
 echo "🧪 Running Jest unit tests..."
 TZ=UTC npm run test
 if [ $? -ne 0 ]; then
@@ -54,3 +70,24 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 echo "✅ Unit tests passed — push proceeding."
+
+# The stack writes LOCAL_PG_URL into .env.development.local (#672); an explicit
+# environment variable still wins, which is what CI relies on.
+PG_URL="$LOCAL_PG_URL"
+if [ -z "$PG_URL" ] && [ -f .env.development.local ]; then
+  PG_URL=$(grep -E '^[[:space:]]*LOCAL_PG_URL[[:space:]]*=' .env.development.local | tail -n 1 | cut -d= -f2- | tr -d '"'"'"' ')
+fi
+
+if [ -n "$PG_URL" ]; then
+  echo "🗄  Running the database suite (money SQL)..."
+  LOCAL_PG_URL="$PG_URL" npm run test:pg
+  if [ $? -ne 0 ]; then
+    echo "❌ Database tests failed. Fix them before pushing — CI runs this same suite."
+    exit 1
+  fi
+  echo "✅ Database tests passed — push proceeding."
+else
+  echo "⚠️  NO DATABASE SUITE RUN. The money SQL (locks, wallet debits, claim"
+  echo "   transitions) was NOT checked — CI will run it and can still go red."
+  echo "   To check it here first: ./scripts/local-stack/up.sh"
+fi
