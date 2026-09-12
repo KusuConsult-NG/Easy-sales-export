@@ -8,7 +8,7 @@ checked against the tree, not carried forward.
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 717 suites / 12,991 tests green** — and
+**Gate at this revision: build clean, 718 suites / 13,003 tests green** — and
 green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
 world after #663's enforcement date. The version before this one said 12,930
 across 712.
@@ -467,6 +467,46 @@ And #645's own ratchet asserted the local `timingSafeEqual` it had added.
 one is case-insensitive. Five doubles were written that way and seven already
 lowercased — a hidden coupling to one route's casing rather than a model of the
 real thing. All five corrected.
+
+### ✅ (#668) Told to pay again, after paying
+
+Followed from the captured log's four *"Academy payment verification error"*
+lines. The question was not whether the error is handled — it is — but **what a
+member sees when it happens to a real payment.**
+
+All three academy verifiers share one shape: claim the Paystack reference, then
+fulfil. The claim is the moment that call **owes the delivery** —
+`claimPaymentOnce` has banked the reference and the money is ours. A failure
+after it means the member has paid and has nothing.
+
+All three handled it. **One said so:**
+
+| | |
+|---|---|
+| `verifyEnrollmentPaymentAction` | *"…contact support with reference: &lt;ref&gt;"* ✅ |
+| `verifyAcademyPaymentAction` | *"Failed to verify payment"* ❌ |
+| `verifyCoursePaymentAction` | *"Failed to verify payment"* ❌ |
+
+**And the screen discarded all three.** `academy/payment/callback` did
+`setStatus(result.success ? "success" : "failed")` and rendered one fixed panel:
+a red cross, *"Payment Verification Failed"*, *"We couldn't verify your payment.
+Please try again or contact support"*, and a button labelled **Try Again**
+pointing back at the payment flow.
+
+So a member who has been **charged**, whose reference is banked, and whose
+enrolment failed, was shown the most emphatic possible instruction to pay a
+second time — and was not told the reference, so they could not tell support
+which payment they meant. A second payment is a new reference, so
+`claimPaymentOnce` does not stop it; that guard is per reference and it is the
+right guard.
+
+**Fixed in one place**, because it was three strings and one of them was right:
+`lib/paid-but-not-fulfilled` states the refusal once — *we have your payment,
+reference X, do NOT pay again* — and carries a code in `meta` so the screen
+branches on a fact rather than matching prose. The screen shows the action's own
+message and offers **support instead of a retry** when the money was taken, and
+still offers the retry to everyone else: before the claim nothing was collected
+in our name and retrying is the correct advice.
 
 ### ✅ (#667) The member was offered a retry button and not told why
 

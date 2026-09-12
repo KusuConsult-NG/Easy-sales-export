@@ -11,6 +11,7 @@ import {
     verifyEnrollmentPaymentAction,
 } from "@/app/actions/academy";
 import { Suspense } from "react";
+import { PAID_FULFILMENT_FAILED } from "@/lib/paid-but-not-fulfilled";
 
 /**
  * Which payment came back here.
@@ -50,6 +51,19 @@ function PaymentCallbackContent() {
     const reference = searchParams.get("reference") || searchParams.get("trxref");
     const flow = resolveFlow(searchParams.get("flow"));
     const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
+    /**
+     *   #668 — WHAT WENT WRONG, AND WHETHER THE MONEY WAS TAKEN.
+     *
+     *   This screen used to keep only `success`/`failed`. The three verify
+     *   actions each return a message, one of them naming the payment
+     *   reference, and `setStatus(result.success ? "success" : "failed")` threw
+     *   all three away — then rendered a fixed panel ending in a button
+     *   labelled "Try Again" that points back at the payment flow.
+     *
+     *   For the one case where the member has ALREADY BEEN CHARGED and the
+     *   fulfilment failed, that is an instruction to pay twice.
+     */
+    const [failure, setFailure] = useState<{ message: string; paid: boolean }>({ message: "", paid: false });
 
     useOnce(() => {
         const verify = async () => {
@@ -65,8 +79,19 @@ function PaymentCallbackContent() {
                         : flow === "enrollment"
                             ? await verifyEnrollmentPaymentAction(reference)
                             : await verifyAcademyPaymentAction(reference);
+                if (!result.success) {
+                    const meta = (result as { meta?: { code?: string } }).meta;
+                    setFailure({
+                        message: result.error ?? "",
+                        //   Branching on the CODE rather than on the sentence:
+                        //   a screen that matched prose would break the day the
+                        //   wording improved.
+                        paid: meta?.code === PAID_FULFILMENT_FAILED,
+                    });
+                }
                 setStatus(result.success ? "success" : "failed");
             } catch {
+                setFailure({ message: "", paid: false });
                 setStatus("failed");
             }
         };
@@ -98,16 +123,38 @@ function PaymentCallbackContent() {
                     <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <XCircle className="w-8 h-8 text-red-600" />
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Payment Verification Failed</h1>
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">
+                        {failure.paid ? "We have your payment" : "Payment Verification Failed"}
+                    </h1>
                     <p className="text-slate-600 mb-6">
-                        We couldn&apos;t verify your payment. Please try again or contact support.
+                        {/*
+                          *   The action's own message, which names the
+                          *   reference. It used to be discarded and replaced
+                          *   with one fixed sentence.
+                          */}
+                        {failure.message
+                            || "We couldn't verify your payment. Please try again or contact support."}
                     </p>
-                    <Link
-                        href={retryHref}
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"
-                    >
-                        Try Again
-                    </Link>
+                    {/*
+                      *   NO RETRY WHEN THE MONEY WAS TAKEN. This is the whole
+                      *   finding: the case that must not pay again was the one
+                      *   being handed a button that says Try Again.
+                      */}
+                    {failure.paid ? (
+                        <Link
+                            href="/contact"
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition"
+                        >
+                            Contact support
+                        </Link>
+                    ) : (
+                        <Link
+                            href={retryHref}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"
+                        >
+                            Try Again
+                        </Link>
+                    )}
                 </div>
             </div>
         );

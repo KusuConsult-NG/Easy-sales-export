@@ -15,6 +15,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import type { Course, UserProgress } from "@/lib/types/academy-actions";
 import { COURSE_PURCHASE_FLOW, coursePurchaseStamp, isForeignPaymentFlow } from "@/lib/academy-purchase-flow";
 import { ensureCourseAccessRecords } from "@/lib/academy-course-progress";
+import { paidButNotFulfilled } from "@/lib/paid-but-not-fulfilled";
 
 /**
  * Initialize Payment for a Course
@@ -413,6 +414,11 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
             reference,
             error: error instanceof Error ? error.message : String(error)
         });
+
+        //   #668 — see lib/paid-but-not-fulfilled. Past the claim the money is
+        //   ours and "Try Again" is the wrong thing to tell anybody.
+        if (claimedReference) return paidButNotFulfilled(claimedReference);
+
         return { success: false as const, error: "Failed to verify payment", data: null };
     }
 }

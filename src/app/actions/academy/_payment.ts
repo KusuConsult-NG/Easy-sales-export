@@ -24,6 +24,7 @@ import {
     DEFAULT_ACADEMY_PLAN,
 } from "@/lib/academy-plan";
 import { isAmountAtLeast } from "@/lib/amount";
+import { paidButNotFulfilled } from "@/lib/paid-but-not-fulfilled";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -463,6 +464,12 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             action: 'verifyEnrollment',
             reference });
 
+        //   #668 — this flow was ALREADY the one that named the reference, and
+        //   it is routed through the shared module so the three cannot drift
+        //   apart again. The wording gains "do not pay again", which is the
+        //   part the screen's button was contradicting.
+        if (claimedReference) return paidButNotFulfilled(claimedReference);
+
         return { success: false as const, error: "Failed to verify payment. Please contact support with reference: " + reference, data: null };
     }
 }
@@ -825,6 +832,14 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             reference,
             error: error instanceof Error ? error.message : String(error)
         });
+
+        //   #668 — WHICH SIDE OF THE CLAIM THIS FAILED ON DECIDES WHAT TO SAY.
+        //   Past the claim the money is ours and the member must not pay again;
+        //   before it, nothing was collected in our name and retrying is the
+        //   right advice. One sentence covered both, and the screen's button
+        //   said "Try Again" to both.
+        if (claimedReference) return paidButNotFulfilled(claimedReference);
+
         return { success: false as const, error: "Failed to verify payment", data: null };
     }
 }
