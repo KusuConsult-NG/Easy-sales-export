@@ -428,6 +428,77 @@ describe('onboardLegacyMemberAction — resolving the identity', () => {
         expect(store.get(COLLECTIONS.USERS, 'zzz-real')).toBeDefined();
     });
 
+    it('REFUSES to merge a module row onto one that already exists — measured at 50,000 to 0', async () => {
+        /*
+         *   #682 THE MODULE MIGRATION MERGED ONE MEMBERSHIP ROW ONTO ANOTHER
+         *   AND THEN DELETED THE EVIDENCE.
+         *
+         *   Each of eight collections was moved with
+         *
+         *       set(target, { ...source.data() }, { merge: true })
+         *       delete(source)
+         *
+         *   and `merge: true` means THE SOURCE'S FIELDS WIN. Nothing checked
+         *   whether the target already existed.
+         *
+         *   MEASURED BEFORE BEING FIXED, against the real adapter: a
+         *   cooperative_members row at the target holding savingsBalance 50000,
+         *   merged with a source holding 0, came out at 0 — and the source was
+         *   then deleted, so the only other copy of the number went with it.
+         *   That collection carries savingsBalance and lockedBalance. This is a
+         *   member's cooperative savings.
+         *
+         *   It is reachable: `oldUidToMigrate` is set when no USERS document
+         *   carries the auth id, which says nothing at all about whether a
+         *   cooperative_members or wave_members row does.
+         *
+         *   Two rows carrying a version of one person's record in one module is
+         *   the judgement #490 says the platform has no basis for making
+         *   unattended. Both are left alone and the operator is told.
+         */
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'old-uid', { email: 'ada@example.com' });
+        //   The member's real balance, already at the destination.
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'real-uid', {
+            userId: 'real-uid', savingsBalance: 50000,
+        });
+        //   And an emptier row under the old id, which used to win.
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'old-uid', {
+            userId: 'old-uid', savingsBalance: 0,
+        });
+
+        /*
+         *   THE REFUSAL HAS TO REACH SOMEBODY. A mutant that downgraded the
+         *   log from `error` to `debug` SURVIVED the first run: every
+         *   assertion about the DATA still passed, and the operator was left
+         *   with two unreconciled rows and no way to learn of them. Refusing
+         *   silently is its own version of the defect this file keeps finding.
+         */
+        const { logger } = await import('@/lib/logger');
+        const errors = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+
+        try {
+            expect((await onboard(form({ roles: ['cooperative_member'] }))).success).toBe(true);
+
+            //   THE assertion. Before #682 this was 0.
+            expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'real-uid')!.savingsBalance).toBe(50000);
+            //   And the source is still there to be reconciled, not deleted.
+            const source = store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'old-uid');
+            expect(source).toBeDefined();
+            expect(source!.savingsBalance).toBe(0);
+
+            //   And it was said out loud, naming the collection and both ids so
+            //   the two rows can actually be found.
+            const said = errors.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(said).toContain('REFUSED to merge');
+            expect(said).toContain(COLLECTIONS.COOPERATIVE_MEMBERS);
+            expect(said).toContain('old-uid');
+            expect(said).toContain('real-uid');
+        } finally {
+            errors.mockRestore();
+        }
+    });
+
     it('and migrates the module documents that hung off the old UID', async () => {
         existingAuthRecord('real-uid');
         store.seed(COLLECTIONS.USERS, 'old-uid', { email: 'ada@example.com' });

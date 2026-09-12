@@ -412,10 +412,79 @@ async function _onboardLegacyMemberAction(
             }
         }
 
-        // Migrate associated module documents from oldUidToMigrate to targetUid
+        /**
+         *   #682 THE MODULE MIGRATION MERGED ONE MEMBERSHIP ROW ONTO ANOTHER
+         *        AND THEN DELETED THE EVIDENCE.
+         *
+         *        Each of these eight collections was moved with
+         *
+         *            set(target, { ...source.data() }, { merge: true })
+         *            delete(source)
+         *
+         *        and `merge: true` means THE SOURCE'S FIELDS WIN. Nothing
+         *        checked whether the target already existed.
+         *
+         *        MEASURED, not reasoned about. A `cooperative_members` row at
+         *        the target id holding `savingsBalance: 50000`, merged with a
+         *        source row holding `savingsBalance: 0`, leaves 0 — and the
+         *        source is then deleted, so the only other copy of the number
+         *        is gone too. That collection carries `savingsBalance` and
+         *        `lockedBalance`; this is a member's cooperative savings.
+         *
+         *        It is reachable: `oldUidToMigrate` is set when no USERS
+         *        document carries the auth id, which says nothing at all about
+         *        whether a cooperative_members or wave_members row does.
+         *
+         *   WHAT IT DOES NOW. A target that already exists is a CONFLICT, not
+         *   an opportunity to merge: two rows carry a version of this person's
+         *   record in that module, and which one is right is exactly the
+         *   judgement #490 says the platform has no basis for making
+         *   unattended. Both rows are left alone and the operator is told.
+         *
+         *   WHERE THE TARGET IS ABSENT the move is unchanged, and that is not
+         *   a deletion in the sense #681 is about: the data provably lands at
+         *   the new id in the same commit. It is a rename. Superseding instead
+         *   would leave two membership rows for one member, and the readers of
+         *   THESE collections are not tombstone-aware the way
+         *   profile-choice.ts is — so it would trade a rare loss for a
+         *   guaranteed ambiguity.
+         *
+         *   THE BATCH IS STILL NOT ATOMIC (#679), which is survivable here for
+         *   the same reason: each collection's set and delete sit next to each
+         *   other, so a failure part-way leaves earlier collections moved and
+         *   later ones untouched, and re-running the import completes it.
+         */
         if (oldUidToMigrate && targetUid) {
             const migrationBatch = db.batch();
-            
+            const conflicts: string[] = [];
+
+            /** Move one document, unless something is already at the destination. */
+            const moveOrReportConflict = async (col: string, fromId: string, toId: string) => {
+                const docSnap = await db.collection(col).doc(fromId).get();
+                if (!docSnap.exists) return;
+
+                const existing = await db.collection(col).doc(toId).get();
+                if (existing.exists) {
+                    //   Neither row is touched. Named so the operator can look
+                    //   at the two of them; a count could not be acted on.
+                    conflicts.push(`${col}: ${fromId} → ${toId}`);
+                    logger.error(
+                        `[Legacy Onboarding] REFUSED to merge ${col}/${fromId} onto ${col}/${toId} — `
+                        + `both rows exist and merging would let the source's fields overwrite the `
+                        + `target's, including balances (#682). Both rows are left as they are and `
+                        + `need reconciling by hand.`,
+                    );
+                    return;
+                }
+
+                migrationBatch.set(db.collection(col).doc(toId), {
+                    ...docSnap.data(),
+                    userId: targetUid,
+                    updatedAt: FieldValue.serverTimestamp()
+                }, { merge: true });
+                migrationBatch.delete(db.collection(col).doc(fromId));
+            };
+
             // 1. Direct document IDs based on userId
             const directCollections = [
                 COLLECTIONS.COOPERATIVE_MEMBERS,
@@ -424,15 +493,7 @@ async function _onboardLegacyMemberAction(
                 COLLECTIONS.WAVE_MEMBERS
             ];
             for (const col of directCollections) {
-                const docSnap = await db.collection(col).doc(oldUidToMigrate).get();
-                if (docSnap.exists) {
-                    migrationBatch.set(db.collection(col).doc(targetUid), {
-                        ...docSnap.data(),
-                        userId: targetUid,
-                        updatedAt: FieldValue.serverTimestamp()
-                    }, { merge: true });
-                    migrationBatch.delete(db.collection(col).doc(oldUidToMigrate));
-                }
+                await moveOrReportConflict(col, oldUidToMigrate, targetUid);
             }
 
             // 2. Legacy prefixed document IDs (legacy_{userId})
@@ -443,19 +504,19 @@ async function _onboardLegacyMemberAction(
                 COLLECTIONS.ACADEMY_APPLICATIONS
             ];
             for (const col of prefixedCollections) {
-                const docSnap = await db.collection(col).doc(`legacy_${oldUidToMigrate}`).get();
-                if (docSnap.exists) {
-                    migrationBatch.set(db.collection(col).doc(`legacy_${targetUid}`), {
-                        ...docSnap.data(),
-                        userId: targetUid,
-                        updatedAt: FieldValue.serverTimestamp()
-                    }, { merge: true });
-                    migrationBatch.delete(db.collection(col).doc(`legacy_${oldUidToMigrate}`));
-                }
+                await moveOrReportConflict(col, `legacy_${oldUidToMigrate}`, `legacy_${targetUid}`);
             }
-            
+
             await migrationBatch.commit();
-            logger.info(`[Legacy Onboarding] Successfully migrated child documents from ${oldUidToMigrate} to ${targetUid}`);
+
+            if (conflicts.length > 0) {
+                logger.error(
+                    `[Legacy Onboarding] ${conflicts.length} module row(s) were NOT migrated from `
+                    + `${oldUidToMigrate} to ${targetUid} because a record already existed at the `
+                    + `destination: ${conflicts.join("; ")}`,
+                );
+            }
+            logger.info(`[Legacy Onboarding] Migrated child documents from ${oldUidToMigrate} to ${targetUid}`);
         }
 
         // 2. 🔒 DEDUP GUARD: Check Firestore by phone (Fraud Prevention)
