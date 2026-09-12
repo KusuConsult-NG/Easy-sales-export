@@ -312,9 +312,55 @@ dbDescribe('#654 — the escape hatch the application cannot reach', () => {
         ).trim().split('\n').filter(Boolean).sort();
 
         expect(hits).toEqual([
+            //   #660 committed the generated single-file deploy, which is the
+            //   migrations concatenated — so every migration's mention of this
+            //   field appears a second time in it. Listing it here is honest
+            //   (the string IS in the repository twice) but it would also make
+            //   the aggregate a place a NEW writer could hide, since this test
+            //   only checks the set of filenames. The assertion below closes
+            //   that: the generated file may only repeat lines a migration
+            //   already has.
+            'supabase/deploy.sql',
             'supabase/migrations/008_fix_member_status_trigger.sql',
             'supabase/schema.sql',
         ]);
+    });
+
+    it('AND THE GENERATED DEPLOY ONLY REPEATS WHAT A MIGRATION ALREADY SAYS', () => {
+        /*
+         *   The control on the line above. Adding a filename to an expected
+         *   list is the cheapest possible way to make a sweep green again, and
+         *   it is how a sweep stops sweeping: `deploy.sql` is 33 migrations
+         *   long, and "it is allowed to mention the field" would let anything
+         *   at all be written into it.
+         *
+         *   So the aggregate is held to containment rather than to permission —
+         *   every line of it that names the field must be a line some migration
+         *   also has. That is the actual property of a generated file, and it
+         *   fails the moment somebody hand-edits the deploy or regenerates it
+         *   from a source that is not in `supabase/migrations/`.
+         */
+        const { readFileSync, readdirSync } = require('fs') as typeof import('fs');
+        const { join } = require('path') as typeof import('path');
+
+        const root = process.cwd();
+        const lines = (text: string) =>
+            text.split('\n').map((l) => l.trim()).filter((l) => l.includes('statusChangeReason'));
+
+        const fromMigrations = new Set<string>();
+        for (const file of readdirSync(join(root, 'supabase/migrations')).filter((f) => f.endsWith('.sql'))) {
+            for (const line of lines(readFileSync(join(root, 'supabase/migrations', file), 'utf8'))) {
+                fromMigrations.add(line);
+            }
+        }
+
+        const deployLines = lines(readFileSync(join(root, 'supabase/deploy.sql'), 'utf8'));
+
+        //   A positive control on the comparison itself: an empty deploy file,
+        //   or one this test failed to read, would satisfy "every line is
+        //   accounted for" while checking nothing.
+        expect(deployLines.length).toBeGreaterThan(0);
+        expect(deployLines.filter((l) => !fromMigrations.has(l))).toEqual([]);
     });
 });
 

@@ -2089,7 +2089,37 @@ export class SupabaseQuery {
             const cols = NATIVE_COLUMNS[tableName] || [];
             let colName: string;
 
-            if (ob.field === 'createdAt' || ob.field === 'created_at') {
+            if (
+                ob.field === '__name__'
+                || ob.field === '__id__'
+                || (typeof ob.field === 'object' && (ob.field as any)?._methodName === 'FieldPath.documentId')
+            ) {
+                /**
+                 *   #671 THE DOCUMENT ID WAS HONOURED IN A FILTER AND NOT IN AN
+                 *        ORDER, AND THE DIFFERENCE WAS SILENT.
+                 *
+                 *        `where('__name__', ...)` has mapped to the `id` column
+                 *        since this shim was written — see applyFilter. The
+                 *        order path had no such branch, so the name fell
+                 *        through to the JSONB fallback at the bottom of this
+                 *        chain and became `raw_data->>"__name__"`, which is
+                 *        NULL on every row of every table.
+                 *
+                 *        Postgres accepts that and sorts by it, so the query
+                 *        SUCCEEDS and returns rows in no defined order — the
+                 *        worst possible outcome, because the caller asked for
+                 *        the one ordering that is guaranteed total and got the
+                 *        one that is guaranteed arbitrary. With `.offset()`
+                 *        paging on top, rows are then re-read and skipped
+                 *        between pages.
+                 *
+                 *        Nothing called it before today, which is why it was
+                 *        never noticed and why correcting it changes no
+                 *        existing behaviour. The duplicate-profile forensic
+                 *        calls it now, and needs it to mean what it says.
+                 */
+                colName = 'id';
+            } else if (ob.field === 'createdAt' || ob.field === 'created_at') {
                 colName = 'created_at'; // native timestamp column (all tables have this)
             } else if (fieldMap[ob.field]) {
                 colName = fieldMap[ob.field];

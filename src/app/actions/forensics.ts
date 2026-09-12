@@ -14,6 +14,7 @@ import { normalisePhone } from "@/lib/phone";
 import { genderOutcome } from "@/lib/gender";
 import { authAccountsWithProfiles } from "@/lib/auth-profile-link";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { findFarmNationApplications } from "@/lib/farm-nation-application-lookup";
 
 /**
  * Forensic data-integrity scan.
@@ -264,7 +265,11 @@ export async function runForensicScanAction(): Promise<
                     : `${ids.length} profile(s) have no email stored. They cannot be found by any `
                       + `lookup that resolves a person from their address, so if the profile is not `
                       + `keyed by the auth id the person gets a blank profile at login. A login now `
-                      + `repairs its own row (#479); these are the ones that have not logged in since.`,
+                      + `repairs its own row (#479); these are the ones that have not logged in since — `
+                      + `which is why waiting for them to is not a plan. The address is not lost: `
+                      + `Supabase Auth holds it, verified, against the same account id. `
+                      + `POST /api/admin/backfill-missing-emails copies it across (#671) — it fills only `
+                      + `rows that are still blank, never overwrites an address, and can be run twice.`,
                 affectedIds: ids
             });
         } catch (e: any) { results.push({ module: "Auth", check: "Profiles With No Email Address", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
@@ -313,34 +318,85 @@ export async function runForensicScanAction(): Promise<
          */
         try {
             const PAGE = 1000;
-            const byEmail = new Map<string, string[]>();
-            let scanned = 0;
+            /**
+             *   #671 A SET, NOT AN ARRAY — AND THE PRODUCTION REPORT IS WHY.
+             *
+             *        The owner's scan contained this row:
+             *
+             *            ann***@gmail.com — 2 profiles:
+             *              yD9fEmmYzdMPuoczXYzh1Xqx8zv2,
+             *              yD9fEmmYzdMPuoczXYzh1Xqx8zv2
+             *
+             *        ONE id, listed twice, reported as two profiles. There is
+             *        no duplicate there at all; the scan read the same document
+             *        twice and counted it as two people.
+             *
+             *        THE CAUSE IS THE PAGING BELOW, not the grouping — but the
+             *        grouping is what turned a re-read into a finding, so both
+             *        are fixed. A document id identifies a document; a
+             *        collection of them that can hold the same id twice is
+             *        modelling something that cannot happen.
+             *
+             *        This matters more than a cosmetic double-entry: "two
+             *        profiles for one address" is the #490 defect, and an
+             *        operator acting on this row would go looking for a second
+             *        account that does not exist.
+             */
+            const byEmail = new Map<string, Set<string>>();
+            const scannedIds = new Set<string>();
 
             for (let page = 0; page < 6; page++) {
                 const snap = await db.collection(COLLECTIONS.USERS)
-                    .orderBy("createdAt", "desc")
+                    //   #671 ORDERED BY DOCUMENT ID, WHICH IS UNIQUE.
+                    //
+                    //        This paged with `.orderBy("createdAt","desc")
+                    //        .offset(page * PAGE)`. OFFSET PAGING IS ONLY
+                    //        STABLE OVER A TOTAL ORDER: `createdAt` is not
+                    //        unique — bulk imports and migrations write whole
+                    //        batches on the same timestamp, and rows that lack
+                    //        the field sort arbitrarily — so two documents
+                    //        sharing a value may be returned in either order,
+                    //        and one that swaps across a page boundary between
+                    //        the two queries is read TWICE while its neighbour
+                    //        is skipped entirely.
+                    //
+                    //        Read twice, it became a duplicate profile. Skipped,
+                    //        it left a real duplicate unreported — the quieter
+                    //        half of the same bug, and the reason this is not
+                    //        merely de-duplicated at the end.
+                    //
+                    //        The document id is unique by construction, so the
+                    //        order is total and every row is visited exactly
+                    //        once. Nothing here depends on WHICH order.
+                    .orderBy("__name__", "asc")
                     .limit(PAGE)
                     .offset(page * PAGE)
                     .get();
 
                 if (snap.empty) break;
-                scanned += snap.docs.length;
 
                 for (const d of snap.docs) {
+                    //   Belt and braces on the count itself: if a future paging
+                    //   change reintroduces a re-read, `scanned` must not grow
+                    //   by it either, or the report overstates its own coverage.
+                    scannedIds.add(d.id);
                     const raw = (d.data() ?? {}) as Record<string, any>;
                     const normalised = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
                     if (!normalised) continue;
-                    const list = byEmail.get(normalised) ?? [];
-                    list.push(d.id);
-                    byEmail.set(normalised, list);
+                    const set = byEmail.get(normalised) ?? new Set<string>();
+                    set.add(d.id);
+                    byEmail.set(normalised, set);
                 }
 
                 if (snap.docs.length < PAGE) break;
             }
 
+            const scanned = scannedIds.size;
+
             const duplicateEmails: string[] = [];
-            for (const [email, ids] of byEmail) {
-                if (ids.length > 1) {
+            for (const [email, idSet] of byEmail) {
+                if (idSet.size > 1) {
+                    const ids = [...idSet];
                     duplicateEmails.push(`${maskAddress(email)} — ${ids.length} profiles: ${ids.join(", ")}`);
                 }
             }
@@ -761,10 +817,44 @@ export async function runForensicScanAction(): Promise<
             results.push({
                 module: "Cooperative",
                 check: "Financial Reconciliation (Balance vs Txs)",
+                /**
+                 *   #671 THE VERDICT IS RIGHT. THE SENTENCE ABOVE IT WAS NOT.
+                 *
+                 *        Production, in the owner's own scan:
+                 *
+                 *            Sampled 20 members … 0 mismatch(es), 2 member(s)
+                 *            with no membership record.                 Fail
+                 *
+                 *        Read left to right that is a check reporting zero
+                 *        problems and then failing, which is how an operator
+                 *        learns to distrust the report.
+                 *
+                 *        THE FIRST ATTEMPT AT THIS DOWNGRADED THE MISSING
+                 *        MEMBERSHIP TO A GAP and made the check inconclusive.
+                 *        That was wrong, and three existing tests said so
+                 *        before it reached anybody — #475 ("a cooperative_member
+                 *        with no membership row is a defect somebody must fix,
+                 *        not a record that could not be read"), #488's vacuity
+                 *        guard, and the reconciliation suite's own case. They
+                 *        are right: unlike an unrecorded gender, this is not a
+                 *        fact nobody collected. The role was granted. The row
+                 *        should exist. Somebody has to make it exist.
+                 *
+                 *        So the finding stays a finding, and what changes is
+                 *        that the line SAYS WHAT IT FOUND before it says what
+                 *        it did not find. A verdict a reader cannot predict
+                 *        from the sentence above it is the actual defect here.
+                 */
                 status: (balanceMismatches.length > 0 || unreadableMembers.length > 0) ? "fail" : "pass",
                 // The sample size and the comparison are both stated, so a
                 // "pass" cannot be read as more than it is.
-                details: `Sampled ${coopMembersQuery.docs.length} members. Compared cooperative_members.savingsBalance + lockedBalance against completed ledger rows (${CREDIT_TYPES.join("/")} minus ${DEBIT_TYPES.join("/")}). ${balanceMismatches.length} mismatch(es), ${unreadableMembers.length} member(s) with no membership record.`,
+                details: `Sampled ${coopMembersQuery.docs.length} members. `
+                    + `Found ${balanceMismatches.length + unreadableMembers.length} problem(s): `
+                    + `${balanceMismatches.length} balance mismatch(es) and ${unreadableMembers.length} member(s) `
+                    + `holding the cooperative_member role with no membership row under either key — the second `
+                    + `is a record that should exist and does not, so it counts. `
+                    + `Compared cooperative_members.savingsBalance + lockedBalance against completed ledger rows `
+                    + `(${CREDIT_TYPES.join("/")} minus ${DEBIT_TYPES.join("/")}).`,
                 affectedIds: [...balanceMismatches, ...unreadableMembers.map((id) => `${id} (no membership record)`)]
             });
         } catch (e: any) { results.push({ module: "Cooperative", check: "Financial Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
@@ -853,24 +943,64 @@ export async function runForensicScanAction(): Promise<
                 .get();
 
             const driftIds: string[] = [];
+            const noApplicationIds: string[] = [];
             let compared = 0;
 
             for (const doc of farmerRoleQuery.docs) {
                 const data = doc.data() as any;
                 const userStatus = data?.serviceRegistrations?.farmNation?.status ?? null;
 
-                const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                    .where("userId", "==", doc.id)
-                    .get();
+                /**
+                 *   #671 THIS ASKED `where("userId","==",id)` AND NOTHING ELSE,
+                 *        AND REPORTED 45 OF 50 PRODUCTION FARMERS AS APPROVED
+                 *        WITH NO APPLICATION BEHIND THEM.
+                 *
+                 *        The applications were there — under the id the user
+                 *        record points at, under `legacy_<uid>`, or under the
+                 *        address. Every real reader of this collection walks
+                 *        that chain; only this scan did not, so a row that had
+                 *        simply not been through a reader yet (the readers
+                 *        backfill `userId` when they match) looked like an
+                 *        orphaned approval.
+                 *
+                 *        #488 exactly, one module over — see the header on
+                 *        lib/farm-nation-application-lookup.ts, which is this
+                 *        chain in one place and WRITES NOTHING, because a scan
+                 *        that repairs what it measures cannot be run twice for
+                 *        the same answer.
+                 */
+                const matches = await findFarmNationApplications(
+                    db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS),
+                    {
+                        userId: doc.id,
+                        applicationId: data?.serviceRegistrations?.farmNation?.applicationId ?? null,
+                        email: data?.email ?? null,
+                    },
+                );
 
-                if (appSnap.empty) {
+                if (matches.length === 0) {
                     //   A user whose registration says approved with no
-                    //   application behind it. Not reported when the user has no
-                    //   registration either — that is a farmer who arrived by
-                    //   some other route (a legacy import, an admin role grant)
-                    //   and is not this check's business.
+                    //   application findable under ANY key the product uses.
+                    //   Not reported when the user has no registration either —
+                    //   that is a farmer who arrived by some other route (an
+                    //   admin role grant) and is not this check's business.
+                    //
+                    //   #671 COUNTED SEPARATELY, AND STILL A FINDING. Drift is
+                    //   two records that disagree; this is one record that is
+                    //   absent, and they need different work — one is
+                    //   reconciled, the other investigated. Reporting them as
+                    //   one number is what let "compared 1 … found 45" go out,
+                    //   a sentence whose two halves cannot both be true.
+                    //
+                    //   THEY ARE STILL BOTH FINDINGS. An approval with nothing
+                    //   behind it, under ANY key the product uses, is #486's
+                    //   anomaly and belongs in affectedIds — the first attempt
+                    //   at this made it "inconclusive" and #486's own suite
+                    //   caught that before it reached anybody. What was wrong
+                    //   in production was not the verdict but the lookup: 45 of
+                    //   these had an application all along.
                     if (userStatus === "approved") {
-                        driftIds.push(`${doc.id} (user: approved, no application record)`);
+                        noApplicationIds.push(`${doc.id} (user: approved, no application record under any key)`);
                     }
                     continue;
                 }
@@ -878,13 +1008,14 @@ export async function runForensicScanAction(): Promise<
                 //   The most advanced application decides. A member may
                 //   reasonably hold an older rejected application and a newer
                 //   approved one; the reverse is what would be wrong.
-                const appStatuses = appSnap.docs.map((d) => (d.data() as any)?.status ?? null);
+                const appStatuses = matches.map((m) => m.data?.status ?? null);
                 const appApproved = appStatuses.includes("approved");
                 compared += 1;
 
                 if (appApproved !== (userStatus === "approved")) {
                     driftIds.push(
-                        `${doc.id} (user: ${userStatus ?? "none"}, application: ${appStatuses.join("/") || "none"})`
+                        `${doc.id} (user: ${userStatus ?? "none"}, application: ${appStatuses.join("/") || "none"}`
+                        + `, found via: ${matches[0].via})`
                     );
                 }
             }
@@ -892,11 +1023,26 @@ export async function runForensicScanAction(): Promise<
             results.push({
                 module: "Farm Nation",
                 check: "Approval Drift (User Record vs Application)",
-                status: driftIds.length > 0 ? "fail" : "pass",
+                status: (driftIds.length > 0 || noApplicationIds.length > 0) ? "fail" : "pass",
+                /**
+                 *   #671 "compared 1 … found 45" COULD NOT BOTH BE TRUE.
+                 *
+                 *        The production sentence reported a total that counted
+                 *        rows the comparison had never run on, so the two
+                 *        numbers in one line described different populations.
+                 *        They are stated separately now, each against the
+                 *        population it actually describes.
+                 */
                 details: farmerRoleQuery.size === 0
                     ? "No farmers found to check."
-                    : `Scanned ${farmerRoleQuery.size} accounts holding the farmer role; compared ${compared} against their authoritative application record. Found ${driftIds.length} whose user registration and application disagree.`,
-                affectedIds: driftIds
+                    : `Scanned ${farmerRoleQuery.size} accounts holding the farmer role, looking their `
+                      + `application up by every key the product uses (userId, the applicationId on the user `
+                      + `record, legacy_<uid>, then address). `
+                      + `Compared ${compared}; of those, ${driftIds.length} have a user registration and an `
+                      + `application that disagree. A further ${noApplicationIds.length} are marked approved `
+                      + `with no application findable under any key — nothing to compare, and an approval with `
+                      + `nothing behind it.`,
+                affectedIds: [...driftIds, ...noApplicationIds]
             });
         } catch (e: any) { results.push({ module: "Farm Nation", check: "Verification Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }

@@ -266,12 +266,37 @@ describe('#486 — the forensic check compares two things that should agree', ()
         //   pass there. An unfiltered read would compare each farmer to the
         //   whole queue and report almost nobody — a check that cannot fail,
         //   #331's defect arriving through its own repair for the third time.
+        /*
+         *   #671 THE MECHANISM MOVED; THE CLAIM DID NOT.
+         *
+         *        This asserted the check's own `.where("userId","==",doc.id)`.
+         *        That single key is what reported 45 of 50 production farmers
+         *        as approved with no application record — every real reader of
+         *        this collection walks a chain of four, and the rows the scan
+         *        could not see were reachable by the other three.
+         *
+         *        The lookup is now lib/farm-nation-application-lookup.ts. The
+         *        property THIS test is about — that the application compared is
+         *        the SCANNED USER'S OWN, not whichever the mock happened to
+         *        return — is unchanged and is what is asserted: every key handed
+         *        to the lookup is derived from `doc`, so an unfiltered read
+         *        cannot creep back in.
+         */
         const check = code(FORENSICS);
-        const start = check.indexOf('const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)');
-        const section = check.slice(start, start + 300);
+        const start = check.indexOf('const matches = await findFarmNationApplications(');
+        const section = check.slice(start, start + 400);
 
         expect(start).toBeGreaterThan(-1);
-        expect(section).toContain('.where("userId", "==", doc.id)');
+        expect(section).toContain('userId: doc.id');
+        expect(section).toContain('applicationId: data?.serviceRegistrations?.farmNation?.applicationId');
+        expect(section).toContain('email: data?.email');
+        //   And the lookup keys every one of its queries on what it was handed.
+        //   A door that ignored its argument would satisfy the three lines
+        //   above and compare each farmer against the whole queue again.
+        const lookup = code('src/lib/farm-nation-application-lookup.ts');
+        expect(lookup).toContain('.where("userId", "==", userId)');
+        expect(lookup).toContain('applications.doc(keys.applicationId)');
+        expect(lookup).toContain('applications.doc(`legacy_${userId}`)');
     });
 
     it('and the population it scans is stated, so a pass cannot be read as more than it is', () => {
