@@ -119,10 +119,16 @@ at module load, an honest `isRedisConfigured` flag that callers check, and a red
 **Disconnected** tile on `/admin/system-health`. No code work is outstanding —
 only the credentials.
 
-### 🔑 Confirm migration `034_user_segment_counts_widened.sql` is applied
+### 🔑 Confirm migrations `034` and `035` are applied
 
-33 migrations are in `supabase/migrations/`. Whether the production database has
-them cannot be determined from here.
+**34 migration files** are in `supabase/migrations/`. Whether the production
+database has them cannot be determined from here.
+
+`035` is the one that matters most and is new: it is **#652's overselling fix**,
+and until it is applied a cart carrying the same product on two lines can take
+more stock than exists. It is `CREATE OR REPLACE` over `015`, transaction-safe,
+and takes effect the moment it is applied — no code change is needed for it to
+start working.
 
 ### 🔑 Confirm what production is actually serving
 
