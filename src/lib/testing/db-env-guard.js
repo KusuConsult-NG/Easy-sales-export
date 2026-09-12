@@ -41,8 +41,36 @@ const PRODUCTION_PROJECT_REF = 'dpuiznenrymoyarvdave';
  * @returns {{ hasDb: boolean, url: string, key: string, isLocal: boolean }}
  */
 function resolveDbEnv({ label, envFile = '.env.staging' }) {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        require('dotenv').config({ path: path.resolve(process.cwd(), envFile) });
+    /**
+     * WHERE TO LOOK, IN ORDER — #655.
+     *
+     * process.env first (CI exports the ephemeral stack's values), then the file
+     * the LOCAL STACK ACTUALLY WRITES, then the staging file.
+     *
+     * `.env.development.local` was missing from this list, and the consequence
+     * was the exact shape the comment below this one describes. Running the
+     * local stack and then following its own closing instructions —
+     *
+     *     ./scripts/local-stack/up.sh
+     *     npm run test:db          # printed by up.sh as the thing to run next
+     *
+     * — skipped all 17 suites and 161 tests. `.env.staging` is where the guard
+     * looked, and that file DOES NOT EXIST in this repository; the stack writes
+     * its URL and keys to `.env.development.local` instead. Two halves of one
+     * workflow that never met.
+     *
+     * scripts/local-stack/jest-env.js exists because of this identical problem
+     * on the pg side, and says so in its own header. The fix reached one of the
+     * two harnesses. It reaches both now.
+     *
+     * dotenv does not override variables that are already set, so CI — which
+     * exports them through $GITHUB_ENV — is unaffected by either file, and the
+     * production-project check below still runs on whatever is resolved.
+     */
+    const candidates = ['.env.development.local', envFile];
+    for (const file of candidates) {
+        if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) break;
+        require('dotenv').config({ path: path.resolve(process.cwd(), file) });
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -75,9 +103,14 @@ function resolveDbEnv({ label, envFile = '.env.staging' }) {
             // Was "npx supabase start", which pulls container images and so
             // fails on exactly the machines that reach this message. up.sh
             // needs no Docker, and it writes the two variables above.
+            //   #655 — this used to end "then re-run with those variables
+            //   exported from .env.development.local", which was the manual step
+            //   this guard now performs, and a parenthetical saying `.env.staging`
+            //   "currently carries all three variables with EMPTY values" — a
+            //   file that is not in the repository at all. Both are gone: a
+            //   message describing a file nobody has is worse than no message.
             `  or bring the whole stack up locally with: ./scripts/local-stack/up.sh\n` +
-            `  then re-run with those variables exported from .env.development.local\n` +
-            `  (${envFile} currently carries all three variables with EMPTY values.)`
+            `  which writes .env.development.local, and is read automatically.`
         );
     }
 

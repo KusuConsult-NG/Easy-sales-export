@@ -1,21 +1,29 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`f686d529`, `a96f6546` and now at `78e267f7`.** Every line below was checked against the
+`a96f6546`, `78e267f7` and now at `cdc7af71`.** Every line below was checked against the
 tree, not carried forward.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 704 suites / 12,840 tests green.** The
-version before this one said 12,837 across 704.
+**Gate at this revision: build clean, 705 suites / 12,847 tests green.** The
+version before this one said 12,840 across 704.
 
-**And the Postgres suites were run for real** against PostgreSQL 16 with the
-schema and all 34 migrations: **13 suites, 176 passed**, 23 skipped for want of
-a PostgREST. A status document that
-contradicts the repository is worse than none — it is read and believed — so
-these numbers are re-read from a full run each time this file is touched.
+**And every database suite was run for real**, against the local stack
+`scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
+schema, all 34 migrations, RLS on:
+
+| | |
+|---|---|
+| `test:pg` | **13 suites, 199 passed, 0 skipped** |
+| `test:db` | **17 suites, 161 passed** |
+| `test:integration` | **5 suites, 31 passed** |
+
+A status document that contradicts the repository is worse than none — it is
+read and believed — so these numbers are re-read from a full run each time this
+file is touched.
 
 Gate for every item marked done: `npm run build` then `npm run test`, green, with
 the change mutation-tested against a control.
@@ -277,6 +285,53 @@ named in `kyc-validators`.
 `middleware.ts` records it: five module apexes have `www` variants in
 `DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
 depends on their DNS.
+
+### ✅ (#655) The local stack told you to run the suites, and the suites skipped
+
+`scripts/local-stack/up.sh` brings up a complete local backend with **no Docker**
+— real PostgreSQL, real PostgREST, the schema, all migrations, RLS on — and
+finishes by printing what to do with it, including:
+
+    npm run test:db      run the DB/integration suites against it
+
+**Following that line ran nothing.** All 17 suites skipped, 161 tests; and
+`npm run test:integration` skipped 11 of its 31 beside them. The stack writes its
+URL and keys to `.env.development.local`; `db-env-guard.js` looked in
+`.env.staging` — **a file that is not in this repository at all.**
+
+The fix for this already existed on the other harness:
+`scripts/local-stack/jest-env.js` was written for the identical problem on the pg
+side and says so in its header. The db harness never got it — *the fix reached
+one of two*, which is #651's sentence one layer up. The guard's own warning had
+got as far as **documenting the manual step** it now performs, and told you
+`.env.staging` "carries all three variables with EMPTY values", describing a file
+nobody has.
+
+**Measured, before and after, with nothing exported by hand:**
+
+| | before | after |
+|---|---|---|
+| `test:db` | 0 of 161 | **161** |
+| `test:integration` | 20 of 31 | **31** |
+
+172 tests a developer could not reach by following the instructions they were
+given. **CI was never broken** — it exports the ephemeral stack's values through
+`$GITHUB_ENV` and dotenv does not override what is set. This is a
+local-development repair, and it matters because testing locally is how a defect
+gets caught before production.
+
+✅ **And #651's remaining gap is closed as a side effect.** The 23 adapter tests
+that skipped for want of a PostgREST now run: `test:pg` is **199 passed, zero
+skipped**.
+
+⚠️ **Two harness mistakes of my own, both silent.** Setting a child's env key to
+`undefined` does not unset it — it arrives as the string `"undefined"`, which is
+truthy, so the no-file *control* passed for entirely the wrong reason. And the
+assertion that the stale message is gone read the guard's raw text and found the
+sentence in **the comment explaining its removal** — my own prose breaking an
+assertion about code, after doing the reverse in #651 and #654. Three times in
+five findings is a rule, not luck: a source assertion strips comments, every
+time, in every file format.
 
 ### ✅ (#654) A rule the database enforces by itself, that nothing tested
 
