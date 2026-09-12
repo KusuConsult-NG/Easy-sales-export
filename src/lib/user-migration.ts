@@ -55,6 +55,54 @@ function preserveActiveValues(
 }
 
 /**
+ * Money-bearing fields that live INSIDE a `serviceRegistrations.<module>` object.
+ *
+ *   #683 ACTIVE_WINS_FIELDS above protects the top level and stops there. These
+ *   three sit one level down, inside objects that are swapped WHOLESALE by
+ *   status, so they travelled with a status comparison that knows nothing about
+ *   money.
+ *
+ *   Kept as a named list rather than a regex over field names so that adding a
+ *   fourth is a deliberate act — and a test sweeps the application for
+ *   money-like fields written under `serviceRegistrations` and fails if one is
+ *   missing here, so the list cannot go stale the way the top-level one did.
+ */
+const REGISTRATION_MONEY_FIELDS = [
+    'waveEarningsBalance',
+    'paymentAmount',
+    'paid',
+] as const;
+
+/**
+ * Keep the LIVE record's money when a registration object is replaced.
+ *
+ * The status decision belongs to the caller; this only re-pins the fields whose
+ * value is a fact about money the member already has. A field the active record
+ * does not define is left as the winner has it — absent is not zero.
+ */
+function preserveActiveRegistrationMoney(
+    module: string,
+    activeVal: Record<string, any> | undefined,
+    winner: Record<string, any>,
+): Record<string, any> {
+    if (!activeVal || activeVal === winner) return winner;
+
+    const result: Record<string, any> = { ...winner };
+    for (const field of REGISTRATION_MONEY_FIELDS) {
+        const live = activeVal[field];
+        if (live === undefined || live === null) continue;
+        if (result[field] !== live) {
+            logger.warn(
+                `[UserMigration] Kept the live ${module}.${field} (${live}) rather than the ` +
+                `legacy value (${result[field]}).`,
+            );
+        }
+        result[field] = live;
+    }
+    return result;
+}
+
+/**
  *   #490 A SOURCE THAT HAS ALREADY BEEN MIGRATED IS NOT THE RECORD TO COPY.
  *
  *   This function copies a profile forward and tombstones the original with
@@ -169,7 +217,49 @@ export async function migrateLegacyUserData(
                 if (legacyVal && activeVal) {
                     const scoreLegacy = registrationProgressScore(legacyVal.status || '');
                     const scoreActive = registrationProgressScore(activeVal.status || '');
-                    mergedServiceRegistrations[key] = scoreActive > scoreLegacy ? activeVal : legacyVal;
+                    const winner = scoreActive > scoreLegacy ? activeVal : legacyVal;
+
+                    /**
+                     *   #683 THE MONEY INSIDE A REGISTRATION TRAVELLED WITH THE
+                     *        STATUS, AND A TIE HANDED IT TO THE LEGACY RECORD.
+                     *
+                     *        The line above replaces the WHOLE registration
+                     *        object with whichever has the further-along
+                     *        status, and the comparison is STRICT — by design,
+                     *        see `isFurtherAlong`: "equal scores mean no reason
+                     *        to prefer the newcomer". So on a TIE the legacy
+                     *        object wins outright, and a tie is the ordinary
+                     *        case for a migrated member: both records say
+                     *        `approved`.
+                     *
+                     *        Three money-bearing fields live inside these
+                     *        objects, and they went with it:
+                     *
+                     *            wave.waveEarningsBalance   withdrawable money
+                     *            academy.paymentAmount      what they paid
+                     *            academy.paid               whether they paid
+                     *
+                     *        MEASURED against the real function: an active WAVE
+                     *        registration holding 75,000 and a legacy one
+                     *        holding 0, both `approved`, came out at 0.
+                     *
+                     *        THIS IS #84 FOR THE THIRD TIME. That defect zeroed
+                     *        savings from the legacy-onboarding screen;
+                     *        ACTIVE_WINS_FIELDS above is its fix, and the note
+                     *        on it says "letting a stale figure overwrite that
+                     *        is how #84 zeroed people's savings". That list is
+                     *        applied to TOP-LEVEL fields only, so the nested
+                     *        money was never covered — a declared rule that did
+                     *        not reach the case beside it. And this path runs
+                     *        from the LOGIN, unattended.
+                     *
+                     *        The status decision is unchanged; only the money
+                     *        is pinned to the live record, exactly as
+                     *        preserveActiveValues does one level up.
+                     */
+                    mergedServiceRegistrations[key] = preserveActiveRegistrationMoney(
+                        key, activeVal, winner,
+                    );
                 }
             }
 

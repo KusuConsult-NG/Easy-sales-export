@@ -61,6 +61,205 @@ beforeEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#683 — the money inside a registration does not travel with the status', () => {
+    /*
+     *   The merge replaces a WHOLE `serviceRegistrations.<module>` object with
+     *   whichever has the further-along status, and the comparison is STRICT by
+     *   design — `isFurtherAlong` says "equal scores mean no reason to prefer
+     *   the newcomer". So on a TIE the legacy object wins outright, and a tie is
+     *   the ordinary case for a migrated member: both records say `approved`.
+     *
+     *   Three money-bearing fields live inside those objects and went with it.
+     *
+     *   MEASURED BEFORE BEING FIXED, against this same function: an active WAVE
+     *   registration holding 75,000 and a legacy one holding 0, both approved,
+     *   came out at 0.
+     *
+     *   THIS IS #84 FOR THE THIRD TIME. That defect zeroed savings from the
+     *   legacy-onboarding screen; ACTIVE_WINS_FIELDS is its fix and its own note
+     *   says so. That list is applied to TOP-LEVEL fields only, so the nested
+     *   money was never covered — a declared rule that did not reach the case
+     *   beside it. And this path runs from the LOGIN, unattended.
+     */
+    it('KEEPS THE LIVE WAVE EARNINGS WHEN THE STATUSES TIE', async () => {
+        store.seed(USERS, LEGACY, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved', waveEarningsBalance: 0 } },
+        });
+        store.seed(USERS, ACTIVE, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved', waveEarningsBalance: 75000 } },
+        });
+
+        await migrate();
+
+        const wave = (store.get(USERS, ACTIVE)!.serviceRegistrations as any).wave;
+        //   THE assertion. Before #683 this was 0.
+        expect(wave.waveEarningsBalance).toBe(75000);
+    });
+
+    it('AND WHEN THE LEGACY RECORD IS GENUINELY FURTHER ALONG', async () => {
+        /*
+         *   The harder half. Here the legacy object legitimately wins the
+         *   STATUS — approved beats pending — and it must still not bring its
+         *   stale balance with it. Money is not evidence of progress.
+         */
+        store.seed(USERS, LEGACY, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved', waveEarningsBalance: 0 } },
+        });
+        store.seed(USERS, ACTIVE, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'pending', waveEarningsBalance: 75000 } },
+        });
+
+        await migrate();
+
+        const wave = (store.get(USERS, ACTIVE)!.serviceRegistrations as any).wave;
+        expect(wave.status).toBe('approved');      // the status decision is unchanged
+        expect(wave.waveEarningsBalance).toBe(75000);
+    });
+
+    it('AND A PAID ACADEMY MEMBER IS NOT TOLD THEY HAVE NOT PAID', async () => {
+        //   `paid` and `paymentAmount` sit in the same object. Reverting them is
+        //   #668's shape: telling somebody who has paid that they have not.
+        store.seed(USERS, LEGACY, {
+            email: 'ada@example.com',
+            serviceRegistrations: { academy: { status: 'approved', paid: false, paymentAmount: 0 } },
+        });
+        store.seed(USERS, ACTIVE, {
+            email: 'ada@example.com',
+            serviceRegistrations: { academy: { status: 'approved', paid: true, paymentAmount: 50000 } },
+        });
+
+        await migrate();
+
+        const academy = (store.get(USERS, ACTIVE)!.serviceRegistrations as any).academy;
+        expect(academy.paid).toBe(true);
+        expect(academy.paymentAmount).toBe(50000);
+    });
+
+    it('AND AN ABSENT LIVE VALUE IS NOT A ZERO — the legacy figure survives', async () => {
+        /*
+         *   The mirror of the finding, and the case a mutant found missing. If
+         *   the active registration does not define the field at all, there is
+         *   nothing live to protect and the legacy figure is the only record of
+         *   it — pinning `undefined` over it would destroy the number in the
+         *   name of preserving it.
+         *
+         *   The top-level list has had this test since #84 ("takes the legacy
+         *   balance when the active account has none"); the nested one did not,
+         *   which is the same one-of-two shape as the finding itself.
+         */
+        store.seed(USERS, LEGACY, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved', waveEarningsBalance: 50000 } },
+        });
+        store.seed(USERS, ACTIVE, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved' } },
+        });
+
+        await migrate();
+
+        const wave = (store.get(USERS, ACTIVE)!.serviceRegistrations as any).wave;
+        expect(wave.waveEarningsBalance).toBe(50000);
+    });
+
+    it('AND A LIVE ZERO IS A REAL VALUE, NOT A MISSING ONE', async () => {
+        //   The other side of the same line: a member who has withdrawn
+        //   everything has a live balance of 0, and a stale legacy 50,000 must
+        //   not be restored to them.
+        store.seed(USERS, LEGACY, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved', waveEarningsBalance: 50000 } },
+        });
+        store.seed(USERS, ACTIVE, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved', waveEarningsBalance: 0 } },
+        });
+
+        await migrate();
+
+        const wave = (store.get(USERS, ACTIVE)!.serviceRegistrations as any).wave;
+        expect(wave.waveEarningsBalance).toBe(0);
+    });
+
+    it('AND THE STATUS DECISION IS STILL THE STATUS DECISION', async () => {
+        /*
+         *   THE control. Pinning money must not quietly turn into "the active
+         *   record always wins", which would undo the whole point of merging —
+         *   a member who completed onboarding on the legacy account would be
+         *   sent back to pending.
+         */
+        store.seed(USERS, LEGACY, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'approved', cohort: 'legacy-cohort' } },
+        });
+        store.seed(USERS, ACTIVE, {
+            email: 'ada@example.com',
+            serviceRegistrations: { wave: { status: 'pending' } },
+        });
+
+        await migrate();
+
+        const wave = (store.get(USERS, ACTIVE)!.serviceRegistrations as any).wave;
+        expect(wave.status).toBe('approved');
+        expect(wave.cohort).toBe('legacy-cohort');
+    });
+
+    it('AND THE PROTECTED LIST COVERS EVERY MONEY FIELD THE APPLICATION WRITES THERE', () => {
+        /*
+         *   The ratchet, and the reason this finding exists at all: the
+         *   top-level list went stale because nothing checked it against the
+         *   schema. This sweeps the application for money-like fields written
+         *   under `serviceRegistrations.<module>.` and fails if one is not
+         *   protected.
+         *
+         *   Narrow enough to be sound — it matches a literal dotted path, and
+         *   the answer set is three — unlike the collection sweeps discarded in
+         *   #678 and #679, which could not distinguish a claim from a mention.
+         */
+        const { readFileSync, readdirSync, statSync } = require('fs') as typeof import('fs');
+        const { join } = require('path') as typeof import('path');
+        const ROOT = process.cwd();
+
+        const files: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                if (entry === 'node_modules' || entry === '__tests__' || entry === '.next') continue;
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) { walk(full); continue; }
+                if (/\.(ts|tsx)$/.test(entry) && !/\.test\./.test(entry)) files.push(full);
+            }
+        };
+        walk(join(ROOT, 'src'));
+
+        const found = new Set<string>();
+        for (const f of files) {
+            const src = readFileSync(f, 'utf8');
+            for (const m of src.matchAll(
+                /serviceRegistrations\.[a-zA-Z]+\.([a-zA-Z]*(?:[Bb]alance|[Ee]arnings|[Pp]aymentAmount|paid))\b/g,
+            )) {
+                found.add(m[1]);
+            }
+        }
+
+        //   The control: a sweep that matched nothing would agree with any list.
+        expect(found.size).toBeGreaterThan(0);
+
+        const src = readFileSync(join(ROOT, 'src/lib/user-migration.ts'), 'utf8');
+        const protectedList = src.slice(
+            src.indexOf('const REGISTRATION_MONEY_FIELDS'),
+            src.indexOf('] as const;', src.indexOf('const REGISTRATION_MONEY_FIELDS')),
+        );
+
+        const unprotected = [...found].filter((f) => !protectedList.includes(`'${f}'`)).sort();
+        expect({ unprotected }).toEqual({ unprotected: [] });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('#173 — roles do not travel through a login', () => {
     it('carries an ordinary member across, keeping their profile', async () => {
         store.seed(USERS, LEGACY, {
