@@ -8,7 +8,7 @@ checked against the tree, not carried forward.
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 719 suites / 13,012 tests green** — and
+**Gate at this revision: build clean, 719 suites / 13,015 tests green** — and
 green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
 world after #663's enforcement date. The version before this one said 12,930
 across 712.
@@ -467,6 +467,47 @@ And #645's own ratchet asserted the local `timingSafeEqual` it had added.
 one is case-insensitive. Five doubles were written that way and seven already
 lowercased — a hidden coupling to one route's casing rather than a model of the
 real thing. All five corrected.
+
+### ✅ (#670) A lead list nobody read, guarded by a number
+
+`collection-writer-scan` exists to find the defect class where each writer of a
+collection is correct on its own terms and the fault lives **between** them —
+the shape that made every row from one announcements writer invisible (#143) and
+gave two kinds of certificate one `isValid: true` (#144).
+
+It runs. Its output was pinned by:
+
+```ts
+expect(findings.length).toBeLessThan(30);
+```
+
+It reports **ten**. So **twenty new defects could appear and that test would
+still pass.** A cap on a count is not a ratchet — it is #666's "35 of 45" and
+#658's unactionable warning again: a number that says something might be wrong
+and never which thing.
+
+**All ten were read.** Not one is an unaddressed defect, and the most alarming
+three are *a fix being reported as the defect it fixed*:
+
+| lead | verdict |
+|---|---|
+| `COURSE_ENROLLMENTS` ×3 — writers never write `resolvedUserId`, "queried by readers" | **The repair, flagged.** Writers correctly write `userId` now; readers query the legacy name *as well* so rows written while it was wrong are still found. Writing it again recreates the defect. |
+| `ESCROW_TRANSACTIONS` ×2 — never writes `releaseRequestedAt` | Set when a release is *requested*; a creation site has nothing to put there. |
+| `USERS` ×2 — approval paths never write `firstName`/`phone` | Updates, not creates. |
+| `NOTIFICATIONS` — omits `linkText` | Cosmetic; the label has a default. |
+| `WALLET_TRANSACTIONS` — omits `balanceBefore`/`balanceAfter` | **Real, and deliberately not fixed.** The WAVE earnings credit moves the balance with `FieldValue.increment`, which returns no balance, so a trail could only come from a separate read — and a read-derived balance trail is *wrong under concurrency*. A wrong trail on a money ledger is worse than an absent one; `WalletClient` already guards on `undefined`. |
+| `WALLET_TRANSACTIONS` — omits `reference` | The purchase leg carries `orderId`, and nothing queries this collection by reference. |
+
+**The cap is replaced by the read list.** Each lead is named with its verdict, so
+an eleventh fails the test and has to be read. A second assertion refuses an
+entry the scanner no longer produces — an exemption that has stopped exempting
+anything has started hiding the next one, the same rule the public-route list
+lives under.
+
+⚠️ **And a mutant deleted the assertion and survived**, which this audit has
+relearned six times. The recorded cure was applied: the comparison is a named
+function now, asked questions with known answers, so the *logic* is verified even
+though any single assertion remains deletable.
 
 ### ✅ (#669) The money tables, audited — and the answer is that they are sound
 

@@ -115,12 +115,126 @@ describe('the scanner reads the write surface', () => {
         for (const m of merges) expect(m.kind).toBe('update');
     });
 
-    it('stays under a readable number of findings', () => {
-        // A lead list nobody reads is worth nothing. The point of the merge
-        // correction and the five-key floor.
-        const findings = reportByCollection().flatMap((r) => r.findings);
+    /**
+     * Every lead this scanner produces, READ, with a verdict — #670.
+     *
+     *   This was `expect(findings.length).toBeLessThan(30)`, and the scanner
+     *   reports ten. So TWENTY NEW DEFECTS COULD APPEAR AND THIS TEST WOULD
+     *   STILL PASS. A cap on a count is not a ratchet: it is the same shape as
+     *   #666's "35 of 45" and #658's unactionable warning — a number that says
+     *   something might be wrong and never which thing.
+     *
+     *   All ten were read. Not one is an unaddressed defect, and three of them
+     *   are a FIX being reported as the defect it fixed. Each is listed with the
+     *   reason it is not acted on, so an eleventh fails this test instead of
+     *   hiding under a cap.
+     *
+     *   Keyed WITHOUT the line number: a writer that moves down a file has not
+     *   changed, and a list that broke on every unrelated edit above it would be
+     *   deleted within a week.
+     */
+    const READ_AND_ACCEPTED: Record<string, string> = {
+        //   THE ACADEMY RENAME, and the scanner is reporting the repair. Writers
+        //   correctly write `userId` now; readers query the legacy
+        //   `resolvedUserId` AS WELL so rows written while the name was wrong are
+        //   still found. Writing it again would recreate the defect — see the
+        //   three tests directly below this block.
+        'COURSE_ENROLLMENTS | READER-EXPECTS src/app/actions/academy/_ac_enrollment.ts autoEnrollPaidUser never writes resolvedUserId — queried by readers':
+            'the legacy read is deliberate; writing it again recreates the defect it recovers from',
+        'COURSE_ENROLLMENTS | READER-EXPECTS src/app/actions/course-actions.ts enrollmentRef never writes resolvedUserId — queried by readers':
+            'same — the field is read for recovery only',
+        'COURSE_ENROLLMENTS | READER-EXPECTS src/lib/academy-course-progress.ts ensureCourseEnrolmentRecord never writes resolvedUserId — queried by readers':
+            'same — the field is read for recovery only',
 
-        expect(findings.length).toBeLessThan(30);
+        //   A field stamped when a release is REQUESTED cannot be written by the
+        //   site that creates the escrow.
+        'ESCROW_TRANSACTIONS | READER-EXPECTS src/app/actions/marketplace/_payment_orders.ts _initializeOrderPaymentAction never writes releaseRequestedAt — queried by readers':
+            'set later by the release-request path; a creation site has nothing to put there',
+        'ESCROW_TRANSACTIONS | READER-EXPECTS src/infrastructure/payments/service.ts result never writes releaseRequestedAt — queried by readers':
+            'same — written when a release is requested, not when the escrow is created',
+
+        'NOTIFICATIONS | DIVERGENT-KEYS src/app/actions/marketplace/_quotes.ts _submitQuoteRequestAction omits linkText':
+            'the link label falls back to a default; cosmetic, and the row is not invisible',
+
+        //   These are UPDATES to an existing user document, not creates. A seller
+        //   approval has no business restating somebody's name.
+        'USERS | READER-EXPECTS src/app/actions/wave/_wv_admin_applications.ts _approveWaveApplicationAction never writes firstName, lastName, phone, phoneNumber, sellerVerificationStatus, updatedAt — queried by readers':
+            'an update, not a create — the profile fields already exist on the row',
+        'USERS | READER-EXPECTS src/app/api/admin/marketplace/approve-seller/route.ts POST never writes firstName, lastName, phone, phoneNumber — queried by readers':
+            'an update, not a create',
+
+        //   #669 territory. The WAVE earnings credit moves the balance with
+        //   FieldValue.increment, which RETURNS NO BALANCE — so a
+        //   balanceBefore/balanceAfter pair could only be derived from a separate
+        //   read, and a read-derived trail is wrong under concurrency. A wrong
+        //   balance trail on a money ledger is worse than an absent one, and
+        //   WalletClient already guards on `!== undefined`. Recorded, not fixed.
+        'WALLET_TRANSACTIONS | DIVERGENT-KEYS src/app/actions/order-management.ts result omits id, balanceBefore, balanceAfter':
+            'credited by FieldValue.increment, which returns no balance; a derived trail would be racy',
+        'WALLET_TRANSACTIONS | DIVERGENT-KEYS src/infrastructure/payments/service.ts result omits reference':
+            'the purchase leg carries orderId instead, and nothing queries this collection by reference',
+    };
+
+    /** The finding, with its line number removed. */
+    const key = (collection: string, finding: string) =>
+        `${collection} | ${finding.replace(/:\d+ /, ' ')}`;
+
+    /**
+     * The two comparisons, as FUNCTIONS.
+     *
+     *   A mutation run turned `expect({ unread }).toEqual({ unread: [] })` into
+     *   `expect(true).toBe(true)` and nothing noticed — which is the
+     *   delete-an-assertion mutant this audit has relearned six times, and the
+     *   repair is always the same one: make the decision a named function and
+     *   ask it questions with known answers. Then the LOGIC is verified even
+     *   though the assertion that uses it is, like every assertion, deletable.
+     */
+    const unreadIn = (live: string[], accepted: Record<string, string>) =>
+        live.filter((k) => !(k in accepted));
+
+    const staleIn = (live: string[], accepted: Record<string, string>) =>
+        Object.keys(accepted).filter((k) => !live.includes(k));
+
+    it('THE COMPARISON ITSELF ANSWERS KNOWN QUESTIONS', () => {
+        expect(unreadIn(['a', 'b'], { a: 'read' })).toEqual(['b']);
+        expect(unreadIn(['a'], { a: 'read' })).toEqual([]);
+        //   An empty tree is not a clean tree: nothing unread, and every
+        //   accepted entry stale.
+        expect(unreadIn([], { a: 'read' })).toEqual([]);
+        expect(staleIn([], { a: 'read' })).toEqual(['a']);
+        expect(staleIn(['a'], { a: 'read' })).toEqual([]);
+    });
+
+    it('EVERY FINDING IS ONE THAT HAS BEEN READ', () => {
+        /*
+         *   THE ratchet, replacing a cap that left room for twenty unread
+         *   defects. A new finding fails here and has to be read and given a
+         *   verdict — which is the only thing that makes a lead list worth
+         *   generating.
+         */
+        const live = reportByCollection()
+            .flatMap((r) => r.findings.map((f: string) => key(r.collection, f)));
+
+        expect({ unread: unreadIn(live, READ_AND_ACCEPTED) }).toEqual({ unread: [] });
+    });
+
+    it('AND EVERY ACCEPTED ENTRY IS STILL A FINDING', () => {
+        /*
+         *   The other half. An entry for a lead the scanner no longer produces
+         *   is an exemption that has stopped exempting anything and started
+         *   hiding the next one — the same rule the public-route list in
+         *   every-api-route-has-a-door lives under.
+         */
+        const live = reportByCollection()
+            .flatMap((r) => r.findings.map((f: string) => key(r.collection, f)));
+
+        expect({ stale: staleIn(live, READ_AND_ACCEPTED) }).toEqual({ stale: [] });
+    });
+
+    it('AND THE SCANNER IS STILL LOOKING AT THE WHOLE TREE', () => {
+        //   A positive control on both lines above: a scanner that found
+        //   nothing would satisfy them and report a clean codebase for ever.
+        expect(reportByCollection().flatMap((r) => r.findings).length).toBeGreaterThanOrEqual(10);
     });
 });
 
