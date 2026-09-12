@@ -50,5 +50,63 @@ UNION ALL
 SELECT '033 auth-id lookup applied',
        coalesce((SELECT 'YES' FROM pg_proc WHERE proname='find_users_by_supabase_auth_ids' LIMIT 1), 'NO')
 UNION ALL
-SELECT 'money functions present (expect 45)', count(*)::text
-  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public';
+-- ── #666 — APPLICATION FUNCTIONS ONLY. ──────────────────────────────────────
+-- The first version of this line counted every function in `public` and said
+-- "expect 45", which was the number on the machine it was written on. Supabase
+-- keeps extensions in the `extensions` schema; the local stack had uuid-ossp in
+-- `public`, contributing exactly ten. So a COMPLETE production database
+-- reported 35 of 45 and looked like it was missing ten money functions.
+-- Extension-owned functions are excluded by pg_depend now, and the expectation
+-- is the application's own.
+-- count(DISTINCT proname), not count(*): credit_wallet_once and
+-- debit_jsonb_balance are OVERLOADED, so a row count and the list below
+-- disagree by two and the expectation cannot match both.
+SELECT 'application functions present (expect 34)', count(DISTINCT p.proname)::text
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  LEFT JOIN pg_depend d ON d.objid = p.oid AND d.deptype = 'e'
+ WHERE n.nspname = 'public' AND d.objid IS NULL
+UNION ALL
+-- ── And WHICH ones are missing, by name. ────────────────────────────────────
+-- A count cannot be acted on: "35 of 45" says something is wrong and not what,
+-- which is the same defect as a warning nobody can act on (#658) and a flag no
+-- screen renders (#665). Expect NO rows below this line.
+SELECT 'MISSING FUNCTION', expected.name
+  FROM (VALUES ('apply_array_ops'),
+               ('apply_document_patch'),
+               ('apply_increments'),
+               ('atomic_profile_sync'),
+               ('claim_idempotency_key'),
+               ('claim_payment_once'),
+               ('claim_single_open_loan_application'),
+               ('claim_status_transition'),
+               ('claim_status_transition_in'),
+               ('claim_versioned_update'),
+               ('count_user_segments'),
+               ('credit_wallet_once'),
+               ('debit_jsonb_balance'),
+               ('debit_jsonb_balance_with_floor'),
+               ('debit_wallet_locked'),
+               ('debit_wallet_once'),
+               ('decrement_many_or_fail'),
+               ('enforce_member_active_on_paid'),
+               ('find_users_by_normalised_email'),
+               ('find_users_by_normalised_emails'),
+               ('find_users_by_supabase_auth_ids'),
+               ('increment_within_ceiling'),
+               ('jsonb_array_remove'),
+               ('jsonb_array_union'),
+               ('jsonb_numeric_or_null'),
+               ('jsonb_present'),
+               ('jsonb_set_deep'),
+               ('jsonb_text_array_or_null'),
+               ('jsonb_truthy'),
+               ('merge_raw_data'),
+               ('native_column_map'),
+               ('platform_revenue_totals'),
+               ('update_updated_at_column'),
+               ('user_segment')) AS expected(name)
+ WHERE NOT EXISTS (
+     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = expected.name
+ );

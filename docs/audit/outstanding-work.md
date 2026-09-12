@@ -459,6 +459,53 @@ one is case-insensitive. Five doubles were written that way and seven already
 lowercased — a hidden coupling to one route's casing rather than a model of the
 real thing. All five corrected.
 
+### ✅ (#666) A count taken on the wrong machine
+
+#664 committed `supabase/status.sql` so the owner could ask a database what it
+has, validated against two controls before being handed over. Run against
+production it came back:
+
+    money functions present (expect 45)   |   35
+
+Ten missing, on the money layer. The honest reading of that number is an
+emergency.
+
+**It was the query.** `count(*) FROM pg_proc WHERE nspname='public'` counts
+EXTENSION functions too, and the expectation of 45 came from the machine the
+query was written on. The local stack installs `uuid-ossp` into `public`;
+Supabase keeps extensions in the `extensions` schema. That extension contributes
+**exactly ten** functions. 45 − 10 = 35. **Production had every one of its
+application functions and was entirely up to date.**
+
+⚠️ **Why both controls passed anyway** — this is the part worth keeping. They
+were real controls and they both ran: a complete database, and one missing three
+migrations. Both on the **same machine**. A control only rules out what it
+varies, and both of mine varied the MIGRATIONS while holding the HOST fixed. The
+one difference that mattered was the one neither touched.
+
+*Audit the instrument before believing the measurement* is this audit's first
+rule, and here it nearly cost the owner an emergency: a fully patched production
+database reported as missing ten functions from the wallet and escrow layer.
+
+**Fixed:** extension-owned functions excluded through `pg_depend`, so the count
+is the application's own wherever the host puts its extensions; `count(DISTINCT
+proname)`, because `credit_wallet_once` and `debit_jsonb_balance` are overloaded
+and a row count disagrees with a name list by two; and the query now **names**
+what is absent instead of counting it — "35 of 45" says something is wrong and
+not what, the same defect as a warning nobody can act on (#658) and a flag no
+screen renders (#665).
+
+**The comment trap, in a fourth file format.** The first version of the ratchet
+asserted `not.toContain('expect 45')` against raw SQL, where the comment
+explaining what 45 *was* contains the phrase. And its mirror: asserting
+"READ-ONLY" against *stripped* SQL fails, because that claim legitimately lives
+in a comment. The claim is asserted against the raw file and the code against
+the stripped one.
+
+**Production status, confirmed:** RLS on for all 9 tables, 0 policies (correct
+under Option A), migrations **033, 034 and 035 all applied**. #652's overselling
+fix is live.
+
 ### ✅ (#665) The screen warned you the chart was truncated and not that the total was
 
 Followed from the captured server log's four Paystack fallback paths. Three
