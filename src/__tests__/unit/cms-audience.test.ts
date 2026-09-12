@@ -116,7 +116,10 @@ function setAnnouncements(rows: any[] = ROWS) {
         // The document-level shape. One stub serves both the announcements
         // query and the users read #281 added, so it has to carry the caller's
         // roles or the admin guard refuses. See the note on setSession.
-        data: () => ({ uid: currentUser.id, roles: currentUser.roles }),
+        //   #663 — requireAdmin now asks for a second factor on admin accounts.
+        //   Set here so this suite does not start failing on the enforcement
+        //   date rather than on a defect.
+        data: () => ({ uid: currentUser.id, roles: currentUser.roles, mfaEnabled: true }),
     }));
 }
 

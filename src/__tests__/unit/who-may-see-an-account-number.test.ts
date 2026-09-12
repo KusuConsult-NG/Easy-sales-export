@@ -74,6 +74,7 @@
  *     reword this header                              SURVIVED, as intended
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
@@ -118,7 +119,7 @@ function actAs(id: string | null, tokenRoles: string[], recordRoles: string[] | 
         id === null ? null : { user: { id, roles: tokenRoles, email: `${id}@e.com` } },
     ));
     if (id !== null && recordRoles !== null) {
-        store.seed(COLLECTIONS.USERS, id, { roles: recordRoles, email: `${id}@e.com` });
+        store.seed(COLLECTIONS.USERS, id, { mfaEnabled: true, roles: recordRoles, email: `${id}@e.com` });
     }
 }
 
@@ -163,7 +164,7 @@ describe('#535 — the record decides, not the token', () => {
         //   requireAdmin checks this while it has the document, and the token
         //   never carried it at all.
         actAs(BOSS, ['super_admin'], null);
-        store.seed(COLLECTIONS.USERS, BOSS, { roles: ['super_admin'], suspended: true });
+        store.seed(COLLECTIONS.USERS, BOSS, { mfaEnabled: true, roles: ['super_admin'], suspended: true });
 
         expect(await mayReveal('finance:process_withdrawals')).toBe(false);
     });

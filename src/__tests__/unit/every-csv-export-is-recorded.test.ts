@@ -63,6 +63,7 @@
  * trace, and that a failure to leave one is visible rather than silent.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
@@ -287,7 +288,7 @@ describe('#309 — the action whose NAME said it recorded', () => {
             userId: 'member-1', amount: 50_000, status: 'approved',
             appliedAt: '2026-01-02T00:00:00.000Z',
         });
-        store.seed(COLLECTIONS.USERS, 'member-1', {
+        store.seed(COLLECTIONS.USERS, 'member-1', { mfaEnabled: true,
             fullName: 'Ada Obi',
             bankDetails: { bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi' },
         });
@@ -305,7 +306,7 @@ describe('#309 — the action whose NAME said it recorded', () => {
          *        jest.resetModules(), so a top-level `auth` would be a different
          *        copy from the one requireAdmin resolves inside the action.
          */
-        store.seed(COLLECTIONS.USERS, ADMIN, { roles: ['super_admin'], email: 'a@e.com' });
+        store.seed(COLLECTIONS.USERS, ADMIN, { mfaEnabled: true, roles: ['super_admin'], email: 'a@e.com' });
         const { auth } = await import('@/lib/auth');
         (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve({
             user: { id: ADMIN, email: 'a@e.com', roles: ['super_admin'] },

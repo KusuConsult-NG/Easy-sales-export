@@ -84,6 +84,7 @@
  * confirmation was an artefact of mocking the wrong module.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -134,7 +135,7 @@ describe('#281 — the CMS admin check reads the live record', () => {
         const store = installFakeDb();
 
         if (opts.seedUser !== false) {
-            store.seed(COLLECTIONS.USERS, 'u1', {
+            store.seed(COLLECTIONS.USERS, 'u1', { mfaEnabled: true,
                 uid: 'u1',
                 roles: opts.liveRoles ?? opts.jwtRoles,
                 ...(opts.live ?? {}),

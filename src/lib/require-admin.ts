@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-permissions";
+import { adminMfaVerdict } from "@/lib/mfa-policy";
 
 /**
  * requireAdmin — Live Role Re-Validation
@@ -197,6 +198,26 @@ export async function requireAdmin(permission?: AdminPermission): Promise<
         //    which is how one screen ends up gated two ways.
         if (permission && !hasAdminPermission(roles, permission)) {
             return { error: "Unauthorized: Admin access required" };
+        }
+
+        /**
+         *   6. #663 — AND THE SECOND FACTOR THIS ACCOUNT IS REQUIRED TO HAVE.
+         *
+         *   Asked HERE as well as in middleware, and the difference matters.
+         *   Middleware reads the session token, which is synced from the
+         *   database every two minutes; this reads the document it has already
+         *   fetched two steps above, so it is current to this request. An admin
+         *   who disabled MFA sixty seconds ago is refused here even though
+         *   their token still says otherwise.
+         *
+         *   It is the same function middleware calls, so the two cannot answer
+         *   differently about who is required to enrol — which is the whole
+         *   shape of #659, #648 and #353, and not a mistake worth repeating in
+         *   the change that fixes an unwired security feature.
+         */
+        const verdict = adminMfaVerdict({ roles, mfaEnabled: data?.mfaEnabled === true });
+        if (verdict.outcome === "enrol") {
+            return { error: verdict.reason };
         }
 
         return { userId: session.user.id, roles };

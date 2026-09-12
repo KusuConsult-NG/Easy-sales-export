@@ -57,6 +57,7 @@
  *        guard — so the write now names its keys.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
@@ -136,7 +137,7 @@ describe('#317 — the write stores the five fields and nothing else', () => {
                     doc: () => ({
                         get: () => Promise.resolve({
                             exists: true,
-                            data: () => ({ roles: ['super_admin'] }),
+                            data: () => ({ mfaEnabled: true, roles: ['super_admin'] }),
                         }),
                         set: (v: any) => { written.push(v); return Promise.resolve(); },
                     }),
@@ -147,7 +148,7 @@ describe('#317 — the write stores the five fields and nothing else', () => {
                     doc: () => ({
                         get: () => Promise.resolve({
                             exists: true,
-                            data: () => ({ roles: ['super_admin'] }),
+                            data: () => ({ mfaEnabled: true, roles: ['super_admin'] }),
                         }),
                     }),
                 }),

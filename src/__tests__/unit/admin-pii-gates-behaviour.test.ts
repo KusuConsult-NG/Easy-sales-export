@@ -38,6 +38,7 @@
  * gated thing. Nobody loses a screen; super_admin and admin lose nothing.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
@@ -104,14 +105,14 @@ function actAs(id: string | null, roles: string[] = ['general_user']): void {
     ));
 
     if (id !== null) {
-        store.seed(USERS, id, { ...(store.get(USERS, id) ?? {}), roles, email: `${id}@e.com` });
+        store.seed(USERS, id, { mfaEnabled: true, ...(store.get(USERS, id) ?? {}), roles, email: `${id}@e.com` });
     }
 }
 
 beforeEach(() => {
     jest.clearAllMocks();
     store = installFakeDb();
-    store.seed(USERS, MEMBER, {
+    store.seed(USERS, MEMBER, { mfaEnabled: true,
         name: 'Ada Obi', email: 'ada@example.com', phone: '08030000000',
         roles: ['general_user', 'marketplace_buyer'],
         bankDetails: BANK,
@@ -425,7 +426,7 @@ describe('#155 — the combined withdrawal queue', () => {
     });
 
     it('and of a member whose account is only in the LEGACY spelling', async () => {
-        store.seed(USERS, 'legacy-1', {
+        store.seed(USERS, 'legacy-1', { mfaEnabled: true,
             name: 'Emeka Nwosu', email: 'emeka@example.com',
             bankAccountNumber: '9876543210', bankAccountName: 'Emeka Nwosu', bankCode: '011',
         });
@@ -442,7 +443,7 @@ describe('#155 — the combined withdrawal queue', () => {
     it('falls back to the account on the REQUEST when the user document has none', async () => {
         // `a || b` could not reach this: the hydrated block is an object of
         // empty strings, which is truthy.
-        store.seed(USERS, 'bare-1', { name: 'Ngozi Obi', email: 'ngozi@example.com' });
+        store.seed(USERS, 'bare-1', { mfaEnabled: true, name: 'Ngozi Obi', email: 'ngozi@example.com' });
         store.seed(COLLECTIONS.WITHDRAWALS, 'w-3', {
             id: 'w-3', userId: 'bare-1', amount: 7_500, status: 'pending',
             bankDetails: { bankName: 'Zenith', accountNumber: '5555555555', accountName: 'Ngozi Obi', bankCode: '057' },

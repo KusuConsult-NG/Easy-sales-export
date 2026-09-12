@@ -81,6 +81,7 @@
  *     reword this header                               SURVIVED, as intended
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -108,7 +109,7 @@ function actAs(id: string, roles: string[]): void {
     (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve({
         user: { id, roles, email: `${id}@example.com` },
     }));
-    store.seed(COLLECTIONS.USERS, id, { roles, email: `${id}@example.com` });
+    store.seed(COLLECTIONS.USERS, id, { mfaEnabled: true, roles, email: `${id}@example.com` });
 }
 
 beforeEach(() => {
@@ -193,7 +194,7 @@ describe('#530 — the reader, executed', () => {
         //   keeps its claim for hours after the row loses it, and #526 found
         //   that unfixed on the endpoint that grants roles.
         actAs(BOSS, ['super_admin']);                                  // token says so
-        store.seed(COLLECTIONS.USERS, BOSS, { roles: ['general_user'] }); // record does not
+        store.seed(COLLECTIONS.USERS, BOSS, { mfaEnabled: true, roles: ['general_user'] }); // record does not
 
         expect((await read(GONE)).success).toBe(false);
     });

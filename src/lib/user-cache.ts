@@ -50,6 +50,15 @@ export interface CachedUserProfile {
      *        between them was tested by nothing.
      */
     sessionsValidFrom?: number;
+    /**
+     * Whether this account has a second factor enrolled — #663.
+     *
+     * Carried so the JWT can carry it, so MIDDLEWARE can enforce enrolment on
+     * the admin surface without a database read on every request. The admin
+     * gate re-reads the live document anyway and checks it there too; this is
+     * what makes the page redirect possible at the edge.
+     */
+    mfaEnabled?: boolean;
     isBanned?: boolean;
     suspended?: boolean;
     status?: string;
@@ -164,6 +173,10 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             requiresPasswordChange: userData.requiresPasswordChange,
             // #343. Read by the jwt callback and, until now, never carried here.
             sessionsValidFrom: Number(userData.sessionsValidFrom) || undefined,
+            //   #663 — read by the jwt callback so middleware can enforce
+            //   administrator enrolment. `=== true` rather than truthy: an
+            //   absent field must read as NOT enrolled.
+            mfaEnabled: userData.mfaEnabled === true,
             isBanned: userData.isBanned,
             suspended: userData.suspended,
             status: userData.status,

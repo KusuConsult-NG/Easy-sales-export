@@ -24,6 +24,7 @@
  *        unchanged, read by the action and by the page.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 // #535 The bank-details decision reads the database through auth().
@@ -88,7 +89,7 @@ function actAs(id: string | null, roles: string[] = ['general_user']): void {
     ));
 
     if (id !== null) {
-        store.seed(COLLECTIONS.USERS, id, {
+        store.seed(COLLECTIONS.USERS, id, { mfaEnabled: true,
             ...(store.get(COLLECTIONS.USERS, id) ?? {}), roles, email: `${id}@e.com`,
         });
     }
@@ -102,7 +103,7 @@ beforeEach(() => {
     // set inside one test leaks into the next. Both are re-armed here.
     mockToggle.mockResolvedValue(false);
     mockDebit.mockResolvedValue({ ok: true });
-    store.seed(USERS, MEMBER, {
+    store.seed(USERS, MEMBER, { mfaEnabled: true,
         name: 'Ada Obi', email: 'ada@example.com',
         bankDetails: { bankName: 'GTBank', accountNumber: '0123456789', accountName: 'Ada Obi', bankCode: '058' },
         serviceRegistrations: { wave: { status: 'approved', waveEarningsBalance: 50_000 } },

@@ -416,7 +416,17 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   reason for raising rather than relaxing: that file strips other
         //   files with its own line-based codeOnly(), not the block-eating
         //   regex measured here, and it never reads its own text.
-        expect(AFFECTED.length).toBeLessThanOrEqual(23);
+        //   #663 raised this from 23 to 24, on the same test as every time
+        //   before. mfa-enforcement-decided.test.ts quotes the file it replaces
+        //   — including `expect(source('src/middleware.ts')).not.toMatch(/mfa|MFA/i)`,
+        //   a regex literal inside a comment — which is the `/`-in-prose trap
+        //   this describe measures.
+        //
+        //   Raised rather than relaxed, on the same test as every time: that
+        //   file strips nothing with the naive regex. It reads raw source on
+        //   purpose, because what it asserts about the routes is the presence
+        //   of a call, and it never reads its own text.
+        expect(AFFECTED.length).toBeLessThanOrEqual(24);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');

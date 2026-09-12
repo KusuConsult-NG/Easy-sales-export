@@ -71,6 +71,7 @@
  *        notes alone would show a moderator the case with a hole in it.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
@@ -95,7 +96,7 @@ async function callRequireAdmin(
     );
     (global as any).mockFirestoreGet.mockResolvedValue({
         exists: true,
-        data: () => ({ roles: roles ?? [], ...extra }),
+        data: () => ({ mfaEnabled: true, roles: roles ?? [], ...extra }),
     });
 
     const { requireAdmin } = await import('@/lib/require-admin');

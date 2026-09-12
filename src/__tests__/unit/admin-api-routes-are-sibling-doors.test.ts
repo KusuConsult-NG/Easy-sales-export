@@ -135,6 +135,10 @@ const USER_DOC = {
     data: () => ({
         firstName: 'A', lastName: 'Seller', email: 'seller@example.com',
         roles: CALLER_ROLES,
+        //   #663 — requireAdmin now asks for a second factor on admin
+        //   accounts. Set here so this suite does not start failing on the
+        //   enforcement date rather than on a defect.
+        mfaEnabled: true,
     }),
 };
 

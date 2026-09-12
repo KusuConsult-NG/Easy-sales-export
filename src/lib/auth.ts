@@ -600,6 +600,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             token.sellerVerificationStatus = (cachedProfile as any).sellerVerificationStatus;
                             token.serviceRegistrations = cachedProfile.serviceRegistrations || {};
                             token.isBanned = cachedProfile.isBanned || cachedProfile.status === "banned" || cachedProfile.suspended || false;
+                            //   #663 — so middleware can send an administrator
+                            //   without a second factor to enrol, without a
+                            //   database read on every request. Synced on the
+                            //   same two-minute cycle as the roles it is
+                            //   checked against, so enabling MFA takes effect
+                            //   within the same window as a role change.
+                            token.mfaEnabled = cachedProfile.mfaEnabled === true;
                             token.gender = cachedProfile.gender;
                             const cachedCreatedAt = (cachedProfile as any).createdAt;
                             if (cachedCreatedAt) {

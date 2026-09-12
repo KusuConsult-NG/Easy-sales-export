@@ -103,11 +103,49 @@ async function verifyMFAHandler(request: NextRequest) {
             );
         }
 
-        const isValid = verifyTOTPToken(code, secret);
+        /**
+         *   #663 A BACKUP CODE IS ACCEPTED HERE TOO, AND THAT IS THE
+         *   PREREQUISITE FOR ENFORCING ANY OF THIS.
+         *
+         *   This route's own header said why nobody had switched enforcement
+         *   on: "switching enforcement on for those ten actions while backup
+         *   codes cannot be redeemed would lock anyone who loses their
+         *   authenticator out of withdrawals with no way back."
+         *
+         *   `verifyBackupCode` was written, is correct — it claims the code
+         *   through claimIdempotencyKey, so "each can only be used once" is a
+         *   guarantee rather than a read-modify-write — and had no callers. The
+         *   eight codes handed to a user at setup, over those exact words, could
+         *   not be redeemed anywhere.
+         *
+         *   ROUTED BY SHAPE, not by trying one and falling back to the other. A
+         *   TOTP code is six digits; a backup code is XXXX-XXXX. Falling back
+         *   would SPEND a backup code on a mistyped authenticator digit, because
+         *   the claim is taken before the caller knows which kind of credential
+         *   they offered.
+         */
+        const submitted = code.trim();
+        const looksLikeBackupCode = /^[0-9]{4}-[0-9]{4}$/.test(submitted);
+
+        let isValid: boolean;
+
+        if (looksLikeBackupCode) {
+            const { verifyBackupCode } = await import("@/lib/mfa");
+            const redeemed = await verifyBackupCode(session.user.id, submitted);
+            isValid = redeemed.success;
+        } else {
+            isValid = verifyTOTPToken(submitted, secret);
+        }
 
         if (!isValid) {
             return NextResponse.json(
-                { success: false, error: "Invalid verification code" },
+                {
+                    success: false,
+                    //   The same message either way. Saying which kind of
+                    //   credential was wrong tells an attacker which they are
+                    //   closer to guessing.
+                    error: "Invalid verification code",
+                },
                 { status: 400 }
             );
         }

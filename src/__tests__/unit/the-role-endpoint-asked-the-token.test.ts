@@ -56,6 +56,7 @@
  *     reword this header                              SURVIVED, as intended
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -93,9 +94,9 @@ beforeEach(() => {
     jest.clearAllMocks();
     store = installFakeDb();
     actAs(CALLER, ['admin']);
-    store.seed(COLLECTIONS.USERS, CALLER, { roles: ['admin'], email: 'admin@example.com' });
-    store.seed(COLLECTIONS.USERS, TARGET, { roles: ['general_user'], email: 'ada@example.com' });
-    store.seed(COLLECTIONS.USERS, SUPER_TARGET, { roles: ['super_admin'], email: 'boss@example.com' });
+    store.seed(COLLECTIONS.USERS, CALLER, { mfaEnabled: true, roles: ['admin'], email: 'admin@example.com' });
+    store.seed(COLLECTIONS.USERS, TARGET, { mfaEnabled: true, roles: ['general_user'], email: 'ada@example.com' });
+    store.seed(COLLECTIONS.USERS, SUPER_TARGET, { mfaEnabled: true, roles: ['super_admin'], email: 'boss@example.com' });
 });
 
 const call = async (method: 'POST' | 'DELETE', body: unknown) => {
@@ -139,7 +140,7 @@ describe('#526 — a plain admin cannot change a super admin', () => {
 
     it('and a super admin can still change another admin', async () => {
         actAs('boss-1', ['super_admin']);
-        store.seed(COLLECTIONS.USERS, 'boss-1', { roles: ['super_admin'] });
+        store.seed(COLLECTIONS.USERS, 'boss-1', { mfaEnabled: true, roles: ['super_admin'] });
 
         expect((await call('POST', { userId: SUPER_TARGET, roles: ['cooperative_member'] })).status).toBe(200);
     });
@@ -156,7 +157,7 @@ describe('#526 — the database decides, not the token', () => {
         //   The revoked-admin case. #356's whole point: the JWT keeps its claim
         //   for hours after the record loses it.
         actAs(CALLER, ['admin']);                                   // token still says admin
-        store.seed(COLLECTIONS.USERS, CALLER, { roles: ['general_user'] });  // record does not
+        store.seed(COLLECTIONS.USERS, CALLER, { mfaEnabled: true, roles: ['general_user'] });  // record does not
 
         const res = await call('POST', { userId: TARGET, roles: ['wave_participant'] });
 
@@ -167,7 +168,7 @@ describe('#526 — the database decides, not the token', () => {
     it('AND A SUSPENDED ADMIN IS REFUSED', async () => {
         //   requireAdmin checks this while it has the document; the old gate
         //   never read a document at all.
-        store.seed(COLLECTIONS.USERS, CALLER, { roles: ['admin'], suspended: true });
+        store.seed(COLLECTIONS.USERS, CALLER, { mfaEnabled: true, roles: ['admin'], suspended: true });
 
         expect((await call('POST', { userId: TARGET, roles: ['wave_participant'] })).status).toBe(401);
     });
@@ -201,7 +202,7 @@ describe('#526 — a role change leaves a record', () => {
     });
 
     it('AND SO DOES REVOKING', async () => {
-        store.seed(COLLECTIONS.USERS, TARGET, { roles: ['general_user', 'wave_participant'] });
+        store.seed(COLLECTIONS.USERS, TARGET, { mfaEnabled: true, roles: ['general_user', 'wave_participant'] });
 
         await call('DELETE', { userId: TARGET, roles: ['wave_participant'] });
 

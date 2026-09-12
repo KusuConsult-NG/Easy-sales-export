@@ -8,8 +8,10 @@ checked against the tree, not carried forward.
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 712 suites / 12,930 tests green.** The
-version before this one said 12,894 across 709.
+**Gate at this revision: build clean, 713 suites / 12,965 tests green** — and
+green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
+world after #663's enforcement date. The version before this one said 12,930
+across 712.
 
 **And every database suite was run for real**, against the local stack
 `scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
@@ -208,10 +210,34 @@ A `buildTime` alone could not answer it, for the reasons `lib/deployment-facts`
 records: a failed build leaves the previous image serving under a plausible
 timestamp, and redeploying an old commit produces a new one.
 
-### 🔑 Two decisions with no code consequence until made
+### ✅ MFA enforcement — **#445 reversed by the owner on 2026-09-12** (#663)
 
-- **MFA enforcement for admin accounts** — the machinery exists; whether it is
-  mandatory is a policy call.
+`mfa-not-enforced.test.ts` carried: *"OWNER DECISION (#445): DO NOT ENFORCE.
+Asked directly, told directly. This is no longer my judgement held open pending
+an answer — it is the answer, and these tests are the record of it."*
+
+The owner reversed it in as many words — *"go ahead with the MFA enforcement"*,
+then *"ignore my decision for earlier but do not break production"*. Recorded
+here as plainly as the original, because a repository holding two contradictory
+owner decisions with only one of them written down is worse than one holding
+neither.
+
+**The order that file demanded was followed.** It said: *"wire verifyBackupCode()
+first, THEN enforcement"*, because enforcing while recovery is unwired locks
+anyone who loses their authenticator out of their own money. The verify route
+accepts a backup code before any gate closes — routed by SHAPE, since a fallback
+would spend a single-use code on a mistyped authenticator digit.
+
+**And it does not land on deploy.** Not one administrator account has MFA today,
+so enforcing immediately would refuse every one at once — the first version of
+the change did, and nineteen suites went red, the fixtures modelling production
+faithfully. Enforcement has a date in the code (`MFA_ADMIN_ENFORCE_FROM`, 14
+days out) rather than a flag somebody must remember: before it, unenrolled
+admins are warned and let through; after it, they are sent to enrol, with nobody
+setting anything.
+
+### 🔑 One dashboard lookup
+
 - **Paystack reference `s9ib3feavh`** — flagged during an earlier reconciliation
   and never searched in the Paystack dashboard.
 

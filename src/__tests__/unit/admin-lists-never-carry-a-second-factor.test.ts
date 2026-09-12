@@ -49,6 +49,7 @@
  *        may not.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 // #535 The PII decision reads the database through auth(); actAs sets it.
@@ -97,11 +98,11 @@ function actAs(roles: string[]) {
     (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve({
         user: { id: 'admin1', roles, email: 'a@x.com' },
     }));
-    store.seed(COLLECTIONS.USERS, 'admin1', { roles, email: 'a@x.com' });
+    store.seed(COLLECTIONS.USERS, 'admin1', { mfaEnabled: true, roles, email: 'a@x.com' });
 }
 
 function seed() {
-    store.seed(COLLECTIONS.USERS, 'u1', {
+    store.seed(COLLECTIONS.USERS, 'u1', { mfaEnabled: true,
         firstName: 'Ada', lastName: 'Obi', email: 'ada@example.com', phone: '08011111111',
         gender: 'female', dateOfBirth: '1990-01-01', occupation: 'Farmer',
         // The keys only the user document has — the ones that survive `...app`.

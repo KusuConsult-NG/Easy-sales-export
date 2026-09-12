@@ -112,6 +112,7 @@
  *   own test. _savePlatformSettingsAction is executed now.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
@@ -153,7 +154,7 @@ function actAs(id: string, tokenRoles: string[], recordRoles: string[]): void {
     (auth as unknown as jest.Mock).mockImplementation(() => Promise.resolve({
         user: { id, roles: tokenRoles, email: `${id}@example.com` },
     }));
-    store.seed(COLLECTIONS.USERS, id, { roles: recordRoles, email: `${id}@example.com` });
+    store.seed(COLLECTIONS.USERS, id, { mfaEnabled: true, roles: recordRoles, email: `${id}@example.com` });
 }
 
 beforeEach(() => {
@@ -199,7 +200,7 @@ describe('#532 — a token that outlived its roles opens nothing', () => {
             userId: 'member-1', amount: 5000, status: 'pending',
             createdAt: '2026-01-02T00:00:00.000Z',
         });
-        store.seed(COLLECTIONS.USERS, 'member-1', {
+        store.seed(COLLECTIONS.USERS, 'member-1', { mfaEnabled: true,
             fullName: 'Ada Obi', email: 'ada@example.com',
             bankDetails: { accountNumber: '0123456789', bankName: 'GTB' },
         });
@@ -218,7 +219,7 @@ describe('#532 — a token that outlived its roles opens nothing', () => {
             userId: 'member-1', amount: 5000, status: 'pending',
             createdAt: '2026-01-02T00:00:00.000Z',
         });
-        store.seed(COLLECTIONS.USERS, 'member-1', {
+        store.seed(COLLECTIONS.USERS, 'member-1', { mfaEnabled: true,
             fullName: 'Ada Obi', email: 'ada@example.com',
             bankDetails: { accountNumber: '0123456789', bankName: 'GTB' },
         });
@@ -234,7 +235,7 @@ describe('#532 — a token that outlived its roles opens nothing', () => {
         //   requireAdmin checks this while it has the document; the JWT gate
         //   never read one.
         actAs(BOSS, ['admin'], ['admin']);
-        store.seed(COLLECTIONS.USERS, BOSS, { roles: ['admin'], suspended: true });
+        store.seed(COLLECTIONS.USERS, BOSS, { mfaEnabled: true, roles: ['admin'], suspended: true });
 
         expect((await withdrawalQueue()).success).toBe(false);
     });

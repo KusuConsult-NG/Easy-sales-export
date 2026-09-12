@@ -106,6 +106,7 @@
  *   agree — and it is why the swaps are anchored rather than global.
  */
 
+// #663 — mfaEnabled on the seeded administrator. requireAdmin now requires a second factor of admin accounts, and these fixtures were written when none did. Set here rather than left to the rollout window, so this suite does not start failing on the enforcement date.
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -144,7 +145,7 @@ function actAs(id: string, tokenRoles: string[], recordRoles: string[] | null): 
         { user: { id, roles: tokenRoles, email: `${id}@example.com` } },
     ));
     if (recordRoles !== null) {
-        store.seed(COLLECTIONS.USERS, id, { roles: recordRoles, email: `${id}@example.com` });
+        store.seed(COLLECTIONS.USERS, id, { mfaEnabled: true, roles: recordRoles, email: `${id}@example.com` });
     }
 }
 
@@ -164,7 +165,7 @@ describe('#537(a) — the name beside the number', () => {
      * is invisible — which is why it survived in production.
      */
     function seedBorrowerWithNestedBankAccountOnly(): void {
-        store.seed(COLLECTIONS.USERS, BORROWER, {
+        store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',
             email: 'adaeze@example.com',
             bankAccount: {
@@ -232,7 +233,7 @@ describe('#537(a) — the name beside the number', () => {
     it('AND A BORROWER WITH NO ACCOUNT NAME ANYWHERE FALLS BACK TO THEIR OWN NAME', async () => {
         //   The term the wrong one was shadowing. Without this, a fix that
         //   simply DELETED the offending term would pass every test above.
-        store.seed(COLLECTIONS.USERS, BORROWER, {
+        store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',
             bankAccount: { bankName: 'Zenith Bank', accountNumber: ACCOUNT_NUMBER },
         });
@@ -248,7 +249,7 @@ describe('#537(a) — the name beside the number', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#537(b) — the export obeys the same restriction as the screen', () => {
     beforeEach(() => {
-        store.seed(COLLECTIONS.USERS, BORROWER, {
+        store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',
             bankDetails: {
                 bankName: 'Zenith Bank', accountNumber: ACCOUNT_NUMBER,
@@ -331,7 +332,7 @@ describe('#537(b) — the export obeys the same restriction as the screen', () =
 describe('#537(c) — the two the containment check could not see', () => {
     it('THE ACADEMY PENDING QUEUE WITHHOLDS BANK DETAILS FROM A ROLE THAT MAY NOT APPROVE', async () => {
         actAs(ADMIN, ['academy_admin'], ['support']);
-        store.seed(COLLECTIONS.USERS, BORROWER, {
+        store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',
             bankDetails: {
                 bankName: 'Zenith Bank', accountNumber: ACCOUNT_NUMBER,
@@ -358,7 +359,7 @@ describe('#537(c) — the two the containment check could not see', () => {
         //   admits the caller to the queue, and it is deliberately untouched.
         //   Only the record changes, because only the record decides the fields.
         actAs(ADMIN, ['academy_admin'], ['super_admin']);
-        store.seed(COLLECTIONS.USERS, BORROWER, {
+        store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',
             bankDetails: {
                 bankName: 'Zenith Bank', accountNumber: ACCOUNT_NUMBER,
@@ -386,7 +387,7 @@ describe('#537(c) — the two the containment check could not see', () => {
      * test still found the account number, twice over.
      */
     function seedWaveApplicant(): void {
-        store.seed(COLLECTIONS.USERS, BORROWER, {
+        store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',
             email: 'adaeze@example.com',
             bankDetails: {

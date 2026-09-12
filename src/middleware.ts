@@ -26,6 +26,7 @@ const { auth } = NextAuth(authConfig);
 import { HUB_MODULES } from "@/config/modules.config";
 import { canonicalHostFor } from "@/lib/canonical-host";
 import { adminSiloRedirect } from "@/lib/admin-permissions";
+import { adminMfaGate } from "@/lib/mfa-policy";
 
 // Derive maps from HUB_MODULES
 const DOMAIN_MAP: Record<string, string> = Object.values(HUB_MODULES).reduce((acc, mod) => {
@@ -191,6 +192,42 @@ const authMiddleware = auth((req: any) => {
         const siloRedirect = adminSiloRedirect(req.auth?.user?.roles, pathname);
         if (siloRedirect) {
             return NextResponse.redirect(new URL(siloRedirect, req.nextUrl.origin));
+        }
+
+        /*
+         *   #663 AN ADMINISTRATOR WITHOUT A SECOND FACTOR IS SENT TO ENROL.
+         *
+         *   The MFA feature worked and was connected to nothing: the verify
+         *   route's own header said "NOTHING READS THAT COOKIE, AND NOTHING
+         *   ENFORCES MFA", and `requiresMFA()` named ten sensitive actions with
+         *   no callers. This is one of the two places that changed.
+         *
+         *   A FUNCTION, for the same reason as the silo rule above — middleware
+         *   cannot be exercised in a test and a function can, and the mutants
+         *   that survived against the inline version of THAT rule are on record
+         *   a few lines up.
+         *
+         *   It answers differently for a page and for an API route, because
+         *   redirecting a fetch to an HTML page turns "you must enrol" into a
+         *   JSON parse error at the caller. And it refuses to touch /profile,
+         *   /auth/* or /api/auth/* at all — those are how somebody gets out, and
+         *   a redirect loop here would leave an administrator unable to reach
+         *   either the admin panel or the screen that fixes it.
+         */
+        const mfaGate = adminMfaGate(pathname, {
+            roles: req.auth?.user?.roles,
+            mfaEnabled: (req.auth?.user as { mfaEnabled?: boolean } | undefined)?.mfaEnabled,
+        });
+
+        if (mfaGate?.kind === "deny") {
+            return NextResponse.json(
+                { success: false, error: mfaGate.reason, code: "MFA_ENROLMENT_REQUIRED" },
+                { status: 403 },
+            );
+        }
+
+        if (mfaGate?.kind === "redirect") {
+            return NextResponse.redirect(new URL(mfaGate.to, req.nextUrl.origin));
         }
     }
 
