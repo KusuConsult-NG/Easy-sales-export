@@ -153,12 +153,59 @@ export async function hardResetCacheAction() { const authCheck = await requireAd
  * 4. Cleanup Abandoned Drafts
  * (Required by Maintenance UI)
  */
+/**
+ *   #680 THE ONE BUTTON ON THE MAINTENANCE SCREEN DID NOTHING AND SAID IT HAD
+ *        WORKED.
+ *
+ *        `/admin/settings/maintenance` is the only caller of anything in this
+ *        file. It asks the admin to confirm:
+ *
+ *            "Are you sure you want to delete all draft listings older than 30
+ *             days? This action cannot be undone."
+ *
+ *        and then called a function whose entire body was
+ *
+ *            // Placeholder for logic to delete old 'draft' applications
+ *            return { success: true, message: "Draft cleanup executed (Dry
+ *                     run).", count: 0 };
+ *
+ *        The screen read `success`, showed a green tick and the words
+ *        "Successfully cleaned up 0 drafts", and rendered "Cleanup complete!
+ *        Removed 0 items." An operator cannot tell that from "there was
+ *        nothing to clean", so drafts accumulate while the monthly maintenance
+ *        task is believed to be running.
+ *
+ *        That is the shape docs/audit/outstanding-work.md already records
+ *        against push notifications — "a stub that returned a fake success id
+ *        for every send, so nothing was ever delivered while the logs reported
+ *        success" — and #676 met it again in the SMS sandbox. A third channel.
+ *
+ *        AND IT THREATENED AN IRREVERSIBLE DELETION THAT COULD NOT HAPPEN,
+ *        which is its own cost: a confirm dialog that cries wolf is one the
+ *        next dialog inherits.
+ *
+ *   THE DELETION IS NOT IMPLEMENTED HERE, DELIBERATELY. The standing
+ *   instruction for this codebase is that nothing is deleted or destroyed —
+ *   #292 and lib/module-application-erasure.ts are built on it, and #675 now
+ *   guards the Cloudinary half. Writing a bulk delete of land listings to make
+ *   a stub honest would be the wrong repair by a wide margin.
+ *
+ *   So the button refuses, and says why. If abandoned drafts are ever to be
+ *   cleared, the decision about what "cleared" means — removed, or marked and
+ *   kept the way an erased application is — is the owner's, and it belongs in
+ *   that conversation rather than in a placeholder nobody re-read.
+ */
 export async function cleanupAbandonedDraftsAction() { const authCheck = await requireAdmin("config:update");
     if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
-    try { const db = getAdminDb();
-        // Placeholder for logic to delete old 'draft' applications
-        return { success: true as const, message: "Draft cleanup executed (Dry run).", count: 0, error: null };
-    } catch (error: any) { return { success: false as const, error: error.message, count: 0, data: null };
-    }
+    return {
+        success: false as const,
+        error:
+            "Draft cleanup is not implemented. Nothing was deleted, and nothing has been deleted by this "
+            + "button before — it has always been a placeholder that reported success. Removing listings "
+            + "would need a decision first about whether they are deleted or marked and kept, the way an "
+            + "erased application is.",
+        count: 0,
+        data: null,
+    };
 }
