@@ -301,6 +301,19 @@ jobs:
               echo "::error::THE APP REFUSED THE CRON SECRET. /api/cron/$JOB_PATH answered $http_code, which is what it returns when the Authorization header does not match its own CRON_SECRET. The secret is SET — it does not match the one the running app checks."
             elif [ "$http_code" = "404" ]; then
               echo "::error::THE APP IS THERE AND THE ROUTE IS NOT. /api/cron/$JOB_PATH returned 404 from the application itself, so this endpoint is missing from the deployed build — most likely the deployed build is older than the route."
+            elif [ "$http_code" = "409" ]; then
+              # ── #677 THE JOB RAN AND THE DATA IS WRONG ────────────────────
+              #
+              # A third kind of failure, and the one this workflow could not
+              # previously express. Every branch above says the job DID NOT RUN;
+              # this one says it ran perfectly and found something.
+              #
+              # reconcile-paystack returned 200 for `critical` — more than three
+              # payments present in Paystack and missing from the database — so
+              # a run that found money the platform has no record of printed a
+              # green tick. The result went to system_health, which nothing in
+              # the application reads.
+              echo "::error::THE JOB RAN AND FOUND A PROBLEM WITH THE DATA. /api/cron/$JOB_PATH completed normally and is reporting a discrepancy it wants a human to look at — this is NOT a broken endpoint or a bad secret. The response body above lists what it found; for reconcile-paystack that is payments Paystack has and this platform does not."
             else
               echo "::error::/api/cron/$JOB_PATH returned HTTP $http_code"
             fi

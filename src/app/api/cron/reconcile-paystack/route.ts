@@ -263,10 +263,50 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 5. Return summary ────────────────────────────────────────────────────────
+    /**
+     *   #677 THE WORST THING THIS JOB CAN FIND WAS REPORTED AS SUCCESS.
+     *
+     *        The mapping was:
+     *
+     *            ok      → 200
+     *            warning → 200
+     *            error   → 500
+     *            EVERYTHING ELSE → 200
+     *
+     *        and `critical` is everything else. `critical` means MORE THAN
+     *        THREE PAYMENTS EXIST IN PAYSTACK THAT ARE MISSING FROM THIS
+     *        DATABASE — money the platform took and has no record of. The 500
+     *        fired only when an exception had been thrown, so a run that
+     *        completed perfectly and found fifty missing payments answered 200.
+     *
+     *        AND NOTHING ELSE WAS WATCHING. The result is written to
+     *        `system_health/paystack_reconciliation`, and that collection is
+     *        read by NO screen, NO action and NO other route in this
+     *        repository — swept today. So the finding went into a document
+     *        nobody opens, and the one process that does look at this job, the
+     *        scheduled workflow, was told the run succeeded.
+     *
+     *        That is two of this audit's recurring shapes stacked on the
+     *        payment-reconciliation path: a check that cannot fail, and a
+     *        record nothing consults. Every six hours, for ever.
+     *
+     *   WHY 409 AND NOT 500. #631 established that this workflow must say which
+     *   KIND of failure it met, because "the route is missing" and "nothing is
+     *   deployed" need different people to do different things. A reconciliation
+     *   that RAN CORRECTLY and found a discrepancy is a third kind: the job is
+     *   healthy and the data is not. 500 would say the endpoint broke, which is
+     *   the one thing that did not happen.
+     *
+     *   WARNING STAYS AT 200 ON PURPOSE. One to three unmatched references is
+     *   the ordinary noise of a payment window straddling a run boundary, and
+     *   this file's own workflow already records the principle: a failure every
+     *   few hours is a failure nobody reads. The alarm is kept for the case
+     *   that warrants one.
+     */
     const httpStatus =
-        results.status === "ok"       ? 200 :
-        results.status === "warning"  ? 200 :
-        results.error                 ? 500 : 200;
+        results.error                 ? 500 :
+        results.status === "critical" ? 409 :
+        200;
 
     return NextResponse.json(results, { status: httpStatus });
 }
