@@ -163,6 +163,32 @@ async function _getAllExportRequestsAction(
 // Export Onboarding Approval
 // ============================================
 
+/**
+ *   #678 THESE COUNTERS ARE MAINTAINED AND NOTHING READS THEM — TREAT THEM AS
+ *   UNRECONCILED UNTIL SOMEBODY DOES.
+ *
+ *   `system_metadata/export_stats` is written here and in two places in
+ *   export/_ex_onboarding.ts, and read by NO screen, NO action and NO route in
+ *   this repository. Every mention of the name is a write.
+ *
+ *   That is not merely idle, it is a trap. The counters move by
+ *   FieldValue.increment from an application's previous status to its next, so
+ *   they are only correct if EVERY transition since the beginning has been
+ *   applied exactly once — and the catch below swallows its own failures into
+ *   logger.error, which is the right call for a counter nobody reads and the
+ *   wrong one for a number anybody trusts. Nothing has ever reconciled them
+ *   against the applications they count.
+ *
+ *   So whoever builds the dashboard these were written for inherits numbers
+ *   that have drifted for as long as the platform has been running, and that
+ *   will look authoritative because they are atomic and awaited.
+ *
+ *   THE HONEST OPTIONS ARE TO RECONCILE THEM ONCE AND THEN SHOW THEM, OR TO
+ *   STOP KEEPING THEM. The writes are left in place — removing them would
+ *   discard the only thing that could be reconciled against, and this audit
+ *   does not destroy data — but nothing should be rendered from this document
+ *   until it has been counted against `export_applications` at least once.
+ */
 async function updateExportStatsAtomic(decrementStatus?: 'pending' | 'approved' | 'rejected' | 'resubmitted' | null, incrementStatus?: 'pending' | 'approved' | 'rejected' | 'resubmitted' | null) {
     try {
         const statsRef = db.collection("system_metadata").doc("export_stats");
