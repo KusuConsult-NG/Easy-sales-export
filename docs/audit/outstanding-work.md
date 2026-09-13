@@ -274,6 +274,48 @@ instrument reports "clean"; two are both.
 
 ---
 
+## 1c. Since `a3d179d5` — findings #671 to #686
+
+Sixteen findings. **Six of them are one defect**, met in six places, and naming
+that is worth more than the six entries: *a legacy re-import overwrote a live
+record with the form in front of the admin.* `ImportLegacyModal` opens EMPTY
+every time — it never reads the person being imported — and the action then
+wrote what the form said over what the member had. The variations are only in
+what got overwritten.
+
+| | |
+|---|---|
+| ✅ #671 | **The forensic scan reported 45 approvals as orphaned; the records were there.** The lookup knew one way to find a Farm Nation application and the writers use five. Now a read-only multi-key lookup (`userId` field → `applicationId` on the user → deterministic ids → `userEmail`, unclaimed-or-own → `profile.email`). **An over-reach was reverted in the same finding**: downgrading a genuinely absent record to `inconclusive` broke four existing tests that were right. |
+| ✅ #672 | **The money suite the local stack started and never told you about.** `up.sh` brought up a database and did not write `LOCAL_PG_URL`, so `npm run test:pg` skipped. The pre-push hook now runs it when a database is resolvable and says so loudly when it is not. |
+| ✅ #673 | **A query-plan test passing on another suite's leftovers.** The condition is not "empty table" but *empty AND ANALYZED* — a seed-and-delete leaves dead tuples and the planner keeps the old estimate. Residue fixed and ratcheted. |
+| ✅ #674 | The fix for #671 nearly repeated #671 — the new lookup had to read `MODULE_ERASURE_TARGETS` rather than carry its own copy of the id scheme. |
+| ✅ #675 | **The owner's most emphatic standing rule was true by accident.** "Nothing is destroyed in Cloudinary" held because no caller happened to call `destroy`, not because anything stopped one. Now asserted. |
+| ✅ #676 | The record of a broadcast was written **after** the broadcast, so a crash mid-send left a send with no record. |
+| ✅ #677 | **A reconciliation that found money missing reported success.** The cron returned 200 whatever it found; `critical` now returns 409 and the workflow has a branch that says the job ran and found a problem with the DATA. |
+| ✅ #678 | The platform collects answers nobody reads — a collection with writers and no readers. Recorded, not wired. |
+| ✅ #679 | **Two callers promised atomicity the write batch cannot deliver.** `SupabaseWriteBatch.commit()` is a sequential loop. The batch now says so in its own header and names `claim_status_transition` as the alternative. |
+| ✅ #680 | **The one button on the maintenance screen did nothing and said it worked.** A placeholder returning `{success: true, count: 0}` behind a confirm dialog threatening an irreversible deletion. It refuses and explains now — the deletion is deliberately NOT implemented, because nothing here removes a member's records without a decision first. |
+| ✅ #681 | **A legacy import deleted a member's other profile documents.** Now superseded — `_migratedTo` / `_supersededAt` / `_supersededBy` — rather than deleted. |
+| ✅ #682 | **The module migration merged one membership row onto another.** Measured cost: a cooperative `savingsBalance` of ₦50,000 going to zero. It refuses and logs a conflict now instead of merging. |
+| ✅ #683 | **The money inside a registration travelled with the status.** Measured cost: a WAVE `waveEarningsBalance` of ₦75,000 going to zero. Money fields are preserved from the ACTIVE registration. |
+| ✅ #684 | **The re-initialisation guard reached three provisioning blocks of ten.** `createdAt` and `submittedAt` were rewritten on re-import — and the academy review queue orders by `submittedAt`, so a re-import sent an old application back to the top of the queue. |
+| ✅ #685 | **A re-import rewrote the member's roles from the form's checkboxes.** `set(merge: true)` protects a field the payload OMITS but replaces an array it NAMES. Money was safe; what the member lost was being COUNTED and CONTACTED — broadcast audiences and forensic samples both key on `roles array-contains`. Now a union, which is what `user-migration.ts` already did. |
+| ✅ #686 | **A field the caller had no value for was deleted from the record.** An adapter-level defect, not a caller one: a plain `undefined` reached the database as a DELETION on `update()` and `set(merge)` alike. Firestore, which this adapter shims, either throws or ignores — removing has always needed `FieldValue.delete()`. On the legacy import that deleted the bank account payouts go to, the next of kin a loan is guaranteed against, and **the record pointing at the member's uploaded ID** — the Cloudinary asset survives, but the only thing that knew its URL was the field just removed. One guard in `buildWritePatch`, one in `flattenForMerge`, and all 13,160 tests pass unchanged. |
+
+**On #686 and the instruments.** I expected to find the fake database had hidden
+this — it clones with `JSON.stringify`, which drops undefined keys — and wrote
+that down before measuring. It is not what happens: the fake set the key to
+undefined first and the field was gone, so it matched the adapter exactly, which
+is the one property it promises. A mutant reverting the fake alone kills the
+behavioural tests. **The defect was catchable from a behavioural test at any
+point; what was missing was the test** — nobody had re-imported a member
+carrying details the second import did not mention. That is a more useful
+conclusion than another note about instruments: the gap was in the questions
+being asked.
+
+
+---
+
 ## 2. UI
 
 ### ✅ Done
@@ -1388,6 +1430,37 @@ new, and because two of them were found in **my own work** during this session.
    audit's own tooling, all with the same signature: a scanner reporting ZERO
    over a surface it could not read. The repair each time was to point it at a
    known-bad sample first and only then believe its answer about the tree.
+
+8. **A stale record written over a live one.** The dominant class of this
+   session: **#84, #681, #682, #683, #684, #685 and #686 are all the same
+   defect** in the legacy import, and it is worth stating once rather than seven
+   times. `ImportLegacyModal` opens EMPTY — it never reads the person being
+   imported — and the action wrote the form over the record. What that cost
+   depended only on which field you look at: other profile documents (#681), a
+   ₦50,000 cooperative balance (#682), a ₦75,000 WAVE balance (#683), the dates
+   the review queue orders by (#684), the roles the broadcast audiences key on
+   (#685), and the bank account, next of kin and ID-document URLs (#686).
+
+   The repair is the same shape every time — **read what is there, and let an
+   import ADD rather than REPLACE.** Removing something is a different action,
+   with its own gate and its own audit row, and the screen for it already
+   exists.
+
+   **The form is the root, and it is still standing — deliberately.** Every one
+   of these was fixed at the WRITE, because that is where the data is lost, and
+   a write-side fix is the one that holds no matter which screen, script or
+   future caller sends the payload. Those fixes are complete and the member's
+   data is safe as it stands.
+
+   Populating the modal from the member being imported would stop the class at
+   its source, and it is the right next change. It is recorded rather than done
+   because it is UI work of a different kind — it needs a lookup on email, a
+   loading and not-found state, and an answer to what an admin should SEE when
+   the person already exists (an import form pre-filled, or an edit form that
+   says so). That is a screen to design, not a line to correct, and it earns
+   nothing the write-side fixes have not already secured. My judgement, not a
+   question being passed back: finish the data-integrity sweep first, then build
+   it.
 
 7. **A surviving mutant is a question about the TESTS before it is a question
    about the code.** Three findings running (#638, #639, #641/#642) had a mutant
