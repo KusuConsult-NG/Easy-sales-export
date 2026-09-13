@@ -116,113 +116,108 @@ jobs:
             -m "Release ${{ github.event.inputs.release_version }} — certified production deployment"
           git push origin "${{ github.event.inputs.release_version }}"
 
-  # Trigger Railway production deployment
+  # #703 — CONFIRM the release reached production. It does not trigger one:
+  # Railway's GitHub integration deploys `main` on push, and the mutation this
+  # job used to call does not exist. The name said "Deploy" for a year while the
+  # job deployed nothing, which is the kind of thing this audit exists to stop.
   deploy-production:
-    name: Deploy to Production
+    name: Confirm Production Release
     needs: tag-release
     runs-on: ubuntu-latest
 
     steps:
-      # This step used to be a bare `curl -sS` whose exit status was the only
-      # thing gating the job. A GraphQL error is returned as HTTP 200 with an
-      # `errors` array in the body, so curl exited 0, the step went green, and
-      # the next step printed "=== PRODUCTION DEPLOYMENT ===" for a deploy that
-      # never happened.
+      # #703 — THIS STEP CALLED A MUTATION RAILWAY DOES NOT HAVE.
       #
-      # That is exactly what occurred on 2026-08-09 for v1.2.0: Railway replied
-      # {"errors":[{"message":"Problem processing request"}]} and the workflow
-      # reported success. It was caught by polling production by hand, which is
-      # not a control.
+      # It POSTed `mutation { deploymentTrigger(input: { serviceId: ... }) }`
+      # and Railway answered HTTP 400:
       #
-      # WHAT THIS STEP NOW ASSERTS
-      #   1. the Railway credentials are actually present
-      #   2. the HTTP status is 2xx
-      #   3. the body carries no `errors` array
-      #   4. a deployment id came back
+      #   Cannot query field "deploymentTrigger" on type "Mutation".
+      #   Did you mean "deploymentCancel", "deploymentRemove",
+      #   "deploymentRestart", "deploymentTriggerCreate", ...
       #
-      # WHAT IT STILL DOES NOT ASSERT: that the build succeeded and the new
-      # revision is serving traffic. Railway accepting a trigger is not the same
-      # as production having changed. Verify that separately — see the note at
-      # the end of this file.
-      - name: Check Railway credentials are present
+      # There is no such field, so this workflow has NEVER deployed anything.
+      # That is also what happened on 2026-08-09 for v1.2.0, recorded above:
+      # the step was a bare `curl` whose exit status was the only check, so a
+      # GraphQL error returned with HTTP 200 read as success. Hardening the step
+      # is what finally made the real failure visible.
+      #
+      # AND NOTHING WAS LOST BY IT, which is why this is a verification and not
+      # a corrected mutation. Railway's own GitHub integration deploys `main` on
+      # push; that is how every release has actually reached production,
+      # including every one this workflow reported. Re-triggering it from here
+      # would be a second way to do something that already happens.
+      #
+      # SO THE STEP NOW ASSERTS THE THING THE OLD ONE ADMITTED IT COULD NOT:
+      # the comment above said "WHAT IT STILL DOES NOT ASSERT: that the build
+      # succeeded and the new revision is serving traffic". This waits until
+      # production reports the commit being released, and fails if it never
+      # does. A release is not a request that was accepted; it is a revision
+      # that is answering.
+      - name: Verify production is serving this commit
         env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PRODUCTION_SERVICE_ID: ${{ secrets.RAILWAY_PRODUCTION_SERVICE_ID }}
-        run: |
-          missing=0
-          if [ -z "$RAILWAY_API_TOKEN" ]; then
-            echo "::error::RAILWAY_API_TOKEN is empty. Nothing can be deployed."
-            missing=1
-          fi
-          if [ -z "$RAILWAY_PRODUCTION_SERVICE_ID" ]; then
-            echo "::error::RAILWAY_PRODUCTION_SERVICE_ID is empty. Railway will reject the mutation."
-            missing=1
-          fi
-          [ "$missing" -eq 0 ] || exit 1
-          echo "Railway credentials present."
-
-      - name: Trigger Railway Production Deployment
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PRODUCTION_SERVICE_ID: ${{ secrets.RAILWAY_PRODUCTION_SERVICE_ID }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          RELEASE_SHA: ${{ github.sha }}
         run: |
           set -o pipefail
 
-          # Built with jq. `tojson` emits the id already quoted and escaped, so
-          # the QUERY SHAPE is byte-identical to the interpolated form that has
-          # been deploying successfully, while an id containing a quote is
-          # escaped rather than producing malformed JSON.
-          #
-          # Switching to GraphQL variables would be tidier and is deliberately
-          # NOT done: this endpoint is not somewhere to discover a wire-format
-          # incompatibility during a release.
-          payload=$(jq -nc --arg sid "$RAILWAY_PRODUCTION_SERVICE_ID" \
-            '{query: ("mutation { deploymentTrigger(input: { serviceId: " + ($sid|tojson) + " }) { id } }")}')
-
-          http_code=$(curl -sS -o /tmp/railway.json -w '%{http_code}' \
-            --max-time 60 \
-            -X POST \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://backboard.railway.app/graphql/v2" \
-            --data "$payload")
-
-          echo "HTTP $http_code"
-          # Printed so a failure is diagnosable from the log alone. The body
-          # carries no credentials.
-          cat /tmp/railway.json || true
-          echo
-
-          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-            echo "::error::Railway returned HTTP $http_code — deployment NOT triggered."
+          if [ -z "$PRODUCTION_URL" ]; then
+            echo "::error::PRODUCTION_URL is empty, so there is nothing to check. Set the secret to the host the application is served on, including www if that is canonical."
             exit 1
           fi
 
-          if jq -e '.errors' /tmp/railway.json >/dev/null 2>&1; then
-            echo "::error::Railway returned a GraphQL error — deployment NOT triggered."
-            jq -r '.errors[]?.message // "unknown error"' /tmp/railway.json | sed 's/^/::error::/'
-            exit 1
-          fi
+          # Railway builds an image before it swaps containers; measured at
+          # roughly ten minutes on this project. Twenty is generous without
+          # being a workflow that hangs.
+          DEADLINE=$(( $(date +%s) + 1200 ))
+          attempt=0
+          last=""
 
-          deployment_id=$(jq -r '.data.deploymentTrigger.id // empty' /tmp/railway.json)
-          if [ -z "$deployment_id" ]; then
-            echo "::error::Railway accepted the request but returned no deployment id — treating as NOT triggered."
-            exit 1
-          fi
+          echo "Waiting for $PRODUCTION_URL to report ${RELEASE_SHA:0:7}"
 
-          echo "DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
-          echo "Railway accepted the trigger. Deployment id: $deployment_id"
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            attempt=$(( attempt + 1 ))
+
+            # -f is deliberately NOT used: a non-2xx body is worth printing.
+            body=$(curl -sS --max-time 20 "$PRODUCTION_URL/api/health" 2>/dev/null || true)
+            serving=$(printf '%s' "$body" | jq -r '.commit // empty' 2>/dev/null || true)
+
+            if [ -n "$serving" ]; then
+              last="$serving"
+              if [ "$serving" = "$RELEASE_SHA" ]; then
+                echo "Production is serving ${serving:0:7}."
+                echo "SERVING_COMMIT=$serving" >> "$GITHUB_ENV"
+                exit 0
+              fi
+            fi
+
+            # Reported every fifth attempt so a long wait is legible without
+            # being a wall of text.
+            if [ $(( attempt % 5 )) -eq 1 ]; then
+              echo "  attempt $attempt: serving ${last:-<no commit reported>}"
+            fi
+            sleep 20
+          done
+
+          # THREE DISTINCT FAILURES, NAMED SEPARATELY. "It did not deploy" sends
+          # somebody to the wrong place in two of these three cases.
+          if [ -z "$last" ]; then
+            echo "::error::$PRODUCTION_URL/api/health NEVER REPORTED A COMMIT. Either the host is not answering, or the running build predates the deployment facts on /api/health (#470). This is not evidence that the release failed — it is evidence that this check cannot see it."
+          elif [ "$last" = "$RELEASE_SHA" ]; then
+            echo "::error::Internal: the loop exited without matching a commit it had already matched."
+          else
+            echo "::error::PRODUCTION IS STILL SERVING ${last:0:7}, NOT ${RELEASE_SHA:0:7}. The release did not reach production within twenty minutes. Check Railway: the build may have failed, or auto-deploy from main may be disabled for this service."
+          fi
+          exit 1
 
       - name: Log deployment event
         run: |
-          echo "=== PRODUCTION DEPLOYMENT TRIGGERED ==="
-          echo "Version:       ${{ github.event.inputs.release_version }}"
-          echo "Commit:        ${{ github.sha }}"
-          echo "Deployment id: $DEPLOYMENT_ID"
-          echo "Triggered by:  ${{ github.actor }}"
-          echo "Timestamp:     $(date -u)"
+          echo "=== PRODUCTION RELEASE CONFIRMED ==="
+          echo "Version:  ${{ github.event.inputs.release_version }}"
+          echo "Commit:   ${{ github.sha }}"
+          echo "Serving:  $SERVING_COMMIT"
+          echo "Released by: ${{ github.actor }}"
+          echo "Timestamp:   $(date -u)"
           echo ""
-          echo "TRIGGERED is not DEPLOYED. Confirm the new revision is serving"
-          echo "before believing this: check the Railway dashboard, or probe a"
-          echo "route that only exists in this release."
-          echo "======================================="
+          echo "This line means production ANSWERED with this commit, not that a"
+          echo "request to deploy was accepted. That distinction is #703."
+          echo "===================================="
