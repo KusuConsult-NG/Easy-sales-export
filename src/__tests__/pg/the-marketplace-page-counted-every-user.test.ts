@@ -83,9 +83,21 @@ const PROBE_ROWS = 5_000;
 
 const clearProbeRows = async () => {
     await client!.query('delete from public.users where id like $1', [`${TAG}-%`]);
-    //   Re-analysed, not merely deleted — leaving the statistics claiming these
-    //   rows exist is how a later suite measures a table that is not there.
-    await client!.query('analyze public.users');
+    /*
+     *   VACUUMED, not merely deleted and re-analysed.
+     *
+     *   A DELETE leaves dead tuples and the PAGES they occupied, and `relpages`
+     *   is an input to every plan the next suite measures. Seeding this table to
+     *   50,024 rows and deleting them left it at 6,966 pages holding 24 live
+     *   rows — 54 MB — and on that table the planner stops choosing a Seq Scan
+     *   for a filter matching 99.6% of rows, because scanning 6,966 pages is
+     *   genuinely expensive. #471's positive control then fails, correctly,
+     *   about a table nobody meant to leave behind.
+     *
+     *   Cost me an hour of calling that failure pre-existing. It was not; it was
+     *   this file's own rows, uncollected.
+     */
+    await client!.query('vacuum analyze public.users');
 };
 
 const seedProbeRows = async () => {
