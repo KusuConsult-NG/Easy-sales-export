@@ -245,8 +245,18 @@ describe('#305 — the definition lives in one place', () => {
 
     it('ALL THREE deletion paths now build their patch from lib/user-erasure', () => {
         // The member's own path, and the two admin doors through the shared
-        // operation. If a fourth appears, it should fail this rather than grow
-        // a second implementation.
+        // operation.
+        //
+        //   #704 — this used to end "If a fourth appears, it should fail this
+        //   rather than grow a second implementation." IT COULD NOT: the three
+        //   files are named here, and a fourth door does not appear in a list
+        //   nobody added it to. A fourth already existed when that was written
+        //   — api/cron/gdpr-purge marks a user row deleted and is not below.
+        //
+        //   The claim is now kept by a-ratchet-that-could-not-see-a-fourth-door,
+        //   which DERIVES the set of doors from the source. This stays as the
+        //   named check on these three specific paths, which is what it always
+        //   actually was.
         expect(code('src/app/actions/user.ts')).toContain('userErasurePatch(');
         expect(code(OPERATION)).toContain('userErasurePatch(');
 
