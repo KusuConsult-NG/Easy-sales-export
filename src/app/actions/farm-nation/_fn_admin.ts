@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -140,6 +141,18 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             }
         });
 
+        //   #690 AND THE APPLICANT IS TOLD. This file carried no notification
+        //   of any kind: a Farm Nation seller application was accepted or
+        //   refused and the member learned it by opening the page.
+        await notifyMemberDecision({
+            userId,
+            subject: "Your Farm Nation seller application",
+            outcome: "approved",
+            link: "/farm-nation/dashboard",
+            linkText: "Open Farm Nation",
+            note: "You can now list land and produce on Farm Nation.",
+        });
+
         try {
             await invalidateUserCache(userId);
             await invalidateAdminGlobalStats();
@@ -224,6 +237,18 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
+        });
+
+        //   #690 AND THE APPLICANT IS TOLD, WITH THE REASON — which was written
+        //   to the application as `rejectionReason` and readable only by an
+        //   admin.
+        await notifyMemberDecision({
+            userId,
+            subject: "Your Farm Nation seller application",
+            outcome: "rejected",
+            reason,
+            link: "/farm-nation",
+            linkText: "View details",
         });
 
         try {
@@ -382,6 +407,26 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
+
+        /*
+         *   #690 AND THE OWNER IS TOLD, EITHER WAY.
+         *
+         *   Un-verifying is the half that matters most here: a parcel that was
+         *   public stops being public, and the owner had no way to learn it had
+         *   happened, let alone that it had happened to them rather than to the
+         *   site. It is reported as a decision rather than as an approval,
+         *   because it is one.
+         */
+        await notifyMemberDecision({
+            userId: (property as any).ownerId,
+            subject: "Your Farm Nation property",
+            outcome: verified ? "approved" : "rejected",
+            reason: verified ? undefined : "Its verification has been withdrawn pending review.",
+            channel: "land",
+            link: `/farm-nation/property/${propertyId}`,
+            linkText: "View property",
+            note: verified ? "It is now shown to buyers as verified." : undefined,
+        });
 
         /**
          *   #533 TWO THINGS WERE WRONG WITH THIS ROW, AND THE OTHER TWO ACTIONS

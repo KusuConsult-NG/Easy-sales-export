@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -16,6 +17,21 @@ import {
 } from "@/lib/land-listing-status";
 import { recordAdminAction } from "@/lib/audit-log";
 import { safeToISOString, UNKNOWN_DATE_ISO } from "@/lib/date-utils";
+
+/**
+ *   #690 What the member calls the thing that was decided.
+ *
+ *   Partial on purpose: this action only writes a verdict for the three types
+ *   below. `certificates`, `resources` and `courses` are in the ContentType
+ *   union and are not decided here, so naming them would claim a notice they
+ *   never send.
+ */
+const SUBJECT: Partial<Record<ContentType, string>> = {
+    products: "Your product listing",
+    land: "Your land listing",
+    export: "Your export listing",
+};
+
 
 export type ContentType = "products" | "land" | "certificates" | "resources" | "courses" | "export";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -310,6 +326,11 @@ export async function approveContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Product listing not found" };
                     }
+                    //   #690 The owner, so the decision can be told to them.
+                    //   Only `land` was captured before, because only `land`
+                    //   needed a cache invalidation — the notice needs all three.
+                    landOwnerId = (docSnap.data()?.sellerId as string | undefined)
+                        ?? (docSnap.data()?.userId as string | undefined) ?? null;
                     transaction.update(docRef, {
                         status: "active",
                         approvedAt: timestamp,
@@ -361,6 +382,10 @@ export async function approveContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Export listing not found" };
                     }
+                    //   #690 As above — the export catalogue keys its owner on
+                    //   userId.
+                    landOwnerId = (docSnap.data()?.userId as string | undefined)
+                        ?? (docSnap.data()?.sellerId as string | undefined) ?? null;
                     transaction.update(docRef, {
                         status: "live",
                         isActive: true,
@@ -388,6 +413,25 @@ export async function approveContentAction(
                 logger.error('[Content Approval] Cache clear error:', cacheError);
             }
         }
+
+        /*
+         *   #690 AND THE MEMBER IS TOLD.
+         *
+         *   This file decides whether a member's product, land or export
+         *   listing may be seen, and contained no notification of any kind.
+         *   Approval is the half people notice least and wait for most: a
+         *   seller whose listing is live has no reason to know it unless they
+         *   keep checking.
+         */
+        await notifyMemberDecision({
+            userId: String((result as any).ownerId ?? ""),
+            subject: SUBJECT[type] ?? "Your listing",
+            outcome: "approved",
+            channel: type === "land" ? "land" : "success",
+            link: type === "land" ? `/farm-nation/property/${id}` : "/dashboard",
+            linkText: "View listing",
+            note: "It is now visible to buyers.",
+        });
 
         await recordAdminAction({
             action: 'content:approve',
@@ -460,6 +504,10 @@ export async function rejectContentAction(
             return { success: false as const, error: "Rejection reason is too long (max 500 characters)" , data: null };
         }
 
+        //   #690 The owner, read from the snapshot each branch already has, so
+        //   the refusal can be told to the person it refuses.
+        let rejectOwnerId: string | null = null;
+
         const result = await db.runTransaction(async (transaction) => {
             switch (type) {
                 case "products": {
@@ -468,6 +516,9 @@ export async function rejectContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Product listing not found" };
                     }
+                    rejectOwnerId = (docSnap.data()?.ownerId as string | undefined)
+                        ?? (docSnap.data()?.sellerId as string | undefined)
+                        ?? (docSnap.data()?.userId as string | undefined) ?? null;
                     transaction.update(docRef, {
                         status: "rejected",
                         rejectionReason: reason,
@@ -496,6 +547,9 @@ export async function rejectContentAction(
                         };
                     }
 
+                    rejectOwnerId = (docSnap.data()?.ownerId as string | undefined)
+                        ?? (docSnap.data()?.sellerId as string | undefined)
+                        ?? (docSnap.data()?.userId as string | undefined) ?? null;
                     transaction.update(docRef, {
                         status: "rejected",
                         verificationStatus: "rejected",
@@ -514,6 +568,9 @@ export async function rejectContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Export listing not found" };
                     }
+                    rejectOwnerId = (docSnap.data()?.ownerId as string | undefined)
+                        ?? (docSnap.data()?.sellerId as string | undefined)
+                        ?? (docSnap.data()?.userId as string | undefined) ?? null;
                     transaction.update(docRef, {
                         status: "rejected",
                         isActive: false,
@@ -526,12 +583,24 @@ export async function rejectContentAction(
                 default:
                     return { success: false as const, error: "Invalid content type" };
             }
-            return { success: true as const, error: null };
+            return { success: true as const, error: null, ownerId: rejectOwnerId };
         });
 
         if (!result.success) {
             return { success: false as const, error: result.error || "Rejection failed", data: null };
         }
+
+        //   #690 AND THE MEMBER IS TOLD, WITH THE REASON — which was written
+        //   onto the listing where only an admin could read it.
+        await notifyMemberDecision({
+            userId: String((result as any).ownerId ?? ""),
+            subject: SUBJECT[type] ?? "Your listing",
+            outcome: "rejected",
+            reason,
+            channel: type === "land" ? "land" : "warning",
+            link: type === "land" ? `/farm-nation/property/${id}` : "/dashboard",
+            linkText: "View details",
+        });
 
         await recordAdminAction({
             action: 'content:reject',

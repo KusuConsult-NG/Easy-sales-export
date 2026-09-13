@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
@@ -404,6 +405,40 @@ async function _processWaveWithdrawalAction(data: {
                     : "Only pending withdrawals can be approved");
             }
         }
+
+        /*
+         *   #690 AND THE MEMBER IS TOLD.
+         *
+         *   This file contained no notification of any kind. Three withdrawal
+         *   systems on this platform decide a member's money: the cooperative
+         *   one emails, wallet.ts rings the bell, and WAVE did neither — a
+         *   member's withdrawal was approved, refused or paid and they learned
+         *   it by opening the page and noticing.
+         *
+         *   The REJECTION matters most. It restores the balance, so the money
+         *   reappears in their earnings with no explanation of why it came back
+         *   — and `adminNotes`, which is where the admin writes the reason, was
+         *   readable only by another admin.
+         *
+         *   After the claim and the balance move, never before: a notice sent
+         *   ahead of a claim that then loses is a notice about something that
+         *   did not happen.
+         */
+        await notifyMemberDecision({
+            userId: withdrawalData?.userId,
+            subject: "Your WAVE withdrawal",
+            outcome: action === "reject" ? "rejected" : action === "complete" ? "completed" : "approved",
+            reason: action === "reject" ? adminNotes : undefined,
+            amount: Number(withdrawalData?.amount ?? 0),
+            channel: "withdrawal",
+            link: "/wave/earnings",
+            linkText: "View earnings",
+            note: action === "approve"
+                ? "The payout is being processed and the funds will reach your bank account shortly."
+                : action === "complete"
+                    ? "The funds have been sent to your bank account."
+                    : undefined,
+        });
 
         // AUDIT LOG (First Phase)
         await createAdminAuditLog({

@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
@@ -449,6 +450,25 @@ async function _verifyLandListingAction(
         updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
 
+        /*
+         *   #690 AND THE OWNER IS TOLD.
+         *
+         *   Latent rather than live — nothing calls this action today, as the
+         *   note further up records — and wired anyway, because it is an
+         *   exported "use server" endpoint and the next caller would have
+         *   inherited the silence. The same argument the unused `adminId`
+         *   parameter above is kept under.
+         */
+        await notifyMemberDecision({
+            userId: String((listingDoc.data() ?? {}).ownerId ?? ""),
+            subject: "Your land listing",
+            outcome: "approved",
+            channel: "land",
+            link: `/farm-nation/property/${listingId}`,
+            linkText: "View listing",
+            note: "It is now visible to buyers on Farm Nation.",
+        });
+
         // A verified listing is what a buyer trusts. Who verified it, and when,
         // was recorded nowhere — 'land_verified' has been in the audit
         // vocabulary all along with nothing writing it.
@@ -556,6 +576,18 @@ async function _rejectLandListingAction(
         updateTag("land-listings");
         updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
+
+        //   #690 AND THE OWNER IS TOLD, WITH THE REASON. Latent, and wired for
+        //   the same reason as the verify path above.
+        await notifyMemberDecision({
+            userId: String((listingDoc.data() ?? {}).ownerId ?? ""),
+            subject: "Your land listing",
+            outcome: "rejected",
+            reason,
+            channel: "land",
+            link: `/farm-nation/property/${listingId}`,
+            linkText: "View details",
+        });
 
         await recordAdminAction({
             action: "land_rejected",

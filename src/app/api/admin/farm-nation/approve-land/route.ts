@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { logger } from '@/lib/logger';
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
@@ -166,6 +167,18 @@ export async function POST(request: NextRequest) {
         }).catch((e) => logger.error("[approve-land] audit log failed", e));
 
         // Invalidate cache
+        //   #690 AND THE OWNER IS TOLD. Reached only by the caller that won
+        //   the transition above, so one notice per decision.
+        await notifyMemberDecision({
+            userId: (previous as any).ownerId ?? (previous as any).userId,
+            subject: "Your land listing",
+            outcome: "approved",
+            note: "It is now visible to buyers on Farm Nation.",
+            channel: "land",
+            link: `/farm-nation/property/${verificationId}`,
+            linkText: "View listing",
+        });
+
         try {
             const { invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
             await invalidateAdminGlobalStats();

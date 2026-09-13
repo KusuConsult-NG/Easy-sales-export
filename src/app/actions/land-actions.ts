@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { readLandLocation } from "@/lib/land-location";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { GeoPoint, FieldValue, Timestamp } from "@/lib/firestore-compat";
@@ -485,6 +486,41 @@ async function _verifyLandListing(
                       `${validated.verified ? 'approved' : 'rejected'} from that state. ` +
                       `A listing with a purchase in progress must be resolved first.`,
             };
+        }
+
+        /*
+         *   #690 AND THE OWNER IS TOLD.
+         *
+         *   This is the platform's main land decision — eight call sites reach
+         *   it — and the file contained no notification of any kind. A member's
+         *   listing was approved or refused and they found out by opening the
+         *   page. The rejection writes a `rejectionReason` that only an admin
+         *   could read, which is the same half #688 found on loan rejections.
+         *
+         *   The owner is read AFTER the claim, deliberately: only the caller
+         *   that won the transition gets here, so the notice is sent once per
+         *   decision rather than once per attempt.
+         */
+        try {
+            const ownerSnap = await db.collection(COLLECTIONS.LAND_LISTINGS)
+                .doc(validated.listingId).get();
+            const owner = ownerSnap.exists ? (ownerSnap.data() ?? {}).ownerId : undefined;
+            await notifyMemberDecision({
+                userId: owner,
+                subject: "Your land listing",
+                outcome: validated.verified ? "approved" : "rejected",
+                reason: validated.verified ? undefined : (validated.rejectionReason || validated.notes),
+                channel: "land",
+                link: `/farm-nation/property/${validated.listingId}`,
+                linkText: "View listing",
+                note: validated.verified
+                    ? "It is now visible to buyers on Farm Nation."
+                    : undefined,
+            });
+        } catch (error) {
+            //   The decision is already committed; a failed notice must not
+            //   report it as a failure the admin then retries.
+            logger.error("[verifyLandListing] decision notice failed", { error });
         }
 
         // Audit log

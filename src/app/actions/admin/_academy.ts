@@ -1,6 +1,7 @@
 "use server";
 
 import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { revalidatePath, updateTag } from 'next/cache';
@@ -419,6 +420,23 @@ async function _rejectAcademyApplicationAction(
                     updatedAt: FieldValue.serverTimestamp(),
                 });
             }
+        });
+
+        /*
+         *   #690 AND THE APPLICANT IS TOLD, WITH THE REASON.
+         *
+         *   The asymmetry in this file is the whole finding in miniature:
+         *   _approveAcademyApplicationAction, four hundred lines up, sends an
+         *   email. This wrote `rejectionReason` — a field only an admin can
+         *   read — and said nothing to the person refused.
+         */
+        await notifyMemberDecision({
+            userId: userId ?? "",
+            subject: "Your Academy application",
+            outcome: "rejected",
+            reason,
+            link: "/academy",
+            linkText: "View details",
         });
 
         await createAdminAuditLog({
