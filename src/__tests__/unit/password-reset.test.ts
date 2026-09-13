@@ -53,6 +53,8 @@
 
 import { describe, it, expect, beforeEach, beforeAll, afterAll, jest } from '@jest/globals';
 
+import { logger } from '@/lib/logger';
+
 const EMAIL = 'person@example.com';
 const SUPABASE_ID = 'ab8f1c22-0000-4000-8000-000000000001';
 const TOKEN = 'a'.repeat(64);
@@ -364,3 +366,98 @@ describe('sendResetEmailAction — somebody else\'s inbox is not a megaphone', (
         expect(mockSendEmail).not.toHaveBeenCalled();
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#709 — a failure that left somebody in a loop, logged instead of swallowed', () => {
+    /**
+     * The reset clears `requiresPasswordChange` so a legacy member is not sent
+     * straight back to a change-password screen having just changed it.
+     *
+     * That write was wrapped in `catch (updateErr) { // Ignore if field doesn't
+     * exist }` — and a missing field cannot throw there: FieldValue.delete() on
+     * an absent key is fine, and this adapter makes update() on an absent
+     * DOCUMENT a no-op rather than the NOT_FOUND real Firestore raises.
+     *
+     * So the reason given was not a failure mode, and the two real ones — the
+     * auth lookup throwing, and the write failing — were swallowed without a
+     * word. The member resets their password, is asked to change it again, and
+     * nothing anywhere says why.
+     */
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setWorld();
+        mockClaimKey.mockResolvedValue({ claimed: true });
+        mockUpdateUserById.mockResolvedValue({ data: {}, error: null });
+        mockFirebaseUpdate.mockResolvedValue({});
+        mockGetUserByEmail.mockResolvedValue({ uid: 'fb-uid-1' });
+        mockLimitCheck.mockResolvedValue({ success: true });
+    });
+
+    /** Fail ONLY the clear-the-flag write, leaving the reset itself alone. */
+    function breakTheFlagClear() {
+        (global as any).mockFirestoreUpdate.mockImplementation((...args: any[]) => {
+            const carriesFlag = args.some(
+                (a) => a && typeof a === 'object' && 'requiresPasswordChange' in a,
+            );
+            if (carriesFlag) return Promise.reject(new Error('write failed'));
+            return Promise.resolve();
+        });
+    }
+
+    it('THE RESET ITSELF STILL SUCCEEDS — the flag is not worth failing over', async () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+        breakTheFlagClear();
+
+        const r: any = await reset();
+
+        expect(r.success).toBe(true);
+        warn.mockRestore();
+    });
+
+    it('AND THE FAILURE IS NOW VISIBLE, NAMING WHAT IT COSTS THE MEMBER', async () => {
+        //   THE change. Previously nothing was emitted at all, so a member
+        //   stuck in the change-password loop was unexplainable from the logs.
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+        breakTheFlagClear();
+
+        await reset();
+
+        const said = warn.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(said).toMatch(/requiresPasswordChange/);
+        warn.mockRestore();
+    });
+
+    it('AND A RESET THAT WORKS SAYS NOTHING — the control', async () => {
+        /*
+         *   Without this, a logger.warn fired unconditionally would satisfy the
+         *   test above, and every successful reset would raise a warning about
+         *   a failure that did not happen. A log nobody can trust is the same
+         *   as no log.
+         */
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+        (global as any).mockFirestoreUpdate.mockResolvedValue(undefined);
+
+        const r: any = await reset();
+
+        expect(r.success).toBe(true);
+        const said = warn.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(said).not.toMatch(/requiresPasswordChange/);
+        warn.mockRestore();
+    });
+});
+
+/*
+ * ── #709 MUTATION TESTING ───────────────────────────────────────────────────
+ *
+ *   Against a green baseline:
+ *
+ *   M1  the failure is swallowed again — back to an empty catch     KILLED
+ *   M2  the whole reset FAILS on a flag-clear error                 KILLED
+ *   M3  the warning fires on every reset, successful or not         KILLED
+ *
+ *   M2 and M3 are the two ways to get this wrong in opposite directions, and
+ *   both are easy to write. M2 turns a cosmetic leftover into a refused
+ *   password reset; M3 fills the log with a failure that did not happen, which
+ *   costs the log its meaning. The fix has to be non-fatal AND conditional, and
+ *   only a mutant in each direction shows that both halves are held.
+ */

@@ -345,7 +345,32 @@ export async function resetPasswordAction(
                 requiresPasswordChange: FieldValue.delete()
             });
         } catch (updateErr) {
-            // Ignore if field doesn't exist
+            /*
+             *   #709 THE REASON THIS CATCH GAVE WAS NOT A FAILURE MODE.
+             *
+             *   It read "Ignore if field doesn't exist", and a missing field
+             *   cannot throw here: `FieldValue.delete()` on an absent key is
+             *   fine, and this adapter makes `update()` on an absent DOCUMENT a
+             *   no-op rather than the NOT_FOUND real Firestore raises
+             *   (supabase-db.ts says so where it decides that).
+             *
+             *   What the catch actually covered was two things it did not name:
+             *   `getUserByEmail` throwing, and a genuine write failure. Either
+             *   leaves `requiresPasswordChange` SET on somebody who has just
+             *   successfully reset their password — so they are sent straight
+             *   back to a change-password screen, having done the thing it is
+             *   asking for.
+             *
+             *   Still non-fatal: the password itself was reset, and refusing
+             *   the whole reset over a leftover flag would be worse. But now it
+             *   is visible, because a person stuck in that loop is otherwise
+             *   unexplainable from the logs.
+             */
+            logger.warn(
+                `[password-reset] could not clear requiresPasswordChange for ${resetData.email}; `
+                + `the member may still be asked to change their password after signing in`,
+                { error: updateErr },
+            );
         }
 
         /**

@@ -161,7 +161,32 @@ export async function POST(request: NextRequest) {
                         cooperatives: { paymentStatus: "completed" }
                     }
                 }, { merge: true });
-            } catch (e) { /* non-fatal */ }
+            } catch (e) {
+                /*
+                 *   #709 NON-FATAL IS NOT THE SAME AS INVISIBLE.
+                 *
+                 *   Staying non-fatal is right: the membership row already says
+                 *   `completed`, so the member has paid and must not be sent
+                 *   back to a payment screen because a MIRROR write failed.
+                 *
+                 *   Swallowing it without a word is not. This write is what
+                 *   makes the USERS doc agree with the membership row, and the
+                 *   screens that read `serviceRegistrations.cooperatives` are
+                 *   the ones that decide whether somebody looks paid. If it
+                 *   fails, the two records disagree — the member shows as
+                 *   unpaid on a platform that has their money — and with an
+                 *   empty catch there is nothing, anywhere, to say why.
+                 *
+                 *   That is the shape of every "it broke and we cannot tell
+                 *   what happened" report. Logged at warn: the request still
+                 *   succeeds, and the disagreement is now diagnosable.
+                 */
+                logger.warn(
+                    `[Cooperative verify-payment] could not mirror completed status onto the user row for ${userId}; `
+                    + `the membership row and serviceRegistrations may now disagree`,
+                    { error: e },
+                );
+            }
             //   #692 As above — this path writes the same fields.
             await invalidateServiceCache(userId, 'cooperative');
             return NextResponse.json({
