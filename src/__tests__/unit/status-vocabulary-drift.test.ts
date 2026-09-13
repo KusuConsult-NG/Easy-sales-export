@@ -65,7 +65,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { statusVocabularyDrift } from '@/lib/testing/collection-writer-scan';
+import { statusVocabularyDrift, scanWriteSites } from '@/lib/testing/collection-writer-scan';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');
@@ -245,14 +245,39 @@ describe('the scanner that narrowed the search', () => {
     });
 
     it('still finds a value written nowhere at all', () => {
-        // Vacuity guard: a scanner tuned until it reports nothing is not a
-        // scanner. A collection queried for a status no file writing it ever
-        // names must still surface.
-        const drift = statusVocabularyDrift();
+        /*
+         *   Vacuity guard: a scanner tuned until it reports nothing is not a
+         *   scanner. A collection queried for a status no file writing it ever
+         *   names must still surface.
+         *
+         *   #705 — THIS GUARD USED TO BE VACUOUS ITSELF, which is the whole
+         *   reason it is rewritten rather than tidied. It read:
+         *
+         *       expect(drift.every((d) => typeof d.queried === 'string')).toBe(true);
+         *       expect(statusVocabularyDrift.length).toBeGreaterThanOrEqual(0);
+         *
+         *   BOTH LINES HOLD WHEN THE SCANNER RETURNS NOTHING. `[].every(...)`
+         *   is `true` — that is what `every` means on an empty array. And
+         *   `statusVocabularyDrift` is a FUNCTION: `.length` is its declared
+         *   parameter count, not the size of anything it returns. It is 0, it
+         *   is always >= 0, and it would be for any function ever written here.
+         *
+         *   So the guard against "a scanner that reports nothing" was the one
+         *   assertion in this file that could not detect a scanner reporting
+         *   nothing.
+         *
+         *   TIED TO THE CORPUS INSTEAD. What must not silently become empty is
+         *   the set of files and collections the scan runs over: a refactor
+         *   that moves the source tree, or a glob that stops matching, takes
+         *   these to zero and fails here. The drift COUNT is deliberately not
+         *   asserted — it is allowed to reach zero, and a guard demanding that
+         *   defects still exist is worse than no guard at all.
+         */
+        const sites = scanWriteSites();
+        expect(sites.length).toBeGreaterThanOrEqual(250);
+        expect(new Set(sites.map((s) => s.collection)).size).toBeGreaterThanOrEqual(60);
 
-        // It found the four fixed above; it must still be capable of finding
-        // something of that shape.
-        expect(drift.every((d) => typeof d.queried === 'string')).toBe(true);
-        expect(statusVocabularyDrift.length).toBeGreaterThanOrEqual(0);
+        //   The shape check, now made over a corpus proven non-empty above.
+        expect(statusVocabularyDrift().every((d) => typeof d.queried === 'string')).toBe(true);
     });
 });

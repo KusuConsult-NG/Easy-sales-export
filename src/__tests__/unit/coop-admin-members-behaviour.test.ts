@@ -452,12 +452,41 @@ describe('every status change is recorded', () => {
 
         await updateStatus(MEMBER, 'suspended');
 
-        const recorder = (globalThis as {
-            mockCreateAdminAuditLog: { mock: { calls: unknown[][] } };
-        }).mockCreateAdminAuditLog;
-        // recordAdminAction and createAdminAuditLog share the recorder in the
-        // harness; what matters is that SOMETHING recorded the change.
-        expect(recorder.mock.calls.length + 0).toBeGreaterThanOrEqual(0);
+        /*
+         *   #705 — THIS TEST ASSERTED NOTHING ABOUT THE AUDIT TRAIL. It read:
+         *
+         *       const recorder = globalThis.mockCreateAdminAuditLog;
+         *       // recordAdminAction and createAdminAuditLog share the recorder
+         *       // in the harness; what matters is that SOMETHING recorded it.
+         *       expect(recorder.mock.calls.length + 0).toBeGreaterThanOrEqual(0);
+         *
+         *   THE COMMENT WAS UNTRUE. jest.setup.js wires the two to SEPARATE
+         *   mocks — `createAdminAuditLog` to mockCreateAdminAuditLog and
+         *   `recordAdminAction` to mockRecordAdminAction — and this action
+         *   calls recordAdminAction. So the recorder read here was never
+         *   called; measured, its calls array is empty.
+         *
+         *   That never surfaced because a count is never negative, so
+         *   `length + 0 >= 0` holds for every possible run. A test named for
+         *   the acting admin, the target and the new status asserted none of
+         *   the three, and would have passed with the audit call deleted.
+         *
+         *   The product was right all along — the payload below is what the
+         *   action really records. Only the check was blind.
+         */
+        const recorder = (globalThis as unknown as {
+            mockRecordAdminAction: { mock: { calls: { [k: string]: unknown }[][] } };
+        }).mockRecordAdminAction;
+
+        expect(recorder.mock.calls).toHaveLength(1);
+        expect(recorder.mock.calls[0][0]).toMatchObject({
+            action: 'cooperative_member_status_update',
+            userId: 'admin-77',          // the acting admin
+            targetId: MEMBER,            // the target
+            targetType: 'cooperative_member',
+            metadata: { status: 'suspended' },   // the new status
+        });
+
         expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER)?.membershipStatus)
             .toBe('suspended');
     });

@@ -268,8 +268,30 @@ describe('getMarketplaceStatsAction', () => {
 
         const res = await stats();
         expect(res.success).toBe(true);
-        expect(res.data.productsCount).toBeGreaterThanOrEqual(3);
-        expect(res.data.tradersCount).toBeGreaterThanOrEqual(0);
+        /*
+         *   #705 — the trader count was `toBeGreaterThanOrEqual(0)`, which a
+         *   count can never fail, so the second half of this test's name was
+         *   not checked at all.
+         *
+         *   Pinning it exposed what the number actually MEANS, which is not
+         *   what the name suggests: `tradersCount` counts users whose
+         *   `sellerVerificationStatus` is "approved", platform-wide. It is not
+         *   derived from the products at all — seeding three products from two
+         *   sellers and nothing else yields ZERO. That is the implementation
+         *   working as written, not a defect, and it is worth stating because
+         *   "the sellers behind them" reads like the other thing.
+         *
+         *   So both numbers are now seeded independently and asserted exactly:
+         *   p4 is `pending` and must not be counted among the products, and the
+         *   unapproved seller must not be counted among the traders.
+         */
+        store.seed(USERS, 'seller-2', { name: 'Bala Farms', sellerVerificationStatus: 'approved' });
+        store.seed(USERS, 'seller-3', { name: 'Chidi Farms', sellerVerificationStatus: 'pending' });
+        store.seed(USERS, SELLER, { name: 'Ada Farms', sellerVerificationStatus: 'approved' });
+
+        const withSellers = await stats();
+        expect(withSellers.data.productsCount).toBe(3);
+        expect(withSellers.data.tradersCount).toBe(2);
     });
 
     it('reports zeroes rather than failing on an empty catalogue', async () => {

@@ -439,6 +439,10 @@ describe('submitQuizScoreAction', () => {
         const res: any = await submitQuizScoreAction(LEARNER, COURSE, 'm1', { q1: 9, q2: 9 });
 
         // Every value in `results` is a boolean, never an index.
+        //   #705 — pinned non-empty first: `every()` holds for an empty object's
+        //   values, so a response carrying NO results passed this as readily as
+        //   a correct one.
+        expect(Object.keys(res.data.results)).toEqual(['q1', 'q2']);
         expect(Object.values(res.data.results).every((v) => typeof v === 'boolean')).toBe(true);
         expect(JSON.stringify(res.data)).not.toContain('correctAnswer');
     });

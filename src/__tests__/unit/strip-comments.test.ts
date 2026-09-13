@@ -270,6 +270,20 @@ describe('it agrees with the naive version everywhere the naive version is right
         'src/__tests__/unit/revalidate-tag-profile-is-real.test.ts',
         'src/__tests__/unit/safe-redirect-path.test.ts',
         'src/__tests__/unit/sms-sandbox-reporting.test.ts',
+        //   #705 — joined when a block comment was added to it, and the
+        //   mechanism is the one this module exists for, in its THIRD form.
+        //   That file contains the literal '/*' inside a string, at
+        //   `!body.startsWith('/*')`. The naive regex opens a block comment
+        //   there and runs to the next real `*/` — and until #705 there was no
+        //   `*/` after it anywhere in the file, so the regex never matched and
+        //   the damage was nil. Adding a /* … */ comment near the foot SUPPLIED
+        //   the closing delimiter, and the naive stripper now eats everything
+        //   between: 116 non-blank lines became 73.
+        //
+        //   Nothing reads that file with a naive stripper, so no assertion is
+        //   affected. It is here because this list is about which files the
+        //   naive stripper mangles, not which are read.
+        'src/__tests__/unit/status-vocabulary-drift.test.ts',
         'src/__tests__/unit/storage-backend-single-rule.test.ts',
         'src/__tests__/unit/strip-comments.test.ts',
         'src/__tests__/unit/the-audit-log-had-two-vocabularies.test.ts',
@@ -291,7 +305,7 @@ describe('it agrees with the naive version everywhere the naive version is right
         if (naiveLines < goodLines * 0.9) AFFECTED.push(rel);
     }
 
-    it('and the files where it does not is a KNOWN list — eleven, not one', () => {
+    it('and the files where it does not is a KNOWN list, pinned as a SET', () => {
         // I wrote this expecting csp.ts alone. It is ten files. Recording the
         // measured number rather than the assumed one is the whole point of
         // measuring.

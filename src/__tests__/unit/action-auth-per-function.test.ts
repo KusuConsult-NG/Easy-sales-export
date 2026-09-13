@@ -239,6 +239,11 @@ describe('the codebase, against the baseline', () => {
         // If a refactor moves the actions directory, every assertion above
         // passes on an empty set. This is the guard against that silence.
         expect(current.length + known.size).toBeGreaterThan(0);
-        expect(scanDirectory(ACTIONS_DIR, SRC_DIR).length).toBeGreaterThanOrEqual(0);
+        //   #705 — this was `.toBeGreaterThanOrEqual(0)`, which a length can
+        //   never fail. It read as a second, independent check that the scan
+        //   still reaches the directory and was worth nothing; the line above
+        //   was carrying the test alone. Asserted against the same scan the
+        //   suite runs on, which cannot be empty while there are actions.
+        expect(scanDirectory(ACTIONS_DIR, SRC_DIR).length).toBeGreaterThan(0);
     });
 });

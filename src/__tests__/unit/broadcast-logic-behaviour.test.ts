@@ -262,6 +262,11 @@ describe('the sellers audience reads seller_verifications, not users.isSeller', 
         store.seed(COLLECTIONS.SELLER_VERIFICATIONS, 'sv6', { userId: 'u6', status: 'approved' });
         store.seed(COLLECTIONS.USERS, 'u6', { fullName: 'No Email' });
         const result = await resolve({ audience: 'sellers' });
+        //   #705 — `every()` is TRUE for an empty array, so this passed if the
+        //   audience came back empty: "the user with no email was skipped" and
+        //   "nobody was resolved at all" were the same result. The count is
+        //   pinned first — the five from the test above survive, u6 does not.
+        expect(result.data?.count).toBe(5);
         expect(result.data?.recipients.every((r) => Boolean(r.email))).toBe(true);
     });
 
