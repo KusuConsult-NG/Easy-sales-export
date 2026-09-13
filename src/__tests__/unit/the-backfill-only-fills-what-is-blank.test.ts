@@ -332,6 +332,146 @@ describe('#671 — and one bad row does not strand the other forty-seven', () =>
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#715 — it asks Auth about the id the profile POINTS AT, not the row id', () => {
+    /*
+     *   THE SEVENTH READER OF A RULE STATED ONCE TO STOP EXACTLY THIS.
+     *
+     *   A migrated profile keeps its Firebase-era document id and carries
+     *   `_migratedTo`, then `supabaseAuthId`, pointing at the live Supabase
+     *   account (#464/#466). lib/user-identity.ts exists because #449 found SIX
+     *   readers answering "which row is the live one" and five of them
+     *   differently — one cycled forever on a login, one refused a login over a
+     *   dangling pointer, one split a session from its payment on a two-hop
+     *   chain.
+     *
+     *   This module was written later and asked Auth about `profile.id`.
+     *
+     *   AND ITS TARGET POPULATION IS THE ONE THAT BREAKS ON. These rows have no
+     *   email, so auth-profile-link.ts's fallback join — the one that rescues a
+     *   migrated profile by the address both records share — has nothing to
+     *   match on. The document id is the only key left, and for a legacy row it
+     *   is the wrong one. Auth then answers 404 perfectly truthfully and the
+     *   run concluded that the PERSON has no account.
+     *
+     *   One of the 48 in production is `EHp5pfEwUqVBQve9s3fh3dfehrJ2` — a
+     *   Firebase-era uid, which cannot be a Supabase account id at all.
+     */
+
+    it('A MIGRATED PROFILE IS FILLED FROM THE ACCOUNT IT POINTS AT', async () => {
+        //   The defect, directly: the address exists, Auth holds it, and the
+        //   old code reported "no auth account" because it asked about the
+        //   legacy id.
+        profiles = {
+            'EHp5pfEwUqVBQve9s3fh3dfehrJ2': { email: '', supabaseAuthId: 'live-uuid' },
+            'live-uuid': { email: 'ada@example.com' },
+        };
+        authByUid = { 'live-uuid': 'ada@example.com' };
+
+        const report = await backfillMissingEmails();
+
+        expect(writes.map((w) => w.id)).toEqual(['EHp5pfEwUqVBQve9s3fh3dfehrJ2']);
+        expect(writes[0].data.email).toBe('ada@example.com');
+        expect(resultFor(report, 'EHp5pfEwUqVBQve9s3fh3dfehrJ2')).toBe('filled');
+    });
+
+    it('AND _migratedTo WINS OVER supabaseAuthId, AS IT DOES EVERYWHERE ELSE', async () => {
+        //   pointerOf's order, not re-decided here. A module that picked its
+        //   own order would be the eighth reader.
+        profiles = {
+            legacy: { email: '', _migratedTo: 'moved-to', supabaseAuthId: 'self' },
+            'moved-to': { email: 'ada@example.com' },
+        };
+        authByUid = { 'moved-to': 'ada@example.com', self: 'wrong@example.com' };
+
+        await backfillMissingEmails();
+
+        expect(writes[0].data.email).toBe('ada@example.com');
+    });
+
+    it('AND IT FOLLOWS THE WHOLE CHAIN, NOT ONE HOP', async () => {
+        //   #449's measured failure: A → B → C, where the one-hop readers
+        //   stopped at B. Asking Auth about B here would get a 404 and report
+        //   an absent account for somebody who has one.
+        profiles = {
+            a: { email: '', _migratedTo: 'b' },
+            b: { email: '', _migratedTo: 'c' },
+            c: { email: 'ada@example.com' },
+        };
+        authByUid = { c: 'ada@example.com' };
+
+        const report = await backfillMissingEmails();
+
+        expect(resultFor(report, 'a')).toBe('filled');
+    });
+
+    it('AND A DANGLING POINTER FALLS BACK TO THE LAST ROW THAT EXISTS', async () => {
+        /*
+         *   #449's second measured failure. The pointer names a row that is not
+         *   there — a half-finished migration — and resolving to NOTHING is the
+         *   worst reading of that state. The walk keeps the last good row, so
+         *   this asks Auth about the profile's own id, which is what it did
+         *   before this change and is still the right floor.
+         */
+        profiles = { orphan: { email: '', _migratedTo: 'nowhere' } };
+        authByUid = { orphan: 'ada@example.com' };
+
+        const report = await backfillMissingEmails();
+
+        expect(resultFor(report, 'orphan')).toBe('filled');
+    });
+
+    it('AND A POINTER CYCLE DOES NOT HANG THE RUN', async () => {
+        //   Two rows pointing at each other. Before user-identity.ts this walk
+        //   never ended — the probe that found it had to be killed.
+        profiles = {
+            x: { email: '', _migratedTo: 'y' },
+            y: { email: '', _migratedTo: 'x' },
+        };
+        authByUid = {};
+
+        const report = await backfillMissingEmails();
+
+        expect(report.scanned).toBe(2);
+        expect(writes).toEqual([]);
+    });
+
+    it('AND THE REPORT SAYS WHICH ID THE ANSWER IS ABOUT', async () => {
+        //   "no-auth-account" against a migrated row is unreadable on its own:
+        //   the operator cannot tell which of two ids Auth was asked about.
+        profiles = {
+            legacy: { email: '', supabaseAuthId: 'elsewhere' },
+            elsewhere: { email: 'x@example.com' },
+        };
+        authByUid = {};
+
+        const report = await backfillMissingEmails();
+
+        expect(resultFor(report, 'legacy')).toBe('no-auth-account');
+        expect(report.outcomes.find((o) => o.profileId === 'legacy')?.detail)
+            .toContain('resolved to elsewhere');
+    });
+
+    it('AND THE ROW IT REPAIRS IS STILL THE ONE THAT WAS BLANK', async () => {
+        /*
+         *   THE safety property this change must not cost. Resolving the
+         *   identity changes which id AUTH is asked about; it must not change
+         *   which ROW is written. Writing the live row instead would leave the
+         *   blank profile blank and touch a record that never needed repairing.
+         */
+        profiles = {
+            legacy: { email: '', supabaseAuthId: 'live' },
+            live: { email: 'already@example.com' },
+        };
+        authByUid = { live: 'ada@example.com' };
+
+        await backfillMissingEmails();
+
+        expect(writes.map((w) => w.id)).toEqual(['legacy']);
+        expect(profiles.live.email).toBe('already@example.com');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('#714 — "Auth says no" and "I could not ask Auth" are different answers', () => {
     /*
      *   THIS IS NOT A HYPOTHETICAL, AND THAT IS WHY IT IS ITS OWN BLOCK.
@@ -436,6 +576,17 @@ describe('#714 — "Auth says no" and "I could not ask Auth" are different answe
  *     only the "" shape is selected                                   KILLED
  *     the address stops being normalised                              KILLED
  *     filled is counted for rows that were skipped                    KILLED
+ *
+ *     #715 — WHICH ID AUTH IS ASKED ABOUT
+ *     THE DEFECT: Auth is asked about profile.id again                 KILLED
+ *       — kills 5, which is the measure of how much of this file's
+ *         new behaviour rests on it.
+ *     one hop (activeIdFromRow) instead of the full walk               KILLED
+ *     the RESOLVED row is written instead of the blank one             KILLED
+ *       — the safety property this change must not cost: resolving
+ *         changes which id AUTH is asked about, never which ROW is
+ *         repaired.
+ *     the resolved id is dropped from the outcome detail               KILLED
  *
  *     #714 — THE LOOKUP STATE
  *     the default for an unanswered id goes back to "absent"          KILLED

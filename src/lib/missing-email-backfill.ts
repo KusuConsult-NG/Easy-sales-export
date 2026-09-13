@@ -55,6 +55,7 @@ import { adminAuth } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { resolveActiveUserId } from "@/lib/user-identity";
 import { logger } from "@/lib/logger";
 
 /** What happened to one profile, and why. Never a bare count — #658. */
@@ -207,12 +208,68 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
      *   out". Writing is unaffected — neither state writes — so the change is
      *   in what the run CLAIMS, which is the part that was wrong.
      */
-    const lookupById = new Map<string, AuthLookup>();
-    const CHUNK = 100;
-    for (let i = 0; i < profiles.length; i += CHUNK) {
-        const chunk = profiles.slice(i, i + CHUNK);
+    /**
+     * WHICH ID TO ASK AUTH ABOUT — #715.
+     *
+     *   THE BACKFILL LOOKED UP SUPABASE AUTH BY THE DOCUMENT ID, FOR EXACTLY
+     *   THE POPULATION WHOSE DOCUMENT ID IS NOT THE AUTH ID.
+     *
+     *   #464/#466 established the rule and lib/user-identity.ts states it once:
+     *   a migrated profile keeps its Firebase-era document id and carries
+     *   `_migratedTo`, then `supabaseAuthId`, pointing at the live account.
+     *   #449 built resolveActiveUser after finding SIX readers answering this
+     *   question and five of them differently — a cycle that hung a login, a
+     *   dangling pointer that refused one, and a two-hop chain that split the
+     *   session from the payment.
+     *
+     *   This module was written afterwards and is a SEVENTH reader that never
+     *   got the rule. It asked `getUsers([{ uid: profile.id }])`, and for a
+     *   legacy-keyed row that id is not an account anywhere, so Auth answers
+     *   404 truthfully and the run concluded "this person has no auth account"
+     *   from the wrong key. Same class as #710 and #713 and half this audit:
+     *   a correct rule applied to some of the places it names.
+     *
+     *   AND ITS TARGET POPULATION IS PRECISELY THE ONE THAT NEEDS IT. These
+     *   rows are, by definition, reachable only by id — they have no email for
+     *   the fallback join in auth-profile-link.ts to use — and one of the 48 in
+     *   production is `EHp5pfEwUqVBQve9s3fh3dfehrJ2`, a Firebase-era uid, which
+     *   cannot be a Supabase account id at all.
+     *
+     *   The full walk, not activeIdFromRow's single hop: #449 measured a
+     *   two-hop chain, and stopping at the middle row would ask Auth about
+     *   another id that is not an account either. A row with no pointer stops
+     *   immediately and costs one read.
+     */
+    const authIdFor = new Map<string, string>();
+    for (const profile of profiles) {
         try {
-            const result: any = await (adminAuth as any).getUsers(chunk.map((p) => ({ uid: p.id })));
+            const resolved = await resolveActiveUserId(profile.id, db.collection(COLLECTIONS.USERS));
+            authIdFor.set(profile.id, resolved.id);
+            if (resolved.healed) {
+                //   A broken chain is a finding in its own right, and the walk
+                //   degrades to the last row that exists rather than to nothing.
+                logger.warn(
+                    `[missing-email-backfill] profile ${profile.id} has a ${resolved.stoppedBecause} `
+                    + `migration pointer; asking Auth about ${resolved.id} after ${resolved.hops} hop(s).`,
+                );
+            }
+        } catch (e: any) {
+            //   Could not resolve, so fall back to the document id rather than
+            //   skipping the row. That is what this did for every row before,
+            //   and it is still the right floor.
+            logger.error(`[missing-email-backfill] could not resolve an active id for ${profile.id}: ${e?.message}`);
+            authIdFor.set(profile.id, profile.id);
+        }
+    }
+
+    /** Auth answers are keyed by the id ASKED ABOUT; profiles map onto them. */
+    const lookupById = new Map<string, AuthLookup>();
+    const askedIds = [...new Set(profiles.map((p) => authIdFor.get(p.id) ?? p.id))];
+    const CHUNK = 100;
+    for (let i = 0; i < askedIds.length; i += CHUNK) {
+        const chunk = askedIds.slice(i, i + CHUNK);
+        try {
+            const result: any = await (adminAuth as any).getUsers(chunk.map((uid) => ({ uid })));
             for (const user of result?.users ?? []) {
                 if (user?.uid) lookupById.set(user.uid, { kind: "found", email: user.email ?? "" });
             }
@@ -271,15 +328,26 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
             continue;
         }
 
+        const askedAbout = authIdFor.get(profile.id) ?? profile.id;
         const decision = backfillDecision(
             current,
             //   The default is the honest one: an id this run never saw an
             //   answer for is one it could not find out about — #714.
-            lookupById.get(profile.id) ?? { kind: "failed", detail: "the Auth read returned nothing for this id" },
+            lookupById.get(askedAbout) ?? { kind: "failed", detail: "the Auth read returned nothing for this id" },
         );
 
         if (!decision.write) {
-            outcomes.push({ profileId: profile.id, result: decision.result, detail: decision.detail });
+            outcomes.push({
+                profileId: profile.id,
+                result: decision.result,
+                //   Which id the answer is ABOUT, whenever it is not the
+                //   profile's own — #715. Without it, "no-auth-account" on a
+                //   migrated row is unreadable: the operator cannot tell which
+                //   of two ids Auth was asked about.
+                detail: askedAbout === profile.id
+                    ? decision.detail
+                    : [decision.detail, `resolved to ${askedAbout}`].filter(Boolean).join("; "),
+            });
             continue;
         }
 
