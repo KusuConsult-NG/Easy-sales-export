@@ -20,6 +20,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { logger } from "@/lib/logger";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 import { creditWalletOnce, debitWalletLocked, claimSingleOpenLoanApplication } from "@/lib/wallet-ledger";
 import {
     needsDualControl,
@@ -476,6 +477,26 @@ export async function approveLoanApplication(
                     notes: validated.notes } });
         } catch (auditError) { console.error("Failed to log loan approval audit:", auditError);
         }
+
+        //   #688 AND THE MEMBER IS TOLD.
+        //
+        //   The third of the three approval doors #619 already had to reconcile
+        //   over the guarantor gate. It wrote the approval and an audit row and
+        //   said nothing to the applicant — this file contains no notification
+        //   of any kind. Reached only by the caller that won the FINAL claim,
+        //   so a dual-control loan is announced once.
+        await notifyLoanDecision({
+            userId: loanData.userId,
+            decision: "approved",
+            amount: loanData.amount,
+            userEmail: loanData.userEmail,
+            terms: {
+                durationMonths: loanData.durationMonths,
+                interestRate: loanData.interestRate,
+                monthlyPayment: loanData.monthlyPayment,
+                totalRepayment: loanData.totalRepayment,
+            },
+        });
 
         return { error: null, success: true as const, data: null };
     } catch (error) { if (error instanceof z.ZodError) {

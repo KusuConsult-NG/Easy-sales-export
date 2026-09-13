@@ -15,6 +15,7 @@ import {
     GUARANTOR_UNVERIFIED_MESSAGE,
 } from "@/lib/loan-approval-policy";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
+import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 
 /**
  * API Route: Approve Loan Application (Admin Only)
@@ -175,6 +176,18 @@ export async function POST(request: NextRequest) {
                 { status: 409 }
             );
         }
+
+        //   #688 AND THE MEMBER IS TOLD.
+        //
+        //   Only the caller that won the FINAL claim reaches this, so a
+        //   dual-control loan is announced once — when it is actually
+        //   approved — rather than on the first admin's maker claim.
+        await notifyLoanDecision({
+            userId: appData.userId,
+            decision: "approved",
+            amount: appData.amount,
+            userEmail: appData.userEmail,
+        });
 
         // Update member's loan balance — only the caller that won the claim
         // reaches this, so it can run exactly once per approval.

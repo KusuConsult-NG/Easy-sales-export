@@ -113,7 +113,14 @@ const CONVERTED = [
     'app/actions/admin/_exports.ts',
     'app/actions/admin/_land.ts',
     'app/actions/admin/_legacy.ts',
-    'app/actions/admin/_loans.ts',
+    /*
+     *   #688 The loan decision email left admin/_loans.ts for
+     *   lib/loan-decision-notice.ts, which all SEVEN doors onto a loan decision
+     *   now call — five of them were silent before. #394's property follows the
+     *   email: the send goes through the queued sender and no file holds its
+     *   own Resend client.
+     */
+    'lib/loan-decision-notice.ts',
     'app/actions/admin/_marketplace.ts',
     'app/actions/cooperative/_coop_admin_members.ts',
     'app/actions/export/_ex_onboarding.ts',
@@ -135,9 +142,13 @@ describe('#394 — the scan can see', () => {
         // Several converted files carry a repair note naming the call they
         // replaced. A raw scan would rediscover the tombstone — #383, #384,
         // #392 and the contact route's own rate-limit test, all in that trap.
-        const loans = join(SRC, 'app/actions/admin/_loans.ts');
-        expect(/emails\s*\.\s*send/.test(readFileSync(loans, 'utf-8'))).toBe(true);
-        expect(/emails\s*\.\s*send/.test(code(loans))).toBe(false);
+        //   #688 This used admin/_loans.ts, whose repair note moved out with
+        //   the email it described. _exports.ts carries the same tombstone and
+        //   is in the converted set, so the property is unchanged: a file whose
+        //   COMMENT names the removed call must not be reported as unconverted.
+        const tombstone = join(SRC, 'app/actions/admin/_exports.ts');
+        expect(/emails\s*\.\s*send/.test(readFileSync(tombstone, 'utf-8'))).toBe(true);
+        expect(/emails\s*\.\s*send/.test(code(tombstone))).toBe(false);
     });
 
     it('and it does NOT lean on the stripper for the file the stripper mangles', () => {

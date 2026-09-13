@@ -8,6 +8,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { LOAN_REJECTABLE_STATUSES } from "@/lib/loan-approval-policy";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
+import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 
 /**
  * API Route: Reject Loan Application (Admin Only)
@@ -117,6 +118,21 @@ export async function POST(request: NextRequest) {
             targetType: "loan_application",
             metadata: { borrowerId: userId ?? null, reason },
         });
+
+        //   #688 AND THE MEMBER IS TOLD, WITH THE REASON.
+        //
+        //   This door wrote `rejectionReason` and an audit row, both of them
+        //   readable only by an admin, and said nothing to the applicant. Five
+        //   of the seven doors onto a loan decision were silent like this.
+        if (userId) {
+            await notifyLoanDecision({
+                userId,
+                decision: "rejected",
+                amount: Number(appData?.amount ?? 0),
+                reason,
+                userEmail: appData?.userEmail,
+            });
+        }
 
         return NextResponse.json({
             success: true,

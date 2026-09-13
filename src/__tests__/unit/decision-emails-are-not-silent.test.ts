@@ -69,7 +69,19 @@ function code(rel: string): string {
 /** Every file that reached for Resend behind an env check. */
 const DECISION_PATHS = [
     'src/app/actions/admin/_exports.ts',
-    'src/app/actions/admin/_loans.ts',
+    /*
+     *   #688 The LOAN decision email moved out of admin/_loans.ts.
+     *
+     *   That file was one of only two doors of seven that told a member their
+     *   loan had been decided; the other five were silent. The wording and the
+     *   `canSendEmail` guard now live in lib/loan-decision-notice.ts, which all
+     *   seven call, so this list follows the email rather than the screen.
+     *
+     *   The property #308 is about is unchanged and now covers five more
+     *   decisions than it did: an unsendable loan decision is logged rather
+     *   than skipped, whichever door made it.
+     */
+    'src/lib/loan-decision-notice.ts',
     'src/app/actions/admin/_marketplace.ts',
     'src/app/actions/admin/_land.ts',
     'src/app/actions/academy/_ac_admin_review.ts',

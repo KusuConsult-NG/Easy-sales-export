@@ -163,9 +163,14 @@ describe('why the gap was reachable', () => {
         expect(schema).not.toContain('guarantorVerified');
     });
 
-    it('and an admin is sent to that screen by a notification', () => {
-        // Not a forgotten page: admin/_loans.ts links there.
-        expect(code(ADMIN_LOANS)).toContain('link: "/loans"');
+    it('and a member is sent to that screen by the decision notice', () => {
+        //   Not a forgotten page: the loan decision links there.
+        //
+        //   #688 The link used to sit in admin/_loans.ts, which was one of only
+        //   TWO doors of seven that told the member anything. It moved into the
+        //   shared notice every door now calls, so the link is the same one
+        //   whichever admin screen made the decision.
+        expect(code('src/lib/loan-decision-notice.ts')).toContain('link: "/loans"');
     });
 });
 

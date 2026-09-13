@@ -141,7 +141,22 @@ function moduleTypedWrites(): Write[] {
             const slice = src.slice(m.index, m.index + 700);
             const type = /\btype:\s*"([a-z_]+)"/.exec(slice);
             if (!type || !MODULE_TYPES.includes(type[1])) continue;
-            const to = /\buserId:\s*([^,\n]+)/.exec(slice);
+            /*
+             *   #688 THE SHORTHAND IS AN ADDRESS TOO.
+             *
+             *   This read `userId: <expression>` only, so a payload written as
+             *   `{ userId, type: "loan", … }` — the ordinary shorthand, when
+             *   the variable is already called userId — came back as "(no
+             *   userId in the payload)" and was reported as a BROADCAST. It is
+             *   the most precisely addressed form there is.
+             *
+             *   A false positive rather than a false negative, so nothing was
+             *   ever hidden by it; but a scanner that cannot read a common
+             *   shape is #638 and #639's class, and the repair there was the
+             *   same — teach it the shape rather than write around it.
+             */
+            const to = /\buserId:\s*([^,\n]+)/.exec(slice)
+                ?? (/\buserId\s*,/.test(slice) ? ([, 'userId'] as unknown as RegExpExecArray) : null);
             out.push({
                 file,
                 line: src.slice(0, m.index).split('\n').length,

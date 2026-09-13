@@ -1,7 +1,6 @@
 "use server";
 
 import { versionedUpdate } from "@/lib/optimistic-locking";
-import { html } from "@/lib/utils";
 import { ZodError } from "zod";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -16,10 +15,9 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { needsDualControl } from "@/lib/loan-approval-policy";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { createNotificationAction } from "@/app/actions/notifications";
 import { LoanApplicationReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
+import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 
 // ============================================
 // Loan Application Management (Admin)
@@ -396,56 +394,27 @@ async function _approveLoanApplication(
             await invalidateCooperativeCache(loanData.userId);
         } catch (e) { logger.error('[admin] cache invalidation failed silently:', e); }
 
-        if (canSendEmail("loan decision email", loanData.userEmail)) {
-            try {
-                /**
-                 * #394. This was `await resend.emails.send({...})` with the
-                 * result thrown away. Resend RETURNS its errors rather than
-                 * throwing them, so the surrounding try/catch never fired and a
-                 * refused or rate-limited loan decision email was invisible — not
-                 * logged, not retried, not noticed. Five sends across the
-                 * platform had that shape.
-                 */
-                const { error: sendError } = await sendEmailNotification({
-                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
-                    to: loanData.userEmail,
-                    subject: "Loan Application Approved!",
-                    message: html`
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
-                            <p>Great news! Your loan application has been approved by our admin team.</p>
-                            <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                                <h3 style="color: #059669; margin-top: 0;">Loan Details:</h3>
-                                <p><strong>Amount:</strong> ₦${loanData.amount.toLocaleString()}</p>
-                                <p><strong>Duration:</strong> ${loanData.durationMonths} months</p>
-                                <p><strong>Interest Rate:</strong> ${loanData.interestRate}% per month</p>
-                                <p><strong>Monthly Payment:</strong> ₦${Math.round(loanData.monthlyPayment).toLocaleString()}</p>
-                                <p><strong>Total Repayment:</strong> ₦${Math.round(loanData.totalRepayment).toLocaleString()}</p>
-                            </div>
-                            <p><strong>Next Steps:</strong></p>
-                            <ul>
-                                <li>${disbursementTransferCode ? 'Your funds have been transferred to your bank account.' : 'Funds will be disbursed to your account shortly.'}</li>
-                                <li>Your first repayment is due 30 days from disbursement</li>
-                                <li>You can track your repayment schedule in your dashboard</li>
-                            </ul>
-                            <p>Thank you for being a valued member of our cooperative!</p>
-                        </div>
-                    `,
-                    metadata: { type: "loan_decision" },
-                });
-                if (sendError) logger.error("[#394] email send failed", { error: sendError });
-            } catch (e) { logger.error('[admin] loan approval email failed silently:', e); }
-        }
-
-        await createNotificationAction({
+        /*
+         *   #688 ONE NOTICE, FOR ALL SEVEN DOORS.
+         *
+         *   The email and the bell used to be written out here, and this was
+         *   one of only TWO doors of seven onto a loan decision that told the
+         *   member anything at all. The wording moved to
+         *   lib/loan-decision-notice.ts unchanged, so the five silent doors say
+         *   the same thing rather than growing their own copies.
+         */
+        await notifyLoanDecision({
             userId: loanData.userId,
-            type: "success",
-            title: "Loan Approved!",
-            message: disbursementTransferCode
-                ? `Your loan of ₦${loanData.amount.toLocaleString()} has been approved and disbursed to your bank account!`
-                : `Your loan application for ₦${loanData.amount.toLocaleString()} has been approved. Disbursement will follow shortly.`,
-            link: "/loans",
-            linkText: "View Loans",
+            decision: "approved",
+            amount: loanData.amount,
+            userEmail: loanData.userEmail,
+            disbursed: !!disbursementTransferCode,
+            terms: {
+                durationMonths: loanData.durationMonths,
+                interestRate: loanData.interestRate,
+                monthlyPayment: loanData.monthlyPayment,
+                totalRepayment: loanData.totalRepayment,
+            },
         });
 
         await createAdminAuditLog({
@@ -540,40 +509,15 @@ async function _rejectLoanApplication(
         const { loanData } = txResult;
 
         // SIDE EFFECTS (Post-Commit)
-        if (canSendEmail("loan decision email", loanData.userEmail)) {
-            try {
-                /**
-                 * #394. This was `await resend.emails.send({...})` with the
-                 * result thrown away. Resend RETURNS its errors rather than
-                 * throwing them, so the surrounding try/catch never fired and a
-                 * refused or rate-limited loan decision email was invisible — not
-                 * logged, not retried, not noticed. Five sends across the
-                 * platform had that shape.
-                 */
-                const { error: sendError } = await sendEmailNotification({
-                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
-                    to: loanData.userEmail,
-                    subject: "Loan Application Update",
-                    message: html`<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-                        <h2 style="color:#dc2626">Loan Application Update</h2>
-                        <div style="background:#fef2f2;padding:16px;border-radius:8px;margin:20px 0">
-                            <p>Unfortunately, we are unable to approve your loan application at this time.</p>
-                            <p><strong>Reason:</strong> ${reason}</p>
-                        </div>
-                    </div>`,
-                    metadata: { type: "loan_decision" },
-                });
-                if (sendError) logger.error("[#394] email send failed", { error: sendError });
-            } catch (e) { logger.error('[admin] loan rejection email failed silently:', e); }
-        }
-
-        await createNotificationAction({
+        //   #688 One notice, for all seven doors — see the note on approval.
+        //   The reason now reaches the member in the message as well as the
+        //   record, which it did not before on any door.
+        await notifyLoanDecision({
             userId: loanData.userId,
-            type: "warning",
-            title: "Loan Application Declined",
-            message: `Your loan application for ₦${loanData.amount.toLocaleString()} was not approved.`,
-            link: "/loans",
-            linkText: "View Details",
+            decision: "rejected",
+            amount: loanData.amount,
+            userEmail: loanData.userEmail,
+            reason,
         });
 
         await createAdminAuditLog({

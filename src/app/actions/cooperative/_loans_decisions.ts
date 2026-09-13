@@ -11,6 +11,7 @@ import {
     LOAN_REJECTABLE_STATUSES,
 } from "@/lib/loan-approval-policy";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
@@ -204,6 +205,18 @@ export async function approveLoanAction(
             },
         });
 
+        //   #688 AND THE MEMBER IS TOLD.
+        //
+        //   This door wrote the approval and an audit row an admin can read,
+        //   and said nothing to the person whose loan it was. Only two of the
+        //   seven doors onto this decision did. See lib/loan-decision-notice.ts.
+        await notifyLoanDecision({
+            userId: appData.userId,
+            decision: "approved",
+            amount: appData.amount,
+            userEmail: (appData as any).userEmail,
+        });
+
         return { error: null, success: true as const , data: null };
     } catch (error) {
         logger.error("Loan approval error:", error);
@@ -285,6 +298,19 @@ export async function rejectLoanAction(
                 amount: appData.amount,
                 reason,
             },
+        });
+
+        //   #688 AND THE MEMBER IS TOLD, WITH THE REASON.
+        //
+        //   `rejectionReason` was written to the application above, where only
+        //   an admin can read it. A member told nothing at all cannot correct
+        //   whatever it was and re-apply.
+        await notifyLoanDecision({
+            userId: appData.userId,
+            decision: "rejected",
+            amount: appData.amount,
+            reason,
+            userEmail: (appData as any).userEmail,
         });
 
         return { error: null, success: true as const , data: null };
