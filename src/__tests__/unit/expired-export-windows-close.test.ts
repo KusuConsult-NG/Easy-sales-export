@@ -413,6 +413,10 @@ describe('#196 — the premise, re-measured', () => {
             //   the second ratchet to catch this commit, after the workflow cap
             //   in #614. Both fired for the right reason.
             'age-notifications',
+            //   #702 — the ninth. The email backfill used to run only when an
+            //   admin remembered to POST it, while the scan that reports the
+            //   damage ran on a timer. A deliberate edit, as this list intends.
+            'backfill-missing-emails',
             'close-export-windows',
             'gdpr-purge',
             'process-email-queue',

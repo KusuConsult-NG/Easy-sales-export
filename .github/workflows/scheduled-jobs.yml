@@ -110,6 +110,9 @@ on:
     - cron: '7 * * * *'      # close-export-windows — hourly, off the hour
     - cron: '23 * * * *'     # release-stale-reservations — hourly
     - cron: '13 4 * * *'     # age-notifications    — daily, after gdpr-purge
+    # #702 — daily, well clear of the other jobs. The repair is idempotent and
+    # fills only blank rows, so a run that finds nothing is the steady state.
+    - cron: '37 5 * * *'     # backfill-missing-emails — daily
   workflow_dispatch:
     inputs:
       job:
@@ -125,6 +128,7 @@ on:
           - close-export-windows
           - release-stale-reservations
           - age-notifications
+          - backfill-missing-emails
 
 # The offsets (:17, :43) keep these off the top of the hour, when GitHub's
 # scheduler is most contended and delays are longest.
@@ -216,6 +220,7 @@ jobs:
             '7 * * * *')    echo "path=close-export-windows" >> "$GITHUB_OUTPUT" ;;
             '23 * * * *')   echo "path=release-stale-reservations" >> "$GITHUB_OUTPUT" ;;
             '13 4 * * *')   echo "path=age-notifications"    >> "$GITHUB_OUTPUT" ;;
+            '37 5 * * *')   echo "path=backfill-missing-emails" >> "$GITHUB_OUTPUT" ;;
             *)              echo "path=${{ inputs.job }}"   >> "$GITHUB_OUTPUT" ;;
           esac
 
