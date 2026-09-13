@@ -57,7 +57,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { stripComments } from '@/lib/testing/strip-comments';
-import { redisConfigState, missingRedisVariable } from '@/lib/redis';
+import { redisConfigState, missingRedisVariable, presenceOf, describePresence } from '@/lib/redis';
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
 const code = (rel: string) => stripComments(read(rel), { label: rel });
@@ -115,6 +115,64 @@ describe('#661 — the three states are three, not two', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#716 — "not set" was said to somebody looking at the variable', () => {
+    /*
+     *   THE OWNER ANSWERED THIS LOG LINE WITH "this IS set", TWICE:
+     *
+     *       [Redis] UPSTASH_REDIS_REST_URL IS NOT SET, and its partner is.
+     *
+     *   And they were right, and so was the application. A variable in a
+     *   hosting dashboard can EXIST WITH AN EMPTY VALUE — the row is there,
+     *   the name is right, the box is blank, which is exactly what a reference
+     *   like ${{Redis.URL}} leaves when it fails to resolve. `process.env.X` is
+     *   then "", the truthiness test read falsy, and the message chose the one
+     *   wording that makes the person reading it wrong.
+     *
+     *   Three states, and the two that are not "set" send an operator to
+     *   different places: one to ADD a variable, the other to look at the one
+     *   already sitting there.
+     */
+
+    it('A VARIABLE THAT IS NOT THERE AND ONE THAT IS THERE AND BLANK ARE DIFFERENT', () => {
+        expect(presenceOf(undefined)).toBe('missing');
+        expect(presenceOf('')).toBe('empty');
+        expect(presenceOf('https://upstash.example')).toBe('set');
+    });
+
+    it('AND WHITESPACE IS BLANK, WHICH IS THE WORSE HALF OF THIS', () => {
+        /*
+         *   A stray space or a pasted newline is TRUTHY. The old test built a
+         *   real Upstash client against it, so `isRedisConfigured` was true and
+         *   the platform reported a shared cache it did not have — while the
+         *   fallbacks that exist and work sat unused. Being wrong in this
+         *   direction costs more than being unconfigured.
+         */
+        expect(presenceOf('   ')).toBe('empty');
+        expect(presenceOf('\n')).toBe('empty');
+        expect(redisConfigState(env('   ', 'a-token'))).toBe('half-configured');
+        expect(redisConfigState(env('  ', '  '))).toBe('absent');
+    });
+
+    it('AND THE MESSAGE SAYS WHICH OF THE TWO IT FOUND', () => {
+        expect(describePresence(URL_VAR, undefined)).toContain('IS NOT PRESENT');
+        //   The wording the owner's correction demands: not "you did not set
+        //   it", but "the thing you set is carrying nothing".
+        const blank = describePresence(URL_VAR, '');
+        expect(blank).toContain('IS PRESENT BUT ITS VALUE IS BLANK');
+        expect(blank).not.toContain('IS NOT PRESENT');
+        expect(blank).toContain(URL_VAR);
+    });
+
+    it('AND A BLANK URL STILL NAMES THE URL AS THE ONE TO FIX', () => {
+        //   missingRedisVariable has to agree with the new reading, or the
+        //   message names one variable and describes the other.
+        expect(missingRedisVariable(env('', 'a-token'))).toBe(URL_VAR);
+        expect(missingRedisVariable(env('  ', 'a-token'))).toBe(URL_VAR);
+        expect(missingRedisVariable(env('https://upstash.example', '   '))).toBe(TOKEN_VAR);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('#661 — and the mistake is reported differently from the choice', () => {
     const REDIS = code('src/lib/redis.ts');
 
@@ -129,8 +187,20 @@ describe('#661 — and the mistake is reported differently from the choice', () 
 
         expect(body).toContain('console.error(');
         expect(body).toContain('HALF-CONFIGURED');
-        //   And it names the variable rather than listing both.
-        expect(body).toContain('${missing}');
+        /*
+         *   And it names the variable rather than listing both.
+         *
+         *   THIS ASSERTION WAS `toContain('${missing}')` AND IT FIRED WHEN
+         *   #716 CHANGED THE WORDING — correctly, which is what a ratchet is
+         *   for. It is rewritten rather than relaxed: the property #661 bought
+         *   is "the message names the ONE variable at fault", and pinning the
+         *   exact interpolation spelling made it also mean "and never improve
+         *   how you say it". The variable still reaches the message; it now
+         *   goes through describePresence so the line can distinguish a
+         *   variable that is absent from one that exists carrying nothing.
+         */
+        expect(body).toMatch(/describePresence\(\s*missing/);
+        expect(body).not.toContain('UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN');
     });
 
     it('AND THE UNCONFIGURED CASE KEEPS ITS WARNING', () => {
@@ -152,6 +222,30 @@ describe('#661 — and the mistake is reported differently from the choice', () 
          *   rate-limit anything.
          */
         expect(REDIS).toContain('export const isRedisConfigured = !!(redisUrl && redisToken && !isTestRun);');
+    });
+
+    it('AND redisUrl / redisToken ARE TRIMMED BEFORE THAT TEST EVER RUNS', () => {
+        /*
+         *   #716, AND THE HALF OF IT THAT COSTS MORE. The line above is a
+         *   truthiness test, which is correct ONLY IF the two values it reads
+         *   have already had blank-but-truthy content removed. Without the trim,
+         *   a value of "   " — a stray space, a pasted newline, a quoted empty
+         *   string — makes isRedisConfigured TRUE, builds a real Upstash client
+         *   against an unusable URL, and the platform reports a shared cache it
+         *   does not have while the working fallbacks sit unused.
+         *
+         *   A MUTANT THAT REMOVED THIS TRIM SURVIVED EVERY OTHER TEST IN THIS
+         *   FILE, because they all go through redisConfigState — the reporting
+         *   path — and none of them touched the two module-scope constants that
+         *   decide whether a client is CONSTRUCTED. Two readings of the same
+         *   environment, one tested and one not, which is this audit's most
+         *   frequent finding aimed at its own suite.
+         *
+         *   Asserted on the source because both constants are resolved once at
+         *   module load, before any test can set process.env.
+         */
+        expect(REDIS).toContain('const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim() || undefined;');
+        expect(REDIS).toContain('const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || undefined;');
     });
 });
 

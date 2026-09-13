@@ -6,8 +6,15 @@ import {
 } from './cache-fallback';
 
 // Initialize Redis client safely
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+//
+//   #716 TRIMMED, so a value of "   " is not mistaken for a credential. A
+//   pasted newline or a quoted empty string is TRUTHY, and the untrimmed
+//   version built a real Upstash client against an unusable URL — the platform
+//   then believed it had a shared cache while every call to it failed. The
+//   fallbacks below are correct and well tested; silently not using them is
+//   strictly worse than knowing there is no Redis. See redisConfigState.
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim() || undefined;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || undefined;
 
 // Only jest forces the stub.
 //
@@ -100,9 +107,50 @@ export const isRedisConfigured = !!(redisUrl && redisToken && !isTestRun);
  */
 export type RedisConfigState = 'configured' | 'half-configured' | 'absent';
 
+/**
+ * WHY "IS NOT SET" IS NOT ENOUGH, AND WHY THE OWNER AND THE APP BOTH TOLD THE
+ * TRUTH — #716.
+ *
+ *   The owner has now twice answered this log line with "this IS set":
+ *
+ *       [Redis] UPSTASH_REDIS_REST_URL IS NOT SET, and its partner is.
+ *
+ *   Both statements were correct, about different things. A variable in a
+ *   hosting dashboard can EXIST WITH AN EMPTY VALUE — a row is there, the name
+ *   is right, the value box is blank, and a reference like ${{Redis.URL}} that
+ *   failed to resolve leaves exactly that. `process.env.X` is then `""`, the
+ *   truthiness test below reads falsy, and the message says the variable is
+ *   not set. The operator looks at the row and reasonably disagrees.
+ *
+ *   So the message picked the one wording that makes the person reading it
+ *   wrong, and it did so for the state that is EASIEST to fix — which is the
+ *   state most worth naming precisely.
+ *
+ *   AND THE SAME TRUTHINESS TEST HAD A WORSE FAILURE IN THE OTHER DIRECTION.
+ *   A value of "   " — a stray space, a pasted newline, a quoted empty string —
+ *   is TRUTHY. `isRedisConfigured` became true, a Redis client was built
+ *   against an unusable URL, and the platform reported itself as having a
+ *   shared cache while every call to it failed. That is strictly worse than
+ *   knowing there is no cache, because the fallbacks exist and are correct.
+ *
+ *   A value is PRESENT when it has non-whitespace content. Trimming closes the
+ *   second case and `presenceOf` names the first, so the log can say which of
+ *   three things it actually found instead of collapsing them into "no".
+ *
+ *   #620, #621, #714 — the same class every time: a check that cannot tell two
+ *   states apart, reporting the one that reads as a fact.
+ */
+export type VariablePresence = 'set' | 'empty' | 'missing';
+
+/** Whether this variable carries a usable value, and if not, why not. */
+export function presenceOf(value: string | undefined): VariablePresence {
+    if (value === undefined) return 'missing';
+    return value.trim() === '' ? 'empty' : 'set';
+}
+
 export function redisConfigState(env: NodeJS.ProcessEnv = process.env): RedisConfigState {
-    const url = env.UPSTASH_REDIS_REST_URL;
-    const token = env.UPSTASH_REDIS_REST_TOKEN;
+    const url = presenceOf(env.UPSTASH_REDIS_REST_URL) === 'set';
+    const token = presenceOf(env.UPSTASH_REDIS_REST_TOKEN) === 'set';
 
     if (url && token) return 'configured';
     if (url || token) return 'half-configured';
@@ -112,7 +160,29 @@ export function redisConfigState(env: NodeJS.ProcessEnv = process.env): RedisCon
 /** The variable that is missing when exactly one was set, for a message that can be acted on. */
 export function missingRedisVariable(env: NodeJS.ProcessEnv = process.env): string | null {
     if (redisConfigState(env) !== 'half-configured') return null;
-    return env.UPSTASH_REDIS_REST_URL ? 'UPSTASH_REDIS_REST_TOKEN' : 'UPSTASH_REDIS_REST_URL';
+    return presenceOf(env.UPSTASH_REDIS_REST_URL) === 'set'
+        ? 'UPSTASH_REDIS_REST_TOKEN'
+        : 'UPSTASH_REDIS_REST_URL';
+}
+
+/**
+ * How to describe what was found, for the variable that is not usable.
+ *
+ * "is not set" and "is set to an empty value" send the operator to different
+ * places: the first to add a variable, the second to look at the one already
+ * there — very often a dashboard reference that did not resolve.
+ */
+export function describePresence(name: string, value: string | undefined): string {
+    switch (presenceOf(value)) {
+        case 'missing':
+            return `${name} IS NOT PRESENT in this environment at all`;
+        case 'empty':
+            return `${name} IS PRESENT BUT ITS VALUE IS BLANK — the variable exists and carries `
+                + `nothing, which is what an unresolved dashboard reference leaves behind. `
+                + `It will not appear missing where you set it`;
+        default:
+            return `${name} is set`;
+    }
 }
 
 if (!isRedisConfigured && !isTestRun) {
@@ -122,11 +192,15 @@ if (!isRedisConfigured && !isTestRun) {
     if (missing) {
         //   An error, not a warning: somebody set one of these on purpose and
         //   believes the platform has a shared cache. It does not.
+        //
+        //   #716 — and it says WHICH of "not there" and "there but blank" it
+        //   found, because the owner has twice replied "this is set" to the
+        //   older wording and was right to.
         console.error(
-            `[Redis] ${missing} IS NOT SET, and its partner is. Upstash is HALF-CONFIGURED, ` +
-            'so it is not being used at all: caching is disabled and every rate limiter is ' +
-            'using its per-instance in-memory fallback, which does NOT share state between ' +
-            'server instances. This is almost certainly a mistake — set the missing variable.'
+            `[Redis] ${describePresence(missing, process.env[missing])}, and its partner is set. ` +
+            'Upstash is HALF-CONFIGURED, so it is not being used at all: caching is disabled ' +
+            'and every rate limiter is using its per-instance in-memory fallback, which does ' +
+            'NOT share state between server instances. This is almost certainly a mistake.'
         );
     } else {
         console.warn(
