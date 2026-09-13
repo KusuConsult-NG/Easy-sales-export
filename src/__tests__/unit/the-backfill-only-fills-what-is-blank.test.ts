@@ -588,6 +588,19 @@ describe('#714 — "Auth says no" and "I could not ask Auth" are different answe
  *         repaired.
  *     the resolved id is dropped from the outcome detail               KILLED
  *
+ *     #718 — WHAT THE OPERATOR IS HANDED
+ *     the raw phone number is returned instead of the mask           KILLED
+ *     the mask keeps eight digits instead of four                    KILLED
+ *     a number too short to mask is partly revealed                  KILLED
+ *     "could not tell" collapses into "no account"                   KILLED
+ *     the structured name fields are ignored                         KILLED
+ *     a row with no phone reports "***" rather than null             KILLED
+ *     the whole row is spread into the response                      KILLED
+ *       — the one that matters most. NIN, BVN, residential address
+ *         and bank details are all on the row that was read anyway,
+ *         so a single careless spread turns a "who is this person"
+ *         screen into an identity-document export.
+ *
  *     #714 — THE LOOKUP STATE
  *     the default for an unanswered id goes back to "absent"          KILLED
  *     backfillDecision reports a failed lookup as no-auth-account     KILLED
@@ -607,3 +620,129 @@ describe('#714 — "Auth says no" and "I could not ask Auth" are different answe
  *   was right in all three cases; the caller was not. That is the difference
  *   between testing a decision and testing the thing somebody presses.
  */
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#718 — the operator gets something they can act on', () => {
+    /*
+     *   THE PREVIEW RETURNED FORTY-EIGHT UUIDs AND NOTHING ELSE, and its own
+     *   comment gave the reason: "the whole point of these rows is that they
+     *   have no address to return, and the rest of a profile is not this
+     *   endpoint's business."
+     *
+     *   That held while #671's premise held — the address is in Auth against
+     *   the same id, so the repair fills it unattended and ids are all anyone
+     *   needs. The first believable run against production disproved it:
+     *
+     *       scanned 48, filled 0, needsAPerson 47, couldNotTell 1
+     *
+     *   There is no account to copy an address from, so a PERSON has to
+     *   identify these people, and a column of UUIDs gives them nothing.
+     */
+
+    //   describeProfilesWithNoEmail is imported through the same require as the
+    //   rest of this file, so it sees the same mocked database and Auth.
+     
+    const { describeProfilesWithNoEmail, maskPhone } =
+        require('@/lib/missing-email-backfill') as typeof import('@/lib/missing-email-backfill');
+
+    it('IT REPORTS THE NAME AND A MASKED PHONE, WHICH ARE THE KEYS LEFT', async () => {
+        profiles = {
+            u1: { email: '', fullName: 'Ada Okonkwo', phone: '+234 802 555 1234', roles: ['cooperative_member'] },
+        };
+        authByUid = {};
+
+        const [row] = await describeProfilesWithNoEmail();
+
+        expect(row.name).toBe('Ada Okonkwo');
+        expect(row.phone).toBe('***1234');
+        expect(row.roles).toEqual(['cooperative_member']);
+    });
+
+    it('AND IT NEVER RETURNS THE IDENTITY DOCUMENTS THOSE ROWS ALSO CARRY', async () => {
+        /*
+         *   #490's rule. This is a screen for working out who somebody is, not
+         *   for exporting their NIN, BVN, address or bank details — every one
+         *   of which is on the row that was read anyway, which is exactly why
+         *   the assertion is worth having.
+         */
+        profiles = {
+            u1: {
+                email: '', fullName: 'Ada', phone: '08025551234',
+                nin: '12345678901', bvn: '22334455667',
+                residentialAddress: '14 Marina Road', bankDetails: { accountNumber: '0123456789' },
+            },
+        };
+
+        const [row] = await describeProfilesWithNoEmail();
+        const serialised = JSON.stringify(row);
+
+        for (const secret of ['12345678901', '22334455667', '14 Marina Road', '0123456789']) {
+            expect(serialised).not.toContain(secret);
+        }
+        //   And the raw phone is not in there either — only the masked form.
+        expect(serialised).not.toContain('08025551234');
+    });
+
+    it('AND IT SAYS WHETHER THE PERSON CAN SIGN IN AT ALL', async () => {
+        /*
+         *   THE distinction the old list could not express, and the one that
+         *   decides what an operator does next: "this row is missing a field
+         *   and the cron will fill it" and "this person has no login and never
+         *   had one" are not the same problem.
+         */
+        profiles = {
+            canSignIn: { email: '' },
+            cannot: { email: '' },
+            unknown: { email: '' },
+        };
+        authByUid = { canSignIn: 'ada@example.com' };
+        authLookupFails = ['unknown'];
+
+        const rows = await describeProfilesWithNoEmail();
+        const by = (id: string) => rows.find((r) => r.profileId === id);
+
+        expect(by('canSignIn')?.authAccount).toBe('has-account');
+        expect(by('cannot')?.authAccount).toBe('no-account');
+        expect(by('unknown')?.authAccount).toBe('could-not-tell');
+        expect(by('unknown')?.detail).toBe('service key rejected');
+    });
+
+    it('AND IT READS BOTH NAME SHAPES, BECAUSE ROWS EXIST WITH EITHER', async () => {
+        //   fullName is what the old registration wrote; the structured fields
+        //   are what every module written after April 2026 writes. Assuming one
+        //   would blank the name for half the population.
+        profiles = {
+            old: { email: '', fullName: 'Ada Okonkwo' },
+            structured: { email: '', firstName: 'Ada', otherName: 'Ngozi', lastName: 'Okonkwo' },
+            neither: { email: '' },
+        };
+
+        const rows = await describeProfilesWithNoEmail();
+        const by = (id: string) => rows.find((r) => r.profileId === id);
+
+        expect(by('old')?.name).toBe('Ada Okonkwo');
+        expect(by('structured')?.name).toBe('Ada Ngozi Okonkwo');
+        //   Empty, not "undefined undefined" — a row with no name is a fact,
+        //   and rendering it as placeholder words would be a worse one.
+        expect(by('neither')?.name).toBe('');
+    });
+
+    it('AND A ROW WITH NO PHONE SAYS SO RATHER THAN MASKING NOTHING', async () => {
+        //   "***" against a row that has no number would read as "there is a
+        //   number and you may not see it".
+        profiles = { u1: { email: '' } };
+
+        const [row] = await describeProfilesWithNoEmail();
+
+        expect(row.phone).toBeNull();
+    });
+
+    it('AND THE MASK KEEPS FOUR DIGITS, OR NOTHING AT ALL', () => {
+        expect(maskPhone('+234 802 555 1234')).toBe('***1234');
+        expect(maskPhone('08025551234')).toBe('***1234');
+        //   Too short to identify anybody, so it reveals nothing rather than
+        //   most of what is there.
+        expect(maskPhone('123')).toBe('***');
+        expect(maskPhone('')).toBe('***');
+    });
+});

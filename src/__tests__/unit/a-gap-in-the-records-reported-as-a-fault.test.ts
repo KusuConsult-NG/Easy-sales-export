@@ -536,8 +536,28 @@ describe('#671 — and the 48 profiles with no address get their address back', 
          *   same selector.
          */
         const route = code('src/app/api/admin/backfill-missing-emails/route.ts');
-        expect(route).toContain('profilesWithNoEmail(LIMIT)');
+        expect(route).toContain('describeProfilesWithNoEmail(LIMIT)');
         expect(route).toContain('backfillMissingEmails(LIMIT)');
+
+        /*
+         *   THIS ASSERTION READ `toContain('profilesWithNoEmail(LIMIT)')` AND
+         *   FIRED WHEN #718 CHANGED THE PREVIEW. Correctly — that is what a
+         *   ratchet is for — and it is rewritten rather than relaxed.
+         *
+         *   The property it bought is "the preview and the write select the
+         *   same rows". Both still do, and now more strongly than before: they
+         *   share lookUpProfilesWithNoEmail, which does the selection, the
+         *   identity walk and the Auth read in one place, so the preview and
+         *   the action cannot disagree about what they found either — not just
+         *   about which rows they found it on.
+         *
+         *   Asserted here rather than in the route, because the route can only
+         *   show that both call something; only the library shows it is one
+         *   thing.
+         */
+        const lib = code('src/lib/missing-email-backfill.ts');
+        const shared = 'await lookUpProfilesWithNoEmail(limit)';
+        expect((lib.match(new RegExp(shared.replace(/[()]/g, '\\$&'), 'g')) ?? []).length).toBe(2);
         //   And the same gate the scan uses — super_admin and admin, not the
         //   ten roles the admin layout admits (#382).
         expect((route.match(/isPlatformAdmin\(session\?\.user\?\.roles\)/g) ?? []).length).toBe(2);

@@ -29,6 +29,39 @@
  *        reconstructed — it needs to be copied from the system of record for
  *        addresses into the profile that should already have it.
  *
+ * ── AND THAT LAST PARAGRAPH IS FALSE FOR THE 48 IT WAS WRITTEN ABOUT ────────
+ *
+ *   Left standing above, because it is what this module was built on and the
+ *   correction only means anything beside it.
+ *
+ *   #671 asserted it and nothing had checked: the repair was reachable only
+ *   behind an admin session and had never been run. #702 put it on a daily
+ *   cron; #714 and #715 made its answer trustworthy. The first run against
+ *   production that could be believed reported:
+ *
+ *       scanned 48, filled 0, needsAPerson 47, couldNotTell 1
+ *
+ *       47 × no-auth-account      Auth was REACHED and says there is no
+ *                                 account at that id
+ *        1 × auth-lookup-failed   "Expected parameter to be UUID but is not"
+ *                                 — EHp5pfEwUqVBQve9s3fh3dfehrJ2, a
+ *                                 Firebase-era uid Supabase will not accept
+ *
+ *   No outcome carried "resolved to <id>", so not one of the 48 has a
+ *   `_migratedTo` or `supabaseAuthId` pointer either. They are not migrated
+ *   rows whose account sits elsewhere. THERE IS NO ACCOUNT.
+ *
+ *   So these 48 people hold a profile with no login behind it: they cannot
+ *   sign in and never could, and no automatic repair can change that. Copying
+ *   an address is a fact-moving operation; creating a login is not, and
+ *   inventing one for somebody is not this audit's to do.
+ *
+ *   WHAT THIS MODULE IS STILL FOR is unchanged and worth keeping: the day a
+ *   49th profile appears whose account DOES exist, the cron fills it silently
+ *   and nobody has to notice. What changed is that the 48 already on the list
+ *   are now known to need a person, and #718 gives that person something to
+ *   work with instead of a column of UUIDs.
+ *
  * ── WHAT THIS WILL NOT DO ───────────────────────────────────────────────────
  *
  *   IT NEVER OVERWRITES AN ADDRESS. Only a profile whose email is null, empty
@@ -85,6 +118,19 @@ export function maskAddress(email: string): string {
     const [local, domain] = email.split("@");
     if (!domain) return "***";
     return `${local.slice(0, 3)}${local.length > 3 ? "***" : ""}@${domain}`;
+}
+
+/**
+ * A phone number, masked to the last four digits — #490's rule, for #718.
+ *
+ * Enough for an operator to recognise the person against a membership list or
+ * a bank record, and not enough to be a contact-details export. A repair
+ * screen is as likely to be screenshotted as a report.
+ */
+export function maskPhone(phone: string): string {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 4) return "***";
+    return `***${digits.slice(-4)}`;
 }
 
 /** Blank means null, undefined, empty or whitespace — #479, and the reason `|| ''` is not enough. */
@@ -179,17 +225,27 @@ export async function profilesWithNoEmail(limit = 500): Promise<{ id: string; da
     return [...found].map(([id, data]) => ({ id, data }));
 }
 
+/** Everything the read-only half of this module works out, for both callers. */
+export interface ProfileLookups {
+    profiles: { id: string; data: Record<string, any> }[];
+    /** Profile id -> the id Auth was asked about, after following #449's walk. */
+    authIdFor: Map<string, string>;
+    /** That asked-about id -> what Auth established. */
+    lookupById: Map<string, AuthLookup>;
+}
+
 /**
- * Copy the verified address from Supabase Auth onto every profile that has
- * none.
+ * Select the blank-email profiles and find out what Auth knows about each.
  *
- * Auth is read in batches through `getUsers`, which point-reads by uid and
- * reports misses rather than throwing — a profile whose auth account is gone
- * must not fail the whole run for the other forty-seven.
+ * WRITES NOTHING, and is shared by the repair and by the admin preview — #718.
+ * The preview used to return bare ids while the repair did all of this, so the
+ * two knew different amounts about the same rows. The endpoint's own header
+ * already states the rule this keeps: "the preview cannot disagree with the
+ * action — this audit's two-hand-maintained-copies defect, avoided by having
+ * one."
  */
-export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillReport> {
+export async function lookUpProfilesWithNoEmail(limit = 500): Promise<ProfileLookups> {
     const profiles = await profilesWithNoEmail(limit);
-    const outcomes: EmailBackfillOutcome[] = [];
 
     /**
      * What Auth established about each id, in chunks, so the loop below does
@@ -290,6 +346,21 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
         }
     }
 
+    return { profiles, authIdFor, lookupById };
+}
+
+/**
+ * Copy the verified address from Supabase Auth onto every profile that has
+ * none.
+ *
+ * Auth is read in batches through `getUsers`, which point-reads by uid and
+ * reports misses rather than throwing — a profile whose auth account is gone
+ * must not fail the whole run for the other forty-seven.
+ */
+export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillReport> {
+    const { profiles, authIdFor, lookupById } = await lookUpProfilesWithNoEmail(limit);
+    const outcomes: EmailBackfillOutcome[] = [];
+
     let filled = 0;
     for (const profile of profiles) {
         /**
@@ -371,4 +442,108 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
     }
 
     return { scanned: profiles.length, filled, outcomes };
+}
+
+/** What an operator needs to act on one unreachable profile — #718. */
+export interface ProfileWithNoEmail {
+    profileId: string;
+    /** The id Auth was asked about. Differs only for a migrated row. */
+    authId: string;
+    /** fullName, or the structured name fields joined. Empty when the row has neither. */
+    name: string;
+    /** Masked to the last four digits, or null when the row carries none. */
+    phone: string | null;
+    roles: string[];
+    createdAt: string | null;
+    /**
+     * What Supabase Auth said about `authId`.
+     *
+     *   has-account      the person can sign in; the address is simply absent
+     *                    from the profile and the repair will fill it
+     *   no-account       Auth was reached and says there is none — this person
+     *                    CANNOT SIGN IN, and no automatic repair exists
+     *   could-not-tell   the lookup did not work; nothing is known — #714
+     */
+    authAccount: "has-account" | "no-account" | "could-not-tell";
+    /** Why, when the lookup failed. Carried through from the Auth client. */
+    detail?: string;
+}
+
+/**
+ * Describe every profile with no email address, for a person who has to act.
+ *
+ *   #718 THE OPERATOR WAS HANDED FORTY-EIGHT UUIDs AND NOTHING ELSE.
+ *
+ *   GET /api/admin/backfill-missing-emails returned `profileIds` — bare ids —
+ *   and said why in its own comment: "the whole point of these rows is that
+ *   they have no address to return, and the rest of a profile is not this
+ *   endpoint's business."
+ *
+ *   THAT REASONING RESTED ON A PREMISE THAT IS NOW KNOWN TO BE FALSE. It was
+ *   written when #671's claim held — "the address is not missing, it is in
+ *   Supabase Auth against the same account id, verified" — so the ids were all
+ *   anyone needed, because the repair would fill them in unattended.
+ *
+ *   The first real run says otherwise. Of the 48 in production, 47 came back
+ *   `no-auth-account` from a lookup that reached Auth, and the 48th is a
+ *   Firebase-era uid Supabase will not even accept as a parameter. There is no
+ *   account to copy an address from. A person has to identify these people by
+ *   other means, and a list of opaque UUIDs gives them nothing to do it with.
+ *
+ *   SO THE ENDPOINT NOW RETURNS WHAT IT ALREADY HAS. Name, masked phone, roles
+ *   and creation date are on the row that was read anyway, and they are the
+ *   keys left: a name and the last four digits of a phone are what match a
+ *   person against a cooperative's membership list or a bank record.
+ *
+ *   NOT the NIN, BVN, address or bank details those rows also carry. This is a
+ *   screen for finding out who somebody is, not for exporting their identity
+ *   documents, and #490's rule is that a repair view is as likely to be
+ *   screenshotted as a report.
+ *
+ *   It also says, per row, whether Auth has an account — because "this person
+ *   cannot sign in at all" and "this row is just missing a field" need
+ *   completely different responses, and the old list could not tell an operator
+ *   which they were looking at.
+ */
+export async function describeProfilesWithNoEmail(limit = 500): Promise<ProfileWithNoEmail[]> {
+    const { profiles, authIdFor, lookupById } = await lookUpProfilesWithNoEmail(limit);
+
+    return profiles.map((profile) => {
+        const data = profile.data ?? {};
+        const authId = authIdFor.get(profile.id) ?? profile.id;
+        const lookup = lookupById.get(authId);
+
+        //   Absent from the map means no answer was seen for it, which is
+        //   "could not tell" — the same default the repair takes (#714).
+        const authAccount: ProfileWithNoEmail["authAccount"] =
+            lookup?.kind === "found" ? "has-account"
+            : lookup?.kind === "absent" ? "no-account"
+            : "could-not-tell";
+
+        //   fullName is what old registration wrote; the structured fields are
+        //   what every module written after April 2026 writes. Rows exist with
+        //   one, the other, or neither, so both are read and neither is assumed.
+        const structured = [data.firstName, data.otherName, data.lastName]
+            .filter((part) => typeof part === "string" && part.trim() !== "")
+            .join(" ")
+            .trim();
+        const name = (typeof data.fullName === "string" && data.fullName.trim() !== "")
+            ? data.fullName.trim()
+            : structured;
+
+        const rawPhone = typeof data.phone === "string" ? data.phone.trim() : "";
+
+        return {
+            profileId: profile.id,
+            authId,
+            name,
+            phone: rawPhone === "" ? null : maskPhone(rawPhone),
+            roles: Array.isArray(data.roles) ? data.roles.map(String) : [],
+            createdAt: typeof data.createdAt === "string"
+                ? data.createdAt
+                : (data.createdAt?.toDate?.()?.toISOString?.() ?? null),
+            authAccount,
+            ...(lookup?.kind === "failed" && lookup.detail ? { detail: lookup.detail } : {}),
+        };
+    });
 }
