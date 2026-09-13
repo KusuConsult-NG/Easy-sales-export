@@ -163,7 +163,15 @@ describe('a partial list says so', () => {
     it('the flag was already consumed elsewhere', () => {
         // Recorded because it establishes the convention these screens were
         // outside of, rather than a new idea.
-        expect(source('src/services/analytics.service.ts')).toContain('sweep.truncated');
+        //
+        //   #699 MOVED WHERE THE CONVENTION LIVES, WITHOUT CHANGING IT. This
+        //   read analytics.service for `sweep.truncated`, because that service
+        //   swept Paystack on admin page renders and marked a capped total as a
+        //   floor. Those sweeps are gone — they cost up to 100 sequential API
+        //   round trips in front of the reader — so the convention is asserted
+        //   where the truncation still happens, which is the sweep helper and
+        //   the reconcilers that call it.
+        expect(source('src/lib/paystack-sweep.ts')).toContain('truncated');
         expect(source('src/app/api/cron/reconcile-fulfilment/route.ts')).toContain('truncated: snap.truncated');
     });
 });

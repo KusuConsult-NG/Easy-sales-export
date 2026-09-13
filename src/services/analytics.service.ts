@@ -6,7 +6,6 @@ import { logger } from "@/lib/logger";
 import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
-import { eachPaystackSuccess } from "@/lib/paystack-sweep";
 import type {
     AnalyticsServiceContract,
     PlatformHealthMetrics,
@@ -15,7 +14,6 @@ import type {
     ModuleRegistrationStats,
     UserSegments
 } from "@easy-sales/services";
-import { paystackBaseUrl } from "@/lib/paystack-host";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -138,48 +136,39 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         let totalRevenue = 0;
         let totalTransactions = 0;
-        // True when paging stopped at its ceiling, so totalRevenue is a floor.
-        let revenueIsPartial = false;
+        //   #699 — always false now, and kept on the payload rather than
+        //   removed. It meant "the Paystack sweep stopped at its ceiling, so
+        //   this is a floor"; the database aggregate has no ceiling, so the
+        //   figure is exact. The field stays because the dashboard and #665's
+        //   ratchet both read it, and a caller that stops finding it would be a
+        //   worse change than one that always finds it false.
+        const revenueIsPartial = false;
 
-        const secretKey = process.env.PAYSTACK_SECRET_KEY;
-        let paystackSuccess = false;
+        /**
+         *   #699 THIS SWEPT PAYSTACK'S HTTP API, SEQUENTIALLY, ON A PAGE RENDER.
+         *
+         *   It called eachPaystackSuccess with NO maxPages, so it used
+         *   MAX_REVENUE_PAGES — up to 100 awaited round trips to a third party,
+         *   100 transactions at a time, with the whole admin dashboard behind a
+         *   full-screen spinner until it finished. The cost grew with every
+         *   payment the platform had ever taken.
+         *
+         *   The fallback below was always the better answer and said so in its
+         *   own words: the aggregate is computed BY THE DATABASE over the whole
+         *   table, so it is never partial, where the sweep was capped and
+         *   reported `revenueIsPartial` when it truncated. The slow source was
+         *   also the less accurate one.
+         *
+         *   READING THE LEDGER IS NOT A SHORTCUT. Whether the ledger matches
+         *   Paystack is reconciliation's question, and cron/reconcile-paystack
+         *   asks it on a schedule — returning 409 when money is missing (#677)
+         *   rather than reporting success. A live sweep on a page render does
+         *   not make the figure truer; it makes it slower, capped, and dependent
+         *   on Paystack being up.
+         */
+        let revenueSource: "paystack" | "database" | null = null;
 
-        if (secretKey) {
-            try {
-                // The pages were previously fetched 2..pageCount all at once with
-                // Promise.all and no bound. On a platform this size that is a
-                // burst of hundreds of concurrent requests at whatever Paystack's
-                // rate limit is, so it now reads sequentially with a ceiling.
-                const sweep = await eachPaystackSuccess(
-                    secretKey,
-                    { dateFrom: options?.dateFrom, dateTo: options?.dateTo, label: "PlatformMetrics" },
-                    (tx) => {
-                        totalRevenue += (tx.amount / 100);
-                        totalTransactions++;
-                    },
-                );
-                revenueIsPartial = sweep.truncated;
-                paystackSuccess = true;
-            } catch (e: any) {
-                logger.error(`[PlatformMetrics] Live Paystack revenue fetch failed, falling back to Firestore: ${e.message}`);
-            }
-        }
-
-        let revenueSource: "paystack" | "database" | null = paystackSuccess ? "paystack" : null;
-
-        if (!paystackSuccess) {
-            // Discard any partial Paystack total before falling back.
-            //
-            // Page 1's transactions are added before the remaining pages are
-            // fetched, so a failure part-way through left a partial sum behind.
-            // If the fallback below also failed, that partial figure was
-            // returned as the platform's revenue.
-            totalRevenue = 0;
-            totalTransactions = 0;
-            // The aggregate below is computed by the database over the whole
-            // table, so the fallback figure is never a partial one.
-            revenueIsPartial = false;
-
+        {
             try {
                 let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                     .where("status", "==", "completed");
@@ -568,9 +557,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
         const recentActivity = recentActivityCount.status === "fulfilled" ? recentActivityCount.value : 0;
 
-        // Revenue by month
-        const secretKey = process.env.PAYSTACK_SECRET_KEY;
-        let paystackSuccess = false;
+        // Revenue by month — from the platform's own ledger (#699).
         let revenueByMonth: Array<{ month: string; revenue: number }> = [];
         // True when the monthly chart hit its page cap, so earlier months read
         // low. Surfaced rather than left for the reader to infer from a dip.
@@ -579,63 +566,24 @@ export class AnalyticsService implements AnalyticsServiceContract {
         //   flat bar and a bar nobody could draw.
         const unavailableMonths: string[] = [];
 
-        if (secretKey) {
-            try {
-                // Initialize monthly buckets with 0
-                const buckets = months.map(m => ({ label: m.label, start: m.start, end: m.end, revenue: 0 }));
-                
-                // The 5-page cap below is somebody's deliberate latency decision
-                // ("to prevent slow API response or timeouts", at 3s per page)
-                // and is kept as it was. Only the stop CONDITION is fixed: a
-                // missing meta.pageCount used to cut this to 1 page rather than
-                // the 5 that were intended, so a chart already limited to 500
-                // transactions could quietly be drawn from 100.
-                //
-                // WORTH A DECISION, NOT CHANGED HERE: 500 transactions across
-                // twelve months means the monthly chart is drawn from the most
-                // recent 500 only, so early months read low. Raising the cap
-                // costs 3s per extra page on a dashboard load; summing from
-                // processed_payments instead would be exact and fast. That is a
-                // product call, so it is reported rather than taken.
-                const MONTHLY_REVENUE_PAGE_CAP = 5;
-                const monthlySweep = await eachPaystackSuccess(
-                    secretKey,
-                    {
-                        dateFrom: months[0].start,
-                        dateTo: months[months.length - 1].end,
-                        maxPages: MONTHLY_REVENUE_PAGE_CAP,
-                        timeoutMs: 3000,
-                        label: "DashboardStats.monthlyRevenue",
-                        capIsIntentional: true,
-                    },
-                    (tx) => {
-                        const paidAtStr = tx.paid_at || tx.paidAt || tx.created_at || tx.createdAt;
-                        if (!paidAtStr) return;
-                        const txDate = new Date(paidAtStr);
-                        for (const bucket of buckets) {
-                            if (txDate >= bucket.start && txDate <= bucket.end) {
-                                bucket.revenue += (tx.amount / 100);
-                                break;
-                            }
-                        }
-                    },
-                );
-                if (monthlySweep.truncated) {
-                    logger.warn(
-                        `[DashboardStats] Monthly revenue chart read its ${MONTHLY_REVENUE_PAGE_CAP}-page cap ` +
-                        `(${MONTHLY_REVENUE_PAGE_CAP * 100} transactions). Earlier months are under-reported.`
-                    );
-                    monthlyRevenueIsPartial = true;
-                }
-                
-                revenueByMonth = buckets.map(b => ({ month: b.label, revenue: b.revenue }));
-                paystackSuccess = true;
-            } catch (e: any) {
-                logger.error(`[DashboardStats] Live Paystack monthly revenue fetch failed, falling back to Firestore: ${e.message}`);
-            }
-        }
+        /*
+         *   #699 THE MONTHLY CHART SWEPT PAYSTACK ON EVERY DASHBOARD LOAD.
+         *
+         *   Five pages, three seconds of timeout each, awaited one after
+         *   another, with DashboardClient holding a full-screen spinner over the
+         *   whole page until it returned. The block's own comment priced it —
+         *   "3s per extra page on a dashboard load" — and named the alternative:
+         *   "summing from processed_payments instead would be exact and fast.
+         *   That is a product call, so it is reported rather than taken."
+         *
+         *   The product call has been made: the owner reports a ten-second page.
+         *   The per-month database aggregates below are what it now uses, and
+         *   they were already written, already parallel, and already exact. The
+         *   sweep also under-reported by construction: 500 transactions across
+         *   twelve months meant early months were drawn from whatever was left.
+         */
 
-        if (!paystackSuccess) {
+        {
             //   #517 A MONTH THAT FAILED TO READ WAS DRAWN AS A MONTH WITH NO
             //   SALES, AND THEN THE SERIES DECLARED ITSELF EXACT.
             //
@@ -812,7 +760,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const db = getAdminDb();
 
         let totalRevenue = 0;
-        let revenueIsPartial = false;
+        const revenueIsPartial = false;
         let totalEscrowVolume = 0;
         let totalLoansDisbursed = 0;
         let totalSuccessfulCount = 0;
@@ -851,77 +799,26 @@ export class AnalyticsService implements AnalyticsServiceContract {
             logger.error("[FinancialOverview] disbursed-loans aggregate failed", { reason: String(loanR.reason) });
         }
 
-        // 2. Fetch revenue and counts from Paystack API as the source of truth
-        const secretKey = process.env.PAYSTACK_SECRET_KEY;
-        let paystackSuccess = false;
-
-        if (secretKey) {
-            try {
-                // Fetch counts using single quick requests for counts first
-                const [successMetaRes, failedMetaRes, abandonedMetaRes] = await Promise.all([
-                    fetch(`${paystackBaseUrl()}/transaction?perPage=1&page=1&status=success`, {
-                        headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
-                        cache: "no-store",
-                        signal: AbortSignal.timeout(3000),
-                    }),
-                    fetch(`${paystackBaseUrl()}/transaction?perPage=1&page=1&status=failed`, {
-                        headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
-                        cache: "no-store",
-                        signal: AbortSignal.timeout(3000),
-                    }),
-                    fetch(`${paystackBaseUrl()}/transaction?perPage=1&page=1&status=abandoned`, {
-                        headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
-                        cache: "no-store",
-                        signal: AbortSignal.timeout(3000),
-                    }),
-                ]);
-
-                if (successMetaRes.ok) {
-                    const json = await successMetaRes.json();
-                    if (json && json.status) {
-                        totalSuccessfulCount = json.meta?.total ?? 0;
-                    }
-                }
-                if (failedMetaRes.ok) {
-                    const json = await failedMetaRes.json();
-                    if (json && json.status) {
-                        totalFailedCount = json.meta?.total ?? 0;
-                    }
-                }
-                if (abandonedMetaRes.ok) {
-                    const json = await abandonedMetaRes.json();
-                    if (json && json.status) {
-                        totalAbandonedCount = json.meta?.total ?? 0;
-                    }
-                }
-
-                // Fetch and sum all successful transaction amounts to calculate
-                // exact total revenue.
-                //
-                // This was the third copy of the same paging bug in this file —
-                // `json.meta?.pageCount ?? 1`, which stops after ONE page when
-                // the API sends no page count and reports the hundred most
-                // recent transactions as the platform's lifetime revenue. The
-                // loop lived here, in getPlatformMetrics, and in the monthly
-                // chart. All three now share eachPaystackSuccess above, because
-                // fixing one copy and leaving its siblings is how this class
-                // keeps surviving in this codebase.
-                const sweep = await eachPaystackSuccess(
-                    secretKey,
-                    { label: "FinancialOverview", timeoutMs: 3000 },
-                    (tx) => { totalRevenue += (tx.amount / 100); },
-                );
-                // Reported rather than swallowed: an admin reading this figure
-                // needs to know it is a floor, not a total. Surfaced on the
-                // payload below, not only logged.
-                revenueIsPartial = sweep.truncated;
-
-                paystackSuccess = true;
-            } catch (e: any) {
-                logger.error(`[FinancialOverview] Paystack API fetch failed, using Firestore fallback: ${e.message}`);
-            }
-        }
-
+        /*
+         *   #699 THIS PAGE CALLED PAYSTACK FOUR TIMES BEFORE IT RENDERED.
+         *
+         *   Three `perPage=1` probes to read success, failed and abandoned
+         *   counts out of `meta.total`, and then eachPaystackSuccess with NO
+         *   maxPages — up to 100 further awaited round trips, 3s of timeout
+         *   each. On the finance tab, in front of the reader.
+         *
+         *   Every one of those numbers is already computed below from the
+         *   platform's own ledger, by the database, over the whole table: the
+         *   three `.count()` queries that the old code ran ANYWAY under the
+         *   comment "Always calculate accurate counts from database
+         *   collections", and the revenue aggregate that sat in the fallback.
+         *   The API round trips bought nothing the next twenty lines did not
+         *   already have.
+         *
+         *   Reconciliation is what proves the ledger matches Paystack, and it
+         *   still sweeps — see cron/reconcile-paystack and
+         *   api/admin/finance/reconcile. Neither renders a page.
+         */
         // Always calculate accurate counts from database collections
         const [countAbandonedR, countFailedR, countSuccessR] = await Promise.allSettled([
             db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
@@ -935,7 +832,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
             totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
         }
         const dbSuccessCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
-        if (countSuccessR.status !== "fulfilled" && !paystackSuccess) {
+        if (countSuccessR.status !== "fulfilled") {
             //   Neither source could count. Left at 0 and NAMED — this is the
             //   case the removed `totalSuccessfulCount = recentTransactions.length`
             //   fallback used to paper over, reporting the size of one page as
@@ -947,7 +844,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
             totalSuccessfulCount = Math.max(totalSuccessfulCount, dbSuccessCount);
         }
 
-        if (!paystackSuccess) {
+        {
             const [allTxnsR] = await Promise.allSettled([
                 db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").aggregate({ totalRevenue: AggregateField.sum("amount") }).get(),
             ]);

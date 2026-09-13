@@ -83,22 +83,44 @@ const SERVICE = 'src/services/analytics.service.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#665 — the flag is still computed, on both paths', () => {
-    it('THE SERVICE SETS IT FROM THE SWEEP, IN BOTH FUNCTIONS', () => {
+    it('THE FLAG IS STILL ON EVERY PAYLOAD A SCREEN READS', () => {
         /*
          *   The positive control for everything below. "The screen reads
-         *   revenueIsPartial" means nothing if the service stopped setting it —
-         *   and a fix that deleted the flag instead of rendering it would
-         *   satisfy a careless version of this test.
+         *   revenueIsPartial" means nothing if the service stopped putting it
+         *   there — and a fix that deleted the flag instead of rendering it
+         *   would satisfy a careless version of this test.
+         *
+         *   #699 CHANGED WHAT SETS IT, AND NOT WHETHER IT IS SET. This asserted
+         *   `revenueIsPartial = sweep.truncated` twice, because both figures
+         *   came from a Paystack sweep that could stop at its page ceiling.
+         *   Those sweeps ran on ADMIN PAGE RENDERS — up to 100 sequential round
+         *   trips to a payment API behind a full-screen spinner — and #699
+         *   removed them; the figures come from database aggregates over the
+         *   whole table, which have no ceiling to hit.
+         *
+         *   So the flag is now constant false, and #665's property is not
+         *   weakened by that, it is satisfied more strongly: the reader could
+         *   not tell a floor from a total, and now there is no floor. The flag
+         *   stays on the payload because three screens branch on it and a
+         *   missing field would read as `undefined` — falsy, and silently so.
          */
         const service = code(SERVICE);
-        const assignments = service.match(/revenueIsPartial = sweep\.truncated/g) ?? [];
 
-        expect(assignments).toHaveLength(2);
-        //   And it is on the payloads a screen can read — the two functions'
-        //   own returns, plus platformOverview, which is where getDashboardStats
-        //   used to drop it while copying revenueAvailable out of the same
-        //   object two lines away.
+        //   The two functions' own returns, plus platformOverview — which is
+        //   where getDashboardStats used to drop it while copying
+        //   revenueAvailable out of the same object two lines away.
         expect((service.match(/^\s+revenueIsPartial,$/gm) ?? []).length).toBe(3);
+
+        //   And it is a real value rather than a leftover identifier: declared
+        //   once per function that returns it.
+        expect((service.match(/revenueIsPartial = false|revenueIsPartial: false/g) ?? []).length)
+            .toBeGreaterThanOrEqual(1);
+    });
+
+    it('AND NO ADMIN PAGE PATH COMPUTES IT FROM A LIVE API SWEEP AGAIN', () => {
+        //   #699's rule, pinned here beside the flag it changed: the service
+        //   that renders admin pages does not sweep Paystack at all.
+        expect(code(SERVICE)).not.toContain('eachPaystackSuccess');
     });
 
     it('AND THE SWEEP STILL REPORTS TRUNCATION RATHER THAN SWALLOWING IT', () => {

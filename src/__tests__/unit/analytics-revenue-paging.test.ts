@@ -157,9 +157,34 @@ describe('the revenue paging loop', () => {
         else process.env.PAYSTACK_SECRET_KEY = realKey;
     });
 
-    async function overview() {
-        const { getFinancialOverviewAction } = await import('@/app/actions/admin-analytics');
-        return getFinancialOverviewAction() as any;
+    /**
+     *   #699 — DRIVEN AT THE HELPER, NOT THROUGH THE DASHBOARD.
+     *
+     *   These four tests used to call getFinancialOverviewAction, because that
+     *   is where the paging loop was reached from. #699 removed every Paystack
+     *   sweep from the page-render paths — up to 100 sequential round trips to a
+     *   third party, on a screen behind a full-screen spinner — so an admin
+     *   action is no longer a route to this behaviour.
+     *
+     *   THE BEHAVIOUR STILL MATTERS and is still reached: cron/reconcile-paystack
+     *   and api/admin/finance/reconcile both sweep, and both depend on every
+     *   property below. #519's defect — `pageCount ?? 1` reading one page and
+     *   calling it the platform's lifetime revenue — would be just as wrong in a
+     *   reconciler as it was on a dashboard.
+     *
+     *   So they now test the unit that OWNS the loop. That is where they always
+     *   belonged: a paging bug was being asserted through a finance screen, and
+     *   the coupling is what made them break when the screen stopped paging.
+     */
+    async function sweep(opts: Record<string, unknown> = {}) {
+        const { eachPaystackSuccess } = await import('@/lib/paystack-sweep');
+        let totalRevenue = 0;
+        const result = await eachPaystackSuccess(
+            'sk_test_paging',
+            { label: 'PagingTest', ...opts },
+            (tx: any) => { totalRevenue += (tx.amount / 100); },
+        );
+        return { totalRevenue, revenueIsPartial: result.truncated, pagesRead: result.pagesRead };
     }
 
     it('keeps paging when the API sends no pageCount at all', async () => {
@@ -168,7 +193,7 @@ describe('the revenue paging loop', () => {
         // Page 1 is full and carries no meta, so the old code stopped here.
         const seen = mockPaystack((n) => (n === 1 ? page(100) : page(3)));
 
-        const r = await overview();
+        const r = await sweep();
 
         expect(seen).toContain(2);
         // 100 full + 3 = 103 transactions at ₦100 each.
@@ -178,7 +203,7 @@ describe('the revenue paging loop', () => {
     it('stops on a short page, which is the real end-of-data signal', async () => {
         const seen = mockPaystack(() => page(40, { pageCount: 999 }));
 
-        const r = await overview();
+        const r = await sweep();
 
         // pageCount claims 999 pages; 40 rows says otherwise and wins.
         expect(seen).toEqual([1]);
@@ -189,7 +214,7 @@ describe('the revenue paging loop', () => {
         // Ignoring it entirely would page to the ceiling on every single call.
         const seen = mockPaystack(() => page(100, { pageCount: 3 }));
 
-        await overview();
+        await sweep();
 
         expect(seen).toEqual([1, 2, 3]);
     });
@@ -199,7 +224,7 @@ describe('the revenue paging loop', () => {
         // never terminates.
         const seen = mockPaystack(() => page(100));
 
-        const r = await overview();
+        const r = await sweep();
 
         expect(seen.length).toBe(100);
         // The distinction the whole change is about: a floor is labelled a
@@ -211,7 +236,7 @@ describe('the revenue paging loop', () => {
         // Vacuity guard. A flag that is always true says nothing.
         mockPaystack(() => page(10, { pageCount: 1 }));
 
-        const r = await overview();
+        const r = await sweep();
 
         expect(r.revenueIsPartial).toBe(false);
     });
@@ -335,9 +360,15 @@ describe('the same bug had two siblings in the same file', () => {
             const src = readFileSync(f, 'utf-8');
             return src.includes('eachPaystackSuccess(') || src.includes('eachPaystackTransaction(');
         });
-        // analytics.service (x3 sweeps in one file), reconcile, paystack-sync,
-        // the cron, and the helper itself.
-        expect(callers.length).toBeGreaterThanOrEqual(5);
+        //   reconcile, paystack-sync, the cron, and the helper itself.
+        //
+        //   WAS 5, AND analytics.service WAS THREE OF THOSE SWEEPS. #699 removed
+        //   all three: they ran on admin page renders, where a sequential sweep
+        //   of a payment API is the wrong thing to do at all. The number is
+        //   lowered deliberately rather than loosened to `> 0` — it still fails
+        //   if the remaining callers stop calling, which is what this control is
+        //   for, and it would fail again if a fifth appeared unexamined.
+        expect(callers.length).toBe(4);
     });
 
     it('no longer fans out unbounded parallel requests', async () => {
