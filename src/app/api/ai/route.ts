@@ -49,8 +49,19 @@ const chatbotRateLimiter = new Ratelimit({
 /**
  * The rate-limit decision, which must not be able to take the chat down.
  *
- *   #707 THE ASSISTANT ANSWERED 500 TO EVERY MESSAGE ON A DEPLOYMENT WITH NO
- *        UPSTASH URL, WHICH IS THIS DEPLOYMENT.
+ *   #707 AN UNGUARDED RATE LIMITER IN FRONT OF THE WHOLE FEATURE.
+ *
+ *   `chatbotRateLimiter.limit()` sat at step 3 of the handler inside the outer
+ *   try, so ANYTHING it threw became `{ error: "Internal Server Error" }, 500`
+ *   for every message from every user. Reachable with Upstash working
+ *   normally: the client is configured with `AbortSignal.timeout(2000)`, so a
+ *   slow patch is an exception here and a 500 to the person typing.
+ *
+ *   AND WORSE WITHOUT UPSTASH — though NOT, as the first version of this note
+ *   claimed, on this deployment. That claim came from a Railway boot log
+ *   reading "UPSTASH_REDIS_REST_URL IS NOT SET"; the owner has since confirmed
+ *   the variable IS set, so the stub path below is not the one production
+ *   takes. It is still the one a preview or local environment takes.
  *
  *   lib/redis.ts hands back a FOUR-METHOD STUB — get, setex, del, keys — when
  *   UPSTASH_REDIS_REST_URL or _TOKEN is missing, cast `as unknown as Redis` so
@@ -60,10 +71,7 @@ const chatbotRateLimiter = new Ratelimit({
  *
  *       TypeError: ctx.redis.evalsha is not a function
  *
- *   — measured, not inferred. The call sat unguarded at step 3 of this route,
- *   inside the outer try, so the throw landed in the catch at the foot of the
- *   file and became `{ error: "Internal Server Error" }, { status: 500 }`.
- *   EVERY message, for every user, from the first one.
+ *   — measured, not inferred.
  *
  *   THE PLATFORM ALREADY KNEW. redis.ts documents this exact TypeError and
  *   exports `isRedisConfigured` so callers can skip the stub, and says why the

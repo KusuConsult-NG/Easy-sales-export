@@ -3,31 +3,47 @@
  */
 
 /**
- *   #707 THE AI ASSISTANT ANSWERED 500 TO EVERY MESSAGE ON A DEPLOYMENT WITH
- *        NO UPSTASH URL — WHICH IS THIS DEPLOYMENT.
+ *   #707 A RATE LIMITER THAT COULD TURN ANY REDIS FAILURE INTO A 500 ON EVERY
+ *        CHAT MESSAGE.
  *
- *   The owner's own Railway boot log says it:
+ *   api/ai/route.ts called `chatbotRateLimiter.limit(userId)` at step 3 of the
+ *   handler, unguarded, inside the outer try. Anything that call throws falls
+ *   into the catch at the foot of the file and becomes
  *
- *       [Redis] UPSTASH_REDIS_REST_URL IS NOT SET
+ *       { error: "Internal Server Error" }, { status: 500 }
  *
- *   lib/redis.ts answers that by handing back a FOUR-METHOD STUB — get, setex,
- *   del, keys — cast `as unknown as Redis` so it type-checks as the full
- *   client. @upstash/ratelimit drives its sliding window through `evalsha`,
- *   which the stub does not have.
+ *   — for every message, from every user. The limiter is not an optional
+ *   decoration in that arrangement; it is a single point of failure in front of
+ *   the whole feature.
  *
- *   MEASURED, NOT INFERRED. Building a Ratelimit over that stub and calling
+ *   AND IT IS REACHABLE WITH UPSTASH WORKING NORMALLY. lib/redis.ts configures
+ *   the client with `AbortSignal.timeout(2000)` and three retries, so an
+ *   Upstash slow patch — not an outage, a slow patch — is an exception on this
+ *   path and a 500 to the person typing.
+ *
+ * ── THE STUB CASE, AND WHAT IS AND IS NOT CLAIMED ABOUT IT ──────────────────
+ *
+ *   lib/redis.ts hands back a FOUR-METHOD STUB — get, setex, del, keys — when
+ *   the Upstash variables are absent, cast `as unknown as Redis` so it
+ *   type-checks as the full client. @upstash/ratelimit drives its sliding
+ *   window through `evalsha`, which the stub does not have.
+ *
+ *   MEASURED, NOT INFERRED — building a Ratelimit over that stub and calling
  *   .limit() gives:
  *
  *       TypeError: ctx.redis.evalsha is not a function
  *
- *   api/ai/route.ts called `chatbotRateLimiter.limit(userId)` at step 3 of the
- *   handler, unguarded, inside the outer try. So the throw fell into the catch
- *   at the foot of the file and became
+ *   THE SCOPE OF THAT CASE IS STATED CAREFULLY, because the first version of
+ *   this file got it wrong. It was written from a Railway boot log reading
+ *   "[Redis] UPSTASH_REDIS_REST_URL IS NOT SET", and asserted in its own
+ *   heading that this was the deployment's live state. The owner then confirmed
+ *   the variable IS set. So the stub path is NOT what production takes, the
+ *   TypeError above is not what was breaking the chat, and a stale log had been
+ *   carried forward as a current fact.
  *
- *       { error: "Internal Server Error" }, { status: 500 }
- *
- *   for EVERY message, from every user, on the first one. Not a degraded chat —
- *   no chat.
+ *   It is kept here because the guard covers it and because the failure is real
+ *   for any deployment without Upstash — a preview environment, a local run, a
+ *   new service. What it is not is a diagnosis of production.
  *
  * ── THE PLATFORM ALREADY KNEW, AND FIXED IT EVERYWHERE ELSE ─────────────────
  *
