@@ -830,12 +830,43 @@ export async function registerAction(prevState: any, formData: FormData) { const
             throw error;
         }
 
-        logger.error("Registration error", error);
-
+        /*
+         *   #712 A PERSON MISTYPING A PASSWORD WAS LOGGED AS A SYSTEM ERROR,
+         *        WITH A STACK TRACE, AND IT DROWNED THE ERRORS THAT MATTER.
+         *
+         *   `logger.error("Registration error", error)` used to sit ABOVE this
+         *   branch — so every failed password rule produced a full ERROR entry
+         *   carrying a ZodError stack, two lines before the code identified it
+         *   as a validation failure and returned a polite message to the person.
+         *
+         *   In the owner's own production log, the ERROR level is mostly this:
+         *   eight "Registration error" entries reading "Password must contain
+         *   at least one uppercase letter" and similar, against two genuine
+         *   faults — a marketplace query timing out, and a login timing out.
+         *   The real ones are the needles.
+         *
+         *   A LOG WHOSE ERROR LEVEL IS MOSTLY TYPOS IS A LOG NOBODY READS, and
+         *   "it breaks and we cannot tell why" is the direct consequence. This
+         *   is the same class as #709 — a failure nobody could see — arriving
+         *   from the opposite direction: not silence, but noise.
+         *
+         *   Classified BEFORE it is logged. A refused password is warn, not
+         *   error: nothing is broken, the platform did exactly what it should,
+         *   and the person was told. Kept, at warn, because "which rule do
+         *   people fail" is worth knowing — and it is the same text already
+         *   returned to them, so logging it reveals nothing new. The STACK is
+         *   dropped: a validation failure has no interesting call site.
+         */
         if (error instanceof ZodError) { const zodError = error as ZodError;
             const errorMessage = zodError.issues?.map(e => e.message).join(", ") || "Validation error";
+            logger.warn("[register] the submission failed validation and was refused", {
+                fields: Array.from(new Set(zodError.issues?.map((i) => i.path.join(".")) ?? [])),
+                reasons: zodError.issues?.map((i) => i.message) ?? [],
+            });
             return { error: errorMessage, success: false as const, redirectUrl: ""};
         }
+
+        logger.error("Registration error", error);
 
         // Handle Firebase auth errors
         if (error.code === "auth/email-already-in-use") { return { error: "An account with this email already exists", success: false as const, redirectUrl: ""};

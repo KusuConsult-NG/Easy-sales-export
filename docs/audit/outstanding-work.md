@@ -1593,3 +1593,59 @@ Recorded so nobody re-reads them, and so that "no finding" is a measurement.
 | `/api/cooperative/withdraw` | No in-app caller, kept anyway — it may serve a client this repository cannot see. Pinned so a caller appearing is noticed (#641). |
 | 107 orphan symbols | Six triaged, one real (#629). Most of the rest are deliberate decisions with their reasons already written down. Falling return. |
 | A pending-queue sweep that did not work | Asked "which collections are written with a pending status and mentioned by no ADMIN file". Ten leads; the five checked were all false positives, because most pending work in this platform is resolved by MEMBER and SELLER screens (land inquiries at `/farm-nation/inquiries`, quotes at `/marketplace/seller/quotes`) and the actions behind admin screens live in files whose paths do not say "admin". The premise was wrong, not the code. Recorded so nobody rebuilds the same sweep: the useful version asks whether a reader is reachable from a rendered screen, which is a call-graph question. |
+
+---
+
+## 6. Needs a production row count, not a guess — #713
+
+`document_collections` holds every collection without a dedicated table: 109
+of the 117 `COLLECTIONS` declares. That is the architecture, not a gap, and
+the table is indexed for it — both composite indexes are LED by
+`collection_name`, so a query pays for its own collection rather than for the
+hundred sharing the table.
+
+    idx_dc_collection_status   (collection_name, raw_data->>'status')
+    idx_dc_collection_user     (collection_name, raw_data->>'userId')
+
+Measured on 50,000 rows spread across 20 collections:
+
+| filter | plan | buffers | time |
+|---|---|---|---|
+| `raw_data->>'userId'` (indexed) | Index Scan | 102 | 0.181 ms |
+| `raw_data->>'read'` (not indexed) | Bitmap Index Scan on `collection_name`, then filter 2,500 rows | 773 | 2.206 ms |
+
+**The second is linear in the size of ONE collection.** At 2,500 rows it is
+2 ms and nobody notices. The question this leaves open is which unmapped
+collections are large enough for that to become #710 — a page that scanned
+the whole `users` table and reached production as a statement timeout.
+
+An AST sweep counts **89 distinct filters** on unmapped collections using a
+field neither index covers. The ones worth measuring first are those whose row
+count grows without bound, ordered by how many call sites they have:
+
+| filter | call sites | grows with |
+|---|---|---|
+| `escrow_transactions.orderId` | 10 | every marketplace order |
+| `products.sellerId` | 6 | every listing |
+| `land_listings.ownerId` | 5 | every listing |
+| `conversations.participants` | 4 | every conversation |
+| `farm_nation_transactions.buyerId` | 4 | every purchase |
+| `product_reviews.productId` | 4 | every review |
+| `wallet_transactions.type` | 4 | every wallet movement |
+| `notifications.read` | 3 | every user × every event |
+| `chatbot_messages.sessionId` | 3 | every chat message |
+| `audit_logs.timestamp` | 2 | every admin action |
+
+**Why no index is added here.** Adding eighty-nine, or even ten, on a guess is
+the opposite of what #710 did: that one was written after an EXPLAIN on the
+real query shape and a production error naming the table. The same is owed to
+each of these, and the input nobody in this environment has is
+`SELECT collection_name, count(*) FROM document_collections GROUP BY 1 ORDER BY 2 DESC`.
+
+Run that against production and any collection in the tens of thousands with a
+filter on this list earns an expression index, in the shape migration 036 uses:
+
+    CREATE INDEX IF NOT EXISTS idx_dc_<collection>_<field>
+        ON public.document_collections (collection_name, (raw_data ->> '<field>'));
+
+under a `lock_timeout`, per #469.

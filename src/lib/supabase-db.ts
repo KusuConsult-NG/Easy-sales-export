@@ -127,16 +127,60 @@ export function getTableName(collection: string): string {
                 + `as subcollections are. Nothing to map.`,
             );
         } else {
-            logger.warn(`[supabase-db] Collection '${shape}' is not in DEDICATED_TABLE_MAP. Falling back to document_collections table.`);
-            if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
-                import('@sentry/nextjs').then(Sentry => {
-                    Sentry.addBreadcrumb({
-                        category: 'database',
-                        message: `Unmapped collection fallback: ${shape}`,
-                        level: 'warning',
-                    });
-                }).catch(() => {});
-            }
+            /**
+             *   #713 THE NORMAL CASE, REPORTED AS A PROBLEM, FOR NINE
+             *        COLLECTIONS IN TEN.
+             *
+             *   #658 fixed exactly this for SUBCOLLECTIONS and stopped there,
+             *   recording the top-level case as deliberately unchanged:
+             *
+             *       "a top-level name with no mapping   WARN — actionable,
+             *        someone may want a dedicated table."
+             *
+             *   THAT CALL DOES NOT SURVIVE THE NUMBERS. lib/types/firestore
+             *   declares 117 collections; DEDICATED_TABLE_MAP names eight
+             *   tables. So this fires for about 109 of them — it describes the
+             *   ARCHITECTURE, not an exception to it, and a warning that is
+             *   true of nine things in ten is not flagging anything.
+             *
+             *   It also does not work in practice, which is the stronger
+             *   argument. The owner reads these as a fault and has sent them
+             *   here twice asking what is wrong. And the one real storage
+             *   problem this audit found — #710, a public page scanning the
+             *   whole users table — was on a MAPPED collection, surfaced by a
+             *   production error and an EXPLAIN. This warning has never been
+             *   what finds those.
+             *
+             * ── AND THE FALLBACK IS NOT A DEGRADED PATH, WHICH IS MEASURED ──
+             *
+             *   document_collections carries composite indexes whose LEADING
+             *   column is collection_name:
+             *
+             *       idx_dc_collection_status  (collection_name, raw_data->>'status')
+             *       idx_dc_collection_user    (collection_name, raw_data->>'userId')
+             *
+             *   so a query pays for its own collection and not for the ~109
+             *   sharing the table. Measured on 50,000 rows across 20
+             *   collections: a filter on an UNINDEXED field took a Bitmap Index
+             *   Scan on collection_name and read 2,500 rows in 2.2 ms; on the
+             *   indexed userId it was an Index Scan, 102 buffers, 0.181 ms.
+             *
+             *   WHAT IS STILL WORTH WATCHING, and is not something a log line
+             *   can decide: that scan is linear in the size of ONE collection,
+             *   so an unbounded one — notifications, audit_logs,
+             *   chatbot_messages — filtered on a field outside those two will
+             *   grow into #710's shape. Eighty-nine such filters exist. Which
+             *   of them matters is a question for measurement against real row
+             *   counts, recorded in docs/audit/outstanding-work.md rather than
+             *   guessed at with speculative indexes here.
+             *
+             *   Said at debug, like the subcollection case, and worded as the
+             *   fact it is rather than as advice nobody can act on.
+             */
+            logger.debug(
+                `[supabase-db] '${shape}' has no dedicated table and is stored in document_collections, `
+                + `which is where all but eight collections live. Nothing to map.`,
+            );
         }
     }
 

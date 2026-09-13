@@ -149,33 +149,72 @@ describe('#658 — a per-member path warns once, not once per member', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#658 — and the signal it was drowning is still there', () => {
-    it('A TOP-LEVEL COLLECTION WITH NO MAPPING STILL WARNS', async () => {
-        /*
-         *   THE positive control, and the reason this is not just "warn less".
-         *   An unmapped top-level collection IS actionable — somebody may want a
-         *   dedicated table for it — and that is the message this channel exists
-         *   to carry. Silencing it to fix the noise would trade one defect for a
-         *   worse one.
-         */
+describe('#713 — and the top-level case is not a warning either', () => {
+    /**
+     * #658 KEPT THIS ONE AT WARN DELIBERATELY, and said so:
+     *
+     *     "a top-level name with no mapping   WARN — actionable, someone may
+     *      want a dedicated table."
+     *
+     * #713 revisits that, on numbers #658 did not have. firestore.ts declares
+     * 117 collections and DEDICATED_TABLE_MAP names eight tables, so the
+     * warning fired for about 109 of them: it described the architecture, not
+     * an exception to it.
+     *
+     * And the fallback is not a degraded path. document_collections carries
+     * composite indexes LED by collection_name, so a query pays for its own
+     * collection. Measured on 50,000 rows across 20 collections: an unindexed
+     * field took a Bitmap Index Scan on collection_name and read 2,500 rows in
+     * 2.2 ms; the indexed userId was an Index Scan, 102 buffers, 0.181 ms.
+     *
+     * The signal #658 wanted to protect is real but is not this: whether an
+     * UNBOUNDED collection filtered outside those two indexed fields has grown
+     * into #710's shape. That is a question for row counts, not for a log line
+     * emitted before any row exists.
+     */
+    it('A TOP-LEVEL COLLECTION WITH NO MAPPING IS NOT A WARNING', async () => {
         const getTableName = await tableName();
         const name = `${fresh()}_a_collection_nobody_mapped`;
 
+        //   Resolution is UNCHANGED — this is about what gets said, not where
+        //   the rows go. That distinction is #658's and still holds.
         expect(getTableName(name)).toBe('document_collections');
 
-        expect(warned.filter(m => m.includes(name))).toHaveLength(1);
-        expect(debugged.filter(m => m.includes(name))).toHaveLength(0);
+        expect(warned.filter(m => m.includes(name))).toHaveLength(0);
+        expect(debugged.filter(m => m.includes(name))).toHaveLength(1);
     });
 
-    it('AND IT STILL SAYS IT ONLY ONCE', async () => {
-        //   The behaviour that was already right, kept. The Set is doing its
-        //   job for the case it was written for.
+    it('AND IT IS NOT SILENCED EITHER — it still says it, once', async () => {
+        /*
+         *   THE control. "Stop warning" is satisfied by saying nothing at all,
+         *   and then a genuinely surprising collection name — a typo in a
+         *   COLLECTIONS constant, say — leaves no trace anywhere. Demoted, not
+         *   deleted, and still once per shape: the Set #658 built is untouched.
+         */
         const getTableName = await tableName();
         const name = `${fresh()}_asked_for_five_times`;
 
         for (let i = 0; i < 5; i++) getTableName(name);
 
-        expect(warned.filter(m => m.includes(name))).toHaveLength(1);
+        expect(debugged.filter(m => m.includes(name))).toHaveLength(1);
+        expect(warned.filter(m => m.includes(name))).toHaveLength(0);
+    });
+
+    it('AND IT NO LONGER CALLS IT A MISSING MAPPING', async () => {
+        /*
+         *   The wording carried the defect as much as the level did. "is not in
+         *   DEDICATED_TABLE_MAP. Falling back" reads as a configuration gap
+         *   somebody should close; for 109 collections there is nothing to
+         *   close. #658 made exactly this argument for subcollections.
+         */
+        const getTableName = await tableName();
+        const name = `${fresh()}_worded_as_a_fact`;
+
+        getTableName(name);
+
+        const said = debugged.filter(m => m.includes(name)).join(' ');
+        expect(said).not.toMatch(/not in DEDICATED_TABLE_MAP/);
+        expect(said).toMatch(/document_collections/);
     });
 
     it('AND A SUBCOLLECTION IS NOT REPORTED AS A MISSING MAPPING', async () => {
@@ -246,4 +285,21 @@ describe('#658 — and nothing about where the data lives changed', () => {
  *   build on the local stack with the server's output captured. The count was
  *   then reproduced directly — fifty ids through getTableName, fifty warnings —
  *   before any of this was written.
+ */
+
+/*
+ * ── #713 MUTATION TESTING ───────────────────────────────────────────────────
+ *
+ *   M1  reverted to warn — the norm reported as a problem again      KILLED
+ *   M2  silenced entirely rather than demoted                        KILLED
+ *   M3  said every time rather than once per shape — #658 undone     KILLED
+ *   M4  resolution changed — rows routed to the wrong table          KILLED
+ *   CONTROL  an unrelated comment reworded                         SURVIVED
+ *
+ *   M1 and M2 are the two opposite errors and both are easy to reach for:
+ *   leaving a warning that is true of nine collections in ten, or deleting the
+ *   line so a genuinely surprising name — a typo in a COLLECTIONS constant —
+ *   leaves no trace anywhere. M4 is the one that matters most and is not about
+ *   logging at all: this finding changes WHAT IS SAID about the fallback and
+ *   must not change where a single row goes.
  */

@@ -32,6 +32,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
+import { logger } from '@/lib/logger';
 
 const createUser = jest.fn(async (_args: Record<string, unknown>) => ({
     data: { user: { id: 'supabase-uid-1' } },
@@ -333,6 +334,122 @@ describe('registration', () => {
         for (const [k, v] of Object.entries(fields)) fd.set(k, v);
         return fd;
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    describe('#712 — a typed password is not a system error', () => {
+        /**
+         * The ERROR level in the owner's production log was mostly this: eight
+         * "Registration error" entries reading "Password must contain at least
+         * one uppercase letter", each with a ZodError stack, against two
+         * genuine faults. `logger.error` fired two lines ABOVE the branch that
+         * identifies the failure as validation and returns a polite message.
+         *
+         * A log whose ERROR level is mostly typos is a log nobody reads, and
+         * "it breaks and we cannot tell why" follows from that.
+         */
+        it('A REFUSED PASSWORD IS NOT LOGGED AS AN ERROR', async () => {
+            const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+            const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+            const { registerAction } = await actions();
+            const result: any = await registerAction(null, form({
+                password: 'weakpassword', confirmPassword: 'weakpassword',
+            }));
+
+            //   The person is still told, in the same words as before.
+            expect(result.success).toBe(false);
+            expect(String(result.error)).toMatch(/password/i);
+
+            //   And nothing claimed the platform was broken.
+            const errors = error.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(errors).not.toMatch(/Registration error/);
+
+            error.mockRestore();
+            warn.mockRestore();
+        });
+
+        it('AND IT IS STILL RECORDED, AT warn, NAMING THE RULE THAT REFUSED IT', async () => {
+            /*
+             *   Demoting it to silence would be the other way to get this
+             *   wrong. "Which rule do people fail" is worth knowing, and the
+             *   text is the same text already returned to the person, so
+             *   logging it reveals nothing the caller does not already hold.
+             */
+            const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+            jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+
+            const { registerAction } = await actions();
+            await registerAction(null, form({
+                password: 'weakpassword', confirmPassword: 'weakpassword',
+            }));
+
+            const said = warn.mock.calls.map((c) => `${String(c[0])} ${JSON.stringify(c[1] ?? '')}`).join('\n');
+            expect(said).toMatch(/failed validation/i);
+            expect(said).toMatch(/password/i);
+
+            jest.restoreAllMocks();
+        });
+
+        it('BUT A REAL FAILURE IS STILL AN ERROR — the control', async () => {
+            /*
+             *   THE assertion that stops this becoming "registration never
+             *   logs an error". A genuine fault — the auth provider throwing —
+             *   must still reach the level somebody is paged on.
+             *
+             *   NOT asserted as "Registration error": measured, a createUser
+             *   rejection is caught EARLIER and logged as "[Register] Supabase
+             *   Auth creation exception", never reaching the outer catch at
+             *   all. The first version of this control demanded the outer
+             *   message and failed against correct code — the property is that
+             *   a real fault reaches the ERROR level, not which of the two
+             *   handlers catches it.
+             */
+            const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+            createUser.mockRejectedValueOnce(new Error('supabase is down'));
+
+            const { registerAction } = await actions();
+            const result: any = await registerAction(null, form());
+
+            expect(result.success).toBe(false);
+            expect(error.mock.calls.length).toBeGreaterThan(0);
+
+            //   And it is a FAULT, not somebody's password.
+            const errors = error.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(errors).not.toMatch(/must contain at least one/i);
+
+            error.mockRestore();
+        });
+
+        it('AND THE OUTER CATCH STILL ERRORS FOR A NON-VALIDATION THROW', async () => {
+            /*
+             *   The half the control above cannot reach, pinned on the source:
+             *   the ZodError branch must come BEFORE the logger.error, and the
+             *   logger.error must still be there. Reordering them back is the
+             *   whole defect, and it is invisible to a behavioural test that
+             *   never reaches the outer handler.
+             */
+            //   STRIPPED FIRST. The comment explaining this finding quotes
+            //   `logger.error("Registration error", error)` verbatim, so a
+            //   search of the raw file finds the EXPLANATION before the code
+            //   and reports the order backwards — which is exactly what the
+            //   first version of this assertion did. #665's trap, met in a test
+            //   written about false claims.
+            const { readFileSync } = require('fs') as typeof import('fs');
+            const { stripComments } = require('@/lib/testing/strip-comments') as typeof import('@/lib/testing/strip-comments');
+            const src = stripComments(
+                readFileSync(`${process.cwd()}/src/app/actions/auth.ts`, 'utf-8'),
+                { label: 'auth.ts' },
+            );
+            const tail = src.slice(src.indexOf('export async function registerAction'));
+
+            const zodAt = tail.indexOf('error instanceof ZodError');
+            const errAt = tail.indexOf('logger.error("Registration error"');
+
+            expect(zodAt).toBeGreaterThan(-1);
+            expect(errAt).toBeGreaterThan(-1);
+            expect(zodAt).toBeLessThan(errAt);
+        });
+    });
 
     it('refuses a phone number that already has an account', async () => {
         // THE guard, and the only thing standing between the platform and
