@@ -12,6 +12,7 @@ import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 // admin/finance/paystack-sync. The processors are reached through it.
 import { dispatchPaystackPayment, UNHANDLED_PAYMENT_STATUS } from "@/infrastructure/payments/payment-router";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { recordPayoutOutcome } from "@/lib/payout-outcome";
 
 /**
  *   #531 THIS LIST WAS RIGHT ABOUT ITS OWN ROUTE AND WRONG ABOUT THE PLATFORM.
@@ -223,6 +224,43 @@ export async function POST(req: NextRequest) {
             }, { merge: true });
 
             return NextResponse.json({ message: "Abandoned transaction recorded" }, { status: 200 });
+        }
+
+        /*
+         *   #693 WHAT BECAME OF A PAYOUT, WHICH NOTHING ASKED.
+         *
+         *   A Paystack transfer is asynchronous. `POST /transfer` answers
+         *   `data.status: "pending"` — the API accepted it, the money has not
+         *   moved — and the outcome arrives here as transfer.success,
+         *   transfer.failed or transfer.reversed.
+         *
+         *   All three fell through to "Event ignored" below. So a transfer a
+         *   bank rejected left the member's balance debited, the withdrawal
+         *   marked "completed", a ledger row saying they were paid, and nothing
+         *   anywhere that could notice. #318 covers the case where INITIATION
+         *   was ambiguous; this is the one where initiation succeeded, so no
+         *   flag was ever set.
+         *
+         *   Recorded and reported, not repaired — see lib/payout-outcome.ts for
+         *   why a webhook is the wrong place to move money back.
+         */
+        if (event.event === "transfer.success"
+            || event.event === "transfer.failed"
+            || event.event === "transfer.reversed") {
+            const data = event.data ?? {};
+            const outcome = await recordPayoutOutcome({
+                reference: data.reference,
+                event: event.event,
+                message: data.reason || data.message || data.gateway_response || null,
+                amountNaira: typeof data.amount === "number" ? data.amount / 100 : null,
+            });
+
+            logger.info(`[Paystack Webhook] ${event.event} for ${data.reference}`, outcome);
+
+            //   200 either way: an unrecognised reference is not something
+            //   Paystack can fix by redelivering, and a retry storm helps
+            //   nobody. recordPayoutOutcome logs what it could not place.
+            return NextResponse.json({ message: "Transfer outcome recorded" }, { status: 200 });
         }
 
         return NextResponse.json({ message: "Event ignored" }, { status: 200 });

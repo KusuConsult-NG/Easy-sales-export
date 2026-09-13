@@ -31,6 +31,12 @@ import { paystackBaseUrl } from "@/lib/paystack-host";
 export type BankAccount = import("zod").infer<typeof bankAccountSchema>;
 
 export interface TransferResult {
+    /**
+     *   #693 Paystack's own state for the transfer — "pending", "otp" or
+     *   "success" — as distinct from `success`, which only says the API
+     *   accepted the request. The money has not moved while this is "pending".
+     */
+    transferStatus?: string | null;
     success: boolean;
     transferCode?: string;
     reference?: string;
@@ -228,9 +234,27 @@ export async function initiateTransfer(
             return { success: false, error: message, reference: ref, indeterminate };
         }
 
-        logger.info(`[PaystackTransfer] Transfer initiated: ${data.data.transfer_code} | ref: ${ref}`);
+        /*
+         *   #693 `success` MEANS PAYSTACK ACCEPTED IT, NOT THAT ANYBODY WAS PAID.
+         *
+         *   The outer `data.status` checked above is the API envelope. The
+         *   transfer's own state is `data.data.status`, and on acceptance it is
+         *   "pending" or "otp" — the money has not moved, and whether it ever
+         *   does arrives later as a transfer.success / transfer.failed /
+         *   transfer.reversed webhook.
+         *
+         *   Callers read this boolean as PAID and write `status: "completed"`.
+         *   That is not changed here — the statuses have many readers and
+         *   rewriting them from a transport detail would be a wide, risky edit
+         *   — so the transfer's real state is REPORTED alongside instead, and
+         *   the webhook now records the outcome that decides it.
+         */
+        logger.info(
+            `[PaystackTransfer] Transfer initiated: ${data.data.transfer_code} | ref: ${ref} `
+            + `| paystack status: ${data.data.status ?? "unknown"} (pending until a transfer.* webhook says otherwise)`);
         return {
             success: true,
+            transferStatus: data.data.status ?? null,
             transferCode: data.data.transfer_code,
             reference: ref,
         };

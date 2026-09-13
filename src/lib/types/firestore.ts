@@ -426,6 +426,18 @@ export const COLLECTIONS = {
     DISPUTES: "disputes",
     PROCESSED_PAYMENTS: "processedPayments",
     FAILED_PAYMENTS: "failedPayments",
+    /**
+     *   #693 What became of a payout AFTER Paystack accepted it.
+     *
+     *   A transfer is asynchronous: `POST /transfer` returns `pending`, and
+     *   `transfer.success` / `transfer.failed` / `transfer.reversed` say where
+     *   the money ended up. The webhook ignored all three, so a payout that
+     *   failed at the bank was recorded as completed and nothing could notice.
+     *
+     *   Keyed `<reference>::<event>` and written with create(), so a redelivered
+     *   webhook cannot tell the member twice. See lib/payout-outcome.ts.
+     */
+    PAYOUT_EVENTS: "payout_events",
 
     // NEW: Marketplace Expansions (Phase 12)
     WALLETS: "wallets",

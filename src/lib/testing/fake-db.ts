@@ -510,6 +510,8 @@ interface LiveRef {
     /** #612 — the adapter's write that reports whether the document was there. */
     updateExisting(patch: Doc): Promise<boolean>;
     set(data: Doc, options?: { merge?: boolean }): Promise<void>;
+    /** #693 — the adapter's INSERT, which throws ALREADY_EXISTS on a duplicate. */
+    create(data: Doc): Promise<void>;
     delete(): Promise<void>;
     get(): Promise<ReturnType<typeof docSnapshot>>;
     /** A subcollection, as SupabaseDocumentReference.collection() gives. */
@@ -546,6 +548,33 @@ function liveRef(collection: string, id: string): LiveRef {
         },
         set: async (data: Doc, options?: { merge?: boolean }) => {
             ops?.doSet(collection, id, data, options?.merge);
+        },
+        /**
+         *   #693 create() — INSERT, and ALREADY_EXISTS on a duplicate.
+         *
+         *   The adapter has this (SupabaseDocumentReference.create) and the fake
+         *   did not, so a caller using it failed with "create is not a function"
+         *   — a fake NARROWER than the thing it stands for, which is the one
+         *   property this file promises not to break.
+         *
+         *   The error's `code` carries as much as the throw: a caller tells
+         *   "somebody got here first" from a real failure by reading it, which
+         *   is how a redelivered webhook is distinguished from a broken one.
+         *
+         *   IT WAS ADDED TO THE WRONG FACTORY FIRST. There are two reference
+         *   shapes in this file — this one, which `db.collection(c).doc(id)`
+         *   returns, and the snapshot's `ref` further down. Both need it, and
+         *   only fixing one leaves the failure exactly where it was.
+         */
+        create: async (data: Doc) => {
+            const existing = ops?.read(collection, id);
+            if (existing !== undefined) {
+                throw Object.assign(
+                    new Error(`Document ${collection}/${id} already exists`),
+                    { code: 'ALREADY_EXISTS' },
+                );
+            }
+            ops?.doSet(collection, id, data, false);
         },
         delete: async () => { ops?.doDelete(collection, id); },
         get: async () => docSnapshot(id, ops?.read(collection, id), collection),
@@ -838,6 +867,29 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
             },
             set: (next: Doc, opts?: { merge?: boolean }) => {
                 doSet(collection, id, next ?? {}, opts?.merge);
+                return Promise.resolve();
+            },
+            /**
+             *   #693 create() — INSERT, and ALREADY_EXISTS on a duplicate.
+             *
+             *   The adapter has this (SupabaseDocumentReference.create) and the
+             *   fake did not, so a caller using it failed here with "create is
+             *   not a function" — a fake narrower than the thing it stands for,
+             *   which is the one property this file promises not to break.
+             *
+             *   The error's `code` matters as much as the throw: callers
+             *   distinguish "somebody got here first" from a real failure by
+             *   reading it, which is how a redelivered webhook is told apart
+             *   from a broken one.
+             */
+            create: (next: Doc) => {
+                if (collectionOf(collection).has(id)) {
+                    return Promise.reject(Object.assign(
+                        new Error(`Document ${collection}/${id} already exists`),
+                        { code: 'ALREADY_EXISTS' },
+                    ));
+                }
+                doSet(collection, id, next ?? {}, false);
                 return Promise.resolve();
             },
             get: () => Promise.resolve(docSnapshot(id, collectionOf(collection).get(id), collection)),

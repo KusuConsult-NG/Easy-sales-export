@@ -231,6 +231,40 @@ function createMockDb() {
                 Object.assign({}, descriptor, { merge: options && options.merge }),
                 () => { global.mockFirestoreSet(id, data); return Promise.resolve(); },
             ),
+            /**
+             *   #693 docRef.create() — an INSERT at a KNOWN id, which throws
+             *   ALREADY_EXISTS when the document is there.
+             *
+             *   The adapter has it (SupabaseDocumentReference.create) and this
+             *   did not, so `db.collection(x).doc(y).create(...)` threw "create
+             *   is not a function" — the caller's catch turned that into a
+             *   generic failure, and the test asserting once-only behaviour
+             *   could not fail either way. The same shape as `delete()` and
+             *   `updateExisting()` in the two comments around this one; the
+             *   third time this file has been narrower than the adapter.
+             *
+             *   A `create` DID exist on the COLLECTION a few dozen lines below,
+             *   as an alias of add() — a generated id, no conflict, nothing to
+             *   throw. Easy to mistake for this one, and it is not this one.
+             *
+             *   The error's `code` carries as much as the throw: a caller tells
+             *   "somebody got here first" from a real failure by reading it,
+             *   which is how a redelivered webhook is distinguished from a
+             *   broken one.
+             */
+            create: async (data) => {
+                const snap = await withAccess(descriptor, () => global.mockFirestoreGet(id, collection));
+                if (snap && snap.exists) {
+                    throw Object.assign(
+                        new Error(`Document ${collection}/${id} already exists`),
+                        { code: 'ALREADY_EXISTS' },
+                    );
+                }
+                return withAccess(descriptor, () => {
+                    global.mockFirestoreSet(id, data);
+                    return Promise.resolve();
+                });
+            },
             // docRef.delete() was missing here originally, while existing on the
             // modular docRefFor() below, so `db.collection(x).doc(y).delete()`
             // threw "certRef.delete is not a function", the action's catch
