@@ -3,6 +3,7 @@ import { COLLECTIONS } from './types/firestore';
 import { logger } from './logger';
 import { User } from './types/firestore';
 import { dateRangeStart, dateRangeEnd } from './date-utils';
+import { isContactableAccount } from "@/lib/contactable-account";
 import { isMarketplaceBuyer } from "./broadcast-audience";
 import { isRecentlyActive } from "@/lib/recent-activity";
 
@@ -900,10 +901,22 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                 //   dated every recipient to now.
                 "appliedAt",
                 "registeredAt",
-                "timestamp"
+                "timestamp",
+                //   #697 — the two tombstones. They MUST be in this list: since
+                //   #696 made .select() real, a field not named here is not on
+                //   the row, and the contactable check would have been
+                //   half-blind — catching an erased account by its address and
+                //   never seeing a superseded one at all.
+                "deleted",
+                "_migratedTo"
             );
 
         const emailMap = new Map<string, Recipient>();
+        /**
+         * #697 — uids the user pass ruled out, so the module supplements below
+         * do not re-add somebody the platform has tombstoned.
+         */
+        const notContactable = new Set<string>();
         let totalScanned = 0;
         let matchedAudienceCount = 0;
         const missingEmailUserIds: { uid: string; data: any }[] = [];
@@ -931,7 +944,25 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                 .on("data", (doc) => {
                     totalScanned++;
                     const data = doc.data();
-                    
+
+                    /*
+                     *   #697 — BEFORE ANY AUDIENCE QUESTION IS ASKED.
+                     *
+                     *   An erased account carries a synthetic address that
+                     *   isPlausibleEmail accepts and that can never resolve; a
+                     *   superseded profile is a second copy of somebody who is
+                     *   reachable at their live row. Neither is a person to
+                     *   contact, whatever audience was selected.
+                     *
+                     *   Recorded as well as skipped: the module supplements
+                     *   below add by userId, and this stream is the only pass
+                     *   that sees the user row where the tombstone lives.
+                     */
+                    if (!isContactableAccount(data, doc.id)) {
+                        notContactable.add(doc.id);
+                        return;
+                    }
+
                     // Delay email extraction until matchesAudience is confirmed
 
                     // 2. Apply Date Range Filter if present
@@ -1099,6 +1130,11 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
         if (filters?.audience === "all" || filters?.audience === "all_except_approved_coop") {
             const addEmail = (rawEmail: string | undefined | null, name: string, state: string | undefined | null, uid: string, lastActiveRaw: any) => {
                 if (!rawEmail) return;
+                //   #697 — the supplements below read MODULE rows, which carry
+                //   their own copy of the address and know nothing about the
+                //   tombstone on the user row. The user pass above recorded it.
+                if (uid && notContactable.has(uid)) return;
+                if (String(rawEmail).toLowerCase().trim().endsWith("@redacted.local")) return;
                 const email = rawEmail.toLowerCase().trim();
                 if (email) {
                     const cleanState = state || 'Unknown';

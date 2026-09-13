@@ -16,6 +16,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/africastalking";
+import { isContactableAccount } from "@/lib/contactable-account";
 import { normalisePhone } from "@/lib/phone";
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireAdmin } from "@/lib/require-admin";
@@ -125,11 +126,27 @@ async function resolvePhoneStates(
     // .all(): a broadcast that reaches the first 5,000 of ~41,000 recipients and
     // reports success is worse than one that takes longer.
     const usersStream = db.collection(COLLECTIONS.USERS)
-        .select("phone", "phoneNumber", "kyc", "stateOfOrigin", "state", "address")
+        .select("phone", "phoneNumber", "kyc", "stateOfOrigin", "state", "address",
+            //   #697 — the two tombstones. Named here because #696 made
+            //   .select() real: a field not in this list is not on the row.
+            "deleted", "email", "_migratedTo")
         .all()
         .get();
     for (const d of (await usersStream).docs) {
         const u: any = d.data();
+        /*
+         *   #697 — an erased or superseded account is not a person to text.
+         *
+         *   STATED HONESTLY: this changes nothing today for an ERASED member,
+         *   and that is worth writing down rather than claiming a fix. `phone`
+         *   and `phoneNumber` are in ERASED_FIELDS and deleted outright, and
+         *   #376 scrubs the same numbers off all eight module rows — which is
+         *   where the supplements below read most of their numbers. An erased
+         *   member has no number left to reach. It is safe by two accidents;
+         *   this makes it safe by rule, so an erasure that ever leaves a number
+         *   behind does not quietly become a send.
+         */
+        if (!isContactableAccount(u, d.id)) continue;
         const state = u.stateOfOrigin || u.state || (u.address && u.address.state);
         addMap(u.phone, state);
         addMap(u.phoneNumber, state);
@@ -231,7 +248,10 @@ async function collectSmsRecipients(
             }
 
             // 1. Primary: root users collection
-            const usersStream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name").all().get();
+            const usersStream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name",
+                //   #697 — the tombstones, named because #696 made .select()
+                //   real: a field not in this list is not on the row.
+                "deleted", "email", "_migratedTo").all().get();
             const seenUserIds = new Set<string>();
             for (const d of (await usersStream).docs) {
                 if (excludeIds.has(d.id)) continue;
@@ -239,6 +259,8 @@ async function collectSmsRecipients(
                 seenUserIds.add(u.id || d.id);
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
+                //   #697 — see the note on the phone-state map above.
+                if (!isContactableAccount(u, d.id)) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "User");
             }
 

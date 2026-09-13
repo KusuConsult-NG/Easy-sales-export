@@ -47,6 +47,7 @@ export type InAppAudience =
     | "abandoned_failed_transactions";
 
 import type { Notification } from "@/lib/types/firestore";
+import { loadNonContactableUserIds } from "@/lib/contactable-account";
 import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
 import { recordAdminAction } from "@/lib/audit-log";
 
@@ -115,7 +116,20 @@ export async function collectRecipientUserIds(
     const db = getAdminDb();
     const recipients: Map<string, { userId: string; name: string }> = new Map();
 
-    const add = (userId: string, name: string) => { if (userId && !recipients.has(userId)) recipients.set(userId, { userId, name });
+    /**
+     *   #697 — the accounts the platform has tombstoned, loaded once.
+     *
+     *   This audience keys on the UID, so the deduplication that hides a
+     *   superseded profile from the email and SMS lists does not apply: an
+     *   in-app notification written onto a superseded row lands on an account
+     *   #490 says is not where the person is, and one written onto an erased
+     *   row lands on somebody who asked to be removed.
+     */
+    const notContactable = await loadNonContactableUserIds(db, COLLECTIONS.USERS);
+
+    const add = (userId: string, name: string) => {
+        if (userId && notContactable.has(userId)) return;
+        if (userId && !recipients.has(userId)) recipients.set(userId, { userId, name });
     };
 
     switch (filters.audience) { 
