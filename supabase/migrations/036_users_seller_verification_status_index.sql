@@ -1,0 +1,104 @@
+-- ============================================================================
+-- #710 THE PUBLIC MARKETPLACE PAGE COUNTED EVERY USER IN THE DATABASE, ON
+--      EVERY VIEW, THROUGH A FILTER NO INDEX COULD SERVE.
+--
+-- getMarketplaceStatsAction runs, for the tradersCount tile:
+--
+--     db.collection(USERS).where("sellerVerificationStatus", "==", "approved")
+--       .count().get()
+--
+-- `sellerVerificationStatus` is NOT a native column on `users` — the native
+-- set is (id, email, roles, created_at, updated_at), so the adapter emits
+--
+--     raw_data->>'sellerVerificationStatus' = 'approved'
+--
+-- and nothing indexed that expression. /marketplace is a PUBLIC page and the
+-- count is not cached, so every visitor bought a full scan of the users table.
+--
+-- IT IS IN THE PRODUCTION LOG, twice in sixteen minutes:
+--
+--     [ERROR] getMarketplaceStatsAction error:
+--       {"error":"[supabase-db] count users: ", ...
+--        at async y (/app/.next/server/app/marketplace/page.js...)}
+--
+-- ── WHY THE GIN INDEX ALREADY ON raw_data DOES NOT HELP ─────────────────────
+--
+-- `users` carries idx_users_raw_data — GIN (raw_data) — which LOOKS like it
+-- covers any JSONB filter and does not. Default jsonb_ops serves @>, ?, ?| and
+-- ?&; it cannot serve `raw_data->>'key' = 'value'`, which is what the adapter
+-- writes. Measured below: the planner ignores it and sequential-scans.
+--
+-- That is the trap worth recording. An index whose name suggests it covers the
+-- column is more dangerous than no index, because it stops anybody looking.
+--
+-- ── AND THIS PROJECT ALREADY KNEW THE TECHNIQUE ─────────────────────────────
+--
+-- document_collections — the fallback table — carries
+--
+--     idx_dc_collection_status  btree (collection_name, (raw_data->>'status'))
+--     idx_dc_collection_user    btree (collection_name, (raw_data->>'userId'))
+--
+-- Exactly this shape, on exactly this problem, applied to the shared table and
+-- not to `users`. The dedicated tables were given native columns and the
+-- expression-index habit did not travel with them.
+--
+-- ── MEASURED, ON 50,024 ROWS, LOCAL POSTGRES ────────────────────────────────
+--
+-- Seeded rows carry a DELIBERATELY SMALL raw_data (two keys). A production user
+-- row holds kyc, profile, serviceRegistrations and more, so the scan below
+-- reads several times the bytes per row that it does here — which is why this
+-- is 16 ms locally and a statement timeout in production.
+--
+--   BEFORE
+--     Aggregate (cost=10664.99..10665.00)
+--       -> Seq Scan on users  (actual rows=1)
+--            Filter: ((raw_data ->> 'sellerVerificationStatus') = 'approved')
+--            Rows Removed by Filter: 50023
+--            Buffers: shared hit=9325 read=589
+--     Execution Time: 16.533 ms
+--
+--   AFTER
+--     Aggregate (cost=8.31..8.32)
+--       -> Index Scan using idx_users_seller_verification_status
+--            Index Cond: ((raw_data ->> 'sellerVerificationStatus') = 'approved')
+--            Buffers: shared hit=1 read=2
+--     Execution Time: 0.047 ms
+--
+--   9,914 buffers -> 3.  Per marketplace page view.
+--
+-- ── WHAT THIS DOES NOT CLAIM ────────────────────────────────────────────────
+--
+-- The same log carries
+--
+--     [PreValidate] Auth error: [supabase-db] query users:
+--       canceling statement due to statement timeout
+--
+-- — a LOGIN failing. That query is `where("email","==",...) limit 1`, `email`
+-- is a native column with idx_users_email, and measured on the same 50k rows it
+-- is an Index Scan touching 3 buffers in 0.572 ms. It is not slow by itself.
+--
+-- A cheap query timing out is what a saturated database looks like, and the
+-- scan above is the largest uncached load on the box. That is consistent with
+-- the login timeouts and is NOT proof of them, and the difference is worth
+-- keeping: if logins still time out after this, the cause is elsewhere and
+-- this header should not have said otherwise.
+--
+-- ── HOW TO APPLY ────────────────────────────────────────────────────────────
+--
+-- Paste into the Supabase SQL Editor, or let it arrive in the consolidated
+-- deploy. Plain CREATE INDEX under a lock_timeout, for the reason #469 records
+-- in 027's header: CONCURRENTLY cannot run inside a transaction and the SQL
+-- Editor always opens one, so a CONCURRENTLY migration here is a migration that
+-- never gets applied. The build takes a ShareLock — reads are unaffected,
+-- writes pause for the duration — and the lock_timeout turns queueing behind an
+-- open transaction into a clean, re-runnable abort.
+--
+-- Safe to re-run: IF NOT EXISTS.
+-- ============================================================================
+
+SET lock_timeout = '5s';
+
+CREATE INDEX IF NOT EXISTS idx_users_seller_verification_status
+    ON public.users ((raw_data ->> 'sellerVerificationStatus'));
+
+RESET lock_timeout;

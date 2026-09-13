@@ -108,57 +108,100 @@ describe('#708 — the chat is only offered to people it can serve', () => {
         expect(route).toContain('{ status: 401 }');
     });
 
-    it('AND THE WIDGET IS RENDERED ONLY WHEN THERE IS A SESSION', () => {
-        //   THE fix. Asserted on the rendering line rather than on the file
-        //   containing the word `isAuthenticated`, which it did all along —
-        //   for the banner one line above.
-        expect(code(LAYOUT)).toMatch(/\{\s*isAuthenticated\s*&&\s*<AiChatWidget\s*\/>\s*\}/);
-    });
-
-    it('AND THE WIDGET IS NOT RENDERED UNGUARDED ANYWHERE', () => {
+    it('AND THE WIDGET DRAWS NOTHING WITHOUT A SESSION', () => {
         /*
-         *   The regression that matters: a second mount point, or a revert of
-         *   the line above, puts the broken bubble back. Checked across every
-         *   file that renders it rather than only the one that was wrong.
-         */
-        const offenders: string[] = [];
-        for (const rel of [LAYOUT]) {
-            code(rel).split('\n').forEach((line, i) => {
-                if (!line.includes('<AiChatWidget')) return;
-                if (!/isAuthenticated\s*&&/.test(line)) offenders.push(`${rel}:${i + 1}  ${line.trim()}`);
-            });
-        }
-        expect(offenders).toEqual([]);
-    });
-
-    it('AND THE WIDGET STILL HAS NO AUTH CHECK OF ITS OWN — so the gate is load-bearing', () => {
-        /*
-         *   States WHY the layout has to do this. If the widget ever grows its
-         *   own session awareness, this test failing is the prompt to decide
-         *   which of the two owns the rule — rather than quietly having both.
+         *   THE fix, and it lives in the WIDGET — see #711 below for why not in
+         *   the layout. Asserted as an early return before any markup, not
+         *   merely as the file mentioning useSession.
          */
         const widget = code(WIDGET);
-        expect(widget).not.toContain('useSession');
-        expect(widget).not.toContain('isAuthenticated');
+        expect(widget).toContain("import { useSession } from \"next-auth/react\"");
+        expect(widget).toMatch(/if\s*\(\s*status\s*!==\s*["']authenticated["']\s*\)\s*return null;/);
+
+        //   Before the first `return (` — a gate after the markup is not a gate.
+        const gate = widget.indexOf('status !== "authenticated"');
+        expect(gate).toBeGreaterThan(-1);
+        expect(gate).toBeLessThan(widget.indexOf('<div className="fixed bottom-6 right-6'));
+    });
+
+    it('AND THE LAYOUT DOES NOT GATE IT A SECOND TIME — #711', () => {
+        /*
+         *   THE regression this finding cost 92 tests to learn. The gate was
+         *   first written here as `{isAuthenticated && <AiChatWidget />}`,
+         *   copying the push banner one line above, and the app's own
+         *   page-render suite went from green to 92 empty pages — including
+         *   static signed-out ones like /privacy.
+         *
+         *   The tests were at fault, not the conditional (see #711 in
+         *   helpers/page-health), but the rule belongs in the widget regardless:
+         *   the component that cannot work without a session is the one that
+         *   should know it needs one, and having BOTH would mean two places to
+         *   read before answering "when does this draw".
+         */
+        const layout = code(LAYOUT);
+        expect(layout).toContain('<AiChatWidget />');
+        expect(layout).not.toMatch(/\{\s*isAuthenticated\s*&&\s*<AiChatWidget/);
+    });
+
+    it('AND THE PUSH BANNER IS STILL GATED — the control', () => {
+        /*
+         *   Without this, "the layout gates nothing" would be satisfied by
+         *   removing every conditional from the file. The banner's gate is
+         *   correct and untouched, and it is what makes the widget's absence
+         *   from that list a deliberate difference rather than a deletion.
+         */
+        expect(code(LAYOUT)).toMatch(/\{\s*isAuthenticated\s*&&\s*<PushNotificationBanner\s*\/>\s*\}/);
     });
 });
 
 /*
+ * ── AND WHAT THIS FINDING COST TO GET RIGHT ─────────────────────────────────
+ *
+ *   The gate was FIRST written in ClientLayout as
+ *
+ *       {isAuthenticated && <AiChatWidget />}
+ *
+ *   copying the push banner one line above it. Every local gate passed — tsc,
+ *   lint, the production build, 13,355 unit tests — and CI went from green to
+ *   NINETY-TWO failing page-render tests, on pages that render perfectly.
+ *
+ *   The cause was not the conditional. Those tests read `innerText` one tick
+ *   after domcontentloaded, when the page is parsed but not laid out, and this
+ *   widget — fixed-position, outside the containers hidden until hydration —
+ *   was supplying the only rendered text at that instant. Measured on
+ *   /privacy: textContent 18,308 chars, innerText 0, innerText after 2s 2,343.
+ *   The suite was passing on the chat bubble rather than on the pages. #711
+ *   repairs that, in one shared helper rather than the five spellings it had.
+ *
+ *   Two lessons kept here rather than tidied away:
+ *
+ *     THE LOCAL GATE DOES NOT COVER RENDERING. Nothing in tsc, lint, build or
+ *     13,355 unit tests could see this; only the browser suite could, and it
+ *     runs in CI. A change to a layout that wraps every page needs that suite
+ *     run before it is pushed, which is now what happens here.
+ *
+ *     AND THE FIRST FIX WAS NOT WRONG, WHICH IS WHY IT WAS TEMPTING TO FORCE.
+ *     The honest reading was that a green suite had been relying on an
+ *     accident, and the repair belonged in the suite — but the gate still moved
+ *     into the widget, because a component that cannot work without a session
+ *     is the one that should know it needs one.
+ *
  * ── MUTATION TESTING ────────────────────────────────────────────────────────
  *
  *   Against a green baseline (5/5):
  *
- *   M1  the gate reverted — the broken bubble returns             KILLED
- *   M2  a SECOND, ungated mount point added to the layout         KILLED
- *   M3  the route stops requiring a session                       KILLED
- *   CONTROL  the push banner reworded                           SURVIVED
+ *   M1  the widget's session gate removed                          KILLED
+ *   M2  the gate moved BELOW the markup it is meant to prevent      KILLED
+ *   M3  the route stops requiring a session                        KILLED
+ *   M4  the layout gates the widget a second time (the #711 shape)  KILLED
+ *   CONTROL  an unrelated layout change (Toaster position)        SURVIVED
  *
- *   M2 is why the fourth test reads every line that renders the widget rather
- *   than asserting the one that was wrong: reverting a fix and adding a second
- *   copy of the fault look nothing alike in a diff and are the same outage.
+ *   The push-banner assertion is what stops "the layout gates nothing" being
+ *   satisfied by deleting every conditional in the file.
  *
- *   M3 is the premise, pinned deliberately. If the session requirement is ever
- *   lifted on purpose, this test failing is the reminder that the gate is now
- *   unnecessary — the right outcome is to reconsider both together, not to
- *   discover later that the widget is hidden from the people it was opened to.
+ *   THE FIRST CONTROL WAS A BAD MUTANT AND IS RECORDED AS ONE. It added a
+ *   `key` to the push banner — the exact element the control test pins — so it
+ *   was killed, and by the assertion written for it. A control has to vary
+ *   something the suite does not name; varying something it does name proves
+ *   only that the mutant was chosen carelessly.
  */

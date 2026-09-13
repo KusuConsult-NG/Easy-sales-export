@@ -249,6 +249,11 @@ describe('it agrees with the naive version everywhere the naive version is right
      */
     const KNOWN_AFFECTED: string[] = [
         'src/__tests__/unit/a-certificate-that-named-a-page-that-was-not-there.test.ts',
+        //   #711 — joined when the finding's header grew. Same mechanism as the
+        //   two below: the file holds `'//'` inside a string (its own
+        //   comment-skipping filter) and its block comments supply the closing
+        //   `*/` the naive regex needs.
+        'src/__tests__/unit/a-chat-offered-to-people-who-could-not-use-it.test.ts',
         'src/__tests__/unit/a-declared-database-is-not-a-running-one.test.ts',
         //   #706 — the same mechanism again, and this time deliberately: that
         //   file skips comment lines with `line.startsWith('/*')`, so it holds

@@ -2,6 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 import { sessionFileFor } from '../../e2e/helpers/session';
 import fs from 'node:fs';
 import path from 'node:path';
+import { renderedText } from './helpers/page-health';
 
 /**
  * Every admin page must render for an admin.
@@ -79,10 +80,10 @@ const FAILURE_MARKERS = [
 async function assertRendered(page: Page, route: string) {
     // 1. Something is on screen. An empty body is a blank page, which is what a
     //    component throwing during render leaves behind in production.
-    const body = page.locator('body');
-    await expect(body).toBeVisible();
-    const text = ((await body.innerText().catch(() => '')) || '').trim();
-    expect(text.length, `${route} rendered an empty page`).toBeGreaterThan(0);
+    //   #711 — polled, not sampled once: innerText is the RENDERED text and is
+    //   empty until layout, so this used to pass on the chat widget's text
+    //   rather than the page's. See helpers/page-health.
+    const text = await renderedText(page, route);
 
     // 2. No error boundary, overlay or 404.
     for (const marker of FAILURE_MARKERS) {

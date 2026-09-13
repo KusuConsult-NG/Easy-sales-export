@@ -1,5 +1,6 @@
 import { loginAs, USERS } from '../../e2e/helpers/auth';
 import { test, expect } from '@playwright/test';
+import { renderedText } from './helpers/page-health';
 
 /**
  * Academy E2E Tests
@@ -49,8 +50,8 @@ test.describe('Academy', () => {
         await loginAs(page, USERS.academy.email, USERS.academy.password);
         await page.goto('/academy/test-course-id');
 
-        const body = (await page.locator('body').innerText()).trim();
-        expect(body.length).toBeGreaterThan(0);
+        //   #711 — polled, not sampled once. See helpers/page-health.
+        const body = await renderedText(page, '/academy/test-course-id');
         expect(body).not.toContain('Application error');
         expect(body).not.toContain('Unhandled Runtime Error');
     });
