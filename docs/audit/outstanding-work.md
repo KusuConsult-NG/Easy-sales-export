@@ -368,6 +368,46 @@ these three checkouts work. **The day the webhook URL is corrected, all three
 begin taking money and fulfilling nothing** — a fix landing and the app breaking,
 which is the complaint this audit exists to answer. Repair this before that URL.
 
+### #696 — `.select()` did nothing, on the heaviest reads the platform runs
+
+**This is the measured cause of "the admin panel is slow", and it is not indexes.**
+Migration `022_jsonb_expression_indexes.sql` was written to add expression indexes
+and is headed **"DO NOT APPLY. The numbers do not support it"** — `EXPLAIN ANALYZE`
+showed the index scan would be *slower* than the seq scan it replaced. The same
+file names the real mechanism: *"598 ms to scan ~1,830 rows … large JSONB being
+detoasted by SELECT \*. Selecting fewer columns is the fix; indexing is not."*
+
+#455 acted on that for **aggregates**. The **read path** never was: `select('*')`
+on dedicated tables, `select('id, raw_data')` everywhere else — whole documents,
+every row, every tab. And `SupabaseQuery.select(...fields)`, the one API a caller
+could use to ask for less, stored its argument in `_selectedFields` and **nothing
+ever read it** — not the query builder, not the row mapper, not even a trim in
+JavaScript. 75 call sites across 11 files called it; `broadcast-logic.ts` labels
+its list *"Targeted projection to minimize bandwidth"*.
+
+One place already did it right by leaving the adapter: `analytics.service.ts`
+issues `supabaseAdmin.from("users").select("raw_data->serviceRegistrations, …")`
+by hand because the adapter could not express it.
+
+| | |
+|---|---|
+| Adapter | `readProjection()` plans the narrowest select; `_mapRow` assembles the document from it, keeping the existing raw_data-over-column precedence. No `.select()` ⇒ byte-identical behaviour to before. |
+| Operator | **`->`, not `->>`.** Measured against this repo's PostgREST: `->>` returns a nested object as a *JSON string*. `sms-broadcast` selects `kyc`, `profile`, `personalInfo`, `companyInfo` — all objects — so copying the aggregate planner's operator would have silently broken every audience filter reading into them. |
+| The fake | `fake-db` narrows too. Its `select: () => q` carried a comment naming the hazard exactly — *"a caller reading a field it did not select … gets undefined in production"* — which was **false when written** (the adapter was inert too) and would have become true. |
+| Dashboard | The financial overview fetched a **whole user document per payer** just to read a phone number, and read **every failed payment ever recorded**, unbounded — already silently truncated at 5,000. Now narrowed, and bounded to the 500 most recent, ordered on the native `created_at` column (ordering on `failedAt` would hit #49's NULLS-FIRST trap, since abandoned rows have none). Headline counts still come from `.count()` and stay exact; the list footer stops claiming "All N loaded" over a capped list. |
+
+**Eight call sites were reading fields they had not selected** and had to be found
+by reading, because with an inert `.select()` nothing in the suite could fail. Two
+mattered: `sms-broadcast` read `paymentStatus` to decide who is in a broadcast, and
+six sites in `broadcast-logic` read the join date that becomes each recipient's
+`lastActive` — which falls back to `new Date()` when absent, so every recipient
+would have looked active today. Making the fake narrow is what stops that class
+being invisible next time.
+
+**Not claimed:** no production timing was taken — there is no production database
+reachable from here. What is measured is *what the query asks for*; the 598 ms per
+1,830 rows figure and its cause are the earlier audit's, reproduced above.
+
 ### Named follow-on: three missing processors
 
 `CALLBACK_FULFILLED_TYPES` in `payment-router.ts` lists three checkouts whose

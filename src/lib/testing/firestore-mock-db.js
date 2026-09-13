@@ -345,11 +345,25 @@ function createMockDb() {
             endAt: () => q,
             endBefore: () => q,
 
-            // .select() narrows columns. The store returns whole documents, so
-            // this is a pass-through — and that is a divergence worth knowing
-            // about: a caller reading a field it did not select works here and
-            // gets undefined in production.
-            select: () => q,
+            /**
+             * .select() narrows the document, here as in production.
+             *
+             *   #696 THIS WAS A PASS-THROUGH, AND THE COMMENT THAT STOOD HERE
+             *   DESCRIBED THE HAZARD EXACTLY: "a caller reading a field it did
+             *   not select works here and gets undefined in production."
+             *
+             *   It was not true when it was written — the ADAPTER's .select()
+             *   was inert too, so both returned whole documents and the fake
+             *   matched. Now the adapter narrows, and a pass-through here would
+             *   make the divergence real: the one class of defect this change
+             *   can introduce would be precisely the class no unit test could
+             *   see. Eight call sites were reading unselected fields when the
+             *   adapter was fixed; every one had to be found by reading, because
+             *   nothing in the suite could fail.
+             */
+            select: (...fields) => next({
+                selectedFields: fields.filter((f) => typeof f === 'string' && f),
+            }),
 
             // .all() bypasses the default 5,000-row cap. A BUILDER, not an
             // executor: production writes `.all().get()`.

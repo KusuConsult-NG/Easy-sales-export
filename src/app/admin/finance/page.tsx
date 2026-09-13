@@ -169,6 +169,18 @@ export default function AdminFinancePage() {
     // Slice for rendering — full array used for CSV export
     const visibleTx = displayedTx.slice(0, visibleCount);
     const hasMore = visibleCount < displayedTx.length;
+
+    /**
+     * What the DATABASE says this tab holds, when it can say.
+     *
+     * #696 — the three lists are each capped server-side now, so the length of
+     * what arrived is not the size of what exists. These counts come from
+     * .count() queries over the whole table and are the honest number.
+     */
+    const tabTotal: number | null =
+        activeTab === "successful" ? (totalSuccessfulCount ?? null)
+        : activeTab === "abandoned" ? (totalAbandonedCount ?? null)
+        : (totalFailedCount ?? null);
     const isRecoveryTab = activeTab !== "successful";
 
     // ── Selection helpers ────────────────────────────────────────────────────
@@ -603,7 +615,20 @@ export default function AdminFinancePage() {
 
                         {!hasMore && displayedTx.length > 0 && (
                             <p className="text-center text-xs text-slate-400 py-4">
-                                All {numberOrZero(displayedTx.length).toLocaleString()} transactions loaded
+                                {/*
+                                  * #696 — "All N loaded" must not be said over a
+                                  * capped list. The failed and abandoned lists are
+                                  * now bounded server-side (they used to read every
+                                  * failed payment ever recorded, and were silently
+                                  * truncated at 5,000 anyway). The headline counts
+                                  * above come from the database and stay exact, so
+                                  * when the tab's total exceeds what was fetched,
+                                  * say which it is — the same wording the
+                                  * successful tab already uses.
+                                  */}
+                                {tabTotal !== null && tabTotal > displayedTx.length
+                                    ? `Showing the ${numberOrZero(displayedTx.length).toLocaleString()} most recent of ${numberOrZero(tabTotal).toLocaleString()}`
+                                    : `All ${numberOrZero(displayedTx.length).toLocaleString()} transactions loaded`}
                             </p>
                         )}
                     </div>

@@ -192,6 +192,10 @@ describe('#651 — and the gate they share is one gate', () => {
             'a-blank-email-is-not-an-identity.test.ts',
             'aggregate-reads-the-column.test.ts',
             'login-finds-the-profile-it-already-has.test.ts',
+            //   #696 — the read-path projection is only meaningful against a
+            //   real PostgREST: the whole question is what `raw_data->field`
+            //   returns over the wire.
+            'select-narrows-the-read.test.ts',
             'the-role-scan-reads-the-whole-table-without-the-index.test.ts',
         ]);
     });
@@ -211,7 +215,7 @@ describe('#651 — and the gate they share is one gate', () => {
         expect(harness).toContain('export async function assertRestReachable');
         const wired = PG_SUITES.filter((f) =>
             read(`${PG_DIR}/${f}`).includes('beforeAll(assertRestReachable)'));
-        expect(wired.length).toBe(4);
+        expect(wired.length).toBe(5);
     });
 });
 

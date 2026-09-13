@@ -199,6 +199,10 @@ jest.mock('@/lib/supabase-db', () => {
         // aggregate needs to select. From the real module for the same reason:
         // a copy here would be a second answer to a question with one.
         aggregateProjection: jest.requireActual('@/lib/supabase-db').aggregateProjection,
+        //   #696 — the read-path projection planner. Real, not stubbed:
+        //   a test that asserts what .select() narrows to must ask the
+        //   function the adapter actually uses.
+        readProjection: jest.requireActual('@/lib/supabase-db').readProjection,
         //   #480 the email-column capability probe. A no-op here: the mocked
         //   adapter never reaches PostgREST, so there is nothing to probe, and
         //   a real one would make every mocked query wait on a network call

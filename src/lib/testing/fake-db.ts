@@ -674,6 +674,8 @@ export interface AccessDescriptor {
         startAfterValues?: any[];
         startAfterDoc?: { data(): any };
         unbounded?: boolean;
+        /** #696 — the fields a .select() narrowed this read to. */
+        selectedFields?: string[];
     };
     aggregate?: Record<string, { field?: string; kind: 'sum' | 'average' | 'count' }>;
 }
@@ -752,7 +754,28 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
             return Promise.resolve({ data: () => out });
         }
 
-        return Promise.resolve(querySnapshot(rows, d.collection!));
+        /**
+         *   #696 — .select() narrows here exactly as it does in the adapter.
+         *
+         *   The rule is the adapter's: keep the named fields, always keep `id`,
+         *   and OMIT a field the document does not carry rather than setting it
+         *   to null. See the projected branch of _mapRow for why omitting is the
+         *   faithful answer.
+         */
+        const selected = d.query?.selectedFields;
+        const projected = (selected && selected.length > 0)
+            ? rows.map(([id, doc]) => {
+                const narrow: Doc = { id };
+                for (const field of selected) {
+                    if (field === 'id') continue;
+                    const value = (doc as Doc)[field];
+                    if (value !== undefined && value !== null) narrow[field] = value;
+                }
+                return [id, narrow] as [string, Doc];
+            })
+            : rows;
+
+        return Promise.resolve(querySnapshot(projected, d.collection!));
     });
 
     // ── writes ───────────────────────────────────────────────────────────────

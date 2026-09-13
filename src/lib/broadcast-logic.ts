@@ -893,7 +893,14 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                 "roles",
                 "sellerVerificationStatus",
                 "status",
-                "isSeller"
+                "isSeller",
+                //   #696 — read at the `createdRaw` fallback below. `.select()`
+                //   was inert when this list was written, so the three were
+                //   never in it and nobody noticed; a narrowed read would have
+                //   dated every recipient to now.
+                "appliedAt",
+                "registeredAt",
+                "timestamp"
             );
 
         const emailMap = new Map<string, Recipient>();
@@ -1114,7 +1121,7 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             };
 
             // 2. Supplement: cooperative_members
-            const cmStream = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "firstName", "lastName", "email", "userEmail").get();
+            const cmStream = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "firstName", "lastName", "email", "userEmail", "createdAt", "appliedAt").get();
             for (const d of cmStream.docs) {
                 const m: any = d.data();
                 const uid = m.userId || d.id;
@@ -1128,7 +1135,7 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             }
 
             // 3. Supplement: wave_applications
-            const waveStream = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("userId", "state", "residentialState", "firstName", "surname", "lastName", "email").get();
+            const waveStream = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("userId", "state", "residentialState", "firstName", "surname", "lastName", "email", "createdAt", "appliedAt").get();
             for (const d of waveStream.docs) {
                 const a: any = d.data();
                 const uid = a.userId || d.id;
@@ -1141,7 +1148,7 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             }
 
             // 4. Supplement: academy_applications
-            const academyStream = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("userId", "personalInfo", "state", "email").get();
+            const academyStream = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("userId", "personalInfo", "state", "email", "createdAt", "appliedAt").get();
             for (const d of academyStream.docs) {
                 const a: any = d.data();
                 const uid = a.userId || d.id;
@@ -1155,7 +1162,7 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             }
 
             // 5. Supplement: wave_briefing_registrations
-            const briefStream = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("userId", "state", "name", "firstName", "surname", "email").get();
+            const briefStream = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("userId", "state", "name", "firstName", "surname", "email", "createdAt", "timestamp").get();
             for (const d of briefStream.docs) {
                 const r: any = d.data();
                 const uid = r.userId || d.id;
@@ -1167,7 +1174,7 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             }
 
             // 6. Supplement: farm_nation_applications
-            const fnStream = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).select("profile").get();
+            const fnStream = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).select("profile", "createdAt", "timestamp").get();
             for (const d of fnStream.docs) {
                 const a: any = d.data();
                 if (a.profile?.email) {
@@ -1176,7 +1183,7 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             }
 
             // 7. Supplement: export_onboarding_applications
-            const exportStream = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "email").get();
+            const exportStream = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "email", "createdAt", "appliedAt").get();
             for (const d of exportStream.docs) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;

@@ -1800,6 +1800,141 @@ export function aggregateProjection(tableName: string, fields: string[]): Aggreg
     return { projection: [...select].join(','), columnFor };
 }
 
+/**
+ * What a `.select(...fields)` read should actually ask the database for.
+ *
+ *   #696 `.select()` WAS INERT, AND IT IS CALLED 75 TIMES ON THE HEAVIEST
+ *        SCANS THIS PLATFORM RUNS.
+ *
+ *   The method stored its argument in `_selectedFields` and NOTHING EVER READ
+ *   IT — not the query builder, not the row mapper, not even a trim in
+ *   JavaScript. Its own comment said half of it ("we still fetch all raw_data
+ *   from Supabase") and the other half is worse: the fields were not narrowed
+ *   anywhere, at any stage. A record nothing consults, which is one of this
+ *   audit's named classes.
+ *
+ *   Meanwhile the performance audit of 2026-08-10 had already measured the cost
+ *   and written down the remedy. It found the slowness is NOT missing indexes —
+ *   migration 022 is headed "DO NOT APPLY. The numbers do not support it",
+ *   because EXPLAIN ANALYZE showed an index scan would be slower than the seq
+ *   scan it replaced — and named the real mechanism:
+ *
+ *       "598 ms to scan ~1,830 rows ... The likely cause is large JSONB being
+ *        detoasted by SELECT *, or shared-tier I/O. SELECTING FEWER COLUMNS IS
+ *        THE FIX; indexing is not."
+ *
+ *   #455 acted on that for AGGREGATES and the aggregate planner above is the
+ *   result. The READ path kept `select('*')` for dedicated tables and
+ *   `select('id, raw_data')` for everything else — whole documents, every row,
+ *   every admin tab — and the one API a caller could use to ask for less did
+ *   nothing.
+ *
+ *   THE TECHNIQUE WAS ALREADY PROVEN IN THIS CODEBASE, ONCE. analytics.service
+ *   drops out of the adapter entirely and issues
+ *
+ *       supabaseAdmin.from("users").select("raw_data->serviceRegistrations, ...")
+ *
+ *   by hand, because the adapter could not express it. One site doing the right
+ *   thing by bypassing the layer that should carry it is the shape this audit
+ *   keeps finding; the fix belongs in the layer.
+ *
+ * ── `->` AND NOT `->>`, MEASURED AGAINST THE POSTGREST THIS REPO RUNS ───────
+ *
+ *   The aggregate planner above uses `->>` and is right to: it wants numbers.
+ *   Copying it here would have been a silent data defect. Against v12.2.3:
+ *
+ *       select=k:raw_data->>kyc    ->  {"k":"{\"bvn\": \"123\", \"tier\": 2}"}
+ *       select=k:raw_data->kyc     ->  {"k":{"bvn": "123", "tier": 2}}
+ *       select=t:raw_data->tags    ->  {"t":["a", "b"]}
+ *       select=s:raw_data->score   ->  {"s":7}
+ *       select=z:raw_data->nope    ->  {"z":null}
+ *
+ *   `->>` renders a nested object as a JSON STRING. sms-broadcast selects `kyc`,
+ *   `profile`, `personalInfo` and `companyInfo` — every one an object — so the
+ *   wrong operator would have turned each into a string and broken every
+ *   audience filter that reads into them. `->` preserves objects, arrays and
+ *   numbers exactly.
+ *
+ *   Also verified there, because the narrowing would be worthless if any were
+ *   false: ordering by a non-selected JSON field works, filtering on a
+ *   non-selected field works, `range()` paging works with a projection, and a
+ *   native column aliases to its Firestore field name.
+ *
+ * ── WHY EACH FIELD IS ASKED FOR TWICE ON A DEDICATED TABLE ──────────────────
+ *
+ *   _mapRow's precedence is raw_data FIRST, native column only as a fallback
+ *   (`if (row.status !== undefined && mergedData.status === undefined)`). A row
+ *   can carry a field in either place, so projecting only the column would
+ *   return a different value than the wide read for any row holding both. Both
+ *   are projected and the same precedence is applied, so a narrowed read and a
+ *   wide read cannot disagree — which is the one property this must have.
+ */
+export interface ReadPlan {
+    projection: string;
+    /** null means "the whole document" — map the row exactly as before. */
+    fields: string[] | null;
+    /** field → positional alias carrying the native column, when one exists. */
+    columnAlias: Record<string, string>;
+}
+
+/** createdAt/updatedAt are columns on every dedicated table, and _mapRow
+ *  already falls back to them. Named here so a narrowed read does too. */
+const TIMESTAMP_COLUMN: Record<string, string> = {
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+};
+
+export function readProjection(params: {
+    tableName: string;
+    isDedicated: boolean;
+    isCollectionGroup: boolean;
+    fields: string[] | null;
+}): ReadPlan {
+    const { tableName, isDedicated, isCollectionGroup, fields } = params;
+
+    //   The unnarrowed projection, exactly as it was before this finding.
+    const wide = isDedicated
+        ? '*'
+        : (isCollectionGroup ? 'id, raw_data, collection_name' : 'id, raw_data');
+    const whole: ReadPlan = { projection: wide, fields: null, columnAlias: {} };
+
+    if (!fields || fields.length === 0) return whole;
+
+    //   A name this cannot express safely takes the WHOLE plan back to the
+    //   document — aggregateProjection's rule, for the same reason: a select is
+    //   one string and half a narrowing is not a narrowing.
+    if (!fields.every((f) => SAFE_JSON_KEY.test(f))) return whole;
+
+    const select = new Set<string>(['id']);
+    if (isCollectionGroup) select.add('collection_name');
+
+    const columnAlias: Record<string, string> = {};
+    const wanted: string[] = [];
+
+    fields.forEach((field, i) => {
+        //   `id` and `collection_name` are already in the select above, and
+        //   aliasing them again would collide on the result key.
+        if (field === 'id' || field === 'collection_name') return;
+        wanted.push(field);
+
+        select.add(`${field}:raw_data->${field}`);
+
+        if (!isDedicated) return;
+        const column = FIELD_TO_COLUMN[tableName]?.[field] ?? TIMESTAMP_COLUMN[field];
+        if (column && NATIVE_COLUMNS[tableName]?.includes(column)) {
+            //   Positional, like the aggregate planner's `agg0` — two fields
+            //   cannot share an alias and no table has a column by these names.
+            const alias = `col${i}`;
+            select.add(`${alias}:${column}`);
+            columnAlias[field] = alias;
+        }
+    });
+
+    if (wanted.length === 0) return whole;
+
+    return { projection: [...select].join(','), fields: wanted, columnAlias };
+}
+
 export class SupabaseQuery {
     protected readonly _collection: string;
     protected _filters: WhereFilter[] = [];
@@ -2082,7 +2217,7 @@ export class SupabaseQuery {
      * mapping below is where this adapter's subtle bugs live (see the
      * startAfter cursor note), and a second copy would drift from this one.
      */
-    protected _buildQuery(): { query: any; tableName: string; isDedicated: boolean } {
+    protected _buildQuery(): { query: any; tableName: string; isDedicated: boolean; plan: ReadPlan } {
         const tableName = getTableName(this._collection);
         // For dedicated tables, select ALL columns so native columns (status, user_id, etc.)
         // are available and can be merged into doc.data(). Raw-only select misses these.
@@ -2091,9 +2226,18 @@ export class SupabaseQuery {
         // A collection group needs collection_name in the result, not just as a
         // filter: _mapRow builds each doc.ref from it, so that a write through
         // doc.ref lands back in the row's own subcollection.
-        let query = supabaseAdmin.from(tableName).select(
-            isDedicated ? '*' : (this._isCollectionGroup ? 'id, raw_data, collection_name' : 'id, raw_data')
-        );
+        //
+        //   #696 — and when the caller named its fields, ask for those instead
+        //   of the whole document. readProjection returns the wide select
+        //   unchanged whenever it cannot narrow, so this is the previous
+        //   behaviour for every caller that does not call .select().
+        const plan = readProjection({
+            tableName,
+            isDedicated,
+            isCollectionGroup: this._isCollectionGroup,
+            fields: this._selectedFields,
+        });
+        let query = supabaseAdmin.from(tableName).select(plan.projection);
 
         if (tableName === 'document_collections') {
             if (this._isCollectionGroup) {
@@ -2219,7 +2363,7 @@ export class SupabaseQuery {
             }
         }
 
-        return { query, tableName, isDedicated };
+        return { query, tableName, isDedicated, plan };
     }
 
     async get(): Promise<SupabaseQuerySnapshot> {
@@ -2228,7 +2372,7 @@ export class SupabaseQuery {
         //   whether a background probe has landed yet. Once per process.
         await ensureEmailFilterColumn();
 
-        const { query, isDedicated } = this._buildQuery();
+        const { query, isDedicated, plan } = this._buildQuery();
 
         // Apply limit and fetch auto-paginated batches to bypass Supabase 1,000-row select caps
         const allData: any[] = [];
@@ -2295,7 +2439,7 @@ export class SupabaseQuery {
             }
         }
 
-        const docs = allData.map((row: any) => this._mapRow(row, isDedicated));
+        const docs = allData.map((row: any) => this._mapRow(row, isDedicated, plan));
 
         return new SupabaseQuerySnapshot(docs, truncated);
     }
@@ -2307,7 +2451,59 @@ export class SupabaseQuery {
      * `status` or `userId` while a fetched one had them would be a difference
      * nobody would think to look for.
      */
-    protected _mapRow(row: any, isDedicated: boolean): SupabaseQueryDocumentSnapshot {
+    protected _mapRow(row: any, isDedicated: boolean, plan?: ReadPlan): SupabaseQueryDocumentSnapshot {
+            /**
+             *   #696 A NARROWED READ CARRIES NO raw_data, so it is assembled
+             *   from the aliases instead — with the SAME precedence the wide
+             *   path uses below: the document's own value first, the native
+             *   column only when the document has none.
+             *
+             *   `->` renders an absent key as SQL NULL, which arrives here as
+             *   null rather than undefined, so the fallback tests for both. The
+             *   one consequence is that a key STORED as an explicit null falls
+             *   back to its column where a wide read would have kept the null —
+             *   the same trade the aggregate planner documents, on the same
+             *   operator, and it can only affect a field that has a column at
+             *   all.
+             */
+            if (plan?.fields) {
+                const data: Record<string, any> = {};
+                for (const field of plan.fields) {
+                    const own = row[field];
+                    if (own !== undefined && own !== null) {
+                        data[field] = own;
+                        continue;
+                    }
+                    const alias = plan.columnAlias[field];
+                    const fromColumn = alias === undefined ? undefined : row[alias];
+                    if (fromColumn !== undefined && fromColumn !== null) {
+                        data[field] = fromColumn;
+                    }
+                    //   Asked for and absent from both: the key is OMITTED, not
+                    //   set to null. A wide read omits a key the document does
+                    //   not have and Firestore's own .select() does the same, so
+                    //   this is the answer that keeps `field in data` and
+                    //   `=== undefined` meaning what they meant before — and it
+                    //   is what the in-memory fake can reproduce exactly.
+                    //
+                    //   The cost, stated: `->` cannot tell an absent key from
+                    //   one STORED as JSON null, so a stored null reads as
+                    //   absent on a narrowed read where a wide read would have
+                    //   kept it. Same operator-level trade the aggregate planner
+                    //   documents, and it cannot change a truthiness test.
+                }
+                const projectedId = row.id ?? data.id;
+                if (data.id === undefined) data.id = projectedId;
+                const owning = (this._isCollectionGroup && row.collection_name)
+                    ? row.collection_name
+                    : this._collection;
+                return new SupabaseQueryDocumentSnapshot(
+                    projectedId,
+                    new SupabaseDocumentReference(owning, projectedId),
+                    convertStringsToTimestamps(data),
+                );
+            }
+
             const rawData = row.raw_data ?? {};
             const id = row.id || rawData.id;
             // Merge native columns into raw_data so doc.data() returns a complete view.
@@ -2408,8 +2604,8 @@ export class SupabaseQuery {
         // project's config, so the alias failed `npm run lint` in CI while
         // passing tsc, jest and the browser suite locally.
         const buildQuery = () => this._buildQuery();
-        const mapRow = (row: Record<string, unknown>, isDedicated: boolean) =>
-            this._mapRow(row, isDedicated);
+        const mapRow = (row: Record<string, unknown>, isDedicated: boolean, plan?: ReadPlan) =>
+            this._mapRow(row, isDedicated, plan);
         const explicitLimit = this._limit;
 
         const limitVal = this._limit ?? UNBOUNDED_CEILING;
@@ -2420,7 +2616,7 @@ export class SupabaseQuery {
             // #480 — as in get(): settle the email-column capability first.
             await ensureEmailFilterColumn();
 
-            const { query, isDedicated } = buildQuery();
+            const { query, isDedicated, plan } = buildQuery();
             let fetchedSoFar = 0;
 
             while (fetchedSoFar < limitVal) {
@@ -2437,7 +2633,7 @@ export class SupabaseQuery {
                 // Yield per document rather than accumulating: holding all
                 // 41,000 users in memory would defeat the point of streaming.
                 for (const row of batchData) {
-                    yield mapRow(row, isDedicated);
+                    yield mapRow(row, isDedicated, plan);
                 }
 
                 fetchedSoFar += batchData.length;

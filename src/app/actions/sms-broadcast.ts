@@ -379,7 +379,7 @@ async function collectSmsRecipients(
             break;
         }
         case "cooperative_members": { 
-            const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name", "membershipStatus", "status").get();
+            const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name", "membershipStatus", "status", "paymentStatus").get();
             const userIds: string[] = [];
             const members: any[] = [];
             for (const d of (await stream).docs) {

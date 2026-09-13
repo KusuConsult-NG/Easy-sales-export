@@ -1045,7 +1045,43 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         const failedTransactions: FinancialOverview["failedTransactions"] = [];
         try {
-            const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            /**
+             *   #696 EVERY FAILED PAYMENT EVER RECORDED, IN FULL, ON A DASHBOARD.
+             *
+             *   This read had no projection and NO LIMIT. Its sibling two
+             *   blocks up — `recentTransactions` — is capped at 15; this one
+             *   took the whole collection, mapped it and sorted it in
+             *   JavaScript, and returned all of it. The cost grows with the
+             *   number of payments that have ever failed, which only goes up.
+             *
+             *   IT WAS ALREADY TRUNCATED, SILENTLY. A query with no .limit()
+             *   stops at DEFAULT_QUERY_LIMIT (5,000) and logs a warning, so
+             *   "every failed payment" was already a lie past that point — the
+             *   worst of both, unbounded cost and an incomplete answer.
+             *
+             *   ORDERED ON THE NATIVE COLUMN, deliberately. The JavaScript sort
+             *   below reads failedAt ?? abandonedAt ?? createdAt ?? updatedAt,
+             *   and ordering on any ONE of those in SQL would hit #49: Postgres
+             *   sorts DESC as NULLS FIRST, so the rows MISSING that key would
+             *   come back first — abandoned rows have no failedAt. `createdAt`
+             *   maps to the `created_at` COLUMN, which every table has and which
+             *   is never null, so it orders every row and is monotonic with when
+             *   the failure was recorded. The JS sort still runs, on the page.
+             *
+             *   The counts an admin reads are NOT affected: totalFailed and
+             *   totalAbandoned come from .count() queries above, which the
+             *   database answers over the whole table.
+             */
+            const FAILED_TRANSACTIONS_PAGE = 500;
+            const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS)
+                .select(
+                    "type", "amount", "status", "gatewayResponse", "paystackEvent",
+                    "failedAt", "abandonedAt", "createdAt", "updatedAt",
+                    "phone", "userPhone", "customerPhone", "metadata", "customer", "userId",
+                )
+                .orderBy("createdAt", "desc")
+                .limit(FAILED_TRANSACTIONS_PAGE)
+                .get();
             failedSnap.docs.forEach((doc: any) => {
                 const d = doc.data();
                 const parseTs = (val: any) => {
@@ -1116,8 +1152,27 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     chunks.push(uids.slice(i, i + 30));
                 }
                 const userSnaps = await Promise.all(
-                    chunks.map(chunk => 
-                        db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get()
+                    chunks.map(chunk =>
+                        db.collection(COLLECTIONS.USERS)
+                            .where(FieldPath.documentId(), "in", chunk)
+                            /*
+                             *   #696 — THE FOUR FIELDS getPhoneFromUser READS,
+                             *   instead of the whole user document.
+                             *
+                             *   A user row is the largest document this platform
+                             *   stores: serviceRegistrations, verificationProfile,
+                             *   bankDetails, documents, kyc and address. This
+                             *   hydration runs on the ADMIN FINANCIAL OVERVIEW,
+                             *   once per distinct payer with a missing phone
+                             *   across both the recent and the failed lists — so
+                             *   the dashboard was pulling a full profile per
+                             *   transaction to read a phone number off it.
+                             *
+                             *   `.select()` did nothing until #696, which is why
+                             *   this reads as if it were already narrow.
+                             */
+                            .select("phone", "phoneNumber", "kyc", "serviceRegistrations")
+                            .get()
                     )
                 );
                 userSnaps.forEach(snap => {
