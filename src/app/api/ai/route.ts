@@ -14,7 +14,8 @@ import {
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Ratelimit } from "@upstash/ratelimit";
-import { redis } from "@/lib/redis";
+import { redis, isRedisConfigured } from "@/lib/redis";
+import { checkFallbackLimit } from "@/lib/rate-limiter-fallback";
 import { randomUUID } from "crypto";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -35,12 +36,71 @@ const MAX_HISTORY_TURNS = 6;
 const MAX_HISTORY_CHARS = 2000;
 
 // 15 messages per user per hour (sliding window)
+const CHAT_MESSAGES_PER_HOUR = 15;
+const CHAT_WINDOW_MS = 60 * 60 * 1000;
+
 const chatbotRateLimiter = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(15, "1 h"),
+    limiter: Ratelimit.slidingWindow(CHAT_MESSAGES_PER_HOUR, "1 h"),
     analytics: false,
     prefix: "chatbot:user",
 });
+
+/**
+ * The rate-limit decision, which must not be able to take the chat down.
+ *
+ *   #707 THE ASSISTANT ANSWERED 500 TO EVERY MESSAGE ON A DEPLOYMENT WITH NO
+ *        UPSTASH URL, WHICH IS THIS DEPLOYMENT.
+ *
+ *   lib/redis.ts hands back a FOUR-METHOD STUB — get, setex, del, keys — when
+ *   UPSTASH_REDIS_REST_URL or _TOKEN is missing, cast `as unknown as Redis` so
+ *   it type-checks as the real client. @upstash/ratelimit drives its sliding
+ *   window through `evalsha`, which the stub does not have, so
+ *   `chatbotRateLimiter.limit()` threw
+ *
+ *       TypeError: ctx.redis.evalsha is not a function
+ *
+ *   — measured, not inferred. The call sat unguarded at step 3 of this route,
+ *   inside the outer try, so the throw landed in the catch at the foot of the
+ *   file and became `{ error: "Internal Server Error" }, { status: 500 }`.
+ *   EVERY message, for every user, from the first one.
+ *
+ *   THE PLATFORM ALREADY KNEW. redis.ts documents this exact TypeError and
+ *   exports `isRedisConfigured` so callers can skip the stub, and says why the
+ *   stub deliberately does not grow a no-op `evalsha`: "a no-op evalsha would
+ *   make rate limiting silently allow everything, which is worse than
+ *   throwing." lib/rate-limit.ts and lib/rate-limiter.ts both consult the flag.
+ *   This route imported `redis` and not the flag — the only one of the three
+ *   that builds a Ratelimit and does not ask.
+ *
+ *   WHY NO TEST CAUGHT IT: jest cannot even load @upstash/redis here — it is
+ *   ESM and the transform rejects it with "SyntaxError: Unexpected token
+ *   'export'" — so no suite imports this module, and the throw was invisible to
+ *   the whole suite. That is recorded in the test for this finding, which
+ *   asserts on the source rather than by execution for exactly that reason.
+ *
+ *   FAILS CLOSED, NOT OPEN. The in-memory fallback is the same one the login
+ *   and API limiters use. It is per-container and resets on restart, which is
+ *   weaker than Redis and is the deliberate trade #661 already settled: a
+ *   weaker limit that works beats a perfect limit that returns 500.
+ */
+async function chatRateDecision(userId: string): Promise<{ success: boolean; remaining: number }> {
+    const key = `chatbot:user:${userId}`;
+
+    if (!isRedisConfigured) {
+        return checkFallbackLimit(key, CHAT_MESSAGES_PER_HOUR, CHAT_WINDOW_MS);
+    }
+
+    try {
+        const { success, remaining } = await chatbotRateLimiter.limit(userId);
+        return { success, remaining };
+    } catch (err) {
+        //   A REAL Redis failure, now distinguishable from "none configured" —
+        //   which is the other half of what isRedisConfigured bought.
+        logger.error("[chatbot] rate limiter failed; falling back to in-memory", { err });
+        return checkFallbackLimit(key, CHAT_MESSAGES_PER_HOUR, CHAT_WINDOW_MS);
+    }
+}
 
 // Rules-based fallback when API key is missing or OpenAI is down
 const FALLBACK_RULES = [
@@ -93,7 +153,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Per-user rate limit: 15 messages/hour
-        const { success: withinLimit, remaining } = await chatbotRateLimiter.limit(userId);
+        const { success: withinLimit, remaining } = await chatRateDecision(userId);
         if (!withinLimit) {
             logger.warn(`[chatbot] Rate limit hit for user: ${userId}`);
             return NextResponse.json(

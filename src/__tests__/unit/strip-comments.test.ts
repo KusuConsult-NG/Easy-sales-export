@@ -250,6 +250,13 @@ describe('it agrees with the naive version everywhere the naive version is right
     const KNOWN_AFFECTED: string[] = [
         'src/__tests__/unit/a-certificate-that-named-a-page-that-was-not-there.test.ts',
         'src/__tests__/unit/a-declared-database-is-not-a-running-one.test.ts',
+        //   #706 — the same mechanism again, and this time deliberately: that
+        //   file skips comment lines with `line.startsWith('/*')`, so it holds
+        //   the literal '/*' inside a string, and its own block comments supply
+        //   the closing `*/`. Written that way on purpose — it is a sweep that
+        //   must not read an explanation of `x * 100` as an instance of it —
+        //   and recorded here rather than contorted to dodge this list.
+        'src/__tests__/unit/a-guard-on-the-door-money-leaves-by-only.test.ts',
         'src/__tests__/unit/a-record-corrected-and-a-cache-that-kept-the-old-one.test.ts',
         'src/__tests__/unit/admin-approval-audit.test.ts',
         'src/__tests__/unit/admin-permission-gates.test.ts',

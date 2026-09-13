@@ -238,7 +238,12 @@ async function _fundWalletViaPaystackAction(amountNGN: number): Promise<ActionRe
     const userEmail = session.user.email;
 
     const reference = `WALLET-${userId}-${Date.now()}`;
-    const amountKobo = amountNGN * 100; // Paystack uses kobo
+    //   #706 — Math.round, like every other naira-to-kobo conversion on this
+    //   platform. FundWalletSchema declares `z.number().int()`, so today the
+    //   product is always exact and this changes nothing; the rounding is here
+    //   so that the correctness of a money conversion does not rest on a
+    //   validation rule written in a different part of the file.
+    const amountKobo = Math.round(amountNGN * 100); // Paystack uses kobo
 
     const baseUrl = await getBaseUrl();
     const callbackUrl = `${baseUrl}/api/wallet/verify?ref=${reference}`;

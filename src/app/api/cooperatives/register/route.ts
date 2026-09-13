@@ -115,7 +115,15 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
                 email: session.user.email,
-                amount: registrationFee * 100,
+                //   #706 — Math.round, as the note in api/cooperative/contribute
+                //   already says of its own conversion two files over: "`amount
+                //   * 100` on a fractional naira figure produces a non-integer
+                //   kobo value, which Paystack rejects." registrationFee is
+                //   10_000 in constants.ts today, so this is exact either way —
+                //   which is precisely why it was easy to leave unrounded, and
+                //   why it changes the moment somebody sets a fee with kobo in
+                //   it.
+                amount: Math.round(registrationFee * 100),
                 reference: paymentReference,
                 channels: ["bank_transfer"],
                 // See the note in api/cooperative/contribute: a bare

@@ -194,8 +194,16 @@ describe('none of it is unbounded', () => {
 
 describe('what was already right', () => {
     it('per-user rate limiting, keyed on the account', () => {
+        //   Still keyed on the account, and still fifteen an hour.
+        //
+        //   #707 moved the number into a named constant that the Redis window
+        //   and the in-memory fallback BOTH read, so that a deployment without
+        //   Upstash cannot silently get a different limit. The property this
+        //   test is about is unchanged; only its spelling is, so it is asserted
+        //   through the constant rather than pinned to the literal.
         expect(route).toContain('chatbotRateLimiter.limit(userId)');
-        expect(route).toContain('Ratelimit.slidingWindow(15, "1 h")');
+        expect(route).toContain('const CHAT_MESSAGES_PER_HOUR = 15');
+        expect(route).toContain('Ratelimit.slidingWindow(CHAT_MESSAGES_PER_HOUR, "1 h")');
     });
 
     it('the module is checked against a list', () => {

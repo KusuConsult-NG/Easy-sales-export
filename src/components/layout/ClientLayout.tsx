@@ -221,8 +221,30 @@ function LayoutContent({ children }: ClientLayoutProps) {
             {/* Push notification permission banner */}
             {isAuthenticated && <PushNotificationBanner />}
 
-            {/* Module-aware AI chatbot */}
-            <AiChatWidget />
+            {/*
+              *   Module-aware AI chatbot.
+              *
+              *   #708 IT WAS OFFERED TO EVERY VISITOR AND COULD ONLY WORK FOR
+              *   SOME OF THEM. api/ai/route.ts refuses a request with no
+              *   session — step 1, `{ error: "Authentication required" }, 401`
+              *   — and that is deliberate and tested
+              *   (chatbot-session-integrity: "a session is required").
+              *
+              *   The widget knew nothing about it. It carries no session check
+              *   of its own, so a logged-out visitor saw the bubble, typed a
+              *   question, and got the catch branch:
+              *
+              *       "I'm sorry, I encountered a connection issue. Please try
+              *        again or contact our support team directly."
+              *
+              *   Every time, for every anonymous visitor — which on a landing
+              *   page is most of them. Not a connection issue: a door that was
+              *   never open, described as a fault that might pass.
+              *
+              *   Gated on the same flag as the banner one line above, which is
+              *   where the pattern was already right.
+              */}
+            {isAuthenticated && <AiChatWidget />}
         </ToastProvider>
     );
 }

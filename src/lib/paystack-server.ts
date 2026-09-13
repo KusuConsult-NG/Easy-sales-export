@@ -259,6 +259,45 @@ export async function initializePaystackPayment(
     accessCode: string;
     reference: string;
 }> {
+    /**
+     *   #706 #251's GUARD WAS PUT ON THE DOOR MONEY LEAVES BY AND NOT ON THE
+     *        DOOR IT ARRIVES BY.
+     *
+     *        paystack-transfer.ts states the rule and the reasoning in full:
+     *
+     *          "The body was `Math.round(amountNaira * 100)` with no guard. NaN
+     *           — which is what Math.abs(undefined) or a missing stored field
+     *           produces — serialises to `null` in the JSON body; a negative
+     *           amount serialises to negative kobo; Infinity to null again.
+     *           Every one of those is a request to move money built from a
+     *           value nobody looked at, and the amount arrives here from five
+     *           different stored documents, so no single caller can be relied
+     *           on to have checked."
+     *
+     *        Every word of that applies here, and more so: this function is
+     *        reached from TEN call sites — export, marketplace, cooperative,
+     *        farm nation and academy — most converting naira to kobo with their
+     *        own private copy of the arithmetic, over an amount read from a
+     *        stored document. It had no check of any kind.
+     *
+     *        THE NON-INTEGER CASE IS NOT THEORETICAL, and this codebase already
+     *        wrote it down, in api/cooperative/contribute: "`amount * 100` on a
+     *        fractional naira figure produces a non-integer kobo value, which
+     *        Paystack rejects." In binary floating point 19.99 * 100 is
+     *        1998.9999999999998 — so the trigger is not an exotic input, it is
+     *        an ordinary price with kobo in it.
+     *
+     *        BEFORE THE RETRY LOOP, deliberately. An amount that is wrong is
+     *        wrong on all three attempts, and retrying only delays the error by
+     *        a second and a half while making it look like a network fault.
+     */
+    if (!Number.isInteger(amount) || amount < 1) {
+        throw new Error(
+            `Refusing to initialize a payment for an invalid amount: ${amount}. `
+            + `Paystack takes a whole number of kobo — check the naira-to-kobo conversion at the call site.`,
+        );
+    }
+
     const maxRetries = 3;
     let delay = 500;
     for (let i = 0; i < maxRetries; i++) {
