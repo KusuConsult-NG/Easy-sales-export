@@ -92,7 +92,42 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        return NextResponse.json({ ok: true, ...report, needsAPerson: needsAPerson.length });
+        /*
+         *   #714 A RUN THAT ESTABLISHED NOTHING MUST NOT REPORT LIKE A RUN THAT
+         *   FOUND FORTY-EIGHT ORPHANED PROFILES.
+         *
+         *   Separated from `needsAPerson` because it asks for the opposite
+         *   thing. Every entry above is a finding about a PERSON that somebody
+         *   must now decide about; every entry here is a fact about THIS RUN,
+         *   and the response to it is to run it again.
+         *
+         *   AND IF THAT IS ALL THAT HAPPENED, THE RUN IS BROKEN — 500, so the
+         *   workflow's failure reporting fires and says so. A job that reaches
+         *   nothing and reports `{ ok: true }` is #703's defect in miniature:
+         *   a green tick over a run that did not happen. The `scanned > 0`
+         *   guard keeps the steady state quiet — nothing to look up is not a
+         *   failed lookup.
+         */
+        const couldNotTell = report.outcomes.filter((o) => o.result === "auth-lookup-failed");
+        if (couldNotTell.length > 0) {
+            logger.error(
+                `[cron/backfill-missing-emails] could not reach Supabase Auth for ${couldNotTell.length} `
+                + `of ${report.scanned} profile(s). These are NOT known to be missing an account — the lookup `
+                + `did not work. Run again.`,
+                { results: couldNotTell.map((o) => `${o.profileId}:${o.detail ?? "no detail"}`) },
+            );
+        }
+
+        const body = { ...report, needsAPerson: needsAPerson.length, couldNotTell: couldNotTell.length };
+
+        if (report.scanned > 0 && couldNotTell.length === report.scanned) {
+            return NextResponse.json(
+                { ok: false, error: "Supabase Auth could not be read for a single profile this run.", ...body },
+                { status: 500 },
+            );
+        }
+
+        return NextResponse.json({ ok: true, ...body });
     } catch (error) {
         logger.error("[cron/backfill-missing-emails] run failed", { error });
         //   500 so the workflow's failure reporting fires: this IS a broken run,

@@ -63,6 +63,7 @@ export interface EmailBackfillOutcome {
     result:
         | "filled"
         | "no-auth-account"
+        | "auth-lookup-failed"
         | "auth-has-no-email"
         | "already-had-one"
         | "profile-vanished"
@@ -91,6 +92,36 @@ export function isBlankEmail(value: unknown): boolean {
 }
 
 /**
+ * What the Auth read established about one profile id.
+ *
+ *   #714 "AUTH HAS NO ACCOUNT FOR THIS PERSON" AND "I COULD NOT ASK AUTH" WERE
+ *   THE SAME ANSWER.
+ *
+ *   `backfillDecision` took `authEmail: string | null | undefined` and read
+ *   null-or-undefined as `no-auth-account`. Everything that could not produce
+ *   an address arrived as one of those two: an account that genuinely does not
+ *   exist, a batch read that threw, a service key Supabase would not accept, an
+ *   id that is not a UUID. The caller then reported all of them as a statement
+ *   about the PERSON — that they have no auth account — having established
+ *   nothing of the kind.
+ *
+ *   THE FIRST PRODUCTION RUN IS WHY THIS IS A FINDING AND NOT A TIDY-UP. It
+ *   returned `no-auth-account` for all 48 profiles, unanimously. Forty-eight
+ *   orphaned profiles and one broken lookup produce exactly the same report,
+ *   and they need completely different responses — so the report was unusable
+ *   for the only question anyone wanted to ask of it.
+ *
+ *   Three states, named, so a caller cannot accidentally collapse two of them.
+ */
+export type AuthLookup =
+    /** Auth answered, and holds this account. `email` may still be blank. */
+    | { kind: "found"; email: string | null | undefined }
+    /** Auth answered, and says there is no such account. */
+    | { kind: "absent" }
+    /** The lookup did not work. Nothing is known about this account either way. */
+    | { kind: "failed"; detail?: string };
+
+/**
  * Decide what to do about one profile, given what Auth says.
  *
  * SEPARATED FROM THE I/O ON PURPOSE. This is the whole rule, and it is the part
@@ -99,20 +130,24 @@ export function isBlankEmail(value: unknown): boolean {
  * changing it.
  *
  * @param storedEmail what the profile currently has
- * @param authEmail   what Supabase Auth holds for the same id, if the account exists
+ * @param lookup      what the Auth read established — see AuthLookup
  */
 export function backfillDecision(
     storedEmail: unknown,
-    authEmail: string | null | undefined,
-): { write: false; result: EmailBackfillOutcome["result"] } | { write: true; value: string } {
+    lookup: AuthLookup,
+): { write: false; result: EmailBackfillOutcome["result"]; detail?: string } | { write: true; value: string } {
     //   Re-checked here rather than trusted from the query that selected the
     //   row. The scan and the write are two round trips apart, and a login in
     //   between would have filled it — at which point this must do nothing.
     if (!isBlankEmail(storedEmail)) return { write: false, result: "already-had-one" };
 
-    if (authEmail === null || authEmail === undefined) return { write: false, result: "no-auth-account" };
+    //   Both write nothing, and they are still reported apart: `absent` is a
+    //   fact about the account that somebody must now act on, `failed` is a
+    //   fact about this run that means run it again.
+    if (lookup.kind === "failed") return { write: false, result: "auth-lookup-failed", detail: lookup.detail };
+    if (lookup.kind === "absent") return { write: false, result: "no-auth-account" };
 
-    const normalised = String(authEmail).trim().toLowerCase();
+    const normalised = String(lookup.email ?? "").trim().toLowerCase();
     //   An auth account with no address of its own — a phone-only signup. There
     //   is nothing to copy, and inventing one would be worse than the gap.
     if (normalised === "") return { write: false, result: "auth-has-no-email" };
@@ -155,21 +190,44 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
     const profiles = await profilesWithNoEmail(limit);
     const outcomes: EmailBackfillOutcome[] = [];
 
-    //   Auth addresses first, in chunks, so the loop below does one write per
-    //   profile and no reads.
-    const authEmailById = new Map<string, string | null>();
+    /**
+     * What Auth established about each id, in chunks, so the loop below does
+     * one write per profile and no reads.
+     *
+     *   #714 — A MAP OF ADDRESSES CANNOT EXPRESS "I DID NOT FIND OUT".
+     *
+     *   This was `Map<string, string | null>`, and an id simply absent from it
+     *   meant "no auth account". A failed chunk left its ids absent in exactly
+     *   the same way, so a run where the Auth read did not work was reported as
+     *   a run that proved forty-eight people have no account.
+     *
+     *   THE DEFAULT IS NOW "failed", NOT "absent". An id is only reported
+     *   `no-auth-account` when Auth was reached and named it in `notFound`;
+     *   anything this code did not see an answer for stays "I could not find
+     *   out". Writing is unaffected — neither state writes — so the change is
+     *   in what the run CLAIMS, which is the part that was wrong.
+     */
+    const lookupById = new Map<string, AuthLookup>();
     const CHUNK = 100;
     for (let i = 0; i < profiles.length; i += CHUNK) {
         const chunk = profiles.slice(i, i + CHUNK);
         try {
             const result: any = await (adminAuth as any).getUsers(chunk.map((p) => ({ uid: p.id })));
             for (const user of result?.users ?? []) {
-                if (user?.uid) authEmailById.set(user.uid, user.email ?? "");
+                if (user?.uid) lookupById.set(user.uid, { kind: "found", email: user.email ?? "" });
+            }
+            for (const identifier of result?.notFound ?? []) {
+                if (identifier?.uid) lookupById.set(identifier.uid, { kind: "absent" });
+            }
+            for (const failure of result?.errored ?? []) {
+                if (failure?.identifier?.uid) {
+                    lookupById.set(failure.identifier.uid, { kind: "failed", detail: failure.message });
+                }
             }
         } catch (e: any) {
             //   A failed chunk leaves its ids absent from the map, so every
-            //   profile in it is reported "no-auth-account" and NOTHING IS
-            //   WRITTEN for it. That is the safe direction: the run
+            //   profile in it falls to the "failed" default below and NOTHING
+            //   IS WRITTEN for it. That is the safe direction: the run
             //   under-repairs and says so, and can simply be run again.
             logger.error(`[missing-email-backfill] Could not read an Auth batch: ${e?.message}`);
         }
@@ -213,10 +271,15 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
             continue;
         }
 
-        const decision = backfillDecision(current, authEmailById.has(profile.id) ? authEmailById.get(profile.id) : null);
+        const decision = backfillDecision(
+            current,
+            //   The default is the honest one: an id this run never saw an
+            //   answer for is one it could not find out about — #714.
+            lookupById.get(profile.id) ?? { kind: "failed", detail: "the Auth read returned nothing for this id" },
+        );
 
         if (!decision.write) {
-            outcomes.push({ profileId: profile.id, result: decision.result });
+            outcomes.push({ profileId: profile.id, result: decision.result, detail: decision.detail });
             continue;
         }
 

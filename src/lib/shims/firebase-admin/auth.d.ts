@@ -88,8 +88,25 @@ export interface GetUsersResult {
      * Identifiers with no matching account. Firebase reports misses here
      * rather than throwing, and the broadcast callers depend on that: one
      * member without an auth record must not fail a batch of 100.
+     *
+     * THIS MEANS "AUTH ANSWERED, AND SAID NO". It no longer doubles as "the
+     * lookup did not work" — see `errored`, and #714.
      */
     notFound: UserIdentifier[];
+    /**
+     * Identifiers whose lookup FAILED — #714. Not part of Firebase's contract,
+     * and added rather than folded into `notFound` because the two mean
+     * opposite things to a caller deciding what to do about a person:
+     *
+     *     notFound  this account does not exist
+     *     errored   we could not find out
+     *
+     * The four broadcast callers read `users` only and are unaffected. The
+     * caller that needed the distinction is the missing-email backfill, which
+     * reported "Auth has no account for this person" 48 times in production
+     * for a population it had not established anything about.
+     */
+    errored: { identifier: UserIdentifier; message: string }[];
 }
 
 export interface DeleteUsersResult {
@@ -112,7 +129,10 @@ export interface Auth {
     /** Throws with code "auth/user-not-found" when there is no match. */
     getUser(uid: string): Promise<ShimUserRecord>;
 
-    /** Does NOT throw for a missing account — see GetUsersResult.notFound. */
+    /**
+     * Does NOT throw for a missing account — see GetUsersResult.notFound, and
+     * GetUsersResult.errored for the lookups that did not work.
+     */
     getUsers(identifiers: UserIdentifier[]): Promise<GetUsersResult>;
 
     listUsers(maxResults?: number, pageToken?: string): Promise<ListUsersResult>;

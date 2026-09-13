@@ -118,6 +118,34 @@ function notFoundError() {
 }
 
 /**
+ * Does this error from Supabase mean "no such account", or "I could not tell"?
+ *
+ *   #714 THE TWO WERE THE SAME ANSWER, AND THE DIFFERENCE IS THE WHOLE POINT.
+ *
+ * `auth.admin.getUserById` reports a missing account as an ERROR (404), not as
+ * `{ user: null }`. So `if (error) notFound.push(...)` — what getUsers did —
+ * gave the same answer for an account that does not exist, a service key that
+ * is not accepted, a malformed id, and a network that is down.
+ *
+ * It is not academic. The missing-email backfill's first production run
+ * returned `no-auth-account` for ALL 48 profiles it examined, and that result
+ * is what a systemic lookup failure looks like as well as what 48 genuinely
+ * orphaned profiles look like. Nothing downstream could tell, which meant
+ * nobody could safely act on it either way.
+ *
+ * ONLY A 404 IS AN ABSENCE. Everything else — 401, 403, 4xx on a malformed id,
+ * 5xx, a transport failure — is reported as a failed lookup, because it is one.
+ * Status is checked first and the message only as a fallback, since the text is
+ * GoTrue's and may change.
+ */
+function isAbsence(error) {
+    const status = Number(error?.status ?? error?.code);
+    if (status === 404) return true;
+    if (Number.isFinite(status) && status !== 404) return false;
+    return /user not found|user_not_found/i.test(String(error?.message ?? ''));
+}
+
+/**
  * Walk every page of the auth store, calling `match` on each user.
  *
  * The single mechanism the three lookups share. It exists because the previous
@@ -256,12 +284,18 @@ class MockAuth {
     const list = Array.isArray(identifiers) ? identifiers : [];
     const users = [];
     const notFound = [];
+    const errored = [];
 
     for (const identifier of list) {
         try {
             if (identifier?.uid) {
                 const { data, error } = await supabaseAdmin.auth.admin.getUserById(identifier.uid);
-                if (error || !data?.user) { notFound.push(identifier); continue; }
+                if (error) {
+                    if (isAbsence(error)) notFound.push(identifier);
+                    else errored.push({ identifier, message: error.message || String(error) });
+                    continue;
+                }
+                if (!data?.user) { notFound.push(identifier); continue; }
                 users.push(toUserRecord(data.user));
             } else if (identifier?.email) {
                 const target = String(identifier.email).toLowerCase();
@@ -277,12 +311,14 @@ class MockAuth {
             }
         } catch (e) {
             // A single bad identifier must not fail the batch — that is the
-            // whole reason Firebase reports misses instead of throwing.
-            notFound.push(identifier);
+            // whole reason Firebase reports misses instead of throwing. It
+            // lands in `errored` rather than `notFound` because a thrown
+            // lookup establishes nothing about whether the account exists.
+            errored.push({ identifier, message: e?.message || 'unknown error' });
         }
     }
 
-    return { users, notFound };
+    return { users, notFound, errored };
   }
 
   /**

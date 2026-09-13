@@ -47,15 +47,33 @@ let authThrows = false;
  */
 let duringAuthRead: (() => void) | null = null;
 
+/**
+ * Ids this fake's Auth reports as a FAILED LOOKUP rather than a miss — #714.
+ * The shim reports these in `errored`; the two must not be interchangeable.
+ */
+let authLookupFails: string[] = [];
+
 jest.mock('@/lib/firebase-admin', () => ({
     adminAuth: {
         getUsers: async (identifiers: { uid: string }[]) => {
             if (duringAuthRead) { duringAuthRead(); duringAuthRead = null; }
             if (authThrows) throw new Error('Auth is unreachable');
-            const users = identifiers
+            //   THE FAKE NOW ANSWERS THE WAY THE SHIM DOES.
+            //
+            //   It used to return `notFound: []` unconditionally, so an id Auth
+            //   did not hold arrived as "simply absent from the map" — which is
+            //   also what a failed lookup looked like. A double that cannot
+            //   express the distinction cannot test it, and #714 is precisely
+            //   that distinction. See the note at the foot of this file.
+            const errored = identifiers
+                .filter((i) => authLookupFails.includes(i.uid))
+                .map((i) => ({ identifier: i, message: 'service key rejected' }));
+            const remaining = identifiers.filter((i) => !authLookupFails.includes(i.uid));
+            const users = remaining
                 .filter((i) => authByUid[i.uid] !== undefined)
                 .map((i) => ({ uid: i.uid, email: authByUid[i.uid] }));
-            return { users, notFound: [] };
+            const notFound = remaining.filter((i) => authByUid[i.uid] === undefined);
+            return { users, notFound, errored };
         },
     },
 }));
@@ -123,6 +141,7 @@ beforeEach(() => {
     profiles = {};
     authByUid = {};
     authThrows = false;
+    authLookupFails = [];
     duringAuthRead = null;
 });
 
@@ -302,7 +321,90 @@ describe('#671 — and one bad row does not strand the other forty-seven', () =>
 
         expect(writes).toEqual([]);
         expect(report.filled).toBe(0);
-        expect(report.outcomes.map((o) => o.result)).toEqual(['no-auth-account', 'no-auth-account']);
+        //   #714 — AND IT SAYS SO. This assertion read
+        //
+        //       ['no-auth-account', 'no-auth-account']
+        //
+        //   which is the finding: an unreachable Auth was reported as proof
+        //   that two people have no account. See the describe block below.
+        expect(report.outcomes.map((o) => o.result)).toEqual(['auth-lookup-failed', 'auth-lookup-failed']);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#714 — "Auth says no" and "I could not ask Auth" are different answers', () => {
+    /*
+     *   THIS IS NOT A HYPOTHETICAL, AND THAT IS WHY IT IS ITS OWN BLOCK.
+     *
+     *   The first production run of this repair — the cron's first firing,
+     *   dispatched by hand because the daily schedule had not come round yet —
+     *   returned, for all 48 profiles:
+     *
+     *       {"ok":true,"scanned":48,"filled":0,
+     *        "outcomes":[{"profileId":"05c711c7-…","result":"no-auth-account"},
+     *                    … forty-seven more, every one identical …]}
+     *
+     *   Read one way that is the most serious finding in the forensic report:
+     *   48 people hold a profile with no account behind it, so they cannot log
+     *   in and never could. Read the other way it is one broken lookup.
+     *
+     *   THE OLD CODE COULD NOT TELL, AND NEITHER COULD ANYONE READING IT. Both
+     *   the batch failure and the genuine miss arrived as "this id is not in
+     *   the map", and the map only held addresses. A unanimous result across 48
+     *   independent rows is much more like a systemic failure than like 48
+     *   coincidences, and the report gave no way to check.
+     *
+     *   So the distinction is now carried end to end — the shim reports
+     *   `errored` apart from `notFound`, and the default for an id nothing
+     *   answered for is "could not find out", not "does not exist".
+     */
+
+    it('AN ACCOUNT AUTH SAYS IS ABSENT IS REPORTED AS ABSENT', async () => {
+        profiles = { gone: { email: '' } };
+        authByUid = {};
+
+        const report = await backfillMissingEmails();
+
+        expect(resultFor(report, 'gone')).toBe('no-auth-account');
+    });
+
+    it('AND A LOOKUP THAT FAILED IS REPORTED AS A FAILED LOOKUP, NOT AS AN ABSENT ACCOUNT', async () => {
+        profiles = { unknown: { email: '' } };
+        authLookupFails = ['unknown'];
+
+        const report = await backfillMissingEmails();
+
+        expect(writes).toEqual([]);
+        expect(resultFor(report, 'unknown')).toBe('auth-lookup-failed');
+    });
+
+    it('AND ONE FAILED LOOKUP DOES NOT CHANGE THE ANSWER FOR THE ROWS BESIDE IT', async () => {
+        //   The two states have to survive together in one report, because that
+        //   is how a partial failure arrives. A run that downgraded everything
+        //   to "could not tell" would be as useless as one that upgraded
+        //   everything to "no account".
+        profiles = { ok: { email: '' }, absent: { email: '' }, broken: { email: '' } };
+        authByUid = { ok: 'ada@example.com' };
+        authLookupFails = ['broken'];
+
+        const report = await backfillMissingEmails();
+
+        expect(resultFor(report, 'ok')).toBe('filled');
+        expect(resultFor(report, 'absent')).toBe('no-auth-account');
+        expect(resultFor(report, 'broken')).toBe('auth-lookup-failed');
+        expect(report.filled).toBe(1);
+    });
+
+    it('AND THE FAILED LOOKUP CARRIES WHY, SO THE NEXT RUN IS NOT A GUESS', async () => {
+        //   "could not tell" with no reason attached sends the operator back to
+        //   the same unanswerable question. The shim's message is passed
+        //   through rather than replaced with a generic one.
+        profiles = { broken: { email: '' } };
+        authLookupFails = ['broken'];
+
+        const report = await backfillMissingEmails();
+
+        expect(report.outcomes[0].detail).toBe('service key rejected');
     });
 });
 
@@ -334,6 +436,14 @@ describe('#671 — and one bad row does not strand the other forty-seven', () =>
  *     only the "" shape is selected                                   KILLED
  *     the address stops being normalised                              KILLED
  *     filled is counted for rows that were skipped                    KILLED
+ *
+ *     #714 — THE LOOKUP STATE
+ *     the default for an unanswered id goes back to "absent"          KILLED
+ *     backfillDecision reports a failed lookup as no-auth-account     KILLED
+ *     the `errored` entries are not read into the lookup map          KILLED
+ *     the `notFound` entries are not read in, so every miss
+ *       degrades to "could not tell"                                  KILLED
+ *     the failure's detail is dropped from the outcome                KILLED
  *
  *     CONTROL — SHOULD SURVIVE
  *     reword this header                                              SURVIVED ✓

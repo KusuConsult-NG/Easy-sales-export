@@ -473,8 +473,10 @@ describe('#671 — and the 48 profiles with no address get their address back', 
     it('IT FILLS A BLANK ROW FROM THE ADDRESS AUTH HAS VERIFIED', () => {
         //   THE repair, normalised the way every other lookup in this codebase
         //   normalises an address (#478).
-        expect(backfillDecision('', '  Ada@Example.COM ')).toEqual({ write: true, value: 'ada@example.com' });
-        expect(backfillDecision(null, 'ada@example.com')).toEqual({ write: true, value: 'ada@example.com' });
+        expect(backfillDecision('', { kind: 'found', email: '  Ada@Example.COM ' }))
+            .toEqual({ write: true, value: 'ada@example.com' });
+        expect(backfillDecision(null, { kind: 'found', email: 'ada@example.com' }))
+            .toEqual({ write: true, value: 'ada@example.com' });
     });
 
     it('AND NEVER OVERWRITES AN ADDRESS THAT IS ALREADY THERE', () => {
@@ -486,17 +488,37 @@ describe('#671 — and the 48 profiles with no address get their address back', 
          *   for the bulk run, re-checked at the moment of the write rather than
          *   trusted from the query that selected the row.
          */
-        expect(backfillDecision('existing@example.com', 'different@example.com'))
+        expect(backfillDecision('existing@example.com', { kind: 'found', email: 'different@example.com' }))
             .toEqual({ write: false, result: 'already-had-one' });
     });
 
     it('AND WRITES NOTHING WHEN THERE IS NOTHING TO COPY', () => {
         //   An account that is gone, and a phone-only signup with no address of
         //   its own. Inventing one would be worse than the gap.
-        expect(backfillDecision('', null)).toEqual({ write: false, result: 'no-auth-account' });
-        expect(backfillDecision('', undefined)).toEqual({ write: false, result: 'no-auth-account' });
-        expect(backfillDecision('', '')).toEqual({ write: false, result: 'auth-has-no-email' });
-        expect(backfillDecision('', '   ')).toEqual({ write: false, result: 'auth-has-no-email' });
+        expect(backfillDecision('', { kind: 'absent' }))
+            .toEqual({ write: false, result: 'no-auth-account', detail: undefined });
+        expect(backfillDecision('', { kind: 'found', email: '' }))
+            .toEqual({ write: false, result: 'auth-has-no-email' });
+        expect(backfillDecision('', { kind: 'found', email: '   ' }))
+            .toEqual({ write: false, result: 'auth-has-no-email' });
+    });
+
+    it('AND SAYS SO SEPARATELY WHEN IT COULD NOT ASK AUTH AT ALL', () => {
+        /*
+         *   #714. These two arrived as the same answer — `null` — and the rule
+         *   read both as "this person has no auth account". They are opposite
+         *   claims: one is a fact about the account that somebody must act on,
+         *   the other is a fact about the run that means run it again.
+         *
+         *   The production run that made this a finding reported
+         *   `no-auth-account` for 48 of 48 profiles, unanimously, which is
+         *   equally consistent with 48 orphaned profiles and with one broken
+         *   lookup — and nothing in the report could distinguish them.
+         */
+        expect(backfillDecision('', { kind: 'failed', detail: 'service key rejected' }))
+            .toEqual({ write: false, result: 'auth-lookup-failed', detail: 'service key rejected' });
+        //   And it still writes nothing, which was never the defect.
+        expect(backfillDecision('', { kind: 'failed' }).write).toBe(false);
     });
 
     it('AND THE ADDRESS IS MASKED WHEREVER IT IS REPORTED', () => {
