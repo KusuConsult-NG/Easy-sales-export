@@ -6,6 +6,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { landLocationText } from "@/lib/land-location";
 import { logger } from "@/lib/logger";
 import Link from "next/link";
 import { numberOrZero } from "@/lib/numbers";
@@ -290,9 +291,8 @@ export default function FarmNationDashboardClient({ initial = null }: {
                                                 )}
                                             </div>
                                             <p className="text-xs text-slate-500 mb-2">
-                                                {typeof prop.location === "object" && prop.location
-                                                    ? `${(prop.location as any).address || (prop.location as any).lga || ""}, ${(prop.location as any).state || ""}`.trim().replace(/^,\s*/, "")
-                                                    : (prop.location || prop.state || "")} · {prop.size} Ha ·{" "}
+                                                {/* #689 One rule for four shapes — see lib/land-location.ts. */}
+                                                {landLocationText(prop)} · {prop.size} Ha ·{" "}
                                                 <span className="capitalize">{prop.type}</span>
                                             </p>
                                             <div className="flex items-center gap-2">

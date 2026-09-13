@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { readLandLocation } from "@/lib/land-location";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { GeoPoint, FieldValue, Timestamp } from "@/lib/firestore-compat";
@@ -140,11 +141,13 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
                 return {
                     id: doc.id,
                     ...data,
-                    location: {
-                        ...data.location,
-                        lat: data.location.geopoint?.latitude || data.location.lat,
-                        lng: data.location.geopoint?.longitude || data.location.lng 
-                    },
+                    //   #689 One reader for four shapes — see lib/land-location.ts.
+                    //   `data.location.geopoint?.latitude` guarded the geopoint
+                    //   and not the location, so a row written by
+                    //   /api/farm-nation/create-listing (which stores no
+                    //   `location` at all) threw here and took the whole page
+                    //   with it.
+                    location: readLandLocation(data),
                     createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
                     updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
                     verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
@@ -225,11 +228,8 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
         const listing: LandListing = { 
             id: listingDoc.id,
             ...data,
-            location: {
-                ...data.location,
-                lat: data.location.geopoint?.latitude || data.location.lat,
-                lng: data.location.geopoint?.longitude || data.location.lng 
-            },
+            //   #689 One reader for four shapes — see lib/land-location.ts.
+            location: readLandLocation(data),
             createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
             updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
             verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
@@ -276,11 +276,13 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
                 return {
                     id: doc.id,
                     ...data,
-                    location: {
-                        ...data.location,
-                        lat: data.location.geopoint?.latitude || data.location.lat,
-                        lng: data.location.geopoint?.longitude || data.location.lng 
-                    },
+                    //   #689 One reader for four shapes — see lib/land-location.ts.
+                    //   `data.location.geopoint?.latitude` guarded the geopoint
+                    //   and not the location, so a row written by
+                    //   /api/farm-nation/create-listing (which stores no
+                    //   `location` at all) threw here and took the whole page
+                    //   with it.
+                    location: readLandLocation(data),
                     createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
                     updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
                     verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 

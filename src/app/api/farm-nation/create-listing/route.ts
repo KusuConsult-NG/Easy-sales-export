@@ -234,6 +234,35 @@ export async function POST(request: NextRequest) {
             state,
             lga,
             address,
+            /*
+             *   #689 A `location` OBJECT, BESIDE THE FLAT FIELDS AND NOT
+             *   INSTEAD OF THEM.
+             *
+             *   This writer stored state/lga/address flat and no `location` at
+             *   all, while every other writer of LAND_LISTINGS stores an
+             *   object. The three readers in actions/land-actions.ts assumed
+             *   the object and did `data.location.geopoint?.latitude` — a
+             *   TypeError on these rows, caught by their own try/catch and
+             *   returned as "Failed to fetch". One listing created here stopped
+             *   the owner's page, that listing's page, and the ADMIN REVIEW
+             *   QUEUE, which reads status 'pending_verification' — the status
+             *   written three lines above.
+             *
+             *   Those readers normalise now and no longer depend on this, so
+             *   history is safe without a migration. This is here so NEW rows
+             *   also answer `where("location.state", ...)`, which is how
+             *   land-listings.ts filters a search — a flat row was invisible to
+             *   every state filter on the platform.
+             *
+             *   The flat fields stay exactly as they were: other code reads
+             *   them, and nothing here is removed to tidy up.
+             */
+            location: {
+                state,
+                lga,
+                address,
+                ...(gpsCoordinates ? { lat: gpsCoordinates.latitude, lng: gpsCoordinates.longitude } : {}),
+            },
             size,
             unit,
             pricePerUnit,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { landLocationText } from "@/lib/land-location";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -364,9 +365,8 @@ export default function CheckoutClient({ initial = null }: {
                                 <div className="flex items-center gap-2 text-sm text-slate-600">
                                     <MapPin className="w-4 h-4" />
                                     <span>
-                                        {typeof property.location === "object" && property.location
-                                            ? `${property.location.address || property.location.lga || ""}, ${property.location.state || ""}`.trim().replace(/^,\s*/, "")
-                                             : (property.location as any || "Nigeria")}
+                                        {/* #689 One rule for four shapes — see lib/land-location.ts. */}
+                                        {landLocationText(property) || "Nigeria"}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-slate-600">

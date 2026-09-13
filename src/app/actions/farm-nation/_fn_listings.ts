@@ -287,7 +287,29 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
         const property = {
             name: validatedData.name,
             description: validatedData.description,
-            location: validatedData.location,
+            /*
+             *   #689 THE OBJECT SHAPE, CARRYING THE ADDRESS THE SCHEMA CALLS
+             *   `location`.
+             *
+             *   farmNationListingSchema declares
+             *   `location: z.string().min(2, "Location address is required")`,
+             *   so this stored a STRING into a collection whose other writers
+             *   store an object. It did not throw in the readers — it garbled:
+             *   `{ ...("5 Riverside, Jos") }` spreads a string into character
+             *   keys, and the address reached the caller as
+             *   `{ "0": "5", "1": " ", "2": "R", … }`.
+             *
+             *   Three Farm Nation screens each carried their own
+             *   `typeof location === "object" ? … : …` to cope; those now read
+             *   through lib/land-location.ts, which accepts either — so rows
+             *   already holding a string are unaffected and this one is no
+             *   longer creating more of them.
+             */
+            location: {
+                address: validatedData.location,
+                state: normalizeLocation(validatedData.state),
+                lga: normalizeLocation(validatedData.lga),
+            },
             state: normalizeLocation(validatedData.state),
             lga: normalizeLocation(validatedData.lga),
             price: validatedData.price,

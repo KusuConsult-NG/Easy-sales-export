@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { landLocationText } from "@/lib/land-location";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -221,7 +222,9 @@ export default function MyPropertiesPage() {
 
                                     <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
                                         <MapPin className="w-4 h-4" />
-                                        <span className="line-clamp-1">{property.location?.state}, {property.location?.lga}</span>
+                                        {/* #689 This had no copy of the defence at all and rendered ", " for
+                                            a string location, which is what the Farm Nation writer stored. */}
+                                        <span className="line-clamp-1">{landLocationText(property)}</span>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-3 mb-4">
