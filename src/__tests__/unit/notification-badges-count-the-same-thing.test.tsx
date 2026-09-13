@@ -85,6 +85,15 @@ function walk(dir: string): string[] {
 
 const PANEL = 'src/components/layout/NotificationCenter.tsx';
 const ACTION = 'src/app/actions/my-data.ts';
+/**
+ *   #687 The counting rule moved OUT of the action and into one server-only
+ *   module, because a THIRD copy of it turned up in the notification service —
+ *   a cached `users.unreadCount` that five of the platform's notification
+ *   writers never touched. #416's property is unchanged and is now structural:
+ *   there is one query to agree with rather than two that happen to match.
+ */
+const RULE = 'src/lib/unread-notification-count.ts';
+const SERVICE = 'src/infrastructure/notifications/service.ts';
 const PUSH = 'src/hooks/usePushPermissionState.ts';
 
 beforeEach(() => { asMock.mockReset(); });
@@ -92,7 +101,7 @@ beforeEach(() => { asMock.mockReset(); });
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#416 — one rule, one window, two badges', () => {
     it('THE COUNT READS THE SAME WINDOW THE PANEL DOES', () => {
-        const src = code(ACTION);
+        const src = code(RULE);
         // Not a bare .count() over every unread row any more — that was the
         // half of #416 that made the nav badge exceed the bell and stay up.
         expect(src).not.toMatch(/where\("read", "==", false\)\s*\.count\(\)/);
@@ -127,10 +136,40 @@ describe('#416 — one rule, one window, two badges', () => {
          * and capped at the window; the panel counts `!n.read` over the same
          * window it fetched. Two ways of writing one number.
          */
-        const action = code(ACTION);
-        expect(action).toMatch(/\.where\("userId", "==", userId\)/);
-        expect(action).toMatch(/\.where\("read", "==", false\)/);
+        const rule = code(RULE);
+        expect(rule).toMatch(/\.where\("userId", "==", userId\)/);
+        expect(rule).toMatch(/\.where\("read", "==", false\)/);
         expect(code(PANEL)).toMatch(/notifications\.filter\(\(n\) => !n\.read\)\.length/);
+    });
+
+    it('#687 AND THE ACTION DELEGATES RATHER THAN KEEPING ITS OWN COPY', () => {
+        /*
+         *   The property #416 could only assert by comparing two files is
+         *   structural now: the action holds no query of its own to drift.
+         *
+         *   Asserted in both directions — it calls the rule, and it no longer
+         *   carries the query — because "calls the rule" alone would survive a
+         *   change that called it and then ignored the answer.
+         */
+        const action = code(ACTION);
+        expect(action).toMatch(/return countUnreadNotifications\(userId\);/);
+        const fn = action.slice(action.indexOf('export async function getMyUnreadNotificationCount'));
+        const body = fn.slice(0, fn.indexOf('\n}'));
+        expect(body).not.toMatch(/COLLECTIONS\.NOTIFICATIONS/);
+        expect(body).not.toMatch(/NOTIFICATION_BADGE_WINDOW/);
+    });
+
+    it('#687 AND THE SERVICE DELEGATES TO THE SAME RULE, WITH NO CACHED COUNTER', () => {
+        /*
+         *   THE finding. getUnreadCount read `users.unreadCount` and took the
+         *   real count only when that field was ABSENT, then backfilled it so
+         *   the real count could never run again — over a counter five
+         *   notification writers never incremented and markAllAsRead set to
+         *   zero. It returned 0 over unread mail.
+         */
+        const service = code(SERVICE);
+        expect(service).toMatch(/return countUnreadNotifications\(userId\);/);
+        expect(service).not.toMatch(/unreadCount/);
     });
 
     it('and the count takes no userId from the browser', () => {

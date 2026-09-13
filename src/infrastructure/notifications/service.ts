@@ -1,8 +1,13 @@
 /**
  * Centralized Notification Infrastructure Service
  * 
- * Manages all platform-level in-app notifications with atomic counts,
- * target segment filtering, and clean lifecycle tracking.
+ * Manages all platform-level in-app notifications.
+ *
+ * #687 It used to say "with atomic counts". The counts were not atomic — the
+ * batch that carried them is a sequential loop (#679) — nor complete, since
+ * five notification writers never went through this file, nor read by anything.
+ * Counting now happens in one place, lib/unread-notification-count.ts, and this
+ * service keeps no counter of its own.
  */
 
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -16,6 +21,7 @@ import type { Notification as SharedNotification } from "@/lib/types/shared";
 // #534 The window size lives in a client-safe module: the notifications
 // screen is a "use client" file and must not reach this one.
 import { NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
+import { countUnreadNotifications } from "@/lib/unread-notification-count";
 
 /**
  * Server-side Notification shape.
@@ -48,13 +54,17 @@ export async function createNotification(data: Omit<Notification, "read" | "crea
             createdAt: FieldValue.serverTimestamp()
         };
 
+        /*
+         *   #687 ONE WRITE, AND NO COUNTER.
+         *
+         *   This was a two-operation batch: the notification, and an increment
+         *   of `users.unreadCount`. The counter is gone — see the header — and
+         *   with it the batch, which #679 established is a sequential loop
+         *   rather than an atomic commit. A single document write needs no
+         *   batch and cannot half-succeed.
+         */
         const docRef = db.collection(COLLECTIONS.NOTIFICATIONS).doc();
-        const batch = db.batch();
-        batch.set(docRef, notification);
-        batch.update(db.collection(COLLECTIONS.USERS).doc(data.userId), {
-            unreadCount: FieldValue.increment(1)
-        });
-        await batch.commit();
+        await docRef.set(notification);
 
         return { success: true, error: null, data: { notificationId: docRef.id } };
     } catch (error) {
@@ -80,14 +90,13 @@ export async function createBulkNotifications(
 
             chunk.forEach((userId) => {
                 const docRef = notificationsRef.doc();
+                //   #687 The notification only. The `users.unreadCount`
+                //   increment that stood here maintained a counter nothing read.
                 batch.set(docRef, {
                     userId,
                     ...notificationTemplate,
                     read: false,
                     createdAt: FieldValue.serverTimestamp()
-                });
-                batch.update(usersRef.doc(userId), {
-                    unreadCount: FieldValue.increment(1)
                 });
             });
 
@@ -157,7 +166,6 @@ export async function getUserNotifications(
 export async function markNotificationAsRead(notificationId: string, currentUserId: string): Promise<ActionResponse<any>> {
     try {
         const docRef = db.collection(COLLECTIONS.NOTIFICATIONS).doc(notificationId);
-        const userRef = db.collection(COLLECTIONS.USERS).doc(currentUserId);
         
         // Execute inside transaction to secure atomic update
         const result = await db.runTransaction(async (transaction) => {
@@ -172,22 +180,22 @@ export async function markNotificationAsRead(notificationId: string, currentUser
             }
 
             if (!data.read) {
+                /*
+                 *   #687 The read flag is the whole of it.
+                 *
+                 *   A second document read and a second write stood here, to
+                 *   decrement `users.unreadCount` — on the hot path, inside the
+                 *   transaction, for a counter nothing consulted. What made it
+                 *   worse than wasted work is that the decrement was
+                 *   `Math.max(0, current - 1)` against a figure five of the
+                 *   platform's notification writers never incremented, so it
+                 *   drifted DOWNWARD with every read of a notification those
+                 *   paths had created.
+                 */
                 transaction.update(docRef, {
                     read: true,
                     readAt: FieldValue.serverTimestamp()
                 });
-
-                const userSnap = await transaction.get(userRef);
-                if (userSnap.exists) {
-                    const userData = userSnap.data() || {};
-                    const currentUnread = userData.unreadCount || 0;
-                    const nextUnread = Math.max(0, currentUnread - 1);
-                    transaction.update(userRef, {
-                        unreadCount: nextUnread
-                    });
-                } else {
-                    transaction.set(userRef, { unreadCount: 0 }, { merge: true });
-                }
             }
             return { success: true };
         });
@@ -242,10 +250,9 @@ export async function markAllAsRead(userId: string): Promise<ActionResponse<any>
         }
 
         if (snapshot.empty) {
-            // Make sure count is 0 anyway to ensure perfect synchronization
-            await db.collection(COLLECTIONS.USERS).doc(userId).set({
-                unreadCount: 0
-            }, { merge: true });
+            //   #687 Nothing to mark, and no counter to synchronise — the
+            //   count is taken from these rows now, so there is no second
+            //   figure that could disagree with them.
             return { success: true, error: null, data: null };
         }
 
@@ -276,10 +283,11 @@ export async function markAllAsRead(userId: string): Promise<ActionResponse<any>
                 .count()
                 .get();
 
-            await db.collection(COLLECTIONS.USERS).doc(userId).set({
-                unreadCount: remaining.data().count,
-            }, { merge: true });
-
+            //   #687 The figure is REPORTED, not stored. #534's point stands
+            //   whole — a truncated sweep must not be reported as a completed
+            //   one — and the caller is still told exactly how many rows are
+            //   left. What is gone is writing that number into a counter,
+            //   which is what made it a second source of truth.
             return {
                 success: true,
                 error: null,
@@ -287,11 +295,9 @@ export async function markAllAsRead(userId: string): Promise<ActionResponse<any>
             };
         }
 
-        // Atomically update user document to 0 unreadCount
-        await db.collection(COLLECTIONS.USERS).doc(userId).set({
-            unreadCount: 0
-        }, { merge: true });
-
+        //   #687 No counter to zero. Every row that could be counted has just
+        //   had `read: true` written to it, so the count IS zero, derived
+        //   rather than asserted.
         return { success: true, error: null, data: { count: snapshot.size, truncated: false } };
     } catch (error) {
         logger.error("Mark all notifications read error:", error);
@@ -300,30 +306,36 @@ export async function markAllAsRead(userId: string): Promise<ActionResponse<any>
 }
 
 /**
- * Gets the current unread count directly from Firestore truth
+ *   #687 A THIRD COUNT OF ONE FACT, MAINTAINED BY NINE WRITERS, BYPASSED BY
+ *        FIVE, AND READ BY NOTHING.
+ *
+ *   Its docstring said "the current unread count directly from Firestore
+ *   truth". It read a DENORMALISED COUNTER — `users.unreadCount` — and took the
+ *   real count only when that field was ABSENT, then backfilled the field so
+ *   the expensive path could never run again.
+ *
+ *   THE COUNTER WAS ALREADY WRONG. Five of the platform's notification writers
+ *   go straight to the collection and never incremented it: the in-app
+ *   broadcast, marketplace quote requests, two wallet withdrawal decisions, and
+ *   lib/marketplace-notifications.ts — the shared helper, with seven callers of
+ *   its own. Meanwhile markAllAsRead wrote 0. So for any member who had ever
+ *   cleared their bell and then received a notification down one of those five
+ *   paths, this function returned 0 over unread mail.
+ *
+ *   IT WAS HARMLESS ONLY BECAUSE NOTHING CALLED IT. Its one caller,
+ *   getUnreadCountAction, has no callers of its own; the live badges both count
+ *   the rows. That is the whole of the defect: the obvious-looking function,
+ *   with the most authoritative docstring, was the broken one, and the next
+ *   person needing a count would have reached for it.
+ *
+ *   It now asks the same question the badges ask, in the one place that asks
+ *   it. The counter is no longer written by anything in this file.
+ *
+ *   THE STORED FIELD IS LEFT WHERE IT IS on the user documents that carry it.
+ *   Nothing on this platform destroys a record to tidy up, and a stale number
+ *   nothing reads costs nothing; what mattered was that it stopped being
+ *   presented as the truth.
  */
 export async function getUnreadCount(userId: string): Promise<number> {
-    const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-    if (userDoc.exists) {
-        const data = userDoc.data();
-        if (data && typeof data.unreadCount === "number") {
-            return data.unreadCount;
-        }
-    }
-
-    // Fallback & backfill count
-    const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
-        .where("userId", "==", userId)
-        .where("read", "==", false)
-        .count()
-        .get();
-
-    const count = snapshot.data().count;
-    
-    // Backfill user doc
-    await db.collection(COLLECTIONS.USERS).doc(userId).set({
-        unreadCount: count
-    }, { merge: true });
-
-    return count;
+    return countUnreadNotifications(userId);
 }

@@ -264,8 +264,25 @@ describe('#634 — every module notification is addressed to somebody', () => {
             'return notificationMatchesTab(n.type, filter);',
         ]);
 
+        /*
+         *   #687 THE FOURTH READER MOVED, AND STILL READS.
+         *
+         *   `return snap.docs.length;` was asserted in my-data.ts. The counting
+         *   rule now lives in ONE server-only module, because a third copy of
+         *   it turned up in the notification service — a cached
+         *   `users.unreadCount` that five notification writers never
+         *   incremented and markAllAsRead set to zero.
+         *
+         *   Both halves are asserted: the rule still returns the member's own
+         *   unread rows, and the action still reaches it. Asserting only the
+         *   delegation would pass over a rule that had stopped counting.
+         */
+        const rule = BODIES.get('src/lib/unread-notification-count.ts')!;
+        expect(rule).toMatch(/return snap\.docs\.length;/);
+        expect(rule).not.toMatch(/isNotificationVisible/);
+
         const action = BODIES.get('src/app/actions/my-data.ts')!;
-        expect(action).toMatch(/return snap\.docs\.length;/);
+        expect(action).toMatch(/return countUnreadNotifications\(userId\);/);
     });
 });
 

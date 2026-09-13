@@ -33,6 +33,7 @@ import { toDate } from "@/lib/date-utils";
 import { isActiveOrderStatus } from "@/lib/order-status";
 import { logger } from "@/lib/logger";
 import { NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
+import { countUnreadNotifications } from "@/lib/unread-notification-count";
 import { isOnTheList } from "@/lib/notification-ageing";
 
 /** The signed-in user's id, or null when unauthenticated. */
@@ -342,24 +343,17 @@ export async function getMyUnreadNotificationCount(): Promise<number> {
     const userId = session?.user?.id;
     if (!userId) return 0;
 
-    try {
-        const snap = await db
-            .collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
-            .where("read", "==", false)
-            .orderBy("createdAt", "desc")
-            .limit(NOTIFICATION_BADGE_WINDOW)
-            .get();
-
-        //   Every row this query returned is unread and belongs to this user —
-        //   that IS the count. #634: nothing is subtracted from it for a module
-        //   the member is not registered for, because the notification was
-        //   addressed to them regardless.
-        return snap.docs.length;
-    } catch (error) {
-        logger.error("[my-data] getMyUnreadNotificationCount failed", { userId, error });
-        return 0;
-    }
+    //   #687 THE RULE IS STATED ONCE, in lib/unread-notification-count.ts.
+    //
+    //   This query used to live here, and the notification service kept a THIRD
+    //   version of the same question — a cached `users.unreadCount` that five
+    //   of the platform's notification writers never touched. Two copies of a
+    //   counting rule is what #416 was; three is what #687 found.
+    //
+    //   #634 still holds inside that rule: nothing is subtracted for a module
+    //   the member is not registered for, because the notification was
+    //   addressed to them regardless.
+    return countUnreadNotifications(userId);
 }
 
 /**

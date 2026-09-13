@@ -87,6 +87,7 @@ import { getUserNotifications, markAllAsRead } from '@/infrastructure/notificati
 // #534 The window size is in a client-safe module — see the note there. The
 // screen is "use client" and may not reach the service.
 import { NOTIFICATION_PAGE_SIZE } from '@/lib/notification-filter';
+import { countUnreadNotifications } from '@/lib/unread-notification-count';
 
 const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: p });
@@ -195,25 +196,60 @@ describe('#534 — the list is a page, not a history', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#534 — marking all read does not claim a zero it has not earned', () => {
-    it('A COMPLETE SWEEP MARKS EVERYTHING AND ZEROES THE COUNT', async () => {
+    it('A COMPLETE SWEEP MARKS EVERY ROW, AND THE COUNT FOLLOWS FROM THEM', async () => {
+        /*
+         *   #687 THE ASSERTION MOVED FROM THE COUNTER TO THE ROWS.
+         *
+         *   This used to seed `unreadCount: 10` and require a stored 0
+         *   afterwards. There is no stored counter any more: it was read by one
+         *   function nothing called, and five of the platform's notification
+         *   writers never incremented it, so it was already wrong.
+         *
+         *   The property #534 was about is unchanged and is now checked where
+         *   it is true — on the rows. A count derived from them cannot disagree
+         *   with them.
+         */
         seedNotifications(10);
-        store.seed(COLLECTIONS.USERS, ME, { unreadCount: 10 });
 
         const res = await markAllAsRead(ME);
 
         expect(res.success).toBe(true);
         expect((res.data as any).truncated).toBe(false);
-        expect((store.get(COLLECTIONS.USERS, ME) as any).unreadCount).toBe(0);
-        expect((store.get(COLLECTIONS.NOTIFICATIONS, 'n-0005') as any).read).toBe(true);
+        expect((res.data as any).count).toBe(10);
+
+        //   Every row, not just the sampled one — a sweep that marked nine of
+        //   ten would pass a single spot check.
+        const unread = store.all(COLLECTIONS.NOTIFICATIONS)
+            .filter(([, d]) => (d as any).userId === ME && !(d as any).read);
+        expect(unread).toEqual([]);
+
+        //   And the number the badge would show is zero because of that.
+        expect(await countUnreadNotifications(ME)).toBe(0);
     });
 
     it('AND IT SAYS SO WHEN THERE WAS NOTHING TO DO', async () => {
         //   The pre-existing behaviour that has to survive: an account with no
-        //   unread rows still has its counter corrected to 0.
-        store.seed(COLLECTIONS.USERS, ME, { unreadCount: 7 });
-
+        //   unread rows is a success, not a failure.
         expect((await markAllAsRead(ME)).success).toBe(true);
-        expect((store.get(COLLECTIONS.USERS, ME) as any).unreadCount).toBe(0);
+        expect(await countUnreadNotifications(ME)).toBe(0);
+    });
+
+    it('#687 AND IT WRITES NO COUNTER ANYWHERE — the row is the only record', async () => {
+        /*
+         *   The control on the two above, and the finding itself. Re-storing a
+         *   derived total would satisfy them and put back the second source of
+         *   truth: a figure that can be right when the rows say otherwise.
+         *
+         *   Measured against the USER DOCUMENT, which is where it used to go.
+         */
+        seedNotifications(3);
+        store.seed(COLLECTIONS.USERS, ME, { email: 'me@example.com' });
+
+        await markAllAsRead(ME);
+
+        const me = store.get(COLLECTIONS.USERS, ME) as any;
+        expect(me.unreadCount).toBeUndefined();
+        expect(code(SERVICE)).not.toContain('unreadCount');
     });
 
     it('AND THE SWEEP IS THE ADAPTER\'S HONEST ONE, WHICH REPORTS ITS CEILING', () => {
@@ -227,19 +263,32 @@ describe('#534 — marking all read does not claim a zero it has not earned', ()
         expect(fn.slice(0, 3000)).toContain('if (snapshot.truncated)');
     });
 
-    it('AND THE ZERO IS INSIDE THE COMPLETE BRANCH, NOT AFTER IT', () => {
-        //   Position, not presence — the same check #532 needed. A truncation
-        //   test written ABOVE an unconditional zero would read as a fix and be
-        //   none.
+    it('AND A TRUNCATED SWEEP RECOUNTS AND REPORTS, RATHER THAN CLAIMING IT FINISHED', () => {
+        /*
+         *   Position, not presence — the same check #532 needed. A truncation
+         *   test written ABOVE an unconditional "done" would read as a fix and
+         *   be none.
+         *
+         *   #687 re-anchored: what follows the guard used to be a stored
+         *   `unreadCount: 0`. It is now the REPORT — `truncated: true` with the
+         *   remaining figure — which is the half #534 actually cared about.
+         *   The fake cannot produce a truncated snapshot (`.all()` applies no
+         *   cap there), so this stays a source assertion rather than pretending
+         *   to be a behavioural one.
+         */
         const src = code(SERVICE);
         const fn = src.slice(src.indexOf('export async function markAllAsRead'));
         const guard = fn.indexOf('if (snapshot.truncated) {', fn.indexOf('chunkSize'));
-        const zero = fn.indexOf('unreadCount: 0', guard);
         const recount = fn.indexOf('.count()', guard);
+        const report = fn.indexOf('truncated: true', recount);
+        const complete = fn.indexOf('truncated: false', report);
 
         expect(guard).toBeGreaterThan(-1);
         expect(recount).toBeGreaterThan(guard);
-        expect(zero).toBeGreaterThan(recount);
+        expect(report).toBeGreaterThan(recount);
+        //   And the completed answer comes AFTER the truncated one returns, so
+        //   a truncated sweep can never reach it.
+        expect(complete).toBeGreaterThan(report);
     });
 });
 
