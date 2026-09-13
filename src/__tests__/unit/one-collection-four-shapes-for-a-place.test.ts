@@ -266,11 +266,30 @@ describe('#689 — the rule itself', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#689 — and nobody keeps their own copy of the rule', () => {
+    /*
+     *   SIX READERS, FOUND BY SWEEPING RATHER THAN BY EYE.
+     *
+     *   The first four came from reading the Farm Nation screens. The last two
+     *   came from a sweep for the crash SHAPE — a document field dereferenced
+     *   two hops without guarding the first — run over the whole of src and
+     *   validated against the pre-fix land-actions.ts, which it reported
+     *   correctly at all three sites.
+     *
+     *   Without it this finding would have fixed five places and left two,
+     *   which is the "one of N doors" class applied to its own repair. Neither
+     *   of the two crashed — both guarded the shape their own way — but both
+     *   dropped the address for a row written by the API route, and the layout
+     *   is the widest audience of all: it is the page's OpenGraph title and its
+     *   schema.org RealEstateListing, which is what a shared link and a search
+     *   engine show.
+     */
     const SCREENS = [
         'src/app/farm-nation/(member)/dashboard/FarmNationDashboardClient.tsx',
         'src/app/farm-nation/checkout/[propertyId]/CheckoutClient.tsx',
         'src/app/farm-nation/property/[id]/PropertyDetailsClient.tsx',
         'src/app/farm-nation/(member)/my-properties/page.tsx',
+        'src/app/farm-nation/property/[id]/layout.tsx',
+        'src/app/actions/saved-items.ts',
     ];
 
     it.each(SCREENS)('%s RENDERS THROUGH THE SHARED RULE', (screen) => {
@@ -282,17 +301,100 @@ describe('#689 — and nobody keeps their own copy of the rule', () => {
         //   beside it would satisfy the line above and leave the copies to
         //   drift — which is the state this finding found.
         for (const screen of SCREENS) {
-            expect({ screen, handRolled: /typeof\s+\w+\.location\s*===\s*"object"/.test(code(screen)) })
+            const src = code(screen);
+            expect({ screen, handRolled: /typeof\s+[\w.]+\.location\s*===\s*["']object["']/.test(src) })
                 .toEqual({ screen, handRolled: false });
+            //   And no reader reaches past `location` on its own — the
+            //   OPTIONAL form included. `data.location?.lga` does not throw,
+            //   which is exactly why it survived a mutant here: it is guarded
+            //   against the crash and not against the defect, and it still
+            //   loses the address on every row the API route wrote.
+            expect({ screen, rawRead: /\bdata\.location[.?]/.test(src) })
+                .toEqual({ screen, rawRead: false });
         }
     });
 
-    it('AND THE THREE SERVER READERS DO NOT DEREFERENCE location DIRECTLY', () => {
+    it('AND THE SWEEP THAT FOUND THE LAST TWO STILL REPORTS THE ORIGINAL FAULT', () => {
+        /*
+         *   THE INSTRUMENT, PINNED. The last two readers were found by sweeping
+         *   for "a document field dereferenced two hops with the first hop
+         *   unguarded", not by reading the screens — and a sweep is only worth
+         *   having if it is known to fire on the thing it was written for.
+         *
+         *   Asked of a known-bad sample rather than of the tree: the exact
+         *   expression that threw, which no longer appears anywhere in src.
+         */
+        const KNOWN_BAD = `
+            const data = doc.data();
+            return { lat: data.location.geopoint?.latitude || data.location.lat };
+        `;
+        const rawRead = /\bdata\.location[.?]/;
+        expect(rawRead.test(KNOWN_BAD)).toBe(true);
+        //   …and the optional form too, which is the one that slipped through
+        //   the first version of this pattern.
+        expect(rawRead.test('addressLocality: data.location?.lga')).toBe(true);
+
+        //   …and it is absent from every reader this finding touched.
+        for (const screen of [...SCREENS, 'src/app/actions/land-actions.ts']) {
+            expect({ screen, found: rawRead.test(code(screen)) }).toEqual({ screen, found: false });
+        }
+    });
+
+    it('AND ALL FOUR READERS IN land-actions.ts GO THROUGH THE RULE', () => {
         //   The ratchet on the defect itself: `data.location.geopoint` guarded
         //   the geopoint and not the location.
+        //
+        //   FOUR, not three. getLandStatistics was the fourth and it did not
+        //   crash — `data.location?.state` is guarded against the TypeError and
+        //   not against the defect, so every listing the API route wrote was
+        //   counted under 'Unknown' in the by-state breakdown.
         const src = code('src/app/actions/land-actions.ts');
         expect(src).not.toMatch(/data\.location\.geopoint/);
-        expect((src.match(/readLandLocation\(data\)/g) ?? []).length).toBe(3);
+        expect((src.match(/readLandLocation\(data\)/g) ?? []).length).toBe(4);
+    });
+
+    it('AND THE RULE PASSES THROUGH WHAT THE SHAPES DO NOT DISAGREE ABOUT', () => {
+        /*
+         *   A regression the first version of this fix introduced, caught by
+         *   reading rather than by a test — which is why it is a test now.
+         *
+         *   `...data.location` used to carry the whole object, `city` included,
+         *   and _getLandListings filters on `listing.location.city`. Returning
+         *   only the five normalised fields silently broke the city filter on
+         *   the land search, and nothing covered it.
+         */
+        const out = readLandLocation({
+            location: { state: 'Plateau', lga: 'Jos North', city: 'Jos', address: '1 A Road' },
+        });
+        expect(out.city).toBe('Jos');
+        expect(out.state).toBe('Plateau');
+
+        //   …and the filter that needs it is still written that way.
+        expect(code('src/app/actions/land-actions.ts')).toContain('listing.location.city');
+    });
+
+    it('AND NORMALISATION WINS OVER PASS-THROUGH, NOT THE OTHER WAY AROUND', () => {
+        /*
+         *   The control on the line above, and a surviving mutant put it here.
+         *
+         *   Passing the object's keys through is for the fields the shapes
+         *   AGREE about. For the five this function normalises, the normalised
+         *   value must win — `...obj` spread AFTER them would hand back
+         *   whatever the row happened to hold, which is the raw reading this
+         *   whole finding exists to stop.
+         *
+         *   Both halves of what normalising means are checked: a coordinate
+         *   stored as a STRING becomes a number, and a padded state is trimmed.
+         *   Either alone would still pass with the spread in the wrong place.
+         */
+        const out = readLandLocation({
+            location: { state: '  Plateau  ', lga: 'Jos North', lat: '9.93', lng: '8.89' },
+        });
+
+        expect(out.state).toBe('Plateau');
+        expect(out.lat).toBe(9.93);
+        expect(out.lng).toBe(8.89);
+        expect(typeof out.lat).toBe('number');
     });
 
     it('AND BOTH DIVERGENT WRITERS NOW STORE A location OBJECT', () => {
@@ -359,11 +461,21 @@ describe('#689 — and nobody keeps their own copy of the rule', () => {
  *     the normaliser ignores a string location                        KILLED
  *     the normaliser reads no coordinates at all                      KILLED
  *     `??` becomes `||`, so a coordinate of zero disappears           KILLED
- *     the normaliser treats an array as an object                  (withdrawn)
- *     a screen keeps its hand-rolled shape test                       KILLED
  *     the API route stops writing its location object                 KILLED
  *     the API route drops its flat fields while adding the object     KILLED
- *       — SURVIVED the first run; see the note below                          
+ *       — SURVIVED TWICE; see the note below
+ *     a screen keeps its hand-rolled shape test                       KILLED
+ *     saved items keeps its own copy of the shape rule                KILLED
+ *     the shared link's title reads location directly again           KILLED
+ *     the schema.org address reads the raw field again                KILLED
+ *       — SURVIVED once; the pattern missed the OPTIONAL form
+ *     the statistics bucket reads location directly again             KILLED
+ *     the rule stops passing the object's other keys through (city)   KILLED
+ *     pass-through wins over normalisation                            KILLED
+ *       — SURVIVED once; nothing pinned which of the two wins
+ *
+ *     WITHDRAWN AS EQUIVALENT
+ *     the normaliser treats an array as an object                  (withdrawn)
  *
  *     CONTROL — SHOULD SURVIVE
  *     reword this header                                              SURVIVED ✓
@@ -385,6 +497,18 @@ describe('#689 — and nobody keeps their own copy of the rule', () => {
  *
  *   It reads the payload with the `location` block brace-matched out now, and
  *   checks separately that the excised block really was that object.
+ *
+ *   "the schema.org address reads the raw field again" survived because the
+ *   pattern was `/\bdata\.location\.\w/` and the code was
+ *   `data.location?.lga` — guarded against the CRASH and not against the
+ *   defect, which is the distinction this whole finding turns on. Widening it
+ *   to `/\bdata\.location[.?]/` killed the mutant AND immediately found a
+ *   SEVENTH reader, getLandStatistics, in a file already counted as fixed.
+ *
+ *   "pass-through wins over normalisation" survived because nothing said which
+ *   of the two the function owes. It owes normalisation on the five fields it
+ *   names and pass-through on everything else; a coordinate stored as a string
+ *   and a padded state now pin it.
  *
  *   "the normaliser treats an array as an object" is WITHDRAWN AS EQUIVALENT
  *   rather than chased. Removing `!Array.isArray(v)` makes `location: []` take

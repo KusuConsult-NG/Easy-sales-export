@@ -617,8 +617,18 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
             else if (data.status === 'verified') stats.verified++;
             else if (data.status === 'rejected') stats.rejected++;
 
-            // By state
-            const state = data.location?.state || 'Unknown';
+            //   #689 THE SEVENTH READER, and the one that did not crash.
+            //
+            //   `data.location?.state` is guarded against the TypeError and not
+            //   against the defect: a listing written by
+            //   /api/farm-nation/create-listing carries its state FLAT on the
+            //   row, so every one of them was counted under 'Unknown' and the
+            //   by-state breakdown on the admin dashboard was wrong by exactly
+            //   that many.
+            //
+            //   Found by the sweep rather than by eye — the six readers before
+            //   it were, and this one sits in the same file as three of them.
+            const state = readLandLocation(data).state || 'Unknown';
             stats.byState[state] = (stats.byState[state] || 0) + 1;
 
             // By soil quality

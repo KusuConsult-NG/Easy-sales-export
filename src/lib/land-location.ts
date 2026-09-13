@@ -63,6 +63,19 @@ export interface LandLocation {
     /** null when the row carries no coordinates, which most of them do not. */
     lat: number | null;
     lng: number | null;
+    /**
+     *   ANY OTHER KEY THE ROW'S OWN `location` OBJECT CARRIED.
+     *
+     *   Not decoration. `landListingSchema` records a `city`, and
+     *   _getLandListings filters on `listing.location.city` — so a normaliser
+     *   that returned only the five fields it names would silently break the
+     *   city filter on the land search. The first version of this did exactly
+     *   that, and no test covered that filter to say so.
+     *
+     *   The rule is: normalise what the shapes disagree about, and pass
+     *   through what they do not.
+     */
+    [key: string]: unknown;
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
@@ -98,6 +111,9 @@ export function readLandLocation(row: Record<string, any> | null | undefined): L
     const fromString = typeof loc === "string" ? loc.trim() : "";
 
     return {
+        //   Whatever the object carried — `city`, and anything a future writer
+        //   adds — kept, then overridden by the normalised fields below.
+        ...obj,
         state: str(obj.state) || str(data.state),
         lga: str(obj.lga) || str(data.lga),
         address: str(obj.address) || fromString || str(data.address),

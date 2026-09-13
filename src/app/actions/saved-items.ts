@@ -1,6 +1,7 @@
 "use server";
 
 import { logger } from "@/lib/logger";
+import { landLocationText } from "@/lib/land-location";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -284,11 +285,11 @@ async function _getSavedPropertiesAction(): Promise<
                     const data = snap.data() as Record<string, any>;
                     if (!isLandListingViewable(data.status)) return { ...row, listing: null };
 
-                    const location = typeof data.location === "object" && data.location
-                        ? [data.location.address, data.location.lga, data.location.state]
-                            .filter((part) => typeof part === "string" && part.trim() !== "")
-                            .join(", ")
-                        : String(data.location ?? "");
+                    //   #689 The fourth hand-written copy of the shape rule.
+                    //   It handled the string and the object and not the row
+                    //   with NO `location` — for those it produced "" and threw
+                    //   away the state and lga sitting on the row beside it.
+                    const location = landLocationText(data);
 
                     return {
                         ...row,

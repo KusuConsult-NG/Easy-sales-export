@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { readLandLocation, landLocationText } from '@/lib/land-location'
 import { getAdminDb } from '@/lib/firebase-admin'
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -27,9 +28,17 @@ export async function generateMetadata(
 
         const data = doc.data()!
         const title = data.title ?? 'Agricultural Land Listing'
-        const location = data.location
-            ? `${data.location.lga ?? ''}, ${data.location.state ?? 'Nigeria'}`.trim().replace(/^,\s*/, '')
-            : 'Nigeria'
+        /*
+         *   #689 The fifth copy of the shape rule, and the one with the widest
+         *   audience — this is the page's OpenGraph title and its
+         *   schema.org RealEstateListing, which is what a search engine and a
+         *   shared link show. It read `data.location.lga` behind a truthiness
+         *   check on `location`, so a row written by
+         *   /api/farm-nation/create-listing — which stores no `location` at all
+         *   — was published as "Nigeria" with no address at all.
+         */
+        const place = readLandLocation(data)
+        const location = landLocationText(data) || 'Nigeria'
         const description = data.description
             ? String(data.description).slice(0, 160)
             : `${data.size ?? ''} hectares of farmland in ${location}. Available on Farm Nation.`
@@ -44,8 +53,8 @@ export async function generateMetadata(
             image,
             address: {
                 '@type': 'PostalAddress',
-                addressLocality: data.location?.lga,
-                addressRegion: data.location?.state,
+                addressLocality: place.lga || undefined,
+                addressRegion: place.state || undefined,
                 addressCountry: 'NG',
             },
             offers: price ? {
