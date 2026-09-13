@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Component, ReactNode } from 'react';
+import { isStaleDeploymentError, consumeReloadBudget } from '@/lib/stale-deployment-recovery';
 import Link from 'next/link';
 
 interface Props {
@@ -15,26 +16,9 @@ interface State {
 /**
  * Global Error Boundary
  * Catches errors in any child component tree.
- * Auto-reloads on chunk-load / stale-deployment errors.
+ * Auto-reloads ONCE on chunk-load / stale-deployment errors — #717.
  */
 
-function isStaleDeploymentError(error?: Error): boolean {
-    if (!error) return false;
-    const msg = error.message ?? "";
-    const name = error.name ?? "";
-    return (
-        name === "ChunkLoadError" ||
-        name === "UnrecognizedActionError" ||
-        msg.includes("ChunkLoadError") ||
-        msg.includes("Loading chunk") ||
-        msg.includes("was not found on the server") ||
-        msg.includes("UnrecognizedAction") ||
-        msg.includes("Failed to fetch dynamically imported module") ||
-        msg.includes("Importing a module script failed") ||
-        msg.includes("Failed to find Server Action") ||
-        msg.includes("older or newer deployment")
-    );
-}
 
 export class ErrorBoundary extends Component<Props, State> {
     constructor(props: Props) {
@@ -50,10 +34,28 @@ export class ErrorBoundary extends Component<Props, State> {
         // Do not log internal Next.js redirect errors
         if (error.message.startsWith('NEXT_REDIRECT')) return;
 
-        // Auto-reload on stale-deployment errors (new Vercel build invalidated old chunks)
+        /*
+         *   #717 — BOUNDED. This was an unguarded window.location.reload(), one
+         *   of nine. A reload only fixes a stale bundle if it fetches a newer
+         *   page; when it does not — an edge cache still holding the old shell,
+         *   a rolling deploy, a back/forward restore — the same error reached
+         *   the same boundary and reloaded again, forever.
+         *
+         *   A class component cannot use the hook the eight route boundaries
+         *   use, so it calls the same budget directly. The RULE is shared; only
+         *   the plumbing differs.
+         */
         if (isStaleDeploymentError(error)) {
-            console.warn('[ErrorBoundary] Stale deployment — auto-reloading.');
-            window.location.reload();
+            if (consumeReloadBudget()) {
+                console.warn('[ErrorBoundary] Stale deployment — reloading once.');
+                window.location.reload();
+                return;
+            }
+            console.error(
+                '[ErrorBoundary] Stale deployment error after this page already used its '
+                + 'automatic reloads. Showing the error instead of reloading again.',
+                error,
+            );
             return;
         }
 

@@ -1,27 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { useStaleDeploymentRecovery } from "@/components/shared/useStaleDeploymentRecovery";
 import { AlertTriangle } from "lucide-react";
 import { HardLogoutButton } from "@/components/auth/HardLogoutButton";
 import { useSession } from "next-auth/react";
-
-/** Returns true if the error is caused by a stale JS bundle after a new deployment */
-function isStaleDeploymentError(error: Error & { digest?: string }): boolean {
-    const msg = error?.message ?? "";
-    const name = error?.name ?? "";
-    return (
-        name === "ChunkLoadError" ||
-        name === "UnrecognizedActionError" ||
-        msg.includes("ChunkLoadError") ||
-        msg.includes("Loading chunk") ||
-        msg.includes("was not found on the server") ||
-        msg.includes("UnrecognizedAction") ||
-        msg.includes("Failed to fetch dynamically imported module") ||
-        msg.includes("Importing a module script failed") ||
-        msg.includes("Failed to find Server Action") ||
-        msg.includes("older or newer deployment")
-    );
-}
 
 export default function ErrorBoundary({
     error,
@@ -33,16 +16,20 @@ export default function ErrorBoundary({
     const { data: session } = useSession();
     const isLoggedIn = !!session?.user;
 
-    useEffect(() => {
-        if (isStaleDeploymentError(error)) {
-            console.warn("[MarketplaceErrorBoundary] Stale deployment detected — auto-reloading.", error.name, error.message);
-            window.location.reload();
-            return;
-        }
-        console.error(error);
-    }, [error]);
+    //   #717 — one shared, bounded recovery instead of nine copies
+    //   of the same unguarded reload.
+    const updating = useStaleDeploymentRecovery(error);
 
-    if (isStaleDeploymentError(error)) {
+    useEffect(() => {
+        //   #717 — any reload is the hook's, and it is bounded. This was
+        //   an unguarded window.location.reload(): when a reload did not
+        //   fetch a newer page, the same error hit the same boundary and
+        //   reloaded again, with nothing counting.
+        if (updating) return;
+        console.error(error);
+    }, [error, updating]);
+
+    if (updating) {
         return (
             <div className="min-h-[400px] flex items-center justify-center p-6 bg-slate-50">
                 <p className="text-slate-600 font-medium">Updating to latest version…</p>

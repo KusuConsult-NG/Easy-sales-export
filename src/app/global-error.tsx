@@ -1,29 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import { useStaleDeploymentRecovery } from "@/components/shared/useStaleDeploymentRecovery";
 import { logger } from "@/lib/logger";
 import { AlertTriangle, Home, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
 import { logTelemetryAction } from "@/app/actions/telemetry";
-
-/** Returns true if the error is caused by a stale JS bundle after a new deployment */
-function isStaleDeploymentError(error: Error & { digest?: string }): boolean {
-    const msg = error?.message ?? "";
-    const name = error?.name ?? "";
-    return (
-        name === "ChunkLoadError" ||
-        name === "UnrecognizedActionError" ||
-        msg.includes("ChunkLoadError") ||
-        msg.includes("Loading chunk") ||
-        msg.includes("was not found on the server") ||
-        msg.includes("UnrecognizedAction") ||
-        msg.includes("Failed to fetch dynamically imported module") ||
-        msg.includes("Importing a module script failed") ||
-        msg.includes("Failed to find Server Action") ||
-        msg.includes("older or newer deployment")
-    );
-}
 
 export default function GlobalError({
     error,
@@ -32,16 +15,20 @@ export default function GlobalError({
     error: Error & { digest?: string }
     reset: () => void
 }) {
+    //   #717 — one shared, bounded recovery instead of nine copies
+    //   of the same unguarded reload.
+    const updating = useStaleDeploymentRecovery(error);
+
     useEffect(() => {
         // ── Stale-deployment auto-recovery ──────────────────────────────────
         // ChunkLoadError / UnrecognizedActionError mean the browser has a stale
         // JS bundle from before the last Railway deploy. A hard reload fetches
         // the new bundle and the user lands on the same page without any error.
-        if (isStaleDeploymentError(error)) {
-            console.warn("[GlobalError] Stale deployment detected — auto-reloading.", error.name, error.message);
-            window.location.reload();
-            return;
-        }
+        //   #717 — any reload is the hook's, and it is bounded. This was
+        //   an unguarded window.location.reload(): when a reload did not
+        //   fetch a newer page, the same error hit the same boundary and
+        //   reloaded again, with nothing counting.
+        if (updating) return;
 
         // Log genuine errors to Sentry
         Sentry.captureException(error);
@@ -54,10 +41,10 @@ export default function GlobalError({
             path: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
             fatal: true
         });
-    }, [error]);
+    }, [error, updating]);
 
     // While a stale-deployment reload is in flight, show nothing
-    if (isStaleDeploymentError(error)) {
+    if (updating) {
         return (
             <html>
                 <body>
