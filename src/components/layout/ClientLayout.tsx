@@ -224,27 +224,25 @@ function LayoutContent({ children }: ClientLayoutProps) {
             {/*
               *   Module-aware AI chatbot.
               *
-              *   #708 IT WAS OFFERED TO EVERY VISITOR AND COULD ONLY WORK FOR
-              *   SOME OF THEM. api/ai/route.ts refuses a request with no
-              *   session — step 1, `{ error: "Authentication required" }, 401`
-              *   — and that is deliberate and tested
-              *   (chatbot-session-integrity: "a session is required").
+              *   #708 IT IS OFFERED ONLY TO PEOPLE IT CAN SERVE — and the
+              *   widget decides that, not this file. api/ai/route.ts refuses a
+              *   request with no session (401, deliberate and tested), so a
+              *   signed-out visitor could only ever reach its "connection
+              *   issue" branch. AiChatWidget now returns null without a
+              *   session.
               *
-              *   The widget knew nothing about it. It carries no session check
-              *   of its own, so a logged-out visitor saw the bubble, typed a
-              *   question, and got the catch branch:
-              *
-              *       "I'm sorry, I encountered a connection issue. Please try
-              *        again or contact our support team directly."
-              *
-              *   Every time, for every anonymous visitor — which on a landing
-              *   page is most of them. Not a connection issue: a door that was
-              *   never open, described as a fault that might pass.
-              *
-              *   Gated on the same flag as the banner one line above, which is
-              *   where the pattern was already right.
+              *   #711 THE GATE WAS TRIED HERE FIRST — `{isAuthenticated &&
+              *   <AiChatWidget />}`, matching the banner above — AND IT BROKE
+              *   NINETY-TWO PAGE-RENDER TESTS. Not because the conditional is
+              *   wrong, but because those tests were passing on this widget's
+              *   text: they read `innerText` one tick after domcontentloaded,
+              *   when the page itself is parsed but not yet laid out, and this
+              *   fixed element was the only rendered text at that instant.
+              *   Both were repaired — see helpers/page-health — and the gate
+              *   lives in the component that needs the session, which is where
+              *   the rule belongs anyway.
               */}
-            {isAuthenticated && <AiChatWidget />}
+            <AiChatWidget />
         </ToastProvider>
     );
 }

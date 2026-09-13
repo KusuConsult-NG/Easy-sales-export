@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /**
  * Detects failures a page can suffer while still looking fine to a weak
@@ -71,4 +71,50 @@ export function watchPageHealth(page: Page, baseURL = 'http://localhost:3000'): 
             );
         },
     };
+}
+
+/**
+ * The text a page has actually RENDERED, once it has rendered anything.
+ *
+ *   #711 EVERY CALLER OF THIS USED TO READ innerText ONCE, IMMEDIATELY, AND
+ *        WAS PASSING FOR THE WRONG REASON.
+ *
+ *   `innerText` is the rendered text — it reflects layout, and returns '' for
+ *   content the browser has parsed but not laid out. Measured on /privacy at
+ *   the moment those assertions fired:
+ *
+ *       textContent  18,308 chars     the page IS server-rendered
+ *       innerText         0 chars     none of it is laid out yet
+ *       innerText (+2s)   2,343       once layout has happened
+ *
+ *   So "the body is not empty" never distinguished a component throwing during
+ *   render — the thing it was written to catch — from layout not having
+ *   finished. What held it up was the AI chat widget: a fixed element drawn on
+ *   every page, outside the containers hidden until hydration, supplying the
+ *   only rendered text at that instant. When #708 stopped drawing it for
+ *   signed-out visitors, 92 of these assertions failed at once, on pages that
+ *   render perfectly.
+ *
+ *   Polling keeps the property and drops the accident. A page that genuinely
+ *   renders nothing still fails — that is what the timeout is for — and one
+ *   that is merely slower than a turn of the event loop no longer does.
+ *
+ *   ONE helper rather than five copies: the five call sites had five spellings
+ *   of the same unsound check, which is why fixing the first would have left
+ *   four.
+ */
+export async function renderedText(
+    page: Page,
+    route: string,
+    timeoutMs = 15_000,
+): Promise<string> {
+    const body = page.locator('body');
+    await expect(body).toBeVisible();
+
+    await expect
+        .poll(async () => ((await body.innerText().catch(() => '')) || '').trim().length,
+            { timeout: timeoutMs, message: `${route} rendered an empty page` })
+        .toBeGreaterThan(0);
+
+    return ((await body.innerText().catch(() => '')) || '').trim();
 }

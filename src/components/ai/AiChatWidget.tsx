@@ -12,6 +12,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { MODULE_CONFIGS, type ChatbotModule } from "@/lib/chatbot-knowledge";
 
@@ -41,6 +42,7 @@ function detectModule(pathname: string): ChatbotModule {
 
 export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
   const pathname = usePathname();
+  const { status } = useSession();
   const activeModule = moduleProp ?? detectModule(pathname ?? "");
   const config = MODULE_CONFIGS[activeModule];
 
@@ -199,6 +201,33 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
       setIsLoading(false);
     }
   };
+
+  /**
+   *   #708 THE WIDGET DECIDES THIS, NOT THE LAYOUT.
+   *
+   *   api/ai/route.ts refuses a request with no session — step 1, 401,
+   *   deliberate and covered by chatbot-session-integrity. So a signed-out
+   *   visitor typing here could only ever reach the catch branch below:
+   *   "I'm sorry, I encountered a connection issue. Please try again" — a
+   *   door that was never open, described as a fault that might pass.
+   *
+   *   THE GATE WAS TRIED IN ClientLayout FIRST — `{isAuthenticated &&
+   *   <AiChatWidget />}`, matching the push banner one line above it — AND
+   *   THAT BROKE NINETY-TWO PAGES. That file spends thirty lines warning why:
+   *   "children appears in TWO different places below ... React reconciles by
+   *   POSITION, so the moment showSidebar flips, the entire page subtree is
+   *   UNMOUNTED and a fresh one mounted." Adding a second session-dependent
+   *   conditional to the same child list perturbs the same reconciliation, and
+   *   the app's own render smoke suite went from green to 92 empty pages —
+   *   including static signed-out ones like /privacy. Measured by A/B: revert
+   *   that one line and /privacy passes again.
+   *
+   *   Here the layout's children never change shape. The widget is always
+   *   mounted at its position and draws nothing when there is nobody to serve,
+   *   which is also where the rule belongs — the component that cannot work
+   *   without a session is the one that should know it needs one.
+   */
+  if (status !== "authenticated") return null;
 
   if (isHidden) return null;
 

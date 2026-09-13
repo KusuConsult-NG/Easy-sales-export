@@ -179,6 +179,20 @@ const EXPECTED = [
              "aggregates too so a member is refused before Paystack rather than " +
              "after.",
     },
+    {
+        n: "036",
+        why: "the expression index on users.raw_data->>'sellerVerificationStatus'. " +
+             "Order does not matter against the others; it is here for the same " +
+             "reason 028 is, one field along. getMarketplaceStatsAction counts " +
+             "approved sellers on the PUBLIC, uncached /marketplace page, the field " +
+             "is not native so the adapter emits a JSONB path, and nothing indexed " +
+             "it — measured on 50,024 rows, a Seq Scan over 9,914 buffers versus 3 " +
+             "with the index, and in production it is the `count users:` statement " +
+             "timeout in the log. The GIN index already on raw_data cannot serve " +
+             "`->>` equality and is why this looked covered. Plain CREATE INDEX " +
+             "under a lock_timeout, per #469; transaction-safe, and it takes effect " +
+             "the moment it is applied — the code needs no change to benefit.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAs, USERS } from '../../e2e/helpers/auth';
+import { renderedText } from './helpers/page-health';
 
 /**
  * Escrow, loans and admin feature toggles.
@@ -41,8 +42,8 @@ test.describe('Escrow Management', () => {
         const escrowId = 'test-escrow-id';
         await page.goto(`/escrow/${escrowId}/chat`);
 
-        const body = (await page.locator('body').innerText()).trim();
-        expect(body.length).toBeGreaterThan(0);
+        //   #711 — polled, not sampled once. See helpers/page-health.
+        const body = await renderedText(page, `/escrow/${escrowId}/chat`);
         expect(body).not.toContain('Application error');
         expect(body).not.toContain('Unhandled Runtime Error');
     });
@@ -51,8 +52,8 @@ test.describe('Escrow Management', () => {
         const escrowId = 'test-escrow-id';
         await page.goto(`/escrow/${escrowId}/dispute`);
 
-        const body = (await page.locator('body').innerText()).trim();
-        expect(body.length).toBeGreaterThan(0);
+        //   #711 — polled, not sampled once. See helpers/page-health.
+        const body = await renderedText(page, `/escrow/${escrowId}/dispute`);
         expect(body).not.toContain('Application error');
         expect(body).not.toContain('Unhandled Runtime Error');
     });

@@ -395,6 +395,45 @@ function buildGenericRow(collection: string, id: string, data: Record<string, an
 
 // ─── Supabase Write Helpers ───────────────────────────────────────────────────
 
+
+/**
+ * A PostgREST error, in a form a log line can actually be read from.
+ *
+ *   #710 THE PRODUCTION LOG SAID "count users: " AND STOPPED THERE.
+ *
+ *   Every error thrown out of this adapter was built as `${error.message}`, and
+ *   PostgREST does not always put the reason there. The marketplace failure
+ *   arrived as
+ *
+ *       [supabase-db] count users:
+ *
+ *   with nothing after the colon, while the login failure on the same page —
+ *   same adapter, different call — carried "canceling statement due to
+ *   statement timeout". One of them happened to have a message and the other
+ *   did not, and the one that did not was unexplainable.
+ *
+ *   A statement timeout is SQLSTATE 57014. The code was on the error object the
+ *   whole time; nothing read it. So this joins everything the error actually
+ *   carries, and when it carries none of it, SAYS SO rather than trailing off —
+ *   "no message, code, details or hint" is a fact about the error, and an empty
+ *   string looks like a truncated log line.
+ */
+function describeDbError(
+    error: { message?: string | null; code?: string | null; details?: string | null; hint?: string | null } | null | undefined,
+): string {
+    if (!error) return 'no error object';
+
+    const parts = [error.message, error.details, error.hint]
+        .map((p) => (typeof p === 'string' ? p.trim() : ''))
+        .filter(Boolean);
+    const code = typeof error.code === 'string' && error.code.trim() ? `[${error.code.trim()}]` : '';
+
+    if (parts.length && code) return `${code} ${parts.join(' — ')}`;
+    if (parts.length) return parts.join(' — ');
+    if (code) return `${code} (no message)`;
+    return 'no message, code, details or hint';
+}
+
 async function supabaseUpsert(
     collection: string,
     id: string,
@@ -407,13 +446,13 @@ async function supabaseUpsert(
         const { error } = await supabaseAdmin
             .from('document_collections')
             .upsert(row, { onConflict: 'id,collection_name' });
-        if (error) throw new Error(`[supabase-db] upsert ${collection}/${id}: ${error.message}`);
+        if (error) throw new Error(`[supabase-db] upsert ${collection}/${id}: ${describeDbError(error)}`);
     } else {
         const row = buildDedicatedRow(tableName, id, data);
         const { error } = await supabaseAdmin
             .from(tableName)
             .upsert(row, { onConflict: 'id' });
-        if (error) throw new Error(`[supabase-db] upsert ${tableName}/${id}: ${error.message}`);
+        if (error) throw new Error(`[supabase-db] upsert ${tableName}/${id}: ${describeDbError(error)}`);
     }
 }
 
@@ -933,7 +972,7 @@ async function supabasePartialUpdate(
         const { error } = await supabaseAdmin
             .from('document_collections')
             .upsert(row, { onConflict: 'id,collection_name' });
-        if (error) throw new Error(`[supabase-db] partial-update upsert ${collection}/${id}: ${error.message}`);
+        if (error) throw new Error(`[supabase-db] partial-update upsert ${collection}/${id}: ${describeDbError(error)}`);
     } else {
         // For dedicated tables: fetch current raw_data, merge patch on top, then PATCH
         const { data: cur, error: fetchErr } = await supabaseAdmin
@@ -970,13 +1009,13 @@ async function supabaseDelete(collection: string, id: string): Promise<void> {
             .delete()
             .eq('id', id)
             .eq('collection_name', collection);
-        if (error) throw new Error(`[supabase-db] delete ${collection}/${id}: ${error.message}`);
+        if (error) throw new Error(`[supabase-db] delete ${collection}/${id}: ${describeDbError(error)}`);
     } else {
         const { error } = await supabaseAdmin
             .from(tableName)
             .delete()
             .eq('id', id);
-        if (error) throw new Error(`[supabase-db] delete ${tableName}/${id}: ${error.message}`);
+        if (error) throw new Error(`[supabase-db] delete ${tableName}/${id}: ${describeDbError(error)}`);
     }
 }
 
@@ -1451,7 +1490,7 @@ export class SupabaseDocumentReference {
                 .eq('id', this.id)
                 .eq('collection_name', this._collection)
                 .maybeSingle();
-            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${error.message}`);
+            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${describeDbError(error)}`);
             raw = data?.raw_data ?? null;
         } else {
             const { data, error } = await supabaseAdmin
@@ -1459,7 +1498,7 @@ export class SupabaseDocumentReference {
                 .select('*')
                 .eq('id', this.id)
                 .maybeSingle();
-            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${error.message}`);
+            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${describeDbError(error)}`);
             if (data) {
                 // Precedence must match SupabaseQuery.get(): the domain value in
                 // raw_data wins, the native SQL column is only a fallback.
@@ -2116,7 +2155,7 @@ export class SupabaseQuery {
                 }
 
                 const { count, error } = await query;
-                if (error) throw new Error(`[supabase-db] count ${this._collection}: ${error.message}`);
+                if (error) throw new Error(`[supabase-db] count ${this._collection}: ${describeDbError(error)}`);
                 
                 return {
                     data() {
@@ -2157,7 +2196,7 @@ export class SupabaseQuery {
                 const rows: any[] = [];
                 for (let offset = 0; ; offset += 1000) {
                     const { data, error } = await query.range(offset, offset + 999);
-                    if (error) throw new Error(`[supabase-db] aggregate ${this._collection}: ${error.message}`);
+                    if (error) throw new Error(`[supabase-db] aggregate ${this._collection}: ${describeDbError(error)}`);
                     if (!data || data.length === 0) break;
                     rows.push(...data);
                     if (data.length < 1000) break;
@@ -2403,7 +2442,7 @@ export class SupabaseQuery {
             const rangeEnd = rangeStart + batchLimit - 1;
 
             const { data: batchData, error } = await query.range(rangeStart, rangeEnd);
-            if (error) throw new Error(`[supabase-db] query ${this._collection}: ${error.message}`);
+            if (error) throw new Error(`[supabase-db] query ${this._collection}: ${describeDbError(error)}`);
             if (!batchData || batchData.length === 0) break;
 
             allData.push(...batchData);
@@ -2627,7 +2666,7 @@ export class SupabaseQuery {
                     rangeStart,
                     rangeStart + batchLimit - 1,
                 );
-                if (error) throw new Error(`[supabase-db] stream ${collection}: ${error.message}`);
+                if (error) throw new Error(`[supabase-db] stream ${collection}: ${describeDbError(error)}`);
                 if (!batchData || batchData.length === 0) return;
 
                 // Yield per document rather than accumulating: holding all

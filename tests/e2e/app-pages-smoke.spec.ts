@@ -3,6 +3,7 @@ import { USERS } from '../../e2e/helpers/auth';
 import { sessionFileFor } from '../../e2e/helpers/session';
 import fs from 'node:fs';
 import path from 'node:path';
+import { renderedText } from './helpers/page-health';
 
 /**
  * Every page in the application must render for the person it is meant for.
@@ -120,12 +121,10 @@ const FAILURE_MARKERS = [
 ];
 
 async function assertRendered(page: Page, route: string) {
-    const body = page.locator('body');
-    await expect(body).toBeVisible();
-
-    // An empty body is what a component throwing during render leaves behind.
-    const text = ((await body.innerText().catch(() => '')) || '').trim();
-    expect(text.length, `${route} rendered an empty page`).toBeGreaterThan(0);
+    //   #711 — polled, not sampled once. innerText is the RENDERED text and
+    //   is empty until layout has happened, so this used to pass on the chat
+    //   widget's text rather than the page's. See helpers/page-health.
+    const text = await renderedText(page, route);
 
     for (const marker of FAILURE_MARKERS) {
         expect(text, `${route} shows "${marker}"`).not.toContain(marker);
