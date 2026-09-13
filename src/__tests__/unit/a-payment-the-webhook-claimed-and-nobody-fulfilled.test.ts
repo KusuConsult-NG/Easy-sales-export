@@ -201,7 +201,7 @@ describe('#695 — every checkout the platform mints must have a door that fulfi
         expect({ ownerless }).toEqual({ ownerless: [] });
     });
 
-    it('AND THE THREE THE WEBHOOK CANNOT FULFIL ARE PINNED, NOT OPEN-ENDED', () => {
+    it('AND THE TWO THE WEBHOOK CANNOT FULFIL ARE PINNED, NOT OPEN-ENDED', () => {
         /*
          *   THE COST OF THIS LIST, WRITTEN DOWN WHERE IT CANNOT BE MISSED.
          *
@@ -213,15 +213,31 @@ describe('#695 — every checkout the platform mints must have a door that fulfi
          *   A fourth entry is a fourth checkout with that hole and has to be
          *   argued for here; an entry REMOVED means somebody wrote the
          *   processor, which is the direction this should move.
+         *
+         *   ── AND IT MOVED. #719 WROTE THE FIRST OF THE THREE. ──────────────
+         *
+         *   `export_buyer_order` is gone from this list because it now has a
+         *   row in PAYMENT_ROUTES: processExportBuyerOrder, delivering through
+         *   lib/export-order-fulfilment, which the buyer's callback calls too.
+         *   A buyer who pays for an export order and never comes back now gets
+         *   the order anyway.
+         *
+         *   The assertion below is REDUCED, not relaxed — the list is still
+         *   pinned exactly, and the two that remain still carry the hole this
+         *   comment describes. `property_purchase` and `academy_enrollment` are
+         *   the same work and are tracked in docs/audit/outstanding-work.md.
          */
         const { CALLBACK_FULFILLED_TYPES, HANDLED_PAYMENT_TYPES } =
             require('@/infrastructure/payments/payment-router');
 
         expect([...CALLBACK_FULFILLED_TYPES].sort()).toEqual([
             'academy_enrollment',
-            'export_buyer_order',
             'property_purchase',
         ]);
+
+        //   And the one that left is genuinely routable now, rather than simply
+        //   deleted from a list — which would reinstate #695's defect silently.
+        expect(HANDLED_PAYMENT_TYPES.has('export_buyer_order')).toBe(true);
 
         //   And no type may be in both. The webhook skips claiming whatever is
         //   callback-owned, so a type that is ALSO routable would have its
@@ -515,4 +531,261 @@ describe('#695 — an export order the webhook claimed and nobody fulfilled', ()
  *   that fails is the instrument reporting its own breakage; it was rebuilt to
  *   snapshot the files and copy them back, and each mutant now asserts its own
  *   edit landed so a pattern that matched nothing cannot pose as a survivor.
+ */
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#719 — and now the webhook actually delivers the order', () => {
+    /*
+     *   #695 STOPPED THE LYING AND SAID WHAT IT DID NOT FIX, IN ITS OWN WORDS:
+     *
+     *       "A buyer who pays and never returns to the callback — closes the
+     *        tab, loses signal, switches apps — still has no fulfilment,
+     *        because there is still no processor."
+     *
+     *   This is that processor. The tests above assert the reference is not
+     *   claimed as `unhandled_type`; these assert the thing the buyer cares
+     *   about, which is a different question and was false until now: IS THE
+     *   ORDER DELIVERED.
+     *
+     *   Asserted on the STORE throughout. The route answers 200 whether or not
+     *   anything was fulfilled — #531's own note makes that point — so a test
+     *   reading the response would pass against the defect.
+     */
+
+    const walletLedger = require('@/lib/wallet-ledger');
+
+    const orderRow = () => store.get(COLLECTIONS.EXPORT_ORDERS, ORDER_ID);
+
+    /*
+     *   ITS OWN SETUP, AND THE FIRST VERSION OF THIS BLOCK HAD NONE.
+     *
+     *   This is a sibling describe, so the #695 block's beforeEach does not run
+     *   for it — my tests inherited whatever store the previous block's last
+     *   test left behind, and the very first assertion ("the order starts at
+     *   pending_payment") read `processing` from a webhook another test had
+     *   already delivered. It passed or failed on ORDERING, which is worse than
+     *   failing: a suite that depends on the order its tests happen to run in
+     *   proves nothing about any of them.
+     */
+    beforeEach(() => {
+        jest.clearAllMocks();
+        claims.clear();
+        process.env.PAYSTACK_SECRET_KEY = SECRET;
+
+        store = installFakeDb();
+        store.seed(COLLECTIONS.EXPORT_ORDERS, ORDER_ID, {
+            orderId: ORDER_ID,
+            buyerId: BUYER,
+            items: [],
+            totalNGN: TOTAL_NGN,
+            totalUSD: 150,
+            paymentReference: REF,
+            paymentStatus: 'pending',
+            status: 'pending_payment',
+        });
+
+        mockRequireSession.mockResolvedValue({
+            session: { user: { id: BUYER, email: 'b@e.test', roles: ['export_participant'] } },
+            error: null,
+        });
+
+        verifyPaystackPayment.mockResolvedValue({
+            status: true,
+            data: {
+                status: 'success',
+                amount: TOTAL_NGN * 100,
+                metadata: { userId: BUYER, type: 'export_buyer_order', totalNGN: TOTAL_NGN },
+            },
+        });
+    });
+
+    it('A BUYER WHO NEVER COMES BACK STILL GETS THEIR ORDER', async () => {
+        //   THE finding, directly. Before #719 this order stayed at
+        //   pending_payment forever and only the reconciler's discrepancy list
+        //   said so.
+        expect(orderRow()?.status).toBe('pending_payment');
+
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedChargeSuccess('export_buyer_order'));
+
+        expect(orderRow()?.status).toBe('processing');
+        expect(orderRow()?.paymentStatus).toBe('completed');
+    });
+
+    it('AND THE LEDGER ROW IS WRITTEN, SO THE MONEY IS ACCOUNTED FOR', async () => {
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedChargeSuccess('export_buyer_order'));
+
+        const tx = store.get(COLLECTIONS.TRANSACTIONS, REF);
+        expect(tx?.type).toBe('export_order');
+        expect(tx?.amount).toBe(TOTAL_NGN);
+        expect(tx?.userId).toBe(BUYER);
+    });
+
+    it('AND THE REFERENCE IS CLAIMED AS A FULFILMENT, NOT LEFT FOR A CALLBACK', async () => {
+        /*
+         *   The mirror of the test above this block. While `export_buyer_order`
+         *   was callback-owned the webhook deliberately did NOT claim it, so the
+         *   buyer's verify path could. Now that a processor exists, claiming is
+         *   exactly right — and leaving it unclaimed would mean the order is
+         *   delivered with nothing recording that it was.
+         */
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedChargeSuccess('export_buyer_order'));
+
+        expect(claims.get(REF)).toBe('completed');
+    });
+
+    it('AND THE BUYER ARRIVING AFTERWARDS IS TOLD IT WORKED, WITHOUT DELIVERING TWICE', async () => {
+        /*
+         *   #259's rule, on the path that now usually loses the race: the
+         *   webhook finishes before the redirect completes. A duplicate is a
+         *   SUCCESS because the money moved and the thing was delivered — and
+         *   the stock must not be decremented a second time for one order.
+         */
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedChargeSuccess('export_buyer_order'));
+
+        const decrementsAfterWebhook = (walletLedger.decrementManyOrFail as jest.Mock).mock.calls.length;
+
+        const { verifyExportOrderPaymentAction } = await import('@/app/actions/export-payment');
+        const result: any = await verifyExportOrderPaymentAction(REF);
+
+        expect(result.success).toBe(true);
+        expect((walletLedger.decrementManyOrFail as jest.Mock).mock.calls.length)
+            .toBe(decrementsAfterWebhook);
+    });
+
+    it('AND A PAID ORDER THE CATALOG CANNOT COVER IS MARKED FOR REFUND, NOT SILENTLY COMPLETED', async () => {
+        /*
+         *   The claim is already taken and will not retry, so the buyer has been
+         *   charged for stock that is not there. Two things have to be true:
+         *   the ORDER says a refund is owed, and the PAYMENT stops looking
+         *   settled — markFulfilmentFailed moves it off the default "completed",
+         *   which is what keeps it out of revenue and inside
+         *   reconcilePendingFulfillments' view.
+         */
+        store.seed(COLLECTIONS.EXPORT_ORDERS, ORDER_ID, {
+            orderId: ORDER_ID,
+            buyerId: BUYER,
+            items: [{ productId: 'cocoa-1', quantityMT: 40, stockTracked: true }],
+            totalNGN: TOTAL_NGN,
+            paymentReference: REF,
+            paymentStatus: 'pending',
+            status: 'pending_payment',
+        });
+        (walletLedger.decrementManyOrFail as jest.Mock<any>)
+            .mockResolvedValueOnce({ ok: false, failedId: 'cocoa-1', reason: 'insufficient' } as any);
+
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedChargeSuccess('export_buyer_order'));
+
+        expect(orderRow()?.status).toBe('cancelled_out_of_stock');
+        expect(orderRow()?.paymentStatus).toBe('paid_awaiting_refund');
+        expect(orderRow()?.refundAmount).toBe(TOTAL_NGN);
+        expect(walletLedger.markFulfilmentFailed).toHaveBeenCalled();
+    });
+
+    it('AND AN ORDER THAT IS NOT THERE THROWS, RATHER THAN READING AS "NO PROCESSOR"', async () => {
+        /*
+         *   dispatchPaystackPayment returns false for "no row claims this type",
+         *   and the webhook turns that into an `unhandled_type` claim. A missing
+         *   ORDER returning false the same way would record a routable payment
+         *   as unroutable — erasing the distinction #695 turns on.
+         */
+        store.clear();
+
+        const { processExportBuyerOrder } = await import('@/infrastructure/payments/service');
+        await expect(processExportBuyerOrder(REF, TOTAL_NGN, BUYER)).rejects.toThrow(/not found/i);
+    });
+
+    it('AND BOTH DOORS DELIVER THROUGH ONE MODULE, NOT TWO COPIES', () => {
+        /*
+         *   #272's pattern, and the reason it exists: marketplace orders once
+         *   had two fulfilment paths that answered the same payment differently
+         *   depending on which arrived first — and they race by design. A
+         *   hand-written second copy here would recreate that on a flow that
+         *   decrements real stock.
+         *
+         *   Asserted at the source, because the behavioural tests above would
+         *   pass just as well against two copies that happen to agree today.
+         */
+        const read = (rel: string) =>
+            stripComments(readFileSync(join(ROOT, rel), 'utf8'), { label: rel });
+
+        const callback = read('src/app/actions/export-payment.ts');
+        const processor = read('src/infrastructure/payments/service.ts');
+
+        expect(callback).toContain('fulfilExportBuyerOrder');
+        expect(processor).toContain('fulfilExportBuyerOrder');
+
+        /*
+         *   And the ORDER callback no longer carries the delivery itself.
+         *
+         *   SCOPED TO THE FUNCTION, NOT THE FILE, and the first version of this
+         *   assertion was not — it read `expect(callback).not.toContain(...)`
+         *   and failed, because export-payment.ts ALSO holds
+         *   verifyInvestmentPaymentAction, which decrements stock for its own
+         *   reasons. "Does this file mention X" is the trap #704 and #707 both
+         *   had a mutant survive on; here it produced a false failure instead,
+         *   which is the same instrument error pointing the other way.
+         */
+        const fn = callback.slice(
+            callback.indexOf('export async function verifyExportOrderPaymentAction'),
+            callback.indexOf('export async function initializeInvestmentPaymentAction'),
+        );
+        expect(fn.length).toBeGreaterThan(500);
+        expect(fn).toContain('fulfilExportBuyerOrder');
+        //   The stock decrement is the sharpest marker: it was the first write
+        //   of the ninety lines this finding moved out.
+        expect(fn).not.toContain('decrementManyOrFail');
+        expect(fn).not.toContain('cancelled_out_of_stock');
+    });
+});
+
+/*
+ * ── MUTATION TESTING, #719 AND #720 ─────────────────────────────────────────
+ *
+ *   Baseline green, one anchored swap at a time, restored from a snapshot copy.
+ *
+ *     #719 — THE PROCESSOR THAT DID NOT EXIST               RESULT
+ *     the route row is removed from PAYMENT_ROUTES           KILLED
+ *       — kills 8, which is the measure of how much of this
+ *         finding rests on the table entry rather than on
+ *         the fulfilment code beside it.
+ *     the processor does not claim the reference             KILLED
+ *     a paid order the catalog cannot cover is marked
+ *       "processing" instead of awaiting refund              KILLED
+ *     a failed fulfilment skips markFulfilmentFailed,
+ *       leaving the payment looking settled                  KILLED
+ *     a missing order returns instead of throwing, so the
+ *       webhook records it as an unhandled type              KILLED
+ *     the TRANSACTIONS ledger row is not written             KILLED
+ *
+ *     #720 — THE GUARD THAT DISCARDED THE WRITE
+ *     writeGuard returns result.data again (strips)          KILLED
+ *     the raw value wins over the validated one              KILLED
+ *     validation is skipped entirely                         KILLED
+ *
+ *     CONTROL — SHOULD SURVIVE
+ *     reword a comment in export-order-fulfilment            SURVIVED ✓
+ *
+ * ── WHAT THIS FILE'S OWN TESTS GOT WRONG FIRST ──────────────────────────────
+ *
+ *   Two, and both are the instrument rather than the subject.
+ *
+ *   THE #719 BLOCK HAD NO beforeEach. It is a sibling describe, so the #695
+ *   block's setup does not run for it, and these tests read whatever store the
+ *   previous block's last test left behind. The first assertion — "the order
+ *   starts at pending_payment" — read `processing` from a webhook another test
+ *   had already delivered. It passed or failed on ORDERING, which is worse than
+ *   failing outright.
+ *
+ *   AND "BOTH DOORS DELIVER THROUGH ONE MODULE" ASSERTED OVER THE WHOLE FILE.
+ *   export-payment.ts also holds verifyInvestmentPaymentAction, which
+ *   decrements stock for its own reasons, so `not.toContain('decrementManyOrFail')`
+ *   failed against correct code. That is the file-level-versus-use-level trap
+ *   #704 and #707 each had a mutant survive on, arriving here as a FALSE
+ *   FAILURE instead — the same instrument error pointing the other way. Scoped
+ *   to the function now.
  */

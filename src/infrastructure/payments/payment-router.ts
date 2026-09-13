@@ -81,6 +81,7 @@ import { logger } from "@/lib/logger";
 import {
     processMarketplaceOrder,
     processWalletFunding,
+    processExportBuyerOrder,
     processExportInvestment,
     processCooperativeRegistration,
     processAcademyRegistration,
@@ -163,6 +164,14 @@ export const PAYMENT_ROUTES: readonly PaymentRoute[] = [
         run: (c) => processWaveRegistration(c.reference, c.amount, c.userId, c.paidAt),
     },
     {
+        //   #719 — the first of #695's three missing processors. Its fulfilment
+        //   is lib/export-order-fulfilment, shared with the buyer's callback, so
+        //   the two doors cannot disagree about the same payment the way the two
+        //   marketplace paths once did (#272).
+        types: ["export_buyer_order"],
+        run: (c) => processExportBuyerOrder(c.reference, c.amount, c.userId, c.paidAt),
+    },
+    {
         types: ["wallet_funding"],
         // processWalletFunding throws on refusal, so a wallet credit that did
         // not happen is never counted as fulfilled — #298's rule, and the
@@ -242,7 +251,10 @@ export const HANDLED_PAYMENT_TYPES: ReadonlySet<string> = new Set(
  *   and the honest move is to make the lying stop first.
  */
 export const CALLBACK_FULFILLED_TYPES: ReadonlySet<string> = new Set([
-    "export_buyer_order",
+    //   `export_buyer_order` WAS HERE AND IS NOT ANY MORE — #719 wrote its
+    //   processor, which is the direction the list above says this should move.
+    //   The webhook now fulfils it, so claiming the reference is exactly the
+    //   right thing to do and no longer steals the callback's claim.
     "property_purchase",
     "academy_enrollment",
 ]);

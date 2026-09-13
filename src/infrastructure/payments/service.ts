@@ -15,6 +15,7 @@ import { checkAcademyPayment } from "@/lib/academy-plan";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
+import { findExportOrderByReference, fulfilExportBuyerOrder } from "@/lib/export-order-fulfilment";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -1492,4 +1493,87 @@ export async function processWalletFunding(reference: string, paidAt?: Date) {
     }
 
     logger.info(`[Payments] Wallet funding ${reference} credited`);
+}
+
+/**
+ * Handle Export Buyer Order Fulfilment — #719.
+ *
+ *   THE PROCESSOR THAT DID NOT EXIST. `export_buyer_order` was one of the three
+ *   types #695 found the platform charging money under with no row in
+ *   PAYMENT_ROUTES to route it. Its fulfilment lived only in
+ *   verifyExportOrderPaymentAction — the page the buyer is redirected back to —
+ *   so a buyer who paid and closed the tab, lost signal or switched apps got a
+ *   charge and no order, and only the reconciler's discrepancy list said so.
+ *
+ *   The delivery itself is NOT re-implemented here. lib/export-order-fulfilment
+ *   holds it once and both doors call it, which is #272's pattern and exists
+ *   because marketplace orders once had two fulfilment paths that disagreed
+ *   about the same payment.
+ *
+ *   This function is the webhook's half: find the order, claim the reference,
+ *   deliver, and THROW on refusal — dispatchPaystackPayment's contract is that
+ *   a processor's failure reaches the caller, so the webhook answers 500 and
+ *   Paystack retries.
+ */
+export async function processExportBuyerOrder(reference: string, amount: number, userId: string, paidAt?: Date) {
+    const order = await findExportOrderByReference(reference);
+
+    if (!order) {
+        //   Thrown, not returned false. `false` from the dispatcher means "no
+        //   processor claims this type", and reporting a missing order that way
+        //   would make the webhook record it as an unhandled type — erasing the
+        //   difference between a payment nobody can route and an order that is
+        //   not there. That distinction is what #695 turns on.
+        logger.error(`[Paystack Webhook] Export order not found for ref ${reference}`);
+        throw new Error("Export order not found");
+    }
+
+    //   Claimed here, exactly as every other processor does, and AFTER the
+    //   lookup so a reference for an order that does not exist is not consumed
+    //   by a claim that delivers nothing.
+    //
+    //   The buyer's own userId is preferred over the one on the payment: the
+    //   ledger row and the notification are about the person who placed the
+    //   order. They are the same in every normal flow — the callback refuses a
+    //   mismatch — and when they differ, the order's own record is the one to
+    //   trust.
+    const buyerId = order.data.buyerId || order.data.userId || userId;
+
+    const claim = await claimPaymentOnce({
+        reference,
+        userId: buyerId,
+        amount,
+        type: "export_buyer_order",
+        source: "webhook",
+        metadata: { orderId: order.data.orderId || order.docId },
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Export order ${reference} already processed.`);
+        return;
+    }
+
+    const result = await fulfilExportBuyerOrder({
+        reference,
+        amountInNaira: amount,
+        userId: buyerId,
+        order,
+    });
+
+    if (!result.ok) {
+        /*
+         *   PAID AND UNFULFILLABLE. The order is already marked
+         *   `cancelled_out_of_stock` / `paid_awaiting_refund` by the fulfilment,
+         *   so the record is correct and a person has to refund it.
+         *
+         *   markFulfilmentFailed first, THEN throw: the claim is already taken
+         *   and will not be retried, so leaving the row at its default
+         *   "completed" would count this in revenue and hide it from
+         *   reconcilePendingFulfillments, which only looks for
+         *   'pending_fulfilment'. A payment that delivered nothing must not
+         *   look settled.
+         */
+        await markFulfilmentFailed(reference, result.message);
+        throw new Error(result.message);
+    }
 }

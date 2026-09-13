@@ -15,6 +15,11 @@
  * In development/staging: throws an Error with full field details.
  * In production: logs the error to logger and allows the write (fail-open
  * to avoid blocking payments/critical flows on schema drift).
+ *
+ * IT VALIDATES; IT DOES NOT FILTER — #720. Fields the schema does not declare
+ * are passed through unchanged. It used to return Zod's parsed output, which
+ * DROPS them, so a four-field payment write against a one-field schema wrote
+ * one field and reported success. See the note at the return.
  */
 import { z } from 'zod';
 import { logger } from './logger';
@@ -29,6 +34,47 @@ export function writeGuard<T>(
     const result = schema.safeParse(data);
 
     if (result.success) {
+        /**
+         *   #720 THIS RETURNED `result.data`, AND ZOD STRIPS WHAT THE SCHEMA
+         *   DOES NOT DECLARE. THE GUARD AGAINST SILENT DATA CORRUPTION WAS
+         *   CAUSING IT.
+         *
+         *   PaymentStatusWriteSchema declares exactly one field,
+         *   `paymentStatus`. Two live money paths hand it four:
+         *
+         *       await ref.update(writeGuard(PaymentStatusWriteSchema.partial(), {
+         *           status: "processing",            <- discarded
+         *           paymentStatus: "completed",         kept
+         *           paymentVerifiedAt: serverTimestamp(),  <- discarded
+         *           updatedAt: serverTimestamp(),       <- discarded
+         *       }, '...'));
+         *
+         *   Measured, not inferred — that call returns `{"paymentStatus":
+         *   "completed"}` and nothing else. So a paid export order never left
+         *   `pending_payment` and a paid export investment never became
+         *   `active`: the row ended up asserting both that the payment
+         *   completed and that the order is still awaiting it. No
+         *   `paymentVerifiedAt` was ever recorded on either, and `updatedAt`
+         *   never moved, so the row did not even look recently touched.
+         *
+         *   Nothing could see it. The write succeeds, Firestore accepts any
+         *   shape, and the guard logs only on FAILURE — a silent partial write
+         *   is its success path.
+         *
+         *   IT IS A VALIDATOR, NOT A FILTER. Every call site passes an object
+         *   literal it intends to write in full; not one of them is asking for
+         *   a subset. The validated values win (so a schema that coerces still
+         *   coerces) and the fields the schema says nothing about are carried
+         *   through untouched, which is what "validate before a write" has
+         *   always meant here and what all three call sites already assumed.
+         *
+         *   Narrow schemas are then a feature rather than a trap: a schema can
+         *   pin the two fields worth pinning without having to enumerate every
+         *   field any caller might write beside them.
+         */
+        if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
+            return { ...(data as Record<string, unknown>), ...(result.data as object) } as T;
+        }
         return result.data;
     }
 

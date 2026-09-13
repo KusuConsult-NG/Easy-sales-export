@@ -17,6 +17,7 @@ import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
 import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling , markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { isAmountAtLeast } from "@/lib/amount";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
+import { findExportOrderByReference, fulfilExportBuyerOrder } from "@/lib/export-order-fulfilment";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -295,17 +296,12 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         if (userId !== session.user.id) { return { error: "Payment verification failed: User mismatch", success: false as const, meta: null };
         }
 
-        // Find the pending order
-        const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS)
-            .where("paymentReference", "==", reference)
-            .limit(1)
-            .get();
+        //   #719 — the order lookup is shared with the processor, so the two
+        //   doors cannot disagree about WHICH order a reference names.
+        const order = await findExportOrderByReference(reference);
 
-        if (orderQuery.empty) { return { error: "Export Order record not found", success: false as const, meta: null };
+        if (!order) { return { error: "Export Order record not found", success: false as const, meta: null };
         }
-
-        const orderDoc = orderQuery.docs[0];
-        const orderData = orderDoc.data();
 
         // The processed-payment check above read the marker and the write below
         // set it, with the whole fulfilment in between — so two deliveries of
@@ -318,7 +314,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
             amount: amountInNaira,
             type: "export_buyer_order",
             source: "client_verify",
-            metadata: { orderId: orderData.orderId },
+            metadata: { orderId: order.data.orderId },
         });
 
         if (!claim.claimed) {
@@ -331,11 +327,18 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
              *   branch reported success over an order still at pending_payment
              *   with its stock never decremented. claim_payment_once returns the
              *   winning row's status precisely so this can be told apart.
+             *
+             *   #719 makes the usual winner a fulfilment rather than a
+             *   bookkeeping row: the webhook now has a processor for this type,
+             *   so "already claimed" here is most often the order having been
+             *   delivered before the buyer got back. The check still matters —
+             *   the admin sync can still claim without fulfilling — and it is
+             *   the same check either way.
              */
             if (!lostClaimWasFulfilled(claim.status)) {
                 logger.error(
                     `[verifyExportOrderPaymentAction] ${reference} was claimed by something that did `
-                    + `NOT fulfil it (status "${claim.status}"). Order ${orderData.orderId} is unfulfilled `
+                    + `NOT fulfil it (status "${claim.status}"). Order ${order.data.orderId} is unfulfilled `
                     + `and the buyer has been charged.`,
                 );
                 return { error: UNFULFILLED_CLAIM_MESSAGE, success: false as const, meta: null };
@@ -345,148 +348,38 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
                 error: null,
                 success: true as const,
                 meta: null,
-                data: { orderId: orderData.orderId },
+                data: { orderId: order.data.orderId },
             } as any;
         }
 
-        {
-            // Stock first, and all-or-nothing. FieldValue.increment(-qty) is
-            // atomic but unbounded, so an order for more than the catalog holds
-            // drove availableQuantity negative — and a per-item loop would
-            // leave the earlier items decremented when a later one fell short.
-            // decrement_many_or_fail (015) locks every row, checks them all,
-            // then writes, in id order so concurrent orders cannot deadlock.
-            /**
-             *   #582 ONLY THE LISTINGS SOMEBODY IS ACTUALLY COUNTING.
-             *
-             *   This decremented `availableQuantity` — the MARKETPLACE's field
-             *   name — on a collection that has never carried it, and a missing
-             *   field is 0 to decrement_many_or_fail. So every paid export
-             *   order was cancelled as out of stock and left awaiting a manual
-             *   refund. See lib/export-stock.
-             *
-             *   An unrecorded stock is not a stock of zero. A listing with a
-             *   real quantity is still counted down, and a genuine shortfall is
-             *   still refused all-or-nothing, which is #279's fix and untouched.
-             */
-            const trackedItems = (orderData.items || []).filter((item: any) => item?.stockTracked === true);
-
-            const stock = trackedItems.length === 0
-                ? { ok: true as const, failedId: undefined, reason: undefined }
-                : await decrementManyOrFail(
-                    trackedItems.map((item: any) => ({
-                        collection: COLLECTIONS.EXPORT_CATALOG,
-                        id: item.productId,
-                        field: EXPORT_STOCK_FIELD,
-                        amount: item.quantityMT,
-                    }))
-                );
-
-            if (!stock.ok) {
-                // The payment is already claimed, so this will not retry. The
-                // buyer has been charged for stock that is not there, which
-                // somebody has to refund — log loudly enough to be found.
-                logger.error("[verifyExportOrderPaymentAction] PAID BUT OUT OF STOCK — refund required", {
-                    reference,
-                    orderId: orderData.orderId,
-                    failedProductId: stock.failedId,
-                    reason: stock.reason,
-                });
-
-                const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderDoc.id);
-                await orderRef.update({
-                    status: "cancelled_out_of_stock",
-                    paymentStatus: "paid_awaiting_refund",
-                    refundReason: `Insufficient catalog stock for product ${stock.failedId}`,
-                    refundAmount: amountInNaira,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-
-                return {
-                    error: "This order could not be fulfilled: one of the products is no longer available in the quantity ordered. You have been charged and a refund is being arranged.",
-                    success: false as const,
-                    meta: null,
-                };
-            }
-
-            const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderDoc.id);
-            await orderRef.update(writeGuard(
-                PaymentStatusWriteSchema.partial(),
-                {
-                    status: "processing",
-                    paymentStatus: "completed",
-                    paymentVerifiedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
-                },
-                'export-payment/verifyExportOrderPayment'
-            ));
-
-            // (The processed_payments row is written by claimPaymentOnce above.)
-
-            // Global Ledger Record — last, deliberately.
-            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            await globalTxRef.set({
-                id: reference,
-                userId: session.user.id,
-                type: "export_order",
-                module: "export",
-                amount: amountInNaira,
-                currency: "NGN",
-                status: "completed",
-                date: FieldValue.serverTimestamp(),
-                reference,
-                description: `Export Order #${orderData.orderId}`
-            });
-        }
-
-        /**
-         *   #585 AND TELL THE BUYER, WHO IS THE ONE WHO PAID.
+        /*
+         *   #719 THE DELIVERY ITSELF IS NOT WRITTEN HERE ANY MORE.
          *
-         *   This notified the admins and stopped. Every other module's payment
-         *   path notifies the person whose money moved; the export buyer got a
-         *   confirmation screen, and after they closed it there was no record
-         *   of the order on any screen they could open.
+         *   It was ~90 lines of stock decrement, order update, ledger write and
+         *   notifications, reachable ONLY from this page. A buyer who paid and
+         *   closed the tab never ran it, and no other door could.
          *
-         *   Its own failure must not fail the fulfilment: the payment is
-         *   claimed, the stock is decremented and the order is processing by
-         *   the time this runs, so a notification that cannot be written is
-         *   worth a log line and nothing more.
+         *   lib/export-order-fulfilment holds it once and the webhook's
+         *   processor calls the same function. That is #272's pattern, and it
+         *   exists because marketplace orders once had two fulfilment paths that
+         *   answered the same payment differently depending on which arrived
+         *   first — which is exactly what a hand-written second copy here would
+         *   have recreated, on a flow that decrements real stock.
          */
-        try {
-            const { createNotification } = await import("@/infrastructure/notifications/service");
-            await createNotification({
-                userId: session.user.id,
-                type: "payment",
-                title: "Export order confirmed",
-                message: `We have received your payment for order ${orderData.orderId}. Our export team will prepare your consignment and the shipping documentation.`,
-                link: "/export/buyer/orders",
-                linkText: "View my orders",
-            });
-        } catch (e: any) {
-            logger.warn("Failed to notify export buyer of their order", { error: e?.message || String(e) });
-        }
+        const fulfilment = await fulfilExportBuyerOrder({
+            reference,
+            amountInNaira,
+            userId: session.user.id,
+            order,
+        });
 
-        // Notify Admins
-        try {
-            const { notifyAdmins } = await import("@/lib/admin-notifications");
-            await notifyAdmins({
-                type: "export",
-                title: "New Export Order Received",
-                message: `Export order ${orderData.orderId} has been fully paid. Term: ${orderData.buyerDetails.shippingTerm}. Port: ${orderData.buyerDetails.portOfDestination}.`,
-                // /admin/export/orders/{id} is not a route — there is no [id]
-                // segment under it, only the list page. Every "New Export Order
-                // Received" notification an admin received linked to a 404. The
-                // order id is already in the message above, and the list page is
-                // where they would look it up.
-                link: `/admin/export/orders`,
-                linkText: "View Order"
-            });
-        } catch (e: any) { logger.warn("Failed to send export order admin notification", { error: e?.message || String(e) });
+        if (!fulfilment.ok) {
+            return { error: fulfilment.message, success: false as const, meta: null };
         }
 
         return { error: null, success: true as const,
             meta: null
-        , data: { orderId: orderDoc.id } };
+        , data: { orderId: order.docId } };
     } catch (error: any) { logger.error('[Export Order Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyExportOrder',

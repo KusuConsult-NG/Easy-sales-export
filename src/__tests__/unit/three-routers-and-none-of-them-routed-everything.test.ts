@@ -185,7 +185,13 @@ describe('#531 — one table, and every type on it', () => {
 
         //   EIGHT, measured. My reading of the module said nine; deriving it
         //   rather than restating it is what corrected the header above.
-        expect(exported.length).toBe(8);
+        //
+        //   NINE SINCE #719, which added processExportBuyerOrder — the first of
+        //   the three types #695 found the platform charging money under with
+        //   no processor to route them. The number is raised, not removed: the
+        //   point of pinning it is that a processor added to service.ts and
+        //   forgotten here fails this test, and that is still true at nine.
+        expect(exported.length).toBe(9);
         for (const fn of exported) {
             expect({ fn, reached: routed.includes(fn) }).toEqual({ fn, reached: true });
         }
