@@ -78,16 +78,35 @@ if [ -z "$PG_URL" ] && [ -f .env.development.local ]; then
   PG_URL=$(grep -E '^[[:space:]]*LOCAL_PG_URL[[:space:]]*=' .env.development.local | tail -n 1 | cut -d= -f2- | tr -d '"'"'"' ')
 fi
 
-if [ -n "$PG_URL" ]; then
+# #691 A URL IS A DECLARATION, NOT A SERVICE.
+#
+# This asked only whether PG_URL was SET. src/lib/testing/pg-harness.ts spends a
+# page on why that is not enough — and names the exact third form of it that bit
+# here: a stale .env.development.local left by a stack that is no longer up.
+#
+# A push during the audit failed against a database whose container had been
+# reclaimed, and this hook said "❌ Database tests failed. Fix them before
+# pushing", pointing at the money SQL when the money SQL was fine and nothing was
+# listening on the port. Somebody who sees that twice starts passing --no-verify,
+# which is how a gate stops being one.
+if [ -z "$PG_URL" ]; then
+  echo "⚠️  NO DATABASE SUITE RUN. The money SQL (locks, wallet debits, claim"
+  echo "   transitions) was NOT checked — CI will run it and can still go red."
+  echo "   To check it here first: ./scripts/local-stack/up.sh"
+elif ! node scripts/pg-reachable.js "$PG_URL"; then
+  echo "⚠️  NO DATABASE SUITE RUN. A database is DECLARED at"
+  echo "      $PG_URL"
+  echo "   and nothing answered on that port, so the money SQL was NOT checked."
+  echo "   Either start the stack — ./scripts/local-stack/up.sh — or remove the"
+  echo "   stale LOCAL_PG_URL from .env.development.local. CI will run this suite"
+  echo "   either way and can still go red."
+else
   echo "🗄  Running the database suite (money SQL)..."
   LOCAL_PG_URL="$PG_URL" npm run test:pg
   if [ $? -ne 0 ]; then
     echo "❌ Database tests failed. Fix them before pushing — CI runs this same suite."
+    echo "   A database ANSWERED at $PG_URL, so these are real failures."
     exit 1
   fi
   echo "✅ Database tests passed — push proceeding."
-else
-  echo "⚠️  NO DATABASE SUITE RUN. The money SQL (locks, wallet debits, claim"
-  echo "   transitions) was NOT checked — CI will run it and can still go red."
-  echo "   To check it here first: ./scripts/local-stack/up.sh"
 fi

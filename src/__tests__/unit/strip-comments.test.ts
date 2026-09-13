@@ -249,6 +249,7 @@ describe('it agrees with the naive version everywhere the naive version is right
      */
     const KNOWN_AFFECTED: string[] = [
         'src/__tests__/unit/a-certificate-that-named-a-page-that-was-not-there.test.ts',
+        'src/__tests__/unit/a-declared-database-is-not-a-running-one.test.ts',
         'src/__tests__/unit/admin-approval-audit.test.ts',
         'src/__tests__/unit/admin-permission-gates.test.ts',
         'src/__tests__/unit/admin-route-authority.test.ts',
@@ -262,6 +263,7 @@ describe('it agrees with the naive version everywhere the naive version is right
         'src/__tests__/unit/kyc-route-bypass.test.ts',
         'src/__tests__/unit/loan-application-refusal-is-visible.test.ts',
         'src/__tests__/unit/mfa-enforcement-decided.test.ts',
+        'src/__tests__/unit/npm-scripts-can-actually-run.test.ts',
         'src/__tests__/unit/paystack-host-cannot-be-redirected.test.ts',
         'src/__tests__/unit/repair-and-public-catalog.test.ts',
         'src/__tests__/unit/revalidate-tag-profile-is-real.test.ts',
@@ -498,6 +500,22 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   "these two lists are equal".
         expect([...AFFECTED].sort()).toEqual(KNOWN_AFFECTED);
     });
+
+        // EIGHTEEN became TWENTY when #691 added
+        // a-declared-database-is-not-a-running-one.test.ts and edited
+        // npm-scripts-can-actually-run.test.ts. ELEVENTH form, and both are the
+        // plainest one: the first quotes the shell line
+        // `if [ -n "$PG_URL" ]; then … fi` and the URL spellings
+        // `postgres://` and `postgresql://`, and the second gained a paragraph
+        // naming `.husky/pre-push`. Each carries `//` inside a quoted string,
+        // which is exactly what the naive regex opens a comment at.
+        //
+        // Raised rather than relaxed, on the same test as every time. The first
+        // strips ONE other file — scripts/pg-reachable.js — with
+        // lib/testing/strip-comments, the good one, and reads the hook RAW
+        // because a shell script has no block comments to confuse anything. The
+        // second reads tsconfig.json through the good stripper. Neither reads
+        // its own text, so no assertion in either can be misled by the mangling.
 
     it('only two of them are application source, which is what narrows the risk', () => {
         // The other seven are test files: they CARRY the naive helper, and

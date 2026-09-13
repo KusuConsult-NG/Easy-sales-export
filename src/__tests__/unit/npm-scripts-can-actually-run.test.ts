@@ -429,9 +429,16 @@ describe('#363 — recorded, not repaired', () => {
     it('the .js files under scripts/ are still outside the typechecker', () => {
         // #328 lifted the exclusions; `allowJs` is on, but tsconfig's `include`
         // lists only .ts, .tsx and .mts globs, so no .js file is ever part of
-        // the program. These four are covered by the ratchets in this file and
+        // the program. These are covered by the ratchets in this file and
         // by eslint, not by tsc. Stated rather than assumed, because that gap
         // is why #363 exists.
+        //
+        // #691 added the FIFTH, pg-reachable.js, and this test caught it —
+        // which is the whole point of listing them. It is deliberately .js:
+        // .husky/pre-push runs it with plain `node` before anything is built or
+        // transpiled, so TypeScript is not available to it. Its behaviour is
+        // covered by a-declared-database-is-not-a-running-one.test.ts, which
+        // executes the file rather than reading it.
         const tsconfig = read('tsconfig.json');
         const include: string[] = JSON.parse(
             stripComments(tsconfig).replace(/,(\s*[}\]])/g, '$1'),
@@ -440,6 +447,7 @@ describe('#363 — recorded, not repaired', () => {
         expect(include).toContain('**/*.ts');
         expect(include.filter((g) => g.endsWith('.js') || g.endsWith('.jsx'))).toEqual([]);
         expect(readdirSync(join(ROOT, 'scripts')).filter((f) => f.endsWith('.js')).sort())
-            .toEqual(['convert-to-webp.js', 'firebase-migrate.js', 'seed.js', 'setup-firebase.js']);
+            .toEqual(['convert-to-webp.js', 'firebase-migrate.js', 'pg-reachable.js',
+                'seed.js', 'setup-firebase.js']);
     });
 });
