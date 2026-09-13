@@ -10,7 +10,7 @@ import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
 // #531 The dispatch table, shared with cron/reconcile-paystack and
 // admin/finance/paystack-sync. The processors are reached through it.
-import { dispatchPaystackPayment, UNHANDLED_PAYMENT_STATUS } from "@/infrastructure/payments/payment-router";
+import { dispatchPaystackPayment, UNHANDLED_PAYMENT_STATUS, isCallbackFulfilled } from "@/infrastructure/payments/payment-router";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { recordPayoutOutcome } from "@/lib/payout-outcome";
 
@@ -122,7 +122,28 @@ export async function POST(req: NextRequest) {
                 // unknown payment vanishes silently. It is claimed explicitly,
                 // with a status that is NOT "completed" so it is not summed as
                 // revenue, and logged loudly enough to be found.
-                if (!handled) {
+                if (!handled && isCallbackFulfilled(type)) {
+                    /*
+                     *   #695 THIS REFERENCE BELONGS TO A CALLBACK THAT CAN
+                     *   ACTUALLY FULFIL IT, AND CLAIMING IT WOULD STOP THAT.
+                     *
+                     *   The claim below is INSERT ... ON CONFLICT DO NOTHING on
+                     *   the reference. Taking it for a type nothing here can
+                     *   fulfil leaves the buyer's verify path with a lost claim
+                     *   — and #259 has that path report SUCCESS over an order
+                     *   nobody fulfilled. See payment-router.
+                     *
+                     *   Unclaimed is not unrecorded: reconcile-paystack scans
+                     *   for completed claims, so this reference shows up in its
+                     *   discrepancy list every run until the callback fulfils
+                     *   it.
+                     */
+                    logger.error(
+                        `[Paystack Webhook] ${reference} is a "${type}" payment, which is fulfilled by `
+                        + `its checkout callback. Left UNCLAIMED so that callback can still fulfil it; `
+                        + `it will show as a reconciliation discrepancy until it does.`,
+                    );
+                } else if (!handled) {
                     logger.error(`[Paystack Webhook] Unhandled payment type for ${reference}`, { type });
                     await claimPaymentOnce({
                         reference,

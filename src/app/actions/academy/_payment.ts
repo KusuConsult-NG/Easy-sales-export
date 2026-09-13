@@ -25,6 +25,7 @@ import {
 } from "@/lib/academy-plan";
 import { isAmountAtLeast } from "@/lib/amount";
 import { paidButNotFulfilled } from "@/lib/paid-but-not-fulfilled";
+import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -686,6 +687,15 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         });
 
         if (!claim.claimed) {
+            //   #695 — a claim taken by something that did not fulfil it is not
+            //   a duplicate. See lib/claim-outcome.
+            if (!lostClaimWasFulfilled(claim.status)) {
+                logger.error(
+                    `[verifyAcademyPaymentAction] ${reference} was claimed by something that did NOT `
+                    + `fulfil it (status "${claim.status}"). The registration has not been applied.`,
+                );
+                return { success: false as const, error: UNFULFILLED_CLAIM_MESSAGE, data: null };
+            }
             logger.info(`[verifyAcademyPaymentAction] Payment ${reference} already claimed — nothing to do.`);
             return { success: true, error: null, data: null };
         }

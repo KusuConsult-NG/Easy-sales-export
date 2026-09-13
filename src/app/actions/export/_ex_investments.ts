@@ -14,6 +14,7 @@ import { revalidatePath } from "next/cache";
 import { toMillis } from "@/lib/firestore-serialize";
 import { getBaseUrl } from "@/lib/server-utils";
 import { isAmountAtLeast } from "@/lib/amount";
+import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 
 // ============================================
 // Get User Export Investments Action
@@ -463,6 +464,22 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
              *        success here cannot be used to wave through a payment that
              *        does not match what was initiated.
              */
+            /*
+             *   #695 — AND THE PREMISE ABOVE STOPPED BEING TRUE.
+             *
+             *   "A claim that loses means the payment was ALREADY APPLIED" was
+             *   correct when #259 was written. #531 then gave the webhook and
+             *   the admin sync a reason to claim a reference they could NOT
+             *   apply. The sentence "the investment is already recorded" in the
+             *   log line below is the assumption this checks.
+             */
+            if (!lostClaimWasFulfilled(claim.status)) {
+                logger.error(
+                    `[verifyExportInvestmentAction] ${reference} was claimed by something that did NOT `
+                    + `fulfil it (status "${claim.status}"). No investment is recorded against it.`,
+                );
+                return { error: UNFULFILLED_CLAIM_MESSAGE, success: false as const, data: null };
+            }
             logger.info(
                 `[verifyExportInvestmentAction] Payment ${reference} already claimed — ` +
                 `the investment is already recorded; reporting success.`);

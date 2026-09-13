@@ -177,6 +177,87 @@ export const HANDLED_PAYMENT_TYPES: ReadonlySet<string> = new Set(
 );
 
 /**
+ * The checkouts this platform MINTS that no row above can fulfil.
+ *
+ *   #695 THE TABLE ABOVE WAS MEASURED AGAINST THE WRONG SIDE OF THE CONTRACT.
+ *
+ *   #531 built PAYMENT_ROUTES by measuring the three dispatch CHAINS against
+ *   the nine PROCESSORS service.ts exports, and made all three agree. What it
+ *   never measured is what the CHECKOUTS put in `metadata.type`. Measured now,
+ *   across all eight files that call initializePaystackPayment, three of the
+ *   types the platform charges money under reach no processor at all:
+ *
+ *     export_buyer_order    actions/export-payment.ts
+ *                           verifyExportOrderPaymentAction decrements catalog
+ *                           stock all-or-nothing, sets the order to processing
+ *                           and writes the TRANSACTIONS row.
+ *
+ *     property_purchase     actions/farm-nation-payment.ts
+ *                           verifyFarmNationPaymentAction moves the property
+ *                           out of pending_escrow inside a transaction.
+ *
+ *     academy_enrollment    actions/academy/_payment.ts and
+ *                           actions/academy/_ac_course_payment.ts
+ *                           Not a spelling of `academy_registration`: the table
+ *                           already carries multi-spelling rows where two names
+ *                           mean one thing. Registration is the programme and
+ *                           takes metadata.plan; enrolment is the purchase of a
+ *                           single course, against the CURRENT course price.
+ *
+ *   Their fulfilment lives in the interactive verify path, and ONLY there.
+ *
+ * ── WHICH IS WHY THESE MUST NOT BE CLAIMED BY A DOOR THAT CANNOT FULFIL THEM ─
+ *
+ *   #531's instinct — "an unknown payment must not vanish silently" — is right
+ *   about a type the platform does NOT mint: a Paystack payment link, or the
+ *   twelve ghost ₦10,000 payments with no application metadata. Nothing can
+ *   ever fulfil those, so recording them is the whole of what is possible.
+ *
+ *   For a type the platform DOES mint it is exactly backwards. claim_payment_once
+ *   is INSERT ... ON CONFLICT DO NOTHING on the reference, so a webhook that
+ *   claims `export_buyer_order` as `unhandled_type` has taken the one claim the
+ *   buyer's callback needs in order to fulfil the order. The callback then loses
+ *   its claim and — following #259 — reports SUCCESS over an order still sitting
+ *   at pending_payment. The record intended to stop a payment vanishing is what
+ *   makes the order vanish.
+ *
+ *   The webhook and the admin sync therefore leave these references UNCLAIMED
+ *   and say so loudly. They do not become invisible: cron/reconcile-paystack
+ *   scans processedPayments WHERE status == "completed", so an unclaimed
+ *   reference is reported as a discrepancy on every run until the callback
+ *   fulfils it.
+ *
+ * ── WHAT THIS DOES NOT FIX, STATED PLAINLY ──────────────────────────────────
+ *
+ *   A buyer who pays and never returns to the callback — closes the tab, loses
+ *   signal, switches apps — still has no fulfilment, because there is still no
+ *   processor. That is the pre-existing behaviour of these three checkouts and
+ *   this change neither causes nor repairs it; it is now visible in the
+ *   reconciler's discrepancy list rather than hidden behind a claimed row, and
+ *   the buyer is never told it worked when it did not.
+ *
+ *   The repair is three processors, so the webhook fulfils these as it fulfils
+ *   the other five and this set empties. That is tracked in
+ *   docs/audit/outstanding-work.md; it is a larger change to live money paths
+ *   and the honest move is to make the lying stop first.
+ */
+export const CALLBACK_FULFILLED_TYPES: ReadonlySet<string> = new Set([
+    "export_buyer_order",
+    "property_purchase",
+    "academy_enrollment",
+]);
+
+/**
+ * Is this payment one an interactive verify path owns?
+ *
+ * True means: do not claim this reference, and do not record it as unhandled.
+ * Something else is going to fulfil it and needs the claim to do so.
+ */
+export function isCallbackFulfilled(type: string | null | undefined): boolean {
+    return typeof type === "string" && CALLBACK_FULFILLED_TYPES.has(type.trim());
+}
+
+/**
  * Fulfil one payment.
  *
  * Returns true when a processor ran, false when no row claims the type. It does

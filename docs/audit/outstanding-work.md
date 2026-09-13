@@ -316,6 +316,76 @@ being asked.
 
 ---
 
+## 1d. Since `43060334` — findings #687 to #695
+
+Nine findings. **Seven of them are the same defect** — *a correct rule applied to
+some of the places it names* — which is now by a distance the most common shape
+in this audit and has its own entry in §4.
+
+| | |
+|---|---|
+| ✅ #687 | **A third count of one fact, bypassed by five writers and read by nothing.** The unread-notification counter is derived on read now; the stored counter is gone rather than kept in step. |
+| ✅ #688 | **A loan decision reached the member from one door of six.** One `notifyLoanDecision`, called by all seven decision paths. |
+| ✅ #689 | **One bad land listing lost the whole page, and the admin review queue with it.** A location read four different shapes; `readLandLocation` is the one reader. A regression I introduced in the fix — dropping `city` — was caught by reading the diff, not by a test, and the test came after. |
+| ✅ #690 | **An admin decided and the member was not told, thirteen times.** The sweep for this was wrong twice and missed the platform's MAIN land decision on both passes. |
+| ✅ #691 | **The push gate asked whether a database was declared, not whether one was there.** |
+| ✅ #692 | **The record was corrected and the cache kept the old one, 25 times.** Five-minute stale window that heals itself before anyone looks — one of the closest matches in this audit to "it breaks, we fix it, it breaks again". |
+| ✅ #693 | **A payout Paystack accepted and then failed was recorded as completed.** `transfer.*` webhooks were ignored entirely: member debited, withdrawal marked completed, ledger row written, money back in the Paystack balance, nothing able to notice. |
+| ✅ #694 | **The platform records which addresses bounce and kept sending to them.** The suppression protected the bulk door and not the one that carries every loan and withdrawal decision. |
+| ✅ #695 | **Two correct fixes composed into a checkout that takes the money, fulfils nothing, and says it worked.** See below — it is the most consequential of the nine. |
+
+**#695 in full, because it is the one to understand.** #259 established that a
+lost payment claim means *"the payment was ALREADY APPLIED… the money moved"*,
+so four verify paths report success on one. #531 then gave the webhook and the
+admin sync a reason to claim a reference they *could not apply*
+(`status: unhandled_type`), so that an unknown payment would not vanish. Each is
+right alone. Together, the premise of the first is removed by the second.
+
+`PAYMENT_ROUTES` was built by measuring the three dispatch **chains** against the
+nine **processors**. Nobody measured it against what the **checkouts mint**.
+Three do not appear in it — `export_buyer_order`, `property_purchase`,
+`academy_enrollment` — so the ordinary sequence was: buyer pays → webhook claims
+the reference as `unhandled_type` (and the webhook normally wins, by the
+marketplace path's own note) → buyer's callback loses the claim → reports
+**"Order payment successful!"** over an order still at `pending_payment`, stock
+never decremented, no ledger row.
+
+The discriminator needed to tell these apart has existed since claiming did:
+migration 009 returns the winning row's status *"so a caller can distinguish
+'already completed' from a row left behind in some other state."* No caller read
+it — and the existing test doubles mock the loss as `{ claimed: false }` with no
+status field, so no test could have.
+
+Fixed in two halves: doors that cannot fulfil a minted type no longer take its
+claim, and every inbound verify path now asks what the winning claim actually
+did. The second half deliberately covers the five **routed** types too, because
+`fulfilment_failed` can be left on any of them — confining it to the three would
+have been this audit's own most repeated defect, committed inside the fix for it.
+
+**How live it is, stated honestly.** #531 recorded that the webhook URL pointed
+at a host answering POST with 405, so no delivery ever arrived. While that holds,
+these three checkouts work. **The day the webhook URL is corrected, all three
+begin taking money and fulfilling nothing** — a fix landing and the app breaking,
+which is the complaint this audit exists to answer. Repair this before that URL.
+
+### Named follow-on: three missing processors
+
+`CALLBACK_FULFILLED_TYPES` in `payment-router.ts` lists three checkouts whose
+fulfilment exists **only** in the interactive callback. #695 stops the platform
+lying about them; it does not give them a server-side path. So a buyer who pays
+and never returns — closes the tab, loses signal, switches apps — still gets no
+fulfilment. That is pre-existing behaviour, now visible in the reconciler's
+discrepancy list instead of hidden behind a claimed row.
+
+The repair is a processor for each, reached through the table like the other
+five. It is **not** three new copies of the fulfilment logic: the house pattern
+is `order-payment-amount.ts` (#272) — extract the decision into one module and
+call it from both doors. That is a real change to live money paths and is the
+next substantial piece of work, not something to rush alongside the finding that
+exposed it.
+
+---
+
 ## 2. UI
 
 ### ✅ Done

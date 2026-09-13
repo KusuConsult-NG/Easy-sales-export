@@ -15,6 +15,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { PURCHASABLE_STATUSES, isPurchasable, statusAfterCancellation } from "@/lib/land-listing-status";
 import { isAmountAtLeast } from "@/lib/amount";
+import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -333,6 +334,22 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
         });
 
         if (!claim.claimed) {
+            /*
+             *   #695 `property_purchase` REACHES NO PROCESSOR, so before this
+             *   finding the webhook claimed it as `unhandled_type` and this
+             *   branch told the buyer their property purchase had succeeded
+             *   while the property sat in pending_escrow. The webhook no longer
+             *   takes that claim; this is the second half, for any claim left
+             *   behind by a fulfilment that died.
+             */
+            if (!lostClaimWasFulfilled(claim.status)) {
+                logger.error(
+                    `[verifyFarmNationPayment] ${reference} was claimed by something that did NOT `
+                    + `fulfil it (status "${claim.status}"). Property ${propertyId} is not transferred `
+                    + `and the buyer has been charged.`,
+                );
+                return { success: false, error: UNFULFILLED_CLAIM_MESSAGE, data: null } as any;
+            }
             logger.info(`[verifyFarmNationPayment] Payment ${reference} already claimed — nothing to do.`);
             return {
                 success: true,

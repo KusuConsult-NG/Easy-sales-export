@@ -16,6 +16,7 @@ import { logger } from "@/lib/logger";
 import {
     dispatchPaystackPayment,
     UNHANDLED_PAYMENT_STATUS,
+    isCallbackFulfilled,
 } from "@/infrastructure/payments/payment-router";
 import { resolveActiveUserId } from "@/lib/user-identity";
 import { recordAdminAction } from "@/lib/audit-log";
@@ -210,6 +211,30 @@ async function paystackSyncHandler(_req: NextRequest) {
                             const handled = await dispatchPaystackPayment(type, {
                                 reference, amount: amountNGN, userId: userId as string, metadata, paidAt: paidAtDate,
                             });
+
+                            if (!handled && isCallbackFulfilled(type)) {
+                                /*
+                                 *   #695 THE SAME REASON THE WEBHOOK LEAVES
+                                 *   THESE ALONE, AND THE SAME MECHANISM.
+                                 *
+                                 *   This branch writes a processed_payments row
+                                 *   keyed on the reference, which is the row
+                                 *   claim_payment_once conflicts against. For a
+                                 *   type whose fulfilment lives in the checkout
+                                 *   callback, writing it here takes the claim
+                                 *   that callback needs — and a sync run is
+                                 *   exactly when an admin is trying to RESCUE
+                                 *   such a payment, so doing it here would
+                                 *   permanently prevent the rescue.
+                                 */
+                                unhandled++;
+                                unhandledReferences.push(reference);
+                                logger.error(
+                                    `[PaystackSync] ${reference} is a "${type}" payment, fulfilled by its `
+                                    + `checkout callback. Left UNCLAIMED so that callback can still fulfil it.`,
+                                );
+                                return;
+                            }
 
                             if (!handled) {
                                 //   #531 THIS BRANCH USED TO WRITE `status: "completed"`.

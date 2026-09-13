@@ -16,6 +16,7 @@ import { EXPORT_STOCK_FIELD, exportStockIsTracked, exportStockOf } from "@/lib/e
 import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
 import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling , markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { isAmountAtLeast } from "@/lib/amount";
+import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -321,6 +322,24 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         });
 
         if (!claim.claimed) {
+            /*
+             *   #695 A LOST CLAIM IS ONLY GOOD NEWS IF THE WINNER FULFILLED.
+             *
+             *   #259's rule — a duplicate is a success — rests on "the money
+             *   moved AND the thing was delivered". The webhook and the admin
+             *   sync can both claim a reference they could not fulfil, and this
+             *   branch reported success over an order still at pending_payment
+             *   with its stock never decremented. claim_payment_once returns the
+             *   winning row's status precisely so this can be told apart.
+             */
+            if (!lostClaimWasFulfilled(claim.status)) {
+                logger.error(
+                    `[verifyExportOrderPaymentAction] ${reference} was claimed by something that did `
+                    + `NOT fulfil it (status "${claim.status}"). Order ${orderData.orderId} is unfulfilled `
+                    + `and the buyer has been charged.`,
+                );
+                return { error: UNFULFILLED_CLAIM_MESSAGE, success: false as const, meta: null };
+            }
             logger.info(`[verifyExportOrderPaymentAction] Payment ${reference} already claimed — nothing to do.`);
             return {
                 error: null,
@@ -760,6 +779,15 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
         });
 
         if (!claim.claimed) {
+            //   #695 — "the webhook got here first" is not the same as "the
+            //   webhook fulfilled it". See the note on the order path above.
+            if (!lostClaimWasFulfilled(claim.status)) {
+                logger.error(
+                    `[verifyInvestmentPaymentAction] ${reference} was claimed by something that did NOT `
+                    + `fulfil it (status "${claim.status}"). Investment ${investmentDoc.id} is unfunded.`,
+                );
+                return { error: UNFULFILLED_CLAIM_MESSAGE, success: false as const, meta: null };
+            }
             // The webhook got here first. A duplicate delivery is a success.
             logger.info(`[verifyInvestmentPaymentAction] Payment ${reference} already claimed — nothing to do.`);
             return {

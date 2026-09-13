@@ -13,6 +13,7 @@ import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { claimPaymentOnce, CLAIM_TYPE , markFulfilmentFailed } from '@/lib/wallet-ledger';
 import { FieldValue } from '@/lib/firestore-compat';
 import { isAmountAtLeast } from "@/lib/amount";
+import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -152,6 +153,15 @@ export async function verifyContributionPaymentAction(
         // Losing the claim means someone else already recorded this exact
         // payment. That is success — the money is where it should be.
         if (!claim.claimed) {
+            //   #695 — "already processed" was inferred from the lost claim
+            //   alone. See lib/claim-outcome for why that stopped being safe.
+            if (!lostClaimWasFulfilled(claim.status)) {
+                logger.error(
+                    `[verifyContributionPaymentAction] ${reference} was claimed by something that did NOT `
+                    + `fulfil it (status "${claim.status}"). The contribution has not been recorded.`,
+                );
+                return { error: UNFULFILLED_CLAIM_MESSAGE, success: false as const, data: undefined };
+            }
             logger.info(`[verifyContributionPaymentAction] Payment ${reference} already processed — returning success.`);
             return { error: null, success: true as const, message: 'Your contribution has been recorded.', data: undefined };
         }
