@@ -1045,7 +1045,7 @@ export default function ProfileClient({ initialProfile = null }: {
                                 </svg>
                             </button>
                         </div>
-                        <form onSubmit={handleChangePassword} className="p-6 space-y-4">
+                        <form method="post" onSubmit={handleChangePassword} className="p-6 space-y-4">
                             {passwordError && (
                                 <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
                                     {passwordError}
@@ -1135,7 +1135,7 @@ export default function ProfileClient({ initialProfile = null }: {
                                 </svg>
                             </button>
                         </div>
-                        <form onSubmit={handleDisableMFA} className="p-6 space-y-4">
+                        <form method="post" onSubmit={handleDisableMFA} className="p-6 space-y-4">
                             {mfaError && (
                                 <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center gap-2">
                                     <AlertCircle className="w-4 h-4 shrink-0" />

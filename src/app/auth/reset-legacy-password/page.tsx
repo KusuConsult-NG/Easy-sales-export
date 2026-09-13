@@ -123,7 +123,7 @@ export default function ResetLegacyPasswordPage() {
                         </p>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form method="post" onSubmit={handleSubmit} className="space-y-6">
                         {/* Current Password */}
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-2">

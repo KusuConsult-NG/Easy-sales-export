@@ -302,7 +302,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
 
                 {/* Login Card */}
                 <div className="bg-white border border-slate-100 shadow-2xl backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 relative z-10">
-                    <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
+                    <form method="post" onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
                         <input type="hidden" name="redirectTo" value={callbackUrl} />
 
                         {error && (
