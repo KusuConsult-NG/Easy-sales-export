@@ -1,6 +1,7 @@
 "use server";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -833,6 +834,9 @@ async function _requestWaveRevisionAction(
                 'serviceRegistrations.wave.status': 'revision_required',
                 updatedAt: FieldValue.serverTimestamp()
             });
+            //   #692 As the cooperative and academy revision paths — the member
+            //   reads this status through the cached profile.
+            await invalidateServiceCache(userId, 'wave');
         }
 
         await createAdminAuditLog({
@@ -1033,6 +1037,11 @@ async function _resubmitWaveApplicationAction(
                 updatedAt: FieldValue.serverTimestamp()
             });
         });
+
+        //   #692 A resubmission returns the registration to `pending`, which is
+        //   what the member's own dashboard reads through the cached profile.
+        //   After the transaction commits, not inside it.
+        await invalidateServiceCache(session.user.id, 'wave');
 
         await createAdminAuditLog({
             action: 'user_update',

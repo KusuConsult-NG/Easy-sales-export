@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -423,6 +424,16 @@ async function _requestAcademyRevisionAction(
                 'serviceRegistrations.academy.status': 'revision_required',
                 updatedAt: FieldValue.serverTimestamp(),
             });
+            /*
+             *   #692 THE MEMBER'S CACHE, NOT THE ADMIN'S.
+             *
+             *   `session.user.id` here is the ADMIN who sent the application
+             *   back; `userId` is the applicant whose status just changed. A
+             *   blunt search-and-replace while wiring this finding wrote the
+             *   wrong one, and it would have cleared a key nobody was waiting
+             *   on while leaving the member reading their old status.
+             */
+            await invalidateServiceCache(userId, 'academy');
         }
 
         // #265 Recorded, like every other permission-gated admin write. The
@@ -598,6 +609,11 @@ async function _resubmitAcademyApplicationAction(
                 updatedAt: FieldValue.serverTimestamp(),
             });
         });
+
+        //   #692 The member's own dashboard reads this status through the
+        //   cached profile, so a resubmission was invisible to them for up to
+        //   five minutes. After the transaction commits, not inside it.
+        await invalidateServiceCache(session.user.id, 'academy');
 
         return { error: null, success: true as const , data: null };
     } catch (error) {

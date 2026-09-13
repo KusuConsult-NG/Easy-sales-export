@@ -1,4 +1,5 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
@@ -147,6 +148,24 @@ export async function softDeleteUserRecord(
         });
         return { ok: false, stage: "modules", reason: `${moduleErasure.failures.length} module row(s) unreachable` };
     }
+
+    /*
+     *   #692 — THE CACHED PROFILE OUTLIVED THE SCRUB.
+     *
+     *   Step 2 writes `roles: ["deleted"]`, `isActive: false` and
+     *   `suspended: true`. session-guard reads all three from
+     *   CacheKeys.userProfile, whose TTL is 300 seconds, and nothing here
+     *   cleared it — so a session already in flight kept its old roles for up
+     *   to five minutes after the account was scrubbed.
+     *
+     *   `suspended` is the field lib/auth.ts refuses at LOGIN, and step 4 below
+     *   revokes sign-in, so a new sign-in was always refused. What survived is
+     *   the request path of a session already holding a token, which reads the
+     *   cached profile rather than logging in again. That is the half this
+     *   closes, and it belongs before the revocation rather than after: the
+     *   revocation can fail and return, and the cache must be gone either way.
+     */
+    await invalidateUserCache(targetUserId);
 
     // 4 — sign-in, against the scrubbed address.
     const revocation = await revokeAuthAccess(targetUserId, scrubbedEmail);

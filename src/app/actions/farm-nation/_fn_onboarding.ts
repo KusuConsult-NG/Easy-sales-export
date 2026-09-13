@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -272,6 +273,10 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
                         "serviceRegistrations.farmNation.paymentStatus": "completed",
                         "serviceRegistrations.farmNation.syncedAt": FieldValue.serverTimestamp()
                     });
+                    //   #692 The member's own status check heals the record; the
+                    //   cached profile session-guard serves for 300 seconds has to
+                    //   go with it, or the heal is invisible to the person who asked.
+                    await invalidateServiceCache(session.user.id, 'farm-nation');
                 } else if (appData.status) { 
                     status = appData.status;
                 }
@@ -297,6 +302,9 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
                 }
             );
 
+            //   #692 As above — a legacy backfill changes exactly the fields
+            //   session-guard caches.
+            await invalidateServiceCache(session.user.id, 'farm-nation');
             logger.info(`[checkFarmNationStatus] Backfilled legacy farmNation status '${legacyStatus}' for user ${session.user.id}`);
             return { success: true as const, data: legacyStatus, error: null };
         }

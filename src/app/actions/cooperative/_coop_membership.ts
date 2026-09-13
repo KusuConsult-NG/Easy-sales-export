@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { autoProvisionZereCooperative, autoProvisionLegacyCooperative } from "@/lib/cooperative-provisioning";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
@@ -275,6 +276,18 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                         } : {})
                     })
                 );
+                /*
+                 *   #692 THE HEAL THAT THE CACHE THEN UNDID.
+                 *
+                 *   session-guard reads roles and serviceRegistrations from
+                 *   CacheKeys.userProfile, whose TTL is 300 seconds. This is
+                 *   the member's own "check my status" path: it notices their
+                 *   record is wrong, corrects it — granting the
+                 *   cooperative_member role — and the platform then kept
+                 *   answering from the copy it had just corrected, for five
+                 *   minutes, to the very person who asked it to look again.
+                 */
+                await invalidateServiceCache(session.user.id, 'cooperative');
                 logger.info(`[checkCooperativeStatus] Healed user ${session.user.id} status to '${derivedStatus}' from membership`);
                 registrationStatus = derivedStatus;
             }
@@ -316,6 +329,10 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                             updatedAt: FieldValue.serverTimestamp(),
                         })
                     );
+                    //   #692 As above — this grants the role and activates the
+                    //   registration, which is precisely what the cached
+                    //   profile holds.
+                    await invalidateServiceCache(session.user.id, 'cooperative');
                     return 'active';
                 }
                 return 'pending_review';

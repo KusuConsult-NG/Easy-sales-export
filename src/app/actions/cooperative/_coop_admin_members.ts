@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
@@ -604,6 +605,9 @@ export async function requestCooperativeRevisionAction(
                     'serviceRegistrations.cooperatives.status': 'revision_required',
                     updatedAt: FieldValue.serverTimestamp(),
                 }));
+                //   #692 A member sent back for revision reads their own status
+                //   through the cached profile.
+                await invalidateServiceCache(userId, 'cooperative');
             }
 
             return {

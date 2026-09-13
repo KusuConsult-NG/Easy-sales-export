@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -59,6 +60,21 @@ async function syncAlreadyProcessed(userId: string, reference: string, amount: n
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true }),
     ]);
+    /*
+     *   #692 THE MEMBER'S CACHED PROFILE STILL SAID THEY HAD NOT PAID.
+     *
+     *   `session-guard` reads roles and serviceRegistrations from
+     *   CacheKeys.userProfile, whose TTL is 300 seconds. Every write above
+     *   changes exactly those fields and none of them cleared the key, so for
+     *   up to five minutes after paying, the platform answered from the
+     *   pre-payment profile.
+     *
+     *   That is #668's shape — a paid member told to pay again — arriving by a
+     *   different route, and it is the mechanism behind "we fix it and it
+     *   breaks again": the record IS correct, and the thing reading it is not.
+     */
+    await invalidateServiceCache(userId, 'cooperative');
+
 }
 
 /**
@@ -146,6 +162,8 @@ export async function POST(request: NextRequest) {
                     }
                 }, { merge: true });
             } catch (e) { /* non-fatal */ }
+            //   #692 As above — this path writes the same fields.
+            await invalidateServiceCache(userId, 'cooperative');
             return NextResponse.json({
                 success: true,
                 message: "Payment already verified. Please continue your application.",
@@ -360,6 +378,12 @@ export async function POST(request: NextRequest) {
             }
 
             await userRef.set(normalizeUserDoc(userUpdatePayload), { merge: true });
+
+            //   #692 THE ONE THAT MATTERS MOST: this is the write that grants
+            //   `cooperative_member` and marks the registration active. Without
+            //   clearing the profile key the member pays, is redirected, and is
+            //   refused by a cache for up to five minutes.
+            await invalidateServiceCache(userId, 'cooperative');
 
             // Ledger rows LAST, and both keyed on the reference so a retry
             // overwrites rather than duplicates. Ordering matches the webhook

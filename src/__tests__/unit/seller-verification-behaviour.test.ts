@@ -52,8 +52,27 @@ jest.mock('@/lib/auth', () => ({
     handlers: {},
 }));
 
+/*
+ *   #692 THE WHOLE MODULE, NOT THE HALF THIS SUITE HAPPENED TO NEED.
+ *
+ *   A partial jest.mock returns `undefined` for every export it omits, so the
+ *   day the code under test calls one of them the failure is a TypeError with
+ *   nothing to do with the behaviour being tested. That is what happened here:
+ *   adding a cache invalidation to a path this suite exercises turned three
+ *   green suites red for a reason none of them was about.
+ *
+ *   Every function lib/cache-invalidation.ts exports is stubbed, so the mock
+ *   cannot be narrower than the module again.
+ */
 jest.mock('@/lib/cache-invalidation', () => ({
     invalidateUserCache: jest.fn(async () => undefined),
+    invalidateSellerCache: jest.fn(async () => undefined),
+    invalidateCooperativeCache: jest.fn(async () => undefined),
+    invalidateServiceCache: jest.fn(async () => undefined),
+    invalidateAdminGlobalStats: jest.fn(async () => undefined),
+    invalidateMultipleUsers: jest.fn(async () => undefined),
+    invalidateSystemSettingsCache: jest.fn(async () => undefined),
+    deleteCache: jest.fn(async () => undefined),
 }));
 
 /** Stateful, so "cannot resubmit twice" cannot pass against a missing guard. */

@@ -250,6 +250,7 @@ describe('it agrees with the naive version everywhere the naive version is right
     const KNOWN_AFFECTED: string[] = [
         'src/__tests__/unit/a-certificate-that-named-a-page-that-was-not-there.test.ts',
         'src/__tests__/unit/a-declared-database-is-not-a-running-one.test.ts',
+        'src/__tests__/unit/a-record-corrected-and-a-cache-that-kept-the-old-one.test.ts',
         'src/__tests__/unit/admin-approval-audit.test.ts',
         'src/__tests__/unit/admin-permission-gates.test.ts',
         'src/__tests__/unit/admin-route-authority.test.ts',
@@ -516,6 +517,18 @@ describe('it agrees with the naive version everywhere the naive version is right
         // because a shell script has no block comments to confuse anything. The
         // second reads tsconfig.json through the good stripper. Neither reads
         // its own text, so no assertion in either can be misled by the mangling.
+        //
+        // TWENTY became TWENTY-ONE when #692 added
+        // a-record-corrected-and-a-cache-that-kept-the-old-one.test.ts. TWELFTH
+        // form, and the most self-referential yet: that file's own strip()
+        // helper carries the literal '/*' and '//' — it is a suite ABOUT a
+        // comment-stripping sweep, so the naive regex opens a block comment
+        // inside the very expression written to keep line numbers honest.
+        //
+        // Raised rather than relaxed, on the same test as every time: it strips
+        // OTHER files with its own line-preserving helper and reads
+        // session-guard, cache-invalidation and redis through it, never its own
+        // text.
 
     it('only two of them are application source, which is what narrows the risk', () => {
         // The other seven are test files: they CARRY the naive helper, and

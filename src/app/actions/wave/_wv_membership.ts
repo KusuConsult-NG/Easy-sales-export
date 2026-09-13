@@ -1,6 +1,7 @@
 "use server";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -127,6 +128,10 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                         "serviceRegistrations.wave.status": "approved",
                         "serviceRegistrations.wave.syncedAt": new Date().toISOString()
                     });
+                    //   #692 The member's own status check heals the record and
+                    //   must clear the cached profile it has just corrected —
+                    //   session-guard serves that copy for 300 seconds.
+                    await invalidateServiceCache(session.user.id, 'wave');
                 } else if (appData.status) {
                     status = appData.status;
                 }
@@ -159,6 +164,8 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                 }
             );
 
+            //   #692 As above.
+            await invalidateServiceCache(session.user.id, 'wave');
             logger.info(`[checkWaveStatus] Backfilled legacy wave status '${legacyStatus}' for user ${session.user.id}`);
             return { error: null, success: true as const, data: { status: legacyStatus } };
         }
@@ -329,6 +336,10 @@ async function _enrollInWaveAction(userId: string): Promise<ActionResponse<null>
             "serviceRegistrations.wave.applicationId": existingApplicationId,
             "serviceRegistrations.wave.updatedAt": FieldValue.serverTimestamp()
         });
+
+        //   #692 An enrolment grants access, and access is read from the cached
+        //   profile — see lib/cache-invalidation.ts.
+        await invalidateServiceCache(session.user.id, 'wave');
 
         await createAdminAuditLog({
             action: "user_update",

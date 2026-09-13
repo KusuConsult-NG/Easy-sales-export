@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
@@ -82,6 +83,10 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
                         "serviceRegistrations.academy.status": "approved",
                         "serviceRegistrations.academy.syncedAt": new Date().toISOString()
                     });
+                    //   #692 The member's own status check heals the record; the
+                    //   cached profile session-guard serves for 300 seconds has to
+                    //   go with it, or the heal is invisible to the person who asked.
+                    await invalidateServiceCache(session.user.id, 'academy');
                 } else if (appData.status) {
                     currentStatus = appData.status;
                 }

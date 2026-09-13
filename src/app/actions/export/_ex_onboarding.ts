@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { hashData } from "@/lib/security";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
@@ -326,6 +327,10 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                         "serviceRegistrations.export.status": "approved",
                         "serviceRegistrations.export.syncedAt": new Date().toISOString()
                     });
+                    //   #692 The member's own status check heals the record; the
+                    //   cached profile session-guard serves for 300 seconds has to
+                    //   go with it, or the heal is invisible to the person who asked.
+                    await invalidateServiceCache(session.user.id, 'export');
                 } else if (appData.status) { // Normalize statuses
                     status = appData.status === "pending_review" ? "pending_approval" : appData.status;
                 }
@@ -354,6 +359,9 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                 }
             );
 
+            //   #692 As above — a legacy backfill changes exactly the fields
+            //   session-guard caches.
+            await invalidateServiceCache(session.user.id, 'export');
             logger.info(`[checkExportStatus] Backfilled legacy export status '${legacyStatus}' for user ${session.user.id}`);
             return legacyStatus;
         }

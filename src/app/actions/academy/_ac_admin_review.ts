@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
@@ -330,6 +331,11 @@ async function _updateAcademyApplicationPaymentAction(
         // it treated "registration", so nothing changes behaviourally.
         const normalisedPlan = normaliseAcademyPlan(plan);
 
+        //   #692 Carried out of the transaction so the cache can be cleared
+        //   after it commits — invalidating inside a transaction would clear a
+        //   key for a write that may still roll back.
+        let applicantUserId: string | undefined;
+
         // Perform atomic update in a transaction
         await db.runTransaction(async (transaction) => {
             const appSnap = await transaction.get(appRef);
@@ -345,6 +351,7 @@ async function _updateAcademyApplicationPaymentAction(
             });
 
             if (appData.userId) {
+                applicantUserId = appData.userId;
                 const userRef = db.collection(COLLECTIONS.USERS).doc(appData.userId);
                 transaction.update(userRef, {
                     "serviceRegistrations.academy.paymentStatus": paymentStatus,
@@ -352,6 +359,11 @@ async function _updateAcademyApplicationPaymentAction(
                 });
             }
         });
+
+        //   #692 Recording a payment changes the member's academy registration,
+        //   and checkCourseAccess reads `plan` from it. Cleared after the
+        //   transaction commits, not inside it.
+        if (applicantUserId) await invalidateServiceCache(applicantUserId, 'academy');
 
         await createAdminAuditLog({
             action: "academy_update_payment",

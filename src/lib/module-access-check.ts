@@ -18,6 +18,7 @@
  */
 
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { getAdminDb } from "@/lib/supabase-db";
@@ -350,6 +351,10 @@ export async function checkModuleAccess(
                                     updatedAt: FieldValue.serverTimestamp()
                                 })
                             );
+                            //   #692 As the five below — this heal grants
+                            //   cooperative_member and must clear the cached
+                            //   profile session-guard serves for 300 seconds.
+                            await invalidateServiceCache(userId, app);
                             logger.info(`[ModuleAccess] Healed membership status to 'active' for user ${userId}`);
                         } catch (healErr) {
                             logger.error(`[ModuleAccess] Failed to heal membership status for user ${userId}`, healErr);
@@ -424,6 +429,20 @@ export async function checkModuleAccess(
                         updatedAt: FieldValue.serverTimestamp()
                     }, { merge: true });
 
+                    /*
+                     *   #692 THE HEAL CLEARS THE PROFILE IT JUST CORRECTED.
+                     *
+                     *   session-guard reads roles and serviceRegistrations from
+                     *   CacheKeys.userProfile, TTL 300 seconds. These layers
+                     *   exist to repair a member whose record says they have no
+                     *   access when they do — and the repair was then invisible
+                     *   to the very reader it was written for, for five minutes.
+                     *
+                     *   Inside the heal branch, which is rare, rather than on
+                     *   this function's hot path.
+                     */
+                    await invalidateServiceCache(userId, app);
+
                     return true;
                 }
             }
@@ -492,6 +511,20 @@ export async function checkModuleAccess(
                         updatedAt: FieldValue.serverTimestamp()
                     }, { merge: true });
 
+                    /*
+                     *   #692 THE HEAL CLEARS THE PROFILE IT JUST CORRECTED.
+                     *
+                     *   session-guard reads roles and serviceRegistrations from
+                     *   CacheKeys.userProfile, TTL 300 seconds. These layers
+                     *   exist to repair a member whose record says they have no
+                     *   access when they do — and the repair was then invisible
+                     *   to the very reader it was written for, for five minutes.
+                     *
+                     *   Inside the heal branch, which is rare, rather than on
+                     *   this function's hot path.
+                     */
+                    await invalidateServiceCache(userId, app);
+
                     return true;
                 }
             }
@@ -559,6 +592,20 @@ export async function checkModuleAccess(
                         },
                         updatedAt: FieldValue.serverTimestamp()
                     }, { merge: true });
+
+                    /*
+                     *   #692 THE HEAL CLEARS THE PROFILE IT JUST CORRECTED.
+                     *
+                     *   session-guard reads roles and serviceRegistrations from
+                     *   CacheKeys.userProfile, TTL 300 seconds. These layers
+                     *   exist to repair a member whose record says they have no
+                     *   access when they do — and the repair was then invisible
+                     *   to the very reader it was written for, for five minutes.
+                     *
+                     *   Inside the heal branch, which is rare, rather than on
+                     *   this function's hot path.
+                     */
+                    await invalidateServiceCache(userId, app);
 
                     return true;
                 }
@@ -637,6 +684,20 @@ export async function checkModuleAccess(
                         updatedAt: FieldValue.serverTimestamp()
                     }, { merge: true });
 
+                    /*
+                     *   #692 THE HEAL CLEARS THE PROFILE IT JUST CORRECTED.
+                     *
+                     *   session-guard reads roles and serviceRegistrations from
+                     *   CacheKeys.userProfile, TTL 300 seconds. These layers
+                     *   exist to repair a member whose record says they have no
+                     *   access when they do — and the repair was then invisible
+                     *   to the very reader it was written for, for five minutes.
+                     *
+                     *   Inside the heal branch, which is rare, rather than on
+                     *   this function's hot path.
+                     */
+                    await invalidateServiceCache(userId, app);
+
                     return true;
                 }
             }
@@ -672,6 +733,20 @@ export async function checkModuleAccess(
                         },
                         updatedAt: FieldValue.serverTimestamp()
                     }, { merge: true });
+
+                    /*
+                     *   #692 THE HEAL CLEARS THE PROFILE IT JUST CORRECTED.
+                     *
+                     *   session-guard reads roles and serviceRegistrations from
+                     *   CacheKeys.userProfile, TTL 300 seconds. These layers
+                     *   exist to repair a member whose record says they have no
+                     *   access when they do — and the repair was then invisible
+                     *   to the very reader it was written for, for five minutes.
+                     *
+                     *   Inside the heal branch, which is rare, rather than on
+                     *   this function's hot path.
+                     */
+                    await invalidateServiceCache(userId, app);
 
                     return true;
                 }

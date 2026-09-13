@@ -1,6 +1,7 @@
 "use server";
 
 import { hashData } from "@/lib/security";
+import { invalidateSellerCache } from "@/lib/cache-invalidation";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -510,6 +511,17 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
                 _version: FieldValue.increment(1) 
             });
         });
+
+        /*
+         *   #692 A resubmission sets sellerVerificationStatus and the
+         *   marketplace registration back to `pending`. session-guard serves
+         *   both from the cached profile for 300 seconds, so without this the
+         *   seller's own dashboard kept showing the previous decision.
+         *
+         *   invalidateSellerCache clears the seller key AND the profile —
+         *   see lib/cache-invalidation.ts. After the transaction commits.
+         */
+        await invalidateSellerCache(session.user.id);
 
         return { error: null, success: true as const, data: { verificationId: docRef.id } };
     } catch (error: any) { 

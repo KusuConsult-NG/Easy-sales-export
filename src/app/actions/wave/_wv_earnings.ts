@@ -1,6 +1,7 @@
 "use server";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { checkWithdrawalRateLimit } from "@/lib/withdrawal-rate-limit";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -234,6 +235,10 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
                 'serviceRegistrations.wave.waveEarningsBalance': availableBalance,
                 updatedAt: FieldValue.serverTimestamp()
             });
+            //   #692 The balance lives inside serviceRegistrations, which is
+            //   what session-guard caches for 300 seconds — so a backfilled
+            //   balance was invisible to the member it was computed for.
+            await invalidateServiceCache(userId, 'wave');
             logger.info(`Backfilled WAVE earnings balance for user ${userId}: ${availableBalance}`);
         } else if (availableBalance === undefined) {
             availableBalance = entitlement;
@@ -448,6 +453,16 @@ async function _withdrawEarningsAction(
                 updatedAt: FieldValue.serverTimestamp()
             });
         });
+
+        /*
+         *   #692 The balance was debited under a lock a few lines above and the
+         *   pending flag set here — both inside serviceRegistrations, which is
+         *   what session-guard caches for 300 seconds. Without this the member
+         *   could still see the money they have just withdrawn, and the
+         *   "withdrawal in progress" banner that reads the flag would not
+         *   appear. After the transaction commits, not inside it.
+         */
+        await invalidateServiceCache(userId, 'wave');
 
         } catch (workError) {
             await compensateJsonbDebit({
