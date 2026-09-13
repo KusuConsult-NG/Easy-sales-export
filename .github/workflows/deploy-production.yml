@@ -16,10 +16,28 @@ on:
         description: 'Type CERTIFIED to confirm release checklist is complete'
         required: true
         type: string
+      # #700 — this was `type: string` requiring the literal "YES", and THIS
+      # PROJECT HAS NO STAGING ENVIRONMENT. The only mentions of staging in the
+      # repository are this input and a CI comment recording that .env.staging
+      # carries EMPTY Supabase values. So the gate could be passed only by
+      # asserting something untrue, on every release, forever.
+      #
+      # A gate that can only be passed by a false statement is not a gate — it
+      # teaches whoever runs it to type the magic word without reading, which is
+      # exactly what it exists to prevent. #691 found the same shape in the push
+      # hook: a URL is a declaration, not a service.
+      #
+      # A choice, so the honest answer is available and is recorded in the run.
+      # If a staging environment is ever built, YES becomes meaningful again and
+      # nothing here has to change back.
       staging_validated:
-        description: 'Confirm staging was validated (type YES)'
+        description: 'Was this validated on staging?'
         required: true
-        type: string
+        type: choice
+        options:
+          - 'NO_STAGING_ENVIRONMENT'
+          - 'YES'
+        default: 'NO_STAGING_ENVIRONMENT'
       paystack_reconciled:
         description: 'Confirm Paystack reconciliation passed (type YES)'
         required: true
@@ -38,10 +56,18 @@ jobs:
             echo "❌ GATE FAILED: certification_word must be exactly 'CERTIFIED'"
             exit 1
           fi
-          if [ "${{ github.event.inputs.staging_validated }}" != "YES" ]; then
-            echo "❌ GATE FAILED: staging_validated must be 'YES'"
-            exit 1
-          fi
+          # #700 — both answers pass, and the run records WHICH. The gate's job
+          # is that a person states the position deliberately, not that they
+          # produce a fixed string; see the note on the input.
+          case "${{ github.event.inputs.staging_validated }}" in
+            YES)
+              echo "✅ staging: validated" ;;
+            NO_STAGING_ENVIRONMENT)
+              echo "⚠️  staging: none exists — deploying straight from main." ;;
+            *)
+              echo "❌ GATE FAILED: staging_validated must be YES or NO_STAGING_ENVIRONMENT"
+              exit 1 ;;
+          esac
           if [ "${{ github.event.inputs.paystack_reconciled }}" != "YES" ]; then
             echo "❌ GATE FAILED: paystack_reconciled must be 'YES'"
             exit 1
