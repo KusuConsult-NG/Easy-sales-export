@@ -5,6 +5,7 @@
  */
 
 import { html, trustedHtml } from "@/lib/utils";
+import { isUndeliverable } from "@/lib/bounced-address";
 import { logger } from "@/lib/logger";
 
 /**
@@ -187,6 +188,37 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
         if (!process.env.RESEND_API_KEY) {
             console.error('[EMAIL] RESEND_API_KEY not configured — no email can be sent.');
             return { success: false, error: 'Email service not configured' };
+        }
+
+        /**
+         *   #694 AN ADDRESS THAT HAS REFUSED MAIL IS NOT SENT MORE OF IT.
+         *
+         *   api/webhooks/resend records every bounce in BOUNCED_EMAILS, and the
+         *   admin broadcast excludes on it — broadcast-logic.ts says why in its
+         *   own words: "BOUNCED_EMAILS exists precisely because sender
+         *   reputation matters here." This path, which every transactional
+         *   email on the platform takes, never looked.
+         *
+         *   The reputation cost is real and reaches the broadcasts the existing
+         *   check protects. The worse cost is that the send SUCCEEDS — Resend
+         *   accepts it, this returns `{ success: true }`, and #688/#690's
+         *   thirteen decision notices record a member as told when the message
+         *   arrived nowhere.
+         *
+         *   REFUSED, NOT THROWN, and reported the same way a missing key is —
+         *   callers already read this result (#394) and treat email as
+         *   non-fatal. The in-app notice is unaffected: both decision notices
+         *   ring the bell BEFORE reaching here, deliberately.
+         *
+         *   Only `email.bounced` suppresses. A spam complaint is a different
+         *   fact and does not make an address undeliverable — see
+         *   lib/bounced-address.ts.
+         */
+        if (await isUndeliverable(data.to)) {
+            logger.error('[EMAIL] not sent: this address has hard-bounced', {
+                to: data.to, subject: data.subject,
+            });
+            return { success: false, error: 'Recipient address has bounced' };
         }
 
         // Dynamic import to keep bundle size small
