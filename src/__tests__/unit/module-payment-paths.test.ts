@@ -49,6 +49,42 @@ jest.mock('@/lib/paystack-server', () => ({
     initializePaystackPayment: jest.fn(),
 }));
 
+/*
+ *   #748 — the gate these routes now use. requireAdmin re-reads roles from the
+ *   database instead of trusting a JWT claim that outlives a revocation by
+ *   hours, so it has to be answered here or every call returns "Unauthenticated".
+ *
+ *   NOT STUBBED TRUE. jest.setup.js records what that cost last time —
+ *   `isAdmin: () => true` made every caller an admin in every test, so a guard
+ *   that was missing and one that was present looked identical. This mirrors the
+ *   real gate's decisions against the SAME session the requireSession mock
+ *   returns, so roles still decide and a non-admin is still refused.
+ */
+jest.mock('@/lib/require-admin', () => ({
+    requireAdmin: async (permission: any) => {
+        const { isAdmin, hasAdminPermission } = jest.requireActual<any>('@/lib/admin-permissions');
+        const result = await (global as any).mockRequireSession();
+        const user = result?.session?.user;
+        if (!user) return { error: 'Unauthenticated' };
+        const roles = user.roles ?? [];
+        if (!isAdmin(roles)) return { error: 'Unauthorized: Admin access required' };
+        if (permission && !hasAdminPermission(roles, permission)) {
+            return { error: 'Unauthorized: Admin access required' };
+        }
+        return { userId: user.id, roles };
+    },
+    liveAdminRoles: async () => {
+        const { isAdmin } = jest.requireActual<any>('@/lib/admin-permissions');
+        const result = await (global as any).mockRequireSession();
+        const user = result?.session?.user;
+        if (!user) return { error: 'Unauthenticated' };
+        const roles = user.roles ?? [];
+        if (!isAdmin(roles)) return { error: 'Unauthorized: Admin access required' };
+        return { roles };
+    },
+}));
+
+
 function setSession(id: string, roles: string[] = ['admin', 'super_admin']) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
         session: { user: { id, name: id, email: `${id}@example.com`, roles } },

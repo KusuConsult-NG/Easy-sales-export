@@ -452,6 +452,11 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
          *   unhelpful. ledgerVerdict names the direction and the next step, so
          *   converting one costs a one-line edit that RECORDS it.
          */
-        expect(ledgerVerdict(jwtOnly.length, 84)).toBe(LEDGER_HELD);
+        //   #748 lowered this from 84: the four money-OUT gates — both withdrawal
+        //   payout doors, the WAVE withdrawal action and the cooperative loan
+        //   approval route — now re-validate against the database. The ledger
+        //   reported the improvement rather than absorbing it, which is what
+        //   #743 changed it from a ceiling for.
+        expect(ledgerVerdict(jwtOnly.length, 80)).toBe(LEDGER_HELD);
     });
 });

@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * PATCH /api/admin/cooperative/mark-withdrawal-completed
@@ -23,8 +23,22 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        if (!hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
-            return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+        /*
+         *   #748 — this asked the JWT. #356 established what that costs: a role
+         *   claim "keeps its value for hours after the database loses it", so a
+         *   revoked finance admin could still mark a withdrawal paid out.
+         *
+         *   REPLACED, not stacked. #532 removed the old check from below the
+         *   live one on the three files it converted, and gave the reason: once
+         *   requireAdmin has asked the database, a second check on the token
+         *   refuses nobody the first would admit — except an admin GRANTED the
+         *   permission after their token was issued, who is refused by a claim
+         *   that is merely out of date. A redundant check that can only produce
+         *   false refusals is not defence in depth.
+         */
+        const gate = await requireAdmin("finance:process_withdrawals");
+        if ("error" in gate) {
+            return NextResponse.json({ success: false, error: gate.error }, { status: 403 });
         }
 
         const body = await request.json();

@@ -9,7 +9,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 
 export const dynamic = 'force-dynamic';
 
@@ -43,8 +43,17 @@ export async function GET(req: NextRequest) {
          *        Gated on the permission the queue is FOR, matching the reader
          *        the screen uses. The route is kept, not removed.
          */
-        if (!hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
-            return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+        /*
+         *   #748 — live re-validation, replacing a check on the JWT. It matters
+         *   more here than on most: the note above records that this route
+         *   spreads the whole withdrawal document, BANK DETAILS INCLUDED, and
+         *   that it is wired to no screen — "an HTTP GET needs no caller in the
+         *   bundle to be reachable with a session cookie". A revoked admin's
+         *   token kept opening it for as long as the claim lasted.
+         */
+        const gate = await requireAdmin("finance:process_withdrawals");
+        if ("error" in gate) {
+            return NextResponse.json({ error: gate.error }, { status: 403 });
         }
 
         const { searchParams } = new URL(req.url);

@@ -6,7 +6,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { isAdmin } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs } from "@/lib/firestore-serialize";
@@ -292,8 +293,18 @@ async function _processWaveWithdrawalAction(data: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles) || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
-            return { success: false as const, error: "Unauthorized: finance:process_withdrawals permission required" };
+        /*
+         *   #748 — live re-validation, replacing a check on the JWT. This is
+         *   the action that approves or rejects a WAVE withdrawal, so the stale
+         *   claim was between a revoked admin and money leaving the platform.
+         *
+         *   requireAdmin asks isAdmin AND the permission against roles read from
+         *   the database, so the two-part test here is not lost — it is the same
+         *   test on a fresher answer.
+         */
+        const gate = await requireAdmin("finance:process_withdrawals");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error };
         }
 
         const { withdrawalId, action, adminNotes, transactionReference } = data;

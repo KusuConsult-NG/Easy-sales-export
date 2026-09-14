@@ -166,7 +166,11 @@ describe('#743 — and every population ledger is on it', () => {
         expect(cra).toContain("ledgerVerdict(n('D5'), 44)");
 
         expect(code('src/__tests__/unit/half-converted-off-the-stale-token.test.ts'))
-            .toContain('ledgerVerdict(jwtOnly.length, 84)');
+            //   84 → 80 when #748 converted the four money-OUT gates. The ledger
+            //   REPORTED that improvement — 'IMPROVED to 80… lower the recorded
+            //   count' — which under the old `<= 88` ceiling would have been
+            //   silent. This line moving is the mechanism working, one finding on.
+            .toContain('ledgerVerdict(jwtOnly.length, 80)');
     });
 
     it('AND THE BEHAVIOURAL BOUNDS ARE LEFT AS BOUNDS', () => {

@@ -264,6 +264,21 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/actions/marketplace/_escrow_lifecycle.ts': ['finance:resolve_disputes'],
         'src/app/actions/marketplace/_escrow_disputes.ts': Array(2).fill('finance:resolve_disputes'),
 
+        /*
+         *   #748 — THE FOUR DOORS MONEY LEAVES BY, taken off the stale JWT.
+         *
+         *   #532 converted the three files that disagreed with THEMSELVES and
+         *   recorded the rest as a ledger it deliberately did not touch. These
+         *   four are the sharpest of what remained, picked by #532's own
+         *   criterion: not "reads a queue" but "money goes out". A JWT role
+         *   claim outlives a revocation by hours (#356), and that window sat
+         *   between a revoked admin and a payout.
+         */
+        'src/app/api/admin/cooperative/mark-withdrawal-completed/route.ts': ['finance:process_withdrawals'],
+        'src/app/api/admin/marketplace/withdrawals/route.ts': ['finance:process_withdrawals'],
+        'src/app/actions/wave/_wv_admin_withdrawals.ts': ['finance:process_withdrawals'],
+        'src/app/api/admin/cooperative/approve-loan/route.ts': ['cooperatives:approve_loans'],
+
         // Account creation.
         'src/app/actions/admin/_legacy.ts': ['users:create'],
 
@@ -461,7 +476,8 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // that a gate added and forgotten in the EXPECTED map above fails this,
         // and that is still true at 51. 49 → 51: #726 added the cooperative
         // membership repair's two.
-        expect(callSites().length).toBe(51);
+        // 51 → 55: #748 converted the four money-OUT gates off the stale JWT.
+        expect(callSites().length).toBe(55);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

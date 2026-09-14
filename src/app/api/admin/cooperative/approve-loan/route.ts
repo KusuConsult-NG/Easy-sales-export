@@ -7,7 +7,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import {
     needsDualControl,
@@ -31,10 +31,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+        /*
+         *   #748 — live re-validation, replacing a check on the JWT. This route
+         *   approves a cooperative loan AND increments the member's loanBalance,
+         *   so a revoked admin holding an unexpired token could move money for
+         *   as long as the claim lasted. See #356 for the window.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
             return NextResponse.json(
-                { success: false, message: "Admin access required" },
+                { success: false, message: gate.error },
                 { status: 403 }
             );
         }

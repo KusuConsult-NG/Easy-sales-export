@@ -254,6 +254,24 @@ describe('#690 — the doors, run', () => {
     async function harness() {
         jest.resetModules();
         notices = [];
+        /*
+         *   #748 — the cooperative loan decision now re-validates the admin
+         *   against the database rather than the JWT. Mirrors the real gate's
+         *   decisions against the same session above, so roles still decide.
+         */
+        jest.doMock('@/lib/require-admin', () => ({
+            requireAdmin: async (permission: any) => {
+                const { isAdmin, hasAdminPermission } = jest.requireActual<any>('@/lib/admin-permissions');
+                const roles = ADMIN.roles ?? [];
+                if (!isAdmin(roles)) return { error: 'Unauthorized: Admin access required' };
+                if (permission && !hasAdminPermission(roles, permission)) {
+                    return { error: 'Unauthorized: Admin access required' };
+                }
+                return { userId: ADMIN.id, roles };
+            },
+            liveAdminRoles: async () => ({ roles: ADMIN.roles ?? [] }),
+        }));
+
         jest.doMock('@/lib/session-guard', () => ({
             requireSession: async () => ({ session: { user: ADMIN }, error: null }),
         }));

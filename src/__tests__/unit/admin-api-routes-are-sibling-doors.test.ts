@@ -327,14 +327,21 @@ describe('#339 — the permissions chosen are the ones the siblings use', () => 
 
         //   #535 The PERMISSION is what this asserts, not the expression that
         //   asks for it. The seller-verifications route moved its pack decision
-        //   onto the live roles through the shared rule; the other three still
-        //   read the token and are among the 88 that
-        //   half-converted-off-the-stale-token.test.ts counts. Either spelling
-        //   names the same permission, which is the claim.
+        //   onto the live roles through the shared rule; the others read the
+        //   token and are among the set half-converted-off-the-stale-token.test.ts
+        //   counts. Any spelling names the same permission, which is the claim.
+        //
+        //   #748 — AND requireAdmin IS THE THIRD SPELLING. The note above had
+        //   the right instinct and still ENUMERATED, so converting the
+        //   withdrawals route to live re-validation — strictly stronger than
+        //   what it replaced — failed a test whose stated claim it satisfied.
+        //   The list of ways to ask is what keeps needing to grow; the
+        //   permission named is the invariant.
         for (const [file, permission] of expected) {
             expect(src(file)).toMatch(new RegExp(
                 `hasAdminPermission\\(session\\.user\\.roles, "${permission}"\\)`
-                + `|mayRevealMemberPii\\("${permission}"\\)`,
+                + `|mayRevealMemberPii\\("${permission}"\\)`
+                + `|requireAdmin\\("${permission}"\\)`,
             ));
         }
     });

@@ -350,6 +350,14 @@ describe('isAdmin() is ten roles and the matrix means two', () => {
     it('the cooperative money routes among them', () => {
         // These were THE concrete consequence: an academy_admin could price and
         // delete cooperative loan products and reject applications.
+        //
+        //   #748 — THE PERMISSION, NOT THE SPELLING OF THE CHECK. This asserted
+        //   the literal `hasAdminPermission(session.user.roles, …)` and went red
+        //   when approve-loan moved onto requireAdmin — a change that made the
+        //   gate STRONGER, since requireAdmin asks the database instead of a JWT
+        //   claim that outlives a revocation by hours. A ratchet that pins an
+        //   implementation reports on the implementation; the claim here is that
+        //   the route demands this permission, by whichever route.
         for (const r of [
             'cooperative/create-loan-product',
             'cooperative/update-loan-product',
@@ -357,9 +365,26 @@ describe('isAdmin() is ten roles and the matrix means two', () => {
             'cooperative/reject-loan',
             'cooperative/approve-loan',
         ]) {
-            expect(source(`src/app/api/admin/${r}/route.ts`))
-                .toContain('hasAdminPermission(session.user.roles, "cooperatives:approve_loans")');
+            const src = source(`src/app/api/admin/${r}/route.ts`);
+            const demanded =
+                src.includes('hasAdminPermission(session.user.roles, "cooperatives:approve_loans")')
+                || src.includes('requireAdmin("cooperatives:approve_loans")');
+
+            expect({ r, demanded }).toEqual({ r, demanded: true });
         }
+    });
+
+    it('and the one that MOVES money asks the database, not the token', () => {
+        /*
+         *   #748 — approve-loan increments the member's loanBalance, so a
+         *   revoked admin holding an unexpired token could move money for as
+         *   long as the claim lasted. Named on its own rather than left inside
+         *   the loop above, because "demands the permission" and "asks a live
+         *   source for it" are two different guarantees and only this route has
+         *   both so far.
+         */
+        expect(source('src/app/api/admin/cooperative/approve-loan/route.ts'))
+            .toContain('requireAdmin("cooperatives:approve_loans")');
     });
 
     it('but the two bulk exports of personal data still do — RECORDED, not fixed', () => {
