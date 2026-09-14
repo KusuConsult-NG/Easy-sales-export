@@ -256,11 +256,19 @@ export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiate
  *        components/modals/ContributionModal.tsx, is imported by NOTHING — no
  *        page renders it. But this file is "use server" and the cooperative
  *        barrel re-exports this action (index.ts), and that barrel is imported
- *        by client components that ARE rendered (RecordRepaymentModal,
- *        LoanApplicationWizard, RepaymentSchedule, RepayFromSavingsModal). So
- *        it compiled into a live authenticated POST endpoint with no screen in
- *        front of it — exactly what #279 was, where an unreferenced
- *        enrollInCourseAction granted paid courses for free.
+ *        by client components that ARE rendered — RecordRepaymentModal and
+ *        RepayFromSavingsModal. So it compiled into a live authenticated POST
+ *        endpoint with no screen in front of it — exactly what #279 was, where
+ *        an unreferenced enrollInCourseAction granted paid courses for free.
+ *
+ *        THE LIST ABOVE NAMED FOUR, AND TWO OF THEM ARE NOT RENDERED EITHER.
+ *        LoanApplicationWizard and RepaymentSchedule are imported by nothing,
+ *        the same as ContributionModal. The CONCLUSION is unaffected — the two
+ *        that remain do render, so the barrel is reached and the endpoint was
+ *        live — but a reader who checks the supporting fact finds it false, and
+ *        a correct argument resting on a wrong premise is one the next person
+ *        discounts entirely. Corrected rather than deleted, because the
+ *        reachability check is the part of this note worth keeping.
  *
  *        REFUSED RATHER THAN REMOVED. Nothing here is deleted: the export, the
  *        signature and the state shape all stand, so the barrel and the modal

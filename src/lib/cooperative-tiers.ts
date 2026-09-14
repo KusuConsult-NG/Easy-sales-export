@@ -193,6 +193,35 @@ export function calculateLoanCost(
 /**
  * Default MONTHLY interest rate, as a percentage. 10 means 10% per month.
  * Previously returned 10/12, which is 10% per year.
+ *
+ * ── READ THIS BEFORE WIRING calculateLoanCost TO A SCREEN ───────────────────
+ *
+ *   THIS RATE IGNORES THE LOAN PRODUCT, and that is safe only while nothing
+ *   renders the one component that uses it.
+ *
+ *   Every path that actually CREATES a cooperative loan — _coop_money.ts,
+ *   api/cooperative/apply-loan and the member page — reads `interestRate` off
+ *   the LOAN_PRODUCTS row and passes it to calculateRepaymentTerms. A prior
+ *   finding put them on one function for exactly this reason, and recorded it:
+ *   "Same function now, so a rate change or a fix cannot reach only one of
+ *   them." Before that, a borrower was quoted their product's terms and the
+ *   loan was written at a hardcoded default.
+ *
+ *   calculateLoanCost is the remaining exception. Its only caller is
+ *   components/LoanApplicationWizard.tsx, which is imported by NOTHING, so no
+ *   member sees a figure from it today. Rendering that component would quote
+ *   every product at DEFAULT_MONTHLY_INTEREST_RATE while the server records the
+ *   loan at the product's own rate — a member told one monthly payment and
+ *   charged another, which is the defect that was already fixed once.
+ *
+ *   THE ARITHMETIC ITSELF AGREES, measured rather than assumed: over
+ *   (₦100,000, 10%, 6mo), (₦250,000, 5%, 12mo), (₦50,000, 2.5%, 3mo) and
+ *   (₦19,999, 7.5%, 9mo), calculateLoanCost and calculateRepaymentTerms return
+ *   the same monthly payment to within a fraction of a kobo. The float-versus-
+ *   integer difference is not the hazard here. THE RATE IS.
+ *
+ *   So if that wizard is ever brought back: take the rate from the product and
+ *   quote through calculateRepaymentTerms, as the three live paths do.
  */
 export function getTierInterestRate(tier: CooperativeTier): number {
     return DEFAULT_MONTHLY_INTEREST_RATE;
