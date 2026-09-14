@@ -28,6 +28,7 @@ import { getWaveTrainingEventsAction, type WaveTrainingEvent } from "@/app/actio
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { toSafeDate } from "@/lib/utils";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 const STATUS_OPTIONS = [
     { id: "upcoming", label: "Upcoming", color: "blue" },
@@ -43,6 +44,7 @@ export default function AdminWaveTrainingPage() {
     const {
         data: events,
         loading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -291,6 +293,8 @@ export default function AdminWaveTrainingPage() {
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="w-12 h-12 animate-spin text-pink-600" />
                     </div>
+                ) : fetchError ? (
+                    <AdminReadFailed error={fetchError} subject="training events" onRetry={loadEvents} />
                 ) : events.length > 0 ? (
                     <div className="space-y-6">
                         {[

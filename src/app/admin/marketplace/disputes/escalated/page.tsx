@@ -22,6 +22,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { humanise } from "@/lib/humanise";
 import { formatDateTimeOrDash } from "@/lib/date-utils";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 //   #600 — one reading, in lib/date-utils.
 function fmtDate(val: any) {
@@ -44,6 +45,7 @@ export default function EscalatedDisputesPage() {
     const {
         data: disputes,
         loading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -145,7 +147,9 @@ export default function EscalatedDisputesPage() {
                     <div className="flex items-center justify-center py-20">
                         <Loader2 className="w-10 h-10 animate-spin text-red-600" />
                     </div>
-                ) : disputes.length === 0 ? (
+                ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="escalated disputes" onRetry={loadAll} />
+            ) : disputes.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
                         <CheckCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-slate-900 mb-2">No Escalated Disputes</h3>

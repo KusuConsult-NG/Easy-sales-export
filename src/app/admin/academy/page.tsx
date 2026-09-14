@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
 import { humaniseCapitalised } from "@/lib/humanise";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 export default function AcademyAdminPage() {
     const router = useRouter();
@@ -243,7 +244,15 @@ export default function AcademyAdminPage() {
                     </div>
                 )}
 
-                {!isLoading && filteredCourses.length === 0 && (
+                {/*
+                 *   #742 — `error` was destructured and never rendered, so a
+                 *   failed read drew "No courses found. Get started by creating
+                 *   your first course." at an administrator whose course list
+                 *   the platform could not open.
+                 */}
+                <AdminReadFailed error={error} subject="courses" onRetry={loadCourses} />
+
+                {!isLoading && !error && filteredCourses.length === 0 && (
                     <div className="text-center py-12">
                         <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-slate-900">No courses found</h3>

@@ -20,6 +20,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { humanise } from "@/lib/humanise";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 const DISPUTE_REASON_LABELS: Record<string, string> = {
     not_received: "Item Not Received",
@@ -45,6 +46,7 @@ export default function AdminDisputesPage() {
     const {
         data: filteredDisputes,
         loading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -252,6 +254,8 @@ export default function AdminDisputesPage() {
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="w-12 h-12 animate-spin text-primary" />
                     </div>
+                ) : fetchError ? (
+                    <AdminReadFailed error={fetchError} subject="disputes" onRetry={loadDisputes} />
                 ) : filteredDisputes.length > 0 ? (
                     <div className="space-y-4">
                         {filteredDisputes.map((dispute) => {

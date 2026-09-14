@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { recordExport } from "@/lib/record-export";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
@@ -73,6 +74,7 @@ export default function AdminTransactionsPage() {
     const {
         data: transactions,
         loading: isLoading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -402,6 +404,8 @@ export default function AdminTransactionsPage() {
                             <p className="text-sm text-slate-500">Loading transactions…</p>
                         </div>
                     </div>
+                ) : fetchError ? (
+                    <AdminReadFailed error={fetchError} subject="transactions" onRetry={loadTransactions} />
                 ) : filteredTransactions.length > 0 ? (
                     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">

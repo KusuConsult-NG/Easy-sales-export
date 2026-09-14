@@ -18,6 +18,7 @@ import {
 // The default rate an admin sees pre-filled must be the platform's stated
 // rate, not a copy of whatever it was when this form was written.
 import { DEFAULT_MONTHLY_INTEREST_RATE } from "@/lib/cooperative-tiers";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 export default function LoanProductsPage() {
     const { showToast } = useToast();
@@ -25,6 +26,7 @@ export default function LoanProductsPage() {
     const {
         data: products,
         loading: isLoading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -157,6 +159,8 @@ export default function LoanProductsPage() {
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className="text-slate-600">Loading products...</p>
                 </div>
+            ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="loan products" onRetry={fetchProducts} />
             ) : products.length === 0 ? (
                 <div className="bg-white rounded-xl p-12 text-center shadow-lg">
                     <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />

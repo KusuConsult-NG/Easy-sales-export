@@ -20,6 +20,7 @@ import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { recordExport } from "@/lib/record-export";
 import { humaniseCapitalised } from "@/lib/humanise";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 type SellerVerification = {
     id: string;
@@ -420,7 +421,9 @@ export default function AdminSellersPage() {
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                         <p className="text-slate-600">Loading verifications...</p>
                     </div>
-                ) : filteredVerifications.length === 0 ? (
+                ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="seller verifications" onRetry={loadVerifications} />
+            ) : filteredVerifications.length === 0 ? (
                     <div className="p-12 text-center">
                         <Store className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-slate-900 mb-2">No Seller Verifications Found</h3>

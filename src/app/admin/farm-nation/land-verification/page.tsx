@@ -10,6 +10,7 @@ import { getAdminLandVerificationsAction, getFarmNationVerificationStatsAction, 
 import { recordExport } from "@/lib/record-export";
 import { csvDocument } from "@/lib/csv-safe";
 import { formatShortDateOrDash } from "@/lib/date-utils";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 type LandVerification = {
     id: string;
@@ -421,7 +422,9 @@ export default function AdminLandVerificationPage() {
                         <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
                         <p className="text-slate-600">Loading verifications...</p>
                     </div>
-                ) : filteredVerifications.length === 0 ? (
+                ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="land verifications" onRetry={loadVerifications} />
+            ) : filteredVerifications.length === 0 ? (
                     <div className="bg-white rounded-xl shadow-lg p-12 text-center">
                         <MapPin className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-slate-900 mb-2">No Listings Found</h3>

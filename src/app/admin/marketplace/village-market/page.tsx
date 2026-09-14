@@ -24,6 +24,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 
 import { formatLocalDate } from "@/lib/date-utils";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 const fmtDate = (val: any) => formatLocalDate(val);
 
@@ -244,6 +245,7 @@ export default function AdminVillageMarketPage() {
     const {
         data: events,
         loading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -309,6 +311,8 @@ export default function AdminVillageMarketPage() {
                 <div className="flex items-center justify-center py-16">
                     <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
                 </div>
+            ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="village market events" onRetry={load} />
             ) : events.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
                     <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />

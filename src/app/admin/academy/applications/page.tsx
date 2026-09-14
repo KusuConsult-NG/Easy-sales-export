@@ -24,6 +24,7 @@ import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
 import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 import { csvDocument } from "@/lib/csv-safe";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -399,6 +400,7 @@ export default function AdminAcademyApplicationsPage() {
     const {
         data: applications,
         loading: isLoading,
+        error: fetchError,
         hasMore,
         refresh: fetchData,
         onNextPage,
@@ -978,8 +980,16 @@ export default function AdminAcademyApplicationsPage() {
                 </div>
             )}
 
+            {/*
+             *   #742 — the read failure, which this screen never asked the hook
+             *   for. The empty state below is the one that lies: the other, at
+             *   the foot of the card list, sits inside `applications.length > 0`
+             *   and cannot be reached when the read returned nothing.
+             */}
+            <AdminReadFailed error={fetchError} subject="academy applications" onRetry={fetchData} />
+
             {/* Empty State */}
-            {!isLoading && applications.length === 0 && (
+            {!isLoading && !fetchError && applications.length === 0 && (
                 <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
                     <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-slate-900 mb-2">No Applications Yet</h3>

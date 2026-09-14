@@ -18,6 +18,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatLocalDate } from "@/lib/date-utils";
 import { humaniseCapitalised, shortId } from "@/lib/humanise";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 function StarDisplay({ rating }: { rating: number }) {
     return (
@@ -52,6 +53,7 @@ export default function AdminReviewsPage() {
     const {
         data: reviews,
         loading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -242,6 +244,8 @@ export default function AdminReviewsPage() {
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="w-12 h-12 animate-spin text-primary" />
                     </div>
+                ) : fetchError ? (
+                    <AdminReadFailed error={fetchError} subject="reviews" onRetry={loadReviews} />
                 ) : filteredReviews.length > 0 ? (
                     <div className="space-y-4">
                         {filteredReviews.map((review) => (

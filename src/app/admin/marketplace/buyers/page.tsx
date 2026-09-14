@@ -11,6 +11,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { recordExport } from "@/lib/record-export";
 import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 type BuyerRole = "buyer_only" | "seller_only" | "both";
 
@@ -253,7 +254,9 @@ export default function MarketplaceBuyersPage() {
                         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                         <p className="text-slate-500">Loading users...</p>
                     </div>
-                ) : filtered.length === 0 ? (
+                ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="marketplace users" onRetry={loadUsers} />
+            ) : filtered.length === 0 ? (
                     <div className="p-12 text-center">
                         <ShoppingCart className="w-14 h-14 text-slate-200 mx-auto mb-3" />
                         <p className="text-slate-500">No marketplace users found</p>

@@ -31,6 +31,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { toSafeDate } from "@/lib/utils";
 import { recordExport } from "@/lib/record-export";
 import { numberOrZero } from "@/lib/numbers";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 const severityConfig = {
     info: { color: "blue", icon: Info, label: "Info" },
@@ -285,7 +286,9 @@ export default function AdminAuditLogsPage() {
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 text-blue-300 animate-spin" />
                         </div>
-                    ) : logs.length === 0 ? (
+                    ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="audit logs" onRetry={loadLogs} />
+            ) : logs.length === 0 ? (
                         <div className="p-12 text-center">
                             <Shield className="w-16 h-16 text-blue-300 mx-auto mb-4" />
                             <h3 className="text-xl font-semibold text-white mb-2">No audit logs found</h3>

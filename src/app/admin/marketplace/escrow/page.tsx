@@ -21,6 +21,7 @@ import {
     refundEscrowToBuyer,
 } from "@/app/actions/marketplace";
 import type { EscrowTransaction as BaseEscrowTransaction, EscrowStatus } from "@/types/escrow";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 type EscrowTransaction = BaseEscrowTransaction & {
     buyerDetails?: {
@@ -242,6 +243,8 @@ export default function AdminEscrowPage() {
                     <div className="flex items-center justify-center py-20">
                         <Loader2 className="w-12 h-12 animate-spin text-primary" />
                     </div>
+                ) : fetchError ? (
+                    <AdminReadFailed error={fetchError} subject="escrow transactions" onRetry={loadTransactions} />
                 ) : filtered.length === 0 ? (
                     <div className="bg-white rounded-2xl shadow-sm p-16 text-center">
                         <ShieldCheck className="w-16 h-16 text-gray-300 mx-auto mb-4" />

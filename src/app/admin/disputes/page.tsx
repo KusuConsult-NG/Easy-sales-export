@@ -18,6 +18,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import type { Dispute } from "@/lib/types/marketplace";
 import { formatLocalDate } from "@/lib/date-utils";
 import { humanise } from "@/lib/humanise";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import { humaniseUpper } from "@/lib/humanise";
 
 export default function AdminDisputesPage() {
@@ -145,7 +146,14 @@ export default function AdminDisputesPage() {
             </div>
 
             {/* Content */}
-            {filteredDisputes.length === 0 ? (
+            {/*
+             *   #742 — `fetchError` was destructured here and never mentioned
+             *   again. A failed read left disputes at [] and drew "No disputes
+             *   found" over a queue the screen could not open.
+             */}
+            {fetchError ? (
+                <AdminReadFailed error={fetchError} subject="disputes" onRetry={loadDisputes} />
+            ) : filteredDisputes.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 shadow-sm text-center">
                     <AlertCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                     <p className="text-slate-500 text-lg">No disputes found</p>

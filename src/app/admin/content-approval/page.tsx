@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import { humaniseUpper } from "@/lib/humanise";
 import { formatShortDateOrDash, formatTimeOrDash } from "@/lib/date-utils";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 export default function ContentApprovalPage() {
     const [contentFilter, setContentFilter] = useState<ContentType | "all">("all");
@@ -19,6 +20,7 @@ export default function ContentApprovalPage() {
     const {
         data: items,
         loading,
+        error: fetchError,
         refresh: loadContent
     } = useAdminData<PendingContentItem>({
         fetchAction: async () => {
@@ -414,7 +416,9 @@ export default function ContentApprovalPage() {
 
                 {/* Content List */}
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden min-h-[400px]">
-                    {filteredItems.length === 0 ? (
+                    {fetchError ? (
+                <AdminReadFailed error={fetchError} subject="content submissions" onRetry={loadContent} />
+            ) : filteredItems.length === 0 ? (
                         <div className="p-12 text-center h-full flex flex-col items-center justify-center">
                             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4 opacity-50" />
                             <h3 className="text-xl font-semibold text-slate-900 mb-2">

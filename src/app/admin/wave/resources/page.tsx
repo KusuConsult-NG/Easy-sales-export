@@ -17,6 +17,7 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getWaveResourcesAction } from "@/app/actions/wave";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import {
     uploadResourceAction,
     deleteResourceAction,
@@ -38,6 +39,7 @@ export default function AdminWaveResourcesPage() {
     const {
         data: resources,
         loading,
+        error: fetchError,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -183,7 +185,9 @@ export default function AdminWaveResourcesPage() {
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 text-purple-300 animate-spin" />
                         </div>
-                    ) : resources.length === 0 ? (
+                    ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="resources" onRetry={loadResources} />
+            ) : resources.length === 0 ? (
                         <div className="p-12 text-center">
                             <Upload className="w-16 h-16 text-purple-300 mx-auto mb-4" />
                             <h3 className="text-xl font-semibold text-white mb-2">

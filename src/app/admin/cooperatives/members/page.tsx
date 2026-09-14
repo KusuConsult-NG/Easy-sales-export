@@ -15,6 +15,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
 type MembershipApplication = {
     id: string;
@@ -624,7 +625,9 @@ export default function CooperativeMembersPage() {
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                         <p className="text-slate-600">Loading applications...</p>
                     </div>
-                ) : filteredApplications.length === 0 ? (
+                ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="membership applications" onRetry={loadApplications} />
+            ) : filteredApplications.length === 0 ? (
                     <div className="p-12 text-center">
                         <Users className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <p className="text-slate-600">No applications found</p>

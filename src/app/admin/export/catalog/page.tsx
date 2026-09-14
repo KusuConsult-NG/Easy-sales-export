@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useAdminData } from "@/hooks/useAdminData";
 import { numberOrZero } from "@/lib/numbers";
+import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import { 
     getAdminExportCatalogAction, 
     createExportCatalogAction, 
@@ -180,6 +181,7 @@ export default function AdminExportCatalogPage() {
     const {
         data: products,
         loading: isLoading,
+        error: fetchError,
         hasMore,
         refresh: loadProducts,
         onNextPage,
@@ -354,6 +356,8 @@ export default function AdminExportCatalogPage() {
                 <div className="flex items-center justify-center py-24">
                     <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
                 </div>
+            ) : fetchError ? (
+                <AdminReadFailed error={fetchError} subject="the catalogue" onRetry={loadProducts} />
             ) : products.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
                     {activeTab === "live" ? (
