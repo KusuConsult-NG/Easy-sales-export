@@ -48,6 +48,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readdirSync, statSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { ledgerVerdict, LEDGER_HELD } from '@/lib/testing/ledger';
 
 const ROOT = join(process.cwd(), 'src');
 
@@ -178,31 +179,44 @@ describe('the sweep itself', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('a server answer must not be silently discarded', () => {
     /**
-     * Ceilings, not targets. Each number is what the sweep measured after
-     * #293/#294 were fixed. Adding a new site fails here, which is the whole
-     * point: the pattern stops growing while the backlog is worked down.
+     * Ledgers, not targets. Each number is what the sweep measures NOW. Adding
+     * a new site fails here, which is the whole point: the pattern stops
+     * growing while the backlog is worked down.
+     *
+     *   #743 — THESE WERE `toBeLessThanOrEqual` AND FOUR OF THEM HAD DRIFTED
+     *   OPEN. The ceilings were the counts measured after #293/#294; every
+     *   later fix lowered the real count and left the ceiling where it was, so
+     *   D1 read 87 against an actual 61, D2 29 against 17, D4 54 against 40 and
+     *   D5 55 against 44 — sixty-three new sites across four classes that no
+     *   test would have noticed, on ratchets whose stated purpose is that
+     *   adding one fails here.
+     *
+     *   Pinned exactly now. The objection to that — "converting one is progress
+     *   and must not fail a test" — is answered by WHAT the failure says rather
+     *   than by leaving slack: see lib/testing/ledger.ts. Improvement costs one
+     *   line and is recorded; the ceiling absorbed it silently instead.
      */
     it('D3 — an action awaited with its result thrown away', () => {
         // Down from 7: #294 was one of them. What remains is logout (x2),
         // mark-as-read (x2) and an audit-log write — genuinely fire-and-forget,
         // though the audit one is worth a look next pass.
-        expect(n('D3')).toBeLessThanOrEqual(6);
+        expect(ledgerVerdict(n('D3'), 6)).toBe(LEDGER_HELD);
     });
 
     it('D1 — success checked, error and message never read', () => {
-        expect(n('D1')).toBeLessThanOrEqual(87);
+        expect(ledgerVerdict(n('D1'), 61)).toBe(LEDGER_HELD);
     });
 
     it('D2 — an action result captured and never inspected at all', () => {
-        expect(n('D2')).toBeLessThanOrEqual(29);
+        expect(ledgerVerdict(n('D2'), 17)).toBe(LEDGER_HELD);
     });
 
     it('D4 — a fetch response never checked for ok or status', () => {
-        expect(n('D4')).toBeLessThanOrEqual(54);
+        expect(ledgerVerdict(n('D4'), 40)).toBe(LEDGER_HELD);
     });
 
     it('D5 — a catch that swallows the failure', () => {
-        expect(n('D5')).toBeLessThanOrEqual(55);
+        expect(ledgerVerdict(n('D5'), 44)).toBe(LEDGER_HELD);
     });
 });
 

@@ -120,6 +120,7 @@ import { stripComments } from '@/lib/testing/strip-comments';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { auth } from '@/lib/auth';
+import { ledgerVerdict, LEDGER_HELD } from '@/lib/testing/ledger';
 
 const ROOT = process.cwd();
 
@@ -436,8 +437,21 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         };
         walk(join(ROOT, 'src/app'));
 
-        //   Not pinned to an exact number: converting one is progress and must
-        //   not fail a test. Pinned as a CEILING, so the class cannot grow.
-        expect(jwtOnly.length).toBeLessThanOrEqual(88);
+        /*
+         *   THIS WAS `toBeLessThanOrEqual(88)`, and the reasoning above it read:
+         *   "Not pinned to an exact number: converting one is progress and must
+         *   not fail a test. Pinned as a CEILING, so the class cannot grow."
+         *
+         *   #743 — the worry was right and the conclusion was not. Four of the
+         *   eighty-eight were converted afterwards and the ceiling stayed at
+         *   88, so four NEW admin gates on the stale JWT could be added with
+         *   every test green — on the class #356 established as a security
+         *   defect, where a revoked admin keeps their access for hours.
+         *
+         *   A test that fails on progress is only a problem if the failure is
+         *   unhelpful. ledgerVerdict names the direction and the next step, so
+         *   converting one costs a one-line edit that RECORDS it.
+         */
+        expect(ledgerVerdict(jwtOnly.length, 84)).toBe(LEDGER_HELD);
     });
 });

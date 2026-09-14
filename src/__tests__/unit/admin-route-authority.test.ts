@@ -87,6 +87,7 @@ import { join } from 'path';
 import { csvCell, csvRow, csvDocument } from '@/lib/csv-safe';
 import { PRIVILEGED_ROLES, includesPrivilegedRole, isAdmin, hasAdminPermission } from '@/lib/admin-permissions';
 import { ALL_USER_ROLES, isUserRole } from '@/lib/types/roles';
+import { ledgerVerdict, LEDGER_HELD } from '@/lib/testing/ledger';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');
@@ -343,7 +344,7 @@ describe('isAdmin() is ten roles and the matrix means two', () => {
         // grep -l matches comments too, so two of the survivors are files whose
         // prose mentions the old guard. The structural, per-function assertion
         // lives in admin-permission-gates.test.ts.
-        expect(isAdminGatedRoutes().length).toBeLessThanOrEqual(15);
+        expect(ledgerVerdict(isAdminGatedRoutes().length, 15)).toBe(LEDGER_HELD);
     });
 
     it('the cooperative money routes among them', () => {
