@@ -82,6 +82,7 @@ import {
     processMarketplaceOrder,
     processWalletFunding,
     processExportBuyerOrder,
+    processPropertyPurchase,
     processExportInvestment,
     processCooperativeRegistration,
     processAcademyRegistration,
@@ -172,6 +173,16 @@ export const PAYMENT_ROUTES: readonly PaymentRoute[] = [
         run: (c) => processExportBuyerOrder(c.reference, c.amount, c.userId, c.paidAt),
     },
     {
+        //   #721 — the second of #695's three. The propertyId comes from the
+        //   metadata the checkout minted; the processor throws when it is
+        //   absent rather than reading as "no processor for this type".
+        types: ["property_purchase"],
+        run: (c) => processPropertyPurchase(
+            c.reference, c.amount, c.userId,
+            String(c.metadata.propertyId ?? ""), c.metadata, c.paidAt,
+        ),
+    },
+    {
         types: ["wallet_funding"],
         // processWalletFunding throws on refusal, so a wallet credit that did
         // not happen is never counted as fulfilled — #298's rule, and the
@@ -251,11 +262,13 @@ export const HANDLED_PAYMENT_TYPES: ReadonlySet<string> = new Set(
  *   and the honest move is to make the lying stop first.
  */
 export const CALLBACK_FULFILLED_TYPES: ReadonlySet<string> = new Set([
-    //   `export_buyer_order` WAS HERE AND IS NOT ANY MORE — #719 wrote its
-    //   processor, which is the direction the list above says this should move.
-    //   The webhook now fulfils it, so claiming the reference is exactly the
-    //   right thing to do and no longer steals the callback's claim.
-    "property_purchase",
+    //   `export_buyer_order` (#719) and `property_purchase` (#721) WERE HERE
+    //   AND ARE NOT ANY MORE — both have processors, which is the direction the
+    //   list above says this should move. The webhook fulfils them, so claiming
+    //   the reference is exactly the right thing to do and no longer steals the
+    //   callback's claim.
+    //
+    //   ONE LEFT.
     "academy_enrollment",
 ]);
 

@@ -243,9 +243,20 @@ describe('verifying a property payment', () => {
     it('compares the paid amount to the listed price, before moving to escrow', async () => {
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/app/actions/farm-nation-payment.ts'), 'utf-8');
+        /*
+         *   #721 MOVED THE VERIFICATION OUT OF THE ACTION and into the module
+         *   the buyer's callback and the webhook's processor both call, because
+         *   a buyer who paid and closed the tab had no door that could deliver
+         *   the property at all.
+         *
+         *   The ORDER this test pins — refuse an underpayment BEFORE writing the
+         *   escrow marker — is unchanged and is what still matters: the write is
+         *   past the claim, so doing it before the check means the money is
+         *   taken and the property moves on an amount nobody verified.
+         */
+        const src = readFileSync(join(process.cwd(), 'src/lib/property-purchase-fulfilment.ts'), 'utf-8');
 
-        const verify = src.slice(src.indexOf('async function _verifyPropertyPaymentAction'));
+        const verify = src.slice(src.indexOf('export async function fulfilPropertyPurchase'));
 
         const checkAt = verify.indexOf('does not cover the property price');
         const escrowWriteAt = verify.indexOf('escrowHeldAt');
@@ -260,9 +271,14 @@ describe('verifying a property payment', () => {
         // seller won and the real owner was only a fallback. Reversed now.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/app/actions/farm-nation-payment.ts'), 'utf-8');
+        //   #721 — same rule, read where the write now lives. The metadata
+        //   spelling changed with the extraction (the processor passes the
+        //   metadata's seller in as an explicit argument), so the assertion
+        //   names the argument rather than the object it came from — and the
+        //   ORDER, which is the whole point, is pinned exactly as before.
+        const src = readFileSync(join(process.cwd(), 'src/lib/property-purchase-fulfilment.ts'), 'utf-8');
 
-        expect(src).not.toContain('metadata.sellerId || freshData.ownerId');
-        expect(src).toContain('freshData.ownerId || metadata.sellerId');
+        expect(src).not.toContain('sellerIdFromMetadata || freshData.ownerId');
+        expect(src).toContain('freshData.ownerId || sellerIdFromMetadata');
     });
 });

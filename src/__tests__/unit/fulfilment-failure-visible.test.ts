@@ -129,7 +129,10 @@ describe('markFulfilmentFailed', () => {
 describe('every money path that can fail after claiming records it', () => {
     /** The sites measured to have post-claim failure paths. */
     const SITES = [
-        ['src/app/actions/farm-nation-payment.ts', 'farm_nation_escrow'],
+        //   #721 — the post-claim failure path for a property purchase moved
+        //   into the module both doors share, so the marking is now made once
+        //   for the callback AND the webhook's processor rather than in each.
+        ['src/lib/property-purchase-fulfilment.ts', 'farm_nation_escrow'],
         ['src/app/actions/cooperative/_payment.ts', 'cooperative_contribution (browser)'],
         ['src/app/actions/export-payment.ts', 'export_investment'],
         ['src/infrastructure/payments/service.ts', 'cooperative_contribution (webhook)'],

@@ -16,6 +16,7 @@ import { escrowIdFor } from "@/lib/escrow-status";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 import { findExportOrderByReference, fulfilExportBuyerOrder } from "@/lib/export-order-fulfilment";
+import { fulfilPropertyPurchase } from "@/lib/property-purchase-fulfilment";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -1576,4 +1577,69 @@ export async function processExportBuyerOrder(reference: string, amount: number,
         await markFulfilmentFailed(reference, result.message);
         throw new Error(result.message);
     }
+}
+
+/**
+ * Handle Property Purchase Fulfilment — #721.
+ *
+ *   The second of the three types #695 found the platform charging money under
+ *   with no processor to route them. Its delivery lived only in
+ *   _verifyPropertyPaymentAction, so a buyer who paid for a property and never
+ *   came back had the money taken and the property left in `pending_escrow`
+ *   with nothing recording it had been bought.
+ *
+ *   The delivery is lib/property-purchase-fulfilment, shared with the buyer's
+ *   callback — #272's pattern, for the same reason as #719.
+ *
+ *   The claim type is `farm_nation_escrow`, NOT `property_purchase`. That is
+ *   the callback's own spelling and it is kept: the metadata type names the
+ *   CHECKOUT, the claim type labels what the money became, and changing it here
+ *   would put two different labels on the same payment depending on which door
+ *   arrived first — which is the class of defect this whole extraction exists
+ *   to avoid.
+ */
+export async function processPropertyPurchase(
+    reference: string,
+    amount: number,
+    userId: string,
+    propertyId: string,
+    metadata: Record<string, any>,
+    paidAt?: Date,
+) {
+    if (!propertyId) {
+        //   Thrown, not returned false. `false` from the dispatcher means "no
+        //   processor claims this type", and a payment whose metadata is
+        //   missing the property would be recorded as unroutable — erasing the
+        //   distinction #695 turns on.
+        logger.error(`[Paystack Webhook] property_purchase ${reference} carries no propertyId`);
+        throw new Error("Property purchase payment has no propertyId in its metadata");
+    }
+
+    const claim = await claimPaymentOnce({
+        reference,
+        userId,
+        amount,
+        type: "farm_nation_escrow",
+        source: "webhook",
+        metadata: { propertyId },
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Property purchase ${reference} already processed.`);
+        return;
+    }
+
+    //   Throws on refusal, after marking the payment unfulfilled. That marking
+    //   lives inside the shared module rather than here precisely so both doors
+    //   cannot drift on the one behaviour that keeps a paid-but-undelivered
+    //   payment visible to reconciliation.
+    await fulfilPropertyPurchase({
+        reference,
+        amountInNaira: amount,
+        buyerId: userId,
+        propertyId,
+        propertyTitle: metadata.propertyTitle,
+        sellerIdFromMetadata: metadata.sellerId,
+    });
+    void paidAt;
 }

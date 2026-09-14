@@ -201,7 +201,7 @@ describe('#695 — every checkout the platform mints must have a door that fulfi
         expect({ ownerless }).toEqual({ ownerless: [] });
     });
 
-    it('AND THE TWO THE WEBHOOK CANNOT FULFIL ARE PINNED, NOT OPEN-ENDED', () => {
+    it('AND THE ONE THE WEBHOOK CANNOT FULFIL IS PINNED, NOT OPEN-ENDED', () => {
         /*
          *   THE COST OF THIS LIST, WRITTEN DOWN WHERE IT CANNOT BE MISSED.
          *
@@ -214,30 +214,30 @@ describe('#695 — every checkout the platform mints must have a door that fulfi
          *   argued for here; an entry REMOVED means somebody wrote the
          *   processor, which is the direction this should move.
          *
-         *   ── AND IT MOVED. #719 WROTE THE FIRST OF THE THREE. ──────────────
+         *   ── AND IT MOVED, TWICE. ──────────────────────────────────────────
          *
-         *   `export_buyer_order` is gone from this list because it now has a
-         *   row in PAYMENT_ROUTES: processExportBuyerOrder, delivering through
-         *   lib/export-order-fulfilment, which the buyer's callback calls too.
-         *   A buyer who pays for an export order and never comes back now gets
-         *   the order anyway.
+         *   #719 wrote processExportBuyerOrder and #721 wrote
+         *   processPropertyPurchase, each delivering through a module the
+         *   buyer's callback calls too. A buyer who pays for an export order or
+         *   a property and never comes back now gets it anyway.
          *
          *   The assertion below is REDUCED, not relaxed — the list is still
-         *   pinned exactly, and the two that remain still carry the hole this
-         *   comment describes. `property_purchase` and `academy_enrollment` are
-         *   the same work and are tracked in docs/audit/outstanding-work.md.
+         *   pinned exactly, and the one that remains still carries the hole
+         *   this comment describes. `academy_enrollment` is the same work and
+         *   is tracked in docs/audit/outstanding-work.md.
          */
         const { CALLBACK_FULFILLED_TYPES, HANDLED_PAYMENT_TYPES } =
             require('@/infrastructure/payments/payment-router');
 
         expect([...CALLBACK_FULFILLED_TYPES].sort()).toEqual([
             'academy_enrollment',
-            'property_purchase',
         ]);
 
-        //   And the one that left is genuinely routable now, rather than simply
-        //   deleted from a list — which would reinstate #695's defect silently.
+        //   And the ones that left are genuinely routable now, rather than
+        //   simply deleted from a list — which would reinstate #695's defect
+        //   silently, and is the easiest way to make this test pass wrongly.
         expect(HANDLED_PAYMENT_TYPES.has('export_buyer_order')).toBe(true);
+        expect(HANDLED_PAYMENT_TYPES.has('property_purchase')).toBe(true);
 
         //   And no type may be in both. The webhook skips claiming whatever is
         //   callback-owned, so a type that is ALSO routable would have its
@@ -767,8 +767,23 @@ describe('#719 — and now the webhook actually delivers the order', () => {
  *     the raw value wins over the validated one              KILLED
  *     validation is skipped entirely                         KILLED
  *
+ *     #721 — THE SECOND PROCESSOR
+ *     the route row is removed from PAYMENT_ROUTES           KILLED
+ *     the underpayment check is removed                      KILLED
+ *     the LIVE listing price wins over the quote             KILLED
+ *       — the case that matters: an owner repricing between
+ *         initialisation and payment would turn a correct
+ *         payment into an underpayment, refused after the
+ *         claim, so the buyer paid and got nothing.
+ *     markFulfilmentFailed is skipped on refusal             KILLED
+ *     the purchase record is not moved to payment_confirmed  KILLED
+ *     the buyer's email falls back to blank instead of the
+ *       purchase record (the webhook has no session)         KILLED
+ *     metadata with no propertyId is allowed through         KILLED
+ *
  *     CONTROL — SHOULD SURVIVE
  *     reword a comment in export-order-fulfilment            SURVIVED ✓
+ *     reword a comment in property-purchase-fulfilment       SURVIVED ✓
  *
  * ── WHAT THIS FILE'S OWN TESTS GOT WRONG FIRST ──────────────────────────────
  *
@@ -789,3 +804,156 @@ describe('#719 — and now the webhook actually delivers the order', () => {
  *   FAILURE instead — the same instrument error pointing the other way. Scoped
  *   to the function now.
  */
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#721 — and the second of the three: a property nobody recorded as bought', () => {
+    /*
+     *   Same finding as #719, one checkout along. `property_purchase` had no
+     *   processor, so a buyer who paid for a property and closed the tab had
+     *   the money taken and the listing left in `pending_escrow` with no ledger
+     *   row, no payments row, and the purchase record still `pending`.
+     *
+     *   Asserted on the STORE, for the reason recorded above: the webhook route
+     *   answers 200 whether or not anything was fulfilled.
+     */
+
+    const PROPERTY_ID = 'LAND-721';
+    const PURCHASE_ID = 'FNT-721';
+    const PRICE = 4_000_000;
+    const PROP_REF = 'PSK-PROPERTY-721';
+
+    const walletLedger = require('@/lib/wallet-ledger');
+
+    function signedPropertyCharge(amountNaira = PRICE) {
+        const event = {
+            event: 'charge.success',
+            data: {
+                reference: PROP_REF,
+                amount: amountNaira * 100,
+                paid_at: '2026-09-14T00:00:00.000Z',
+                metadata: {
+                    userId: BUYER,
+                    type: 'property_purchase',
+                    propertyId: PROPERTY_ID,
+                    propertyTitle: 'Two plots at Epe',
+                    sellerId: 'seller-721',
+                },
+            },
+        };
+        const body = JSON.stringify(event);
+        const signature = crypto.createHmac('sha512', SECRET).update(body).digest('hex');
+        return {
+            text: async () => body,
+            headers: { get: (h: string) => (h === 'x-paystack-signature' ? signature : null) },
+        } as any;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        claims.clear();
+        process.env.PAYSTACK_SECRET_KEY = SECRET;
+
+        store = installFakeDb();
+        store.seed(COLLECTIONS.LAND_LISTINGS, PROPERTY_ID, {
+            id: PROPERTY_ID,
+            title: 'Two plots at Epe',
+            price: PRICE,
+            ownerId: 'seller-721',
+            status: 'pending_escrow',
+        });
+        store.seed(COLLECTIONS.FARM_NATION_TRANSACTIONS, PURCHASE_ID, {
+            id: PURCHASE_ID,
+            propertyId: PROPERTY_ID,
+            propertyPrice: PRICE,
+            buyerId: BUYER,
+            buyerEmail: 'buyer@e.test',
+            paymentReference: PROP_REF,
+            status: 'pending',
+        });
+    });
+
+    const property = () => store.get(COLLECTIONS.LAND_LISTINGS, PROPERTY_ID);
+    const purchase = () => store.get(COLLECTIONS.FARM_NATION_TRANSACTIONS, PURCHASE_ID);
+
+    it('A BUYER WHO NEVER COMES BACK STILL HAS THEIR PROPERTY HELD IN ESCROW', async () => {
+        //   THE finding. Before #721 none of these writes happened at all.
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedPropertyCharge());
+
+        expect(property()?.escrowHeldAt).toBeDefined();
+        expect(purchase()?.status).toBe('payment_confirmed');
+        expect(purchase()?.escrowStatus).toBe('held');
+    });
+
+    it('AND THE LEDGER AND PAYMENTS ROWS ARE WRITTEN, SO THE MONEY IS ACCOUNTED FOR', async () => {
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedPropertyCharge());
+
+        const tx = store.get(COLLECTIONS.TRANSACTIONS, PROP_REF);
+        expect(tx?.type).toBe('property_purchase');
+        expect(tx?.amount).toBe(PRICE);
+
+        const payment = store.get(COLLECTIONS.PAYMENTS, `PAY-${PROP_REF}`);
+        expect(payment?.status).toBe('success');
+        //   The webhook has no session, so the address comes from the purchase
+        //   record rather than being left blank.
+        expect(payment?.userEmail).toBe('buyer@e.test');
+        expect(payment?.participants).toEqual([BUYER, 'seller-721']);
+    });
+
+    it('AND AN UNDERPAYMENT IS REFUSED AGAINST THE QUOTE AND MARKED UNFULFILLED', async () => {
+        /*
+         *   The refusal runs after the claim, so the buyer has paid. The payment
+         *   must stop looking settled or it is counted as revenue and hidden
+         *   from reconciliation — which is what markFulfilmentFailed is for, and
+         *   why it lives inside the shared module rather than in each door.
+         */
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedPropertyCharge(PRICE - 500_000));
+
+        expect(property()?.escrowHeldAt).toBeUndefined();
+        expect(purchase()?.status).toBe('pending');
+        expect(walletLedger.markFulfilmentFailed).toHaveBeenCalled();
+    });
+
+    it('AND THE QUOTE WINS OVER A LISTING THE OWNER REPRICED MID-PURCHASE', async () => {
+        /*
+         *   Carried over from the callback and worth a test it never had. An
+         *   owner who raises the price between initialisation and the payment
+         *   landing would otherwise turn a correct payment into an underpayment
+         *   — refused AFTER the claim, so the buyer paid and got nothing.
+         */
+        store.seed(COLLECTIONS.LAND_LISTINGS, PROPERTY_ID, {
+            id: PROPERTY_ID, title: 'Two plots at Epe',
+            price: PRICE * 2, ownerId: 'seller-721', status: 'pending_escrow',
+        });
+
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedPropertyCharge(PRICE));
+
+        expect(property()?.escrowHeldAt).toBeDefined();
+        expect(walletLedger.markFulfilmentFailed).not.toHaveBeenCalled();
+    });
+
+    it('AND METADATA WITH NO propertyId THROWS RATHER THAN READING AS "NO PROCESSOR"', async () => {
+        const { processPropertyPurchase } = await import('@/infrastructure/payments/service');
+        await expect(processPropertyPurchase(PROP_REF, PRICE, BUYER, '', {}))
+            .rejects.toThrow(/propertyId/i);
+    });
+
+    it('AND BOTH DOORS DELIVER THROUGH ONE MODULE, NOT TWO COPIES', () => {
+        const read = (rel: string) =>
+            stripComments(readFileSync(join(ROOT, rel), 'utf8'), { label: rel });
+
+        const callback = read('src/app/actions/farm-nation-payment.ts');
+        const processor = read('src/infrastructure/payments/service.ts');
+
+        expect(callback).toContain('fulfilPropertyPurchase');
+        expect(processor).toContain('fulfilPropertyPurchase');
+
+        //   The callback no longer carries the delivery. The payments row and
+        //   the escrow marker are the sharpest markers of the ~120 lines moved.
+        expect(callback).not.toContain('escrowHeldAt');
+        expect(callback).not.toContain('escrow_payment');
+    });
+});

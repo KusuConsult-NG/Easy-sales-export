@@ -3,6 +3,7 @@
 import { requireSession } from "@/lib/session-guard";
 import { releasedReservationFields } from "@/lib/land-reservation-expiry";
 import { logger } from '@/lib/logger';
+import { fulfilPropertyPurchase } from "@/lib/property-purchase-fulfilment";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -358,149 +359,35 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             } as any;
         }
 
-        // Everything below runs AFTER the claim, so a failure here means the
-        // money was taken and nothing was delivered. claim_payment_once already
-        // wrote status 'completed' (its default), and
-        // reconcilePendingFulfillments only looks for 'pending_fulfilment' — so
-        // without the catch below, a throw here leaves a payment that looks
-        // settled, delivered nothing, and is invisible to reconciliation.
-        //
-        // Three things in this block throw: property missing, wrong status, and
-        // underpayment.
-        try {
-            const freshPropertyDoc = await propertyRef.get();
-            if (!freshPropertyDoc.exists) {
-                throw new Error("Property not found");
-            }
-
-            const freshData = freshPropertyDoc.data()!;
-
-            if (freshData.status !== "pending_escrow") {
-                throw new Error(`Property is not in pending escrow state (status: ${freshData.status}).`);
-            }
-
-            // The paid sum must cover the listed price.
-            //
-            // Nothing compared them before: this route trusted that whatever
-            // Paystack collected was the right amount, and the amount had been
-            // chosen by the buyer at initialisation. Charging the listed price
-            // above fixes the normal flow; this fixes the flow where a payment
-            // reference arrives from anywhere else.
-            //
-            // ₦1 of tolerance, matching confirmWalletFundingAction and the
-            // cooperative contribution path.
-            //
-            // COMPARED AGAINST THE PRICE THE BUYER WAS QUOTED, NOT THE LIVE ONE.
-            //
-            // This read `freshData.price`, the listing's CURRENT price, which the
-            // owner can change. So an owner who repriced between a buyer's
-            // initialisation and their return from Paystack made the buyer's
-            // payment look like an underpayment, and this threw — after the claim,
-            // so the buyer had paid and received nothing.
-            //
-            // The purchase record written at initialisation holds `propertyPrice`,
-            // which IS the figure Paystack was asked to collect. That is the
-            // contract, so that is what the payment is checked against.
-            // updatePropertyAction now also refuses to move these terms while a
-            // purchase is in flight; this is the half that does not depend on
-            // winning a race with the status write.
-            //
-            // Falls back to the listing price when no purchase record exists —
-            // a reference arriving from outside the normal flow, which is the case
-            // the original check was added for.
-            const quotedSnap = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-                .where("paymentReference", "==", reference)
-                .limit(1)
-                .get();
-
-            const quotedPrice = quotedSnap.empty
-                ? Number(freshData.price || 0)
-                : Number(quotedSnap.docs[0].data()?.propertyPrice ?? freshData.price ?? 0);
-
-            if (Number.isFinite(quotedPrice) && quotedPrice > 0 && amountInNaira + 1 < quotedPrice) {
-                logger.error("[FarmNationPayment] Underpayment for property", {
-                    propertyId,
-                    paid: amountInNaira,
-                    quoted: quotedPrice,
-                    listedNow: Number(freshData.price || 0),
-                    quoteSource: quotedSnap.empty ? "listing (no purchase record)" : "purchase record",
-                    reference,
-                });
-                throw new Error(
-                    `Payment of ₦${amountInNaira.toLocaleString()} does not cover the property price of ₦${quotedPrice.toLocaleString()}.`
-                );
-            }
-
-            // Transfer ownership later, just lock it in escrow
-            const updatedData = {
-                status: "pending_escrow", // Wait for admin to release C of O
-                escrowHeldAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp()
-            };
-            await propertyRef.update(updatedData);
-
-            // (The processed_payments row is written by claimPaymentOnce above.)
-
-            // Global Ledger Record
-            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            await globalTxRef.set({
-                id: reference,
-                userId: session.user.id,
-                type: "property_purchase",
-                module: "farm_nation",
-                amount: amountInNaira,
-                currency: "NGN",
-                status: "completed",
-                date: FieldValue.serverTimestamp(),
-                reference,
-                description: `Property Purchase - ${metadata.propertyTitle}`
-            });
-
-            // Log direct Paystack payment in the payments collection
-            const paymentId = `PAY-${reference}`;
-            const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentId);
-            await paymentRef.set({
-                id: paymentId,
-                userId: session.user.id,
-                userEmail: session.user.email || "",
-                amount: amountInNaira,
-                currency: "NGN",
-                paymentReference: reference,
-                status: "success",
-                paymentMethod: "paystack",
-                purpose: "escrow_payment",
-                relatedId: propertyId,
-                initiatedAt: freshData.createdAt || FieldValue.serverTimestamp(),
-                completedAt: FieldValue.serverTimestamp(),
-                sellerId: String(freshData.ownerId || metadata.sellerId || ""),
-                participants: [session.user.id, String(freshData.ownerId || metadata.sellerId || "")].filter(Boolean)
-            });
-
-            // Update purchase record
-            const purchaseQuery = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-                .where("paymentReference", "==", reference)
-                .limit(1)
-                .get();
-
-            if (!purchaseQuery.empty) { 
-                const purchaseRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseQuery.docs[0].id);
-                await purchaseRef.update({
-                    status: "payment_confirmed",
-                    escrowStatus: "held",
-                    paymentVerifiedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-        } catch (fulfilmentError: any) {
-            // Marked, then rethrown unchanged. The outer catch still turns this
-            // into the user-facing "contact support with reference" response;
-            // this only makes the payment findable so somebody can act on it.
-            await markFulfilmentFailed(
-                reference,
-                fulfilmentError?.message ?? String(fulfilmentError)
-            );
-            throw fulfilmentError;
-        }
+        /*
+         *   #721 THE DELIVERY ITSELF IS NOT WRITTEN HERE ANY MORE.
+         *
+         *   It was ~120 lines — the escrow hold, the ledger row, the payments
+         *   row and the purchase record — reachable ONLY from this page. A
+         *   buyer who paid and closed the tab never ran it and no other door
+         *   could, so the money was taken and the property sat in
+         *   `pending_escrow` with nothing recording it had been bought.
+         *
+         *   lib/property-purchase-fulfilment holds it once and the webhook's
+         *   processor calls the same function. #272's pattern, and the reason
+         *   it exists: marketplace orders once had two fulfilment paths that
+         *   answered the same payment differently depending on which arrived
+         *   first.
+         *
+         *   markFulfilmentFailed moved in there with it. Everything past the
+         *   claim means the money was taken, so a failure that does not mark
+         *   the payment leaves it looking settled and invisible to
+         *   reconciliation — the behaviour most worth having exactly once.
+         */
+        await fulfilPropertyPurchase({
+            reference,
+            amountInNaira,
+            buyerId: session.user.id,
+            propertyId,
+            propertyTitle: metadata.propertyTitle,
+            buyerEmail: session.user.email || "",
+            sellerIdFromMetadata: metadata.sellerId,
+        });
 
         return {
             success: true,

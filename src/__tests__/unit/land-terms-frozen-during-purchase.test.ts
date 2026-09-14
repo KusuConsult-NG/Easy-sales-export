@@ -49,8 +49,24 @@ const LISTINGS = readFileSync(
     join(process.cwd(), 'src/app/actions/farm-nation/_fn_listings.ts'),
     'utf-8'
 );
+/**
+ * The VERIFICATION half of the purchase.
+ *
+ *   #721 MOVED IT, AND THIS CONSTANT FOLLOWED RATHER THAN BEING RELAXED.
+ *
+ *   It read src/app/actions/farm-nation-payment.ts, because that is where the
+ *   price check lived when this was written. The check now lives in
+ *   lib/property-purchase-fulfilment, shared by the buyer's callback and the
+ *   webhook's processor, because a buyer who paid and closed the tab had no
+ *   door that could deliver the property at all.
+ *
+ *   Every assertion below is unchanged and still exact. The property this file
+ *   exists to pin — that a payment is compared against the QUOTE and not
+ *   against a listing the owner can reprice — is now pinned in the one place
+ *   both doors read, which is strictly stronger than pinning it in one of them.
+ */
 const PAYMENT = readFileSync(
-    join(process.cwd(), 'src/app/actions/farm-nation-payment.ts'),
+    join(process.cwd(), 'src/lib/property-purchase-fulfilment.ts'),
     'utf-8'
 );
 
@@ -123,13 +139,25 @@ describe('the commercial terms are frozen once money is committed', () => {
         // A reference arriving from outside the normal flow — the case the
         // original underpayment check existed for. It must still be checked, not
         // waved through.
-        expect(PAYMENT).toMatch(/quotedSnap\.empty\s*\n?\s*\?\s*Number\(freshData\.price/);
+        //
+        //   #721 SPELLS THE ABSENT CASE `purchase === null` rather than
+        //   `quotedSnap.empty ? ...`, because the extracted module keeps the
+        //   snapshot to read the buyer's email from as well as the price. The
+        //   property is the same and is still pinned exactly: no purchase
+        //   record means the listing price, and it is still compared.
+        expect(PAYMENT).toMatch(/purchase === null\s*\n?\s*\?\s*Number\(freshData\.price/);
     });
 
     it('still refuses an underpayment, so the guard was not simply removed', () => {
         // Vacuity guard. Every assertion above would pass if the comparison had
         // been deleted rather than corrected.
-        expect(PAYMENT).toMatch(/amountInNaira \+ 1 < quotedPrice/);
+        //
+        //   The literal `+ 1` became a named constant in #721. Pinning the NAME
+        //   alone would let the tolerance be changed to ₦1,000,000 without this
+        //   test noticing, so the value is pinned too — which is stricter than
+        //   the text match it replaces, not looser.
+        expect(PAYMENT).toMatch(/amountInNaira \+ PROPERTY_PRICE_TOLERANCE < quotedPrice/);
+        expect(PAYMENT).toMatch(/export const PROPERTY_PRICE_TOLERANCE = 1;/);
         expect(PAYMENT).toMatch(/does not cover the property price/);
     });
 });
