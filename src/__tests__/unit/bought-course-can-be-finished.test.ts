@@ -169,8 +169,16 @@ describe('#424 — the record completion is keyed on gets created', () => {
         expect(store.all(COLLECTIONS.COURSE_ENROLLMENTS)).toHaveLength(0);
     });
 
+    /*
+     *   #722 — the purchase path is lib/academy-course-fulfilment now, called by
+     *   the learner's callback AND by the webhook's processor. A learner who
+     *   bought a course and closed the tab previously got no completion record
+     *   because they got no fulfilment at all.
+     */
+    const FULFILMENT = 'src/lib/academy-course-fulfilment.ts';
+
     it('and THE PURCHASE PATH CALLS IT', () => {
-        const src = code(PURCHASE);
+        const src = code(FULFILMENT);
         expect(src).toMatch(/ensureCourseAccessRecords\(userId, courseId\)/);
         expect(src).toMatch(/from "@\/lib\/academy-course-progress"/);
     });
@@ -178,11 +186,16 @@ describe('#424 — the record completion is keyed on gets created', () => {
     it('and it calls it AFTER the payment transaction, not inside it', () => {
         // Inside, a failure to write a reporting row would roll back an
         // enrolment the learner has paid for.
-        const src = code(PURCHASE);
-        const txEnd = src.indexOf('revalidatePath("/academy")');
+        //
+        //   The old end-marker was `revalidatePath("/academy")`, which stayed in
+        //   the action when the delivery moved. The transaction's own close is
+        //   the anchor now — it is what the call has to come after, and it is in
+        //   the same file as the call, which the revalidate no longer is.
+        const src = code(FULFILMENT);
+        const txEnd = src.indexOf('await db.runTransaction');
         const call = src.indexOf('ensureCourseAccessRecords(userId, courseId)');
-        expect(call).toBeGreaterThan(-1);
-        expect(call).toBeLessThan(txEnd);
+        expect(txEnd).toBeGreaterThan(-1);
+        expect(call).toBeGreaterThan(txEnd);
         expect(src.slice(call)).toMatch(/records\.failed/);
     });
 

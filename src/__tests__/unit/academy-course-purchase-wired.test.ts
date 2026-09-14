@@ -138,9 +138,25 @@ describe('#378 — the verifier records the purchase where the rule can see it',
         expect(isPurchasedCourse(stamp as any)).toBe(true);
     });
 
+    /*
+     *   #722 MOVED THE DELIVERY, AND THESE READ IT WHERE IT NOW LIVES.
+     *
+     *   The stamp was written in _ac_course_payment.ts because that was the only
+     *   door that could deliver a course purchase. lib/academy-course-fulfilment
+     *   holds it now and the webhook's processor calls the same function, so a
+     *   learner who paid and closed the tab gets the course anyway.
+     *
+     *   The assertions are unchanged and still exact. Pinning the stamp in the
+     *   module BOTH doors read is stronger than pinning it in one of them — and
+     *   on this payment type it is the difference #378 exists for: two verifiers
+     *   accept it and write different records, so a second copy of the stamp is
+     *   the mechanism by which a paying learner is locked out.
+     */
+    const FULFILMENT = 'src/lib/academy-course-fulfilment.ts';
+
     it('the verifier stamps a NEW progress row', () => {
-        expect(code(COURSE_PAY)).toMatch(/coursePurchaseStamp\(reference,\s*amountPaid\)/);
-        expect(code(COURSE_PAY)).toMatch(/t\.set\(progressRef,\s*\{\s*\.\.\.progress,\s*\.\.\.coursePurchaseStamp/);
+        expect(code(FULFILMENT)).toMatch(/coursePurchaseStamp\(reference,\s*amountPaid\)/);
+        expect(code(FULFILMENT)).toMatch(/t\.set\(progressRef,\s*\{\s*\.\.\.progress,\s*\.\.\.coursePurchaseStamp/);
     });
 
     it('AND AN EXISTING ONE THAT DOES NOT YET SAY IT WAS BOUGHT', () => {
@@ -148,7 +164,7 @@ describe('#378 — the verifier records the purchase where the rule can see it',
         // the course outright, and #258's repair path, where the payment was
         // claimed and the enrolment write failed. Without this, the retry
         // confirms an enrolment that still cannot be opened.
-        const body = code(COURSE_PAY);
+        const body = code(FULFILMENT);
 
         expect(body).toMatch(/else if \(tProgressDoc\.data\(\)\?\.purchased !== true\)/);
         // A merge: the learner's progress is not touched.

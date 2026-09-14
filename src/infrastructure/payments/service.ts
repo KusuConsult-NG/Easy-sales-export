@@ -17,6 +17,8 @@ import { isDecidedAgainst } from "@/lib/registration-progress";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 import { findExportOrderByReference, fulfilExportBuyerOrder } from "@/lib/export-order-fulfilment";
 import { fulfilPropertyPurchase } from "@/lib/property-purchase-fulfilment";
+import { fulfilAcademyCoursePurchase } from "@/lib/academy-course-fulfilment";
+import { COURSE_PURCHASE_FLOW } from "@/lib/academy-purchase-flow";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -1641,5 +1643,122 @@ export async function processPropertyPurchase(
         propertyTitle: metadata.propertyTitle,
         sellerIdFromMetadata: metadata.sellerId,
     });
+    void paidAt;
+}
+
+/**
+ * Handle Academy Course Purchase Fulfilment — #722.
+ *
+ *   The last of the three types #695 found the platform charging money under
+ *   with no processor to route them. Its delivery lived only in
+ *   _verifyCoursePaymentAction, so a learner who bought a course and closed the
+ *   tab had the money taken and no access to what they paid for.
+ *
+ *   AND IT IS THE ONE THAT MUST BE ALLOWED TO DECLINE.
+ *
+ *   `academy_enrollment` is ONE type with TWO incompatible fulfilments — the
+ *   course purchase (user_progress, which grants ACCESS) and the programme
+ *   enrolment (an ENROLLMENTS row, which the admin report reads). #378 records
+ *   the cost of choosing wrong: "a paying learner listed as enrolled and locked
+ *   out of the course — permanently, since the payment is claimed and cannot be
+ *   claimed again."
+ *
+ *   The discriminator is `metadata.flow`, and #378 deliberately made it
+ *   OPTIONAL so references minted before it keep working. An unmarked reference
+ *   therefore names no flow, and NOTHING HERE CAN TELL WHICH FULFILMENT IS
+ *   OWED. It is left unclaimed for the interactive door, exactly as before this
+ *   finding — the same treatment payment-router gives a callback-owned type,
+ *   decided per payment rather than per type.
+ *
+ *   That remainder is measured, not hoped: initializeCoursePaymentAction is the
+ *   only initiator wired to a component, and it stamps COURSE_PURCHASE_FLOW on
+ *   everything it mints. So every academy payment the platform can currently
+ *   create is routable, and what stays callback-only is the pre-#378 backlog.
+ */
+export async function processAcademyCoursePurchase(
+    reference: string,
+    amount: number,
+    userId: string,
+    metadata: Record<string, any>,
+    paidAt?: Date,
+) {
+    const flow = String(metadata.flow ?? "").trim();
+    const courseId = String(metadata.courseId ?? "");
+
+    if (flow !== COURSE_PURCHASE_FLOW) {
+        /*
+         *   NOT THIS PROCESSOR'S PAYMENT — and deliberately NOT an error.
+         *
+         *   Two cases land here and both must leave the reference unclaimed:
+         *   an unmarked reference, which names no fulfilment at all, and one
+         *   marked for the ENROLLMENTS flow, whose delivery is still
+         *   callback-only.
+         *
+         *   Returning normally means dispatchPaystackPayment reports `true`, so
+         *   the webhook does not fall through to claiming this as an unhandled
+         *   type — which is the whole point. Claiming it would take the one
+         *   claim the learner's callback needs in order to fulfil, and #259
+         *   would then have that callback report SUCCESS over an enrolment
+         *   nobody performed. That is #695's defect exactly, and it is the
+         *   thing this finding must not reintroduce while fixing its sibling.
+         *
+         *   Unclaimed is not unrecorded: reconcile-paystack scans for completed
+         *   claims, so the reference stays in its discrepancy list until the
+         *   callback fulfils it.
+         */
+        logger.warn(
+            `[Paystack Fulfillment] ${reference} is an academy payment this processor cannot route `
+            + `(flow: ${flow || "none"}). Left UNCLAIMED for the interactive verify path, which is `
+            + `the only door that can tell which fulfilment it owes.`,
+        );
+        return;
+    }
+
+    if (!courseId) {
+        //   Marked as a course purchase and carrying no course. Thrown, because
+        //   this IS this processor's payment and it cannot be delivered — the
+        //   distinction #695 turns on is between "not mine" (above) and "mine
+        //   and broken" (here).
+        logger.error(`[Paystack Webhook] academy course purchase ${reference} carries no courseId`);
+        throw new Error("Academy course purchase has no courseId in its metadata");
+    }
+
+    const claim = await claimPaymentOnce({
+        reference,
+        userId,
+        amount,
+        type: "academy_enrollment",
+        source: "webhook",
+        metadata: { courseId },
+    });
+
+    /*
+     *   A LOST CLAIM FALLS THROUGH RATHER THAN RETURNING — #258.
+     *
+     *   Every write in the fulfilment is idempotent and existence-checked, so
+     *   running it for a duplicate costs one read when the learner really is
+     *   enrolled and REPAIRS them when they are not. Returning early on a lost
+     *   claim is what left a learner who paid, whose enrolment write failed,
+     *   permanently enrolled in nothing — because no later call can ever claim
+     *   that reference again.
+     */
+    if (!claim.claimed) {
+        logger.info(
+            `[Paystack Fulfillment] Academy course purchase ${reference} already claimed — `
+            + `confirming the enrolment exists before treating it as done.`,
+        );
+    }
+
+    try {
+        await fulfilAcademyCoursePurchase({ reference, userId, courseId, amountPaid: amount });
+    } catch (error: any) {
+        //   Only when THIS call took the claim. A failure on a duplicate belongs
+        //   to whichever delivery owns the reference, and marking it here would
+        //   overwrite a fulfilment that succeeded.
+        if (claim.claimed) {
+            await markFulfilmentFailed(reference, error?.message ?? String(error));
+        }
+        throw error;
+    }
     void paidAt;
 }

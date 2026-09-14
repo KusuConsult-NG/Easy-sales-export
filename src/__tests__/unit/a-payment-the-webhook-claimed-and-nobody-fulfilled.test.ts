@@ -201,7 +201,7 @@ describe('#695 — every checkout the platform mints must have a door that fulfi
         expect({ ownerless }).toEqual({ ownerless: [] });
     });
 
-    it('AND THE ONE THE WEBHOOK CANNOT FULFIL IS PINNED, NOT OPEN-ENDED', () => {
+    it('AND THE LIST IS EMPTY NOW, WHICH IS WHAT IT WAS FOR', () => {
         /*
          *   THE COST OF THIS LIST, WRITTEN DOWN WHERE IT CANNOT BE MISSED.
          *
@@ -214,30 +214,30 @@ describe('#695 — every checkout the platform mints must have a door that fulfi
          *   argued for here; an entry REMOVED means somebody wrote the
          *   processor, which is the direction this should move.
          *
-         *   ── AND IT MOVED, TWICE. ──────────────────────────────────────────
+         *   ── AND ALL THREE MOVED. ──────────────────────────────────────────
          *
-         *   #719 wrote processExportBuyerOrder and #721 wrote
-         *   processPropertyPurchase, each delivering through a module the
-         *   buyer's callback calls too. A buyer who pays for an export order or
-         *   a property and never comes back now gets it anyway.
+         *   #719, #721 and #722 wrote the processors: export orders, property
+         *   purchases and academy course purchases. Each delivers through a
+         *   module the buyer's callback calls too, so a buyer who pays and
+         *   never comes back gets the thing anyway.
          *
-         *   The assertion below is REDUCED, not relaxed — the list is still
-         *   pinned exactly, and the one that remains still carries the hole
-         *   this comment describes. `academy_enrollment` is the same work and
-         *   is tracked in docs/audit/outstanding-work.md.
+         *   AN EMPTY LIST IS THE STATE TO BE IN; AN ABSENT ONE IS A TRAP. The
+         *   set is kept because a fourth checkout minted with no processor has
+         *   to land somewhere, and the choice it encodes — leave the reference
+         *   UNCLAIMED rather than claim what you cannot fulfil — is the whole
+         *   of #695.
          */
         const { CALLBACK_FULFILLED_TYPES, HANDLED_PAYMENT_TYPES } =
             require('@/infrastructure/payments/payment-router');
 
-        expect([...CALLBACK_FULFILLED_TYPES].sort()).toEqual([
-            'academy_enrollment',
-        ]);
+        expect([...CALLBACK_FULFILLED_TYPES].sort()).toEqual([]);
 
-        //   And the ones that left are genuinely routable now, rather than
-        //   simply deleted from a list — which would reinstate #695's defect
-        //   silently, and is the easiest way to make this test pass wrongly.
+        //   And every type that left is genuinely routable, rather than simply
+        //   deleted from a list — which would reinstate #695's defect silently,
+        //   and is the easiest way to make an empty-list assertion pass wrongly.
         expect(HANDLED_PAYMENT_TYPES.has('export_buyer_order')).toBe(true);
         expect(HANDLED_PAYMENT_TYPES.has('property_purchase')).toBe(true);
+        expect(HANDLED_PAYMENT_TYPES.has('academy_enrollment')).toBe(true);
 
         //   And no type may be in both. The webhook skips claiming whatever is
         //   callback-owned, so a type that is ALSO routable would have its
@@ -781,9 +781,29 @@ describe('#719 — and now the webhook actually delivers the order', () => {
  *       purchase record (the webhook has no session)         KILLED
  *     metadata with no propertyId is allowed through         KILLED
  *
+ *     #722 — THE THIRD PROCESSOR, AND THE ONE THAT MAY DECLINE
+ *     the route row is removed from PAYMENT_ROUTES           KILLED
+ *     an unmarked reference is GUESSED as a course purchase  KILLED
+ *       — the one that locks a paying learner out for good.
+ *     declining THROWS instead of returning                  KILLED
+ *       — SURVIVED first, and it is the most important of
+ *         the seven. "Decline" was asserted only as "nothing
+ *         is claimed", which a throw satisfies too. The
+ *         difference is the webhook's answer: its catch
+ *         returns 500 "so Paystack retries the delivery", so
+ *         a throw puts every unmarked academy reference into
+ *         an endless retry loop over a payment nothing can
+ *         route. The response code IS the distinction between
+ *         "not mine" and "mine and broken", and it was
+ *         untested until this mutant said so.
+ *     a duplicate returns early instead of repairing (#258)  KILLED
+ *     the purchase stamp is dropped from a new progress row  KILLED
+ *     a course purchase with no courseId is allowed through  KILLED
+ *
  *     CONTROL — SHOULD SURVIVE
  *     reword a comment in export-order-fulfilment            SURVIVED ✓
  *     reword a comment in property-purchase-fulfilment       SURVIVED ✓
+ *     reword a comment in academy-course-fulfilment          SURVIVED ✓
  *
  * ── WHAT THIS FILE'S OWN TESTS GOT WRONG FIRST ──────────────────────────────
  *
@@ -955,5 +975,191 @@ describe('#721 — and the second of the three: a property nobody recorded as bo
         //   the escrow marker are the sharpest markers of the ~120 lines moved.
         expect(callback).not.toContain('escrowHeldAt');
         expect(callback).not.toContain('escrow_payment');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#722 — the last of the three, and the only one allowed to decline', () => {
+    /*
+     *   `academy_enrollment` is ONE type with TWO incompatible fulfilments:
+     *   the course purchase writes user_progress, which is what ACCESS is read
+     *   from, and the programme enrolment writes an ENROLLMENTS row, which the
+     *   ADMIN REPORT is read from. claimPaymentOnce lets exactly one of them
+     *   ever run for a reference, and #378 records the cost of choosing wrong:
+     *   "a paying learner listed as enrolled and locked out of the course —
+     *   permanently, since the payment is claimed and cannot be claimed again."
+     *
+     *   The discriminator is `metadata.flow` and #378 made it OPTIONAL, so an
+     *   unmarked reference names no fulfilment at all. The processor must
+     *   refuse those rather than guess — and refusing has to mean LEAVING THE
+     *   REFERENCE UNCLAIMED, not recording it as unhandled, or it reinstates
+     *   #695's defect while fixing its sibling.
+     */
+
+    const COURSE_ID = 'COURSE-722';
+    const AC_REF = 'PSK-ACADEMY-722';
+    const PRICE = 35_000;
+    const LEARNER = 'learner-722';
+
+    const walletLedger = require('@/lib/wallet-ledger');
+
+    function signedAcademyCharge(flow?: string) {
+        const metadata: Record<string, unknown> = {
+            userId: LEARNER,
+            type: 'academy_enrollment',
+            courseId: COURSE_ID,
+        };
+        if (flow !== undefined) metadata.flow = flow;
+
+        const event = {
+            event: 'charge.success',
+            data: {
+                reference: AC_REF,
+                amount: PRICE * 100,
+                paid_at: '2026-09-14T00:00:00.000Z',
+                metadata,
+            },
+        };
+        const body = JSON.stringify(event);
+        const signature = crypto.createHmac('sha512', SECRET).update(body).digest('hex');
+        return {
+            text: async () => body,
+            headers: { get: (h: string) => (h === 'x-paystack-signature' ? signature : null) },
+        } as any;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        claims.clear();
+        process.env.PAYSTACK_SECRET_KEY = SECRET;
+        store = installFakeDb();
+        store.seed(COLLECTIONS.ACADEMY_COURSES, COURSE_ID, {
+            id: COURSE_ID, title: 'Export Documentation', price: PRICE, tier: 'elite',
+        });
+    });
+
+    const progress = () => store.get('user_progress', `${LEARNER}/courses/${COURSE_ID}`)
+        ?? store.get(`user_progress/${LEARNER}/courses`, COURSE_ID);
+
+    it('A LEARNER WHO NEVER COMES BACK STILL GETS THE COURSE THEY BOUGHT', async () => {
+        //   THE finding. The marked course purchase is what every live academy
+        //   checkout mints, and before #722 none of it was delivered.
+        const { COURSE_PURCHASE_FLOW } = await import('@/lib/academy-purchase-flow');
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedAcademyCharge(COURSE_PURCHASE_FLOW));
+
+        expect(claims.get(AC_REF)).toBe('completed');
+        expect(progress()?.purchased).toBe(true);
+    });
+
+    it('AND AN UNMARKED REFERENCE IS LEFT UNCLAIMED, NOT GUESSED AT', async () => {
+        /*
+         *   THE assertion this whole finding turns on. Two different fulfilments
+         *   accept an unmarked reference; the webhook cannot tell which is owed,
+         *   and picking wrong locks a paying learner out permanently.
+         *
+         *   Unclaimed is the correct outcome: it leaves the one claim the
+         *   learner's callback needs in order to fulfil, and the reconciler
+         *   still reports it as a discrepancy until that happens.
+         */
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedAcademyCharge(undefined));
+
+        expect(claims.has(AC_REF)).toBe(false);
+        expect(progress()).toBeUndefined();
+    });
+
+    it('AND IT IS NOT RECORDED AS AN UNHANDLED TYPE EITHER — THAT IS #695 EXACTLY', async () => {
+        /*
+         *   The failure mode a naive "this processor cannot handle it" would
+         *   produce: returning false makes the webhook claim the reference as
+         *   `unhandled_type`, which takes the claim the callback needs and has
+         *   #259 report SUCCESS over an enrolment nobody performed.
+         */
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedAcademyCharge(undefined));
+
+        expect(claims.get(AC_REF)).not.toBe('unhandled_type');
+    });
+
+    it('AND DECLINING ANSWERS 200, SO PAYSTACK DOES NOT RETRY IT FOREVER', async () => {
+        /*
+         *   A MUTANT SURVIVED HERE AND THIS IS THE TEST THAT EARNS THE CLAIM.
+         *
+         *   "Decline" was asserted only as "the reference is not claimed", and
+         *   a processor that THREW instead of returning satisfies that too —
+         *   nothing is claimed either way. The difference is what the webhook
+         *   then answers: its catch returns 500 with the comment "so Paystack
+         *   retries the webhook delivery".
+         *
+         *   So a throw would put every unmarked academy reference into an
+         *   endless Paystack retry loop over a payment nothing can route. The
+         *   response code is the whole distinction between "not mine, leave it
+         *   for the other door" and "mine and broken, send it again", and it
+         *   was untested.
+         */
+        const route = await import('@/app/api/webhooks/paystack/route');
+        const res: any = await route.POST(signedAcademyCharge(undefined));
+
+        expect(res.status).toBe(200);
+    });
+
+    it('AND A REFERENCE MARKED FOR THE OTHER FLOW IS DECLINED THE SAME WAY', async () => {
+        //   The ENROLLMENTS flow's delivery is still callback-only. Claiming it
+        //   here would strand it exactly as an unmarked one.
+        const { ENROLLMENT_FLOW } = await import('@/lib/academy-purchase-flow');
+        const route = await import('@/app/api/webhooks/paystack/route');
+        await route.POST(signedAcademyCharge(ENROLLMENT_FLOW));
+
+        expect(claims.has(AC_REF)).toBe(false);
+        expect(progress()).toBeUndefined();
+    });
+
+    it('AND A COURSE PURCHASE WITH NO courseId THROWS — "MINE AND BROKEN" IS NOT "NOT MINE"', async () => {
+        const { COURSE_PURCHASE_FLOW } = await import('@/lib/academy-purchase-flow');
+        const { processAcademyCoursePurchase } = await import('@/infrastructure/payments/service');
+
+        await expect(processAcademyCoursePurchase(
+            AC_REF, PRICE, LEARNER, { flow: COURSE_PURCHASE_FLOW },
+        )).rejects.toThrow(/courseId/i);
+    });
+
+    it('AND A DUPLICATE DELIVERY REPAIRS RATHER THAN RETURNING EARLY — #258 HOLDS', async () => {
+        /*
+         *   #258: returning early on a lost claim is what left a learner who
+         *   paid, whose enrolment write failed, permanently enrolled in nothing.
+         *   Every write in the fulfilment is idempotent and existence-checked,
+         *   so a duplicate costs one read when they really are enrolled and
+         *   REPAIRS them when they are not.
+         */
+        const { COURSE_PURCHASE_FLOW } = await import('@/lib/academy-purchase-flow');
+        const { processAcademyCoursePurchase } = await import('@/infrastructure/payments/service');
+
+        //   The reference is already claimed by something that delivered nothing.
+        claims.set(AC_REF, 'completed');
+
+        await processAcademyCoursePurchase(
+            AC_REF, PRICE, LEARNER,
+            { flow: COURSE_PURCHASE_FLOW, courseId: COURSE_ID },
+        );
+
+        expect(progress()?.purchased).toBe(true);
+    });
+
+    it('AND BOTH DOORS DELIVER THROUGH ONE MODULE, NOT TWO COPIES', () => {
+        const read = (rel: string) =>
+            stripComments(readFileSync(join(ROOT, rel), 'utf8'), { label: rel });
+
+        const callback = read('src/app/actions/academy/_ac_course_payment.ts');
+        const processor = read('src/infrastructure/payments/service.ts');
+
+        expect(callback).toContain('fulfilAcademyCoursePurchase');
+        expect(processor).toContain('fulfilAcademyCoursePurchase');
+
+        //   On THIS payment type a second copy is not merely drift: two
+        //   verifiers accept it and write different records, so a divergent
+        //   copy is the mechanism by which a paying learner is locked out.
+        expect(callback).not.toContain('coursePurchaseStamp');
+        expect(callback).not.toContain('ensureCourseAccessRecords');
     });
 });

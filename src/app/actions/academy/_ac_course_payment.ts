@@ -13,8 +13,8 @@ import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
 import type { Course, UserProgress } from "@/lib/types/academy-actions";
-import { COURSE_PURCHASE_FLOW, coursePurchaseStamp, isForeignPaymentFlow } from "@/lib/academy-purchase-flow";
-import { ensureCourseAccessRecords } from "@/lib/academy-course-progress";
+import { COURSE_PURCHASE_FLOW, isForeignPaymentFlow } from "@/lib/academy-purchase-flow";
+import { fulfilAcademyCoursePurchase } from "@/lib/academy-course-fulfilment";
 import { paidButNotFulfilled } from "@/lib/paid-but-not-fulfilled";
 
 /**
@@ -269,122 +269,29 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
             claimedReference = reference;
         }
 
-        let enrolledNow = false;
-        await db.runTransaction(async (t) => {
-            // 1. Enroll User
-            const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
-            // Check if user already has progress (in case they are somehow re-enrolling or upgrading)
-            const tProgressDoc = await t.get(progressRef);
-            if (!tProgressDoc.exists) {
-                const progress: UserProgress = {
-                    userId,
-                    courseId,
-                    completedLessons: [],
-                    completedModules: [],
-                    quizScores: {},
-                    overallProgress: 0,
-                    startedAt: FieldValue.serverTimestamp(),
-                    lastAccessedAt: FieldValue.serverTimestamp(),
-                };
-                /**
-                 *   #378 THE ROW HAS TO SAY IT WAS BOUGHT, OR THE PURCHASE
-                 *        BUYS NOTHING.
-                 *
-                 *        Creating the progress row was taken to BE the
-                 *        enrolment. It is not what grants access:
-                 *        checkCourseAccess decides that from the learner's PLAN
-                 *        against the course TIER, and the course page runs it
-                 *        before the progress row is consulted at all. So a
-                 *        learner who bought one elite course on a foundation
-                 *        plan was charged, enrolled, and then redirected off the
-                 *        course's own page on their next visit.
-                 *
-                 *        The flag is written explicitly rather than inferred
-                 *        from the row existing, because enrollInCourseAction
-                 *        writes the same row for plan-granted access — reading
-                 *        the row as proof of purchase would open every course a
-                 *        learner had ever been enrolled on, including after a
-                 *        plan downgrade.
-                 */
-                t.set(progressRef, { ...progress, ...coursePurchaseStamp(reference, amountPaid) });
-                enrolledNow = true;
-            } else if (tProgressDoc.data()?.purchased !== true) {
-                /**
-                 *   #378 THE ROW EXISTED BUT DID NOT SAY IT WAS BOUGHT.
-                 *
-                 *        Two ways to arrive here, and the flag is right in both:
-                 *
-                 *        A learner already enrolled on their plan, who then buys
-                 *        the course outright — a downgrade would otherwise take
-                 *        away what they had just paid for.
-                 *
-                 *        And #258's repair path: the payment was claimed, the
-                 *        enrolment write failed, a retry arrives. That case
-                 *        falls through to here deliberately, and the stamp has
-                 *        to be part of what it repairs — otherwise the retry
-                 *        confirms an enrolment that still cannot be opened.
-                 *
-                 *        A merge, not a set: nothing about the learner's
-                 *        progress is touched.
-                 */
-                t.set(progressRef, coursePurchaseStamp(reference, amountPaid), { merge: true });
-            }
-
-            // 2. (The processed_payments row is written by claimPaymentOnce
-            //     above. Writing it here as well is what put the marker AFTER
-            //     the enrolment, so a duplicate delivery could enrol twice.)
-        });
-
-        /**
-         *   #424 THE OTHER PROGRESS RECORD — THE ONE COMPLETION IS KEYED ON.
+        /*
+         *   #722 THE DELIVERY ITSELF IS NOT WRITTEN HERE ANY MORE.
          *
-         *   The transaction above writes user_progress/{userId}/courses/{id},
-         *   which carries the purchase stamp and is what OPENS the course. It is
-         *   not what FINISHES one: completeCourse and generateCourseCertificate
-         *   both address course_progress/{userId}_{courseId}, and completeCourse
-         *   refuses outright when that document does not exist.
+         *   It was the progress transaction, the purchase stamp, the completion
+         *   record and the audit row — reachable ONLY from this page. A learner
+         *   who bought a course and closed the tab never ran it and no other
+         *   door could, so the money was taken and the course stayed shut.
          *
-         *   Nothing else was going to create it for this learner.
-         *   autoEnrollPaidUser writes both records, but it enrols from the PLAN
-         *   against the course TIER — and somebody buying a single course their
-         *   plan does not cover fails that test by definition. So a bought
-         *   course opened, played to the last lesson, and then refused to
-         *   complete.
-         *
-         *   Outside the transaction on purpose: this is idempotent and
-         *   existence-checked, the money has already been claimed, and a failure
-         *   here must not roll back an enrolment the learner has paid for. It is
-         *   repaired on the next delivery or the next call, because both halves
-         *   check before they write.
+         *   lib/academy-course-fulfilment holds it once and the webhook's
+         *   processor calls the same function. #272's pattern, and here it
+         *   matters more than anywhere else it has been applied: two verifiers
+         *   accept this payment type and write DIFFERENT records, so a second
+         *   hand-written copy is not just drift — it is the mechanism by which
+         *   a paying learner ends up enrolled in the admin's report and locked
+         *   out of the course (#378).
          */
-        const records = await ensureCourseAccessRecords(userId, courseId);
-        if (records.failed) {
-            // Not fatal to the purchase — but it must not vanish into the log
-            // either, because the learner is now enrolled and may be unable to
-            // complete. #259's reasoning: a half-delivered fulfilment belongs in
-            // reconciliation.
-            logger.warn(
-                `[verifyCoursePurchase] Access records incomplete for ${userId}/${courseId} ` +
-                `after reference ${reference} — the learner may be unable to complete the course.`,
-            );
-        }
-
-        // Audit only a real enrolment.
-        //
-        // Now that a duplicate delivery falls through to the block above
-        // (#258), auditing unconditionally would write a second
-        // "course_enrolled" row for every webhook retry — an audit trail that
-        // reports work it did not do, which is the shape #129 fixed for
-        // disputes.
-        if (enrolledNow) {
-            await createAdminAuditLog({
-                action: "course_enrolled",
-                userId,
-                targetId: courseId,
-                targetType: "course",
-                details: `Enrolled via Paystack Ref: ${reference}`,
-            });
-        }
+        const { enrolledNow } = await fulfilAcademyCoursePurchase({
+            reference,
+            userId,
+            courseId,
+            amountPaid,
+        });
+        void enrolledNow;
 
         revalidatePath("/academy");
         // /dashboard/academy is not a route — the academy dashboard is at

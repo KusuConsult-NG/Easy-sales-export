@@ -83,6 +83,7 @@ import {
     processWalletFunding,
     processExportBuyerOrder,
     processPropertyPurchase,
+    processAcademyCoursePurchase,
     processExportInvestment,
     processCooperativeRegistration,
     processAcademyRegistration,
@@ -183,6 +184,15 @@ export const PAYMENT_ROUTES: readonly PaymentRoute[] = [
         ),
     },
     {
+        //   #722 — the last of #695's three, and the only row that may DECLINE
+        //   a payment of its own type. `academy_enrollment` names two
+        //   incompatible fulfilments and its discriminator is optional, so an
+        //   unmarked reference is left unclaimed for the interactive door
+        //   rather than guessed at. See processAcademyCoursePurchase.
+        types: ["academy_enrollment"],
+        run: (c) => processAcademyCoursePurchase(c.reference, c.amount, c.userId, c.metadata, c.paidAt),
+    },
+    {
         types: ["wallet_funding"],
         // processWalletFunding throws on refusal, so a wallet credit that did
         // not happen is never counted as fulfilled — #298's rule, and the
@@ -262,14 +272,24 @@ export const HANDLED_PAYMENT_TYPES: ReadonlySet<string> = new Set(
  *   and the honest move is to make the lying stop first.
  */
 export const CALLBACK_FULFILLED_TYPES: ReadonlySet<string> = new Set([
-    //   `export_buyer_order` (#719) and `property_purchase` (#721) WERE HERE
-    //   AND ARE NOT ANY MORE — both have processors, which is the direction the
-    //   list above says this should move. The webhook fulfils them, so claiming
-    //   the reference is exactly the right thing to do and no longer steals the
-    //   callback's claim.
+    //   EMPTY, AND THAT IS THE POINT OF THE LIST.
     //
-    //   ONE LEFT.
-    "academy_enrollment",
+    //   All three entries left the same way: somebody wrote the processor.
+    //   `export_buyer_order` (#719), `property_purchase` (#721) and
+    //   `academy_enrollment` (#722) are all routed now, so the webhook fulfils
+    //   them and claiming their references is exactly the right thing to do.
+    //
+    //   THE SET IS KEPT, NOT DELETED. A fourth checkout minted with no
+    //   processor has to land somewhere, and the choice this list encodes —
+    //   leave the reference UNCLAIMED rather than claim what you cannot fulfil
+    //   — is the whole of #695. An empty set is the state to be in; an absent
+    //   one is a trap for the next person.
+    //
+    //   #722 also shows the limit of a TYPE-level list: `academy_enrollment` is
+    //   routable for a marked course purchase and callback-owned for an
+    //   unmarked reference, so that decision is taken per PAYMENT inside the
+    //   processor. This set remains the right shape for a type nothing can
+    //   route at all.
 ]);
 
 /**
