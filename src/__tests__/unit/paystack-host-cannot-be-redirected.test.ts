@@ -225,7 +225,6 @@ describe('every caller goes through it', () => {
         // a fabricated payment rather than a wrong bank list.
         for (const rel of [
             'src/lib/paystack-server.ts',
-            'src/lib/paystack.ts',
             'src/lib/paystack-transfer.ts',
             'src/app/actions/wallet.ts',
             'src/app/api/cooperative/verify-payment/route.ts',
@@ -233,6 +232,33 @@ describe('every caller goes through it', () => {
         ]) {
             expect(code(rel)).toContain('paystackBaseUrl');
         }
+    });
+
+    it('and lib/paystack.ts is off that list because it no longer contacts Paystack at all', () => {
+        /*
+         *   #727 — WHY AN ENTRY LEFT THIS LIST, ASSERTED RATHER THAN DELETED.
+         *
+         *   lib/paystack.ts was named above because it held a second
+         *   `verifyPaystackPayment` — a "use client" module reading
+         *   PAYSTACK_SECRET_KEY, weaker than the real one in paystack-server.ts
+         *   and imported by nothing. It was removed, and with it the only call
+         *   in the file that needed a host.
+         *
+         *   Dropping a name from a list of money paths is exactly the move that
+         *   should be suspicious, so the reason is pinned instead: the file
+         *   contacts Paystack NOWHERE. If it ever does again, this fails and
+         *   the name goes back on the list above.
+         */
+        const src = code('src/lib/paystack.ts');
+
+        expect(src).not.toContain('fetch(');
+        expect(src).not.toContain('PAYSTACK_SECRET_KEY');
+        expect(src).not.toContain('/transaction/');
+
+        //   Vacuity guard: the file still exists and still exports the things
+        //   that made it worth keeping.
+        expect(src).toContain('export function generateReference');
+        expect(src).toContain('export function usePaystack');
     });
 });
 

@@ -106,6 +106,10 @@ import { join, relative } from 'path';
 import crypto from 'node:crypto';
 
 import { stripComments } from '@/lib/testing/strip-comments';
+import {
+    checkoutFiles as initiatorFiles,
+    mintedTypes,
+} from '@/lib/testing/paystack-checkout-scan';
 
 const ROOT = process.cwd();
 
@@ -113,69 +117,107 @@ const ROOT = process.cwd();
 // THE MEASUREMENT: what the checkouts mint, against what the router knows.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Every file that calls the shared Paystack initializer.
+/*
+ * ── #727 THE LIST WAS HAND-WRITTEN, AND THREE LIVE CHECKOUTS WERE NOT ON IT ──
  *
- * Listed rather than swept, and the control below proves the list is complete:
- * a sweep over src for the call is cheap and is exactly what #678's discarded
- * instrument got wrong by being clever. This is the narrow, sound version.
- */
-const INITIATOR_FILES = [
-    'src/app/actions/export-payment.ts',
-    'src/app/actions/marketplace/_payment_orders.ts',
-    'src/app/actions/export/_ex_investments.ts',
-    'src/app/actions/cooperative/_payment.ts',
-    'src/app/actions/cooperative/_coop_money.ts',
-    'src/app/actions/farm-nation-payment.ts',
-    'src/app/actions/academy/_payment.ts',
-    'src/app/actions/academy/_ac_course_payment.ts',
-];
-
-/** The span of one call, from its opening paren to the paren that closes it. */
-function callSpan(src: string, openParenAt: number): string {
-    let depth = 0;
-    for (let i = openParenAt; i < src.length; i++) {
-        const c = src[i];
-        if (c === '(') depth++;
-        else if (c === ')') {
-            depth--;
-            if (depth === 0) return src.slice(openParenAt, i + 1);
-        }
-    }
-    return src.slice(openParenAt);
-}
-
-/**
- * The `type` each initializer puts in Paystack's metadata.
+ *   This was eight hardcoded paths, under a comment reading "the control below
+ *   proves the list is complete". IT PROVES THE OPPOSITE DIRECTION. The control
+ *   asserts every LISTED file mints something — that nothing on the list went
+ *   stale. Nothing anywhere asked whether the list covers every checkout, which
+ *   is the claim the file's title makes.
  *
- * Scoped to the CALL, by matching parens — not to a fixed window. A window long
- * enough to reach the metadata object of one call is long enough to reach the
- * next call's, and this file's whole claim is about which call mints which
- * type.
+ *   Three checkouts do not call the shared initializer at all. They POST to
+ *   `/transaction/initialize` with their own fetch:
+ *
+ *       src/app/actions/wallet.ts                    wallet_funding
+ *       src/app/api/cooperative/contribute/route.ts  contribution
+ *       src/app/api/cooperatives/register/route.ts   cooperative_membership_registration
+ *
+ *   All three mint types the router does handle, so there is no unfulfilled
+ *   payment today and this finding repairs no live money defect. WHAT IT
+ *   REPAIRS IS THE GUARANTEE. Pointing one of those three at a type no
+ *   processor owns — the exact #695 defect, on a live money path — left this
+ *   suite green at 32 passing. A ratchet that cannot fail on the thing it was
+ *   written to catch is worse than no ratchet, because the next person reads
+ *   the green and stops looking.
+ *
+ *   SWEPT, NOT LISTED, and the difference is the whole finding. A hand-written
+ *   list is a second copy of a fact the filesystem already holds, and this
+ *   audit's most frequent defect is two copies of one fact with the stale one
+ *   deciding. A list cannot notice a checkout nobody added to it; a sweep
+ *   cannot miss one.
+ *
+ *   The earlier note warned that #678's discarded instrument "got wrong by
+ *   being clever". The lesson there was about an instrument that inferred
+ *   MEANING from source shape. This infers nothing: it looks for two literal
+ *   strings and reads the `type:` out of the call that contains them. The
+ *   floors below keep it from going quiet.
  */
-function mintedTypes(): Array<{ where: string; type: string }> {
-    const found: Array<{ where: string; type: string }> = [];
-    for (const rel of INITIATOR_FILES) {
-        const src = stripComments(readFileSync(join(ROOT, rel), 'utf8'), { label: rel });
-        const needle = 'initializePaystackPayment(';
-        let at = src.indexOf(needle);
-        while (at !== -1) {
-            const span = callSpan(src, at + needle.length - 1);
-            const m = span.match(/\btype:\s*["'`]([a-z_]+)["'`]/);
-            if (m) found.push({ where: rel, type: m[1] });
-            at = src.indexOf(needle, at + needle.length);
-        }
-    }
-    return found;
-}
+
+/*
+ *   SWEPT BY THE SHARED SCAN — lib/testing/paystack-checkout-scan.
+ *
+ *   The first draft of #727 put the sweep here AND in #727's own suite, and
+ *   mutation testing caught it at once: breaking one copy left the other suite
+ *   green. That is this audit's most frequent defect reproduced inside its own
+ *   repair, so there is one implementation and both suites import it.
+ */
 
 describe('#695 — every checkout the platform mints must have a door that fulfils it', () => {
     it('THE SCAN IS READING THE APPLICATION', () => {
         //   THE control. Every assertion below is about a list of minted types,
         //   and an empty list agrees with any expectation about it.
         const minted = mintedTypes();
-        expect(minted.length).toBeGreaterThanOrEqual(8);
-        expect(new Set(minted.map((m) => m.where)).size).toBe(INITIATOR_FILES.length);
+        expect(minted.length).toBeGreaterThanOrEqual(11);
+
+        //   Every file the sweep found yields a type. A checkout the sweep can
+        //   see but cannot read the type of is a silent hole of the same shape
+        //   as a file that was never listed.
+        const seen = new Set(minted.map((m) => m.where));
+        expect([...initiatorFiles()].filter((f) => !seen.has(f))).toEqual([]);
+    });
+
+    it('AND THE SWEEP FINDS THE CHECKOUTS THAT DO NOT USE THE SHARED INITIALIZER', () => {
+        /*
+         *   #727 — THE assertion, and the one the hand-written list could not
+         *   make. These three POST to the endpoint directly, so the old scan
+         *   could not see them however carefully it read the files it knew
+         *   about.
+         *
+         *   Named explicitly rather than counted: a count goes green again the
+         *   moment any three files match, and what has to stay true is that
+         *   THESE checkouts are measured.
+         */
+        const files = initiatorFiles();
+
+        expect(files).toContain('src/app/actions/wallet.ts');
+        expect(files).toContain('src/app/api/cooperative/contribute/route.ts');
+        expect(files).toContain('src/app/api/cooperatives/register/route.ts');
+
+        //   And their types are actually read out, not merely the files found.
+        const byFile = new Map(mintedTypes().map((m) => [m.where, m.type]));
+        expect(byFile.get('src/app/actions/wallet.ts')).toBe('wallet_funding');
+        expect(byFile.get('src/app/api/cooperative/contribute/route.ts')).toBe('contribution');
+        expect(byFile.get('src/app/api/cooperatives/register/route.ts'))
+            .toBe('cooperative_membership_registration');
+    });
+
+    it('AND THE SWEEP STILL FINDS THE EIGHT THAT DO', () => {
+        //   The eight the hand-written list named. A sweep that replaced a list
+        //   has to cover it, or the repair traded one blind spot for another.
+        const files = initiatorFiles();
+        for (const f of [
+            'src/app/actions/export-payment.ts',
+            'src/app/actions/marketplace/_payment_orders.ts',
+            'src/app/actions/export/_ex_investments.ts',
+            'src/app/actions/cooperative/_payment.ts',
+            'src/app/actions/cooperative/_coop_money.ts',
+            'src/app/actions/farm-nation-payment.ts',
+            'src/app/actions/academy/_payment.ts',
+            'src/app/actions/academy/_ac_course_payment.ts',
+        ]) {
+            expect(files).toContain(f);
+        }
     });
 
     it('AND EVERY MINTED TYPE HAS AN OWNER — A PROCESSOR, OR A NAMED CALLBACK', () => {

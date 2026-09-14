@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { paystackBaseUrl } from "@/lib/paystack-host";
 
 declare global {
     interface Window {
@@ -95,41 +94,40 @@ export function generateReference(prefix: string = "PAY"): string {
     return `${prefix}-${timestamp}-${random}`;
 }
 
-/**
- * Verify Paystack payment (Server-side)
+/*
+ * ── #727 A SECOND verifyPaystackPayment LIVED HERE, AND IT WAS THE WEAK ONE ──
+ *
+ *   This file exported a function named `verifyPaystackPayment`, marked
+ *   "(Server-side)", in a module whose first line is "use client". The platform
+ *   already has a function of that exact name in lib/paystack-SERVER.ts, and
+ *   the two differed in every way that matters:
+ *
+ *     paystack-server.ts   retries transient failures, THROWS when the secret
+ *                          is missing, and returns Paystack's own response
+ *                          shape. It fails closed, and the block comment above
+ *                          it records why at length — it is the function a
+ *                          fabricated-reference bypass was removed from.
+ *
+ *     this one             no retry, and every failure — including a missing
+ *                          PAYSTACK_SECRET_KEY — came back as an ordinary
+ *                          `{ success: false }`. A caller that treated a
+ *                          falsy result as "payment not successful" rather
+ *                          than "verification did not happen" would be making
+ *                          #714's mistake on a money path: a lookup that
+ *                          FAILED reported as an answer.
+ *
+ *   NOTHING IMPORTED IT. The only import of this module anywhere in the
+ *   repository is `generateReference`, in api/cooperatives/register. So this
+ *   was not a live defect — it was a loaded trap, one character of import path
+ *   away from the real one, offered by the same autocomplete.
+ *
+ *   REMOVED RATHER THAN HARDENED, on #706's precedent for the fabricated-
+ *   reference block in the same family: "REMOVED RATHER THAN NARROWED, because
+ *   nothing used it." A second implementation of the platform's most
+ *   security-critical function earns its keep only by being used, and this one
+ *   was not. There is now exactly one, and a ratchet says so.
+ *
+ *   `"use client"` is left in place: this module still exports the usePaystack
+ *   hook. What is gone is the server-secret read inside it.
  */
-export async function verifyPaystackPayment(reference: string) {
-    try {
-        const response = await fetch(
-            `${paystackBaseUrl()}/transaction/verify/${reference}`,
-            {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-                },
-            }
-        );
-
-        const data = await response.json();
-
-        if (data.status && data.data.status === "success") {
-            return {
-                success: true,
-                amount: data.data.amount / 100, // Convert from kobo to naira
-                metadata: data.data.metadata,
-                paidAt: data.data.paid_at,
-            };
-        }
-
-        return {
-            success: false,
-            error: data.message || "Payment verification failed",
-        };
-    } catch (error: any) {
-        return {
-            success: false,
-            error: error.message || "Verification failed",
-        };
-    }
-}
 

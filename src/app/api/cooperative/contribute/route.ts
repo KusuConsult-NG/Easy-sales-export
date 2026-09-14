@@ -55,10 +55,68 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
         const { amount, contributionType } = await request.json();
 
-        // Validation
-        if (!amount || amount < 1000) {
+        /*
+         *   #727 — THE ONE CHECKOUT WHOSE AMOUNT COMES FROM THE REQUEST BODY,
+         *          AND THE ONE THAT SKIPS THE GUARD WRITTEN FOR EXACTLY THIS.
+         *
+         *   This read `if (!amount || amount < 1000)`, which asks two questions
+         *   about a value it never established was a number. A JSON body is not
+         *   a typed object:
+         *
+         *       "abc"    !amount false, "abc" < 1000 false   → passes
+         *       1e308    !amount false, 1e308 < 1000 false   → passes
+         *
+         *   and `Math.round(amount * 100)` below then produces NaN or Infinity,
+         *   both of which `JSON.stringify` writes into the Paystack body as
+         *   `"amount": null`. That is the precise shape #706 put a guard in
+         *   initializePaystackPayment to refuse — "a request to move money
+         *   built from a value nobody looked at" — and this route does not go
+         *   through that function, so it never got it.
+         *
+         *   Nothing is lost by it today: Paystack rejects the request and the
+         *   member sees a failure. But the failure names nothing an operator
+         *   can act on, and the check that would have named it exists one file
+         *   away and was applied to the other nine checkouts.
+         *
+         *   IS THE NUMBER FIRST, then the minimum — so the error a member reads
+         *   is about the thing that is actually wrong with what they sent.
+         */
+        if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+            return NextResponse.json(
+                { error: 'Contribution amount must be a number.' },
+                { status: 400 }
+            );
+        }
+
+        if (amount < 1000) {
             return NextResponse.json(
                 { error: 'Minimum contribution is ₦1,000' },
+                { status: 400 }
+            );
+        }
+
+        /*
+         *   AND THE GUARD IS ON THE KOBO FIGURE, WHICH IS THE ONE SENT.
+         *
+         *   Checking `Number.isFinite(amount)` above is necessary and not
+         *   sufficient, and the first version of this fix stopped there — its
+         *   own test caught it. 1e308 is a finite number greater than 1000, so
+         *   it passes every check on the naira value, and `1e308 * 100` is
+         *   Infinity, which `JSON.stringify` writes as `"amount": null`. The
+         *   overflow happens in the conversion, so the conversion is what has
+         *   to be checked.
+         *
+         *   This is #706's rule in its own words — a guard belongs on the value
+         *   actually put in the request body — and `Number.isInteger(kobo)`
+         *   is the same predicate initializePaystackPayment applies to the nine
+         *   checkouts that do go through it. isSafeInteger rather than
+         *   isInteger because above 2^53 the arithmetic stops being exact, and
+         *   a contribution that large is a malformed request either way.
+         */
+        const amountKobo = Math.round(amount * 100);
+        if (!Number.isSafeInteger(amountKobo) || amountKobo < 1) {
+            return NextResponse.json(
+                { error: 'Contribution amount is out of range.' },
                 { status: 400 }
             );
         }
@@ -90,7 +148,7 @@ export async function POST(request: NextRequest) {
                 // Math.round, as nairaToKobo in cooperative/_payment.ts does.
                 // `amount * 100` on a fractional naira figure produces a
                 // non-integer kobo value, which Paystack rejects.
-                amount: Math.round(amount * 100),
+                amount: amountKobo,
                 channels: ["bank_transfer"],
                 // THE MONEY WAS NEVER CREDITED, AND THE MEMBER LANDED ON A 404.
                 //
