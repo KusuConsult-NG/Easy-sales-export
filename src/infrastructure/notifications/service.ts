@@ -11,6 +11,7 @@
  */
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { resolveActiveUserId } from "@/lib/user-identity";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -48,8 +49,46 @@ export interface Notification {
  */
 export async function createNotification(data: Omit<Notification, "read" | "createdAt">): Promise<ActionResponse<any>> {
     try {
+        /*
+         *   #738 A NOTICE ADDRESSED TO A PROFILE THE PERSON NO LONGER USES.
+         *
+         *   Nine callers reach this with a userId taken straight off a record —
+         *   a loan, an order, a booking. If that profile was SUPERSEDED, the
+         *   person signs in as the live one (profile-choice honours
+         *   `_migratedTo`, and every money path resolves through
+         *   resolveActiveUser) and never sees the notice. The platform records
+         *   them as told.
+         *
+         *   That is #688's harm — "an admin decided and the member was not
+         *   told" — arriving by a different route, and the same rule already
+         *   exists for it. Resolving HERE rather than at nine call sites,
+         *   because nine is how the last one reached six doors of seven.
+         *
+         *   REDIRECTED, NOT REFUSED, and the difference matters. A transactional
+         *   notice is for ONE person who must be told, so it follows them to the
+         *   row they use. The BULK path below is the opposite case: an audience
+         *   excludes a tombstoned row entirely, which is what in-app-broadcast
+         *   already does with loadNonContactableUserIds before it gets here.
+         *
+         *   FAILS SOFT. If the lookup throws, the notice is written to the id it
+         *   was given — losing a decision notice entirely is worse than one
+         *   landing on a superseded row.
+         */
+        let userId = data.userId;
+        try {
+            userId = (await resolveActiveUserId(
+                data.userId, db.collection(COLLECTIONS.USERS) as any,
+            )).id;
+        } catch (error) {
+            logger.error("[notifications] could not resolve the active profile; using the id given", {
+                userId: data.userId,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
         const notification: Omit<Notification, "id"> = {
             ...data,
+            userId,
             read: false,
             createdAt: FieldValue.serverTimestamp()
         };
