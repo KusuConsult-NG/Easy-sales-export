@@ -63,6 +63,31 @@ DOMAIN_MAP["www.easysalesexportng.com"] = "/export";
  *        OPEN, AND NOT DECIDED HERE: the other five module apexes have www
  *        variants in DOMAIN_MAP but no apex -> www redirect. Whether they
  *        should get one is a product question about their DNS, not a repair.
+ *
+ *   #494 SETTLED THAT, AND SETTLED IT THE OTHER WAY ROUND.
+ *
+ *        The paragraph above is left standing because it is what #454 decided,
+ *        and struck through here rather than deleted because the answer is the
+ *        opposite of the one it points at. Reading it alone leads somebody
+ *        straight to the change that breaks things.
+ *
+ *        The cookies made it more than a product question: the session cookie
+ *        is host-only and the CSRF cookie's `__Host-` prefix forbids a domain
+ *        attribute outright, so two hosts are two sessions and scoping across
+ *        both is unavailable, not merely undesirable.
+ *
+ *        AND THE REDIRECT RUNS www -> APEX, NOT APEX -> www. Copying the root
+ *        domain's direction to the other six is the obvious repair and it would
+ *        have taken four module sites down: DOMAIN_MAP carries www entries for
+ *        only two of them, so the other four www hosts map to no module and
+ *        fall through to the hub. Every module's `domain` in modules.config.ts
+ *        is the APEX, which is the host that certainly resolves.
+ *
+ *        The root domain keeps its own direction, deliberately — the app is
+ *        deployed on that www host. See lib/canonical-host.ts, which derives
+ *        the list from HUB_MODULES so a module added later is covered, and
+ *        one-host-per-module-or-two-sessions.test.ts, which pins both
+ *        directions.
  */
 
 const authMiddleware = auth((req: any) => {

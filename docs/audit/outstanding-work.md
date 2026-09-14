@@ -170,6 +170,23 @@ will now say so instead of looking like an absent one.
 resolve. Once #661 is deployed it will also distinguish *"Half-configured — X is
 missing"* from *"Disconnected — not configured"*.
 
+**RESOLVED BY #716 — and the owner and the application were both right.** The
+owner pasted a startup log reading `[Redis] UPSTASH_REDIS_REST_URL IS NOT SET`
+and answered it in one line: *"This is not true because it is set."* Both
+statements were true at once, which is why this entry could not be closed from
+either side alone.
+
+`isRedisConfigured` tested **plain truthiness**. A variable that EXISTS on
+Railway with an **empty or whitespace value** is falsy in JavaScript, so a
+variable the owner could see in the dashboard reported as one the platform had
+never heard of. "Set to nothing" and "never set" are different situations —
+the first is a typo or a truncated paste, the second is a choice — and the
+reporting collapsed them into the second.
+
+#716 separates them, names the variable, and trims before testing, so the state
+the owner is actually in is the state the log describes. The half-configured
+reporting from #661 stands unchanged.
+
 ### ☐ Apply `supabase/deploy.sql` — the question "are they applied?" is retired
 
 **This stopped being a research task (#660).** The answer used to require
@@ -426,6 +443,89 @@ exposed it.
 
 ---
 
+## 1e. Since `3d95ffa6` — findings #714 to #729
+
+**Sixteen findings.** The record below stopped at #713 for a while; the commits
+carried the reasoning and this file did not, which is the same defect this audit
+files against the application — a true thing recorded in one place and a stale
+one where somebody actually looks.
+
+**Nine of the sixteen are the same defect** — *a correct rule applied to some of
+the places it names* — and three more are *a test pinned to source text standing
+in front of the fix it was written to protect*. Both have entries in §4.
+
+### The forty-eight profiles, answered
+
+| | |
+|---|---|
+| ✅ #714 | **A lookup that failed was reported as an account that does not exist.** Supabase Auth returns a 404 *error* for a missing account, not `{user: null}`, so every failure mode — network, permissions, a bad key — read as "this person has no Auth account". |
+| ✅ #715 | **The backfill asked Auth about the one id its own rows do not use.** |
+| ✅ #718 | **Forty-eight UUIDs and nothing to do with them.** |
+
+**The answer, which is the part that matters:** 47 of the 48 profiles have **no
+Supabase Auth account at all** (Auth was reached; it returned 404), and the
+48th carries a Firebase-era uid Supabase will not accept. None has a migration
+pointer. **They cannot log in and no code can fix it** — the address they signed
+up with does not exist in any system this platform can read. That is recorded as
+unfixable rather than pending.
+
+### The owner's own reports
+
+| | |
+|---|---|
+| ✅ #716 | **"IS NOT SET" was said to somebody looking straight at the variable.** The owner pasted a startup log reading `UPSTASH_REDIS_REST_URL IS NOT SET` and wrote *"This is not true because it is set"*. Both were right: the app tested plain truthiness, so a variable that **exists with an empty value** reported as absent. See the Redis entry in §1 — this is what finally reconciles it. |
+| ✅ #717 | **Nine boundaries reloaded the page automatically and nothing counted the reloads.** A stale deployment could reload forever. |
+| ✅ #723 | **A bank reference an admin types is claimed in the same namespace as Paystack's.** |
+
+### The three missing payment processors — #695's named follow-on, now closed
+
+| | |
+|---|---|
+| ✅ #719 | **A buyer who closed the tab.** `export_buyer_order` now has a processor; fulfilment is shared with the callback so the two doors cannot disagree. |
+| ✅ #720 | **A guard that discarded the write.** Found *by* #719's test: `writeGuard` returned only the validated subset, so a four-field update wrote one field. Zod strips undeclared keys and the guard handed the stripped object back. |
+| ✅ #721 | **A property nobody recorded as bought.** |
+| ✅ #722 | **The last of the three, and the only one allowed to decline.** `academy_enrollment` names two incompatible fulfilments, so an unmarked reference is left unclaimed for the interactive door rather than guessed at. |
+
+`CALLBACK_FULFILLED_TYPES` is now **empty**, which was the point of it. The set is
+kept, not deleted: a fourth checkout with no processor has to land somewhere, and
+an empty set is the state to be in while an absent one is a trap.
+
+### Three screens for decisions the forensic report could only describe
+
+| | |
+|---|---|
+| ✅ #724 | **Duplicate profiles.** Writes only a supersession marker — additive and reversible. Nothing is deleted. |
+| ✅ #725 | **Farm Nation approvals with nothing behind them.** Confirm records that somebody vouched; it does **not** fabricate the missing application. A third option — revoke — is offered, keeping the previous status beside it. |
+| ✅ #726 | **The cooperative membership row the platform owed.** The recorded reason for deferring this — *"would need a tier and balances invented"* — **overstated it**: the balance is derived from the completed ledger by the same function the reconciliation check verifies with, and the tier is usually on the registration. The row is created `pending`, never `active`. |
+
+### The measurement, audited
+
+| | |
+|---|---|
+| ✅ #727 | **The ratchet guaranteeing every checkout has a door was reading eight of eleven.** Three checkouts POST to Paystack directly rather than through the shared initializer, so a hand-written file list could not see them. Pointing one at a type no processor owns left that suite **green at 32 passing**. Swept now, not listed. A second, weaker `verifyPaystackPayment` — in a `"use client"` module, reading the secret key, imported by nothing — was removed. |
+| ✅ #728 | **A clean sample reported as a clean collection.** Ten of eleven forensic checks sampled (20 members, 50 enrolments, 200 products) and reported **pass**. Seeded at exactly its ceiling with nothing wrong, the academy check returned a green tick over a collection it had read fifty rows of. A problem found in a sample is still a problem — nothing was downgraded; only "clean sample ⇒ clean collection" changed. |
+| ✅ #729 | **One number, four spellings, four guards that knew one.** `lib/phone.ts` says it outright — *"the one thing standing between the platform and two accounts on one phone number"* — and its helper reached two of six identity guards. One of the four missing it was the fraud guard on the bulk import, which `lib/phone.ts` itself names as a writer of raw numbers. |
+
+**Expect more grey "Could not check" rows** on `/admin/forensics` after #728.
+That is not new breakage: it is the checks no longer claiming to have read
+collections they only sampled.
+
+### Checked this pass and found sound
+
+Recorded because "we looked and it was fine" is worth as much as a finding when
+the question is whether the platform is trustworthy:
+
+- **All nine cron routes** authenticate through one shared gate.
+- **API route authorisation is ratcheted** — verified by planting an unguarded
+  role-granting route and watching two suites catch it.
+- **File uploads** (three paths), the **image proxy** (host allow-list *plus*
+  cloud-name pinning, manual redirects, double size checks), and **account
+  erasure** (nothing destroyed, everything marked) are all sound.
+- **Email identity lookups**: `users.email` is normalised in the adapter, and
+  every other write path lowercases through `strictEmailSchema`. Unlike phone,
+  no mixed-case storage could be demonstrated — so there is no email twin of
+  #729.
+
 ## 2. UI
 
 ### ✅ Done
@@ -532,11 +632,35 @@ repeated-character rule all remain. The true length is still unknown and no
 longer matters: the field accepts either, and the one place to add a ceiling is
 named in `kyc-validators`.
 
-### ☐ Module apex domains have no apex → www redirect
+### ✅ (#494) Module apex domains — closed, and the answer was the other direction
 
-`middleware.ts` records it: five module apexes have `www` variants in
-`DOMAIN_MAP` but no redirect from the bare apex. Whether they should have one
-depends on their DNS.
+**This entry stood open, and it had been settled for some time.** It read:
+"five module apexes have `www` variants in `DOMAIN_MAP` but no redirect from
+the bare apex. Whether they should have one depends on their DNS."
+
+Nothing about that is true any more, and leaving it was worse than leaving it
+blank: it pointed the next reader at **apex → www**, which is the change that
+breaks things.
+
+**#494 settled it in the opposite direction — `www` → apex.** The reason is in
+`lib/canonical-host.ts`: `DOMAIN_MAP` carries `www` entries for only two of the
+six module domains, so redirecting the other four apexes at a `www` host would
+send them somewhere `DOMAIN_MAP` does not resolve, and they would fall through
+to the hub. **Four module sites down.** Every module's `domain` in
+`modules.config.ts` is the apex, which is the host that certainly resolves.
+
+It also stopped being a DNS preference once the cookies were read: the session
+cookie is host-only and the CSRF cookie's `__Host-` prefix forbids a domain
+attribute, so two hosts are two sessions — sign in on one, follow a link to the
+other, and you are signed out with a working account and nothing to report.
+
+The root domain keeps its own direction (apex → `www`) because the app is
+deployed on that `www` host. Both directions are pinned by
+`one-host-per-module-or-two-sessions.test.ts`, and the list is derived from
+`HUB_MODULES` so a module added later is covered without anyone remembering.
+
+*No code changed for this entry — the code was already correct. What was wrong
+was this record and the note in `middleware.ts` that it quoted.*
 
 ### ✅ (#659) The constant-time comparison reached one door of eleven
 
@@ -1577,6 +1701,58 @@ new, and because two of them were found in **my own work** during this session.
    survive that turned out to be a missing case or an under-stated property, not
    a redundant rule. Each one made the assertion stronger rather than being
    explained away.
+
+9. **A source-text assertion standing in for a behavioural one.** The most
+   expensive habit in this audit's own tests, and it fails in both directions.
+
+   **It passes code that stopped doing the thing.** `toContain('someFunction')`
+   over a whole file matches the **import line**, which survives intact when the
+   call site is replaced — so the claim holds vacuously. A mutant reverting the
+   #488 two-key member lookup to the one-key read it was opened for passed on
+   exactly this (#727), as did an audit-before-effect ordering check (#724) and
+   a fail-closed check that matched a line a *different* function in the same
+   file also carries (#727 again). **Six occurrences: #719, #723, #724, #725,
+   #726, #727.**
+
+   **And it fails code that is still correct.** #728 moved eleven forensic
+   verdicts behind a shared rule without changing what any of them decides, and
+   **eight assertions broke** — every one pinned to a ternary's spelling rather
+   than its behaviour, two of them positive controls. `forensics-age-check` had
+   already written the lesson in its own comment: *"Fifth time in this audit a
+   test pinned to a source string stood in front of the fix it was written to
+   protect."*
+
+   **The rule:** an assertion about what a FUNCTION does must be scoped to that
+   function's body and, where the function can be executed, should exercise it
+   instead. Source-level matching is for structural claims — "this file does not
+   import that one" — not for behavioural ones.
+
+10. **A hand-written list where the filesystem already holds the fact.** A list
+    cannot notice what nobody added to it, and its staleness is invisible: the
+    suite stays green because the missing entries were never measured.
+
+    **#727** is the clearest case — eight checkout files listed by hand under a
+    comment claiming *"the control below proves the list is complete"*, when the
+    control proved only that no LISTED file had gone stale. Three live money
+    paths were outside it. **#729** is the same shape in the application: four
+    of six identity guards never adopted a helper whose own docstring explains
+    why they must.
+
+    Both are now swept from the filesystem with a positive control proving the
+    sweep can see an offender, so `[]` means clean rather than blind. Note that
+    #727's first repair **wrote the sweep twice** — once in each suite — and
+    mutation testing caught it immediately: this class reproduced inside its own
+    fix.
+
+11. **A record that is true where nobody reads it.** §1e of this file did not
+    exist until #729 was already committed; sixteen findings lived only in
+    commit messages. The apex-redirect entry in §3 stood open for a question
+    **#494 had settled in the opposite direction**, pointing the next reader at
+    the change that takes four module sites down.
+
+    The application version of this class is everywhere in the audit — a stale
+    comment deciding over a live rule — and the audit's own documents are not
+    exempt from it.
 
 ---
 
