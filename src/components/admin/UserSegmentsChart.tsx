@@ -3,6 +3,7 @@
 import React from "react";
 import { Users, Clock, AlertTriangle, Ghost, TrendingUp } from "lucide-react";
 import type { UserSegments } from "@/app/actions/admin-analytics";
+import { numberOrZero } from "@/lib/numbers";
 
 interface UserSegmentsChartProps {
     segments: UserSegments;
@@ -97,7 +98,7 @@ export default function UserSegmentsChart({ segments }: UserSegmentsChartProps) 
                                     <span className="text-sm font-semibold text-slate-700">{seg.label}</span>
                                 </div>
                                 <div className="text-right">
-                                    <span className="text-sm font-bold text-slate-900">{seg.value.toLocaleString()}</span>
+                                    <span className="text-sm font-bold text-slate-900">{numberOrZero(seg.value).toLocaleString()}</span>
                                     <span className="text-[10px] text-slate-400 ml-1.5 font-medium">
                                         ({percentage.toFixed(1)}%)
                                     </span>

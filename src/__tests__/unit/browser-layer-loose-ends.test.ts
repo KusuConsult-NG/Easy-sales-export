@@ -194,7 +194,18 @@ describe('#351 — the PDF invoice names its currency', () => {
         // and the glyph was emitted as nothing at all.
         expect(code).not.toContain('₦');
         expect(code).toContain("head: [['Description', 'Qty', 'Unit Price (NGN)', 'Total (NGN)']]");
-        expect(code.match(/NGN \$\{invoice\./g) ?? []).toHaveLength(4);
+        /*
+         *   #741 — WIDENED FROM `NGN ${invoice.` TO ALLOW A READER AROUND THE
+         *   FIELD. This pinned the exact spelling of the interpolation, so
+         *   guarding the four totals with numberOrZero — a change that leaves
+         *   every one of them labelled NGN, which is all this test is about —
+         *   broke it while the property it protects held perfectly.
+         *
+         *   A ratchet that pins the TEXT of an implementation reports on the
+         *   implementation, not on the rule. The count stays exact at four; only
+         *   the shape between `NGN ${` and `invoice.` is now free.
+         */
+        expect(code.match(/NGN \$\{[^}]*\binvoice\./g) ?? []).toHaveLength(4);
     });
 
     it('and the tombstone still quotes the old output, so the record survives', () => {

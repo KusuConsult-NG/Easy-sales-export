@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Calendar, DollarSign, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { getRepaymentScheduleAction, type RepaymentInstallment } from "@/app/actions/cooperative";
 import { formatShortDateOrDash } from "@/lib/date-utils";
+import { numberOrZero } from "@/lib/numbers";
 
 interface RepaymentScheduleProps {
     loanId: string;
@@ -197,19 +198,19 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
                                 </div>
                                 <div className="text-right">
                                     <p className="font-bold">
-                                        ₦{installment.totalAmount.toLocaleString()}
+                                        ₦{numberOrZero(installment.totalAmount).toLocaleString()}
                                     </p>
                                     {installment.status === "paid" && (
                                         <p className="text-xs mt-1">Paid ✓</p>
                                     )}
                                     {installment.status === "partial" && (
                                         <p className="text-xs mt-1">
-                                            Paid: ₦{installment.paidAmount.toLocaleString()}
+                                            Paid: ₦{numberOrZero(installment.paidAmount).toLocaleString()}
                                         </p>
                                     )}
                                     {installment.penaltyAmount && installment.penaltyAmount > 0 && (
                                         <p className="text-xs mt-1 text-red-600">
-                                            Penalty: ₦{installment.penaltyAmount.toLocaleString()}
+                                            Penalty: ₦{numberOrZero(installment.penaltyAmount).toLocaleString()}
                                         </p>
                                     )}
                                 </div>
@@ -217,8 +218,8 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
 
                             {/* Breakdown */}
                             <div className="mt-2 pt-2 border-t border-current/20 flex gap-4 text-xs">
-                                <span>Principal: ₦{installment.principalAmount.toLocaleString()}</span>
-                                <span>Interest: ₦{installment.interestAmount.toLocaleString()}</span>
+                                <span>Principal: ₦{numberOrZero(installment.principalAmount).toLocaleString()}</span>
+                                <span>Interest: ₦{numberOrZero(installment.interestAmount).toLocaleString()}</span>
                                 {installment.daysOverdue && installment.daysOverdue > 0 && (
                                     <span className="font-bold">Overdue: {installment.daysOverdue} days</span>
                                 )}

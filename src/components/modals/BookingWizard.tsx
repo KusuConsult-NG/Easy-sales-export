@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
 import { useToast } from "@/contexts/ToastContext";
+import { numberOrZero } from "@/lib/numbers";
 import { createBookingAction } from "@/app/actions/export-booking";
 
 interface BookingWizardProps {
@@ -79,8 +80,16 @@ export default function BookingWizard({ isOpen, onClose, exportWindow }: Booking
 
     if (!isOpen || !exportWindow) return null;
 
-    const availableVolume = exportWindow.targetVolume - exportWindow.currentVolume;
-    const totalPrice = volume * exportWindow.slotPrice;
+    /*
+     *   #741 GUARDED AT THE SOURCE. A window missing `targetVolume`,
+     *   `currentVolume` or `slotPrice` made both of these NaN, and NaN is not
+     *   only a bad figure on screen — `volume > NaN` is FALSE, so the "maximum
+     *   available" check in validateStep passed and the wizard walked on to
+     *   payment against a window with no volume.
+     */
+    const slotPrice = numberOrZero(exportWindow.slotPrice);
+    const availableVolume = numberOrZero(exportWindow.targetVolume) - numberOrZero(exportWindow.currentVolume);
+    const totalPrice = volume * slotPrice;
 
     function resetAndClose() {
         setStep(1); setVolume(100); setMoisture(""); setForeignMatter("");
@@ -277,7 +286,7 @@ export default function BookingWizard({ isOpen, onClose, exportWindow }: Booking
                                         </div>
                                         <div>
                                             <p className="text-xs text-blue-600 font-semibold uppercase">Price/kg</p>
-                                            <p className="font-bold text-primary text-lg">₦{exportWindow.slotPrice.toLocaleString()}</p>
+                                            <p className="font-bold text-primary text-lg">₦{slotPrice.toLocaleString()}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-blue-600 font-semibold uppercase">Available</p>

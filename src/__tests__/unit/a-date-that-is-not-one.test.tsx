@@ -97,6 +97,7 @@ import { join } from 'path';
 
 import { formatDateOrDash, formatDateTimeOrDash } from '@/lib/date-utils';
 import { numberOrZero, firstNumber, numberOrDash } from '@/lib/numbers';
+import { FRONT_END_ROOTS, frontEndFiles, walkedRoots } from '@/lib/testing/front-end-roots';
 
 const ROOT = process.cwd();
 
@@ -289,30 +290,27 @@ describe('#597 — and no member-facing screen builds a date formatter by hand',
     }
 
     let lastSeen = 0;
+    let lastRoots: string[] = [];
     function scan(): string[] {
-        const found: string[] = [];
-        let seen = 0;
-        const walk = (dir: string) => {
-            for (const entry of readdirSync(dir)) {
-                const full = join(dir, entry);
-                if (statSync(full).isDirectory()) {
-                    //   #600 — ADMIN IS IN SCOPE. Five more hand-written
-                    //   formatters lived there, including the ones on
-                    //   /admin/marketplace/withdrawals and
-                    //   /admin/marketplace/disputes/escalated, which are the
-                    //   screens where money is released.
-                    walk(full);
-                } else if (entry.endsWith('.tsx')) {
-                    seen += 1;
-                    if (handWrittenFormatters(readFileSync(full, 'utf-8')).length) {
-                        found.push(full.slice(ROOT.length + 1));
-                    }
-                }
-            }
-        };
-        walk(join(ROOT, 'src/app'));
-        lastSeen = seen;
-        return found.sort();
+        /*
+         *   #600 — ADMIN IS IN SCOPE. Five more hand-written formatters lived
+         *   there, including the ones on /admin/marketplace/withdrawals and
+         *   /admin/marketplace/disputes/escalated, which are the screens where
+         *   money is released.
+         *
+         *   #741 — AND SO IS src/components. This walked `src/app` only, and
+         *   TWO more hand-written formatters lived in the components those
+         *   pages mount: modals/ExportDetailsModal and export/DateRangePicker.
+         *   The roots are named in lib/testing/front-end-roots now, shared with
+         *   #598's and #599's scans, which had the identical blind spot.
+         */
+        const files = frontEndFiles(ROOT);
+        lastSeen = files.length;
+        lastRoots = walkedRoots(files);
+        return files
+            .filter((f) => handWrittenFormatters(readFileSync(f.full, 'utf-8')).length)
+            .map((f) => f.rel)
+            .sort();
     }
 
     it('THE COUNT IS ZERO, EXACTLY', () => {
@@ -330,6 +328,18 @@ describe('#597 — and no member-facing screen builds a date formatter by hand',
         expect(lastSeen).toBeGreaterThan(100);
         expect(handWrittenFormatters('new Intl.DateTimeFormat("en-NG", {}).format(d)')).toHaveLength(1);
         expect(handWrittenFormatters('formatDateOrDash(value)')).toHaveLength(0);
+    });
+
+    it('AND IT REACHED EVERY FRONT-END ROOT, BY NAME', () => {
+        /*
+         *   #741 — the guard above was already here and could not see this.
+         *   src/app alone holds 426 .tsx files, so `lastSeen > 100` passed with
+         *   src/components entirely unread. A guard against reading NOTHING is
+         *   not a guard against reading only SOME, and the count is exactly the
+         *   wrong instrument for it: one large root drowns out a missing one.
+         */
+        scan();
+        expect(lastRoots).toEqual([...FRONT_END_ROOTS].sort());
     });
 
     it('AND lib/date-utils IS WHERE THE ONE FORMATTER LIVES', () => {

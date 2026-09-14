@@ -75,6 +75,7 @@ import { ArrowRight, ArrowLeft, Check, Calculator, FileText, Upload } from "luci
 import { calculateLoanCost, COOPERATIVE_TIERS, getTierInterestRate, type CooperativeTier } from "@/lib/cooperative-tiers";
 import { logger } from "@/lib/logger";
 import { submitLoanApplicationAction } from "@/app/actions/cooperative";
+import { numberOrZero } from "@/lib/numbers";
 
 interface LoanApplicationWizardProps {
     userId: string;
@@ -358,7 +359,7 @@ export default function LoanApplicationWizard({
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-blue-100 text-sm">Principal Amount</p>
-                                    <p className="text-2xl font-bold">₦{formData.amount.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold">₦{numberOrZero(formData.amount).toLocaleString()}</p>
                                 </div>
                                 <div>
                                     <p className="text-blue-100 text-sm">Duration</p>
@@ -384,7 +385,7 @@ export default function LoanApplicationWizard({
                                 </div>
                                 <div>
                                     <p className="text-blue-100 text-sm">Total Interest</p>
-                                    <p className="text-2xl font-bold">₦{loanCost.totalInterest.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold">₦{numberOrZero(loanCost.totalInterest).toLocaleString()}</p>
                                 </div>
                             </div>
                         </div>

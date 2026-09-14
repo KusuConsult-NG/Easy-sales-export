@@ -62,6 +62,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
+import { frontEndFiles } from '@/lib/testing/front-end-roots';
 
 const ROOT = process.cwd();
 
@@ -103,9 +104,38 @@ describe('#600 — the scope of the ratchets is itself a claim', () => {
             const src = readFileSync(join(ROOT, ratchet), 'utf-8');
             expect({ ratchet, skipsAdmin: /entry\s*!==\s*'admin'/.test(src) })
                 .toEqual({ ratchet, skipsAdmin: false });
-            expect({ ratchet, walksSrcApp: src.includes("walk(join(ROOT, 'src/app'))") })
-                .toEqual({ ratchet, walksSrcApp: true });
+            /*
+             *   #741 — THIS PINNED THE TEXT `walk(join(ROOT, 'src/app'))`, and
+             *   that is the wrong thing to pin. It reports on how the walk is
+             *   SPELLED, not on where it goes: it passed for as long as the
+             *   three ratchets walked src/app and NOTHING ELSE, which is
+             *   exactly the state #741 found — 22 live sites in src/components,
+             *   outside all three, with this test green over the top.
+             *
+             *   So the claim is now the property: each ratchet draws its files
+             *   from the shared front-end walk, whose roots are asserted by
+             *   name in lib/testing/front-end-roots and in each ratchet itself.
+             *   Widening the front end stays one edit, and this test keeps
+             *   holding rather than breaking.
+             */
+            expect({ ratchet, usesSharedWalk: src.includes('frontEndFiles(ROOT)') })
+                .toEqual({ ratchet, usesSharedWalk: true });
+            expect({ ratchet, privateAppWalk: src.includes("walk(join(ROOT, 'src/app'))") })
+                .toEqual({ ratchet, privateAppWalk: false });
         }
+    });
+
+    it('AND THE SHARED WALK STILL REACHES EVERY ADMIN SCREEN', () => {
+        /*
+         *   #741 — #600's claim, restated against the walk that now serves all
+         *   three ratchets. Moving them onto a shared helper would have been a
+         *   silent way to lose the admin directory again, so it is checked at
+         *   the helper rather than trusted.
+         */
+        const walked = new Set(frontEndFiles(ROOT).map((f) => join(ROOT, f.rel)));
+        const missing = adminFiles().filter((f) => !walked.has(f));
+
+        expect(missing).toEqual([]);
     });
 
     it('AND THE ADMIN DIRECTORY IS BIG ENOUGH THAT SKIPPING IT MATTERED', () => {

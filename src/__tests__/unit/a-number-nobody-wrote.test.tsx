@@ -84,6 +84,7 @@ import { render, waitFor } from '@testing-library/react';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
+import { FRONT_END_ROOTS, frontEndFiles, walkedRoots } from '@/lib/testing/front-end-roots';
 
 const ROOT = process.cwd();
 
@@ -294,28 +295,31 @@ describe('#598 — and no member-facing screen calls toLocaleString on a stored 
     }
 
     let lastSeen = 0;
+    let lastRoots: string[] = [];
     function scan(): { file: string; hits: string[] }[] {
+        /*
+         *   #600 — ADMIN IS IN SCOPE. Thirty-two more sites lived there, on the
+         *   audit-log counters, the SMS broadcast preview and every export
+         *   figure an administrator acts on.
+         *
+         *   #741 — AND SO IS src/components. This walked `src/app` only, and
+         *   EIGHTEEN more sites lived in the components those pages mount. Two
+         *   of them are the sharpest kind: modals/BookingModal and
+         *   modals/BookingWizard render `exportWindow.slotPrice
+         *   .toLocaleString()` — the exact expression, on the exact field, that
+         *   #597 fixed on /export/opportunities, which is the screen that OPENS
+         *   those two modals. The fix reached the page and stopped at its own
+         *   import statement.
+         */
         const found: { file: string; hits: string[] }[] = [];
-        let seen = 0;
-        const walk = (dir: string) => {
-            for (const entry of readdirSync(dir)) {
-                const full = join(dir, entry);
-                if (statSync(full).isDirectory()) {
-                    //   #600 — ADMIN IS IN SCOPE. Thirty-two more sites lived
-                    //   there, on the audit-log counters, the SMS broadcast
-                    //   preview and every export figure an administrator acts on.
-                    walk(full);
-                } else if (entry.endsWith('.tsx')) {
-                    seen += 1;
-                    const rel = full.slice(ROOT.length + 1);
-                    if (CONSTANTS_UNDER_A_LOWERCASE_NAME.includes(rel)) continue;
-                    const hits = unguardedLocaleStrings(readFileSync(full, 'utf-8'));
-                    if (hits.length) found.push({ file: rel, hits });
-                }
-            }
-        };
-        walk(join(ROOT, 'src/app'));
-        lastSeen = seen;
+        const files = frontEndFiles(ROOT);
+        lastSeen = files.length;
+        lastRoots = walkedRoots(files);
+        for (const f of files) {
+            if (CONSTANTS_UNDER_A_LOWERCASE_NAME.includes(f.rel)) continue;
+            const hits = unguardedLocaleStrings(readFileSync(f.full, 'utf-8'));
+            if (hits.length) found.push({ file: f.rel, hits });
+        }
         return found;
     }
 
@@ -340,6 +344,16 @@ describe('#598 — and no member-facing screen calls toLocaleString on a stored 
         expect(unguardedLocaleStrings('<p>{Number(loan.amount).toLocaleString()}</p>;')).toHaveLength(0);
         expect(unguardedLocaleStrings('<p>{loan.amount?.toLocaleString()}</p>;')).toHaveLength(0);
         expect(unguardedLocaleStrings('<p>{COOPERATIVE_CONFIG.registrationFee.toLocaleString()}</p>;')).toHaveLength(0);
+    });
+
+    it('AND IT REACHED EVERY FRONT-END ROOT, BY NAME', () => {
+        /*
+         *   #741 — `lastSeen > 100` above passed for years with src/components
+         *   entirely unread, because src/app alone holds 426 .tsx files. A
+         *   count cannot notice a missing root; naming them can.
+         */
+        scan();
+        expect(lastRoots).toEqual([...FRONT_END_ROOTS].sort());
     });
 
     it('AND THE ONE EXCLUSION IS ONE, NAMED, AND STILL THERE', () => {

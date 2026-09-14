@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Calendar, X } from "lucide-react";
+import { formatDateOrDash } from "@/lib/date-utils";
 
 type DateRange = {
     from: Date | null;
@@ -18,20 +19,13 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
     const [isOpen, setIsOpen] = useState(false);
     const [tempRange, setTempRange] = useState<DateRange>(value);
 
-    const formatDate = (date: Date | null) => {
-        if (!date) return "";
-        try {
-            const d = new Date(date);
-            if (isNaN(d.getTime())) return "Invalid Date";
-            return new Intl.DateTimeFormat("en-NG", {
-                year: "numeric",
-                month: "short",
-                day: "numeric"
-            }).format(d);
-        } catch (e) {
-            return "Invalid Date";
-        }
-    };
+    /*
+     *   #741 — the ninth hand-written date formatter, and the other one #597's
+     *   walk could not reach. Empty string kept as the fallback: this renders
+     *   into a range input's label, where a dash would read as a chosen date.
+     */
+    const formatDate = (date: Date | null) =>
+        formatDateOrDash(date, { year: "numeric", month: "short", day: "numeric" }, "");
 
     function handleApply() {
         onChange(tempRange);

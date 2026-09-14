@@ -5,6 +5,7 @@ import { X, Package, Hash, Loader2, CheckCircle } from "lucide-react";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
 import { useToast } from "@/contexts/ToastContext";
 import { createBookingAction } from "@/app/actions/export-booking";
+import { numberOrZero } from "@/lib/numbers";
 
 interface BookingModalProps {
     isOpen: boolean;
@@ -20,8 +21,17 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
 
     if (!isOpen || !exportWindow) return null;
 
-    const availableVolume = exportWindow.targetVolume - exportWindow.currentVolume;
-    const totalPrice = quantity * exportWindow.slotPrice;
+    /*
+     *   #741 GUARDED AT THE SOURCE, not at the six places these two are
+     *   rendered. A window missing `targetVolume`, `currentVolume` or
+     *   `slotPrice` made both of these NaN, and NaN is not only a bad figure on
+     *   screen — `quantity > NaN` is FALSE, so the "between 1 and N kg" check
+     *   below passed and the booking was submitted against a window with no
+     *   volume at all.
+     */
+    const slotPrice = numberOrZero(exportWindow.slotPrice);
+    const availableVolume = numberOrZero(exportWindow.targetVolume) - numberOrZero(exportWindow.currentVolume);
+    const totalPrice = quantity * slotPrice;
 
     async function handleSubmit() {
         if (!exportWindow) return;
@@ -113,7 +123,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                                     <span>Price per kg</span>
                                 </div>
                                 <span className="font-semibold text-primary">
-                                    ₦{exportWindow.slotPrice.toLocaleString()}
+                                    ₦{slotPrice.toLocaleString()}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">

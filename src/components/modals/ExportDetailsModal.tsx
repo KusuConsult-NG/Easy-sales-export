@@ -2,6 +2,8 @@
 
 import { Package, Calendar, DollarSign, TrendingUp, MapPin, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { humanise } from "@/lib/humanise";
+import { formatDateOrDash } from "@/lib/date-utils";
 import Modal from "@/components/ui/Modal";
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
@@ -30,20 +32,17 @@ export default function ExportDetailsModal({
     onClose,
     exportWindow
 }: ExportDetailsModalProps) {
-    const formatDate = (date: Date | undefined) => {
-        if (!date) return "Not set";
-        try {
-            const d = new Date(date);
-            if (isNaN(d.getTime())) return "Invalid Date";
-            return new Intl.DateTimeFormat("en-NG", {
-                year: "numeric",
-                month: "long",
-                day: "numeric"
-            }).format(d);
-        } catch (e) {
-            return "Invalid Date";
-        }
-    };
+    /*
+     *   #741 — the eighth hand-written date formatter, in the half of the front
+     *   end #597's ratchet never walked. This one was among the CORRECT ones:
+     *   it checked isNaN and caught. It still goes through the shared reader,
+     *   because "seven copies, four of them wrong" is not fixed by leaving the
+     *   three right ones in place — toDateOrNull also reads a Firestore
+     *   Timestamp and the `_seconds` shape that loses its methods crossing the
+     *   server boundary, which `new Date(date)` renders as Invalid.
+     */
+    const formatDate = (date: Date | undefined) =>
+        formatDateOrDash(date, { year: "numeric", month: "long", day: "numeric" }, "Not set");
 
     const getStatusColor = (status: ExportStatus) => {
         switch (status) {
@@ -105,7 +104,7 @@ export default function ExportDetailsModal({
                         </p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(exportWindow.status)}`}>
-                        {exportWindow.status.replace("_", " ")}
+                        {humanise(exportWindow.status)}
                     </span>
                 </div>
 

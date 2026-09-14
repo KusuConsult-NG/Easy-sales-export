@@ -3,6 +3,7 @@
 import { FileText, Download } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from "@/contexts/ToastContext";
+import { numberOrZero } from "@/lib/numbers";
 
 interface InvoiceItem {
     description: string;
@@ -135,8 +136,8 @@ export default function InvoiceGenerator({
                 body: invoice.items.map(item => [
                     item.description,
                     item.quantity.toString(),
-                    item.unitPrice.toLocaleString(),
-                    item.total.toLocaleString()
+                    numberOrZero(item.unitPrice).toLocaleString(),
+                    numberOrZero(item.total).toLocaleString()
                 ]),
                 theme: 'grid',
                 headStyles: {
@@ -170,20 +171,20 @@ export default function InvoiceGenerator({
 
             // Subtotal
             doc.text('Subtotal:', totalsX, currentY);
-            doc.text(`NGN ${invoice.subtotal.toLocaleString()}`, 190, currentY, { align: 'right' });
+            doc.text(`NGN ${numberOrZero(invoice.subtotal).toLocaleString()}`, 190, currentY, { align: 'right' });
             currentY += 6;
 
             // Tax if applicable
             if (invoice.tax && invoice.tax > 0) {
                 doc.text(`Tax (${invoice.taxRate || 0}%):`, totalsX, currentY);
-                doc.text(`NGN ${invoice.tax.toLocaleString()}`, 190, currentY, { align: 'right' });
+                doc.text(`NGN ${numberOrZero(invoice.tax).toLocaleString()}`, 190, currentY, { align: 'right' });
                 currentY += 6;
             }
 
             // Shipping if applicable
             if (invoice.shipping && invoice.shipping > 0) {
                 doc.text('Shipping:', totalsX, currentY);
-                doc.text(`NGN ${invoice.shipping.toLocaleString()}`, 190, currentY, { align: 'right' });
+                doc.text(`NGN ${numberOrZero(invoice.shipping).toLocaleString()}`, 190, currentY, { align: 'right' });
                 currentY += 6;
             }
 
@@ -192,7 +193,7 @@ export default function InvoiceGenerator({
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...darkColor);
             doc.text('Total:', totalsX, currentY + 3);
-            doc.text(`NGN ${invoice.total.toLocaleString()}`, 190, currentY + 3, { align: 'right' });
+            doc.text(`NGN ${numberOrZero(invoice.total).toLocaleString()}`, 190, currentY + 3, { align: 'right' });
 
             // Notes section
             if (invoice.notes) {

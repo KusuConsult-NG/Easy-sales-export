@@ -97,6 +97,7 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 import { humanise, humaniseCapitalised, humaniseUpper, shortId } from '@/lib/humanise';
+import { FRONT_END_ROOTS, frontEndFiles, walkedRoots } from '@/lib/testing/front-end-roots';
 
 const ROOT = process.cwd();
 
@@ -265,32 +266,33 @@ describe('#596 — and no member-facing screen humanises a stored field by hand'
     }
 
     function scan(): { file: string; hits: string[] }[] {
+        /*
+         *   #600 — ADMIN IS IN SCOPE NOW. It was excluded here on "a handful of
+         *   staff, not every member", and that reads differently once you
+         *   notice these are the screens where a withdrawal is approved and an
+         *   escrow released: a blank admin page is a seller who does not get
+         *   paid.
+         *
+         *   #741 — AND SO IS src/components. This walked `src/app` only, and
+         *   two more lived in the components those pages mount:
+         *   land/LandMap renders `listing.status.replace('_',' ')` inside a map
+         *   popup — while /land/map, the page that mounts it, had already been
+         *   fixed — and modals/ExportDetailsModal does the same on an export
+         *   window's status.
+         */
         const found: { file: string; hits: string[] }[] = [];
-        let seen = 0;
-        const walk = (dir: string) => {
-            for (const entry of readdirSync(dir)) {
-                const full = join(dir, entry);
-                if (statSync(full).isDirectory()) {
-                    //   #600 — ADMIN IS IN SCOPE NOW. It was excluded here on
-                    //   "a handful of staff, not every member", and that reads
-                    //   differently once you notice these are the screens where
-                    //   a withdrawal is approved and an escrow released: a blank
-                    //   admin page is a seller who does not get paid.
-                    walk(full);
-                } else if (entry.endsWith('.tsx')) {
-                    seen += 1;
-                    const rel = full.slice(ROOT.length + 1);
-                    if (GUARDED_BY_A_TYPEOF.includes(rel)) continue;
-                    const hits = handWrittenHumanisers(readFileSync(full, 'utf-8'));
-                    if (hits.length) found.push({ file: rel, hits });
-                }
-            }
-        };
-        walk(join(ROOT, 'src/app'));
-        lastSeen = seen;
+        const files = frontEndFiles(ROOT);
+        lastSeen = files.length;
+        lastRoots = walkedRoots(files);
+        for (const f of files) {
+            if (GUARDED_BY_A_TYPEOF.includes(f.rel)) continue;
+            const hits = handWrittenHumanisers(readFileSync(f.full, 'utf-8'));
+            if (hits.length) found.push({ file: f.rel, hits });
+        }
         return found;
     }
     let lastSeen = 0;
+    let lastRoots: string[] = [];
 
     it('THE COUNT IS ZERO, EXACTLY', () => {
         //   Exact, not `<=`: #588's ratchet could be raised to any number
@@ -308,6 +310,13 @@ describe('#596 — and no member-facing screen humanises a stored field by hand'
          */
         scan();
         expect(lastSeen).toBeGreaterThan(100);
+        /*
+         *   #741 — AND EVERY ROOT BY NAME, which is the half this guard was
+         *   missing. It said "the walk has to have READ something" and checked
+         *   a count; src/app alone satisfies that with src/components unread,
+         *   so the guard held while a third of the front end was invisible.
+         */
+        expect(lastRoots).toEqual([...FRONT_END_ROOTS].sort());
 
         expect(handWrittenHumanisers('{shipment.status.replace("_", " ")}')).toHaveLength(1);
         expect(handWrittenHumanisers("{t.type.replace('_', ' ')}")).toHaveLength(1);

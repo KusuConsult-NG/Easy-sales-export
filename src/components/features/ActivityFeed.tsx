@@ -2,6 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { TrendingUp, DollarSign, GraduationCap, Package, ArrowUpRight } from "lucide-react";
+import { numberOrZero } from "@/lib/numbers";
 
 interface Activity {
     id: string;
@@ -124,7 +125,7 @@ export default function ActivityFeed() {
                             </p>
                             {activity.amount && (
                                 <p className="text-sm font-semibold text-primary mt-1">
-                                    ₦{activity.amount.toLocaleString()}
+                                    ₦{numberOrZero(activity.amount).toLocaleString()}
                                 </p>
                             )}
                             <p className="text-xs text-slate-500 mt-1">

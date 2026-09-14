@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { MapPin, Droplets, Zap, Route } from "lucide-react";
 import { type LandListing, SoilQuality } from "@/types/strict";
 import { formatCurrency } from "@/lib/utils";
+import { humaniseUpper } from "@/lib/humanise";
 import "leaflet/dist/leaflet.css";
 
 // Fix for default marker icon in Next.js
@@ -203,7 +204,7 @@ export function LandMap({
                                                 ? 'bg-red-100 text-red-800'
                                                 : 'bg-yellow-100 text-yellow-800'
                                             }`}>
-                                            {listing.status.replace('_', ' ').toUpperCase()}
+                                            {humaniseUpper(listing.status)}
                                         </span>
                                     </div>
                                 </div>

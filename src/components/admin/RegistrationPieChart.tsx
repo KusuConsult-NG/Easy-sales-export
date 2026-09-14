@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ModuleRegistrationStats } from "@/app/actions/admin-analytics";
+import { numberOrZero } from "@/lib/numbers";
 
 interface Slice {
     label: string;
@@ -309,7 +310,7 @@ export default function RegistrationPieChart({ stats, totalAccounts }: Registrat
                                             textAlign: "right",
                                         }}
                                     >
-                                        {slice.value.toLocaleString()}
+                                        {numberOrZero(slice.value).toLocaleString()}
                                         <span
                                             style={{
                                                 marginLeft: 5,
