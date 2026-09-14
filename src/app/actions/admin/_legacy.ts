@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { phoneLookupVariants } from "@/lib/phone";
 import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -519,12 +520,28 @@ async function _onboardLegacyMemberAction(
             logger.info(`[Legacy Onboarding] Migrated child documents from ${oldUidToMigrate} to ${targetUid}`);
         }
 
-        // 2. 🔒 DEDUP GUARD: Check Firestore by phone (Fraud Prevention)
-        const phoneCheck = await db.collection(COLLECTIONS.USERS)
-            .where("phone", "==", data.phone)
-            .limit(1)
-            .get();
-        if (!phoneCheck.empty) {
+        /*
+         *   2. 🔒 DEDUP GUARD: Check Firestore by phone (Fraud Prevention)
+         *
+         *   #729 — EVERY SPELLING, AND THIS IS THE PATH THAT MADE THE PROBLEM.
+         *
+         *   lib/phone.ts names this very file as one of the writers that store
+         *   a raw phone number rather than the normalised form, and draws the
+         *   conclusion: "the bulk import is where most members came from — so
+         *   the guard was blind to most of the platform."
+         *
+         *   The guard here is that guard. Asking for one spelling meant the
+         *   fraud check missed a member whose row this same import had written
+         *   in a different one.
+         */
+        const phoneForms = phoneLookupVariants(data.phone);
+        const phoneCheck = phoneForms.length > 0
+            ? await db.collection(COLLECTIONS.USERS)
+                .where("phone", "in", phoneForms)
+                .limit(1)
+                .get()
+            : null;
+        if (phoneCheck && !phoneCheck.empty) {
             const phoneDoc = phoneCheck.docs[0];
             const phoneData = phoneDoc.data();
             const phoneUid = phoneDoc.id;

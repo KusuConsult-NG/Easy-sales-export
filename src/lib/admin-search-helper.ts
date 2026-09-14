@@ -1,6 +1,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SupabaseQuerySnapshot } from "@/lib/supabase-db";
+import { phoneLookupVariants } from "@/lib/phone";
 
 /**
  * Searches the users collection by email, phone, or name prefix.
@@ -23,10 +24,33 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
 
         // 2. Phone matches — exact AND prefix (so "0803" finds "08035678901")
         const rawPhone = searchQuery.trim();
+        /*
+         *   #729 — EVERY SPELLING, SO AN ADMIN FINDS THE MEMBER THEY HAVE.
+         *
+         *   The users collection holds one number under several spellings —
+         *   lib/phone.ts lists the four writers responsible — so an admin who
+         *   pasted `+2348035678901` did not find a member whose row the bulk
+         *   import wrote as `08035678901`. The prefix ranges below do not cover
+         *   it either: they extend the string to the RIGHT, and these spellings
+         *   differ on the left.
+         *
+         *   Lower stakes than the dedup guards this finding is mostly about —
+         *   nobody gets a second account out of a search box — but it is the
+         *   same question asked of the same collection, and an admin who cannot
+         *   find a member concludes the member is not there.
+         *
+         *   PARTIALS ARE UNAFFECTED. phoneLookupVariants cannot normalise
+         *   "0803", so it returns just ["0803"] and this degrades to exactly
+         *   the single exact match it replaced, leaving the prefix ranges to do
+         *   the work they were added for.
+         */
+        const phoneForms = phoneLookupVariants(rawPhone);
         const phonePromises: Promise<SupabaseQuerySnapshot>[] = [
-            // Exact match on both field names
-            db.collection(COLLECTIONS.USERS).where("phone", "==", rawPhone).limit(30).get(),
-            db.collection(COLLECTIONS.USERS).where("phoneNumber", "==", rawPhone).limit(30).get(),
+            // Exact match on both field names, across every stored spelling
+            ...(phoneForms.length > 0 ? [
+                db.collection(COLLECTIONS.USERS).where("phone", "in", phoneForms).limit(30).get(),
+                db.collection(COLLECTIONS.USERS).where("phoneNumber", "in", phoneForms).limit(30).get(),
+            ] : []),
             // Prefix range on phone field
             db.collection(COLLECTIONS.USERS)
                 .where("phone", ">=", rawPhone)

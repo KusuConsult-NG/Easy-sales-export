@@ -12,6 +12,7 @@ import { hasAdminPermission, isPlatformAdmin } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
+import { phoneLookupVariants } from "@/lib/phone";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { hashData } from "@/lib/security";
@@ -172,10 +173,26 @@ async function findConflictingApplication(params: {
 }): Promise<string | null> {
     const { callerId, email, phone, nin, ignoreApplicationId } = params;
 
+    /*
+     *   #729 — EVERY SPELLING OF THE NUMBER, NOT THE ONE THIS APPLICANT TYPED.
+     *
+     *   This asked `.where("phone", "==", phone)`. Nothing normalises a phone
+     *   number on the way into WAVE_APPLICATIONS: both writers store what was
+     *   typed, minus whitespace, and strictPhoneSchema accepts `08031234567`,
+     *   `+2348031234567`, `2348031234567` and `0803-123-4567` alike. So one
+     *   number is stored under four spellings and an exact match found only
+     *   applicants who happened to type it the same way as the last one.
+     *
+     *   lib/phone.ts exists for this and says so: "That check is the one thing
+     *   standing between the platform and two accounts on one phone number."
+     *   It was reaching two of the platform's six identity guards.
+     */
+    const phoneForms = phoneLookupVariants(phone);
+
     const [phoneSnap, ninSnap, emailSnap] = await Promise.all([
-        phone
+        phoneForms.length > 0
             ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("phone", "==", phone).limit(DUPLICATE_SCAN_LIMIT).get()
+                .where("phone", "in", phoneForms).limit(DUPLICATE_SCAN_LIMIT).get()
             : Promise.resolve(null),
         nin
             ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)

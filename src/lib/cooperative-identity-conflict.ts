@@ -34,7 +34,7 @@
  */
 
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { normalisePhone } from "@/lib/phone";
+import { normalisePhone, phoneLookupVariants } from "@/lib/phone";
 
 /** How many rows sharing one identity are examined before deciding. */
 export const IDENTITY_SCAN_LIMIT = 20;
@@ -60,17 +60,38 @@ export async function cooperativeIdentityConflict(
     const members = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
     if (phone) {
-        // Both forms, because rows already exist in each: the onboarding form
-        // stores what was typed and the bulk import stored E.164. Matching only
-        // one form is #80, which made the guard blind to every imported member.
-        const forms = [...new Set([phone, normalisePhone(phone)].filter(Boolean))] as string[];
-        const snap = await members
-            .where("phone", "in", forms)
-            .limit(IDENTITY_SCAN_LIMIT)
-            .get();
+        /*
+         *   Both forms, because rows already exist in each: the onboarding form
+         *   stores what was typed and the bulk import stored E.164. Matching
+         *   only one form is #80, which made the guard blind to every imported
+         *   member.
+         *
+         *   #729 — AND "BOTH FORMS" WAS TWO OF THE FOUR THAT EXIST. This built
+         *   its own list, `[phone, normalisePhone(phone)]`, which is a second
+         *   and narrower copy of a rule lib/phone.ts already states in full.
+         *   A member stored as `2348031234567` — no plus — or as `08031234567`
+         *   when the caller passed E.164 was invisible to it, which is the same
+         *   #80 blindness in a smaller size.
+         */
+        const forms = phoneLookupVariants(phone);
+        /*
+         *   The empty case is checked HERE rather than inferred from `phone`
+         *   being truthy above. It is true today that a non-empty string always
+         *   yields at least one variant, but that is a fact about lib/phone.ts,
+         *   and a `where(field, "in", [])` is a query with no possible match
+         *   whose behaviour — empty result or thrown error — is a fact about
+         *   the adapter. A guard whose correctness depends on two other modules
+         *   agreeing is one nobody can check by reading it.
+         */
+        if (forms.length > 0) {
+            const snap = await members
+                .where("phone", "in", forms)
+                .limit(IDENTITY_SCAN_LIMIT)
+                .get();
 
-        if (!snap.empty && snap.docs.some((d: any) => !ownedBy(d, userId))) {
-            return "A cooperative member with this phone number already exists.";
+            if (!snap.empty && snap.docs.some((d: any) => !ownedBy(d, userId))) {
+                return "A cooperative member with this phone number already exists.";
+            }
         }
     }
 

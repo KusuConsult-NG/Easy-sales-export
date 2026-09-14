@@ -4,6 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
+import { phoneLookupVariants } from "@/lib/phone";
 import { sendBriefingConfirmationEmail } from "@/lib/email-notifications";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
@@ -100,6 +101,8 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
         const validData = validationResult.data!;
         const emailToStore = validData.email;
         const phoneToStore = validData.phoneNumber;
+        //   #729 — every spelling of that number that may already be stored.
+        const phoneForms = phoneLookupVariants(phoneToStore);
 
         // 🔒 DEMOGRAPHIC GATE: Strict Gender Alignment check
         let userProfile: any = null;
@@ -196,10 +199,22 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
                 .where("email", "==", emailToStore)
                 .limit(1)
                 .get(),
-            db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
-                .where("phoneNumber", "==", phoneToStore)
-                .limit(1)
-                .get(),
+            /*
+             *   #729 — BOTH SPELLINGS, BECAUSE THE SCHEMA ADMITS BOTH.
+             *
+             *   strictNigerianPhoneSchema is /^(\+234|0)[789]\d{9}$/ — it
+             *   accepts `+2348031234567` AND `08031234567` and normalises
+             *   neither, and this is the only writer, so the collection
+             *   provably holds one number under two spellings. A dedup asking
+             *   for one of them let the same guest register twice by typing
+             *   their number the other way.
+             */
+            phoneForms.length > 0
+                ? db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+                    .where("phoneNumber", "in", phoneForms)
+                    .limit(1)
+                    .get()
+                : Promise.resolve(null),
         ]);
 
         /**
@@ -235,7 +250,10 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
                 meta: { alreadyRegistered: true },
             };
         }
-        if (!existingByPhone.empty) { return { success: false as const, error: "This phone number is already registered for the briefing.", data: null };
+        //   #729 — null when the number yielded no searchable spelling at all,
+        //   which is not the same as "no match". Treated as no match here
+        //   because the schema above already refused anything unparseable.
+        if (existingByPhone && !existingByPhone.empty) { return { success: false as const, error: "This phone number is already registered for the briefing.", data: null };
         }
 
         const status: BriefingStatus = "registered";
