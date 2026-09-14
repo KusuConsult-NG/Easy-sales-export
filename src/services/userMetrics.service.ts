@@ -13,11 +13,40 @@ import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetri
  */
 
 async function fetchAllDocs(query: any): Promise<any[]> {
+    /*
+     *   #739 OFFSET PAGING WITH NO ORDER AT ALL, UNDER THE SERVICE EVERY
+     *        DASHBOARD IS REQUIRED TO USE.
+     *
+     *   This paged with `.limit(1000).offset(offset)` and no `orderBy`, and
+     *   none of the four callers supplies one. Postgres makes NO ordering
+     *   guarantee without ORDER BY, so two pages of the same collection may
+     *   overlap — a row counted twice — or leave a gap — a row counted never.
+     *
+     *   supabase-db states the rule where it maps the key: offset paging needs
+     *   "the one ordering that is guaranteed total", and warns that otherwise
+     *   "rows are then re-read and skipped between pages". #671 found exactly
+     *   that in the duplicate-profile forensic, where a row read twice became a
+     *   duplicate profile and a row skipped left a real one unreported.
+     *
+     *   The same mechanism here moves the numbers on this file's own promise:
+     *   "ALL DASHBOARDS MUST CONSUME THIS SERVICE FOR USER METRICS."
+     *
+     *   ORDERED HERE, NOT AT THE FOUR CALL SITES, because four is how a rule
+     *   comes to reach three. `__name__` is the document id — unique by
+     *   construction, so the order is total and every row is visited exactly
+     *   once. Nothing here depends on WHICH order.
+     *
+     *   It bites only above one page, which is why it has been invisible: a
+     *   collection under a thousand rows returns everything on the first call
+     *   and the offset is never used.
+     */
+    const ordered = query.orderBy("__name__", "asc");
+
     const allDocs: any[] = [];
     let offset = 0;
     let keepFetching = true;
     while (keepFetching) {
-        const snap = await query.limit(1000).offset(offset).get();
+        const snap = await ordered.limit(1000).offset(offset).get();
         if (snap.empty || snap.docs.length === 0) {
             break;
         }

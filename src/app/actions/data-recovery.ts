@@ -180,8 +180,26 @@ export async function runServiceRegistrationRecoveryAction(
 
         const userDocs: Array<{ id: string; data: () => any }> = [];
         for (let offset = 0; userDocs.length < maxUsers; offset += pageSize) {
+            /*
+             *   #739 — ORDERED BY THE DOCUMENT ID, WHICH IS UNIQUE.
+             *
+             *   This paged by `createdAt`, and #671 found the identical thing
+             *   in the duplicate-profile forensic: createdAt IS NOT UNIQUE —
+             *   bulk imports and migrations write whole batches on one
+             *   timestamp, and rows lacking the field sort arbitrarily. Offset
+             *   paging is only stable over a TOTAL order, so a row sharing a
+             *   value with its neighbour may be read twice or skipped entirely
+             *   between pages.
+             *
+             *   On a data-recovery sweep the skip is the half that matters: the
+             *   tool that exists to repair rows would pass over some without
+             *   saying so, and report a clean run.
+             *
+             *   `__name__` maps to the id column and is unique by construction.
+             *   Nothing here depends on WHICH order.
+             */
             const page = await db.collection(COLLECTIONS.USERS)
-                .orderBy("createdAt", "asc")
+                .orderBy("__name__", "asc")
                 .limit(pageSize)
                 .offset(offset)
                 .get();
