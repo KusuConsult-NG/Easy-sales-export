@@ -93,18 +93,65 @@ export class AnalyticsService implements AnalyticsServiceContract {
         activeSince.setDate(activeSince.getDate() - RECENT_ACTIVITY_DAYS);
 
         try {
-            const [totalUsersSnap, activeUsersSnap, fundedEscrowsSnap] = await Promise.all([
+            /*
+             *   #735 ERASING AN ACCOUNT MADE IT COUNT AS AN ACTIVE USER.
+             *
+             *   "Active" here is `updatedAt >= 30 days ago`, and BOTH of this
+             *   platform's tombstone operations write `updatedAt`:
+             *
+             *     user-soft-delete   `updatedAt: FieldValue.serverTimestamp()`
+             *                        in the scrub patch
+             *     #724's resolver    the same, beside `_migratedTo`
+             *
+             *   So the act of honouring a deletion request moved this number UP,
+             *   and kept it up for thirty days. Resolving a duplicate did the
+             *   same. The metric ran backwards from what it reports.
+             *
+             *   SUBTRACTED BY INCLUSION–EXCLUSION rather than filtered, because
+             *   these are `.count()` aggregates with no rows to inspect. A row
+             *   that is both deleted AND superseded would otherwise be removed
+             *   twice, so it is added back.
+             *
+             *   `_migratedTo != ""` matches rows that HAVE the field and no
+             *   others — the adapter emits `raw_data->>'f' <> 'x'`, which is
+             *   NULL and therefore NOT TRUE for a row missing the key. That
+             *   property is asserted in fake-db-matches-postgres, and
+             *   loadNonContactableUserIds relies on the same one.
+             */
+            const recentlyTouched = () =>
+                db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", activeSince);
+
+            const [
+                totalUsersSnap,
+                activeUsersSnap,
+                recentDeletedSnap,
+                recentSupersededSnap,
+                recentBothSnap,
+                fundedEscrowsSnap,
+            ] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).count().get(),
-                db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", activeSince).count().get(),
+                recentlyTouched().count().get(),
+                recentlyTouched().where("deleted", "==", true).count().get(),
+                recentlyTouched().where("_migratedTo", "!=", "").count().get(),
+                recentlyTouched().where("deleted", "==", true).where("_migratedTo", "!=", "").count().get(),
                 // An escrow holding money is `funded`: marketplace/_payment.ts
                 // sets it when payment clears, and it stays there until a
                 // release, a refund or a dispute moves it on.
                 db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "funded").count().get()
             ]);
 
+            const touched = activeUsersSnap.data().count ?? 0;
+            const tombstoned =
+                (recentDeletedSnap.data().count ?? 0)
+                + (recentSupersededSnap.data().count ?? 0)
+                - (recentBothSnap.data().count ?? 0);
+
             return {
                 totalUsers: totalUsersSnap.data().count ?? 0,
-                activeUsers: activeUsersSnap.data().count ?? 0,
+                //   Never below zero: a count that disagreed with its own
+                //   subtrahend should read as "none", not as a negative figure
+                //   on an admin dashboard.
+                activeUsers: Math.max(0, touched - tombstoned),
                 activeEscrows: fundedEscrowsSnap.data().count ?? 0,
                 lastCalculatedAt: new Date().toISOString()
             };
