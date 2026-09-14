@@ -131,3 +131,73 @@ export async function loadNonContactableUserIds(
 
     return out;
 }
+
+/**
+ * Every PHONE NUMBER on a tombstoned row, for an audience keyed by number.
+ *
+ *   #733 THIRTEEN OF THE FIFTEEN SMS AUDIENCES ASKED NOTHING BEFORE SENDING.
+ *
+ *   The in-app broadcast checks contactability in ONE place — inside its `add`,
+ *   the funnel every audience goes through — which is why it has no per-audience
+ *   gaps. The SMS broadcast has the same funnel and never checked in it, so the
+ *   rule reached whichever `case` somebody remembered: `all_except_approved_coop`
+ *   (#697) and, since #732, `wave_briefing_registrants`. The other thirteen read
+ *   a number off a row and sent to it.
+ *
+ *   WHAT THAT COSTS, AND IT IS NOT THE ERASED MEMBER. #697 already established
+ *   that an erased member has no number left to reach: ERASED_FIELDS deletes it
+ *   from the user row and #376 scrubs it off the module rows. The cost is the
+ *   SUPERSEDED one.
+ *
+ *   contactableVerdict refuses two states, and supersession is the other:
+ *   `_migratedTo` pointing at a different uid. #724's duplicate-profile tool
+ *   creates exactly that state, and it deliberately DESTROYS NOTHING — the
+ *   superseded row keeps its name, its email and its phone number so the
+ *   decision stays reversible. So the person whose duplicate an admin resolved
+ *   is still in the users collection twice, with the same number on both rows,
+ *   and every broadcast reached them twice.
+ *
+ *   KEYED BY NUMBER, NOT BY UID, because that is what this funnel has. The SMS
+ *   `add` receives a phone string and nothing else; giving it a uid would mean
+ *   editing fifteen call sites, and a rule applied at fifteen sites is the
+ *   shape that produced this finding.
+ *
+ *   NORMALISED ON BOTH SIDES. #729 established that one number is stored under
+ *   four spellings, so a raw comparison here would miss the row it is meant to
+ *   catch — which is this same defect one layer down.
+ *
+ *   FAILS OPEN, LOUDLY, for the reason loadNonContactableUserIds gives above: a
+ *   read error must not empty an admin's audience.
+ */
+export async function loadNonContactablePhones(
+    db: { collection: (name: string) => any },
+    usersCollection: string,
+): Promise<Set<string>> {
+    const { normalisePhone } = await import("@/lib/phone");
+    const out = new Set<string>();
+
+    const collect = async (run: () => Promise<any>) => {
+        const snap = await run();
+        for (const doc of snap.docs ?? []) {
+            const data = doc.data?.() ?? {};
+            for (const raw of [data.phone, data.phoneNumber, data.kyc?.phoneNumber]) {
+                const normalised = normalisePhone(raw);
+                if (normalised) out.add(normalised);
+            }
+        }
+    };
+
+    const FIELDS = ["phone", "phoneNumber", "kyc"] as const;
+
+    try {
+        await collect(() => db.collection(usersCollection)
+            .where("deleted", "==", true).select(...FIELDS).all().get());
+    } catch { /* fail open — see the header */ }
+
+    try {
+        await collect(() => db.collection(usersCollection)
+            .where("_migratedTo", "!=", "").select(...FIELDS).all().get());
+    } catch { /* fail open — see the header */ }
+
+    return out;
+}

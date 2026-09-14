@@ -16,7 +16,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/africastalking";
-import { isContactableAccount, loadNonContactableUserIds } from "@/lib/contactable-account";
+import { isContactableAccount, loadNonContactableUserIds, loadNonContactablePhones } from "@/lib/contactable-account";
 import { normalisePhone } from "@/lib/phone";
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireAdmin } from "@/lib/require-admin";
@@ -239,7 +239,25 @@ async function collectSmsRecipients(
      */
     const nonContactable = await loadNonContactableUserIds(db, COLLECTIONS.USERS);
 
+    /*
+     *   #733 — AND THE NUMBERS ON THOSE ROWS, CHECKED IN THE FUNNEL.
+     *
+     *   Only two of this file's fifteen audiences asked anything before sending.
+     *   The in-app broadcast has no such gap because its check lives inside its
+     *   `add` — the one place every audience goes through — and this is that,
+     *   here.
+     *
+     *   The cost was not the erased member (#697: they have no number left) but
+     *   the SUPERSEDED one. #724's duplicate-profile tool marks `_migratedTo`
+     *   and destroys nothing, precisely so the decision stays reversible — so
+     *   the row keeps the same phone number as the profile that won, and the
+     *   person an admin de-duplicated received every broadcast twice.
+     */
+    const nonContactablePhones = await loadNonContactablePhones(db, COLLECTIONS.USERS);
+
     const add = (rawPhone: string | undefined | null, name: string) => { const phone = normalisePhone(rawPhone);
+        //   Normalised on both sides — #729: one number, four spellings.
+        if (phone && nonContactablePhones.has(phone)) return;
         if (phone && !recipients.has(phone)) recipients.set(phone, { name, phone });
     };
 

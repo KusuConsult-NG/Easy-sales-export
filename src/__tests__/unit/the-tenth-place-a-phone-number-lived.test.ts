@@ -260,6 +260,12 @@ describe('#732 — and the two guards in front of the audience', () => {
  *   Baseline green, one anchored swap at a time, restored from a snapshot copy,
  *   each mutant proving its edit landed by a unique string on disk.
  *
+ *   RUN AFTER THE COMMIT THAT INTRODUCED THIS FILE, not before it. The table
+ *   below was written from what each mutant was expected to do and only then
+ *   measured — which is the wrong order, and is recorded rather than tidied
+ *   away because an unverified table is exactly the defect this audit keeps
+ *   filing against the application. All nine killed; the control survived.
+ *
  *     MUTANT                                                        RESULT
  *     the briefing target is removed from the list                   KILLED
  *     the target keeps its PII list but loses phoneNumber            KILLED
