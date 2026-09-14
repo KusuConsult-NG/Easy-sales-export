@@ -3,7 +3,7 @@ import { COLLECTIONS } from './types/firestore';
 import { logger } from './logger';
 import { User } from './types/firestore';
 import { dateRangeStart, dateRangeEnd } from './date-utils';
-import { isContactableAccount } from "@/lib/contactable-account";
+import { isContactableAccount, isErasedAddress } from "@/lib/contactable-account";
 import { isMarketplaceBuyer } from "./broadcast-audience";
 import { isRecentlyActive } from "@/lib/recent-activity";
 
@@ -227,6 +227,19 @@ async function getSellerBroadcastList(filters?: BroadcastFilters) {
                 return;
             }
             const d = userDoc.data() as any;
+            /*
+             *   #734 — SEVEN EMAIL PATHS IN THIS FILE, ONE OF THEM GUARDED.
+             *
+             *   isContactableAccount is imported here and used correctly by the
+             *   reader #697 fixed. The other readers had the user document in
+             *   hand and never called it. The cost is not the ERASED row — it
+             *   carries @redacted.local — but the SUPERSEDED one, which #724's
+             *   duplicate-profile tool creates while deliberately keeping every
+             *   field so the decision stays reversible. That row holds the
+             *   person's REAL address, so a de-duplicated member received every
+             *   broadcast twice.
+             */
+            if (!isContactableAccount(d, userDoc.id)) return;
             const rawEmail = d.email || d.userEmail;
             if (!rawEmail) {
                 // User doc exists but has no email — try Auth fallback
@@ -259,6 +272,10 @@ async function getSellerBroadcastList(filters?: BroadcastFilters) {
             try {
                 const result = await auth.getUsers(chunk.map(uid => ({ uid })));
                 result.users.forEach(authUser => {
+                    //   #734 — no row here to ask about, so the tombstone is
+                    //   recognised from the address. A guaranteed hard bounce
+                    //   is what BOUNCED_EMAILS and #694 exist to prevent.
+                    if (isErasedAddress(authUser.email)) return;
                     if (!authUser.email) return;
                     const normalizedEmail = authUser.email.toLowerCase().trim();
                     if (emailMap.has(normalizedEmail)) return;
@@ -372,6 +389,10 @@ async function getAbandonedFailedBroadcastList(filters?: BroadcastFilters) {
                     const chunk = missingAuthIds.slice(i, i + 100);
                     const result = await auth.getUsers(chunk.map(uid => ({ uid })));
                     result.users.forEach(authUser => {
+                    //   #734 — no row here to ask about, so the tombstone is
+                    //   recognised from the address. A guaranteed hard bounce
+                    //   is what BOUNCED_EMAILS and #694 exist to prevent.
+                    if (isErasedAddress(authUser.email)) return;
                         if (!authUser.email) return;
                         const normalizedEmail = authUser.email.toLowerCase().trim();
                         if (emailMap.has(normalizedEmail)) return;
@@ -659,6 +680,19 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
                 return;
             }
             const d = userDoc.data() as any;
+            /*
+             *   #734 — SEVEN EMAIL PATHS IN THIS FILE, ONE OF THEM GUARDED.
+             *
+             *   isContactableAccount is imported here and used correctly by the
+             *   reader #697 fixed. The other readers had the user document in
+             *   hand and never called it. The cost is not the ERASED row — it
+             *   carries @redacted.local — but the SUPERSEDED one, which #724's
+             *   duplicate-profile tool creates while deliberately keeping every
+             *   field so the decision stays reversible. That row holds the
+             *   person's REAL address, so a de-duplicated member received every
+             *   broadcast twice.
+             */
+            if (!isContactableAccount(d, userDoc.id)) return;
             const rawEmail = d.email || d.userEmail;
             if (!rawEmail) {
                 missingEmailUserIds.push(userDoc.id);
@@ -690,6 +724,10 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             try {
                 const result = await auth.getUsers(chunk.map(uid => ({ uid })));
                 result.users.forEach(authUser => {
+                    //   #734 — no row here to ask about, so the tombstone is
+                    //   recognised from the address. A guaranteed hard bounce
+                    //   is what BOUNCED_EMAILS and #694 exist to prevent.
+                    if (isErasedAddress(authUser.email)) return;
                     if (!authUser.email) return;
                     const normalizedEmail = authUser.email.toLowerCase().trim();
                     if (emailMap.has(normalizedEmail)) return;
@@ -862,6 +900,8 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                     docs.forEach(doc => {
                         if (!doc.exists) return;
                         const d = doc.data() as any;
+                        /*  #734 — see the note at the first reader above. */
+                        if (!isContactableAccount(d, doc.id)) return;
                         const kycStatus = d?.kyc?.status || d?.kycStatus;
                         if (kycStatus === "verified" || kycStatus === "approved") verifiedUIDs.add(doc.id);
                     });
@@ -1103,6 +1143,10 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                 try {
                     const result = await auth.getUsers(chunk.map(u => ({ uid: u.uid })));
                     result.users.forEach(authUser => {
+                    //   #734 — no row here to ask about, so the tombstone is
+                    //   recognised from the address. A guaranteed hard bounce
+                    //   is what BOUNCED_EMAILS and #694 exist to prevent.
+                    if (isErasedAddress(authUser.email)) return;
                         if (!authUser.email) return;
                         const normalizedEmail = authUser.email.toLowerCase().trim();
                         if (emailMap.has(normalizedEmail)) return;
@@ -1134,7 +1178,10 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                 //   their own copy of the address and know nothing about the
                 //   tombstone on the user row. The user pass above recorded it.
                 if (uid && notContactable.has(uid)) return;
-                if (String(rawEmail).toLowerCase().trim().endsWith("@redacted.local")) return;
+                //   #734 — the same rule as the other seven paths, not an
+                //   eighth spelling of it. This one was already correct and is
+                //   converted so there is one definition to keep right.
+                if (isErasedAddress(rawEmail)) return;
                 const email = rawEmail.toLowerCase().trim();
                 if (email) {
                     const cleanState = state || 'Unknown';

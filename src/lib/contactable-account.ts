@@ -201,3 +201,27 @@ export async function loadNonContactablePhones(
 
     return out;
 }
+
+/**
+ * Is this address the erasure tombstone rather than a person's?
+ *
+ *   #734 — FOR THE PATHS THAT HAVE AN ADDRESS AND NO ROW TO ASK ABOUT.
+ *
+ *   broadcast-logic falls back to Supabase Auth for a user whose row carries no
+ *   email, in FOUR places. There is no document there to hand
+ *   isContactableAccount, so the tombstone has to be recognised from the
+ *   address itself — and it can be: revokeAuthAccess rewrites the Auth email to
+ *   `deleted_<uid>@redacted.local` when an account is erased, so that domain
+ *   arriving from Auth IS the tombstone.
+ *
+ *   Sending there is not a privacy breach — the domain does not resolve — it is
+ *   a guaranteed HARD BOUNCE, which is the thing BOUNCED_EMAILS and #694 exist
+ *   to keep off this platform's sending reputation.
+ *
+ *   One function rather than four spellings of `endsWith`, because four copies
+ *   of a rule is the defect this finding is an instance of.
+ */
+export function isErasedAddress(email: string | null | undefined): boolean {
+    const value = String(email ?? "").toLowerCase().trim();
+    return value.endsWith(ERASED_EMAIL_DOMAIN);
+}
