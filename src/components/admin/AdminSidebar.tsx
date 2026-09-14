@@ -80,6 +80,10 @@ const NAV_ITEMS = [
      *        the one audience the matrix does not spell.
      */
     { label: "Forensic Scan", href: "/admin/forensics", icon: Stethoscope, section: "platform", platformOnly: true },
+    //   #724 — the screen for the one finding the scan deliberately will not act
+    //   on by itself. Listed beside it because that is where an operator reading
+    //   "33 addresses hold more than one" goes looking for what to do about it.
+    { label: "Duplicate Profiles", href: "/admin/forensics/duplicates", icon: Users, section: "platform", platformOnly: true },
     // Announcements and banners render site-wide via AnnouncementBanner.tsx.
     // The actions existed and the page did not, so the only way to publish was
     // to write to the database by hand.

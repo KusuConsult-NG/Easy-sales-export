@@ -270,6 +270,22 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // #530 Reading a DELETED member's retained profile. A new permission,
         // super_admin only — see the note in admin-permissions on why neither
         // users:read (all ten roles) nor users:export (admin too) expresses it.
+        /*
+         *   #724 — the duplicate-profile tool. TWO gates, one permission: the
+         *   read that lists the groups and the write that settles one.
+         *
+         *   `users:update` and NOT a new permission. #530 minted
+         *   users:read_erased because reading a forgotten member's BVN is
+         *   unlike any other read; this writes one ordinary field on a user
+         *   row, which is exactly what users:update names. Inventing a
+         *   permission per screen is how a matrix stops meaning anything.
+         *
+         *   The READ is gated as tightly as the write on purpose: the list is
+         *   every address on the platform that holds more than one profile,
+         *   which is a map of the member base's weak points.
+         */
+        'src/app/actions/admin/_duplicate_profiles.ts': Array(2).fill('users:update'),
+
         'src/app/actions/admin/_erased.ts': ['users:read_erased'],
 
         // #431's addition. The retired document viewer stated the admin rule by
@@ -415,7 +431,11 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // 41 → 42: the erased-profile reader (#530).
         // 42 → 45: #532 converted the three half-converted files — the land
         // queue, the platform-settings write and the withdrawal queue.
-        expect(callSites().length).toBe(45);
+        // 45 → 47: #724 added the duplicate-profile tool's two gates, the list
+        // and the write. Raised rather than loosened: the point of pinning the
+        // count is that a gate added and forgotten in the EXPECTED map above
+        // fails this, and that is still true at 47.
+        expect(callSites().length).toBe(47);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

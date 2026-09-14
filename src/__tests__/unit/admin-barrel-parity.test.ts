@@ -115,6 +115,18 @@ const ADDED_SINCE_SPLIT = [
     // investigation. super_admin only, on a new permission, and every read
     // writes a data_access row.
     'getErasedUserRecordAction',
+    /*
+     *   #724 The duplicate-profile tool: a read that lists the addresses
+     *   holding more than one record, and a write that settles one group by
+     *   marking the records NOT chosen as superseded. Nothing is deleted —
+     *   `_migratedTo` is the marker every reader already follows — so the
+     *   decision is undone by clearing one field.
+     *
+     *   Both gated on users:update, the read as tightly as the write, because
+     *   the list is a map of the member base's weak points.
+     */
+    'listDuplicateProfileGroupsAction',
+    'resolveDuplicateProfileGroupAction',
 ].sort();
 
 const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();

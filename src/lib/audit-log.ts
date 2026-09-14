@@ -20,6 +20,14 @@ export type AuditAction =
     | 'user_activate'
     | 'user_role_change'
     | 'user_gender_update'
+    /**
+     *   #724 — an admin decided which of somebody's duplicate records IS the
+     *   person. Its own action rather than 'user_update' because it is an
+     *   IDENTITY decision: the audit row carries the reason the operator gave,
+     *   and six months on that reason is the only thing that makes the choice
+     *   re-derivable — the evidence on the rows will have moved.
+     */
+    | 'user_profile_supersede'
     | 'ai_chat_message'
     | 'user_impersonate'
     | 'user_kyc_verify_bvn'

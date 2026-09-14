@@ -31,6 +31,15 @@
 // #530 Reading a deleted member's retained profile. super_admin only, audited.
 export { getErasedUserRecordAction } from "./_erased";
 
+//   #724 — the duplicate-profile tool. Published here rather than imported from
+//   its file, because the barrel is where this domain says what it offers and a
+//   screen reaching past it hides the fact that a new surface was added.
+export {
+    listDuplicateProfileGroupsAction,
+    resolveDuplicateProfileGroupAction,
+} from "./_duplicate_profiles";
+export type { DuplicateProfileReport, ResolveDuplicateInput } from "./_duplicate_profiles";
+
 // ─── Domain types ─────────────────────────────────────────────────────────────
 export type { EditableApplicationFields } from "./_applications";
 
