@@ -201,8 +201,15 @@ describe('#331 — the academy check can now fail', () => {
 
         const c = check(await scan(), ACADEMY);
 
-        expect(c.details).toMatch(/Scanned 2 active enrolments/);
-        expect(c.details).not.toMatch(/Scanned 50/);
+        //   #728 reworded this to say whether the scan saw the whole
+        //   collection ("Scanned all 2") — the claim here is unchanged: the
+        //   REAL count, never the literal 50 the check used to print whatever
+        //   it read.
+        expect(c.details).toMatch(/\b2 active enrolments/);
+        expect(c.details).not.toMatch(/\b50 active enrolments/);
+        //   And two rows is under the ceiling, so this scan really did see
+        //   everything — the vacuity guard on the wording above.
+        expect(c.details).toContain('Scanned all 2');
     });
 
     it('says so when there is nothing to check, instead of implying it looked', async () => {

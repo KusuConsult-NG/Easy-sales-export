@@ -190,7 +190,10 @@ describe('#475 — the scan itself separates them', () => {
         //   "inconclusive", not "pass" and not "fail".
         const code = source(ACTION);
 
-        expect(code).toContain('ineligibleIds.length > 0');
+        //   #728 — the verdict routes through lib/forensic-scan-scope now, so
+        //   a sampled check cannot claim a clean collection it never read.
+        //   #464's rule is untouched and is what this asserts.
+        expect(code).toContain('verdictFor(waveScope, ineligibleIds.length, "fail")');
         expect(code).toContain('"inconclusive"');
     });
 

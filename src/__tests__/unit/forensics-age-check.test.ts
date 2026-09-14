@@ -148,7 +148,14 @@ describe('the forensic age check reads where the date lives', () => {
             forensics.indexOf('check: "Eligibility Paradox') + 2600);
 
         // "fail" is still driven by real ineligibility and nothing else.
-        expect(push).toMatch(/status:\s*ineligibleIds\.length > 0\s*\n?\s*\?\s*"fail"/);
+        expect(push).toContain('verdictFor(waveScope, ineligibleIds.length, "fail")');
+        //   #728 — SIXTH TIME, and this test's own note above predicted it. The
+        //   verdict moved into lib/forensic-scan-scope so a sampled check cannot
+        //   claim a clean collection it never read; the claim here is unchanged.
+        //   An undated participant is a GAP, and a gap alone never reads as
+        //   ineligible.
+        expect(push).toContain('undatedIds.length > 0');
+        expect(push).toContain('"inconclusive"');
 
         // An undated participant is listed, never counted as ineligible.
         expect(push).toContain('...undatedIds');

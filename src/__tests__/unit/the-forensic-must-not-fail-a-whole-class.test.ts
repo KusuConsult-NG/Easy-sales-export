@@ -91,6 +91,7 @@
  *     reword this header                             SURVIVED, as intended
  */
 
+import { verdictFor } from '@/lib/forensic-scan-scope';
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { normaliseGender, isDefinitelyNot, genderOutcome } from '@/lib/gender';
@@ -192,10 +193,33 @@ describe('#464 — the forensic separates a finding from a gap', () => {
     });
 
     it('POSITIVE CONTROL: a real ineligibility still fails the check', () => {
-        const code = forensics();
-        const block = code.slice(code.indexOf('Eligibility Paradox (Gender/Age)'));
+        /*
+         *   #728 — ASSERTED ON THE RULE, NOT ON THE SPELLING.
+         *
+         *   This matched the literal source `ineligibleIds.length > 0 ? "fail"`.
+         *   The verdict now goes through lib/forensic-scan-scope so that a
+         *   sampled check cannot report a clean collection it never read, and
+         *   this control failed against code whose BEHAVIOUR was unchanged —
+         *   a text assertion standing in for a behavioural one.
+         *
+         *   The composition was checked exhaustively over every combination of
+         *   (ineligible, gaps, complete): identical to the old expression in
+         *   every case but one — a full sample with nothing found, which is the
+         *   finding. Exercised here rather than described.
+         */
+        const ineligible = (n: number, gaps: number, complete: boolean) =>
+            (gaps > 0 && n === 0) ? 'inconclusive' : verdictFor({ scanned: 0, ceiling: 0, complete }, n, 'fail');
 
-        expect(block.slice(0, 700)).toMatch(/ineligibleIds\.length > 0\s*\n?\s*\?\s*"fail"/);
+        //   A real ineligibility fails, whether or not the sample was complete
+        //   and whether or not there were gaps beside it.
+        expect(ineligible(1, 0, true)).toBe('fail');
+        expect(ineligible(1, 0, false)).toBe('fail');
+        expect(ineligible(1, 9, true)).toBe('fail');
+        expect(ineligible(1, 9, false)).toBe('fail');
+
+        //   And the check still routes its verdict through that rule.
+        const block = forensics().slice(forensics().indexOf('Eligibility Paradox (Gender/Age)'));
+        expect(block.slice(0, 700)).toContain('verdictFor(waveScope, ineligibleIds.length, "fail")');
     });
 });
 
@@ -294,10 +318,20 @@ describe('#465 — a scan that could not run is not a scan that found something'
     });
 
     it('POSITIVE CONTROL: a real finding still reports "fail"', () => {
-        // Without this, turning every status into "inconclusive" would pass
-        // everything above and retire the whole screen.
-        const code = forensics();
+        /*
+         *   Without this, turning every status into "inconclusive" would pass
+         *   everything above and retire the whole screen. That danger is real
+         *   and #728 moved these verdicts, so the control is kept — but on the
+         *   RULE rather than on the spelling of one check.
+         */
+        expect(verdictFor({ scanned: 3, ceiling: 100, complete: true }, 1, 'fail')).toBe('fail');
+        expect(verdictFor({ scanned: 100, ceiling: 100, complete: false }, 1, 'fail')).toBe('fail');
 
-        expect(code).toMatch(/ghostUserIds\.length > 0 \? "fail" : "pass"/);
+        //   And a clean COMPLETE scan still passes, so "inconclusive" has not
+        //   quietly become the answer to everything.
+        expect(verdictFor({ scanned: 3, ceiling: 100, complete: true }, 0, 'fail')).toBe('pass');
+
+        //   The ghost check reaches its verdict through it.
+        expect(forensics()).toContain('verdictFor(ghostScope, ghostUserIds.length, "fail")');
     });
 });

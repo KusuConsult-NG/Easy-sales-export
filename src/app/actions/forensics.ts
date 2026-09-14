@@ -21,6 +21,32 @@ import {
 import { authAccountsWithProfiles } from "@/lib/auth-profile-link";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { findFarmNationApplications } from "@/lib/farm-nation-application-lookup";
+import { sampleOf, verdictFor, describeSample } from "@/lib/forensic-scan-scope";
+
+/*
+ * ── #728 THE CEILINGS, NAMED ONCE ───────────────────────────────────────────
+ *
+ *   Every sampled check needs its ceiling TWICE: once to limit the query, and
+ *   once to ask whether the result filled it. Written as a literal in both
+ *   places they are two copies of one fact, and the day somebody raises a
+ *   `.limit()` without touching the comparison, the check goes back to claiming
+ *   a completeness it does not have — silently, which is how this defect got
+ *   here.
+ *
+ *   So each is a constant, read by the query and by the verdict.
+ */
+const SCAN_CEILING = {
+    /** Supabase Auth page size for the ghost-user scan. */
+    authUsers: 100,
+    /** Per-query, and the check runs two of them. */
+    blankEmail: 200,
+    products: 200,
+    verifications: 100,
+    waveApplicants: 200,
+    coopMembers: 20,
+    farmers: 50,
+    enrolments: 50,
+} as const;
 
 /**
  * Forensic data-integrity scan.
@@ -165,8 +191,11 @@ export async function runForensicScanAction(): Promise<
         // CHECK: Ghost Users (Auth users without Firestore profile)
         // Note: Listing all auth users is expensive, limit to 100 for this check or iterate if needed.
         // For safety, we'll scan the top 100 most recent users.
-        try { const listUsersResult = await adminAuth.listUsers(100);
+        try { const listUsersResult = await adminAuth.listUsers(SCAN_CEILING.authUsers);
             const authUsers = listUsersResult.users;
+            //   #728 — "recent 100" was the most honest of the sampled lines and
+            //   still reported "pass". The ceiling decides the verdict now.
+            const ghostScope = sampleOf(authUsers.length, SCAN_CEILING.authUsers);
             const ghostUserIds: string[] = [];
 
             /**
@@ -194,8 +223,9 @@ export async function runForensicScanAction(): Promise<
             results.push({
                 module: "Auth",
                 check: "Ghost Users (Auth exists, No Profile)",
-                status: ghostUserIds.length > 0 ? "fail" : "pass",
-                details: `Scanned recent 100 Auth users. Found ${ghostUserIds.length} ghosts.`,
+                status: verdictFor(ghostScope, ghostUserIds.length, "fail"),
+                details: `${describeSample(ghostScope, "recent Auth users")} `
+                    + `Found ${ghostUserIds.length} ghosts.`,
                 affectedIds: ghostUserIds
             });
         /**
@@ -243,13 +273,25 @@ export async function runForensicScanAction(): Promise<
         try {
             const noEmail = await db.collection(COLLECTIONS.USERS)
                 .where("email", "==", "")
-                .limit(200)
+                .limit(SCAN_CEILING.blankEmail)
                 .get();
 
             const nullEmail = await db.collection(COLLECTIONS.USERS)
                 .where("email", "==", null as any)
-                .limit(200)
+                .limit(SCAN_CEILING.blankEmail)
                 .get();
+
+            /*
+             *   #728 — TWO QUERIES, EITHER OF WHICH CAN FILL ITS CEILING.
+             *
+             *   The scan is incomplete if EITHER did, so the sample is reported
+             *   against whichever came closer to its limit. Taking the sum
+             *   against a doubled ceiling would let one full query hide behind
+             *   an empty one.
+             */
+            const emailScope = noEmail.docs.length >= nullEmail.docs.length
+                ? sampleOf(noEmail.docs.length, SCAN_CEILING.blankEmail)
+                : sampleOf(nullEmail.docs.length, SCAN_CEILING.blankEmail);
 
             const seen = new Set<string>();
             const ids: string[] = [];
@@ -265,9 +307,14 @@ export async function runForensicScanAction(): Promise<
             results.push({
                 module: "Auth",
                 check: "Profiles With No Email Address",
-                status: ids.length > 0 ? "fail" : "pass",
+                status: verdictFor(emailScope, ids.length, "fail"),
                 details: ids.length === 0
-                    ? "Every profile carries an email address."
+                    ? (emailScope.complete
+                        ? "Every profile carries an email address."
+                        //   #728 — the claim the sample cannot support, replaced
+                        //   by the one it can.
+                        : `No blank address among the ${emailScope.scanned} profile(s) read, but that `
+                          + `is this scan's ceiling — the rest of the collection was NOT examined.`)
                     : `${ids.length} profile(s) have no email stored. They cannot be found by any `
                       + `lookup that resolves a person from their address, so if the profile is not `
                       + `keyed by the auth id the person gets a blank profile at login. A login now `
@@ -435,7 +482,7 @@ export async function runForensicScanAction(): Promise<
         // ============================================================================
 
         // CHECK: Orphaned Products (Seller does not exist)
-        try { const productsSnapshot = await db.collection(COLLECTIONS.PRODUCTS).limit(200).get(); // Sample check
+        try { const productsSnapshot = await db.collection(COLLECTIONS.PRODUCTS).limit(SCAN_CEILING.products).get(); // Sample check
             const orphanedProductIds: string[] = [];
 
             // Batched, and de-duplicated: the serial version re-read the same
@@ -465,11 +512,16 @@ export async function runForensicScanAction(): Promise<
                 }
             }
 
+            const productScope = sampleOf(productsSnapshot.docs.length, SCAN_CEILING.products);
+
             results.push({
                 module: "Marketplace",
                 check: "Orphaned Products (Deleted Seller)",
-                status: orphanedProductIds.length > 0 ? "fail" : "pass",
-                details: `Scanned ${productsSnapshot.size} products. Found ${orphanedProductIds.length} orphans.`,
+                status: verdictFor(productScope, orphanedProductIds.length, "fail"),
+                //   #728 — "Scanned 200 products" read as the whole collection
+                //   when 200 was the ceiling. describeSample says which it was.
+                details: `${describeSample(productScope, "products")} `
+                    + `Found ${orphanedProductIds.length} orphans.`,
                 affectedIds: orphanedProductIds
             });
         } catch (e: any) { results.push({ module: "Marketplace", check: "Orphaned Product Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
@@ -525,7 +577,7 @@ export async function runForensicScanAction(): Promise<
          */
         try { const verifiedSellersSnapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("status", "==", "approved")
-                .limit(100)
+                .limit(SCAN_CEILING.verifications)
                 .get();
 
             const driftedIds: string[] = [];
@@ -553,13 +605,18 @@ export async function runForensicScanAction(): Promise<
                 }
             }
 
+            const driftScope = sampleOf(verifiedSellersSnapshot.docs.length, SCAN_CEILING.verifications);
+
             results.push({
                 module: "Marketplace",
                 check: "Phone Data Drift (Profile vs Verified)",
-                status: driftedIds.length > 0
-                    ? "warning"
-                    : (comparable === 0 && verifiedSellersSnapshot.size > 0 ? "inconclusive" : "pass"),
-                details: `Scanned ${verifiedSellersSnapshot.size} verifications: `
+                //   #728 — the existing inconclusive case (nothing comparable)
+                //   stands, and verdictFor adds the other one: a sample that
+                //   filled its ceiling cannot report a clean collection.
+                status: comparable === 0 && verifiedSellersSnapshot.size > 0
+                    ? "inconclusive"
+                    : verdictFor(driftScope, driftedIds.length, "warning"),
+                details: `${describeSample(driftScope, "verifications")} `
                     + `${comparable} comparable, ${unreadable} with no usable number on one side. `
                     + `Found ${driftedIds.length} mismatches.`,
                 affectedIds: driftedIds
@@ -576,8 +633,10 @@ export async function runForensicScanAction(): Promise<
         try {
             const waveParticipantsQuery = await db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "wave_participant")
-                .limit(200) // Sample size
+                .limit(SCAN_CEILING.waveApplicants) // Sample size
                 .get();
+
+            const waveScope = sampleOf(waveParticipantsQuery.docs.length, SCAN_CEILING.waveApplicants);
 
             const ineligibleIds: string[] = [];
             const undatedIds: string[] = [];
@@ -671,13 +730,13 @@ export async function runForensicScanAction(): Promise<
                 //        "inconclusive" — the scan could not look, which the
                 //        ScanResult type already has a word for and this check
                 //        was not using.
-                status: ineligibleIds.length > 0
-                    ? "fail"
-                    : (unknownGenderIds.length > 0 || undatedIds.length > 0)
-                        ? "inconclusive"
-                        : "pass",
+                //   #728 — the gap cases below already refuse "pass"; a sample
+                //   that filled its ceiling is the third reason to.
+                status: (unknownGenderIds.length > 0 || undatedIds.length > 0) && ineligibleIds.length === 0
+                    ? "inconclusive"
+                    : verdictFor(waveScope, ineligibleIds.length, "fail"),
                 details:
-                    `Scanned ${waveParticipantsQuery.size} participants. Found ${ineligibleIds.length} ineligible.` +
+                    `${describeSample(waveScope, "participants")} Found ${ineligibleIds.length} ineligible.` +
                     (unknownGenderIds.length > 0
                         ? ` ${unknownGenderIds.length} have no gender recorded — a gap in the records, not a finding about them.`
                         : "") +
@@ -711,8 +770,10 @@ export async function runForensicScanAction(): Promise<
         // Note: This is expensive. We'll sample 20 members.
         try { const coopMembersQuery = await db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "cooperative_member")
-                .limit(20)
+                .limit(SCAN_CEILING.coopMembers)
                 .get();
+
+            const coopScope = sampleOf(coopMembersQuery.docs.length, SCAN_CEILING.coopMembers);
 
             const balanceMismatches: string[] = [];
             const unreadableMembers: string[] = [];
@@ -861,10 +922,24 @@ export async function runForensicScanAction(): Promise<
                  *        it did not find. A verdict a reader cannot predict
                  *        from the sentence above it is the actual defect here.
                  */
-                status: (balanceMismatches.length > 0 || unreadableMembers.length > 0) ? "fail" : "pass",
-                // The sample size and the comparison are both stated, so a
-                // "pass" cannot be read as more than it is.
-                details: `Sampled ${coopMembersQuery.docs.length} members. `
+                /*
+                 *   #728 — THIS CHECK'S OWN COMMENT MADE THE ARGUMENT THIS
+                 *   FINDING REJECTS: "the sample size and the comparison are
+                 *   both stated, so a 'pass' cannot be read as more than it is."
+                 *
+                 *   It can, and it is. The wording here was the most honest of
+                 *   the eleven — it is the one check that said "Sampled" — and
+                 *   it still returned a GREEN CHIP off twenty members. An
+                 *   operator scanning a dashboard reads the chip; the sentence
+                 *   under it is what they read after something is already red.
+                 */
+                status: verdictFor(
+                    coopScope,
+                    balanceMismatches.length + unreadableMembers.length,
+                    "fail",
+                ),
+                details: `Sampled ${coopMembersQuery.docs.length} members`
+                    + `${coopScope.complete ? " — all of them" : ", this scan's ceiling, so the rest were NOT read"}. `
                     + `Found ${balanceMismatches.length + unreadableMembers.length} problem(s): `
                     + `${balanceMismatches.length} balance mismatch(es) and ${unreadableMembers.length} member(s) `
                     + `holding the cooperative_member role with no membership row under either key — the second `
@@ -955,8 +1030,10 @@ export async function runForensicScanAction(): Promise<
         try {
             const farmerRoleQuery = await db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "farmer")
-                .limit(50)
+                .limit(SCAN_CEILING.farmers)
                 .get();
+
+            const farmerScope = sampleOf(farmerRoleQuery.docs.length, SCAN_CEILING.farmers);
 
             const driftIds: string[] = [];
             const noApplicationIds: string[] = [];
@@ -1039,7 +1116,7 @@ export async function runForensicScanAction(): Promise<
             results.push({
                 module: "Farm Nation",
                 check: "Approval Drift (User Record vs Application)",
-                status: (driftIds.length > 0 || noApplicationIds.length > 0) ? "fail" : "pass",
+                status: verdictFor(farmerScope, driftIds.length + noApplicationIds.length, "fail"),
                 /**
                  *   #671 "compared 1 … found 45" COULD NOT BOTH BE TRUE.
                  *
@@ -1200,8 +1277,13 @@ export async function runForensicScanAction(): Promise<
         try {
             const enrollments = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
                 .where("status", "==", "active")
-                .limit(50)
+                .limit(SCAN_CEILING.enrolments)
                 .get();
+
+            //   #728 — THE CHECK THIS FINDING WAS PROVED ON. Seeded with exactly
+            //   fifty clean enrolments it reported "pass": a green tick over a
+            //   collection it had read fifty rows of.
+            const enrolmentScope = sampleOf(enrollments.docs.length, SCAN_CEILING.enrolments);
 
             const freeRideIds: string[] = [];
             const unresolved: string[] = [];
@@ -1252,13 +1334,24 @@ export async function runForensicScanAction(): Promise<
             results.push({
                 module: "Academy",
                 check: "Enrollment Audit (Access vs Plan)",
-                status: freeRideIds.length > 0 ? "warning" : "pass",
+                /*
+                 *   #728 — AN UNRESOLVED ENROLMENT IS A GAP, NOT A FINDING, and
+                 *   folding it into the problem count (my first attempt, caught
+                 *   by re-running the probe) turned "could not evaluate" into a
+                 *   warning. #464 and #475 settled that distinction for the WAVE
+                 *   check directly above; this follows the same shape.
+                 */
+                status: freeRideIds.length > 0
+                    ? "warning"
+                    : unresolved.length > 0
+                        ? "inconclusive"
+                        : verdictFor(enrolmentScope, 0, "warning"),
                 // The number actually scanned. The old line said 50 whatever
                 // happened, including when nothing was read at all.
                 details: enrollments.size === 0
                     ? "No active enrolments found to check."
-                    : `Scanned ${enrollments.size} active enrolments against checkCourseAccess. ` +
-                      `Found ${freeRideIds.length} on a course their plan does not open` +
+                    : `${describeSample(enrolmentScope, "active enrolments")} Checked against ` +
+                      `checkCourseAccess. Found ${freeRideIds.length} on a course their plan does not open` +
                       (unresolved.length > 0 ? `, ${unresolved.length} could not be resolved.` : "."),
                 affectedIds: [...freeRideIds, ...unresolved]
             });

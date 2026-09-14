@@ -338,7 +338,14 @@ describe('#671 — and the scan asks the wide question', () => {
          *   report gaps as failures" does not make the same move.
          */
         const body = checkBody(source, 'Approval Drift');
-        expect(body).toContain('(driftIds.length > 0 || noApplicationIds.length > 0) ? "fail" : "pass"');
+        /*
+         *   #728 — BOTH ARE STILL FAILURES, asserted on the rule rather than on
+         *   the ternary. The verdict moved into lib/forensic-scan-scope so a
+         *   sampled check cannot report a clean collection it never read; what
+         *   drives "fail" is unchanged, and it is still BOTH lists summed —
+         *   which is the thing this test exists to hold.
+         */
+        expect(body).toContain('verdictFor(farmerScope, driftIds.length + noApplicationIds.length, "fail")');
         expect(body).toContain('affectedIds: [...driftIds, ...noApplicationIds]');
     });
 });
@@ -374,7 +381,11 @@ describe('#671 — and the reconciliation says what it found before it says what
          *   was granted. The row should exist. Somebody has to make it exist,
          *   so it belongs where somebody will act on it.
          */
-        expect(body).toContain('(balanceMismatches.length > 0 || unreadableMembers.length > 0) ? "fail" : "pass"');
+        //   #728 — the same move, and the same claim: a missing membership row
+        //   is summed into the problem count, so it still drives "fail" rather
+        //   than being reported as a gap.
+        expect(body).toContain('balanceMismatches.length + unreadableMembers.length');
+        expect(body).toContain('verdictFor(');
         expect(body).toContain('...unreadableMembers.map((id) => `${id} (no membership record)`)');
     });
 
@@ -607,8 +618,11 @@ describe('#671 — and the check that was right is left alone', () => {
          *   was doing it right.
          */
         const body = checkBody(source, 'Eligibility Paradox');
-        expect(body).toContain('ineligibleIds.length > 0');
-        expect(body).toContain('? "fail"');
+        //   #728 — the verdict routes through lib/forensic-scan-scope so a
+        //   sampled check cannot claim a clean collection it never read. What
+        //   this test protects is untouched: ineligibility drives "fail", and
+        //   the gaps stay out of the verdict and in notCheckedIds.
+        expect(body).toContain('verdictFor(waveScope, ineligibleIds.length, "fail")');
         expect(body).toContain('affectedIds: ineligibleIds');
         expect(body).toContain('notCheckedIds: [...unknownGenderIds, ...undatedIds]');
     });
