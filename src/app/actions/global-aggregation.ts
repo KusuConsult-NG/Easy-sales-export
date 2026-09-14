@@ -8,6 +8,7 @@ import { AggregateField } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
+import { countLivePeople } from "@/lib/user-population";
 
 /**
  * Returns exact system-wide analytics pulling Exclusively from the 
@@ -25,9 +26,14 @@ export async function getPlatformMetricsAction() { try {
         // payments however many existed, and totalTransactions came from that
         // same truncated array — while a .count() query ran alongside it and
         // had its result thrown away.
-        const [totals, usersCount] = await Promise.all([
+        //
+        // #747 — and the user count beside it was every ROW, so it included
+        // accounts erased at the person's request and superseded duplicates the
+        // platform had already resolved. lib/user-population.ts holds the
+        // subtraction, shared with the dashboard's figure.
+        const [totals, liveUsers] = await Promise.all([
             supabaseAdmin.rpc("platform_revenue_totals"),
-            db.collection(COLLECTIONS.USERS).count().get(),
+            countLivePeople(db.collection(COLLECTIONS.USERS)),
         ]);
 
         if (totals.error) {
@@ -53,7 +59,7 @@ export async function getPlatformMetricsAction() { try {
             data: {
                 totalRevenue: Number(row?.total_revenue ?? 0),
                 totalTransactions: Number(row?.transaction_count ?? 0),
-                totalUsers: usersCount.data().count || 0,
+                totalUsers: liveUsers,
             }
         };
     } catch (error: any) { logger.error("Failed to aggregate platform metrics:", error);
@@ -156,15 +162,26 @@ export async function getUserMetricsAction() {
          *        The field name is kept — dashboards read it — and the meaning
          *        is stated here rather than left to be inferred from the word.
          */
-        const [totalSnap, activeSnap, verifiedSnap] = await Promise.all([
-            db.collection(COLLECTIONS.USERS).count().get(),
-            db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", thirtyDaysAgo).count().get(),
-            db.collection(COLLECTIONS.USERS).where("isVerified", "==", true).count().get()
+        /*
+         *   #747 — all three counted every row, tombstones included.
+         *
+         *   `active` here is `updatedAt >= 30 days ago`, which is #735's
+         *   finding verbatim: BOTH tombstone operations write `updatedAt`, so
+         *   honouring a deletion request moved this number UP and kept it up
+         *   for thirty days. #735 fixed that computation in
+         *   analytics.service.ts; this identical one was never touched.
+         *
+         *   ALL THREE, not just the two that were wrong on their own, because
+         *   `unverified = total - verified` is only coherent if both sides
+         *   counted the same population. Subtracting a tombstone-free total
+         *   from a tombstone-carrying verified count is a new defect in place
+         *   of the old one — and it can go negative.
+         */
+        const [total, active, verified] = await Promise.all([
+            countLivePeople(db.collection(COLLECTIONS.USERS)),
+            countLivePeople(db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", thirtyDaysAgo)),
+            countLivePeople(db.collection(COLLECTIONS.USERS).where("isVerified", "==", true)),
         ]);
-
-        const total = totalSnap.data().count || 0;
-        const active = activeSnap.data().count || 0;
-        const verified = verifiedSnap.data().count || 0;
 
         return {
             success: true as const,

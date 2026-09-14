@@ -32,8 +32,21 @@ afterAll(() => {
 
 beforeEach(() => {
     jest.clearAllMocks();
-    // The users count still goes through the mocked adapter.
-    global.mockFirestoreGet.mockResolvedValue({ data: () => ({ count: 41_000 }) });
+    /*
+     *   #747 — the user figure is four aggregates now, not one: every row, then
+     *   the erased, the superseded, and the overlap, so a tombstoned account is
+     *   subtracted exactly once. The adapter mock answers them in that order.
+     *
+     *   41,000 rows of which none is a tombstone, so the reported figure is
+     *   41,000 — the same number this asserted before, now arrived at through
+     *   the subtraction rather than around it.
+     */
+    global.mockFirestoreGet
+        .mockResolvedValueOnce({ data: () => ({ count: 41_000 }) })   // all rows
+        .mockResolvedValueOnce({ data: () => ({ count: 0 }) })        // erased
+        .mockResolvedValueOnce({ data: () => ({ count: 0 }) })        // superseded
+        .mockResolvedValueOnce({ data: () => ({ count: 0 }) })        // both
+        .mockResolvedValue({ data: () => ({ count: 0 }) });
 });
 
 describe("getPlatformMetricsAction", () => {
@@ -50,6 +63,35 @@ describe("getPlatformMetricsAction", () => {
         expect(result.data?.totalRevenue).toBe(128_450_000);
         expect(result.data?.totalTransactions).toBe(92_310);
         expect(result.data?.totalUsers).toBe(41_000);
+    });
+
+    it("does not count erased accounts or superseded duplicates as users", async () => {
+        /*
+         *   #747 — the defect. `totalUsers` was every ROW, so an account erased
+         *   at the person's request and a duplicate profile #724's resolver had
+         *   already superseded were both counted as users.
+         *
+         *   41,000 rows: 900 erased, 400 superseded, 100 of them both. The
+         *   overlap is added back, so 41,000 - 900 - 400 + 100 = 39,800.
+         */
+        //   mockReset, not clearAllMocks: the latter keeps queued `once`
+        //   implementations, so the four this block sets would have queued
+        //   BEHIND the four from beforeEach and never been read.
+        global.mockFirestoreGet.mockReset();
+        mockRpc.mockResolvedValue({
+            data: [{ total_revenue: 1, transaction_count: 1 }],
+            error: null,
+        });
+        global.mockFirestoreGet
+            .mockResolvedValueOnce({ data: () => ({ count: 41_000 }) })
+            .mockResolvedValueOnce({ data: () => ({ count: 900 }) })
+            .mockResolvedValueOnce({ data: () => ({ count: 400 }) })
+            .mockResolvedValueOnce({ data: () => ({ count: 100 }) })
+            .mockResolvedValue({ data: () => ({ count: 0 }) });
+
+        const result = await getPlatformMetricsAction();
+
+        expect(result.data?.totalUsers).toBe(39_800);
     });
 
     it("takes the transaction count from the database, not a row count", async () => {

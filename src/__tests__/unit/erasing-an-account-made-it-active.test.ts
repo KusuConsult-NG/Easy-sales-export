@@ -43,11 +43,15 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
+import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 import { lastActiveAt, isRecentlyActive, RECENT_ACTIVITY_DAYS } from '@/lib/recent-activity';
 
 const ANALYTICS = 'src/services/analytics.service.ts';
 const code = () => stripComments(readFileSync(ANALYTICS, 'utf-8'), { label: ANALYTICS });
+//   #747 — the subtraction moved here when a second figure needed it.
+const POPULATION = join(process.cwd(), 'src/lib/user-population.ts');
+const population = () => stripComments(readFileSync(POPULATION, 'utf-8'), { label: POPULATION });
 
 /** The arithmetic the service performs, stated once and exercised. */
 const activeUsers = (touched: number, deleted: number, superseded: number, both: number) =>
@@ -125,11 +129,26 @@ describe('#735 — what the count now reports', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#735 — and the service asks exactly that', () => {
+    /*
+     *   #747 MOVED THE RULE, NOT THE GUARANTEE.
+     *
+     *   These assertions pinned the literal text of the inline implementation
+     *   in analytics.service.ts. A second figure in the same file — the raw
+     *   `totalUsers` count four lines above — needed the identical
+     *   subtraction, so it was extracted to lib/user-population.ts and this
+     *   went red on a change that left the rule exactly as it was.
+     *
+     *   That is the "pins the spelling of an implementation rather than the
+     *   property it protects" shape #741 filed against #600 and #351. Restated
+     *   against where the rule lives, plus the service reading it.
+     */
     it('IT SUBTRACTS BOTH TOMBSTONE STATES', () => {
-        const src = code();
+        const src = population();
 
-        expect(src).toContain('.where("deleted", "==", true).count().get()');
-        expect(src).toContain('.where("_migratedTo", "!=", "").count().get()');
+        expect(src).toContain('query.where(erased, "==", true).count().get()');
+        expect(src).toContain('query.where(superseded, "!=", "").count().get()');
+        expect(src).toContain('erased: "deleted"');
+        expect(src).toContain('superseded: "_migratedTo"');
     });
 
     it('AND TAKES THE OVERLAP, SO NOTHING IS SUBTRACTED TWICE', () => {
@@ -137,46 +156,45 @@ describe('#735 — and the service asks exactly that', () => {
          *   THE SIGN, NOT JUST THE QUERY — and my first version asserted only
          *   that the fourth aggregate existed. A mutant flipping the overlap
          *   from `-` to `+` SURVIVED: the arithmetic exercised above is a COPY
-         *   of the rule living in this file, so mutating the service changed
-         *   nothing it could see. Two copies of one fact, in the test written
-         *   to catch two copies of one fact.
-         *
-         *   The service cannot be executed here without standing up the whole
-         *   aggregate layer, so the binding is to the expression itself.
+         *   of the rule, so mutating the source changed nothing it could see.
          */
-        const src = code();
+        const src = population();
 
-        expect(src).toContain('.where("deleted", "==", true).where("_migratedTo", "!=", "")');
-        expect(src).toContain('- (recentBothSnap.data().count ?? 0);');
-        expect(src).not.toContain('+ (recentBothSnap.data().count ?? 0);');
+        expect(src).toContain('query.where(erased, "==", true).where(superseded, "!=", "")');
+        expect(src).toContain('- (bothSnap.data().count ?? 0);');
+        expect(src).not.toContain('+ (bothSnap.data().count ?? 0);');
 
         //   And the two terms it corrects really are added, so the minus above
         //   is correcting an over-subtraction rather than sitting in isolation.
-        expect(src).toContain('+ (recentSupersededSnap.data().count ?? 0)');
+        expect(src).toContain('+ (supersededSnap.data().count ?? 0)');
     });
 
-    it('AND EVERY SUBTRAHEND IS SCOPED TO THE SAME WINDOW', () => {
+    it('AND EVERY SUBTRAHEND IS SCOPED TO THE SAME WINDOW, BY CONSTRUCTION', () => {
         /*
          *   Counting ALL deleted rows rather than the recently-touched ones
          *   would subtract accounts erased years ago from a thirty-day figure —
          *   a different wrong number, and a plausible way to write this.
+         *
+         *   #747 made that unwriteable rather than merely checked: countLivePeople
+         *   takes the QUERY and narrows that same query for each subtrahend, so
+         *   a mis-scoped term cannot be expressed. What is left to assert is
+         *   that the service hands it the windowed query.
          */
+        expect(population()).toContain('export async function countLivePeople(query: CountableQuery)');
+
         const src = code();
         expect(src).toContain('const recentlyTouched = () =>');
         expect(src).toContain('.where("updatedAt", ">=", activeSince)');
-
-        //   Each subtrahend is built from that helper rather than from the
-        //   collection directly.
-        for (const q of [
-            'recentlyTouched().where("deleted", "==", true).count().get()',
-            'recentlyTouched().where("_migratedTo", "!=", "").count().get()',
-        ]) {
-            expect(src).toContain(q);
-        }
+        expect(src).toContain('countLivePeople(recentlyTouched())');
     });
 
-    it('AND THE FLOOR IS APPLIED WHERE THE NUMBER IS RETURNED', () => {
-        expect(code()).toContain('activeUsers: Math.max(0, touched - tombstoned)');
+    it('AND THE FLOOR IS APPLIED WHERE THE NUMBER IS PRODUCED', () => {
+        expect(population()).toContain('return Math.max(0, all - tombstoned);');
+    });
+
+    it('AND THE TOTAL BESIDE IT READS THE SAME RULE — #747', () => {
+        //   The figure that was a raw .count() when #735 fixed its neighbour.
+        expect(code()).toContain('countLivePeople(db.collection(COLLECTIONS.USERS))');
     });
 });
 

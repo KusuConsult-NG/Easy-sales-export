@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
+import { countLivePeople } from "@/lib/user-population";
 import type {
     AnalyticsServiceContract,
     PlatformHealthMetrics,
@@ -121,37 +122,28 @@ export class AnalyticsService implements AnalyticsServiceContract {
             const recentlyTouched = () =>
                 db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", activeSince);
 
-            const [
-                totalUsersSnap,
-                activeUsersSnap,
-                recentDeletedSnap,
-                recentSupersededSnap,
-                recentBothSnap,
-                fundedEscrowsSnap,
-            ] = await Promise.all([
-                db.collection(COLLECTIONS.USERS).count().get(),
-                recentlyTouched().count().get(),
-                recentlyTouched().where("deleted", "==", true).count().get(),
-                recentlyTouched().where("_migratedTo", "!=", "").count().get(),
-                recentlyTouched().where("deleted", "==", true).where("_migratedTo", "!=", "").count().get(),
+            /*
+             *   #747 — the inclusion–exclusion #735 wrote inline here now lives
+             *   in lib/user-population.ts, because a second figure needed it:
+             *   `totalUsers` beside it was a raw `.count()` of the same
+             *   collection and carried the same tombstones.
+             *
+             *   Taking a QUERY rather than a collection is what lets one
+             *   function serve both — the total counts over the whole
+             *   collection, the active figure over the recently-touched window.
+             */
+            const [totalUsers, activeUsers, fundedEscrowsSnap] = await Promise.all([
+                countLivePeople(db.collection(COLLECTIONS.USERS)),
+                countLivePeople(recentlyTouched()),
                 // An escrow holding money is `funded`: marketplace/_payment.ts
                 // sets it when payment clears, and it stays there until a
                 // release, a refund or a dispute moves it on.
                 db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "funded").count().get()
             ]);
 
-            const touched = activeUsersSnap.data().count ?? 0;
-            const tombstoned =
-                (recentDeletedSnap.data().count ?? 0)
-                + (recentSupersededSnap.data().count ?? 0)
-                - (recentBothSnap.data().count ?? 0);
-
             return {
-                totalUsers: totalUsersSnap.data().count ?? 0,
-                //   Never below zero: a count that disagreed with its own
-                //   subtrahend should read as "none", not as a negative figure
-                //   on an admin dashboard.
-                activeUsers: Math.max(0, touched - tombstoned),
+                totalUsers,
+                activeUsers,
                 activeEscrows: fundedEscrowsSnap.data().count ?? 0,
                 lastCalculatedAt: new Date().toISOString()
             };
@@ -178,8 +170,18 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
     // Centralized Helper: Get Platform Metrics without session checks
     private async getPlatformMetrics(db: any, options?: { dateFrom?: Date; dateTo?: Date }) {
-        const allUsersSnap = await db.collection(COLLECTIONS.USERS).count().get();
-        const totalUsers = allUsersSnap.data().count ?? 0;
+        /*
+         *   #747 — this was `db.collection(USERS).count()`, every row, and it
+         *   is the figure the admin dashboard shows as Total Users. It counted
+         *   accounts erased at the person's request and superseded duplicate
+         *   rows that #724's resolver had already established are the same
+         *   person as a live row.
+         *
+         *   #735 built exactly this subtraction for the ACTIVE figure, in this
+         *   same file, four lines above another raw count. One of two. The rule
+         *   is in lib/user-population.ts now and both read it.
+         */
+        const totalUsers = await countLivePeople(db.collection(COLLECTIONS.USERS));
 
         let totalRevenue = 0;
         let totalTransactions = 0;
