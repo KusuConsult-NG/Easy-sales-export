@@ -14,6 +14,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { sellerDocumentState, UNSTORED_DOCUMENT_MESSAGE } from "@/lib/seller-verification-document";
 import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction, getAdminSellerStatsAction } from "@/app/actions/admin";
 import { formatLocalDate } from "@/lib/date-utils";
+import { csvDocument } from "@/lib/csv-safe";
 
 import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
@@ -161,10 +162,7 @@ export default function AdminSellersPage() {
                 v.data.bankDetails?.bankName || "", v.data.bankDetails?.accountNumber || "", v.data.bankDetails?.accountName || "",
                 v.status, formatLocalDate(v.data.createdAt || Date.now())
             ]);
-            const csv = [
-                headers.join(","),
-                ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-            ].join("\n");
+            const csv = csvDocument(headers, rows);
             const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

@@ -14,6 +14,7 @@ import { Loader2 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import RecordRepaymentModal from "@/components/admin/RecordRepaymentModal";
 import { formatLocalDate } from "@/lib/date-utils";
+import { csvDocument } from "@/lib/csv-safe";
 import { guarantorBlocksApproval } from "@/lib/loan-approval-policy";
 import { recordExport } from "@/lib/record-export";
 import { humaniseCapitalised } from "@/lib/humanise";
@@ -236,10 +237,7 @@ export default function AdminLoansPage() {
                 formatLocalDate(a.appliedAt),
                 a.bankName || "", a.accountNumber || "", a.accountName || ""
             ]);
-            const csv = [
-                headers.join(","),
-                ...rows.map((r: any) => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-            ].join("\n");
+            const csv = csvDocument(headers, rows);
             const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

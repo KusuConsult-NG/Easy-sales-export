@@ -13,6 +13,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { recordExport } from "@/lib/record-export";
+import { csvDocument } from "@/lib/csv-safe";
 import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 
 interface WaveMember {
@@ -196,10 +197,7 @@ export default function AdminWaveMembersPage() {
                 m.applicationId || "",
             ]);
 
-            const csvContent = [
-                headers.join(","),
-                ...rows.map((row: any[]) => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-            ].join("\n");
+            const csvContent = csvDocument(headers, rows);
 
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);
@@ -461,18 +459,20 @@ export default function AdminWaveMembersPage() {
                             <button
                                 onClick={() => {
                                     // Export single member CSV
-                                    const csvContent = [
-                                        "Field,Value",
-                                        `Full Name,"${getDisplayName(selectedMember)}"`,
-                                        `Email,"${selectedMember.email || ''}"`,
-                                        `Phone,"${selectedMember.phone || ''}"`,
-                                        `State,"${selectedMember.stateOfResidence || ''}"`,
-                                        `LGA,"${selectedMember.lgaOfResidence || ''}"`,
-                                        `Bank,"${selectedMember.bankName || ''}"`,
-                                        `Account,"${selectedMember.accountNumber || ''}"`,
-                                        `Farm Size,"${selectedMember.farmSize || ''}"`,
-                                        `Enrolled,"${selectedMember.enrolledAt ? formatShortDateOrDash(selectedMember.enrolledAt, "—", 'en-NG') : "Unknown"}"`,
-                                    ].join("\n");
+                                    const csvContent = csvDocument(
+                                        ["Field", "Value"],
+                                        [
+                                            ["Full Name", getDisplayName(selectedMember)],
+                                            ["Email", selectedMember.email || ''],
+                                            ["Phone", selectedMember.phone || ''],
+                                            ["State", selectedMember.stateOfResidence || ''],
+                                            ["LGA", selectedMember.lgaOfResidence || ''],
+                                            ["Bank", selectedMember.bankName || ''],
+                                            ["Account", selectedMember.accountNumber || ''],
+                                            ["Farm Size", selectedMember.farmSize || ''],
+                                            ["Enrolled", selectedMember.enrolledAt ? formatShortDateOrDash(selectedMember.enrolledAt, "—", 'en-NG') : "Unknown"],
+                                        ],
+                                    );
                                     const blob = new Blob([csvContent], { type: "text/csv" });
                                     const url = URL.createObjectURL(blob);
                                     const a = document.createElement("a");

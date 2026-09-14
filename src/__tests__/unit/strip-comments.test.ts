@@ -300,6 +300,7 @@ describe('it agrees with the naive version everywhere the naive version is right
         'src/__tests__/unit/strip-comments.test.ts',
         'src/__tests__/unit/the-audit-log-had-two-vocabularies.test.ts',
         'src/__tests__/unit/the-export-sweep-only-walked-the-browser.test.ts',
+        'src/__tests__/unit/the-spreadsheet-half-of-the-export-rule.test.ts',
         'src/app/api/id-card/pdf/route.ts',
         'src/lib/csp.ts',
     ];
@@ -555,6 +556,21 @@ describe('it agrees with the naive version everywhere the naive version is right
         // OTHER files with its own line-preserving helper and reads
         // session-guard, cache-invalidation and redis through it, never its own
         // text.
+        //
+        // TWENTY-ONE became TWENTY-TWO when #740 added
+        // the-spreadsheet-half-of-the-export-rule.test.ts. THIRTEENTH form, and
+        // it is the CSV-quoting expression itself: that suite quotes
+        // `replace(/"/g, '""')` to say what twelve admin screens used to carry,
+        // and the `/"` opens a regex the naive stripper reads as division and
+        // then loses its bearings in.
+        //
+        // Raised rather than relaxed, and this one is the exception worth
+        // naming: it DOES read its own file — `code('src/lib/csv-safe.ts')` is
+        // another file, but the suite also counts occurrences in csv-safe RAW
+        // and STRIPPED. Both reads go through lib/testing/strip-comments, the
+        // good one; the naive helper appears nowhere in it. The mangling
+        // recorded here is what the naive stripper WOULD do to that text, which
+        // nothing in the repository asks it to do.
 
     it('only two of them are application source, which is what narrows the risk', () => {
         // The other seven are test files: they CARRY the naive helper, and

@@ -24,6 +24,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Timestamp } from "@/lib/firestore-compat";
 import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
 import { recordExport } from "@/lib/record-export";
+import { csvDocument } from "@/lib/csv-safe";
 import { numberOrZero } from "@/lib/numbers";
 import { formatDateOrDash } from "@/lib/date-utils";
 import { revenueDisplay, revenuePrefix, revenueNote } from "@/lib/revenue-display";
@@ -258,9 +259,10 @@ export default function AdminFinancePage() {
             (t as any).status ?? activeTab,
             (t as any).gatewayResponse ?? "",
         ]);
-        const csv = [["ID", "Type", "Amount (NGN)", "Date & Time", "Phone", "Status", "Reason"], ...rows]
-            .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-            .join("\n");
+        const csv = csvDocument(
+            ["ID", "Type", "Amount (NGN)", "Date & Time", "Phone", "Status", "Reason"],
+            rows,
+        );
         const a = Object.assign(document.createElement("a"), {
             href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
             download: `transactions-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`,

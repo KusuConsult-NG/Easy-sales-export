@@ -8,6 +8,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getBriefingRegistrationsAction } from "@/app/actions/briefing-admin";
 import { recordExport } from "@/lib/record-export";
+import { csvDocument } from "@/lib/csv-safe";
 import { formatShortDateOrDash } from "@/lib/date-utils";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -135,10 +136,7 @@ export default function BriefingRegistrationsPage() {
                 r.createdAt ? formatShortDateOrDash(r.createdAt, "—", "en-NG") : "",
             ]);
 
-            const csvContent = [
-                headers.join(","),
-                ...rows.map((row: any[]) => row.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-            ].join("\n");
+            const csvContent = csvDocument(headers, rows);
 
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);

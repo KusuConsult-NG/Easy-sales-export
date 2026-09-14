@@ -8,6 +8,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getAdminLandVerificationsAction, getFarmNationVerificationStatsAction, updateAdminLandListingAction } from "@/app/actions/farm-nation-admin";
 import { recordExport } from "@/lib/record-export";
+import { csvDocument } from "@/lib/csv-safe";
 import { formatShortDateOrDash } from "@/lib/date-utils";
 
 type LandVerification = {
@@ -328,10 +329,7 @@ export default function AdminLandVerificationPage() {
                 v.verificationStatus || "",
                 formatShortDateOrDash(v.createdAt, "—", "en-NG")
             ]);
-            const csv = [
-                headers.join(","),
-                ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-            ].join("\n");
+            const csv = csvDocument(headers, rows);
             const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

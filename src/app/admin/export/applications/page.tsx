@@ -40,6 +40,7 @@ import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFil
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { recordExport } from "@/lib/record-export";
+import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
 import { formatDateOrDash } from "@/lib/date-utils";
 
@@ -281,7 +282,7 @@ export default function AdminExportApplicationsPage() {
                 ];
             });
             const header = ["Name", "Email", "Phone", "Gender", "Location", "Status", "Submitted", "Bank", "Account No"];
-            const csv = [header, ...rows].map((r) => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+            const csv = csvDocument(header, rows);
             const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
             const a = document.createElement("a");
             a.href = url;

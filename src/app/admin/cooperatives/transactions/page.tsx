@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { recordExport } from "@/lib/record-export";
+import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
 import { shortId } from "@/lib/humanise";
@@ -183,9 +184,7 @@ export default function AdminTransactionsPage() {
             t.description || "",
             t.reference || "",
         ]);
-        const csvContent = [headers, ...rows]
-            .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))
-            .join("\n");
+        const csvContent = csvDocument(headers, rows);
         const blob = new Blob([csvContent], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");

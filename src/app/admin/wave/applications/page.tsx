@@ -12,6 +12,7 @@ import { formatDate } from "@/lib/utils";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import { recordExport } from "@/lib/record-export";
+import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
 import { formatDateOrDash } from "@/lib/date-utils";
 
@@ -222,10 +223,7 @@ export default function AdminWaveApplicationsPage() {
                 app.data?.bankName || "", app.data?.accountNumber || "",
                 app.status, formatDateOrDash(app.data?.createdAt)
             ]);
-            const csvContent = [
-                headers.join(","),
-                ...rows.map((row: any[]) => row.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-            ].join("\n");
+            const csvContent = csvDocument(headers, rows);
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

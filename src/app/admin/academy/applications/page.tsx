@@ -23,6 +23,7 @@ import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
 import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
+import { csvDocument } from "@/lib/csv-safe";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -684,10 +685,7 @@ export default function AdminAcademyApplicationsPage() {
                 app.lga || "",
                 app.submittedAt ? formatShortDateOrDash(app.submittedAt, "—", "en-NG") : ""
             ]);
-            const csvContent = [
-                headers.join(","),
-                ...rows.map((row: any) => row.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-            ].join("\n");
+            const csvContent = csvDocument(headers, rows);
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
