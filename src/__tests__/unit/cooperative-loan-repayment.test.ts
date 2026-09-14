@@ -226,3 +226,82 @@ describe('disburseLoanAction', () => {
         expect(result.error).toMatch(/must be approved/i);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#723 — a lost claim is only "already applied" if the winner was a repayment', () => {
+    /*
+     *   THE BRANCH RETURNED SUCCESS ON THE STRENGTH OF THE LOST CLAIM ALONE,
+     *   and its reasoning — "already applied, a success not an error" — holds
+     *   only while nothing ELSE can hold the reference.
+     *
+     *   Something else can. `processed_payments.id` is ONE namespace shared by
+     *   every claimant: eleven Paystack processors, escrow funding, and this.
+     *   And this reference is not generated — it is a bank reference an ADMIN
+     *   TYPES IN, which RecordRepaymentModal's own note calls the idempotency
+     *   key and warns must be the real one.
+     *
+     *   So an admin entering a reference that collides — another transfer
+     *   recorded as "TRF001", or a Paystack reference — lost the claim and was
+     *   told the repayment was recorded. It was not: the borrower still owed
+     *   the money and the screen said they did not.
+     */
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockCreateNotification.mockResolvedValue({ success: true });
+        (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            exists: true,
+            data: () => installment(),
+            docs: [],
+        }));
+    });
+
+    const submit = async () => {
+        setSession('member-1');
+        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
+        return await submitRepaymentAction({
+            loanId: 'loan-1',
+            installmentId: 'inst-1',
+            userId: 'member-1',
+            amount: 4_000,
+            paymentReference: 'TRF001',
+        }) as any;
+    };
+
+    it('A REFERENCE ALREADY HELD BY A PAYSTACK PAYMENT IS REFUSED, NOT CALLED SUCCESS', async () => {
+        //   THE defect. `completed` is what a fulfilled Paystack payment leaves,
+        //   so lostClaimWasFulfilled would call this fulfilled — it just was not
+        //   fulfilled as THIS loan's repayment.
+        mockClaimPaymentOnce.mockResolvedValue({ claimed: false, status: 'completed' });
+
+        const res = await submit();
+
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/different payment/i);
+        //   And nothing was credited on the strength of it.
+        expect((global as any).mockFirestoreUpdate).not.toHaveBeenCalled();
+    });
+
+    it('AND ONE HELD BY AN ESCROW FUNDING IS REFUSED TOO', async () => {
+        mockClaimPaymentOnce.mockResolvedValue({ claimed: false, status: 'escrow_funding' });
+
+        const res = await submit();
+
+        expect(res.success).toBe(false);
+    });
+
+    it('BUT A GENUINE RE-RECORDING OF THE SAME TRANSFER IS STILL A SUCCESS', async () => {
+        /*
+         *   #259's rule, which this must not cost. An admin re-entering the same
+         *   bank reference — a double-click, a reloaded page — has already had
+         *   it applied by this same action, which claims with this status.
+         *   Telling them it failed is the outcome #259 exists to remove.
+         */
+        mockClaimPaymentOnce.mockResolvedValue({ claimed: false, status: 'loan_repayment' });
+
+        const res = await submit();
+
+        expect(res.success).toBe(true);
+        expect((global as any).mockFirestoreUpdate).not.toHaveBeenCalled();
+    });
+});

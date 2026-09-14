@@ -382,8 +382,50 @@ export async function submitRepaymentAction(data: {
         });
 
         if (!claim.claimed) {
-            // Already applied. A success, not an error — see the rules in
-            // src/lib/wallet-ledger.ts.
+            /*
+             *   #723 A LOST CLAIM IS ONLY "ALREADY APPLIED" IF THE WINNER WAS
+             *   THIS SAME KIND OF THING.
+             *
+             *   This returned success on the strength of the lost claim alone,
+             *   and the reasoning — "already applied, a success not an error" —
+             *   holds only while nothing ELSE can hold this reference.
+             *
+             *   Something else can. `processed_payments.id` is ONE namespace
+             *   shared by every claimant on the platform: Paystack references
+             *   from eleven processors, escrow funding, and this. And the
+             *   reference here is not generated — it is a bank reference an
+             *   ADMIN TYPES IN, which this modal's own note calls the
+             *   idempotency key and warns must be the real one.
+             *
+             *   So an admin entering a reference that collides with an existing
+             *   row — another transfer recorded as "TRF001", or a Paystack
+             *   reference — loses the claim and is told the repayment was
+             *   recorded. It was not. The borrower still owes the money and the
+             *   screen says they do not.
+             *
+             *   The claim writes `status: "loan_repayment"`, and
+             *   claim_payment_once RETURNS the winning row's status precisely
+             *   so this can be told apart. A winner with any other status is a
+             *   different payment wearing the same reference, and that is a
+             *   refusal — the admin has to look at it.
+             */
+            if (claim.status !== "loan_repayment") {
+                logger.error(
+                    `[submitRepaymentAction] reference ${data.paymentReference} is already held by `
+                    + `something that is NOT a loan repayment (status "${claim.status}"). Loan `
+                    + `${data.loanId} has NOT been credited.`,
+                );
+                return {
+                    error: "That payment reference is already recorded against a different payment. "
+                        + "Check the bank reference and enter the one for this transfer.",
+                    success: false as const,
+                    penalty: 0,
+                    data: null,
+                };
+            }
+
+            // Already applied by an earlier recording of this same transfer. A
+            // success, not an error — see the rules in src/lib/wallet-ledger.ts.
             logger.warn("[submitRepaymentAction] duplicate payment reference ignored", {
                 reference: data.paymentReference,
                 loanId: data.loanId,
