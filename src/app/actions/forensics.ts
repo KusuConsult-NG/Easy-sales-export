@@ -21,6 +21,7 @@ import {
 import { authAccountsWithProfiles } from "@/lib/auth-profile-link";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { findFarmNationApplications } from "@/lib/farm-nation-application-lookup";
+import { classifyGroup } from "@/lib/duplicate-profile-resolution";
 import { sampleOf, verdictFor, describeSample } from "@/lib/forensic-scan-scope";
 
 /*
@@ -397,6 +398,7 @@ export async function runForensicScanAction(): Promise<
              */
             const byEmail = new Map<string, Set<string>>();
             const scannedIds = new Set<string>();
+            const rowsById = new Map<string, Record<string, unknown>>();
 
             for (let page = 0; page < 6; page++) {
                 const snap = await db.collection(COLLECTIONS.USERS)
@@ -434,6 +436,11 @@ export async function runForensicScanAction(): Promise<
                     //   by it either, or the report overstates its own coverage.
                     scannedIds.add(d.id);
                     const raw = (d.data() ?? {}) as Record<string, any>;
+                    //   #736 — the supersession marker, kept beside the id. The
+                    //   group cannot be classified without it, and carrying the
+                    //   whole row for six thousand profiles to read one field
+                    //   would be a different defect.
+                    rowsById.set(d.id, { _migratedTo: raw._migratedTo });
                     const normalised = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
                     if (!normalised) continue;
                     const set = byEmail.get(normalised) ?? new Set<string>();
@@ -446,12 +453,43 @@ export async function runForensicScanAction(): Promise<
 
             const scanned = scannedIds.size;
 
+            /*
+             *   #736 A RESOLVED DUPLICATE WAS STILL REPORTED AS A DUPLICATE,
+             *        FOREVER.
+             *
+             *   This counted every address holding more than one profile. The
+             *   sentence below already knew better — "TWO IS NORMAL for anyone
+             *   migrated from the old system — the original is kept and
+             *   tombstoned, never deleted" — and explained the situation in
+             *   prose while still counting it as a problem.
+             *
+             *   So an admin who used the #724 tool to settle a duplicate re-ran
+             *   this scan and saw the same warning, with the same number. The
+             *   work left no trace on the one report that measures it, which is
+             *   the owner's complaint in its purest form: it was fixed and it
+             *   still says it is broken.
+             *
+             *   CLASSIFIED BY THE RULE THE TOOL USES, not a second opinion here.
+             *   classifyGroup already answers this — `resolved` means "one live
+             *   record, every other pointing at it", and its own explanation
+             *   ends "nothing to do". A second definition in this file is how
+             *   the two would come to disagree about the same pair.
+             */
             const duplicateEmails: string[] = [];
+            let settledGroups = 0;
+
             for (const [email, idSet] of byEmail) {
-                if (idSet.size > 1) {
-                    const ids = [...idSet];
-                    duplicateEmails.push(`${maskAddress(email)} — ${ids.length} profiles: ${ids.join(", ")}`);
+                if (idSet.size <= 1) continue;
+
+                const ids = [...idSet];
+                const verdict = classifyGroup(ids.map((id) => ({ id, data: rowsById.get(id) ?? {} })));
+
+                if (verdict.state === "resolved") {
+                    settledGroups++;
+                    continue;
                 }
+
+                duplicateEmails.push(`${maskAddress(email)} — ${ids.length} profiles: ${ids.join(", ")}`);
             }
             //   Worst first: a six-way split is a different problem from a pair.
             duplicateEmails.sort((a, b) => {
@@ -465,13 +503,22 @@ export async function runForensicScanAction(): Promise<
                 status: duplicateEmails.length > 0 ? "warning" : "pass",
                 //   The number actually scanned, not the table size. #331.
                 details: duplicateEmails.length === 0
-                    ? `Scanned ${scanned} profiles. Every address holds one.`
-                    : `Scanned ${scanned} profiles. ${duplicateEmails.length} address(es) hold more than `
-                      + `one. TWO IS NORMAL for anyone migrated from the old system — the original is `
-                      + `kept and tombstoned, never deleted. Three or more is #490's defect, now fixed `
-                      + `at the source; these are the records it already produced. Nothing here merges `
-                      + `or deletes them: which of somebody's records is the person is not a decision `
-                      + `code should make unattended.`,
+                    ? `Scanned ${scanned} profiles. Every address holds one`
+                      + (settledGroups > 0
+                          ? `, apart from ${settledGroups} already settled — one live record with the `
+                            + `rest pointing at it, which is what a migration leaves behind.`
+                          : `.`)
+                    : `Scanned ${scanned} profiles. ${duplicateEmails.length} address(es) need a `
+                      + `decision`
+                      + (settledGroups > 0
+                          ? `, and ${settledGroups} more are already settled and not listed here.`
+                          : `.`)
+                      + ` A settled group is one live record with every other pointing at it — what a `
+                      + `migration leaves behind, and what /admin/forensics/duplicates writes when an `
+                      + `admin resolves one. The addresses listed are the ones where no record points `
+                      + `at another, or where the pointers disagree. Nothing here merges or deletes `
+                      + `anything: which of somebody's records is the person is not a decision code `
+                      + `should make unattended.`,
                 affectedIds: duplicateEmails
             });
         } catch (e: any) { results.push({ module: "Auth", check: "Duplicate Profiles (One Address, Several Accounts)", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });

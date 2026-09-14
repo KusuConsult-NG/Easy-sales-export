@@ -431,7 +431,14 @@ describe('#671 — and one profile is not counted as two', () => {
          *   account that does not exist.
          */
         expect(source).toContain('const byEmail = new Map<string, Set<string>>()');
-        expect(body).toContain('idSet.size > 1');
+        /*
+         *   #736 inverted this to an early `continue`, so the group is
+         *   classified rather than listed on size alone. The claim here is
+         *   unchanged and is what the Set gives it: a group of ONE is never
+         *   reported, whichever way the branch is written.
+         */
+        expect(body).toMatch(/idSet\.size (<= 1|> 1)/);
+        expect(body).toContain('continue');
     });
 
     it('AND THE PAGING THAT CAUSED IT ORDERS BY SOMETHING UNIQUE', () => {
