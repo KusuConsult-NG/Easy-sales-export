@@ -143,7 +143,7 @@ export async function submitLoanApplicationAction(formData: {
 
         // ===== TIER VALIDATION =====
         // Import tier functions
-        const { calculateUserTier, COOPERATIVE_TIERS, getTierMaxDuration } = await import("@/lib/cooperative-tiers");
+        const { calculateUserTier, COOPERATIVE_TIERS, getTierMaxDuration, loanDurationProblem } = await import("@/lib/cooperative-tiers");
 
         // 1. Calculate actual tier based on the member's RECORDED savings
         const actualTier = calculateUserTier(savingsBalance);
@@ -165,12 +165,21 @@ export async function submitLoanApplicationAction(formData: {
                 error: `Loan amount exceeds your limit. You may borrow up to ₦${maxLoanAmount.toLocaleString()} — savings must be at least twice the loan amount.`};
         }
 
-        // 4. Validate duration against tier limits
+        /*
+         *   4. Validate duration against tier limits.
+         *
+         *   #745 — this was `formData.durationMonths > maxDuration` and nothing
+         *   else, a CEILING with no floor, on a value that arrives from the
+         *   browser. Zero, negative, null and non-numeric durations all cleared
+         *   it, and the amortisation loop below is `for (i = 1; i <= n; i++)` —
+         *   so any n under 1 runs no iterations and the application is filed
+         *   with no interest at all. The whole rule is in
+         *   lib/cooperative-tiers.ts now, alongside the ceiling it belongs with.
+         */
         const maxDuration = getTierMaxDuration(actualTier);
-        if (formData.durationMonths > maxDuration) {
-            return {
-                success: false as const,
-                error: `Repayment duration exceeds ${actualTier} tier limit. Maximum: ${maxDuration} months`};
+        const durationProblem = loanDurationProblem(formData.durationMonths, maxDuration);
+        if (durationProblem) {
+            return { success: false as const, error: durationProblem, data: null };
         }
 
         // Calculate repayment in kobo to eliminate floating-point drift

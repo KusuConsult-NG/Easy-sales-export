@@ -122,6 +122,26 @@ export function isEligibleForLoan(
     const requested = requestedAmount;
     const outstanding = currentLoanBalance;
 
+    /*
+     *   #745 AND THE AMOUNT HAD A CEILING AND NO FLOOR. Every rule on a loan
+     *   amount was written as "not more than" — `requested > maxLoan` here, and
+     *   `formData.amount > maxLoanAmount` in the member action — so zero and
+     *   NEGATIVE amounts passed every one of them. A negative amount is not a
+     *   small loan; it inverts the arithmetic that follows it.
+     *
+     *   Placed here rather than at the two call sites because this function is
+     *   already the platform's stated single home for the rule — the apply-loan
+     *   route says so in its own words: "isEligibleForLoan is the single place
+     *   the rule is expressed, so a future change to it reaches every path at
+     *   once".
+     */
+    if (requested <= 0) {
+        return { eligible: false, reason: "The loan amount must be greater than zero." };
+    }
+    if (outstanding < 0) {
+        return { eligible: false, reason: "The recorded loan balance is invalid." };
+    }
+
     if (contribution < COOPERATIVE_TIERS.Member.minContribution) {
         return {
             eligible: false,
@@ -274,4 +294,50 @@ export function getTierInterestRate(tier: CooperativeTier): number {
  */
 export function getTierMaxDuration(tier: CooperativeTier): number {
     return 12;
+}
+
+/**
+ * Why this repayment duration cannot be used, or null when it can.
+ *
+ *   #745 THE DURATION HAD A CEILING AND NO FLOOR EITHER, AND THE FLOOR IS THE
+ *        ONE THAT COSTS MONEY.
+ *
+ *   The member loan action checked `formData.durationMonths > maxDuration` and
+ *   nothing else, on a value that arrives from the browser — the same untrusted
+ *   input #345 found the savings figure coming from, on the neighbouring field
+ *   of the same request. Everything below the ceiling passed:
+ *
+ *       durationMonths   clears cap   interest   monthlyPayment
+ *       null             yes          0          Infinity
+ *       0                yes          0          Infinity
+ *       -5               yes          0          -10,000
+ *       "abc"            yes          0          NaN
+ *
+ *   The amortisation loop is `for (let i = 1; i <= n; i++)`, so any n below 1
+ *   runs ZERO iterations and accrues no interest at all. The application is
+ *   then filed with `totalRepayment` equal to the principal — an interest-free
+ *   loan, in the queue an admin approves from, and nothing on the row says it
+ *   was not a legitimate quote.
+ *
+ *   The sibling route already had this rule, on the product's own field:
+ *   `!Number.isInteger(product.durationMonths) || product.durationMonths < 1`.
+ *   One path guarded and one did not, which is this audit's most common shape,
+ *   so the rule is stated once here and both read it.
+ *
+ *   TAKES `unknown` DELIBERATELY. The action declares `durationMonths: number`
+ *   on its parameter interface and performs no runtime validation, and a
+ *   TypeScript annotation is not a check on a value that arrived as JSON — that
+ *   assumption is the whole defect.
+ */
+export function loanDurationProblem(durationMonths: unknown, maxDuration: number): string | null {
+    if (typeof durationMonths !== "number" || !Number.isInteger(durationMonths)) {
+        return "Repayment duration must be a whole number of months.";
+    }
+    if (durationMonths < 1) {
+        return "Repayment duration must be at least one month.";
+    }
+    if (durationMonths > maxDuration) {
+        return `Repayment duration exceeds the tier limit. Maximum: ${maxDuration} months`;
+    }
+    return null;
 }
