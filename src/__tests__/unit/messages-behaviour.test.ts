@@ -342,7 +342,27 @@ describe('searchUsersAction', () => {
         const roles = res.users.flatMap((u: any) => u.roles);
 
         expect(roles).toContain('farm_nation_admin');
-        expect(roles).toContain('academy_admin');
+    });
+
+    it('AND NOT THE ACADEMY ADMIN, WHO ADMINISTERS NOTHING THIS CALLER DOES', async () => {
+        /*
+         *   #752 REVERSED THE SECOND HALF OF THE ASSERTION ABOVE, WHICH USED TO
+         *   READ `expect(roles).toContain('academy_admin')`.
+         *
+         *   The caller here is a FARMER. #96's finding — that the Farm Nation
+         *   admin must be reachable — is untouched and still asserted; what it
+         *   also pinned, incidentally, was that this branch applied NO scoping
+         *   at all, so every module's admin came back to everybody. The owner
+         *   reported exactly that: "users are only supposed to message the
+         *   admin on that module or super admin but other modules admin are
+         *   also appearing in a different module".
+         *
+         *   Reachability was the finding; the absence of scoping was the
+         *   accident beside it, and the test recorded both as if they were one.
+         */
+        const roles = (await search('')).users.flatMap((u: any) => u.roles);
+
+        expect(roles).not.toContain('academy_admin');
     });
 
     it('does not return the caller to themselves', async () => {
@@ -383,9 +403,50 @@ describe('startSupportConversationAction', () => {
     });
 
     it('falls back to a global admin when the module has none', async () => {
-        const res = await support('academy');
+        /*
+         *   #752 CHANGED HOW THIS IS SET UP, BECAUSE THE OLD SETUP WAS THE
+         *   DEFECT. It used to ask `support('academy')` — a FARMER requesting
+         *   another module — and assert that the request fell through to the
+         *   global admin. That passed for the wrong reason: the module
+         *   parameter is caller-supplied and was trusted, so the fall-through
+         *   was the second step of a route that should never have started.
+         *   Had an academy_admin been seeded, the farmer would have been sent
+         *   to them.
+         *
+         *   The claim worth keeping is the real one: when a member's OWN module
+         *   has no admin, they reach a platform admin rather than nobody. So
+         *   the Farm Nation admin is removed and the farmer asks for their own
+         *   module.
+         */
+        store.clear();
+        store.seedAll(COLLECTIONS.USERS, {
+            [USER]: { fullName: 'Ada Obi', email: 'ada@example.com', roles: ['farmer'] },
+            'global-admin': { fullName: 'Global', email: 'boss@example.com', roles: ['super_admin'] },
+        });
+
+        const res = await support('farmnation');
         expect(res.conversationId).toBeTruthy();
         expect(store.all(CONVS)[0][1].participants).toContain('global-admin');
+    });
+
+    it('AND A MODULE THE CALLER DOES NOT BELONG TO IS NOT HONOURED', async () => {
+        /*
+         *   The other half, which nothing asserted. `module` is a parameter of
+         *   a server action, so any browser can send any string; an
+         *   unrecognised one used to be unshifted onto the caller's own module
+         *   list and then used to pick the admin.
+         *
+         *   Here the farmer asks for "academy" and reaches their own Farm
+         *   Nation admin — and the thread is not stamped `academy_support`
+         *   either, which under #635's scopes would have listed it in the
+         *   academy admin's inbox whoever received it.
+         */
+        const res = await support('academy');
+        expect(res.conversationId).toBeTruthy();
+
+        const [, conv] = store.all(CONVS)[0];
+        expect(conv.participants).toContain('fn-admin');
+        expect(conv.context).toBe('general_support');
     });
 
     it('reports no admin available rather than throwing', async () => {
@@ -501,5 +562,138 @@ describe('the cooperative roster and broadcast', () => {
 
         expect(store.size(CONVS)).toBe(1);
         expect(store.all(`conversations/${convId}/messages`)).toHaveLength(2);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#752 — a member\'s message reaches their admin, END TO END', () => {
+    /**
+     *   ASKED BY THE OWNER — "does the message deliver end to end?" — and the
+     *   honest answer before this existed was that nothing proved it.
+     *
+     *   #752's own suite mocks the messaging service, so it establishes that
+     *   the PICKER offers the right admin and stops there. Every step after
+     *   that was assumed: that the conversation is created with both people on
+     *   it, that the text is stored, that the admin's inbox lists it, and that
+     *   the admin can open it and read what was sent.
+     *
+     *   That last step is the one with real risk. #635 routes the admin inbox
+     *   through `mayAccessConversation`, whose module branch matches a
+     *   conversation's CONTEXT against the module's context list — and
+     *   "general_support", which is what a member with no module produces, is
+     *   in no module's list at all. A module admin reaches such a thread only
+     *   via the participants check. That is a two-step argument about code in
+     *   three files, which is exactly the kind of reasoning that should be run
+     *   rather than believed.
+     *
+     *   Nothing is mocked here but Redis, auth and Supabase's REST client. The
+     *   fake store, the messaging service, the scoping rules and the permission
+     *   matrix all run for real.
+     */
+    const MEMBER = 'member-1';
+    const COOP_ADMIN = 'coop-admin-1';
+
+    const asMember = () => actAs(MEMBER, ['cooperative_member'], 'member@example.com');
+    const asAdmin = () => actAs(COOP_ADMIN, ['cooperative_admin'], 'grace@easysalesexport.com');
+
+    beforeEach(() => {
+        store.seedAll(COLLECTIONS.USERS, {
+            [MEMBER]: { fullName: 'Ada Obi', email: 'member@example.com', roles: ['cooperative_member'] },
+            //   Deliberately an address with NO module word in it — the shape
+            //   the old email-substring scoping made invisible to her own
+            //   members.
+            [COOP_ADMIN]: { fullName: 'Grace Bello', email: 'grace@easysalesexport.com', roles: ['cooperative_admin'] },
+            'wave-admin-1': { fullName: 'Wave Admin', email: 'wave@easysalesexport.com', roles: ['wave_admin'] },
+        });
+        asMember();
+    });
+
+    it('THE WHOLE JOURNEY: picker → conversation → send → admin inbox → read', async () => {
+        const a = await actions();
+
+        //   1. The member opens Messages. The picker offers their own admin,
+        //      and not the wave admin.
+        const picked = (await a.searchUsersAction('')) as any;
+        expect(picked.users.map((u: any) => u.uid)).toEqual([COOP_ADMIN]);
+
+        //   2. They start a support conversation.
+        const started = (await a.startSupportConversationAction('cooperative')) as any;
+        expect(started.error).toBeNull();
+        expect(started.conversationId).toBeTruthy();
+
+        //   3. Both people are on it, and it is stamped as cooperative support.
+        const [convId, conv] = store.all(CONVS)[0];
+        expect(conv.participants).toEqual(expect.arrayContaining([MEMBER, COOP_ADMIN]));
+        expect(conv.context).toBe('cooperative_support');
+
+        //   4. They send a message, and it is STORED.
+        const sent = (await a.sendMessageAction(convId, 'My contribution is missing')) as any;
+        expect(sent.error).toBeFalsy();
+        expect(store.all(`conversations/${convId}/messages`)).toHaveLength(1);
+
+        //   5. The admin's own inbox lists it.
+        asAdmin();
+        expect(((await a.getConversationsAction()) as any).conversations.map((c: any) => c.id))
+            .toContain(convId);
+
+        //   6. AND THE ADMIN CAN OPEN IT AND READ WHAT WAS SENT. The step that
+        //      "the picker returned the right person" does not establish.
+        const opened = (await a.getMessagesAction(convId)) as any;
+        expect(opened.error).toBeFalsy();
+        expect(opened.messages.map((m: any) => m.text)).toContain('My contribution is missing');
+
+        //   7. And the admin can reply, so it is a conversation and not a
+        //      one-way drop.
+        expect(((await a.sendMessageAction(convId, 'Checking now')) as any).error).toBeFalsy();
+        asMember();
+        expect(((await a.getMessagesAction(convId)) as any).messages.map((m: any) => m.text))
+            .toContain('Checking now');
+    });
+
+    it('AND THE WAVE ADMIN CANNOT READ IT — the scoping holds at the far end', async () => {
+        /*
+         *   The other half of delivery: it reached the right person AND not the
+         *   wrong one. Asserted through the real `mayAccessConversation`, not
+         *   by inspecting the row.
+         */
+        const a = await actions();
+        await a.startSupportConversationAction('cooperative');
+        const convId = store.all(CONVS)[0][0];
+        await a.sendMessageAction(convId, 'My contribution is missing');
+
+        actAs('wave-admin-1', ['wave_admin'], 'wave@easysalesexport.com');
+
+        expect(((await a.getConversationsAction()) as any).conversations.map((c: any) => c.id))
+            .not.toContain(convId);
+        expect(((await a.getMessagesAction(convId)) as any).messages).toEqual([]);
+    });
+
+    it('AND IT DELIVERS FOR A MEMBER WITH NO MODULE AT ALL', async () => {
+        /*
+         *   The general_user case — every new registration — where the thread
+         *   is stamped "general_support", which belongs to no module's context
+         *   list. The recipient reaches it as a PARTICIPANT, and this is the
+         *   assertion that proves that argument rather than restating it.
+         */
+        const a = await actions();
+        actAs(MEMBER, ['general_user'], 'member@example.com');
+        store.seed(COLLECTIONS.USERS, MEMBER, {
+            fullName: 'Ada Obi', email: 'member@example.com', roles: ['general_user'],
+        });
+
+        const started = (await a.startSupportConversationAction()) as any;
+        expect(started.conversationId).toBeTruthy();
+
+        const [convId, conv] = store.all(CONVS)[0];
+        expect(conv.context).toBe('general_support');
+        await a.sendMessageAction(convId, 'I cannot log in');
+
+        //   Whoever they were routed to is a participant, and can read it.
+        const recipient = (conv.participants as string[]).find((p) => p !== MEMBER)!;
+        const recipientRoles = (store.get(COLLECTIONS.USERS, recipient) as any).roles;
+        actAs(recipient, recipientRoles, 'x@example.com');
+
+        expect(((await a.getMessagesAction(convId)) as any).messages.map((m: any) => m.text))
+            .toContain('I cannot log in');
     });
 });

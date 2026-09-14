@@ -172,3 +172,104 @@ export function mayAccessConversation(
 
     return conversationInModuleScope(conversation, roles);
 }
+
+/**
+ *   #752 WHICH ADMIN MAY A MEMBER MESSAGE — ASKED ONCE, AND ASKED OF THE ROLE.
+ *
+ *   The rule the platform intends is simple and was stated nowhere: a member
+ *   may reach THEIR OWN module's admin, and the unscoped admins — admin,
+ *   super_admin, moderator, support — who serve everybody. It was implemented
+ *   three times in actions/messages.ts and got a different answer each time.
+ *
+ *     searchUsersAction, EMPTY QUERY   returned EVERY admin on the platform,
+ *                                      filtered only for "not me". This is the
+ *                                      people-picker's DEFAULT state, so a
+ *                                      cooperative member opening Messages was
+ *                                      shown the wave, academy, marketplace,
+ *                                      export and Farm Nation admins as
+ *                                      people to write to. No scoping at all.
+ *
+ *     searchUsersAction, WITH A QUERY  scoped on the admin's EMAIL ADDRESS:
+ *
+ *                                          isGlobal = email.includes("super")
+ *                                              || email.includes("admin.easysalesexport")
+ *                                          matchesModule = keywords
+ *                                              .some(k => email.includes(k))
+ *
+ *     startSupportConversationAction   matched the module's ROLE — and then
+ *                                      `|| email.includes(targetModule)`
+ *                                      beside it, so the substring decided
+ *                                      whenever the role did not.
+ *
+ *   #635 REMOVED EXACTLY THIS TEST FROM THE ADMIN INBOX and wrote down why:
+ *   "It infers authority from a substring in an address, which is not a fact
+ *   about the conversation." The same sentence applies to a person. What the
+ *   address form costs, concretely:
+ *
+ *     - an admin whose address carries no module word — grace@easysalesexport
+ *       .com, a real shape for a real person — was invisible to EVERY member,
+ *       including the members of their own module, who then had nobody to
+ *       write to;
+ *     - `email.includes("super")` promotes any address containing those five
+ *       letters (a supervisor@, a surname) to platform-wide reachability;
+ *     - and a genuine super_admin at ceo@easysalesexport.com matched neither
+ *       test and disappeared from the picker for every non-admin.
+ *
+ *   The roles array is read on the line above each of these tests. It is the
+ *   fact; the address is a coincidence about it. Same shape as #353's
+ *   "_admin suffix", #635's participant-email fallback, and #431's hand-written
+ *   role list.
+ *
+ * ── AND ADMINS STILL SEE EACH OTHER ─────────────────────────────────────────
+ *
+ *   The scoping applies to a MEMBER looking at admins. An admin searching the
+ *   directory is unscoped, as before: module admins have to be able to hand a
+ *   case to one another, and the caller-is-admin branch is what makes the
+ *   support workflow possible at all.
+ */
+
+/**
+ * The module a participant role belongs to, keyed to MODULE_ADMIN_ROLE.
+ *
+ * Written out twice inside actions/messages.ts, once per function — the shape
+ * #635, #633 and #353 each found in this area. One copy now.
+ */
+export const ROLE_MODULE: Readonly<Record<string, string>> = {
+    wave_participant: "wave",
+    cooperative_member: "cooperative",
+    academy_participant: "academy",
+    marketplace_buyer: "marketplace",
+    buyer: "marketplace",
+    seller: "marketplace",
+    export_participant: "export",
+    farmer: "farmnation",
+    land_owner: "farmnation",
+    investor: "farmnation",
+};
+
+/** The modules this person belongs to, from their roles. */
+export function memberModules(roles: string[] | undefined): string[] {
+    if (!roles) return [];
+    return [...new Set(roles.map((r) => ROLE_MODULE[r]).filter(Boolean))];
+}
+
+/**
+ * May `memberRoles` start a conversation with an admin holding `adminRoles`?
+ *
+ * The one answer, asked of the role on both sides.
+ */
+export function adminIsReachableBy(
+    adminRoles: string[] | undefined,
+    memberRoles: string[] | undefined,
+): boolean {
+    if (!adminRoles || adminRoles.length === 0) return false;
+
+    //   Serves everybody, by definition — see UNSCOPED_ADMIN_ROLES.
+    if (isUnscopedAdmin(adminRoles)) return true;
+
+    const modules = memberModules(memberRoles);
+
+    return MODULE_CONVERSATION_SCOPES.some((scope) =>
+        adminRoles.includes(scope.role)
+        && modules.some((m) => MODULE_ADMIN_ROLE[m] === scope.role));
+}

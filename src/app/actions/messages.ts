@@ -13,7 +13,10 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import * as messagingService from "@/infrastructure/messaging/service";
-import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission, isAdmin, isPlatformAdmin } from "@/lib/admin-permissions";
+import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission, isAdmin, isPlatformAdmin, isUnscopedAdmin } from "@/lib/admin-permissions";
+//   #752 — who a member may message, asked of the role. One rule, three call
+//   sites in this file that each used to answer it differently.
+import { adminIsReachableBy, memberModules } from "@/lib/conversation-scope";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 /**
@@ -213,23 +216,6 @@ export async function searchUsersAction(query: string) {
         // helping.
         const userIsAdmin = isAdmin(userRoles);
 
-        const ROLE_MODULE_KEYWORDS: Record<string, string> = {
-            wave_participant: "wave",
-            cooperative_member: "cooperative",
-            academy_participant: "academy",
-            marketplace_buyer: "marketplace",
-            buyer: "marketplace",
-            seller: "marketplace",
-            export_participant: "export",
-            farmer: "farmnation",
-            land_owner: "farmnation",
-            investor: "farmnation"
-        };
-
-        const userModuleKeywords = userRoles
-            .map(role => ROLE_MODULE_KEYWORDS[role])
-            .filter(Boolean) as string[];
-
         if (!trimmedQuery) {
             const { supabaseAdmin } = await import("@/lib/supabase");
             const { data: adminDocs } = await supabaseAdmin
@@ -237,8 +223,55 @@ export async function searchUsersAction(query: string) {
                 .select("id, email, roles, raw_data")
                 .overlaps("roles", ADMIN_ROLES);
 
-            const admins = (adminDocs || [])
-                .filter(doc => doc.id !== session.user.id)
+            const reachable = (adminDocs || [])
+                .filter(doc => doc.id !== session.user.id);
+            /*
+             *   #752 THE SCOPING MUST NEVER LEAVE A MEMBER WITH NOBODY.
+             *
+             *   Found by checking the fix rather than the defect. EVERY new
+             *   registration is created with `roles: ["general_user"]` and
+             *   nothing else — auth.ts, lib/auth.ts, session-guard.ts and
+             *   orphaned-user-repair.ts all four write exactly that — and
+             *   `general_user` belongs to no module. So scoping alone leaves
+             *   such a member with only the UNSCOPED admins, and if this
+             *   platform's staff are all module admins, with an EMPTY PICKER.
+             *
+             *   That is a worse defect than the one being fixed: a member who
+             *   can see the wrong admin can still get help, and a member who
+             *   can see nobody cannot. The owner's own figures make it
+             *   concrete — 19,978 accounts (46.9%) carry no application, bank
+             *   details or address, which is the shape of an account holding
+             *   only the default role.
+             *
+             *   So the scoping applies only when it leaves somebody. This is
+             *   not the rule weakening: a member WITH a module still sees their
+             *   own admin and the unscoped ones and no others, which is the
+             *   reported complaint fixed. It is the rule declining to turn
+             *   itself into a lockout.
+             */
+            const scoped = reachable.filter(doc => adminIsReachableBy(
+                doc.roles || doc.raw_data?.roles || [], userRoles));
+            if (!userIsAdmin && scoped.length === 0 && reachable.length > 0) {
+                logger.warn("[searchUsers] no admin is in scope for this member; "
+                    + "showing all admins so support stays reachable", {
+                    roles: userRoles,
+                } as never);
+            }
+
+            const admins = (userIsAdmin || scoped.length === 0 ? reachable : scoped)
+                /*
+                 *   #752 THE PICKER'S DEFAULT LIST HAD NO SCOPING AT ALL.
+                 *
+                 *   This is the branch a member sees the instant they open
+                 *   Messages, before typing anything, and it returned every
+                 *   admin on the platform — wave, academy, marketplace, export
+                 *   and Farm Nation — to a cooperative member. The scoping two
+                 *   hundred lines below, in the SEARCH branch, was the only
+                 *   copy of the rule, so not typing was the way past it.
+                 *
+                 *   A caller who is themselves an admin is unscoped, as before:
+                 *   module admins have to be able to reach one another.
+                 */
                 .map(doc => {
                     const fullName = doc.raw_data?.fullName || doc.email || doc.raw_data?.email || "Admin";
                     const email = doc.email || doc.raw_data?.email || "";
@@ -306,6 +339,19 @@ export async function searchUsersAction(query: string) {
         const users: UserSearchResult[] = [];
         const seenIds = new Set<string>([session.user.id]);
 
+        /*
+         *   #752 — the same lockout guard as the empty-query branch above, and
+         *   it has to be computed here rather than per document: "is anybody in
+         *   scope for this member" is a question about the WHOLE admin
+         *   directory, and `processDoc` sees one row at a time.
+         *
+         *   `adminsSnapshot` is exactly that directory — it is the
+         *   array-contains-any query on ADMIN_ROLES — so the answer is already
+         *   in hand and costs no extra read.
+         */
+        const someAdminInScope = adminsSnapshot.docs.some((d: any) =>
+            adminIsReachableBy(d.data()?.roles ?? [], userRoles));
+
         const processDoc = (doc: any) => {
             if (seenIds.has(doc.id)) return;
             const userData = doc.data();
@@ -315,9 +361,26 @@ export async function searchUsersAction(query: string) {
 
             const isAdmin = roles.some((r: string) => ADMIN_ROLES.includes(r));
             if (isAdmin && !userIsAdmin) {
-                const isGlobal = email.includes("super") || email.includes("admin.easysalesexport");
-                const matchesModule = userModuleKeywords.some(keyword => email.includes(keyword));
-                if (!isGlobal && !matchesModule) return;
+                /*
+                 *   #752 THIS DECIDED A PERSON'S AUTHORITY FROM THEIR EMAIL
+                 *   ADDRESS. It was:
+                 *
+                 *       const isGlobal = email.includes("super")
+                 *           || email.includes("admin.easysalesexport");
+                 *       const matchesModule = userModuleKeywords
+                 *           .some(keyword => email.includes(keyword));
+                 *
+                 *   `roles` is read three lines above. #635 removed exactly this
+                 *   test from the admin inbox — "it infers authority from a
+                 *   substring in an address, which is not a fact" — and this is
+                 *   the copy that decides who a member may WRITE to. An admin
+                 *   whose address carried no module word was invisible to their
+                 *   own module's members; anyone whose address contained
+                 *   "super" was visible to everybody.
+                 */
+                //   Scope only when scoping leaves this member somebody to
+                //   write to — see the note in the empty-query branch.
+                if (someAdminInScope && !adminIsReachableBy(roles, userRoles)) return;
             }
 
             const matches = fullName.includes(trimmedQuery) || email.includes(trimmedQuery);
@@ -365,26 +428,30 @@ export async function startSupportConversationAction(module?: string) {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userRoles: string[] = userDoc.data()?.roles ?? [];
 
-        const ROLE_MODULE_KEYWORDS: Record<string, string> = {
-            wave_participant: "wave",
-            cooperative_member: "cooperative",
-            academy_participant: "academy",
-            marketplace_buyer: "marketplace",
-            buyer: "marketplace",
-            seller: "marketplace",
-            export_participant: "export",
-            farmer: "farmnation",
-            land_owner: "farmnation",
-            investor: "farmnation"
-        };
-
-        const userModuleKeywords = userRoles
-            .map(role => ROLE_MODULE_KEYWORDS[role])
-            .filter(Boolean) as string[];
-        
-        if (module && !userModuleKeywords.includes(module)) {
-            userModuleKeywords.unshift(module);
-        }
+        /*
+         *   #752 THE MODULE CAME FROM THE CALLER, AND WAS TRUSTED.
+         *
+         *   `module` is a parameter of a server action — anybody's browser can
+         *   send any string — and this was:
+         *
+         *       if (module && !userModuleKeywords.includes(module)) {
+         *           userModuleKeywords.unshift(module);
+         *       }
+         *
+         *   A module the caller does not belong to was not rejected; it was
+         *   PROMOTED to the front of their list and then used to pick the
+         *   admin. So a cooperative member calling this with "wave" was routed
+         *   to the wave admin, which is the rule this function exists to
+         *   enforce, inverted.
+         *
+         *   The parameter is still honoured — it says which of a member's OWN
+         *   modules they want help with, which the screen legitimately knows
+         *   better than the role list does. It just no longer adds one.
+         */
+        const userModuleKeywords = memberModules(userRoles);
+        const requestedModule = module && userModuleKeywords.includes(module)
+            ? module
+            : null;
 
         const { supabaseAdmin } = await import("@/lib/supabase");
         // The canonical list. Both copies of this array were hand-written and
@@ -404,18 +471,23 @@ export async function startSupportConversationAction(module?: string) {
         }
 
         // Target module-specific admin first, then super admin, then any admin
-        const targetModule = module || (userModuleKeywords.length > 0 ? userModuleKeywords[0] : null);
+        const targetModule = requestedModule
+            || (userModuleKeywords.length > 0 ? userModuleKeywords[0] : null);
 
         let targetAdmin = adminDocs.find(doc => {
             const roles = doc.roles || doc.raw_data?.roles || [];
-            const email = (doc.email || doc.raw_data?.email || "").toLowerCase();
             // The module's admin ROLE, looked up rather than concatenated.
             // `${targetModule}_admin` produced "farmnation_admin" for the one
             // module whose keyword and role name differ by more than a suffix,
             // so Farm Nation support always fell through to a global admin.
+            //
+            //   #752 — and the `|| email.includes(targetModule)` that used to
+            //   sit beside it is gone. It let the address decide whenever the
+            //   role did not, which is the substring test #635 removed from the
+            //   inbox; here it could route a member's support request to
+            //   somebody who does not administer their module at all.
             const moduleRole = targetModule ? MODULE_ADMIN_ROLE[targetModule] : undefined;
-            if (targetModule && ((moduleRole && roles.includes(moduleRole)) || email.includes(targetModule))) return true;
-            return false;
+            return !!moduleRole && roles.includes(moduleRole);
         });
 
         if (!targetAdmin) {
@@ -426,10 +498,73 @@ export async function startSupportConversationAction(module?: string) {
         }
 
         if (!targetAdmin) {
+            /*
+             *   #752 THE LAST RESORT WAS `adminDocs[0]` — WHICHEVER ROW THE
+             *   DATABASE HAPPENED TO RETURN FIRST.
+             *
+             *   With no module admin and no platform admin present, a member's
+             *   support request went to an arbitrary admin, which on this
+             *   platform means a module admin for some OTHER module. They can
+             *   neither help nor, under #635's scoping, necessarily even open
+             *   the thread — and they see the member's message either way.
+             *
+             *   An unscoped admin — moderator or support, the two roles whose
+             *   job this is — is the correct wider fallback, and is asked for
+             *   by role rather than by position.
+             */
+            targetAdmin = adminDocs.find(doc =>
+                isUnscopedAdmin(doc.roles || doc.raw_data?.roles || []));
+        }
+
+        if (!targetAdmin) {
+            /*
+             *   AND THEN ANY ADMIN, WHICH IS WHERE THIS STARTED.
+             *
+             *   A correction to my own first version of this fix, found by
+             *   checking it rather than the defect. I had replaced
+             *   `adminDocs[0]` with the unscoped lookup above and RETURNED AN
+             *   ERROR when that found nobody — which makes support unreachable
+             *   on a platform staffed only by module admins, for every member
+             *   whose module has no admin. Every new registration holds
+             *   `general_user` alone and belongs to no module at all, so that
+             *   is not a corner case.
+             *
+             *   The defect in `adminDocs[0]` was never that it was a wide
+             *   fallback; it was that it was the FIRST thing tried after the
+             *   module lookup, so an arbitrary row beat a platform admin. It is
+             *   now the last thing tried, after module, platform and unscoped,
+             *   and it is logged so a misconfigured admin roster is visible
+             *   rather than silent.
+             */
             targetAdmin = adminDocs[0];
+            logger.warn("[startSupportConversation] no module, platform or unscoped "
+                + "admin matched; falling back to an arbitrary admin", {
+                module: targetModule,
+                adminsFound: adminDocs.length,
+            } as never);
+        }
+
+        if (!targetAdmin) {
+            return { error: "No admin available currently", conversationId: null };
         }
 
         const adminUid = targetAdmin.id;
+
+        /*
+         *   #752 AND THE CONTEXT TAG WAS THE SAME LEAK THROUGH THE OTHER DOOR.
+         *
+         *   Both lines below read the RAW `module` parameter, so after the
+         *   recipient was chosen correctly the thread was still STAMPED with
+         *   whatever the caller sent. `MODULE_CONVERSATION_SCOPES` routes the
+         *   admin inbox by exactly that context (#635), so a cooperative
+         *   member passing "wave" put their support thread — names and message
+         *   text — into the wave admin's list, having never been a wave user.
+         *
+         *   Fixing the recipient and leaving the tag would have looked right
+         *   and moved the leak one field across. `requestedModule` is the
+         *   parameter validated against the caller's own roles.
+         */
+        const context = requestedModule ? `${requestedModule}_support` : "general_support";
 
         if (adminUid === session.user.id) {
             // Pick another admin if user is themselves an admin
@@ -437,10 +572,9 @@ export async function startSupportConversationAction(module?: string) {
             if (!otherAdmin) {
                 return { error: "You are the primary admin", conversationId: null };
             }
-            return await startConversationAction(otherAdmin.id, undefined, undefined, module ? `${module}_support` : "general_support");
+            return await startConversationAction(otherAdmin.id, undefined, undefined, context);
         }
 
-        const context = module ? `${module}_support` : "general_support";
         return await startConversationAction(adminUid, undefined, undefined, context);
     } catch (error) {
         logger.error("Start support conversation error", error);
