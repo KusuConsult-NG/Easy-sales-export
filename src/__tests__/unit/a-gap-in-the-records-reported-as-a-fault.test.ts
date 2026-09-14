@@ -86,6 +86,7 @@ import { findFarmNationApplications, deterministicIdsFor } from '@/lib/farm-nati
 import { MODULE_ERASURE_TARGETS } from '@/lib/module-application-erasure';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { backfillDecision, isBlankEmail, maskAddress } from '@/lib/missing-email-backfill';
+import { balancesAgree } from '@/lib/cooperative-ledger-balance';
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
 const code = (rel: string) => stripComments(read(rel), { label: rel });
@@ -378,10 +379,27 @@ describe('#671 — and the reconciliation says what it found before it says what
     });
 
     it('AND MONEY THAT DOES NOT ADD UP IS STILL A FAILURE', () => {
-        //   This check exists to find money unaccounted for, and nothing above
-        //   should be satisfiable by a check that stopped looking for it.
-        expect(body).toContain('Math.abs(calculatedBalance - heldBalance) > 1.0');
+        /*
+         *   This check exists to find money unaccounted for, and nothing above
+         *   should be satisfiable by a check that stopped looking for it.
+         *
+         *   #726 MOVED THE COMPARISON, NOT THE RULE. This read
+         *   `Math.abs(calculatedBalance - heldBalance) > 1.0` inline. The
+         *   tolerance now lives in lib/cooperative-ledger-balance, because an
+         *   admin tool can now CREATE a membership row and had to derive its
+         *   balance by the same rule this check verifies with — two copies
+         *   would have let the repair manufacture the next finding.
+         *
+         *   So the claim is asserted against the shared rule, and the rule's
+         *   own behaviour is pinned below rather than taken on trust.
+         */
+        expect(body).toContain('!balancesAgree(heldBalance, calculatedBalance)');
         expect(body).toContain('balanceMismatches.push(');
+
+        //   Vacuity guard: a `balancesAgree` that agreed with everything would
+        //   satisfy the line above while finding nothing.
+        expect(balancesAgree(1_000, 1_000.5)).toBe(true);
+        expect(balancesAgree(1_000, 1_200)).toBe(false);
     });
 });
 

@@ -54,6 +54,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { stripComments } from '@/lib/testing/strip-comments';
+import { SAVINGS_CREDIT_TYPES } from '@/lib/cooperative-ledger-balance';
 
 const source = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 
@@ -289,7 +290,12 @@ describe('#333 — the forensic reconciliation still counts the rows it already 
         // balance movements as far as a member is concerned, so dropping the
         // type would make every affected member report as a permanent mismatch
         // — the exact failure mode the check was repaired for.
-        const forensics = source('src/app/actions/forensics.ts');
-        expect(forensics).toMatch(/CREDIT_TYPES\s*=\s*\[[^\]]*"savings"/);
+        //
+        //   #726 moved the list to lib/cooperative-ledger-balance. Asserting
+        //   the exported array is the stronger form of the same claim: it
+        //   survives the list being reformatted, and fails if the type is
+        //   dropped however it is spelled.
+        expect(SAVINGS_CREDIT_TYPES).toContain('savings');
+        expect(source('src/app/actions/forensics.ts')).toContain('ledgerBalanceOf(');
     });
 });

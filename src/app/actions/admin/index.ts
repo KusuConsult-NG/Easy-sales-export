@@ -48,6 +48,14 @@ export {
 } from "./_farm_nation_approvals";
 export type { FarmNationApprovalReport, FarmNationDecisionInput } from "./_farm_nation_approvals";
 
+//   #726 — the cooperative membership repair. Same reason: the barrel is where
+//   this domain says what it offers.
+export {
+    listMissingMembershipsAction,
+    createMissingMembershipAction,
+} from "./_cooperative_memberships";
+export type { MissingMembershipReport, CreateMembershipInput } from "./_cooperative_memberships";
+
 // ─── Domain types ─────────────────────────────────────────────────────────────
 export type { EditableApplicationFields } from "./_applications";
 

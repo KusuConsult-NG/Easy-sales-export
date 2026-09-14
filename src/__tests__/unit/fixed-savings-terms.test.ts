@@ -252,9 +252,12 @@ describe('createFixedSavingsAction — where the plan is filed', () => {
         // same as no row at all — that is how the pre-existing "savings" credit
         // type came to be uncounted. Read from the source rather than restated,
         // so renaming one without the other fails here.
-        const { readFileSync } = await import('fs');
-        const forensics = readFileSync('src/app/actions/forensics.ts', 'utf-8');
-        const debitTypes = /const DEBIT_TYPES = \[([^\]]*)\]/.exec(forensics)?.[1] ?? '';
+        //   #726 moved the list out of forensics.ts into
+        //   lib/cooperative-ledger-balance, where the admin membership repair
+        //   reads it too. Imported rather than scraped — still "read from the
+        //   source rather than restated", and no longer dependent on how the
+        //   literal happens to be written.
+        const { SAVINGS_DEBIT_TYPES: debitTypes } = await import('@/lib/cooperative-ledger-balance');
 
         await create(100_000, 12);
         const rows = global.mockFirestoreSet.mock.calls.map((c: any[]) => c[1]);

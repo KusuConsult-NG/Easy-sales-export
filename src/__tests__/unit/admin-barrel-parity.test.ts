@@ -137,6 +137,19 @@ const ADDED_SINCE_SPLIT = [
      */
     'listFarmNationApprovalCasesAction',
     'decideFarmNationApprovalAction',
+    /*
+     *   #726 The cooperative membership repair: a read that lists members
+     *   holding the role with no membership row behind it, and a write that
+     *   creates the row.
+     *
+     *   Unlike the Farm Nation pair above, creating the missing record here IS
+     *   the repair — the role was granted, so the row is owed. The balance on
+     *   it is derived from the completed ledger by the same function the
+     *   reconciliation check verifies with, never typed in, and the row is
+     *   written `pending` so the activation paths still decide.
+     */
+    'listMissingMembershipsAction',
+    'createMissingMembershipAction',
 ].sort();
 
 const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();

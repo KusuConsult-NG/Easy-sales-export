@@ -9,6 +9,7 @@ import {
     LayoutDashboard,
     Users,
     Sprout,
+    Landmark,
     Waves,
     Building2,
     ShoppingBag,
@@ -87,6 +88,8 @@ const NAV_ITEMS = [
     { label: "Duplicate Profiles", href: "/admin/forensics/duplicates", icon: Users, section: "platform", platformOnly: true },
     //   #725 — the other finding the scan names and cannot settle.
     { label: "Farm Nation Approvals", href: "/admin/forensics/farm-nation", icon: Sprout, section: "platform", permission: "farm_nation:verify_applications" as AdminPermission },
+    //   #726 — the last of the three the scan names and cannot settle.
+    { label: "Coop Memberships", href: "/admin/forensics/cooperative", icon: Landmark, section: "platform", permission: "cooperatives:approve_members" as AdminPermission },
     // Announcements and banners render site-wide via AnnouncementBanner.tsx.
     // The actions existed and the page did not, so the only way to publish was
     // to write to the database by hand.

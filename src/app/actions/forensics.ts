@@ -12,6 +12,12 @@ import { checkCourseAccess } from "@/lib/academy-plan";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { normalisePhone } from "@/lib/phone";
 import { genderOutcome } from "@/lib/gender";
+import {
+    SAVINGS_CREDIT_TYPES,
+    SAVINGS_DEBIT_TYPES,
+    ledgerBalanceOf,
+    balancesAgree,
+} from "@/lib/cooperative-ledger-balance";
 import { authAccountsWithProfiles } from "@/lib/auth-profile-link";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { findFarmNationApplications } from "@/lib/farm-nation-application-lookup";
@@ -752,8 +758,23 @@ export async function runForensicScanAction(): Promise<
             // nobody reads, which is the same way the cooperativeProfile bug
             // above stayed invisible. Both creation paths write the row now,
             // and it is counted here.
-            const CREDIT_TYPES = ["savings", "deposit", "contribution", "loan_repayment_excess"];
-            const DEBIT_TYPES = ["withdrawal", "fixed_savings_lock"];
+            /*
+             *   #726 — THESE TWO LISTS LIVE IN lib/cooperative-ledger-balance
+             *   NOW, and are imported rather than restated.
+             *
+             *   They were inline here, and _coop_admin_money.ts and
+             *   api/cooperative/create-fixed-savings both carried comments
+             *   quoting them back asking to be kept in step. A rule maintained
+             *   by comment has already started drifting.
+             *
+             *   It matters more since #726 gave an admin a way to CREATE the
+             *   membership row this check reports as missing: that row carries
+             *   a balance, and if the tool derived it by one rule and this
+             *   verified it by another, the repair would manufacture the next
+             *   finding the instant it ran.
+             */
+            const CREDIT_TYPES = SAVINGS_CREDIT_TYPES;
+            const DEBIT_TYPES = SAVINGS_DEBIT_TYPES;
 
             for (const doc of coopMembersQuery.docs) {
                 const userId = doc.id;
@@ -797,19 +818,14 @@ export async function runForensicScanAction(): Promise<
                     .where("status", "==", "completed") // Only completed transactions count
                     .get();
 
-                let calculatedBalance = 0;
-                transactionsSnapshot.docs.forEach(tx => {
-                    const type = tx.data().type;
-                    const amount = Number(tx.data().amount || 0);
-                    if (CREDIT_TYPES.includes(type)) {
-                        calculatedBalance += amount;
-                    } else if (DEBIT_TYPES.includes(type)) {
-                        calculatedBalance -= amount;
-                    }
-                });
+                //   #726 — the same function the repair tool derives a new
+                //   row's balance with, so a row it creates cannot be one this
+                //   check immediately flags.
+                const calculatedBalance = ledgerBalanceOf(
+                    transactionsSnapshot.docs.map((tx) => tx.data()),
+                );
 
-                // Tolerance for floating point math (kobo)
-                if (Math.abs(calculatedBalance - heldBalance) > 1.0) {
+                if (!balancesAgree(heldBalance, calculatedBalance)) {
                     balanceMismatches.push(`${userId} (Held: ${heldBalance}, Ledger: ${calculatedBalance})`);
                 }
             }

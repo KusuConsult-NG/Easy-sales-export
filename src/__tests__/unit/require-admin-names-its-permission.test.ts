@@ -300,6 +300,16 @@ describe('#375 — every gate names its permission, and the exception is stated'
          */
         'src/app/actions/admin/_farm_nation_approvals.ts': Array(2).fill('farm_nation:verify_applications'),
 
+        /*
+         *   #726 — the cooperative membership repair, listing and writing.
+         *
+         *   Gated on approving members rather than a reading permission: the
+         *   write CREATES a membership row, and while it creates it `pending`
+         *   rather than active, the row is what cooperative access is read
+         *   from. Whoever may write one should be whoever may approve one.
+         */
+        'src/app/actions/admin/_cooperative_memberships.ts': Array(2).fill('cooperatives:approve_members'),
+
         'src/app/actions/admin/_erased.ts': ['users:read_erased'],
 
         // #431's addition. The retired document viewer stated the admin rule by
@@ -449,8 +459,9 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // and the write. 47 → 49: #725 added the Farm Nation approval review's
         // two. Raised rather than loosened: the point of pinning the count is
         // that a gate added and forgotten in the EXPECTED map above fails this,
-        // and that is still true at 49.
-        expect(callSites().length).toBe(49);
+        // and that is still true at 51. 49 → 51: #726 added the cooperative
+        // membership repair's two.
+        expect(callSites().length).toBe(51);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

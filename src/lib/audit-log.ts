@@ -36,6 +36,13 @@ export type AuditAction =
      *   at afterwards.
      */
     | 'farm_nation_approval_review'
+    /**
+     *   #726 — an admin created the cooperative membership row the platform
+     *   owed a member. Its own action because the row carries a DERIVED balance
+     *   and the audit row records what it was derived from, so the figure can
+     *   be re-checked rather than taken on trust.
+     */
+    | 'cooperative_membership_repair'
     | 'ai_chat_message'
     | 'user_impersonate'
     | 'user_kyc_verify_bvn'

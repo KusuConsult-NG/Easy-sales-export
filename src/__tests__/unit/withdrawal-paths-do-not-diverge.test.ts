@@ -68,6 +68,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { COLLECTIONS } from '@/lib/types/firestore';
+import { SAVINGS_DEBIT_TYPES } from '@/lib/cooperative-ledger-balance';
 
 const ROOT = process.cwd();
 
@@ -189,8 +190,16 @@ describe('what the cooperative path does that the generic one never did', () => 
         // savingsBalance + lockedBalance against the ledger, counting
         // `withdrawal` as a debit — so releasing the lock without writing the
         // row makes every completed withdrawal a permanent mismatch.
+        //
+        //   #726 moved the list out of forensics.ts into
+        //   lib/cooperative-ledger-balance, so the admin repair that CREATES a
+        //   membership row derives its balance by the same rule this check
+        //   verifies with. Asserted against the exported array rather than the
+        //   source text: a list that is imported is a stronger claim than one
+        //   that is spelled a particular way.
         const forensics = source('src/app/actions/forensics.ts');
-        expect(forensics).toContain('const DEBIT_TYPES = ["withdrawal", "fixed_savings_lock"];');
+        expect(SAVINGS_DEBIT_TYPES).toContain('withdrawal');
+        expect(forensics).toContain('ledgerBalanceOf(');
         expect(forensics).toContain('lockedBalance');
     });
 });

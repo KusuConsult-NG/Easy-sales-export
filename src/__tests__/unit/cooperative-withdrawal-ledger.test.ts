@@ -10,7 +10,9 @@
  * membership_registration, fixed_savings_lock, deposit — and three separate
  * readers depended on a withdrawal row that was never there:
  *
- *   forensics.ts          DEBIT_TYPES = ["withdrawal", "fixed_savings_lock"].
+ *   forensics.ts          counts both as debits — the list is
+ *                         SAVINGS_DEBIT_TYPES in lib/cooperative-ledger-balance
+ *                         since #726, read by forensics and the admin repair.
  *                         It reconciles cooperative_members.savingsBalance +
  *                         lockedBalance against completed ledger rows. At
  *                         REQUEST time the debit moves savings into
@@ -46,6 +48,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { SAVINGS_DEBIT_TYPES } from '@/lib/cooperative-ledger-balance';
 
 const ADMIN_MONEY = 'src/app/actions/cooperative/_coop_admin_money.ts';
 const REPORTS = 'src/app/actions/cooperative/_coop_admin_reports.ts';
@@ -75,8 +78,15 @@ describe('the readers that expected a withdrawal row', () => {
     it('reconciliation counts it as a debit', () => {
         // THE premise, and the reason this is a correctness defect rather than
         // a reporting nicety.
-        expect(code(FORENSICS)).toContain('const DEBIT_TYPES = ["withdrawal", "fixed_savings_lock"];');
-        expect(code(FORENSICS)).toContain('calculatedBalance -= amount;');
+        //
+        //   #726 moved the two lists into lib/cooperative-ledger-balance so the
+        //   admin repair that creates a missing membership row derives its
+        //   balance by the rule this check verifies with. The claim is the
+        //   same; it is now asserted against the exported array and the
+        //   function forensics calls, rather than against a spelling.
+        expect(SAVINGS_DEBIT_TYPES).toContain('withdrawal');
+        expect(SAVINGS_DEBIT_TYPES).toContain('fixed_savings_lock');
+        expect(code(FORENSICS)).toContain('ledgerBalanceOf(');
     });
 
     it('and it reconciles against savingsBalance PLUS lockedBalance', () => {
@@ -146,6 +156,7 @@ describe('the admin transactions filter', () => {
     it('which is the type the writer produces and reconciliation reads', () => {
         // Vacuity guard on both ends.
         expect(code(CREATE_SAVINGS)).toContain('type: "fixed_savings_lock",');
-        expect(code(FORENSICS)).toContain('"fixed_savings_lock"');
+        //   #726 — read from the one list, which forensics now imports.
+        expect(SAVINGS_DEBIT_TYPES).toContain('fixed_savings_lock');
     });
 });

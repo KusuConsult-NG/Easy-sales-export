@@ -432,8 +432,11 @@ export async function approveWithdrawalAction(
             // deposit — and three separate readers depend on a withdrawal row
             // that was never there:
             //
-            //   forensics.ts        DEBIT_TYPES = ["withdrawal",
-            //                       "fixed_savings_lock"]. It reconciles
+            //   forensics.ts        counts `withdrawal` as a debit — the
+            //                       list is SAVINGS_DEBIT_TYPES in
+            //                       lib/cooperative-ledger-balance since #726,
+            //                       so this is one place now and not a copy.
+            //                       It reconciles
             //                       savingsBalance + lockedBalance against the
             //                       ledger. At request time the debit moves
             //                       savings into lockedBalance so the sum is

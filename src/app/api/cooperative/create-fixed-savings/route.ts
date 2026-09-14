@@ -196,7 +196,9 @@ export async function POST(request: NextRequest) {
         });
 
         // The cooperative ledger, which forensics.ts reconciles against.
-        // fixed_savings_lock is in its DEBIT_TYPES.
+        // fixed_savings_lock is in SAVINGS_DEBIT_TYPES — one list, in
+        // lib/cooperative-ledger-balance since #726, rather than a copy here
+        // kept in step by this comment.
         const coopTxRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(reference);
         await coopTxRef.set({
             id: reference,
