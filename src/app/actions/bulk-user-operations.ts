@@ -53,6 +53,7 @@ import { redis } from "@/lib/redis";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { ActionResponse } from "@/lib/safe-action";
 import { isAdminImpersonationEnabled, ADMIN_IMPERSONATION_REFUSAL } from "@/lib/admin-impersonation";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * Bulk suspend users (Admin only)
@@ -66,8 +67,9 @@ export async function bulkSuspendUsersAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) { 
-            return { success: false, error: "Unauthorized: Permission required - users:suspend", data: null };
+        const gate = await requireAdmin("users:suspend");
+        if ("error" in gate) {
+            return { success: false, error: gate.error, data: null };
         }
 
         if (!userIds || userIds.length === 0) { 
@@ -101,7 +103,7 @@ export async function bulkSuspendUsersAction(
                 // Prevent suspending admins (unless super_admin)
                 const userData = userDoc.data();
                 const userRoles = userData?.roles || [];
-                if (userRoles.includes("admin") && !isSuperAdmin(session.user.roles)) { failedIds.push(userId);
+                if (userRoles.includes("admin") && !isSuperAdmin(gate.roles)) { failedIds.push(userId);
                     continue;
                 }
 
@@ -173,8 +175,9 @@ export async function bulkActivateUsersAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) { 
-            return { success: false, error: "Unauthorized: Permission required - users:update", data: null };
+        const gate = await requireAdmin("users:update");
+        if ("error" in gate) {
+            return { success: false, error: gate.error, data: null };
         }
 
         if (!userIds || userIds.length === 0) { 
@@ -255,9 +258,32 @@ export async function bulkAssignRolesAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) { 
-            return { success: false, error: "Unauthorized: Permission required - users:assign_roles", data: null };
+        /*
+         *   #750 THE TWO ENDPOINTS THAT ASSIGN ROLES DECIDED WHO MAY ASSIGN
+         *        ROLES FROM THE TOKEN.
+         *
+         *   Both the gate here and the escalation guard below read
+         *   `session.user.roles`. #356 established that a JWT role claim "keeps
+         *   its value for hours after the database loses it", so for the life
+         *   of their token a DEMOTED super_admin passed both — and could call
+         *   this on their own id with ["super_admin"] to put the role back in
+         *   the database, permanently.
+         *
+         *   Self-reinstatement on the endpoint whose whole job is assigning
+         *   roles. admin-permissions.ts's header already describes this harm
+         *   ("any admin could call either one on their own id and come back a
+         *   super_admin... described everywhere and enforced nowhere"); the
+         *   guard written to stop it was reading the claim it needed to
+         *   distrust.
+         *
+         *   requireAdmin re-reads the roles from the database and returns them,
+         *   so the guard below decides on the same live answer.
+         */
+        const gate = await requireAdmin("users:assign_roles");
+        if ("error" in gate) {
+            return { success: false, error: gate.error, data: null };
         }
+        const actorRoles = gate.roles;
 
         if (!userIds || userIds.length === 0) { 
             return { success: false, error: "No users selected", data: null };
@@ -278,7 +304,7 @@ export async function bulkAssignRolesAction(
         // users:impersonate — could pass their own id with ["super_admin"] and
         // collect both. Every other endpoint in this file defends that boundary
         // explicitly; this was the one that did not.
-        if (includesPrivilegedRole(rolesToAdd) && !isSuperAdmin(session.user.roles)) {
+        if (includesPrivilegedRole(rolesToAdd) && !isSuperAdmin(actorRoles)) {
             return {
                 success: false,
                 error: "Only a super admin can grant admin roles",
@@ -384,8 +410,9 @@ export async function bulkDeleteUsersAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) { 
-            return { success: false, error: "Unauthorized: Permission required - users:delete (super_admin only)", data: null };
+        const gate = await requireAdmin("users:delete");
+        if ("error" in gate) {
+            return { success: false, error: gate.error, data: null };
         }
 
         if (!userIds || userIds.length === 0) { 
@@ -450,7 +477,7 @@ export async function bulkDeleteUsersAction(
 
                 // Prevent deleting admins (unless you're super_admin)
                 const userRoles = (userDoc.data()?.roles as string[] | undefined) || [];
-                if (userRoles.includes("admin") && !isSuperAdmin(session.user.roles)) {
+                if (userRoles.includes("admin") && !isSuperAdmin(gate.roles)) {
                     failedIds.push(userId);
                     failures.push({ userId, because: "target is an admin" });
                     continue;
@@ -557,7 +584,9 @@ export async function createImpersonationTokenAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:impersonate")) { return { success: false as const, error: "Unauthorized: Permission required - users:impersonate (super_admin only)", data: null };
+        const gate = await requireAdmin("users:impersonate");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
 
         if (!reason || reason.trim().length < 20) { return { success: false as const, error: "Impersonation reason must be at least 20 characters (for audit compliance)", data: null };
@@ -619,8 +648,9 @@ export async function exportUserDataAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) { 
-            return { success: false, error: "Unauthorized: Permission required - users:read", data: null };
+        const gate = await requireAdmin("users:read");
+        if ("error" in gate) {
+            return { success: false, error: gate.error, data: null };
         }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);

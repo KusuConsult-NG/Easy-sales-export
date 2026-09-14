@@ -457,6 +457,11 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         //   approval route — now re-validate against the database. The ledger
         //   reported the improvement rather than absorbing it, which is what
         //   #743 changed it from a ceiling for.
-        expect(ledgerVerdict(jwtOnly.length, 80)).toBe(LEDGER_HELD);
+        //   #750 lowered this from 80: admin/_users.ts and bulk-user-operations.ts
+        //   were converted WHOLE — every gate in both — because converting only
+        //   their role-assignment functions left each file asking the database
+        //   in one place and the token in another, which the ratchet above
+        //   refuses, and was right to.
+        expect(ledgerVerdict(jwtOnly.length, 78)).toBe(LEDGER_HELD);
     });
 });

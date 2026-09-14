@@ -170,10 +170,44 @@ describe('#356 — requireAdmin admits every admin role', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#356 — requireAdmin can ask for a specific permission', () => {
     it('A MODULE ADMIN IS REFUSED finance:resolve_disputes', async () => {
+        /*
+         *   #750 CHANGED WHAT THIS REFUSAL SAYS, AND THE CHANGE IS THE POINT.
+         *
+         *   These five ARE admins — they pass isAdmin — so they reach the
+         *   permission branch, which used to return the same "Admin access
+         *   required" as the not-an-admin branch above. A module admin holding
+         *   their role but not this permission was told only that they were not
+         *   an admin: untrue, and it names nothing they could ask for.
+         *
+         *   It stopped being cosmetic the moment actions began delegating their
+         *   refusal to this gate. Each one used to phrase its own — "Permission
+         *   required - users:assign_roles" — and relaying a generic message in
+         *   its place would have discarded that across every gate #748, #749 and
+         *   #750 converted.
+         */
         for (const role of ['academy_admin', 'wave_admin', 'marketplace_admin', 'support', 'moderator']) {
             await expect(callRequireAdmin([role], 'finance:resolve_disputes'))
-                .resolves.toEqual({ error: 'Unauthorized: Admin access required' });
+                .resolves.toEqual({
+                    error: 'Unauthorized: Permission required - finance:resolve_disputes',
+                });
         }
+    });
+
+    it('AND A NON-ADMIN ASKED FOR A PERMISSION IS TOLD WHICH ONE', async () => {
+        //   The other branch, which #750 also changed. A caller who fails
+        //   isAdmin lacks the permission too, so naming it is both accurate and
+        //   the more actionable of the two things that could be said.
+        await expect(callRequireAdmin(['general_user'], 'finance:resolve_disputes'))
+            .resolves.toEqual({
+                error: 'Unauthorized: Permission required - finance:resolve_disputes',
+            });
+    });
+
+    it('while a BARE gate still says only that admin access is required', async () => {
+        //   There is nothing narrower to say when no permission was named, and
+        //   the one deliberate bare gate (#356/#374) depends on this wording.
+        await expect(callRequireAdmin(['general_user']))
+            .resolves.toEqual({ error: 'Unauthorized: Admin access required' });
     });
 
     it('while admin and super_admin hold it', async () => {

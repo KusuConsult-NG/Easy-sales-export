@@ -16,6 +16,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { UserVerificationToggleSchema, UserKycVerificationSchema, UserGenderUpdateSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin, isSuperAdmin, includesPrivilegedRole } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 import { stripRegistrationPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
@@ -63,8 +64,9 @@ async function _toggleUserVerificationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+        const gate = await requireAdmin("users:update");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const };
         }
 
         const valid = UserVerificationToggleSchema.safeParse({ userId });
@@ -151,8 +153,9 @@ async function _toggleUserKycVerificationAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         // Assuming "users:update" is sufficient for KYC. Could create a stricter role if needed.
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+        const gate = await requireAdmin("users:update");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const };
         }
 
         const valid = UserKycVerificationSchema.safeParse({ userId, field, currentStatus });
@@ -251,8 +254,9 @@ async function _toggleUserKycVerificationAction(
          const sessionResult = await requireSession();
          if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
          const { session } = sessionResult;
-         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-             return { error: "Unauthorized: Permission required - users:update", success: false as const };
+         const gate = await requireAdmin("users:update");
+         if ("error" in gate) {
+             return { error: gate.error, success: false as const };
          }
 
          /**
@@ -358,8 +362,9 @@ async function _unlockUserAccount(email: string): Promise<ActionState> {
          *        button points at it, so an endpoint with no caller is an
          *        endpoint with no witnesses, not one that cannot be reached.
          */
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+        const gate = await requireAdmin("users:update");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const };
         }
 
         if (!email || !email.includes("@")) {
@@ -421,11 +426,34 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
-            const roles = session?.user?.roles ?? [];
-            logger.warn(`[getUsersAction] Permission denied. Session roles: ${roles.join(", ") || "none (session may be stale — user must re-login)"}`);
+        const gate = await requireAdmin("users:read");
+        if ("error" in gate) {
+            /*
+             *   #750 — THIS REFUSAL USED TO PRESCRIBE A REMEDY THAT NO LONGER
+             *   WORKS, AND QUOTED THE CLAIM THE GATE HAD JUST DECLINED TO TRUST.
+             *
+             *   It read:
+             *
+             *       "your session does not have the 'users:read' permission.
+             *        Current roles: [...]. Please sign out and sign back in to
+             *        refresh your session."
+             *
+             *   — with the roles taken from `session.user.roles`. That was sound
+             *   while the gate ITSELF read the token: a stale claim really was
+             *   the likely cause and re-logging in really did fix it.
+             *
+             *   The gate now reads the user document. So the advice sends an
+             *   admin round a loop that cannot change the answer, and the roles
+             *   printed as "Current" are the token's, which may be precisely
+             *   what the database no longer says. Worse, it named users:read
+             *   whatever the actual cause: a suspended account and an admin
+             *   pending MFA enrolment both got told to sign in again.
+             *
+             *   requireAdmin already worked out which of those it was. Relayed.
+             */
+            logger.warn(`[getUsersAction] ${gate.error}`);
             return {
-                error: `Unauthorized: your session does not have the 'users:read' permission. Current roles: [${roles.join(", ") || "none"}]. Please sign out and sign back in to refresh your session.`,
+                error: gate.error,
                 success: false as const,
                 data: null,
             };
@@ -1096,9 +1124,18 @@ async function _updateUserRolesAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
-            return { error: "Unauthorized: Permission required - users:assign_roles", success: false as const };
+        /*
+         *   #750 — the gate AND the escalation guard below both read the token.
+         *   For the life of their JWT a demoted super_admin passed both and
+         *   could call this on their own id with ["super_admin"], putting the
+         *   role the platform had just removed back into the database — where
+         *   it outlives the token. See the sibling in bulk-user-operations.ts.
+         */
+        const gate = await requireAdmin("users:assign_roles");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const };
         }
+        const actorRoles = gate.roles;
 
         // Validate inputs
         const { UpdateUserRolesSchema } = await import("@/lib/schemas");
@@ -1123,7 +1160,7 @@ async function _updateUserRolesAction(
         //
         // The rule is deliberately blunt: any request whose resulting roles
         // include admin or super_admin needs a super_admin to make it.
-        if (includesPrivilegedRole(roles) && !isSuperAdmin(session.user.roles)) {
+        if (includesPrivilegedRole(roles) && !isSuperAdmin(actorRoles)) {
             return { error: "Only a super admin can grant admin roles", success: false as const };
         }
 
@@ -1173,7 +1210,7 @@ async function _updateUserRolesAction(
         }
         const currentRoles = (targetDoc.data()?.roles ?? []) as string[];
 
-        if (includesPrivilegedRole(currentRoles) && !isSuperAdmin(session.user.roles)) {
+        if (includesPrivilegedRole(currentRoles) && !isSuperAdmin(actorRoles)) {
             return {
                 error: "Only a super admin can change an admin's roles",
                 success: false as const,

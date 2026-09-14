@@ -282,6 +282,30 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // Account creation.
         'src/app/actions/admin/_legacy.ts': ['users:create'],
 
+        /*
+         *   #750 — THE TWO ENDPOINTS THAT WRITE ROLES, taken off the stale JWT.
+         *
+         *   Both `_updateUserRolesAction` and `bulkAssignRolesAction` gated on
+         *   `session.user.roles` AND made the super_admin escalation decision
+         *   from the same claim — so a demoted super_admin could call either on
+         *   their own id with ["super_admin"] and restore the role for good.
+         *   admin-permissions.ts's own header had already written the harm
+         *   down: "The boundary was described everywhere and enforced nowhere."
+         *
+         *   Every gate in both files is converted, not only the role writer.
+         *   #532's ratchet counts a file that gates two ways as half-converted,
+         *   and leaving four of six on the token in the file whose defect this
+         *   is would have been exactly that.
+         */
+        'src/app/actions/admin/_users.ts': [
+            'users:update', 'users:update', 'users:update', 'users:update',
+            'users:read', 'users:assign_roles',
+        ],
+        'src/app/actions/bulk-user-operations.ts': [
+            'users:suspend', 'users:update', 'users:assign_roles',
+            'users:delete', 'users:impersonate', 'users:read',
+        ],
+
         // #530 Reading a DELETED member's retained profile. A new permission,
         // super_admin only — see the note in admin-permissions on why neither
         // users:read (all ten roles) nor users:export (admin too) expresses it.
@@ -477,7 +501,11 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // and that is still true at 51. 49 → 51: #726 added the cooperative
         // membership repair's two.
         // 51 → 55: #748 converted the four money-OUT gates off the stale JWT.
-        expect(callSites().length).toBe(55);
+        // 55 → 67: #750 converted the two files that WRITE roles — all twelve
+        // gates in them, because converting only the role writer would leave
+        // each file gated two ways, which is the half-converted shape #532's
+        // ledger exists to catch.
+        expect(callSites().length).toBe(67);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

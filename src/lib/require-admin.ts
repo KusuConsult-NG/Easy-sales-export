@@ -190,14 +190,53 @@ export async function requireAdmin(permission?: AdminPermission): Promise<
 
         // 4. Verify the live role — see the #356 note above for what this was.
         if (!isAdmin(roles)) {
-            return { error: "Unauthorized: Admin access required" };
+            /*
+             *   #750 — when a permission was NAMED, say so here too.
+             *
+             *   My first version distinguished the two branches: "not an admin"
+             *   above, "an admin without this permission" below. That reads
+             *   well and was wrong for this caller. Every action converted onto
+             *   this gate previously checked ONLY the permission, so a
+             *   non-admin got "Permission required - users:read" — and a
+             *   caller who fails isAdmin lacks the permission too, making the
+             *   narrower message both accurate and the more actionable of the
+             *   two. Distinguishing them here would have silently reworded a
+             *   refusal on every gate #748, #749 and #750 converted.
+             *
+             *   A bare requireAdmin() — no permission named — still says
+             *   "Admin access required", because there is nothing narrower to
+             *   say.
+             */
+            return {
+                error: permission
+                    ? `Unauthorized: Permission required - ${permission}`
+                    : "Unauthorized: Admin access required",
+            };
         }
 
         // 5. And, when the caller named one, the specific permission. Asked of
         //    PERMISSION_MATRIX rather than by naming roles at the call site,
         //    which is how one screen ends up gated two ways.
         if (permission && !hasAdminPermission(roles, permission)) {
-            return { error: "Unauthorized: Admin access required" };
+            /*
+             *   #750 NAMES THE PERMISSION IT REFUSED.
+             *
+             *   This returned the same "Admin access required" as the isAdmin
+             *   branch above, so an admin who held the role but not the
+             *   permission was told only that they were not an admin — which is
+             *   both untrue and unactionable.
+             *
+             *   It mattered the moment actions started delegating here. Each
+             *   one used to phrase its own refusal — "Unauthorized: Permission
+             *   required - users:assign_roles" — and relaying a generic message
+             *   in its place would have thrown that away across every gate
+             *   converted in #748, #749 and #750.
+             *
+             *   The two branches stay distinguishable: "not an admin" and "an
+             *   admin without this permission" are different facts about the
+             *   caller, and only the second tells them what to ask for.
+             */
+            return { error: `Unauthorized: Permission required - ${permission}` };
         }
 
         /**

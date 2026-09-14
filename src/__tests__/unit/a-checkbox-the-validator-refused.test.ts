@@ -88,6 +88,11 @@ import { includesPrivilegedRole } from '@/lib/admin-permissions';
 const ROOT = process.cwd();
 const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf8'), { label: rel });
 
+//   #750 — this suite drives an action that now asks the LIVE gate.
+//   The mock decides (roles still matter); see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null,
     setCache: async () => undefined,

@@ -458,22 +458,48 @@ export default function AdminUsersPage() {
                 </p>
             </div>
 
-            {/* Specific access/session error with actionable guidance */}
-            {error && (error.includes("Unauthorized") || error.includes("session") || error.includes("expired")) && (
-                <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            {/*
+              *   #750 — THE REMEDY OFFERED HERE ONLY WORKS FOR ONE OF THE FOUR
+              *   REASONS THIS BANNER APPEARS.
+              *
+              *   It used to tell every refused admin that "your session may not
+              *   have the correct admin roles" and give them a Sign Out &
+              *   Refresh button. That was right while the server decided from
+              *   the JWT: a stale claim was the likely cause, and a new token
+              *   fixed it.
+              *
+              *   requireAdmin now re-reads the roles from the user document on
+              *   every call, so for a refusal on ROLES a new token carries the
+              *   same answer — the button sends an admin out of the product to
+              *   accomplish nothing, and (worse) it reads as though the platform
+              *   were merely confused rather than that they lack the permission.
+              *   The same banner covers an account suspension and an admin who
+              *   has not enrolled in MFA, and signing out helps with neither.
+              *
+              *   So the advice is split by what the gate actually said. Only an
+              *   expired or missing SESSION is fixed by signing in again, and
+              *   only that case still offers the button. Every other refusal
+              *   shows the gate's own reason and says what would change it.
+              */}
+            {error && (error.includes("Unauthorized") || error.includes("session") || error.includes("expired") || error.includes("suspended")) && (
+                <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3" role="alert">
                     <div className="flex-1">
                         <p className="font-semibold text-amber-800">Access Error: {error}</p>
                         <p className="text-sm text-amber-700 mt-1">
-                            Your session may not have the correct admin roles. Please <strong>sign out and sign back in</strong> to refresh your permissions.
+                            {error.includes("Unauthenticated") || error.includes("expired")
+                                ? <>Your session has ended. Please <strong>sign in again</strong>.</>
+                                : <>Your permissions are read from your account each time you open this page, so signing out and back in will not change this. Ask a super admin to review your roles.</>}
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => signOut({ callbackUrl: "/auth/login" })}
-                        className="shrink-0 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition text-center"
-                    >
-                        Sign Out &amp; Refresh
-                    </button>
+                    {(error.includes("Unauthenticated") || error.includes("expired")) && (
+                        <button
+                            type="button"
+                            onClick={() => signOut({ callbackUrl: "/auth/login" })}
+                            className="shrink-0 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition text-center"
+                        >
+                            Sign Out &amp; Refresh
+                        </button>
+                    )}
                 </div>
             )}
 

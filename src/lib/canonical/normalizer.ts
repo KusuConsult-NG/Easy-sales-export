@@ -162,7 +162,43 @@ export function extractCanonicalUser(uData: any, appData: any = null) {
     };
 
     // 3. IDENTITY
-    const name = uData?.fullName || uData?.name || (uData?.firstName && uData?.lastName ? `${uData.firstName} ${uData.lastName}` : appData?.fullName || appData?.name || "");
+    /**
+     *   #751 THE APPLICATION ROW'S OWN NAME PARTS WERE NEVER CONSULTED.
+     *
+     *   The chain fell back to `appData.fullName || appData.name` and stopped.
+     *   Every writer of a cooperative member row records firstName and lastName
+     *   — _coop_registration and the legacy import both do — and a row that
+     *   carries those WITHOUT a fullName rendered a blank name, with the answer
+     *   sitting in the next two fields along.
+     *
+     *   It matters because of who it happens to: this audit measured 48
+     *   cooperative_members references with no matching profile. For those the
+     *   user document is `{}`, so `appData` is the only source there is, and a
+     *   gap in this chain is the difference between a name and an empty cell on
+     *   the admin's screen.
+     *
+     *   Built by the same rule the writers use — first, other, last, blanks
+     *   dropped — rather than assuming two parts.
+     *
+     *   STRICTLY ADDITIVE. The user document's half keeps its exact old
+     *   behaviour — including requiring BOTH firstName and lastName before it
+     *   will build a name — because relaxing that would let a profile carrying
+     *   only a first name beat a complete name on the application row. The new
+     *   parts go on the END of the chain, so a row that resolved before
+     *   resolves identically now.
+     */
+    const joined = (...parts: unknown[]) =>
+        parts.map((p) => (typeof p === "string" ? p.trim() : "")).filter(Boolean).join(" ");
+
+    const name = uData?.fullName
+        || uData?.name
+        || (uData?.firstName && uData?.lastName
+            ? joined(uData.firstName, uData.otherName, uData.lastName)
+            : "")
+        || appData?.fullName
+        || appData?.name
+        || joined(appData?.firstName, appData?.otherName, appData?.lastName)
+        || "";
 
     return {
         name,

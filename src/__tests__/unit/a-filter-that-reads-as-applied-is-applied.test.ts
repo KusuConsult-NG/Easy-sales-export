@@ -66,6 +66,11 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
+//   #750 — this suite drives an action that now asks the LIVE gate.
+//   The mock decides (roles still matter); see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null,
     setCache: async () => undefined,

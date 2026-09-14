@@ -57,6 +57,11 @@ import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
  *   against a real database in who-may-see-an-account-number.test.ts. Each file
  *   tests one thing.
  */
+//   #750 — this suite drives an action that now asks the LIVE gate.
+//   The mock decides (roles still matter); see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/member-pii-visibility', () => ({
     mayRevealMemberPii: async (permission: string) => {
         const { hasAdminPermission } = jest.requireActual('@/lib/admin-permissions') as any;
@@ -129,20 +134,42 @@ describe('getUsersAction — who may read it', () => {
         expect(await listUsers()).toMatchObject({ success: false });
     });
 
-    it('refuses a role without users:read, and says which roles it saw', async () => {
-        // The message names the roles on purpose: the commonest cause is a stale
-        // JWT after a promotion, and "sign out and back in" is the fix.
+    it('refuses a role without users:read, and NAMES THE PERMISSION', async () => {
+        /*
+         *   #750 CHANGED WHAT THIS REFUSAL SAYS, AND THE OLD TEST'S OWN COMMENT
+         *   EXPLAINS WHY IT HAD TO.
+         *
+         *   It read: "The message names the roles on purpose: the commonest
+         *   cause is a stale JWT after a promotion, and 'sign out and back in'
+         *   is the fix" — and asserted the refusal echoed `[user]`, the roles
+         *   off the token.
+         *
+         *   That was sound while this action decided from the token. It now
+         *   asks requireAdmin, which re-reads the roles from the user document,
+         *   so a stale JWT is no longer a cause of this refusal and signing out
+         *   fixes nothing. Echoing the claim back as "Current roles" would
+         *   print the one thing the gate had just declined to trust.
+         *
+         *   What survives from the old assertion is its real content: the
+         *   refusal names the permission, so an admin knows what to ask for.
+         */
         actAs('user-1', ['user']);
         const res = await listUsers();
 
         expect(res.success).toBe(false);
         expect(res.error).toContain('users:read');
-        expect(res.error).toContain('[user]');
+        //   And it is the GATE's reason, not a message this action composed.
+        expect(res.error).toBe('Unauthorized: Permission required - users:read');
     });
 
-    it('names "none" rather than an empty bracket for a session with no roles', async () => {
+    it('and a session with no roles at all gets the same, actionable, answer', async () => {
+        //   This used to assert the word "none", from the empty-array branch of
+        //   the hand-written message. There is no such branch now: the caller
+        //   lacks the permission either way, and that is the fact worth stating.
         actAs('user-1', []);
-        expect(((await listUsers()) as any).error).toContain('none');
+
+        expect(((await listUsers()) as any).error)
+            .toBe('Unauthorized: Permission required - users:read');
     });
 });
 

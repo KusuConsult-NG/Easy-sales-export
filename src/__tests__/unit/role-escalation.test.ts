@@ -66,6 +66,11 @@ const SUPER = 'super-1';
 const ADMIN = 'admin-1';
 const TARGET = 'user-1';
 
+//   #750 — this suite drives an action that now asks the LIVE gate.
+//   The mock decides (roles still matter); see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/audit-log', () => ({
     recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     logAuditAction: jest.fn(async () => ({})),

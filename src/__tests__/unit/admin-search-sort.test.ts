@@ -3,7 +3,19 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { getUsersAction } from '@/app/actions/admin';
+//   #750 — this suite drives an action that now asks the LIVE gate.
+//   The mock decides (roles still matter); see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
+//   IMPORTED LAZILY. `jest` comes from '@jest/globals' in this file, and
+//   babel-plugin-jest-hoist does NOT hoist jest.mock when it does — so a
+//   top-level `import { getUsersAction }` resolves @/lib/require-admin to
+//   the real module before the mock above is ever registered. The factory
+//   simply never ran, and the action met a gate that calls auth() — which
+//   this harness resolves to null — so every call returned Unauthenticated.
+const actions = () => import('@/app/actions/admin');
+
 
 describe('getUsersAction Search and Sort Unit Tests', () => {
     beforeEach(() => {
@@ -45,6 +57,7 @@ describe('getUsersAction Search and Sort Unit Tests', () => {
             });
         });
 
+        const { getUsersAction } = await actions();
         const result = await getUsersAction({ search: "Fatima" });
 
         expect(result.success).toBe(true);
@@ -74,6 +87,8 @@ describe('getUsersAction Search and Sort Unit Tests', () => {
                 empty: false
             });
         });
+
+        const { getUsersAction } = await actions();
 
         // Sort descending: Z-A (male, female, empty)
         const resultDesc = await getUsersAction({ sortBy: "gender", sortOrder: "desc" });

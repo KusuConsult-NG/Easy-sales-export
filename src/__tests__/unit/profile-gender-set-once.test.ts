@@ -62,6 +62,11 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const USER = 'user-1';
 
+//   #750 — this suite drives an action that now asks the LIVE gate.
+//   The mock decides (roles still matter); see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/cache-invalidation', () => ({
     invalidateUserCache: jest.fn(async () => ({})),
     invalidateAdminGlobalStats: jest.fn(async () => ({})),
@@ -217,7 +222,7 @@ describe('the check WAVE relies on, and the route that may still change it', () 
         const admin = await source('src/app/actions/admin/_users.ts');
 
         expect(admin).toContain('_updateUserGenderAction');
-        expect(admin).toContain('hasAdminPermission(session.user.roles, "users:update")');
+        expect(admin).toContain('requireAdmin("users:update")');
         expect(admin).toContain('user_gender_update');
     });
 
