@@ -6,6 +6,7 @@
 
 import { html, trustedHtml } from "@/lib/utils";
 import { isUndeliverable } from "@/lib/bounced-address";
+import { isErasedAddress } from "@/lib/contactable-account";
 import { logger } from "@/lib/logger";
 
 /**
@@ -214,6 +215,32 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
          *   fact and does not make an address undeliverable — see
          *   lib/bounced-address.ts.
          */
+        /*
+         *   #737 — THE TOMBSTONE, BEFORE THE BOUNCE LIST.
+         *
+         *   The check below refuses an address that HAS hard-bounced. This one
+         *   refuses the address guaranteed to: erasure rewrites both the user
+         *   row and the Auth identity to `deleted_<uid>@redacted.local`, and
+         *   that domain does not resolve. Anything still firing a notice at an
+         *   erased account — an admin working a queue, a cron closing something
+         *   out — sent mail that could only bounce.
+         *
+         *   AND THE EXISTING GUARD ONLY HELPED AFTERWARDS. Suppression is
+         *   populated BY bounces, so the first send to every erased account was
+         *   always going to happen, damage the sending reputation #694 exists to
+         *   protect, and then be recorded as a bounce against the platform's own
+         *   tombstone.
+         *
+         *   FIRST, because it is a string test and the bounce check is a
+         *   database read. A tombstoned address should not cost a lookup.
+         */
+        if (isErasedAddress(data.to)) {
+            logger.warn('[EMAIL] not sent: this account has been erased', {
+                subject: data.subject,
+            });
+            return { success: false, error: 'Recipient account has been erased' };
+        }
+
         if (await isUndeliverable(data.to)) {
             logger.error('[EMAIL] not sent: this address has hard-bounced', {
                 to: data.to, subject: data.subject,
