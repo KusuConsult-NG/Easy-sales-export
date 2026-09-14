@@ -158,21 +158,51 @@ export default function AdminDashboardPage() {
         stats?.platformOverview?.revenueAvailable,
         stats?.platformOverview?.revenueIsPartial,
     );
+
+    /**
+     *   #753 A FIGURE THAT COULD NOT BE READ IS NOT ZERO.
+     *
+     *   The owner reported this screen showing "Total Users 0" and "Active
+     *   Users 0" beside "Total Revenue — Unavailable — Could not reach Paystack
+     *   or the database". One outage, three tiles, and only the third was
+     *   honest. The platform has roughly 42,600 accounts, so those zeros do not
+     *   read as a stale number; they read as a dead platform, on the screen an
+     *   administrator opens BECAUSE something looks wrong.
+     *
+     *   The revenue tile's own comment, four lines below, already states the
+     *   rule: "A zero here is a real business figure; an outage rendered as ₦0
+     *   is indistinguishable from a day with no sales." So does the note on
+     *   `unavailableMonths` in the service: "a bar of zero and a bar that could
+     *   not be drawn look identical on a chart, and only one of them is a fact
+     *   about the business." A chart bar was given this treatment and the user
+     *   count was not.
+     *
+     *   `unavailableFigures` carries the names of the reads that failed. An
+     *   ABSENT list means no claim was made — an older payload, a cached
+     *   response — so this tests MEMBERSHIP and never emptiness: `[]` means
+     *   everything was read, `undefined` means nobody said.
+     */
+    const unreadable = new Set(stats?.platformOverview?.unavailableFigures ?? []);
+    const figure = (key: string, value: number | undefined) =>
+        (unreadable.has(key) ? "Unavailable" : numberOrZero(value).toLocaleString());
+    const figureNote = (key: string, note: string) =>
+        (unreadable.has(key) ? "Could not be read — retry shortly" : note);
     const statCards = [
         {
             label: (dateRange.from || dateRange.to) ? "New Registrations" : "Total Users",
-            value: (stats.platformOverview?.totalUsers ?? 0).toLocaleString(),
+            value: figure("totalUsers", stats.platformOverview?.totalUsers),
             icon: Users,
             color: "blue",
-            change: (dateRange.from || dateRange.to) ? "Registered in selected period" : "Total registered accounts",
+            change: figureNote("totalUsers", (dateRange.from || dateRange.to)
+                ? "Registered in selected period" : "Total registered accounts"),
             href: "/admin/users",
         },
         {
             label: "Active Users (30d)",
-            value: (stats.platformOverview?.activeUsers ?? 0).toLocaleString(),
+            value: figure("activeUsers", stats.platformOverview?.activeUsers),
             icon: TrendingUp,
             color: "emerald",
-            change: "Logged in recently",
+            change: figureNote("activeUsers", "Logged in recently"),
             href: "/admin/users",
         },
         {
@@ -197,34 +227,34 @@ export default function AdminDashboardPage() {
         },
         {
             label: "Pending Escrows",
-            value: numberOrZero(stats.counts?.pendingEscrows),
+            value: figure("pendingEscrows", stats.counts?.pendingEscrows),
             icon: Package,
             color: "amber",
-            change: "Requires attention",
+            change: figureNote("pendingEscrows", "Requires attention"),
             href: "/admin/content-approval",
         },
         {
             label: "Active Land Listings",
-            value: numberOrZero(stats.counts?.activeLandListings),
+            value: figure("activeLandListings", stats.counts?.activeLandListings),
             icon: FileText,
             color: "indigo",
-            change: "Verified listings",
+            change: figureNote("activeLandListings", "Verified listings"),
             href: "/admin/farm-nation",
         },
         {
             label: "Pending Loans",
-            value: numberOrZero(stats.counts?.pendingLoans),
+            value: figure("pendingLoans", stats.counts?.pendingLoans),
             icon: AlertCircle,
             color: "red",
-            change: "Requires review",
+            change: figureNote("pendingLoans", "Requires review"),
             href: "/admin/cooperatives/loans",
         },
         {
             label: "Recent Activity",
-            value: numberOrZero(stats.platformOverview?.recentActivityCount),
+            value: figure("recentActivityCount", stats.platformOverview?.recentActivityCount),
             icon: GraduationCap,
             color: "cyan",
-            change: "Actions in last 24h",
+            change: figureNote("recentActivityCount", "Actions in last 24h"),
             href: "/admin/audit-logs",
         },
     ];
@@ -333,7 +363,15 @@ export default function AdminDashboardPage() {
                                     Review Loans
                                 </h3>
                                 <p className="text-sm text-slate-500">
-                                    {numberOrZero(stats.counts?.pendingLoans)} pending applications
+                                    {/*
+                                      *   #753 — the same figure as the tile
+                                      *   above, and it said "0 pending
+                                      *   applications" during an outage, which
+                                      *   is an invitation not to look.
+                                      */}
+                                    {unreadable.has("pendingLoans")
+                                        ? "Pending count unavailable"
+                                        : `${numberOrZero(stats.counts?.pendingLoans)} pending applications`}
                                 </p>
                             </div>
                             <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
@@ -538,10 +576,27 @@ export default function AdminDashboardPage() {
                             </div>
                         ) : moduleStats ? (
                             <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 h-full p-2">
-                                <RegistrationPieChart 
-                                    stats={moduleStats} 
-                                    totalAccounts={stats.platformOverview?.totalUsers ?? 0}
-                                />
+                                {/*
+                                  *   #753 — this chart prints "N Unique
+                                  *   Accounts" under it and divides the module
+                                  *   registrations by it. Handed a 0 that means
+                                  *   "unreadable", it captions the platform as
+                                  *   having no accounts at all — the same lie as
+                                  *   the tile, in a place with no room to say
+                                  *   "unavailable". The chart is held back
+                                  *   rather than drawn from a number nobody
+                                  *   could read.
+                                  */}
+                                {unreadable.has("totalUsers") ? (
+                                    <div className="p-8 text-center text-slate-500 text-sm flex items-center justify-center h-full" role="status">
+                                        Registration breakdown unavailable — the account total could not be read.
+                                    </div>
+                                ) : (
+                                    <RegistrationPieChart
+                                        stats={moduleStats}
+                                        totalAccounts={numberOrZero(stats.platformOverview?.totalUsers)}
+                                    />
+                                )}
                             </div>
                         ) : (
                             <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 p-8 text-center text-slate-400 text-sm h-full flex items-center justify-center">

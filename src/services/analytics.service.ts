@@ -513,6 +513,67 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         const isDateFiltered = !!(options?.dateFrom || options?.dateTo);
 
+        /**
+         *   #753 EVERY HEADLINE FIGURE COLLAPSED A FAILED READ TO ZERO. ONE OF
+         *        THE EIGHT SAID SO.
+         *
+         *   Reported by the owner, from the live dashboard:
+         *
+         *       Total Users     0       Total registered accounts
+         *       Active Users    0       Logged in recently
+         *       Total Revenue   Unavailable
+         *                               Could not reach Paystack or the database
+         *
+         *   Three tiles, one outage, and only the third told the truth. The
+         *   platform has about 42,600 accounts, so "0" there is not a bad
+         *   estimate — it is a statement that the business does not exist, on
+         *   the first screen an administrator opens BECAUSE something looks
+         *   wrong.
+         *
+         *   THE REASONING WAS ALREADY WRITTEN DOWN HERE, THREE TIMES:
+         *
+         *     - beside the zeros in the branch below — "A rejected metrics call
+         *       is not zero revenue, it is no answer" — and then applied to
+         *       revenue alone, while totalUsers and totalTransactions were set
+         *       to 0 on the two lines above it with no flag at all;
+         *     - on the revenue tile — "a zero here is a real business figure; an
+         *       outage rendered as ₦0 is indistinguishable from a day with no
+         *       sales";
+         *     - and on `unavailableMonths` — "a bar of zero and a bar that could
+         *       not be drawn look identical on a chart, and only one of them is
+         *       a fact about the business".
+         *
+         *   A chart bar got this treatment and the user count did not. The
+         *   recurring shape of this audit: a correct rule applied to some of the
+         *   places it names.
+         *
+         * ── WHY A SET AND NOT EIGHT BOOLEANS ────────────────────────────────
+         *
+         *   `revenueAvailable` is a per-figure flag, and adding seven more is how
+         *   the ninth figure gets forgotten. A figure records itself as
+         *   unreadable by NAME, so the screen asks one question — "is this one
+         *   unavailable" — and a figure added later either joins the set or is
+         *   visibly absent from it.
+         *
+         *   Revenue keeps its own richer flag: it has a third state, `partial`,
+         *   that no other figure has, and #665 fought to get that onto the
+         *   payload.
+         */
+        const unavailableFigures: string[] = [];
+        /** Read a settled count, recording the figure as unreadable if it failed. */
+        const settled = <T>(
+            name: string,
+            result: PromiseSettledResult<T>,
+            read: (v: T) => number,
+        ): number => {
+            if (result.status === "fulfilled") return read(result.value);
+            unavailableFigures.push(name);
+            logger.error(`[DashboardStats] ${name} could not be read`, {
+                reason: String(result.reason),
+            });
+            return 0;
+        };
+
         let totalUsers: number;
         let totalRevenue: number;
         let totalTransactions: number;
@@ -546,7 +607,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 this.getPlatformMetrics(db, { dateFrom: filterFrom, dateTo: filterTo }),
                 this.getGlobalPendingApprovals(db),
             ]);
-            totalUsers = newUsersSnap.status === "fulfilled" ? (newUsersSnap.value.data().count ?? 0) : 0;
+            totalUsers = settled("totalUsers", newUsersSnap, (v) => v.data().count ?? 0);
             if (metricsResult.status === "fulfilled") {
                 totalRevenue = metricsResult.value.totalRevenue;
                 totalTransactions = metricsResult.value.totalTransactions;
@@ -554,12 +615,15 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 //   #665 — copied beside its sibling, which is where it was dropped.
                 revenueIsPartial = metricsResult.value.revenueIsPartial;
             } else {
-                // A rejected metrics call is not zero revenue, it is no answer.
+                //   A rejected metrics call is not zero revenue, it is no answer.
+                //   #753 — and it is not zero TRANSACTIONS either, which is what
+                //   the line below used to claim silently.
                 totalRevenue = 0;
                 totalTransactions = 0;
                 revenueAvailable = false;
+                unavailableFigures.push("totalTransactions");
             }
-            pendingApprovals = pendingRes.status === "fulfilled" ? pendingRes.value.totalPending : 0;
+            pendingApprovals = settled("pendingApprovals", pendingRes, (v) => v.totalPending);
         } else {
             //   #517 THE TWO BRANCHES DISAGREED ABOUT WHAT A FAILURE MEANS.
             //
@@ -592,19 +656,29 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 logger.error("[DashboardStats] platform metrics failed", {
                     reason: String(metricsResult.reason),
                 });
+                /*
+                 *   #753 — THE THREE LINES THE OWNER WAS LOOKING AT.
+                 *
+                 *   `getPlatformMetrics` is the single read behind Total Users,
+                 *   Total Transactions and Total Revenue on a plain page load,
+                 *   so one rejection blanks all three — and only revenue was
+                 *   marked. That is the exact screen in the report: two zeros
+                 *   and one honest "Unavailable", from one failure.
+                 */
                 totalUsers = 0;
                 totalTransactions = 0;
                 totalRevenue = 0;
                 revenueAvailable = false;
+                unavailableFigures.push("totalUsers", "totalTransactions");
             }
-            pendingApprovals = pendingResult.status === "fulfilled" ? pendingResult.value.totalPending : 0;
+            pendingApprovals = settled("pendingApprovals", pendingResult, (v) => v.totalPending);
         }
 
-        const activeUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
-        const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
-        const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
-        const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
-        const recentActivity = recentActivityCount.status === "fulfilled" ? recentActivityCount.value : 0;
+        const activeUsers = settled("activeUsers", activeUsersSnap, (v) => v.data().count ?? 0);
+        const pendingEscrows = settled("pendingEscrows", pendingEscrowsCount, (v) => v);
+        const activeLandListings = settled("activeLandListings", activeLandCount, (v) => v);
+        const pendingLoans = settled("pendingLoans", pendingLoansCount, (v) => v);
+        const recentActivity = settled("recentActivityCount", recentActivityCount, (v) => v);
 
         // Revenue by month — from the platform's own ledger (#699).
         let revenueByMonth: Array<{ month: string; revenue: number }> = [];
@@ -782,6 +856,12 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 revenueIsPartial,
                 pendingApprovals,
                 recentActivityCount: recentActivity,
+                //   #753 — the figures on this payload whose read FAILED. A
+                //   zero that is a measurement and a zero that is an outage are
+                //   different facts, and every tile but revenue rendered them
+                //   identically. Named rather than flagged per figure, so a
+                //   figure added later joins the set or is visibly absent.
+                unavailableFigures,
             },
             counts: {
                 pendingEscrows,

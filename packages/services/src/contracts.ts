@@ -93,6 +93,34 @@ export interface AnalyticsData {
         revenueIsPartial?: boolean;
         pendingApprovals: number;
         recentActivityCount: number;
+        /**
+         *   #753 THE FIGURES ON THIS PAYLOAD WHOSE READ FAILED, BY NAME.
+         *
+         *   The note above records that `revenueIsPartial` reached no screen
+         *   because THIS INTERFACE had no field to put it in — "the compiler
+         *   enforced its absence all the way to the screen". The same was true,
+         *   more damagingly, of availability for every figure but revenue.
+         *
+         *   `getDashboardStats` collapses each failed read to 0 and has to:
+         *   a dashboard that throws away the seven figures it DID read because
+         *   the eighth failed is the defect #517 fixed. But a zero that is a
+         *   measurement and a zero that is an outage are different facts, and
+         *   only revenue could tell them apart. The owner saw the consequence
+         *   on a live dashboard — "Total Users 0" beside "Total Revenue
+         *   Unavailable", from one failure, on a platform with ~42,600
+         *   accounts.
+         *
+         *   A SET RATHER THAN A FLAG PER FIGURE. Eight booleans is how the
+         *   ninth figure gets forgotten, which is exactly how this happened:
+         *   `revenueAvailable` was added for one figure and the rule stopped
+         *   there. Membership is asked by name, so a figure added later either
+         *   joins the set or is visibly absent from it.
+         *
+         *   Optional so existing callers compile unchanged. An ABSENT field is
+         *   not a claim that everything was readable — it is no claim at all —
+         *   which is why the screen must test membership rather than emptiness.
+         */
+        unavailableFigures?: string[];
     };
     counts: {
         pendingEscrows: number;
