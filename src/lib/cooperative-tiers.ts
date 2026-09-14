@@ -4,6 +4,7 @@
  */
 
 import { installmentDueDate } from "@/lib/loan-schedule-dates";
+import { numberOrZero } from "@/lib/numbers";
 
 export type CooperativeTier = "Member";
 
@@ -68,8 +69,26 @@ export function calculateUserTier(totalContribution: number): CooperativeTier {
  * Get maximum loan amount for user
  */
 export function getMaxLoanAmount(totalContribution: number): number {
-    const tier = calculateUserTier(totalContribution);
-    return totalContribution * COOPERATIVE_TIERS[tier].maxLoanMultiplier;
+    /*
+     *   #744 A NON-FINITE CONTRIBUTION MAKES THIS NaN, AND EVERY CAP BUILT ON
+     *   IT THEN ADMITS EVERY AMOUNT — `requested > NaN` is FALSE, in both
+     *   directions, so the comparison fails OPEN rather than refusing.
+     *
+     *   The parameter is typed `number`, and a TypeScript annotation is not a
+     *   runtime check on a value read out of JSON: the caller in
+     *   _loans_decisions was handing it `appData.contributionAmount`, declared
+     *   optional on the stored shape and never written by one of the two
+     *   application paths.
+     *
+     *   Guarded here as well as at that call site, because this is the function
+     *   the whole tier rule is expressed in — a third caller reading a stored
+     *   field is the next instance, and it should be refused rather than
+     *   admitted. numberOrZero turns the unreadable case into a cap of zero,
+     *   which refuses; that is the direction a limit must fail in.
+     */
+    const contribution = numberOrZero(totalContribution);
+    const tier = calculateUserTier(contribution);
+    return contribution * COOPERATIVE_TIERS[tier].maxLoanMultiplier;
 }
 
 /**
@@ -80,15 +99,38 @@ export function isEligibleForLoan(
     requestedAmount: number,
     currentLoanBalance: number = 0
 ): { eligible: boolean; reason?: string } {
-    if (totalContribution < COOPERATIVE_TIERS.Member.minContribution) {
+    /*
+     *   #744 — the same NaN trap twice over in this function. The floor below
+     *   is `contribution < minimum`, FALSE for NaN, so an unreadable
+     *   contribution cleared the minimum; and the ceiling after it is
+     *   `requested > maxLoan`, also FALSE. Two refusals, both skipped, on one
+     *   unreadable number.
+     *
+     *   THE TWO SIDES NEED OPPOSITE TREATMENTS, and getting that backwards is
+     *   its own way to fail open. What the member HAS falls back to zero, which
+     *   refuses. What the member ASKS FOR must not: numberOrZero on the
+     *   requested amount turns an unreadable request into 0, and `0 > maxLoan`
+     *   is false — the guard would be reinstated facing the wrong way. So an
+     *   unreadable request, or an unreadable outstanding balance, is refused
+     *   outright.
+     */
+    const contribution = numberOrZero(totalContribution);
+
+    if (!Number.isFinite(requestedAmount) || !Number.isFinite(currentLoanBalance)) {
+        return { eligible: false, reason: "The loan amount could not be read. Please try again." };
+    }
+    const requested = requestedAmount;
+    const outstanding = currentLoanBalance;
+
+    if (contribution < COOPERATIVE_TIERS.Member.minContribution) {
         return {
             eligible: false,
             reason: `Minimum contribution of ₦${COOPERATIVE_TIERS.Member.minContribution.toLocaleString()} required`,
         };
     }
 
-    const maxLoan = getMaxLoanAmount(totalContribution);
-    if ((requestedAmount + currentLoanBalance) > maxLoan) {
+    const maxLoan = getMaxLoanAmount(contribution);
+    if ((requested + outstanding) > maxLoan) {
         return {
             eligible: false,
             reason: `Requested amount plus current loan balance exceeds your maximum limit of ₦${maxLoan.toLocaleString()}`,

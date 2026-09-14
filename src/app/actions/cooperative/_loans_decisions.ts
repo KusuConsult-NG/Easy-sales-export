@@ -16,6 +16,9 @@ import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
+import { isCooperativeLoan } from "@/lib/loan-product";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 
 /**
  * Admin: Approve loan
@@ -88,11 +91,58 @@ export async function approveLoanAction(
                 throw new Error("Active or pending loan application already exists platform-wide for this user.");
             }
 
-            const { getMaxLoanAmount } = await import("@/lib/cooperative-tiers");
-            const maxLoan = getMaxLoanAmount(appData.contributionAmount);
+            /*
+             *   #744 THE TIER CAP READ A FIELD ONE OF THE TWO APPLICATION PATHS
+             *        NEVER WRITES, AND A MISSING NUMBER ADMITS EVERY AMOUNT.
+             *
+             *   This was `getMaxLoanAmount(appData.contributionAmount)`.
+             *   `contributionAmount` is declared optional on the stored shape
+             *   (types/firestore.ts) and /api/cooperative/apply-loan builds its
+             *   application document without it. `undefined * multiplier` is
+             *   NaN, and `appData.amount > NaN` is FALSE — so the only amount
+             *   cap in the approval path passed for any figure at all.
+             *
+             *   It is the guarantor fault from the top of this same function,
+             *   inverted: a field absent on one creation path, met by a check
+             *   written as though it were always present. That one refused
+             *   every application; this one admitted every one.
+             *
+             *   READ LIVE, which is what both application paths already do
+             *   (#345 put readCooperativeBalance on each of them). A cap is a
+             *   statement about the member's savings NOW, and an approval can
+             *   sit behind an application for weeks — so the denormalised copy
+             *   was the wrong source even where it was present.
+             */
+            /*
+             *   SCOPED TO COOPERATIVE APPLICATIONS, which the unguarded version
+             *   was not. LOAN_APPLICATIONS holds BOTH products — loan-actions.ts
+             *   writes business loans into it — and a savings-multiple cap is a
+             *   cooperative rule that a business application has no savings to
+             *   satisfy. Applying it to both was only survivable BECAUSE of the
+             *   NaN: a business row carries no contributionAmount, so the check
+             *   silently skipped itself.
+             *
+             *   Fixing the NaN without scoping would therefore have refused
+             *   every business approval — the guarantor fault from the top of
+             *   this function, committed a third time. Scoped the way that rule
+             *   is: by the shape of the application, through the classifier
+             *   that exists for it.
+             */
+            if (isCooperativeLoan(appData as unknown as Record<string, unknown>)) {
+                const memberRow = await findCooperativeMemberRow(
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), appData.userId,
+                );
+                if (!memberRow) {
+                    throw new Error("This applicant is no longer a cooperative member.");
+                }
+                const savingsBalance = readCooperativeBalance(memberRow.data);
 
-            if (appData.amount > maxLoan) {
-                throw new Error(`This loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.`);
+                const { getMaxLoanAmount } = await import("@/lib/cooperative-tiers");
+                const maxLoan = getMaxLoanAmount(savingsBalance);
+
+                if (appData.amount > maxLoan) {
+                    throw new Error(`This loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.`);
+                }
             }
 
             return { appData };
