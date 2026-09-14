@@ -68,8 +68,21 @@ export async function creditWalletOnce(params: {
      *                      the opposite of income, so it must not be summed.
      *
      * The column is free TEXT, so adding a value here needs no migration.
+     *
+     *   #746 REQUIRED, NOT OPTIONAL WITH A REVENUE-SHAPED DEFAULT.
+     *
+     *   It defaulted to "completed", and thirteen of fourteen callers happened
+     *   to pass the right thing. The fourteenth — the reversal that returns a
+     *   member's money when their bank account cannot be resolved — passed
+     *   nothing, so money going BACK OUT was summed by
+     *   platform_revenue_totals() as revenue arriving.
+     *
+     *   The safe default for "did the platform earn this?" is not "yes". A
+     *   caller that has not thought about it should not be able to compile, so
+     *   the field is required and every one of the fourteen now states its
+     *   answer where a reader can see it.
      */
-    status?: "completed" | "refund" | "disbursement";
+    status: "completed" | "refund" | "disbursement";
 }): Promise<CreditResult> {
     const { reference, userId, amount, paymentType, source, metadata, status } = params;
 

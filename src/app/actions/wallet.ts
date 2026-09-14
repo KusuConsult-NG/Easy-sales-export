@@ -358,6 +358,11 @@ async function _confirmWalletFundingAction(reference: string, paidAt?: Date): Pr
         amount: amountNGN,
         paymentType: "wallet_funding",
         source: "wallet_funding_action",
+        //   #746 — the one credit on the platform that IS revenue arriving: a
+        //   member funding their wallet through the gateway. Stated rather than
+        //   defaulted, so it reads as a decision and not as the field nobody
+        //   filled in.
+        status: "completed",
     });
 
     if (!claimed) {
@@ -622,10 +627,24 @@ async function _withdrawFromWalletAction(
         // The wallet was already debited. Put it back, or a member loses the
         // money to a typo — #299's shape, where a failed step left a balance
         // wrong and reported success.
+        /*
+         *   #746 — this passed no `status`, so it defaulted to "completed" and
+         *   platform_revenue_totals() counted a member's own money coming back
+         *   as revenue arriving. The rule is stated two hundred lines below, on
+         *   the OTHER withdrawal reversal in this same file: "global-aggregation
+         *   sums completed rows as revenue, and money going back out is not
+         *   revenue." One of the two reversals had it.
+         *
+         *   paymentType and source are given too, matching that sibling, so the
+         *   ledger row says what it is rather than only what it is not.
+         */
         const refund = await creditWalletOnce({
             userId,
             amount: amountNGN,
             reference: `WITHDRAW-REVERSAL-${txnRefId}`,
+            paymentType: "withdrawal_reversal",
+            source: "wallet_withdrawal_unresolved_account",
+            status: "refund",
         });
         // `claimed: false` means the credit was NOT applied by this call. For a
         // fresh reversal reference that can only mean the write did not happen,

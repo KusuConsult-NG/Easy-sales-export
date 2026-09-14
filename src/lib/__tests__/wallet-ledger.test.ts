@@ -47,6 +47,7 @@ describe("creditWalletOnce", () => {
             userId: "user-1",
             amount: 500,
             paymentType: "wallet_funding",
+            status: "completed",
         });
 
         expect(result).toEqual({ claimed: true, balance: 1500 });
@@ -67,6 +68,7 @@ describe("creditWalletOnce", () => {
             reference: "psk_ref_1",
             userId: "user-1",
             amount: 500,
+            status: "completed",
         });
 
         // The money already moved. This must not read as an error, or a caller
@@ -77,11 +79,11 @@ describe("creditWalletOnce", () => {
 
     it("rejects a non-positive amount before calling the database", async () => {
         await expect(
-            creditWalletOnce({ reference: "r", userId: "u", amount: 0 })
+            creditWalletOnce({ reference: "r", userId: "u", amount: 0, status: "completed" })
         ).rejects.toThrow(/must be positive/);
 
         await expect(
-            creditWalletOnce({ reference: "r", userId: "u", amount: -100 })
+            creditWalletOnce({ reference: "r", userId: "u", amount: -100, status: "completed" })
         ).rejects.toThrow(/must be positive/);
 
         expect(mockRpc).not.toHaveBeenCalled();
@@ -89,7 +91,7 @@ describe("creditWalletOnce", () => {
 
     it("rejects a non-finite amount before calling the database", async () => {
         await expect(
-            creditWalletOnce({ reference: "r", userId: "u", amount: NaN })
+            creditWalletOnce({ reference: "r", userId: "u", amount: NaN, status: "completed" })
         ).rejects.toThrow(/must be positive/);
 
         expect(mockRpc).not.toHaveBeenCalled();
@@ -97,7 +99,7 @@ describe("creditWalletOnce", () => {
 
     it("requires a reference, so a payment cannot be credited unkeyed", async () => {
         await expect(
-            creditWalletOnce({ reference: "", userId: "u", amount: 100 })
+            creditWalletOnce({ reference: "", userId: "u", amount: 100, status: "completed" })
         ).rejects.toThrow(/reference is required/);
 
         expect(mockRpc).not.toHaveBeenCalled();
@@ -107,7 +109,7 @@ describe("creditWalletOnce", () => {
         mockRpc.mockResolvedValue({ data: null, error: { message: "connection reset" } });
 
         await expect(
-            creditWalletOnce({ reference: "r", userId: "u", amount: 100 })
+            creditWalletOnce({ reference: "r", userId: "u", amount: 100, status: "completed" })
         ).rejects.toThrow(/Wallet credit failed/);
     });
 
@@ -115,7 +117,7 @@ describe("creditWalletOnce", () => {
         mockRpc.mockResolvedValue({ data: [], error: null });
 
         await expect(
-            creditWalletOnce({ reference: "r", userId: "u", amount: 100 })
+            creditWalletOnce({ reference: "r", userId: "u", amount: 100, status: "completed" })
         ).rejects.toThrow(/no result/);
     });
 });
@@ -195,7 +197,7 @@ describe("revenue accounting", () => {
     it("defaults a credit to completed", async () => {
         mockRpc.mockResolvedValue({ data: [{ claimed: true, balance: 100 }], error: null });
 
-        await creditWalletOnce({ reference: "r", userId: "u", amount: 100 });
+        await creditWalletOnce({ reference: "r", userId: "u", amount: 100, status: "completed" });
 
         expect(mockRpc).toHaveBeenCalledWith(
             "credit_wallet_once",
