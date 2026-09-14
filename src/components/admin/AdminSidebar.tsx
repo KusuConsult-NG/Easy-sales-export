@@ -8,6 +8,7 @@ import {
     Activity,
     LayoutDashboard,
     Users,
+    Sprout,
     Waves,
     Building2,
     ShoppingBag,
@@ -84,6 +85,8 @@ const NAV_ITEMS = [
     //   on by itself. Listed beside it because that is where an operator reading
     //   "33 addresses hold more than one" goes looking for what to do about it.
     { label: "Duplicate Profiles", href: "/admin/forensics/duplicates", icon: Users, section: "platform", platformOnly: true },
+    //   #725 — the other finding the scan names and cannot settle.
+    { label: "Farm Nation Approvals", href: "/admin/forensics/farm-nation", icon: Sprout, section: "platform", permission: "farm_nation:verify_applications" as AdminPermission },
     // Announcements and banners render site-wide via AnnouncementBanner.tsx.
     // The actions existed and the page did not, so the only way to publish was
     // to write to the database by hand.

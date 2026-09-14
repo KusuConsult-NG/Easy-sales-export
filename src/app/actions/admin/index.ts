@@ -40,6 +40,14 @@ export {
 } from "./_duplicate_profiles";
 export type { DuplicateProfileReport, ResolveDuplicateInput } from "./_duplicate_profiles";
 
+//   #725 — the Farm Nation approval review. Same reason as above: the barrel is
+//   where this domain says what it offers.
+export {
+    listFarmNationApprovalCasesAction,
+    decideFarmNationApprovalAction,
+} from "./_farm_nation_approvals";
+export type { FarmNationApprovalReport, FarmNationDecisionInput } from "./_farm_nation_approvals";
+
 // ─── Domain types ─────────────────────────────────────────────────────────────
 export type { EditableApplicationFields } from "./_applications";
 

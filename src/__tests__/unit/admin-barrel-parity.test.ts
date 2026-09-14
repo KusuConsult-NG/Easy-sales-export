@@ -127,6 +127,16 @@ const ADDED_SINCE_SPLIT = [
      */
     'listDuplicateProfileGroupsAction',
     'resolveDuplicateProfileGroupAction',
+    /*
+     *   #725 The Farm Nation approval review: a read that lists approvals with
+     *   no application behind them (or an application that disagrees), and a
+     *   write that records what an admin decided. Nothing creates an
+     *   application — confirming records that somebody vouched, which is the
+     *   thing that was missing — and a revoke keeps the previous status beside
+     *   it so it can be read back.
+     */
+    'listFarmNationApprovalCasesAction',
+    'decideFarmNationApprovalAction',
 ].sort();
 
 const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();

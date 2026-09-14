@@ -28,6 +28,14 @@ export type AuditAction =
      *   re-derivable — the evidence on the rows will have moved.
      */
     | 'user_profile_supersede'
+    /**
+     *   #725 — an admin reviewed a Farm Nation approval the forensic scan could
+     *   not settle: confirmed it, revoked it, or reconciled a disagreement. Its
+     *   own action because on a "no application" case the audit row IS the
+     *   record — there is no form, no submission and no payment trail to point
+     *   at afterwards.
+     */
+    | 'farm_nation_approval_review'
     | 'ai_chat_message'
     | 'user_impersonate'
     | 'user_kyc_verify_bvn'

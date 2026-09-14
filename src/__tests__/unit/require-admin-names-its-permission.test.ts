@@ -286,6 +286,20 @@ describe('#375 — every gate names its permission, and the exception is stated'
          */
         'src/app/actions/admin/_duplicate_profiles.ts': Array(2).fill('users:update'),
 
+        /*
+         *   #725 — the Farm Nation approval review. TWO gates, one permission:
+         *   the read that lists the cases and the write that records a
+         *   decision.
+         *
+         *   `farm_nation:verify_applications` and not users:update, because the
+         *   act IS approving or revoking a Farm Nation member — the same
+         *   authority _fn_admin.ts's approve and reject paths require. Gating
+         *   this on a general user permission would let somebody who may not
+         *   approve a farmer confirm an approval that has nothing behind it,
+         *   which is the harder call of the two.
+         */
+        'src/app/actions/admin/_farm_nation_approvals.ts': Array(2).fill('farm_nation:verify_applications'),
+
         'src/app/actions/admin/_erased.ts': ['users:read_erased'],
 
         // #431's addition. The retired document viewer stated the admin rule by
@@ -432,10 +446,11 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // 42 → 45: #532 converted the three half-converted files — the land
         // queue, the platform-settings write and the withdrawal queue.
         // 45 → 47: #724 added the duplicate-profile tool's two gates, the list
-        // and the write. Raised rather than loosened: the point of pinning the
-        // count is that a gate added and forgotten in the EXPECTED map above
-        // fails this, and that is still true at 47.
-        expect(callSites().length).toBe(47);
+        // and the write. 47 → 49: #725 added the Farm Nation approval review's
+        // two. Raised rather than loosened: the point of pinning the count is
+        // that a gate added and forgotten in the EXPECTED map above fails this,
+        // and that is still true at 49.
+        expect(callSites().length).toBe(49);
         expect(SRC.length).toBeGreaterThan(400);
     });
 
