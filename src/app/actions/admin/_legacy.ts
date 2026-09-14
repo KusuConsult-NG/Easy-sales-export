@@ -17,7 +17,11 @@ import { chooseProfileForAuthAccount } from "@/lib/profile-choice";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { LegacyOnboardingSchema } from "@/lib/schemas";
 import { sendLegacyMemberWelcomeEmail, sendEmailNotification } from "@/lib/email-notifications";
-import { hasAdminPermission, includesPrivilegedRole, isSuperAdmin } from "@/lib/admin-permissions";
+//   #749 — hasAdminPermission went with the token check. Its only remaining
+//   mentions are inside _inviteLegacyMemberAction's deprecated comment block,
+//   and an import kept for commented-out code tells a reader this file still
+//   consults the JWT.
+import { includesPrivilegedRole, isSuperAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 // ============================================
 // Import Legacy Cooperative Member
@@ -207,17 +211,31 @@ async function _onboardLegacyMemberAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
 
-        // Permission check with live roles fallback
-        let roles = session.user.roles;
-        if (!hasAdminPermission(roles, "users:create")) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            if (hasAdminPermission(liveRoles, "users:create")) {
-                roles = liveRoles;
-            } else {
-                return { error: "Unauthorized: Permission users:create required", success: false as const };
-            }
-        }
+        /*
+         *   #749 THE ESCALATION GUARD BELOW DECIDED ON THE TOKEN, AND THE LIVE
+         *        ANSWER WAS ALREADY SITTING IN THE VARIABLE ABOVE IT.
+         *
+         *   This read `session.user.roles` and then, ONLY IF THE TOKEN SAID NO,
+         *   looked the roles up live. A one-directional refresh: it could turn a
+         *   stale "no" into a live "yes" and never a stale "yes" into a live
+         *   "no". So for a caller whose token still carried the permission, the
+         *   database was never asked at all.
+         *
+         *   `roles` feeds exactly one decision — `isSuperAdmin(roles)` in the
+         *   privileged-role guard below — so that guard ran on a claim #356
+         *   established "keeps its value for hours after the database loses it".
+         *   A super_admin demoted to admin still holds `users:create`, so
+         *   requireAdmin admits them legitimately; the token then told the guard
+         *   they were still super_admin, and they could mint a NEW super_admin
+         *   account. That account outlives the token by for ever, which turns a
+         *   temporary stale claim into a permanent escalation — onto a separate
+         *   identity, which the guard's own note calls "harder to notice".
+         *
+         *   requireAdmin has ALREADY read the live roles two lines up and
+         *   returns them. The fallback was not just wrong-way-round, it was
+         *   re-doing a query whose answer was in hand.
+         */
+        const roles = adminCheck.roles;
 
         // Validate input
         const validated = LegacyOnboardingSchema.safeParse(formData);

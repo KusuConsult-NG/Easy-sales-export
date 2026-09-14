@@ -185,9 +185,13 @@ describe('#62 — admin can create a user', () => {
         // of this permission in the file sits inside a 120-line block comment —
         // _inviteLegacyMemberAction's original body, deprecated — so `code()`,
         // which strips block comments, is what distinguishes them.
+        //   #749 — the action no longer phrases its own refusal: it asks
+        //   requireAdmin for the permission and relays that gate's message. The
+        //   vacuity guard is the same one — something still asks for
+        //   users:create — anchored on the live call rather than the removed
+        //   token check.
         const legacy = code(LEGACY);
-        expect(legacy).toContain('if (!hasAdminPermission(roles, "users:create")) {');
-        expect(legacy).toContain('Unauthorized: Permission users:create required');
+        expect(legacy).toContain('await requireAdmin("users:create")');
     });
 
     it('the deprecated sibling failing loudly rather than pretending to work', () => {

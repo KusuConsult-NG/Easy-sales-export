@@ -620,8 +620,11 @@ describe('no gate locks out the role that does the work', () => {
         expect(hasAdminPermission(['admin'], 'users:create')).toBe(true);
         expect(hasAdminPermission(['super_admin'], 'users:create')).toBe(true);
 
+        //   #749 — the bespoke message went with the token check it belonged
+        //   to. The gate still names users:create; it is requireAdmin's now, so
+        //   that is what this points at.
         const legacy = readFileSync(join(process.cwd(), 'src/app/actions/admin/_legacy.ts'), 'utf-8');
-        expect(legacy).toContain('Unauthorized: Permission users:create required');
+        expect(legacy).toContain('await requireAdmin("users:create")');
         // ...in a live, exported action, not in the deprecated block-commented
         // copy above it.
         expect(legacy).toContain('export async function onboardLegacyMemberAction');

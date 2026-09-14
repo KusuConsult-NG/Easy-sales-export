@@ -146,7 +146,11 @@ describe('trap 2 — real code inside a real comment', () => {
 
         expect(legacy).toContain('if (!session?.user || !hasAdminPermission(session.user.roles, "users:create"))');
         expect(out).not.toContain('if (!session?.user || !hasAdminPermission(session.user.roles, "users:create"))');
-        expect(out).toContain('if (!hasAdminPermission(roles, "users:create")) {');
+        //   #749 — the live anchor moved. The action's own permission re-check
+        //   was the defect (it read the token) and is gone; the live gate is the
+        //   requireAdmin call. The CLAIM is unchanged: the stripper keeps live
+        //   code and drops the commented copy above it.
+        expect(out).toContain('await requireAdmin("users:create")');
     });
 
     it('line numbers surviving a multi-line comment', () => {

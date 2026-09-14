@@ -47,9 +47,49 @@ jest.mock('@/lib/email-notifications', () => ({
     sendEmail: jest.fn(async () => undefined),
 }));
 
-const requireAdmin = jest.fn(async () => ({ userId: 'admin-1' } as { userId: string } | { error: string }));
+/**
+ * requireAdmin, mirroring the real gate rather than waving callers through.
+ *
+ *   #749 — this returned a bare `{ userId: 'admin-1' }`: no roles, and no
+ *   decision. That was harmless while the action re-derived the acting roles
+ *   from the session and re-checked the permission itself. When that second
+ *   check went — it read the TOKEN, which is the defect — the stub became the
+ *   only gate in the test, and "refuses a role without users:create" started
+ *   passing anybody.
+ *
+ *   The stub answering for a gate is exactly what jest.setup.js warns about:
+ *   "a missing guard and a present one looked identical". So this reads the
+ *   session actAs() set, applies isAdmin and the permission against the real
+ *   matrix, and RETURNS THE ROLES — which is what the action now uses for the
+ *   privileged-role guard.
+ */
+const liveGate = async (permission?: string) => {
+    const { isAdmin, hasAdminPermission } =
+        jest.requireActual<typeof import('@/lib/admin-permissions')>('@/lib/admin-permissions');
+    const result = await (globalThis as any).mockRequireSession();
+    const user = result?.session?.user;
+
+    if (!user) return { error: 'Unauthenticated' };
+
+    //   FROM THE DOCUMENT, not the session — which is the whole point of the
+    //   gate. `re-reads the roles from the database when the session is stale`
+    //   seeds a USERS row that disagrees with the token, and the real
+    //   requireAdmin believes the row.
+    //   The MOCKED adapter — the fake store the suite seeds. requireActual here
+    //   reaches the real one and hangs on a connection that does not exist.
+    const { supabaseDb } = require('@/lib/supabase-db');
+    const snap = await supabaseDb.collection('users').doc(user.id).get();
+    const roles: string[] = (snap.exists ? (snap.data() as any)?.roles : undefined) ?? user.roles ?? [];
+
+    if (!isAdmin(roles)) return { error: 'Unauthorized: Admin access required' };
+    if (permission && !hasAdminPermission(roles, permission as any)) {
+        return { error: 'Unauthorized: Admin access required' };
+    }
+    return { userId: user.id as string, roles };
+};
+const requireAdmin = jest.fn(liveGate) as jest.Mock<any>;
 jest.mock('@/lib/require-admin', () => ({
-    requireAdmin: () => requireAdmin(),
+    requireAdmin: (p?: string) => requireAdmin(p),
 }));
 
 jest.mock('@/lib/auth', () => ({
@@ -98,8 +138,10 @@ function existingAuthRecord(uid: string): void {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    //   Restored per test: 'refuses when requireAdmin refuses' overrides this,
+    //   and without a reset that refusal leaked into every test after it.
+    requireAdmin.mockImplementation(liveGate);
     sendLegacyMemberWelcomeEmail.mockImplementation(async () => ({ success: true, error: null }));
-    requireAdmin.mockImplementation(async () => ({ userId: ADMIN }));
     store = installFakeDb();
     actAs(ADMIN);
     noAuthRecord();
@@ -159,16 +201,25 @@ describe('onboardLegacyMemberAction — who may do it', () => {
     });
 
     it('refuses a caller with no session', async () => {
+        //   #749 — 'Unauthenticated', requireAdmin's word, not the action's own
+        //   'Unauthorized'. The refusal comes from the shared gate now; a
+        //   bespoke message here would mean a bespoke decision here.
         actAs(null);
-        expect(await onboard()).toMatchObject({ success: false, error: 'Unauthorized' });
+        expect(await onboard()).toMatchObject({ success: false, error: 'Unauthenticated' });
     });
 
     it('refuses a role without users:create', async () => {
         actAs('mod-1', ['moderator']);
         store.seed(COLLECTIONS.USERS, 'mod-1', { roles: ['moderator'] });
 
+        /*
+         *   #749 — the message is requireAdmin's. The action used to re-check
+         *   the permission itself, off the TOKEN, and phrase its own refusal;
+         *   that second check was the defect. What matters is that a moderator
+         *   is refused, and the seeded row above is what the gate reads.
+         */
         expect(await onboard()).toMatchObject({
-            success: false, error: 'Unauthorized: Permission users:create required',
+            success: false, error: 'Unauthorized: Admin access required',
         });
     });
 
