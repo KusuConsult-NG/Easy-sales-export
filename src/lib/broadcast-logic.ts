@@ -1201,6 +1201,23 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             const briefStream = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("userId", "state", "name", "firstName", "surname", "email", "createdAt", "timestamp").get();
             for (const d of briefStream.docs) {
                 const r: any = d.data();
+                /*
+                 *   #732 — A GUARD THAT COULD NOT FIRE ON THIS COLLECTION.
+                 *
+                 *   `r.userId || d.id` reads as a careful fallback and is not
+                 *   one here: the briefing register is a GUEST form written
+                 *   with `.add()` and no userId, so `uid` is always an
+                 *   auto-generated DOCUMENT id — never a user id, and therefore
+                 *   never in excludeIds. The exclusion has been running on this
+                 *   supplement and matching nothing.
+                 *
+                 *   The fallback is kept because a row that DOES carry a userId
+                 *   (an admin import, a later writer) is excluded correctly by
+                 *   it. What closes the gap for the rest is erasure reaching
+                 *   the collection at all — #732 adds it to
+                 *   MODULE_ERASURE_TARGETS, matched by address — so an erased
+                 *   person's row has no email left for `addEmail` below.
+                 */
                 const uid = r.userId || d.id;
                 if (excludeIds.has(uid)) continue;
                 if (r.email) {

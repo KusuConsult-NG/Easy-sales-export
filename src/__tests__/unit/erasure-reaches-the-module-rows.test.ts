@@ -145,8 +145,13 @@ beforeEach(() => {
 describe('#376 — the definition covers every collection that holds a copy', () => {
     const names = () => MODULE_ERASURE_TARGETS.map((t) => t.collection);
 
-    it('ALL EIGHT COLLECTIONS ARE TARGETS', () => {
+    it('ALL NINE COLLECTIONS ARE TARGETS', () => {
+        //   #732 — the ninth. wave_briefing_registrations holds a name, phone,
+        //   email, state and gender and was in neither this list nor #697's
+        //   "all eight module rows", so an erased person's number survived
+        //   there and the SMS audience read it straight off the row.
         expect(names().sort()).toEqual([
+            COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS,
             COLLECTIONS.ACADEMY_APPLICATIONS,
             COLLECTIONS.COOPERATIVE_MEMBERS,
             COLLECTIONS.EXPORT_APPLICATIONS,
@@ -272,10 +277,43 @@ describe('#376 — the definition covers every collection that holds a copy', ()
     });
 
     it('every target names fields and a way to find its rows', () => {
+        /*
+         *   #732 — "A WAY TO FIND ITS ROWS" IS NOW TWO WAYS, AND THE CLAIM IS
+         *   UNCHANGED: every target must have at least one.
+         *
+         *   Eight targets derive document ids from the user id. The briefing
+         *   register cannot — it is a guest form written with `.add()`, so no
+         *   row carries a userId or an id derived from one — and matches on the
+         *   address instead. Requiring deterministicIds of EVERY target would
+         *   mean that collection can never be a target at all, which is how it
+         *   came to be missing.
+         *
+         *   Still fails for a target with NEITHER, which is the thing worth
+         *   catching: a collection listed here that nothing can look up.
+         */
         for (const t of MODULE_ERASURE_TARGETS) {
             expect({ c: t.collection, fields: t.pii.length > 0 }).toEqual({ c: t.collection, fields: true });
-            expect(t.deterministicIds(UID).length).toBeGreaterThan(0);
+
+            const byId = t.deterministicIds(UID).length > 0;
+            const byEmail = (t.emailKeys?.length ?? 0) > 0;
+            expect({ c: t.collection, findable: byId || byEmail })
+                .toEqual({ c: t.collection, findable: true });
+
             for (const id of t.deterministicIds(UID)) expect(id).toContain(UID);
+        }
+    });
+
+    it('AND A TARGET FOUND ONLY BY ADDRESS RETAINS ITS PII BEFORE SCRUBBING — #732', () => {
+        /*
+         *   The condition under which email matching is allowed at all. The
+         *   module header's objection is that "a scrub that lands on the wrong
+         *   row cannot be undone by any amount of retention"; retaining the
+         *   values is what answers it, so the two must never be separated.
+         */
+        for (const t of MODULE_ERASURE_TARGETS) {
+            if (!(t.emailKeys?.length)) continue;
+            expect({ c: t.collection, retains: t.retainPii === true })
+                .toEqual({ c: t.collection, retains: true });
         }
     });
 

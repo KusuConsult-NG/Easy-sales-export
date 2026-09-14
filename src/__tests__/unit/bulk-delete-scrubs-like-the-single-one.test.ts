@@ -188,7 +188,12 @@ describe('#206 — the shared operation scrubs, retains and revokes', () => {
     it('the eight module rows are scrubbed too, and a failure is reported', async () => {
         seedMember('u1');
         expect((await (await op()).softDeleteUserRecord('u1', ADMIN)).ok).toBe(true);
-        expect(mockEraseModules).toHaveBeenCalledWith('u1');
+        //   #732 — and the address it read BEFORE the scrub, which is the only
+        //   link to a briefing row. Asserted rather than loosened: passing the
+        //   uid alone is what left that collection unreachable.
+        expect(mockEraseModules).toHaveBeenCalledWith('u1', expect.objectContaining({
+            email: expect.any(String),
+        }));
 
         mockEraseModules.mockResolvedValue({ ok: false, failures: ['a', 'b'] });
         seedMember('u2');

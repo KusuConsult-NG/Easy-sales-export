@@ -141,7 +141,11 @@ export async function softDeleteUserRecord(
     }
 
     // 3 — the eight module rows (#376).
-    const moduleErasure = await eraseModuleApplications(targetUserId);
+    //   #732 — `userData` was read at step 1, before the scrub at step 2, so
+    //   it still holds the address the briefing register was written with.
+    const moduleErasure = await eraseModuleApplications(targetUserId, {
+        email: (userData as any)?.email ?? null,
+    });
     if (!moduleErasure.ok) {
         logger.error(`[soft-delete] module rows could not be scrubbed for ${targetUserId}`, {
             failures: moduleErasure.failures,

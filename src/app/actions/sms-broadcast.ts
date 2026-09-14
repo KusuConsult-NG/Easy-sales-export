@@ -16,7 +16,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/africastalking";
-import { isContactableAccount } from "@/lib/contactable-account";
+import { isContactableAccount, loadNonContactableUserIds } from "@/lib/contactable-account";
 import { normalisePhone } from "@/lib/phone";
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireAdmin } from "@/lib/require-admin";
@@ -227,6 +227,17 @@ async function collectSmsRecipients(
     filters: SmsFilters
 ): Promise<{ name: string; phone: string }[]> { const db = getAdminDb();
     const recipients: Map<string, { name: string; phone: string }> = new Map();
+
+    /*
+     *   #732 — the tombstoned uids, for the supplements that read MODULE rows
+     *   rather than the user row. The in-app broadcast already loads this; this
+     *   file checked `isContactableAccount` on the rows it reads from USERS and
+     *   had nothing for the collection that carries no user row at all.
+     *
+     *   Fails open, loudly, exactly as loadNonContactableUserIds documents:
+     *   losing a broadcast to everybody is worse than including a tombstone.
+     */
+    const nonContactable = await loadNonContactableUserIds(db, COLLECTIONS.USERS);
 
     const add = (rawPhone: string | undefined | null, name: string) => { const phone = normalisePhone(rawPhone);
         if (phone && !recipients.has(phone)) recipients.set(phone, { name, phone });
@@ -668,11 +679,31 @@ async function collectSmsRecipients(
             const stream = db
                 .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
                 .where("status", "==", "registered")
-                .select("state", "phone", "phoneNumber", "name", "firstName", "surname")
+                .select("userId", "state", "phone", "phoneNumber", "name", "firstName", "surname")
                 .get();
             for (const d of (await stream).docs) {
                 const r: any = d.data();
                 if (filters.state && !isStateMatch(r.state, filters.state)) continue;
+                /*
+                 *   #732 — THIS AUDIENCE HAD NO CONTACTABILITY CHECK AT ALL.
+                 *
+                 *   Every other supplement in this file runs
+                 *   `isContactableAccount` before adding a number. This one read
+                 *   `r.phone || r.phoneNumber` straight off the row, and #697's
+                 *   safety argument did not cover it: that argument is that an
+                 *   erased member "has no number left to reach", because
+                 *   ERASED_FIELDS deletes it from the user row and #376 scrubs
+                 *   it off all EIGHT module rows. The briefing register is the
+                 *   ninth collection and was in neither list, so the number was
+                 *   still there.
+                 *
+                 *   #732 puts the collection in MODULE_ERASURE_TARGETS, which
+                 *   removes the number at the source. The check below is the
+                 *   belt to that braces: a row carrying a userId is refused
+                 *   here even if a scrub ever misses it, which is the "safe by
+                 *   rule rather than by accident" #697 asked for.
+                 */
+                if (r.userId && nonContactable.has(String(r.userId))) continue;
                 add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             }
             break;

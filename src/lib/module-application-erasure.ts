@@ -104,9 +104,84 @@ export interface ModuleErasureTarget {
      * into the retention record before the field goes. Dotted paths allowed.
      */
     documentPaths: readonly string[];
+    /**
+     * Fields holding the person's own email address.
+     *
+     *   #732 — ONLY FOR A COLLECTION WHOSE ROWS CARRY NO userId AT ALL, and
+     *   only consulted when the caller supplies the address it read before the
+     *   user row was scrubbed.
+     *
+     *   The header above records why email matching is refused in general, and
+     *   that reasoning is sound for a collection where SOME rows have a userId:
+     *   the userId route finds those, and an email match only adds risk. The
+     *   briefing register is the other case — NO row has ever carried a userId,
+     *   so "no email matching" means "never erased at all".
+     */
+    emailKeys?: readonly string[];
+    /**
+     * Retain every PII VALUE before scrubbing, not just document references.
+     *
+     * Required alongside `emailKeys`: the header's objection to email matching
+     * is that "a scrub that lands on the wrong row cannot be undone", and this
+     * is what makes it undoable. Asserted in the test file rather than left to
+     * whoever adds the next target.
+     */
+    retainPii?: boolean;
 }
 
 export const MODULE_ERASURE_TARGETS: readonly ModuleErasureTarget[] = [
+    {
+        /*
+         *   #732 THE TENTH PLACE A PERSON'S PHONE NUMBER LIVES, AND ERASURE
+         *        REACHED NINE.
+         *
+         *   #697 made the broadcast audiences skip an erased account, and
+         *   stated plainly why an erased member was already safe:
+         *
+         *       "`phone` and `phoneNumber` are in ERASED_FIELDS and deleted
+         *        outright, and #376 scrubs the same numbers off all eight
+         *        module rows — which is where the supplements below read most
+         *        of their numbers. An erased member has no number left to
+         *        reach."
+         *
+         *   The briefing register is the ninth collection and was not one of
+         *   the eight. It stores fullName, firstName, lastName, otherName,
+         *   phoneNumber, email, state and gender, and NOTHING erased it — so an
+         *   erased person did have a number left to reach, and the SMS audience
+         *   `wave_briefing_registrants` reads `r.phone || r.phoneNumber`
+         *   straight off the row with no contactability check at all.
+         *
+         *   MATCHED BY EMAIL, WHICH THIS MODULE REFUSES EVERYWHERE ELSE, and
+         *   the difference is why. The header's rule protects a collection
+         *   where SOME rows carry a userId: the userId route finds those, so an
+         *   email match only adds the risk of landing on somebody else's
+         *   record. NO briefing row has ever carried a userId — the registration
+         *   is a guest form and writes none — so the same rule would mean this
+         *   collection is never erased at all, which is not a decision anybody
+         *   made. It was absent from the list, not excluded from it.
+         *
+         *   AND THE RISK IS BOUNDED ON BOTH SIDES. The registration refuses a
+         *   duplicate email outright, so a match is at most one row; and
+         *   `retainPii` copies every value into the retention record before the
+         *   scrub, so the objection the header raises — "cannot be undone by
+         *   any amount of retention" — no longer holds for this target.
+         *
+         *   Phone is deliberately NOT a match key. The registration's own note
+         *   records that a handset can be shared, and an address is the only
+         *   identifier here that one person holds alone.
+         */
+        collection: COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS,
+        //   A guest form: `.add()` with no userId and no derived id, so there
+        //   is nothing for the deterministic route to try.
+        deterministicIds: () => [],
+        emailKeys: ["email"],
+        retainPii: true,
+        pii: [
+            "fullName", "firstName", "lastName", "otherName", "name", "surname",
+            "phoneNumber", "phone", "email", "gender", "state",
+        ],
+        documentPaths: [],
+    },
     {
         // personalInfo is the whole identity block; the flat spellings are what
         // the zod AcademyApplicationSchema and the KYC sync write beside it.
@@ -259,6 +334,28 @@ export function retainedDocumentsFrom(
         out.push({ collection: target.collection, docId, path, value });
     }
 
+    /*
+     *   #732 — AND THE PII ITSELF, FOR AN EMAIL-MATCHED TARGET.
+     *
+     *   A row found by document reference or userId was found by something the
+     *   platform is certain about. A row found by a free-text email was not,
+     *   and the header's objection to matching on one is exactly that the scrub
+     *   "cannot be undone by any amount of retention". Retaining the values is
+     *   what answers that: the row can be put back from this record.
+     *
+     *   Kept under the same shape as a document reference so the retention
+     *   record needs no second format, and skipped where the value is absent so
+     *   a second erasure pass over an already-scrubbed row adds nothing.
+     */
+    if (target.retainPii) {
+        for (const field of target.pii) {
+            if (target.documentPaths.includes(field)) continue;
+            const value = readPath(data, field);
+            if (value === undefined || value === null) continue;
+            out.push({ collection: target.collection, docId, path: field, value });
+        }
+    }
+
     return out;
 }
 
@@ -287,7 +384,26 @@ export interface ModuleErasureResult {
  * collection could not be reached is the outcome this whole path exists to
  * avoid.
  */
-export async function eraseModuleApplications(userId: string): Promise<ModuleErasureResult> {
+/** What the caller read off the user row BEFORE scrubbing it — #732. */
+export interface ErasureContact {
+    /** The person's address as stored, before userErasurePatch replaced it. */
+    email?: string | null;
+}
+
+export async function eraseModuleApplications(
+    userId: string,
+    contact: ErasureContact = {},
+): Promise<ModuleErasureResult> {
+    /*
+     *   #732 — READ BEFORE THE SCRUB, PASSED IN, NEVER RE-READ HERE.
+     *
+     *   Every caller scrubs the user row BEFORE calling this (soft-delete step
+     *   2 precedes step 3), so by the time this runs the address on that row is
+     *   already `deleted_<uid>@redacted.local`. Looking it up here would find
+     *   the tombstone and match nothing. The one moment the link exists is
+     *   before the scrub, which is where the callers now capture it.
+     */
+    const erasureEmail = String(contact.email ?? "").trim().toLowerCase();
     const retained: RetainedModuleDocument[] = [];
     const failures: string[] = [];
     const patches: Array<{ target: ModuleErasureTarget; docId: string }> = [];
@@ -317,6 +433,27 @@ export async function eraseModuleApplications(userId: string): Promise<ModuleEra
                 seen.add(docId);
                 retained.push(...retainedDocumentsFrom(target, docId, snap.data()));
                 patches.push({ target, docId });
+            }
+
+            /*
+             *   #732 — and the address, for a collection whose rows carry no
+             *   userId at all. Only when the target opts in AND the caller
+             *   supplied an address: absent either, this does nothing, so no
+             *   existing target changes behaviour.
+             */
+            if (target.emailKeys && erasureEmail) {
+                for (const key of target.emailKeys) {
+                    const byEmail = await db
+                        .collection(target.collection)
+                        .where(key, "==", erasureEmail)
+                        .get();
+                    for (const doc of byEmail.docs) {
+                        if (seen.has(doc.id)) continue;
+                        seen.add(doc.id);
+                        retained.push(...retainedDocumentsFrom(target, doc.id, doc.data()));
+                        patches.push({ target, docId: doc.id });
+                    }
+                }
             }
         } catch (error) {
             logger.error("[erasure] module sweep failed", {

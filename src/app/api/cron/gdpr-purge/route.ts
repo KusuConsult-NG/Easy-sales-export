@@ -77,6 +77,12 @@ export async function GET(request: NextRequest) {
 
         const batch = db.batch();
         const deletedUids: string[] = [];
+        /*
+         *   #732 — the address each row carried BEFORE the batch below
+         *   scrubs it. The briefing register has no userId to match on, so
+         *   this is the only link, and it stops existing a few lines down.
+         */
+        const emailAtErasure = new Map<string, string | null>();
 
         /**
          * THE SWEEP DESTROYED ROWS THE PLATFORM'S OWN ERASURE MODULE RETIRES — #327.
@@ -159,6 +165,7 @@ export async function GET(request: NextRequest) {
             // at still exists, scrubbed.
 
             deletedUids.push(uid);
+            emailAtErasure.set(uid, ((doc.data() as any)?.email as string) ?? null);
         }
 
         // Execute Firestore Batch Delete
@@ -187,7 +194,9 @@ export async function GET(request: NextRequest) {
          */
         const moduleFailures: string[] = [];
         for (const uid of deletedUids) {
-            const moduleErasure = await eraseModuleApplications(uid);
+            const moduleErasure = await eraseModuleApplications(uid, {
+                email: emailAtErasure.get(uid) ?? null,
+            });
             if (!moduleErasure.ok) {
                 moduleFailures.push(`${uid}: ${moduleErasure.failures.join(", ")}`);
             }

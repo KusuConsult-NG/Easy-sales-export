@@ -258,6 +258,8 @@ describe('#283 — the admin deletion path, pinned as OPEN', () => {
         // The link between the two, so "calls the operation" cannot become
         // true of an operation that scrubs nothing.
         expect(codeOnly(OPERATION)).toContain('userErasurePatch(targetUserId)');
-        expect(codeOnly(OPERATION)).toContain('eraseModuleApplications(targetUserId)');
+        expect(codeOnly(OPERATION)).toContain('eraseModuleApplications(targetUserId, {');
+        //   #732 — the address goes with it, captured before the scrub.
+        expect(codeOnly(OPERATION)).toMatch(/email:\s*\(userData as any\)\?\.email/);
     });
 });

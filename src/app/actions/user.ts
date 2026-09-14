@@ -219,7 +219,11 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
          *        a collection could not be reached is the outcome this function
          *        exists to avoid.
          */
-        const moduleErasure = await eraseModuleApplications(userId);
+        //   #732 — the address as it stood BEFORE the scrub above. The
+        //   briefing register carries no userId, so this is the only link.
+        const moduleErasure = await eraseModuleApplications(userId, {
+            email: (userSnap.data() as any)?.email ?? null,
+        });
         if (!moduleErasure.ok) {
             logger.error("[NDPR Compliance] module rows could not be scrubbed", {
                 userId,
