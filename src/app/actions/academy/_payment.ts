@@ -314,8 +314,58 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         // overpayment side, and what it failed to do on the underpayment side.
         const amountVerdict = checkOrderPaymentAmount(amountInNaira, expectedPrice);
         if (!amountVerdict.ok) {
+            /*
+             *   #760 THE MONEY HAD ALREADY ARRIVED, AND THE REFUSAL RECORDED IT
+             *        NOWHERE.
+             *
+             *   Paystack has confirmed this payment as successful sixty lines
+             *   above — `paymentData.data.status !== "success"` is already past.
+             *   So by here the learner HAS BEEN CHARGED. The refusal then wrote
+             *   a `logger.warn` and returned an error to their browser, and that
+             *   was the whole record: no processed_payments row (this path never
+             *   reaches claimPaymentOnce — order-payment-amount.ts says so in as
+             *   many words), no enrolment, nothing in any queue. The money is
+             *   with Paystack and the platform owes the learner either the
+             *   course or a refund, and knows about neither.
+             *
+             *   REPORTED BY THE OWNER, and this is what makes it live rather
+             *   than theoretical: "there were discounts you can also check for
+             *   those who paid during that time". There is NO discount, coupon
+             *   or sale-price mechanism anywhere in this codebase — an academy
+             *   course carries a single `price` — so a learner charged a
+             *   discounted amount is, to this check, an underpayment. Every one
+             *   of them landed here.
+             *
+             *   FAILED_PAYMENTS is where this platform already puts money it
+             *   owes back: the webhook routes a marketplace overpayment there
+             *   under `overfunded_review` with the reasoning "the surplus was
+             *   simply unrecorded" beside it. Same shape, same collection.
+             *
+             *   THE REFUSAL ITSELF IS KEPT. Fulfilling a course for less than it
+             *   costs is a decision about discounts that belongs to the owner,
+             *   not a defect to fix by lowering the check. What changes is that
+             *   the money stops being invisible.
+             */
             logger.warn(`Price mismatch for course ${metadata.courseId}. Expected ${expectedPrice}, got ${amountInNaira}`);
-            return { success: false as const, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).`, data: null };
+
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(`${reference}-amount-mismatch`).set({
+                reference,
+                type: "academy_course_amount_mismatch",
+                userId: session.user.id,
+                courseId: metadata.courseId,
+                amountPaid: amountInNaira,
+                expectedAmount: expectedPrice,
+                shortfall: amountVerdict.reason === "underpaid" ? amountVerdict.shortfall : 0,
+                status: "awaiting_review",
+                gatewayResponse:
+                    `Paystack confirmed ${amountInNaira} but the course price is ${expectedPrice}. `
+                    + `The learner has been charged and is NOT enrolled — fulfil or refund.`,
+                failedAt: FieldValue.serverTimestamp(),
+            }, { merge: true }).catch((e: unknown) => logger.error(
+                `[AcademyPayment] Could not record the stranded payment on ${reference}`, e,
+            ));
+
+            return { success: false as const, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}). This has been recorded for review — please contact support.`, data: null };
         }
 
         // "SECURITY FIX #4: Use Firestore transaction for atomicity" provided
@@ -608,13 +658,50 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         // the other side. See lib/academy-plan.ts.
         const amountVerdict = checkAcademyPayment(paidAmount, metadata.plan);
         if (!amountVerdict.ok) {
+            /*
+             *   #760 — THE SAME DEFECT AS THE COURSE PATH, ON THE PLAN FEE.
+             *
+             *   Found by this finding's own mutation sweep: the mutant that
+             *   removed the course path's refusal SURVIVED, because
+             *   `if (!amountVerdict.ok)` occurs TWICE in this file and the
+             *   assertion matched the other one. Reading that second occurrence
+             *   is what showed it has the identical hole — and it is the more
+             *   likely of the two to hold the owner's money, because ₦25,000,
+             *   ₦50,000 and ₦100,000 are PLAN prices.
+             *
+             *   Paystack has confirmed this payment successful above, so the
+             *   learner has been charged. The refusal logged and returned, and
+             *   the money existed nowhere the platform could find it.
+             *
+             *   Fixing one of two copies is the shape this audit has spent more
+             *   findings on than any other; doing it inside the fix for it would
+             *   have been its own entry.
+             */
             logger.error("[verifyAcademyPaymentAction] Academy payment refused on amount", {
                 reference,
                 reason: amountVerdict.reason,
                 paidAmount,
                 plan: metadata.plan,
             });
-            return { success: false as const, error: amountVerdict.message, data: null };
+
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(`${reference}-amount-mismatch`).set({
+                reference,
+                type: "academy_plan_amount_mismatch",
+                userId: session.user.id,
+                plan: metadata.plan ?? null,
+                amountPaid: paidAmount,
+                expectedAmount: "fee" in amountVerdict ? amountVerdict.fee : 0,
+                shortfall: "shortfall" in amountVerdict ? amountVerdict.shortfall : 0,
+                status: "awaiting_review",
+                gatewayResponse:
+                    `Paystack confirmed ${paidAmount} for the ${metadata.plan ?? "unknown"} plan. `
+                    + `The learner has been charged and is NOT registered — fulfil or refund.`,
+                failedAt: FieldValue.serverTimestamp(),
+            }, { merge: true }).catch((e: unknown) => logger.error(
+                `[AcademyPayment] Could not record the stranded plan payment on ${reference}`, e,
+            ));
+
+            return { success: false as const, error: `${amountVerdict.message} This has been recorded for review — please contact support.`, data: null };
         }
 
         // A real plan, never the string "registration".

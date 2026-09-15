@@ -1420,6 +1420,64 @@ export async function runForensicScanAction(): Promise<
         } catch (e: any) { results.push({ module: "Academy", check: "Enrollment Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
+        /*
+         *   #759 CHECK: PAID FOR A COURSE, RECORDED NOWHERE.
+         *
+         *   Reported by the owner, of the Registrations by Module tile: "for
+         *   academy the 9 was payments that came from users who paid 50k, 100k
+         *   and 25k." Nine people paid and the tile read 0.
+         *
+         *   The course-purchase path wrote the progress row, the enrolment row
+         *   and its mirror, and touched the learner's USER document zero times —
+         *   so a paid-up member held no `academy_participant` role and no
+         *   `serviceRegistrations.academy`. The registration-FEE path next door
+         *   does write it, so the platform recorded a member when they paid to
+         *   register and not when they paid for a course.
+         *
+         *   Counted from ACADEMY_ENROLLMENTS, which is the record of who paid,
+         *   against the user document, which is what every other reader asks.
+         */
+        try {
+            const paidSnap = await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)
+                .where("paymentStatus", "==", "completed").all().get();
+
+            const paidUserIds = new Set<string>();
+            for (const d of paidSnap.docs) {
+                const uid = d.data()?.userId;
+                if (typeof uid === "string" && uid) paidUserIds.add(uid);
+            }
+
+            const unrecorded: string[] = [];
+            for (const uid of paidUserIds) {
+                const u = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+                if (!u.exists) continue;
+                const d = u.data() ?? {};
+                const roles: string[] = Array.isArray(d.roles) ? d.roles : [];
+                const hasRole = roles.includes("academy_participant");
+                const hasReg = !!d.serviceRegistrations?.academy?.status;
+                if (!hasRole || !hasReg) unrecorded.push(uid);
+            }
+
+            results.push({
+                module: "Academy",
+                check: "Academy Participation (Paid, Not Recorded)",
+                status: unrecorded.length > 0 ? "fail" : "pass",
+                details: paidUserIds.size === 0
+                    ? "No paid course enrolments found to check."
+                    : `Checked ${paidUserIds.size} learner(s) with a completed course payment. `
+                      + `Found ${unrecorded.length} whose own record does not say they are in the academy.`,
+                affectedIds: unrecorded,
+            });
+        } catch (e: any) {
+            results.push({
+                module: "Academy",
+                check: "Academy Participation (Paid, Not Recorded)",
+                status: "inconclusive",
+                details: `Could not complete this scan: ${e.message}`,
+                affectedIds: [],
+            });
+        }
+
         // ============================================================================
         // 10. MONEY WAITING FOR A HUMAN
         // ============================================================================
@@ -1498,6 +1556,31 @@ export async function runForensicScanAction(): Promise<
                     `order ${d.id}: escrow release was duplicate or indeterminate — check Paystack before releasing again`),
             ];
 
+            /*
+             *   #760 — AND PAYMENTS THE PLATFORM TOOK AND THEN REFUSED.
+             *
+             *   A learner whose academy payment Paystack confirmed but whose
+             *   amount did not match the course price was charged, refused, and
+             *   recorded in a log line. FAILED_PAYMENTS now carries the row;
+             *   this is what makes somebody see it.
+             *
+             *   It belongs in THIS check rather than its own: the question an
+             *   administrator is asking here is "whose money is sitting
+             *   somewhere it should not be", and the answer was three-quarters
+             *   complete.
+             */
+            const stranded = await db.collection(COLLECTIONS.FAILED_PAYMENTS)
+                .where("status", "==", "awaiting_review").get();
+
+            for (const d of stranded.docs) {
+                const data = d.data() ?? {};
+                owed.push(
+                    `payment ${data.reference ?? d.id}: charged ₦${Number(data.amountPaid ?? 0).toLocaleString()} `
+                    + `against a price of ₦${Number(data.expectedAmount ?? 0).toLocaleString()} — `
+                    + `learner not enrolled, fulfil or refund`,
+                );
+            }
+
             results.push({
                 module: "Finance",
                 check: "Money Waiting For A Human",
@@ -1506,7 +1589,8 @@ export async function runForensicScanAction(): Promise<
                 status: owed.length > 0 ? "warning" : "pass",
                 details: `${loans.size} approved loans awaiting manual disbursement, `
                     + `${overpaid.size} overpayments awaiting refund, `
-                    + `${escrow.size} escrow releases that need checking against Paystack.`,
+                    + `${escrow.size} escrow releases that need checking against Paystack, `
+                    + `${stranded.docs.length} payment(s) taken and then refused on the amount.`,
                 affectedIds: owed,
             });
         } catch (e: any) {
@@ -1607,6 +1691,38 @@ async function runRepair(kind: RepairKind): Promise<{ repaired: number; details:
         const r: any = await repairAllOrphanedUsers();
         const repaired = Number(r?.repaired ?? r?.fixed ?? 0) || 0;
         return { repaired, details: `Created ${repaired} missing profile(s).` };
+    }
+
+    if (kind === "academy_participation_drift") {
+        /*
+         *   #759 — THE NINE WHO PAID AND WERE RECORDED NOWHERE.
+         *
+         *   The course-purchase path never wrote anything to the learner's user
+         *   document, so a paid-up academy member held no `academy_participant`
+         *   role and no `serviceRegistrations.academy`. The fix stops it
+         *   happening again; this repairs the ones it already happened to.
+         *
+         *   Driven from ACADEMY_ENROLLMENTS — the record of who actually paid —
+         *   and each one goes through the SAME function the purchase path now
+         *   calls, so the repair and the write cannot drift apart. It is
+         *   additive and never overrides a decision; see recordAcademyParticipation.
+         */
+        const { recordAcademyParticipation } = await import("@/lib/academy-course-fulfilment");
+        const snap = await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)
+            .where("paymentStatus", "==", "completed").all().get();
+
+        const userIds = new Set<string>();
+        for (const doc of snap.docs) {
+            const uid = doc.data()?.userId;
+            if (typeof uid === "string" && uid) userIds.add(uid);
+        }
+
+        for (const uid of userIds) await recordAcademyParticipation(uid);
+
+        return {
+            repaired: userIds.size,
+            details: `Recorded academy participation for ${userIds.size} paid learner(s).`,
+        };
     }
 
     if (kind === "service_registration_drift") {

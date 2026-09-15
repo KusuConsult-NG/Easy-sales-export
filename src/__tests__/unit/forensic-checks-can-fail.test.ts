@@ -439,9 +439,29 @@ describe('#331 — the fields that made both checks impossible are gone', () => 
     });
 
     it('and course_enrollments is not queried on paymentStatus', () => {
+        /*
+         *   #760 NARROWED TWO OF THESE THREE PATTERNS, AND THE CLAIM IS
+         *   UNCHANGED.
+         *
+         *   They were bare `/amountPaid/` and `/paymentReference/` over the
+         *   whole file. What #331 established is narrower and is in its own
+         *   title: the scan must not query COURSE_ENROLLMENTS on fields nothing
+         *   writes — the removed line was
+         *
+         *       if (enrollment.amountPaid > 0 && !enrollment.paymentReference)
+         *
+         *   `amountPaid` is a real, written field elsewhere: the Paystack
+         *   webhook has recorded it on FAILED_PAYMENTS since the overpayment
+         *   route, and #760 records it there twice more for academy payments the
+         *   platform took and then refused. Forbidding the STRING made the scan
+         *   unable to report money it genuinely holds — a pattern broad enough
+         *   to catch the thing it was named for and everything near it.
+         *
+         *   Anchored on the receiver, which is what the finding was about.
+         */
         expect(src).not.toMatch(/"paymentStatus", "==", "paid"/);
-        expect(src).not.toMatch(/amountPaid/);
-        expect(src).not.toMatch(/paymentReference/);
+        expect(src).not.toMatch(/enrollment\.amountPaid/);
+        expect(src).not.toMatch(/enrollment\.paymentReference/);
     });
 
     it('POSITIVE CONTROL: the patterns above match the code they were written for', () => {
@@ -460,6 +480,8 @@ describe('#331 — the fields that made both checks impossible are gone', () => 
             db.collection(COLLECTIONS.LAND_VERIFICATIONS)
             .where("paymentStatus", "==", "paid")
             if (enrollment.amountPaid > 0 && !enrollment.paymentReference) {
+            /* #760 — the narrowed patterns still match the line they came from,
+               which is the whole job of this control. */
             details: \`Scanned 50 paid enrollments. Found \${freeRideIds.length} with missing refs.\`,
         `;
 
