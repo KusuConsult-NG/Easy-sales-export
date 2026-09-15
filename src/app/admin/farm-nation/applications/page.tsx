@@ -372,7 +372,28 @@ export default function FarmNationApplicationsPage() {
                         Registration Applications
                     </h1>
                     <p className="text-sm sm:text-base text-slate-600">
-                        Live — {stats ? numberOrZero(stats.totalApplications).toLocaleString() : sellers.length} total applications
+                        {/*
+                          *   #768 THE FALLBACK REPORTED ONE PAGE AS THE TOTAL.
+                          *
+                          *   `stats ? … : sellers.length` — and `sellers` is
+                          *   the loaded PAGE, not the population. So a failed
+                          *   stats read printed "Live — 25 total applications"
+                          *   with the same confidence as the real figure, and
+                          *   the number it printed was the page size.
+                          *
+                          *   #516 removed the identical fallback from
+                          *   getFinancialOverview, in its words "reporting the
+                          *   size of one page as the platform's lifetime
+                          *   total". Same shape, on a different screen.
+                          *
+                          *   "Unavailable" is what /admin prints for this, and
+                          *   the word "Live" goes with it — a caption claiming
+                          *   the figure is live is the part that made the wrong
+                          *   number believable.
+                          */}
+                        {stats
+                            ? `Live — ${numberOrZero(stats.totalApplications).toLocaleString()} total applications`
+                            : "Total applications — Unavailable, the count could not be read"}
                     </p>
                 </div>
             </div>

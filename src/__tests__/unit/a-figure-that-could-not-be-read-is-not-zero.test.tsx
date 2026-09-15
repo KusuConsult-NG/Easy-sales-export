@@ -334,11 +334,26 @@ describe('#753 — and the service is what names them', () => {
         const viaHelper = [...src.matchAll(/=\s*settled\(/g)].length;
         const viaPush = [...src.matchAll(/unavailableFigures\.push\(/g)].length;
 
-        //   8 call sites of the helper, and 3 mentions of the array's own
-        //   push: the two metrics branches, where one rejection blanks several
-        //   figures at once and the helper does not fit, plus the push INSIDE
-        //   the helper. Measured, after a first draft guessed 6 and 2.
-        expect({ viaHelper, viaPush }).toEqual({ viaHelper: 8, viaPush: 3 });
+        /*
+         *   SIXTEEN, not eight — #768 put getFinancialOverview's eight figures
+         *   through the same helper, which is what closed the ledger below.
+         *
+         *   And viaPush is 2, not 3. The third was the push INSIDE the helper,
+         *   which moved when the helper was lifted to module scope so both
+         *   methods share one definition; it writes to the list it was handed
+         *   (`into.push`) rather than naming one method's array. The two that
+         *   remain are the metrics branches, where a single rejection blanks
+         *   several figures at once and the helper does not fit.
+         *
+         *   Measured, not guessed — a first draft of the original test guessed
+         *   6 and 2.
+         */
+        expect({ viaHelper, viaPush }).toEqual({ viaHelper: 16, viaPush: 2 });
+
+        //   And the one definition really is one. Two `figureReader(…)` call
+        //   sites — one per method — plus the declaration itself.
+        expect([...src.matchAll(/figureReader\(/g)]).toHaveLength(3);
+        expect([...src.matchAll(/into\.push\(/g)]).toHaveLength(1);
     });
 
     it('AND NO FIGURE IN getDashboardStats IS STILL SET TO 0 BY A BARE TERNARY', () => {
@@ -354,27 +369,72 @@ describe('#753 — and the service is what names them', () => {
         expect(method('getDashboardStats')).not.toMatch(/status === "fulfilled"\s*\?[^:]*:\s*0/);
     });
 
-    it('AND THE EIGHT THAT REMAIN ARE IN getFinancialOverview, NAMED NOT HIDDEN', () => {
+    it('AND THE EIGHT IN getFinancialOverview ARE CLOSED TOO — the ledger is at zero', () => {
         /*
-         *   FOUND BY THIS FIX, AND NOT FIXED BY IT. My first draft asserted the
-         *   ternary was absent from the whole FILE and failed, which is how
-         *   these surfaced: `getFinancialOverview` carries eight more of the
-         *   identical shape, and they are the MONEY figures — total escrow,
+         *   FOUND BY THIS FIX AND NOT FIXED BY IT — until #768.
+         *
+         *   #753 recorded eight more of the identical shape in
+         *   `getFinancialOverview`, the MONEY figures: total escrow,
          *   outstanding loans, abandoned/failed/successful payment counts,
-         *   revenue, and the cooperative and WAVE payout totals.
+         *   revenue, and the cooperative and WAVE payout totals. Five of the
+         *   eight had no name attached at all, so an outage on any of them
+         *   reached the finance screen as a confident ₦0 — `totalRevenue`
+         *   among them, which is the exact figure revenue-display.ts was
+         *   written for.
          *
-         *   Every one turns an outage into "₦0 paid out". That is the same
-         *   defect on a worse screen, and it is a second finding's work: the
-         *   finance page needs the same availability plumbing end to end.
+         *   THE LEDGER DID ITS JOB. It was pinned EXACTLY at 8 so that closing
+         *   them would FAIL this test rather than pass quietly, and it did:
+         *   "IMPROVED to 0, below the recorded 8. Lower the recorded count to
+         *   0, or the difference becomes room for 8 new instances that no test
+         *   would notice." That is #743's mechanism working in the direction it
+         *   is hardest to get right.
          *
-         *   Pinned rather than swept, and pinned EXACTLY, so fixing them fails
-         *   this test and forces the number down instead of quietly widening
-         *   the allowance — #743's mechanism.
+         *   Now recorded at 0 and asserted the same way getDashboardStats is:
+         *   the shape must be ABSENT from the method, not merely rarer.
          */
         const n = [...method('getFinancialOverview')
             .matchAll(/status === "fulfilled"\s*\?[^:]*:\s*0/g)].length;
 
-        expect(ledgerVerdict(n, 8)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(n, 0)).toBe(LEDGER_HELD);
+        expect(method('getFinancialOverview')).not.toMatch(/status === "fulfilled"\s*\?[^:]*:\s*0/);
+    });
+
+    it('AND EVERY ONE OF THOSE EIGHT NAMES ITSELF', () => {
+        /*
+         *   The vacuity guard on the line above: deleting the ternaries without
+         *   routing them through the helper would satisfy it and report every
+         *   outage as zero, silently — a worse state than the one being fixed.
+         *
+         *   Asserted as the NAMES, because that is what the screen reads. The
+         *   two payout halves carry a dotted name each so whoever is diagnosing
+         *   can tell which collection is down, and the combined
+         *   `pendingPayoutAmount` is kept beside them because a sum with one
+         *   half missing is unknown, not smaller — it is what an admin pays
+         *   out against.
+         */
+        const body = method('getFinancialOverview');
+
+        for (const name of [
+            'totalEscrowVolume', 'totalLoansDisbursed',
+            'totalAbandonedCount', 'totalFailedCount', 'totalSuccessfulCount',
+            'totalRevenue',
+            'pendingPayoutAmount.cooperative', 'pendingPayoutAmount.wave',
+        ]) {
+            expect({ name, named: body.includes(`settled("${name}"`) })
+                .toEqual({ name, named: true });
+        }
+    });
+
+    it('AND THE FINANCE SCREEN ACTS ON THE REVENUE NAME', () => {
+        /*
+         *   The other half, and the one that makes the service's work visible.
+         *   The page has held `unavailable` since #516 and passed `undefined`
+         *   for revenue's availability under a comment saying "This page never
+         *   learns that the figure could not be read at all" — true only
+         *   because the service never named it. Both halves, or neither works.
+         */
+        expect(code('src/app/admin/finance/page.tsx'))
+            .toContain('revenueDisplay(!unavailable.includes("totalRevenue"), revenueIsPartial)');
     });
 
     it('and the contract carries the field, which is where revenueIsPartial died', () => {
@@ -418,7 +478,7 @@ describe('#753 — and the rest of the class is measured, not swept', () => {
         return { total, screens };
     };
 
-    it('THE REMAINING POPULATION IS SIXTEEN FIGURES ON SIX SCREENS', () => {
+    it('THE REMAINING POPULATION IS TEN FIGURES ON THREE SCREENS', () => {
         /*
          *   Sixteen, not the eighteen a first pass reported. That sweep ran
          *   over RAW source and counted two mentions inside COMMENTS — #601's
@@ -426,11 +486,76 @@ describe('#753 — and the rest of the class is measured, not swept', () => {
          *   and wave/members as a reference to an earlier finding. Measured on
          *   stripped source, which is the instrument the rest of this audit
          *   uses for exactly that reason.
+         *
+         *   #768 SIXTEEN BECAME TEN, AND THE TEN ARE NOT DEFECTS.
+         *
+         *   #753 pinned these as "measured and pinned rather than swept: each
+         *   needs its own action to report which read failed". Read one screen
+         *   at a time, that turned out to be the wrong prediction for most of
+         *   them — the population was three real instances and thirteen
+         *   defensive uses of `numberOrZero`, which this sweep cannot tell
+         *   apart because it matches the CALL and not what the screen does when
+         *   the read fails.
+         *
+         *   THE THREE THAT WERE REAL, fixed here:
+         *
+         *     admin/export                 `useState({total:0,pending:0,…})`
+         *                                  with `setStats` only on success and
+         *                                  `statsLoading` cleared in a
+         *                                  `.finally()` — four confident zeros
+         *                                  on a screen that looks finished.
+         *                                  "0 Pending Action" is the sentence
+         *                                  an admin acts on by not acting.
+         *     farm-nation/applications     `stats ? … : sellers.length` — the
+         *                                  loaded PAGE printed as the total,
+         *                                  captioned "Live". #516 removed the
+         *                                  identical fallback from
+         *                                  getFinancialOverview.
+         *     admin/export/orders          a success toast that could read
+         *                                  "₦0 returned to the buyer's wallet".
+         *
+         *   THE TEN THAT REMAIN, each opened and read:
+         *
+         *     audit-logs            (4)    the whole tile block is `{stats && …}`
+         *     wave/compliance       (4)    the same, twice over
+         *     system-health/…/diagnostics (2)  renders `'—'` when data is absent
+         *
+         *   None of the three renders a figure on a failed read, so none of
+         *   them is this defect. They stay in the ledger because the SWEEP
+         *   still finds them and a ledger that quietly stopped counting would
+         *   lose the drift check — and because a guard removed tomorrow puts
+         *   the screen straight back into the class. The test below is what
+         *   makes that a check rather than a number.
          */
         const { total, screens } = figures();
 
-        expect(ledgerVerdict(total, 16)).toBe(LEDGER_HELD);
-        expect(ledgerVerdict(screens.length, 6)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(total, 10)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(screens.length, 3)).toBe(LEDGER_HELD);
+    });
+
+    it('AND THE TEN THAT REMAIN ARE EACH BEHIND A GUARD', () => {
+        /*
+         *   #768 The ledger above counts; this checks. Ten figures were left
+         *   recorded on the grounds that their screens never render them on a
+         *   failed read — so that reason is asserted, at each of the three, and
+         *   removing a guard fails here instead of quietly rejoining the class.
+         */
+        expect(code('src/app/admin/audit-logs/page.tsx')).toContain('{stats && (');
+        expect(code('src/app/admin/wave/compliance/page.tsx')).toContain('{stats && (');
+        //   The em-dash branch, which is this screen's way of saying the same
+        //   thing inline rather than hiding a block.
+        expect(code('src/app/admin/system-health/diagnostics/page.tsx')).toContain("data ? numberOrZero(");
+    });
+
+    it('AND THE THREE THAT WERE REAL NOW SAY SO', () => {
+        //   The other half of the same guard: the fixes, asserted by what they
+        //   put on the screen rather than by their absence from the sweep.
+        expect(code('src/app/admin/export/page.tsx')).toContain('statsFailed ? "Unavailable"');
+        expect(code('src/app/admin/farm-nation/applications/page.tsx'))
+            .toContain('Total applications — Unavailable');
+        //   And the page-length fallback is gone, which is the defect itself.
+        expect(code('src/app/admin/farm-nation/applications/page.tsx'))
+            .not.toContain(': sellers.length} total applications');
     });
 
     it('AND THE DASHBOARD IS NO LONGER AMONG THEM', () => {

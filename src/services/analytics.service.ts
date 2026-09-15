@@ -61,6 +61,47 @@ function lastNMonths(n: number): Array<{ label: string; start: Date; end: Date }
  */
 const RECENT_TRANSACTION_LIMIT = 200;
 
+/**
+ * Read one settled aggregate, recording the figure as unreadable if it failed.
+ *
+ *   #768 ONE DEFINITION, BECAUSE WRITING THE PAIR BY HAND IS WHAT WENT WRONG.
+ *
+ *   #516 gave both of this service's overview methods the same vocabulary — a
+ *   list of figures that could not be read, so a screen can say "Unavailable"
+ *   instead of drawing an outage as a quiet day. `getDashboardStats` got a
+ *   local helper and every one of its figures went through it.
+ *   `getFinancialOverview` hand-wrote the pair instead:
+ *
+ *       x = r.status === "fulfilled" ? r.value.data().total ?? 0 : 0;
+ *       if (r.status !== "fulfilled") { unavailable.push("x"); logger.error(…) }
+ *
+ *   and after three of those somebody stopped writing the second half. #753
+ *   counted the result: eight bare ternaries, five with no name attached —
+ *   including `totalRevenue`, the figure revenue-display.ts exists for.
+ *
+ *   The zero is DELIBERATE and unchanged: the screen still renders, and the
+ *   name is what separates "no activity" from "we could not count it". What
+ *   changes is that a caller cannot produce the first without the second,
+ *   because it is one call.
+ *
+ *   A FACTORY rather than a free function taking the array each time, so a call
+ *   site reads the same in both methods and neither can pass the wrong list.
+ */
+function figureReader(into: string[], label: string) {
+    return <T>(
+        name: string,
+        result: PromiseSettledResult<T>,
+        read: (v: T) => number,
+    ): number => {
+        if (result.status === "fulfilled") return read(result.value);
+        into.push(name);
+        logger.error(`[${label}] ${name} could not be read`, {
+            reason: String(result.reason),
+        });
+        return 0;
+    };
+}
+
 export class AnalyticsService implements AnalyticsServiceContract {
     /**
      * Aggregates key system health and usage metrics.
@@ -598,19 +639,10 @@ export class AnalyticsService implements AnalyticsServiceContract {
          *   payload.
          */
         const unavailableFigures: string[] = [];
-        /** Read a settled count, recording the figure as unreadable if it failed. */
-        const settled = <T>(
-            name: string,
-            result: PromiseSettledResult<T>,
-            read: (v: T) => number,
-        ): number => {
-            if (result.status === "fulfilled") return read(result.value);
-            unavailableFigures.push(name);
-            logger.error(`[DashboardStats] ${name} could not be read`, {
-                reason: String(result.reason),
-            });
-            return 0;
-        };
+        //   #768 One definition, shared with getFinancialOverview. It was
+        //   declared inline here and that method hand-wrote the pair eight
+        //   times instead, naming three figures and missing five.
+        const settled = figureReader(unavailableFigures, "DashboardStats");
 
         let totalUsers: number;
         let totalRevenue: number;
@@ -954,17 +986,36 @@ export class AnalyticsService implements AnalyticsServiceContract {
         //   The value stays 0 so the screen still renders; `unavailable` names
         //   what could not be read, which is the difference between "no escrow
         //   activity" and "we could not count it".
+        /*
+         *   #768 THE SAME HELPER getDashboardStats USES, NOT A SECOND SPELLING.
+         *
+         *   #516 gave this method the `unavailable` vocabulary and reached
+         *   three figures with it, hand-writing the pair each time: a bare
+         *   `fulfilled ? … : 0`, then an `if (… !== "fulfilled")` beside it
+         *   that pushes a name. #753 counted what that left — EIGHT bare
+         *   ternaries in this method, five of them with no name attached:
+         *
+         *       totalAbandonedCount     the recovery queue's size
+         *       totalFailedCount        the recovery queue's other half
+         *       totalRevenue            THE platform figure
+         *       the two payout halves   an admin pays out against their sum
+         *
+         *   and recorded that the finance page "needs the same availability
+         *   plumbing end to end". This is that work.
+         *
+         *   WHY THE HELPER AND NOT FIVE MORE PAIRS. getDashboardStats was
+         *   repaired by `settled(name, result, read)` — one call that returns 0
+         *   AND records the name — and the bare ternary is now absent from that
+         *   whole method. Writing the pair by hand is what produced a method
+         *   where three figures were named and five were not; the ninth would
+         *   have gone the same way. Lifted to a module-level factory so both
+         *   methods share one definition rather than two that can drift.
+         */
         const unavailable: string[] = [];
-        totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
-        if (allEscrowsR.status !== "fulfilled") {
-            unavailable.push("totalEscrowVolume");
-            logger.error("[FinancialOverview] escrow aggregate failed", { reason: String(allEscrowsR.reason) });
-        }
-        totalLoansDisbursed = loanR.status === "fulfilled" ? (loanR.value.data().total ?? 0) : 0;
-        if (loanR.status !== "fulfilled") {
-            unavailable.push("totalLoansDisbursed");
-            logger.error("[FinancialOverview] disbursed-loans aggregate failed", { reason: String(loanR.reason) });
-        }
+        const settled = figureReader(unavailable, "FinancialOverview");
+
+        totalEscrowVolume = settled("totalEscrowVolume", allEscrowsR, (v) => v.data().total ?? 0);
+        totalLoansDisbursed = settled("totalLoansDisbursed", loanR, (v) => v.data().total ?? 0);
 
         /*
          *   #699 THIS PAGE CALLED PAYSTACK FOUR TIMES BEFORE IT RENDERED.
@@ -993,20 +1044,16 @@ export class AnalyticsService implements AnalyticsServiceContract {
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
         ]);
         if (totalAbandonedCount === 0 || totalAbandonedCount === undefined) {
-            totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
+            totalAbandonedCount = settled("totalAbandonedCount", countAbandonedR, (v) => v.data().count ?? 0);
         }
         if (totalFailedCount === 0 || totalFailedCount === undefined) {
-            totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
+            totalFailedCount = settled("totalFailedCount", countFailedR, (v) => v.data().count ?? 0);
         }
-        const dbSuccessCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
-        if (countSuccessR.status !== "fulfilled") {
-            //   Neither source could count. Left at 0 and NAMED — this is the
-            //   case the removed `totalSuccessfulCount = recentTransactions.length`
-            //   fallback used to paper over, reporting the size of one page as
-            //   the platform's lifetime total.
-            unavailable.push("totalSuccessfulCount");
-            logger.error("[FinancialOverview] successful-payment count failed and Paystack was unavailable");
-        }
+        //   Neither source could count. Left at 0 and NAMED — this is the case
+        //   the removed `totalSuccessfulCount = recentTransactions.length`
+        //   fallback used to paper over, reporting the size of one page as the
+        //   platform's lifetime total.
+        const dbSuccessCount = settled("totalSuccessfulCount", countSuccessR, (v) => v.data().count ?? 0);
         if (dbSuccessCount > 0) {
             totalSuccessfulCount = Math.max(totalSuccessfulCount, dbSuccessCount);
         }
@@ -1017,7 +1064,24 @@ export class AnalyticsService implements AnalyticsServiceContract {
             ]);
 
             totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : totalSuccessfulCount;
-            totalRevenue = allTxnsR.status === "fulfilled" ? (Number(allTxnsR.value.data().totalRevenue) || 0) : 0;
+            /*
+             *   #768 THE WORST OF THE EIGHT, AND ONE OF THE FIVE STILL SILENT.
+             *
+             *   revenue-display.ts was written for exactly this number and says
+             *   so: "unavailable — nothing could be read. Rendering ₦0 here is
+             *   the defect #620 and #621 are filed under: an outage drawn as a
+             *   day with no sales."
+             *
+             *   It gives three states and the machinery to show them, and
+             *   nothing here ever selected the third for a FAILED AGGREGATE. So
+             *   a timed-out revenue sum arrived at the finance screen as a
+             *   confident ₦0 — the exact picture that helper exists to prevent.
+             *
+             *   Named on `unavailable`, which is the list the finance screen's
+             *   own banner already reads and which the other seven figures in
+             *   this method use. One vocabulary, not a fourth flag.
+             */
+            totalRevenue = settled("totalRevenue", allTxnsR, (v) => Number(v.data().totalRevenue) || 0);
         }
 
         try {
@@ -1095,16 +1159,22 @@ export class AnalyticsService implements AnalyticsServiceContract {
             db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
             db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
-        pendingPayoutAmount =
-            (coopPayoutsR.status === "fulfilled" ? (coopPayoutsR.value.data().total ?? 0) : 0) +
-            (wavePayoutsR.status === "fulfilled" ? (wavePayoutsR.value.data().total ?? 0) : 0);
+        /*
+         *   #768 Both halves through the helper, so each names ITSELF when it
+         *   is the one that failed — "pendingPayoutAmount" alone told an admin
+         *   the total was unreadable without saying which side of it.
+         *
+         *   The combined name is KEPT as well, and deliberately: a sum of two
+         *   halves where one failed is not a smaller sum, it is an unknown one,
+         *   and this figure is what an admin pays out against. The screen reads
+         *   the combined name; the halves are there for whoever has to work out
+         *   which collection is down.
+         */
+        const coopPayouts = settled("pendingPayoutAmount.cooperative", coopPayoutsR, (v) => v.data().total ?? 0);
+        const wavePayouts = settled("pendingPayoutAmount.wave", wavePayoutsR, (v) => v.data().total ?? 0);
+        pendingPayoutAmount = coopPayouts + wavePayouts;
         if (coopPayoutsR.status !== "fulfilled" || wavePayoutsR.status !== "fulfilled") {
-            // A SUM of two halves where one failed is not a smaller sum, it is
-            // an unknown one — and this figure is what an admin pays out against.
             unavailable.push("pendingPayoutAmount");
-            logger.error("[FinancialOverview] pending-payout aggregate failed", {
-                cooperative: coopPayoutsR.status, wave: wavePayoutsR.status,
-            });
         }
 
         const failedTransactions: FinancialOverview["failedTransactions"] = [];

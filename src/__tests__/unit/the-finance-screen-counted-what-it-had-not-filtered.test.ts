@@ -256,13 +256,51 @@ describe('#516 — a failed read is not zero naira', () => {
     });
 
     it('and every rejection path names itself rather than logging only', () => {
+        /*
+         *   #768 THIS PINNED THE SPELLING, AND THE SPELLING WAS THE PROBLEM.
+         *
+         *   It required the literal `unavailable.push("<name>")` — the
+         *   hand-written half of the pair #516 introduced:
+         *
+         *       x = r.status === "fulfilled" ? r.value.data().total ?? 0 : 0;
+         *       if (r.status !== "fulfilled") { unavailable.push("x"); … }
+         *
+         *   Writing that pair by hand is exactly what went wrong: after three
+         *   figures somebody stopped writing the second half, and #753 counted
+         *   five more in this method with no name attached at all —
+         *   `totalRevenue` among them. #768 routed all eight through the same
+         *   `settled(name, result, read)` helper getDashboardStats already
+         *   used, which returns 0 AND records the name in one call, so the
+         *   first cannot be written without the second.
+         *
+         *   Asserted as the PROPERTY now — the figure is named, by whichever
+         *   mechanism names it — so an improvement to the mechanism does not
+         *   read as a regression. The behavioural tests above already prove
+         *   the names reach the payload; this is the sweep that catches a
+         *   figure added later with no name at all.
+         */
         const body = code();
         for (const name of [
             'totalEscrowVolume', 'totalLoansDisbursed',
+            'totalAbandonedCount', 'totalFailedCount', 'totalSuccessfulCount',
+            'totalRevenue',
             'pendingPayoutAmount', 'recentTransactions', 'failedTransactions',
         ]) {
-            expect(body).toContain(`unavailable.push("${name}")`);
+            const named = body.includes(`unavailable.push("${name}")`)
+                || body.includes(`settled("${name}"`);
+            expect({ name, named }).toEqual({ name, named: true });
         }
+    });
+
+    it('AND NO FIGURE IN THIS METHOD IS ZEROED WITHOUT ONE', () => {
+        /*
+         *   #768 The vacuity guard on the line above, and the assertion that
+         *   closes #753's ledger from this side: the bare
+         *   `fulfilled ? … : 0` shape — a zero with no name — is absent from
+         *   the whole method, the same way it already was from
+         *   getDashboardStats.
+         */
+        expect(code()).not.toMatch(/status === "fulfilled"\s*\?[^:]*:\s*0/);
     });
 });
 

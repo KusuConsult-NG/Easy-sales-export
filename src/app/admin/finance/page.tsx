@@ -124,9 +124,23 @@ export default function AdminFinancePage() {
     //   the figure is the person who needs to know it is incomplete. Nothing
     //   read it, on this page or on /admin.
     const [revenueIsPartial, setRevenueIsPartial] = useState(false);
-    //   #665 — one decision, three screens. This page never learns that the
-    //   figure could not be read at all, so `available` is left unstated.
-    const revenueState = revenueDisplay(undefined, revenueIsPartial);
+    /*
+     *   #665 — one decision, three screens.
+     *
+     *   #768 IT PASSED `undefined` FOR THE STATE IT WAS BUILT TO SHOW. The
+     *   comment here read "This page never learns that the figure could not be
+     *   read at all, so `available` is left unstated" — and the page has held
+     *   `unavailable` since #516, three lines above. What was missing was the
+     *   service NAMING totalRevenue on it, which #768 fixes; with that, the
+     *   page can learn, and `unavailable` is the one state revenue-display.ts
+     *   exists for: "Rendering ₦0 here is the defect #620 and #621 are filed
+     *   under: an outage drawn as a day with no sales."
+     *
+     *   `available` is false only when the figure is NAMED as unread. An empty
+     *   list means the read succeeded, which is the ordinary case and must not
+     *   put a warning on every load.
+     */
+    const revenueState = revenueDisplay(!unavailable.includes("totalRevenue"), revenueIsPartial);
 
     async function loadFinanceData(silent = false) {
         if (!silent) setLoading(true);

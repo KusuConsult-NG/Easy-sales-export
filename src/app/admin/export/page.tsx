@@ -25,6 +25,26 @@ export default function AdminExportPage() {
     const [hasMore, setHasMore] = useState(false);
     const [stats, setStats] = useState({ total: 0, pending: 0, inTransit: 0, delivered: 0, completed: 0 });
     const [statsLoading, setStatsLoading] = useState(true);
+    /**
+     *   #768 DID THE STATS READ ACTUALLY ANSWER?
+     *
+     *   `stats` starts at all-zeros and `setStats` runs only on success, while
+     *   `statsLoading` is cleared in a `.finally()` — so a failed read left
+     *   four confident zeros on a screen that looks finished. "0 Pending
+     *   Action" is the sentence an admin acts on by not acting.
+     *
+     *   #753 pinned sixteen figures of this class across six admin screens.
+     *   Measured one screen at a time, most were already safe: audit-logs and
+     *   wave/compliance hide their tiles behind `{stats && …}`, and
+     *   system-health/diagnostics renders an em-dash. These four were not.
+     *
+     *   The word is "Unavailable", which is what /admin already prints for the
+     *   same situation — see DashboardClient's `unreadable` set. One vocabulary
+     *   across the admin screens, not a second spelling per page.
+     */
+    const [statsFailed, setStatsFailed] = useState(false);
+    const statValue = (n: number) =>
+        statsFailed ? "Unavailable" : numberOrZero(n).toLocaleString();
 
     // Load exports with useCallback to prevent recreating on every render
     const loadExports = useCallback(async (reset = true) => {
@@ -75,8 +95,16 @@ export default function AdminExportPage() {
     // Server-side stats — fetched once, independent of filter/pagination
     useEffect(() => {
         getExportRequestStatsAction().then(result => {
-            if (result.success && result.data) setStats(result.data);
-        }).finally(() => setStatsLoading(false));
+            if (result.success && result.data) {
+                setStats(result.data);
+                setStatsFailed(false);
+            } else {
+                //   A refusal is not four zeros. Recorded so the tiles can say
+                //   so rather than reporting an outage as an empty queue.
+                setStatsFailed(true);
+            }
+        }).catch(() => setStatsFailed(true))
+          .finally(() => setStatsLoading(false));
     }, []);
 
     // Data fetching on filter change
@@ -173,25 +201,25 @@ export default function AdminExportPage() {
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Total Requests</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-slate-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-slate-900">{numberOrZero(stats.total).toLocaleString()}</p>
+                            <p className={`text-2xl font-bold ${statsFailed ? "text-slate-400 text-base" : "text-slate-900"}`}>{statValue(stats.total)}</p>
                         )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Pending Action</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-amber-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-amber-600">{numberOrZero(stats.pending).toLocaleString()}</p>
+                            <p className={`text-2xl font-bold ${statsFailed ? "text-slate-400 text-base" : "text-amber-600"}`}>{statValue(stats.pending)}</p>
                         )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">In Transit</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-blue-600">{numberOrZero(stats.inTransit).toLocaleString()}</p>
+                            <p className={`text-2xl font-bold ${statsFailed ? "text-slate-400 text-base" : "text-blue-600"}`}>{statValue(stats.inTransit)}</p>
                         )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Completed</p>
                         {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-emerald-300 mt-1" /> : (
-                            <p className="text-2xl font-bold text-emerald-600">{numberOrZero(stats.completed).toLocaleString()}</p>
+                            <p className={`text-2xl font-bold ${statsFailed ? "text-slate-400 text-base" : "text-emerald-600"}`}>{statValue(stats.completed)}</p>
                         )}
                     </div>
                 </div>

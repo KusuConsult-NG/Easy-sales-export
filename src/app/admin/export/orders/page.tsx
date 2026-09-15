@@ -89,10 +89,27 @@ export default function AdminExportOrdersPage() {
                 //   so a second press reports the same outcome rather than paying
                 //   twice. Saying so plainly stops an admin wondering whether it
                 //   worked and pressing again.
+                /*
+                 *   #768 "₦0 returned to the buyer's wallet" WAS A REACHABLE
+                 *   SENTENCE, and it is a statement about money.
+                 *
+                 *   `Number(result.data?.amount ?? 0)` renders an absent or
+                 *   unparseable amount as a confident zero — on the success
+                 *   path, so the admin is told the refund worked AND that
+                 *   nothing was returned. Those two cannot both be acted on,
+                 *   and the one that is true is the first.
+                 *
+                 *   The refund itself is unaffected: the server did the work
+                 *   and said so. What changes is that the message stops naming
+                 *   a figure it does not have.
+                 */
+                const refunded = Number(result.data?.amount);
                 showToast(
                     result.data?.alreadyRefunded
                         ? "This refund had already been credited — nothing was paid twice."
-                        : `₦${Number(result.data?.amount ?? 0).toLocaleString()} returned to the buyer's wallet.`,
+                        : Number.isFinite(refunded) && refunded > 0
+                            ? `₦${refunded.toLocaleString()} returned to the buyer's wallet.`
+                            : "The refund was credited to the buyer's wallet.",
                     "success",
                 );
                 await fetchOrders();
