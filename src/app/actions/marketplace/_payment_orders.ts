@@ -318,6 +318,25 @@ async function _createBankTransferOrderAction(
     deliveryFee: number
 ): Promise<ActionResponse<null>> { 
     let sessionResult;
+    /*
+     *   #755 — THIS PATH HAD NO COMPENSATION AT ALL.
+     *
+     *   #613 established that "a reservation is a debit, and it needed the same
+     *   compensation the money path already had", and wired restoreReservedStock
+     *   into the payment-on-delivery order and into orders.ts. This third
+     *   writer — same file, same reservation, same all-or-nothing decrement —
+     *   was not reached.
+     *
+     *   Its catch logged and returned. So any failure AFTER the decrement — the
+     *   order transaction, the escrow row, a notification write — left the units
+     *   missing from the shelf with no order to show for them. Stock that a
+     *   seller can neither sell nor see a reason for.
+     *
+     *   Assigned only after the decrement returns ok, for the reason in the POD
+     *   path above: a throw from the RPC means nothing was taken, and putting
+     *   units back for it inflates the shelf instead.
+     */
+    let reserved: Array<{ collection: string; id: string; field: string; amount: number }> = [];
     try {
         /**
          *   #379 RETIRED. #334's OWNER DECISION, TAKEN: THIS DOES NOT RUN.
@@ -391,12 +410,13 @@ async function _createBankTransferOrderAction(
         // All-or-nothing matters here: the per-item loop would leave the first
         // items decremented when the third turns out to be short. See migration
         // 015.
-        const stock = await decrementManyOrFail(validatedItems.map((item: any) => ({
+        const pending = validatedItems.map((item: any) => ({
             collection: item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS,
             id: item.productId,
             field: "availableQuantity",
             amount: item.quantity,
-        })));
+        }));
+        const stock = await decrementManyOrFail(pending);
 
         if (!stock.ok) {
             // Simpler than the Paystack path's equivalent: nothing has been
@@ -412,6 +432,10 @@ async function _createBankTransferOrderAction(
                 data: null,
             };
         }
+
+        //   #755 — the units are genuinely off the shelf now, so this function
+        //   owes them back if anything below fails.
+        reserved = pending;
 
         await db.runTransaction(async (transaction) => {
             // Inventory is already decremented by the reservation above.
@@ -486,6 +510,11 @@ async function _createBankTransferOrderAction(
 
         return { error: null, success: true as const, data: null };
     } catch (error) { 
+        //   #755 — #613's compensation, on the path it did not reach.
+        if (reserved.length > 0) {
+            await restoreReservedStock(reserved, "createBankTransferOrderAction failed after reserving stock");
+        }
+
         logger.error("Bank transfer order creation error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -598,13 +627,48 @@ async function _createPaymentOnDeliveryOrderAction(
         // different orders for the last unit both passed.
         //   #613 — kept, so the catch can put these units back if anything after
         //   the reservation throws. See restoreReservedStock.
-        reserved = validatedItems.map((item: any) => ({
+        /*
+         *   #755 `reserved` IS ASSIGNED AFTER THE DECREMENT SUCCEEDS, NOT
+         *        BEFORE IT.
+         *
+         *   It used to be assigned on the line above the call, and
+         *   `decrementManyOrFail` THROWS when the RPC itself fails — a network
+         *   error, a transient database outage, the function missing:
+         *
+         *       if (error) { throw new Error(`Stock decrement failed: ...`) }
+         *
+         *   That throw lands in this function's catch, which finds
+         *   `reserved.length > 0` and calls restoreReservedStock — PUTTING BACK
+         *   UNITS THAT WERE NEVER TAKEN. Every such failure inflated the
+         *   seller's availableQuantity by the ordered amount, so the shop went
+         *   on to sell stock that does not exist and buyers paid for goods that
+         *   cannot be shipped.
+         *
+         *   Measured: an order for 2 units against a stock of 100, with the
+         *   decrement RPC failing, left the product at 102.
+         *
+         *   THE REASONING WAS ALREADY HERE, one branch down: "Nothing to
+         *   restore: 015 is all-or-nothing, so a refusal decremented nothing."
+         *   That is true of the `ok: false` RETURN and equally true of the
+         *   THROW, and only the return was handled.
+         *
+         *   AND ORDERS.TS ALREADY DOES IT THIS WAY. Its own reservation
+         *   decrements, checks `reservation.ok`, and only then assigns
+         *   `reserved` — so a throw there restores nothing. One copy of a path
+         *   correct and its sibling not, which is the shape this file's own
+         *   comment two lines up complains about.
+         *
+         *   `pending` is what we are ASKING to take; `reserved` is what we know
+         *   we HAVE taken and therefore owe back. They are different facts and
+         *   were sharing one variable.
+         */
+        const pending = validatedItems.map((item: any) => ({
             collection: item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS,
             id: item.productId,
             field: "availableQuantity",
             amount: item.quantity,
         }));
-        const stock = await decrementManyOrFail(reserved);
+        const stock = await decrementManyOrFail(pending);
 
         if (!stock.ok) {
             //   Nothing to restore: 015 is all-or-nothing, so a refusal
@@ -622,6 +686,11 @@ async function _createPaymentOnDeliveryOrderAction(
                 data: null,
             };
         }
+
+        //   #755 — ONLY NOW is there anything to put back. The decrement has
+        //   returned, and returned ok, so these units are genuinely off the
+        //   shelf and this function owes them if the work below fails.
+        reserved = pending;
 
         await db.runTransaction(async (transaction) => {
             // Inventory already decremented by the reservation above; do NOT
