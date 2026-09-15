@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Video, Users, Clock, Calendar, Lock, ChevronRight } from "lucide-react";
 import BackButton from "@/components/ui/BackButton";
 import VideoClassroom from "@/components/VideoClassroom";
+import { findOpenSession } from "@/lib/live-session-window";
 import { useSession } from "next-auth/react";
 import { logger } from "@/lib/logger";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
@@ -25,6 +26,9 @@ interface TrainingSession {
      */
     roomKey?: string | null;
     isActive: boolean;
+    //   #778 Stamped when an administrator presses Start. Absent on rows
+    //   written before the stamp existed — see lib/live-session-window.
+    startedAt?: string | null;
     customMeetingLink?: string;
 }
 
@@ -62,14 +66,22 @@ export default function LiveTrainingClient(
                     const all: TrainingSession[] = data.data?.sessions || [];
                     setSessions(all);
 
-                    // Auto-activate a session that started in the last 2h and ends within durationMinutes
-                    const now = Date.now();
-                    const live = all.find(s => {
-                        const start = new Date(s.scheduledAt).getTime();
-                        const end = start + s.durationMinutes * 60 * 1000;
-                        return now >= start && now < end;
-                    });
-                    setActiveSession(live || null);
+                    /*
+                     *   #778 THE ROOM OPENS WHEN THE HOST STARTS IT, not when
+                     *   the clock reaches the scheduled minute.
+                     *
+                     *   The rule this replaces asked only the schedule, so
+                     *   every member's room opened at 10:00 whether or not an
+                     *   administrator had pressed Start — and on a JWT-less
+                     *   meet.jit.si the first person into the room is the
+                     *   moderator. The host arrived to find a member hosting
+                     *   his event, which is the owner's report.
+                     *
+                     *   The rule lives in lib/live-session-window so it can be
+                     *   asked directly with known inputs, including the legacy
+                     *   fallback that keeps sessions already in progress open.
+                     */
+                    setActiveSession(findOpenSession(all));
                     setLoadFailed(false);
                 } else {
                     setLoadFailed(true);

@@ -55,6 +55,18 @@ export type WaveTrainingSession = {
     customMeetingLink: string | null;
     isActive: boolean;
     scheduledAt: string | null;
+    /**
+     *   #778 When an administrator pressed Start.
+     *
+     *   OPTIONAL, AND THE OPTIONALITY IS LOAD-BEARING. The member page opens
+     *   the room from this stamp rather than from the schedule, and a row
+     *   written before the stamp existed has none — including any session in
+     *   progress right now. So the key is OMITTED for such a row rather than
+     *   set to null, because live-session-window distinguishes the two:
+     *   absent means "legacy, fall back to the clock", null means "carries the
+     *   field and has not been started".
+     */
+    startedAt?: string;
     createdAt: string | null;
 };
 
@@ -154,6 +166,21 @@ export async function readWaveTrainingSessions(
             customMeetingLink: data.customMeetingLink ?? null,
             isActive: data.isActive ?? false,
             scheduledAt: data.scheduledAt?.toDate?.()?.toISOString() ?? data.scheduledAt ?? null,
+            /*
+             *   #778 SPREAD CONDITIONALLY, not `?? null`.
+             *
+             *   This projection is what the member page actually receives, and
+             *   a field missing from it is a field the page can never see — the
+             *   #773/#349 class, where a correct rule three files away is inert
+             *   because something in between drops the key. Adding it as
+             *   `startedAt: ... ?? null` would have been the opposite mistake:
+             *   every legacy row would then CARRY the field as null, and
+             *   live-session-window would read that as "not started" and close
+             *   a session that is running right now.
+             */
+            ...(data.startedAt !== undefined && data.startedAt !== null
+                ? { startedAt: data.startedAt?.toDate?.()?.toISOString() ?? String(data.startedAt) }
+                : {}),
             createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
         };
     });

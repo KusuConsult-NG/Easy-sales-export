@@ -508,14 +508,57 @@ describe('#188 — the component refuses a guessable room', () => {
         const src = source(COMPONENT);
         expect(src).toContain('executeCommand("toggleLobby", true)');
         expect(src).not.toContain('executeCommand("toggleLobby", false)');
-        // Only a moderator can, which is why it is on that branch.
-        expect(src).toMatch(/if \(isModeratorRef\.current\) \{\s*\n\s*apiRef\.current\.executeCommand\("toggleLobby", true\);/);
+
+        /*
+         *   #778 THIS ASSERTION PINNED THE SPELLING AND THE SPELLING WAS WRONG.
+         *
+         *   It required, literally:
+         *
+         *       if (isModeratorRef.current) {
+         *           apiRef.current.executeCommand("toggleLobby", true);
+         *
+         *   which is where the command SAT — synchronously, immediately after
+         *   the API object was constructed. At that moment nobody has joined
+         *   the conference, so there is no moderator to issue it and the
+         *   command lands on nobody. #188's control has been inert for its
+         *   whole life and this test could not tell, because it was checking
+         *   that a line existed rather than that it could work.
+         *
+         *   The property is: only a moderator enables the lobby, AND does it
+         *   once there is a moderator — that is, after joining. Asserted as
+         *   containment within the join handler, not as textual order, because
+         *   an ordering assertion is satisfied by the wrong occurrence.
+         */
+        const joined = src.split('addListener("videoConferenceJoined"')[1] ?? '';
+        const handler = joined.split('addListener(')[0];
+
+        expect(handler).toContain('toggleLobby');
+        expect(handler).toContain('isModeratorRef.current');
+        //   exactly once in the file, so it is not ALSO still at construction
+        expect((src.match(/toggleLobby/g) ?? []).length).toBe(1);
     });
 
-    it('nobody is dropped straight into the room', () => {
+    it('A PARTICIPANT is never dropped straight into the room', () => {
+        /*
+         *   #778 NARROWED FROM "nobody", DELIBERATELY, and the narrowing is the
+         *   fix rather than a concession to it.
+         *
+         *   The prejoin screen matters because it is where the lobby's
+         *   "waiting to be admitted" state is shown — to a PARTICIPANT. Applied
+         *   to the host it did the opposite of its job: meet.jit.si has no JWT
+         *   tenant here and grants moderator to whoever is in the room FIRST,
+         *   so holding the host at a "join?" prompt while members walked in is
+         *   precisely how a member ended up hosting. The owner reported it as
+         *   "the entire event is not being hosted by the admin".
+         *
+         *   So the flag follows the role, and this asserts it is a CONDITION
+         *   rather than either constant — `false` would hide the lobby state
+         *   from the people it exists for.
+         */
         const src = source(COMPONENT);
-        expect(src).toContain('prejoinPageEnabled: true');
-        expect(src).not.toContain('prejoinPageEnabled: false');
+        expect(src).toMatch(/prejoinPageEnabled:\s*!isModeratorRef\.current/);
+        expect(src).not.toMatch(/prejoinPageEnabled:\s*false\s*,/);
+        expect(src).not.toMatch(/prejoinPageEnabled:\s*true\s*,/);
     });
 
     it('THE KEY IS NEVER RENDERED — not in the subject, not in the loading text', () => {

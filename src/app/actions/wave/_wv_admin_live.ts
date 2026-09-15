@@ -139,6 +139,14 @@ async function _startWaveLiveSessionAction(
                 roomName,
                 roomKey,
                 isActive: true,
+                //   #778 THE MOMENT THE HOST STARTED IT. The member page used
+                //   to open the room from `scheduledAt` alone, so every
+                //   member's room opened on the clock whether or not anybody
+                //   had pressed Start — and on a JWT-less meet.jit.si the
+                //   first person in the room is the moderator, so a member
+                //   arriving ahead of the host hosted the event. See
+                //   lib/live-session-window.
+                startedAt: new Date(),
                 customMeetingLink: customMeetingLink || null,
                 createdAt: new Date(),
                 createdBy: session.user.id,
@@ -155,6 +163,10 @@ async function _startWaveLiveSessionAction(
             const wrote = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS).doc(docId).updateExisting({
                 scheduledAt: new Date(),
                 isActive: true,
+                //   #778 Re-starting stamps a fresh start. Both branches write
+                //   it: a rule applied to one of the two places it names is
+                //   this audit's most repeated finding.
+                startedAt: new Date(),
                 durationMinutes,
                 roomKey,
                 customMeetingLink: customMeetingLink || null,

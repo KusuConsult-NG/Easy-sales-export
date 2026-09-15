@@ -65,6 +65,12 @@ export default function VideoClassroom({
     const apiRef = useRef<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string>("");
+    /*
+     *   #778 The lobby could not be enabled, so the room is open to anyone
+     *   holding the key. Shown to the host rather than swallowed — see the
+     *   catch in videoConferenceJoined.
+     */
+    const [lobbyFailed, setLobbyFailed] = useState(false);
 
     /** null unless `roomKey` is a real minted key — see lib/classroom-room.ts. */
     const fullRoomName = classroomRoomName(roomKey);
@@ -134,10 +140,35 @@ export default function VideoClassroom({
                         // there would hand it to the person it is meant to
                         // keep out.
                         subject: subjectRef.current || "Easy Sales Export live class",
-                        // A person lands on the prejoin screen rather than
-                        // being dropped straight into the room. It is where
-                        // the lobby's "waiting to be admitted" state is shown.
-                        prejoinPageEnabled: true,
+                        /*
+                         *   #778 THE HOST WAS ASKED TO JOIN HIS OWN EVENT.
+                         *
+                         *   Reported by the owner: "the admin starts an event
+                         *   and its asked to join while users are asked to
+                         *   join so the entire event is not being hosted by
+                         *   the admin."
+                         *
+                         *   A PARTICIPANT still lands on the prejoin screen —
+                         *   that is where the lobby's "waiting to be admitted"
+                         *   state is shown, and removing it would hide the
+                         *   control #188 installed.
+                         *
+                         *   THE MODERATOR DOES NOT. Two reasons, and the
+                         *   second is the one that matters:
+                         *
+                         *     - He opened the event page in order to host. An
+                         *       "are you sure you want to join?" step in front
+                         *       of that is the thing the owner is describing.
+                         *
+                         *     - meet.jit.si has no JWT tenant here, so it
+                         *       grants moderator to WHOEVER IS IN THE ROOM
+                         *       FIRST. `isModerator` is a claim this client
+                         *       makes to itself; the service never sees it.
+                         *       Holding the host on a prejoin screen while
+                         *       members walk in is how the host ends up an
+                         *       ordinary participant in his own call.
+                         */
+                        prejoinPageEnabled: !isModeratorRef.current,
                     },
                     interfaceConfigOverwrite: {
                         TOOLBAR_BUTTONS: [
@@ -191,13 +222,50 @@ export default function VideoClassroom({
                 // on the moderator branch. Whoever arrives after it waits to be
                 // admitted by the instructor. It is a compensating control, not
                 // authentication: see CLASSROOM_JWT_IS_NOT_CONFIGURED.
-                if (isModeratorRef.current) {
-                    apiRef.current.executeCommand("toggleLobby", true);
-                }
-
-                // Event listeners
+                /*
+                 *   #778 AND IT WAS CALLED BEFORE ANYBODY WAS IN THE ROOM, so
+                 *        #188's lobby was never actually switched on.
+                 *
+                 *   This ran synchronously, immediately after
+                 *   `new JitsiMeetExternalAPI(...)` — at which point the
+                 *   moderator is sitting on the prejoin screen and has not
+                 *   joined the conference. He holds no moderator role yet,
+                 *   because on a JWT-less meet.jit.si the role is granted on
+                 *   JOIN, so the command lands on nobody and is dropped.
+                 *
+                 *   Only a moderator can enable the lobby. The command
+                 *   therefore belongs in `videoConferenceJoined`, which is the
+                 *   first moment there is a moderator to issue it — so the
+                 *   control #188 describes is real for the first time.
+                 */
                 apiRef.current.addListener("videoConferenceJoined", () => {
                     if (active) setIsLoading(false);
+
+                    if (isModeratorRef.current) {
+                        try {
+                            apiRef.current?.executeCommand("toggleLobby", true);
+                        } catch (lobbyErr) {
+                            /*
+                             *   NOT FATAL, AND NOT SILENT EITHER.
+                             *
+                             *   #743's ledger caught the first draft of this as
+                             *   a new swallowing catch, and it was right to: an
+                             *   empty block here means the room is UNPROTECTED
+                             *   and the only person who could do anything about
+                             *   it — the host, who is looking at this screen —
+                             *   is not told.
+                             *
+                             *   Throwing would be worse than the defect: it
+                             *   would take the host out of his own call to
+                             *   report that a door was left open. So the class
+                             *   continues and the host is shown what happened,
+                             *   which is the one thing that lets him decide
+                             *   whether to carry on.
+                             */
+                            console.warn("Failed to enable the classroom lobby:", lobbyErr);
+                            if (active) setLobbyFailed(true);
+                        }
+                    }
                 });
 
                 apiRef.current.addListener("videoConferenceLeft", () => {
@@ -275,6 +343,12 @@ export default function VideoClassroom({
                             Setting up your classroom
                         </p>
                     </div>
+                </div>
+            )}
+            {lobbyFailed && (
+                <div className="absolute top-0 inset-x-0 z-20 bg-amber-500 text-amber-950 text-sm font-semibold px-4 py-2 text-center">
+                    The waiting room could not be switched on — anyone with the
+                    link can enter without being admitted.
                 </div>
             )}
             <div ref={jitsiContainerRef} className="w-full h-full" />
