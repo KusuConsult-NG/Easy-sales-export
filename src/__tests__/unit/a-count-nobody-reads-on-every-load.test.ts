@@ -271,6 +271,32 @@ describe('#765 — the forensic scan button is off the UI, temporarily', () => {
         }
     });
 
+    it('AND THE E2E SPEC FOLLOWS THE FLAG RATHER THAN A HARDCODED ANSWER', () => {
+        /*
+         *   #765 CI caught what this suite could not: tests/e2e/health-check
+         *   asserts the System Health screen shows a "Cross-module checks" tile
+         *   linking to the scan — #440 put that assertion there so the panel
+         *   "cannot silently disappear the way the number silently lied" — and
+         *   hiding the tile made it fail. 366 passed, that one did not.
+         *
+         *   The assertion is not deleted, because #440's reason still stands.
+         *   It reads the same constant the screens do and asserts BOTH
+         *   directions: present when the scan is on, ABSENT when it is off. A
+         *   tile headed "Cross-module checks" with nothing to click is the
+         *   half-removed state neither finding wants.
+         *
+         *   Pinned here because this suite is the one that runs on every
+         *   commit; the e2e suite needs a browser and a seeded stack.
+         */
+        const spec = readFileSync(join(ROOT, 'tests/e2e/health-check.spec.ts'), 'utf-8');
+
+        expect(spec).toContain('FORENSIC_SCAN_IN_NAV');
+        //   Both branches, so it cannot be reduced to "always hidden" and stop
+        //   testing the restored state.
+        expect(spec).toContain('if (FORENSIC_SCAN_IN_NAV) {');
+        expect(spec).toContain("toHaveCount(0)");
+    });
+
     it('and one constant brings it back', () => {
         //   The reversal is a single edit, and that is the whole design. Stated
         //   as a test so it stays true.

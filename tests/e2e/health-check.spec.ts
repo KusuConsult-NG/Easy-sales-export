@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { FORENSIC_SCAN_IN_NAV } from '../../src/lib/forensic-scan-visibility';
 
 /**
  * System Health Diagnostic E2E Test
@@ -49,14 +50,34 @@ test.describe('System Health Diagnostic Suite', () => {
         // the forensic scan, which can report "inconclusive"; the tile now
         // links there. Asserted on the link so the panel cannot silently
         // disappear the way the number silently lied.
-        await expect(page.locator('text=Cross-module checks')).toBeVisible();
-        //   #656 — `.first()`. Two links now match /forensic scan/i: the admin
-        //   sidebar's "Forensic Scan" and this panel's own "Run the forensic
-        //   scan →". BOTH point at /admin/forensics, so the assertion's intent
-        //   holds; what failed was strict mode, and only because this spec had
-        //   never run to notice the second link arriving.
-        await expect(page.getByRole('link', { name: /forensic scan/i }).first())
-            .toHaveAttribute('href', '/admin/forensics');
+        //
+        //   #765 THE OWNER TOOK THE FORENSIC SCAN BUTTON OFF THE UI —
+        //   "the forensic button should be removed from the UI temporarily for
+        //   now. the client doesnt need it." — so this tile and the sidebar
+        //   entry are both hidden behind FORENSIC_SCAN_IN_NAV.
+        //
+        //   THE ASSERTION FOLLOWS THE FLAG RATHER THAN BEING DELETED. #440's
+        //   point was that the panel must not "silently disappear the way the
+        //   number silently lied", and that still holds: with the scan ON, the
+        //   tile and its link must be there; with it OFF, they must be gone —
+        //   a tile headed "Cross-module checks" with nothing to click is the
+        //   half-removed state neither #440 nor #765 wants.
+        //
+        //   Read from the module rather than hardcoded, so flipping the
+        //   constant back moves this test with it and no one has to remember.
+        if (FORENSIC_SCAN_IN_NAV) {
+            await expect(page.locator('text=Cross-module checks')).toBeVisible();
+            //   #656 — `.first()`. Two links match /forensic scan/i: the admin
+            //   sidebar's "Forensic Scan" and this panel's own "Run the
+            //   forensic scan →". BOTH point at /admin/forensics, so the
+            //   assertion's intent holds; what failed was strict mode, and only
+            //   because this spec had never run to notice the second link.
+            await expect(page.getByRole('link', { name: /forensic scan/i }).first())
+                .toHaveAttribute('href', '/admin/forensics');
+        } else {
+            await expect(page.locator('text=Cross-module checks')).toHaveCount(0);
+            await expect(page.getByRole('link', { name: /forensic scan/i })).toHaveCount(0);
+        }
         
         // Verify Feature Toggles
         await expect(page.locator('text=Feature Activation States')).toBeVisible();
