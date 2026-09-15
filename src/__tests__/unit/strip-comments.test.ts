@@ -258,6 +258,14 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   comment-skipping filter) and its block comments supply the closing
         //   `*/` the naive regex needs.
         'src/__tests__/unit/a-chat-offered-to-people-who-could-not-use-it.test.ts',
+        //   #763 — joined on the plainest form of all. That file stubs the
+        //   document upload Export onboarding performs, so it holds a URL —
+        //   `https://cdn.example/doc.pdf` — inside a string, and its block
+        //   comments supply the closing `*/` the naive regex needs. It strips
+        //   nothing with the naive regex; the one sweep it runs over source
+        //   reads module-access-check.ts RAW, because what it asserts there is
+        //   the presence of a call.
+        'src/__tests__/unit/a-decision-is-not-overridden-by-a-role.test.ts',
         'src/__tests__/unit/a-declared-database-is-not-a-running-one.test.ts',
         //   #706 — the same mechanism again, and this time deliberately: that
         //   file skips comment lines with `line.startsWith('/*')`, so it holds

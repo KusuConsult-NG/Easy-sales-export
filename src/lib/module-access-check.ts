@@ -90,6 +90,18 @@ export async function checkModuleAccess(
             }
         }
 
+        /**
+         *   #763 The status Layer 2 resolved, kept for Layer 2.5 below.
+         *
+         *   Layer 2 reads the registration to ask "does it say approved". The
+         *   opposite question — "does it say a person decided AGAINST this" —
+         *   has to be asked one layer further down, where the roles array is,
+         *   and the answer is the same object. Undefined when the module has no
+         *   registration key or the member has no registration, which is the
+         *   ordinary case and must stay permissive.
+         */
+        let resolvedStatus: string | undefined;
+
         // Layer 2 — serviceRegistrations check
         if (regKey) {
             const serviceRegistrations = userData.serviceRegistrations || {};
@@ -136,6 +148,8 @@ export async function checkModuleAccess(
             const extendedStatuses = EXTENDED_VALID_STATUSES[regKey] || [];
             const allValidStatuses = [...VALID_STATUSES, ...extendedStatuses];
 
+            resolvedStatus = registration?.status;
+
             if (allValidStatuses.includes(registration?.status)) {
                 logger.info(
                     `[ModuleAccess] Layer 2 — serviceRegistrations confirmed '${app}' access (uid: ${userId}, status: ${registration.status}).`
@@ -152,6 +166,46 @@ export async function checkModuleAccess(
         if (requiredRoles) {
             const firestoreRoles: string[] = userData.roles || [];
             const hasRole = requiredRoles.some(r => firestoreRoles.includes(r));
+
+            /**
+             *   #763 A LEFTOVER ROLE OVERRODE A RECORDED DECISION.
+             *
+             *   registration-progress.ts states the rule this layer was missing,
+             *   in the header above isDecidedAgainst: "A decision is a decision.
+             *   Nothing derived may overwrite one." It was applied at the login
+             *   self-heal (#207) and at Layer 2.6 below, for cooperatives, and
+             *   not here — where every module passes.
+             *
+             *   What that cost, measured against the real rejection paths with
+             *   the JWT empty so the database decides:
+             *
+             *       Farm Nation, role=buyer   rejected, still holds investor   IN
+             *       Farm Nation, role=both    rejected, still holds investor   IN
+             *       Export, approved then rejected, still holds the role       IN
+             *
+             *   Both of those grants are fixed at their source in this same
+             *   finding. This is the half that makes the class unreachable
+             *   rather than the two instances of it: any future path that writes
+             *   `rejected`, `suspended` or `revoked` and forgets the role is now
+             *   closed by default, and `farm-nation`'s `land_owner` — a role no
+             *   module flow grants and no rejection should strip — stops being a
+             *   way back into a module somebody was refused.
+             *
+             *   PERMISSIVE WHERE IT SHOULD BE. isDecidedAgainst('') is false, so
+             *   a member with no registration at all — the manually-role-assigned
+             *   case this layer exists for — is unaffected. Every writer of a
+             *   decided-against status in this repository is an explicit admin
+             *   rejection, suspension or revocation; there is no benign one.
+             */
+            if (hasRole && isDecidedAgainst(resolvedStatus)) {
+                logger.warn(
+                    `[ModuleAccess] Layer 2.5 — '${app}' registration is '${resolvedStatus}' `
+                    + `(uid: ${userId}); the roles array still carries a grant for it, and a `
+                    + `decision is not overridden by a leftover role. No access.`
+                );
+                return false;
+            }
+
             if (hasRole) {
                 logger.info(
                     `[ModuleAccess] Layer 2.5 — Firestore roles[] confirmed '${app}' access (uid: ${userId}, roles: ${firestoreRoles.join(", ")}).`

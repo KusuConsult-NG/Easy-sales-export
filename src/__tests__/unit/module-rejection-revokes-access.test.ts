@@ -32,12 +32,37 @@
  *        The role a module's approval grants now lives in one map,
  *        lib/module-grant-roles.ts, and the last test here is the ratchet: every
  *        module in that map must have a rejection path that revokes it.
+ *
+ *   #763 AND THE RATCHET REPORTED CLEAN WITH TWO MODULES STILL OPEN.
+ *
+ *        Two of its own recorded facts had gone stale, and each hid one module:
+ *
+ *        (a) IT EXCUSED EXPORT BY NAME. The coverage test carried the comment
+ *            "Export has no rejection path today; it is named here so that
+ *            adding one does not silently escape the check". One had been added
+ *            — rejectExportApplicationAction in admin/_exports.ts — and it
+ *            revoked nothing, so an approved export member who was then rejected
+ *            kept the module. The sentence written to stop the gap escaping is
+ *            what let it escape.
+ *
+ *        (b) IT ASKED FOR ONE ROLE PER MODULE. Farm Nation's entry was `farmer`,
+ *            and _submitFarmNationOnboardingAction grants `investor` too — for
+ *            `role: "buyer"` and `role: "both"`, two of its three choices. The
+ *            rejection stripped `farmer` and the ratchet, checking `farmer`,
+ *            agreed. A rejected BUYER kept the module outright.
+ *
+ *        The map is plural now, the coverage test is derived from the rejection
+ *        paths rather than from a set with an exception in it, and the grant
+ *        test reads the ONBOARDING action — which is where the roles are
+ *        actually granted — rather than only the admin file beside the
+ *        rejection. See a-decision-is-not-overridden-by-a-role.test.ts for the
+ *        measurements.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
-import { MODULE_GRANT_ROLE, moduleGrantRole } from '@/lib/module-grant-roles';
+import { MODULE_GRANT_ROLES, moduleGrantRoles } from '@/lib/module-grant-roles';
 
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null, setCache: async () => undefined,
@@ -204,61 +229,107 @@ describe('#210 — the ratchet', () => {
         ],
         cooperatives: ['src/app/actions/cooperative/_coop_admin_members.ts'],
         'farm-nation': ['src/app/actions/farm-nation/_fn_admin.ts'],
+        //   #763 Added. rejectExportApplicationAction lives here and revoked
+        //   nothing while the coverage test below excused the module by name.
+        export: ['src/app/actions/admin/_exports.ts'],
     };
 
-    it('EVERY MODULE THAT GRANTS A ROLE HAS A REJECTION THAT REVOKES IT', () => {
+    it('EVERY MODULE THAT GRANTS A ROLE HAS A REJECTION THAT REVOKES ALL OF THEM', () => {
         for (const [module, files] of Object.entries(REJECTION_PATHS)) {
-            const role = moduleGrantRole(module as never);
+            //   #763 EVERY role, not the first one. Farm Nation grants two and
+            //   the rejection took back one, which is what a singular map could
+            //   not express and therefore could not catch.
+            const roles = moduleGrantRoles(module as never);
             for (const f of files) {
-                // Comments stripped: the notes added by this fix quote the
+                // Comments stripped: the notes added by these fixes quote the
                 // defect, and asserting over raw source would pass on the
                 // explanation rather than on the code.
                 const code = read(f)
                     .replace(/\/\*[\s\S]*?\*\//g, '')
                     .replace(/\/\/.*$/gm, '');
 
-                const revokes =
-                    code.includes(`arrayRemove("${role}")`) ||
-                    code.includes(`arrayRemove('${role}')`) ||
-                    code.includes(`arrayRemove(moduleGrantRole("${module}"))`);
+                //   The spread form covers the whole list at once, which is why
+                //   it is the form every caller uses. A literal is still
+                //   accepted for a module that spells one role out.
+                const revokesAll = code.includes(`arrayRemove(...moduleGrantRoles("${module}"))`);
 
-                expect(`${f} revokes ${role}: ${revokes}`)
-                    .toBe(`${f} revokes ${role}: true`);
+                for (const role of roles) {
+                    const revokes = revokesAll
+                        || code.includes(`arrayRemove("${role}")`)
+                        || code.includes(`arrayRemove('${role}')`);
+
+                    expect(`${f} revokes ${role}: ${revokes}`)
+                        .toBe(`${f} revokes ${role}: true`);
+                }
             }
         }
     });
 
-    it('every module in the grant map is covered by this ratchet', () => {
-        // Export has no rejection path today; it is named here so that adding
-        // one does not silently escape the check, and so that the gap is a
-        // recorded fact rather than an oversight.
-        const covered = new Set([...Object.keys(REJECTION_PATHS), 'export']);
-        expect(Object.keys(MODULE_GRANT_ROLE).filter((m) => !covered.has(m))).toEqual([]);
+    it('every module in the grant map is covered by this ratchet, with NO exceptions list', () => {
+        /*
+         *   #763 This used to read
+         *
+         *       const covered = new Set([...Object.keys(REJECTION_PATHS), 'export']);
+         *
+         *   with a comment explaining that export had no rejection path. It had
+         *   one. A coverage test that carries its own exception cannot report
+         *   the exception going stale, which is the only thing it was for.
+         *
+         *   Derived from REJECTION_PATHS alone now: a module in the map with no
+         *   rejection path listed fails here, and the way to make it pass is to
+         *   list one.
+         */
+        expect(Object.keys(MODULE_GRANT_ROLES).sort())
+            .toEqual(Object.keys(REJECTION_PATHS).sort());
     });
 
-    it('the granted role is one the access check actually reads', () => {
+    it('every granted role is one the access check actually reads', () => {
         // A grant role that is not in APP_TO_ROLES revokes nothing, because
         // Layer 1 never looked at it. Executed rather than eyeballed.
         const src = read('src/lib/module-access-check.ts');
-        for (const [module, role] of Object.entries(MODULE_GRANT_ROLE)) {
+        for (const [module, roles] of Object.entries(MODULE_GRANT_ROLES)) {
             const block = src.slice(src.indexOf('const APP_TO_ROLES'));
             const line = block.split('\n').find((l: string) => l.trim().startsWith(`${module}:`)
                 || l.trim().startsWith(`"${module}":`));
-            expect(`${module}: ${line?.includes(`"${role}"`)}`).toBe(`${module}: true`);
+            for (const role of roles) {
+                expect(`${module}/${role}: ${line?.includes(`"${role}"`)}`).toBe(`${module}/${role}: true`);
+            }
         }
     });
 
-    it('and the approval that grants it is the same role', () => {
-        const grants: Record<string, string> = {
-            wave: 'src/app/actions/wave/_wv_admin_applications.ts',
-            academy: 'src/app/actions/academy/_ac_admin_review.ts',
-            'farm-nation': 'src/app/actions/farm-nation/_fn_admin.ts',
+    it('AND THE FLOW THAT GRANTS THE ROLE IS THE ONE THAT WAS READ', () => {
+        /*
+         *   #763 This used to read only the ADMIN file beside each rejection,
+         *   which for Farm Nation is _fn_admin.ts — and Farm Nation's roles are
+         *   granted by ONBOARDING, in _fn_onboarding.ts, which nothing here
+         *   opened. That is how `investor` stayed out of the map: the test
+         *   confirmed `farmer` was granted where it looked, and the second role
+         *   was granted somewhere it did not.
+         *
+         *   Every file that grants a module's roles is listed now, and each
+         *   listed role must appear as a grant in at least one of them.
+         */
+        const GRANT_PATHS: Record<string, string[]> = {
+            wave: ['src/app/actions/wave/_wv_admin_applications.ts'],
+            academy: ['src/app/actions/academy/_ac_admin_review.ts'],
+            'farm-nation': [
+                'src/app/actions/farm-nation/_fn_admin.ts',
+                //   Where `investor` and `farmer` are actually granted.
+                'src/app/actions/farm-nation/_fn_onboarding.ts',
+            ],
+            export: ['src/app/actions/admin/_exports.ts'],
         };
 
-        for (const [module, f] of Object.entries(grants)) {
-            const role = moduleGrantRole(module as never);
-            expect(`${f} grants ${role}: ${read(f).includes(`arrayUnion("${role}")`)}`)
-                .toBe(`${f} grants ${role}: true`);
+        for (const [module, files] of Object.entries(GRANT_PATHS)) {
+            const sources = files.map(read).join('\n');
+            for (const role of moduleGrantRoles(module as never)) {
+                //   Either spelling: arrayUnion("role") for a fixed grant, or
+                //   push("role") into a list that arrayUnion then spreads, which
+                //   is how the buyer/seller/both choice is expressed.
+                const granted = sources.includes(`arrayUnion("${role}")`)
+                    || sources.includes(`push("${role}")`);
+                expect(`${module} grants ${role}: ${granted}`).toBe(`${module} grants ${role}: true`);
+            }
         }
     });
 });

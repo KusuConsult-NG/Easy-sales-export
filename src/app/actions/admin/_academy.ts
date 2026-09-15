@@ -15,7 +15,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { moduleGrantRole } from "@/lib/module-grant-roles";
+import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { sendEmailNotification } from "@/lib/email-notifications";
 
 // ============================================
@@ -416,7 +416,7 @@ async function _rejectAcademyApplicationAction(
                     // The role goes too, or the rejection revokes nothing —
                     // checkModuleAccess grants Academy from the JWT role alone.
                     // See lib/module-grant-roles.ts.
-                    roles: FieldValue.arrayRemove(moduleGrantRole("academy")),
+                    roles: FieldValue.arrayRemove(...moduleGrantRoles("academy")),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
             }

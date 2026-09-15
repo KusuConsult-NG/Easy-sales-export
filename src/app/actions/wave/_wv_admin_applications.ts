@@ -17,7 +17,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
-import { moduleGrantRole } from "@/lib/module-grant-roles";
+import { moduleGrantRoles } from "@/lib/module-grant-roles";
 
 // ============================================================================
 // APPLICATIONS MANAGEMENT
@@ -456,7 +456,7 @@ async function _rejectWaveApplicationAction(
                      * correction had not reached. Reversible: approval re-adds
                      * it through arrayUnion.
                      */
-                    roles: FieldValue.arrayRemove(moduleGrantRole("wave")),
+                    roles: FieldValue.arrayRemove(...moduleGrantRoles("wave")),
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1),
                 });

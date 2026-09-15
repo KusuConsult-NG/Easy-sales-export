@@ -13,6 +13,7 @@ import { APPROVABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 import type { Property } from "@/lib/types/farm-nation-actions";
 import { recordAdminAction } from "@/lib/audit-log";
 import { resolveProfileEmail } from "@/lib/profile-email-resolution";
+import { moduleGrantRoles } from "@/lib/module-grant-roles";
 
 async function _approveFarmNationSellerAction(userId: string): Promise<ActionResponse<null>> { 
     try {
@@ -217,7 +218,31 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
                 "serviceRegistrations.farmNation.rejectionReason": reason,
                 "serviceRegistrations.farmNation.rejectedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.farmNation.rejectedBy": session.user.id,
-                roles: FieldValue.arrayRemove("farmer") 
+                /*
+                 *   #763 THIS WAS `arrayRemove("farmer")`, AND ONBOARDING
+                 *        GRANTS TWO ROLES, NOT ONE.
+                 *
+                 *   _submitFarmNationOnboardingAction pushes `investor` for
+                 *   `role: "buyer"` and for `role: "both"`. Measured against the
+                 *   real access check with the JWT empty, so the database
+                 *   decides:
+                 *
+                 *       buyer   granted investor          → still investor → IN
+                 *       seller  granted farmer            → stripped       → out
+                 *       both    granted investor, farmer  → still investor → IN
+                 *
+                 *   So rejecting a Farm Nation BUYER revoked nothing, and
+                 *   rejecting a BOTH applicant revoked half — module-access-check
+                 *   Layer 2.5 grants the module from `investor` alone.
+                 *
+                 *   Taken from the shared map rather than spelled again here, so
+                 *   the grant and the revoke cannot disagree a second time. It
+                 *   does NOT include `land_owner`: no Farm Nation flow grants
+                 *   that, and it is the capability to list land rather than this
+                 *   registration. Removing a role the member never held is a
+                 *   no-op, so a seller-only applicant is unaffected.
+                 */
+                roles: FieldValue.arrayRemove(...moduleGrantRoles("farm-nation"))
             });
 
             if (!appSnap.empty) {

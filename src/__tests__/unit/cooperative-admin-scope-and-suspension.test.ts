@@ -123,8 +123,23 @@ describe('suspending a member', () => {
     });
 
     it('which is the same thing Farm Nation already did to a rejected seller', () => {
-        // Vacuity guard: the pattern is the platform's own.
-        expect(code(FN_ADMIN)).toContain('roles: FieldValue.arrayRemove("farmer")');
+        /*
+         *   Vacuity guard: the pattern is the platform's own.
+         *
+         *   #763 THIS PINNED THE SPELLING AND THE SPELLING WAS THE DEFECT.
+         *
+         *   It asserted the literal `arrayRemove("farmer")` — and Farm Nation's
+         *   onboarding grants `investor` as well, for two of its three role
+         *   choices, so that one literal was the whole of a revocation that
+         *   should have taken back two roles. A rejected BUYER kept the module.
+         *
+         *   Asserted as the PROPERTY now: whatever Farm Nation's rejection
+         *   revokes, it is the set its own flows grant, taken from the shared
+         *   map. That is what this test was pointing at as precedent, and it
+         *   stays a live vacuity guard without pinning a string that improving
+         *   the code has to break.
+         */
+        expect(code(FN_ADMIN)).toContain('FieldValue.arrayRemove(...moduleGrantRoles("farm-nation"))');
     });
 });
 

@@ -17,6 +17,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ExportOnboardingReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { stripPii } from "@/lib/admin-pii";
+import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { recordAdminAction } from "@/lib/audit-log";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
@@ -926,6 +927,27 @@ async function _rejectExportApplicationAction(
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.export.status": "rejected",
             "serviceRegistrations.export.rejectedAt": FieldValue.serverTimestamp(),
+            /*
+             *   #763 THE ROLE GOES TOO, OR THE REJECTION REVOKES NOTHING.
+             *
+             *   Nothing guards the status this rejection comes FROM, so it is
+             *   also this module's revoke path: an approved member — who holds
+             *   `export_participant`, granted by _approveExportOnboardingAction
+             *   — can be rejected here. Measured against the real access check
+             *   with the JWT empty, so the database decides:
+             *
+             *       after approve   roles [export_participant]   access TRUE
+             *       after reject    roles [export_participant]   access TRUE
+             *
+             *   Only the word on the admin's screen changed. Layer 2.5 of
+             *   checkModuleAccess grants the module from the roles array alone.
+             *
+             *   #210 built lib/module-grant-roles.ts for exactly this and its
+             *   ratchet excused export by name — "Export has no rejection path
+             *   today" — while this function was already here. Reversible:
+             *   approving re-grants the role with arrayUnion.
+             */
+            roles: FieldValue.arrayRemove(...moduleGrantRoles("export")),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
