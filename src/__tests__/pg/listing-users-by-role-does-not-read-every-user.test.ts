@@ -89,9 +89,36 @@ afterAll(async () => {
     await client?.end().catch(() => {});
 });
 
-const plan = async (sql: string, params: any[] = []) => {
-    const { rows } = await client!.query(`explain (analyze, buffers, format json) ${sql}`, params);
-    return rows[0]['QUERY PLAN'][0];
+/**
+ * A query plan.
+ *
+ *   #767 `forceIndex` takes the COST decision out and leaves the OPERATOR
+ *   question, by running inside a transaction with `enable_seqscan = off`.
+ *
+ *   Needed because two different things get asked of a plan here. "Does the
+ *   planner pick the index for the query the app runs" depends on selectivity
+ *   AND on how big the heap happens to be — which, in a suite that seeds 4,000
+ *   rows into a shared table, is whatever earlier runs left behind. "Can the
+ *   index serve this operator at all" does not depend on either, and is what
+ *   the && test means.
+ *
+ *   SET LOCAL, inside BEGIN/ROLLBACK, so the setting cannot leak into the next
+ *   test and quietly change what IT measures.
+ */
+const plan = async (sql: string, params: any[] = [], opts: { forceIndex?: boolean } = {}) => {
+    if (!opts.forceIndex) {
+        const { rows } = await client!.query(`explain (analyze, buffers, format json) ${sql}`, params);
+        return rows[0]['QUERY PLAN'][0];
+    }
+
+    await client!.query('begin');
+    try {
+        await client!.query('set local enable_seqscan = off');
+        const { rows } = await client!.query(`explain (analyze, buffers, format json) ${sql}`, params);
+        return rows[0]['QUERY PLAN'][0];
+    } finally {
+        await client!.query('rollback');
+    }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,15 +168,78 @@ dbDescribe('#471 — the role filter uses an index', () => {
         expect(rows[0].n).toBeLessThan(50);
     });
 
-    it('AND array-contains-any USES IT TOO — messages.ts and wallet.ts go through &&', async () => {
-        // A fix that reached only @> would leave the admin notification fan-out
-        // and the wallet's notifiable-roles query scanning. Third time in this
-        // audit a fix reached some of the doors.
+    it('AND array-contains-any CAN USE IT TOO — messages.ts and wallet.ts go through &&', async () => {
+        /*
+         * A fix that reached only @> would leave the admin notification fan-out
+         * and the wallet's notifiable-roles query scanning. Third time in this
+         * audit a fix reached some of the doors.
+         *
+         *   #767 THIS ASSERTED A COST DECISION AND MEANT AN OPERATOR ONE, AND
+         *        IT PASSED FOR AN ACCIDENTAL REASON.
+         *
+         *   It ran the query bare and required `idx_users_roles` in the plan.
+         *   But this query has no other predicate and is not scoped to TAG, so
+         *   the planner's choice turns on the size of the HEAP — and the heap
+         *   this suite leaves behind is whatever earlier runs bloated it to.
+         *
+         *   Measured, after a VACUUM FULL compacted it: 4,000 rows in 69
+         *   blocks, seq scan cost 119. Postgres prefers the sequential read and
+         *   IT IS RIGHT TO — a GIN bitmap scan's startup is not worth paying on
+         *   half a megabyte. The test then reported a defect that was not
+         *   there, and would have reported one on any freshly-created database.
+         *
+         *   WHAT THIS TEST ACTUALLY MEANS is in its own first sentence: can the
+         *   index serve `&&` at all, or does the fix reach `@>` alone? That is
+         *   a question about the OPERATOR CLASS, and it is answered by taking
+         *   the cost decision out of it. The sibling below owns the cost half
+         *   deliberately, and the scoped, selective @> test above owns the
+         *   "does the planner actually pick it" half — both unchanged.
+         *
+         *   MUTATION-TESTED:
+         *
+         *     the forceIndex mechanism removed                   KILLED
+         *     the control asks about an INDEXED predicate        KILLED
+         *     idx_users_roles dropped before the run        DID NOT LAND
+         *
+         *   The third is recorded rather than quietly re-run. Dropping the
+         *   index and re-running left the whole suite green, which looks like a
+         *   vacuous test — and is not: the-role-scan-reads-the-whole-table-
+         *   without-the-index.test.ts opens with `create index if not exists
+         *   idx_users_roles …`, so the suite rebuilds it before anything is
+         *   asserted. The index existed at 0 before the run and 1 after, which
+         *   is how the botched mutant was told from a surviving one.
+         */
         const p = await plan(
             `select id from public.users where roles && array['farmer','seller']`,
+            [],
+            { forceIndex: true },
         );
 
-        expect(JSON.stringify(p)).toContain('idx_users_roles');
+        const text = JSON.stringify(p);
+        expect(text).toContain('idx_users_roles');
+        //   The operator reaching the INDEX CONDITION is the claim. A GIN index
+        //   that could not serve `&&` would leave it in a post-scan Filter.
+        expect(text).toContain('Index Cond');
+    });
+
+    it('AND THAT METHOD DISCRIMINATES — the control for the test above', async () => {
+        /*
+         *   #767 `enable_seqscan = off` is a preference, not a prohibition:
+         *   Postgres still sequential-scans when NO index can serve the
+         *   predicate. So without this, "the index is usable" would be
+         *   indistinguishable from "disabling seq scans makes any plan look
+         *   indexed" — and the test above would pass against a table with no
+         *   GIN index on roles at all.
+         *
+         *   An unindexed JSONB key, asked exactly the same way.
+         */
+        const p = await plan(
+            `select id from public.users where raw_data->>'nothing_is_indexed_here' = 'x'`,
+            [],
+            { forceIndex: true },
+        );
+
+        expect(JSON.stringify(p)).toContain('"Node Type":"Seq Scan"');
     });
 
     it("POSITIVE CONTROL: THE PLANNER IGNORES IT FOR A ROLE THAT MATCHES EVERYTHING", async () => {
