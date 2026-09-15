@@ -9,6 +9,11 @@ import { isUndeliverable } from "@/lib/bounced-address";
 import { isErasedAddress } from "@/lib/contactable-account";
 import { logger } from "@/lib/logger";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_NAME_WITH_ACRONYM } from "@/lib/wave-program";
+
 /**
  * EVERY VALUE INTERPOLATED INTO A TEMPLATE BELOW IS ESCAPED.
  *
@@ -635,7 +640,7 @@ export async function sendWaveApplicationEmail(
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #059669;">Congratulations!</h2>
             <p>Hi ${userName ?? ""},</p>
-            <p>We are thrilled to inform you that your application for the <strong>Women Agro-Value Expansion (WAVE)</strong> program has been approved.</p>
+            <p>We are thrilled to inform you that your application for the <strong>${WAVE_NAME_WITH_ACRONYM}</strong> program has been approved.</p>
             
             <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
                 <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
@@ -665,7 +670,7 @@ export async function sendWaveApplicationEmail(
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #dc2626;">WAVE Application Update</h2>
             <p>Hi ${userName ?? ""},</p>
-            <p>Thank you for your interest in the Women Agro-Value Expansion (WAVE) program.</p>
+            <p>Thank you for your interest in the ${WAVE_NAME_WITH_ACRONYM} program.</p>
             
             <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
                 <p>Unfortunately, we are unable to approve your application at this time.</p>

@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { ArrowRight, Shield, CheckCircle, Home } from "lucide-react";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+
 export default function AboutPage() {
     return (
         <div className="min-h-screen bg-slate-50">
@@ -51,7 +56,7 @@ export default function AboutPage() {
                                     Our work spans commodity export, cooperative development, farm production structuring, export training, and global market access facilitation.
                                 </p>
                                 <p>
-                                    As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900">Women Agro Value Expansion (WAVE) Program</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
+                                    As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900">{WAVE_PROGRAM_NAME}</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
                                 </p>
                             </div>
                         </div>
@@ -125,7 +130,7 @@ export default function AboutPage() {
                                     Strategic Partner: WAVE Program
                                 </h3>
                                 <p className="text-lg text-slate-900 mb-4">
-                                    As the lead implementing partner for the <strong>Women Agro Value Expansion (WAVE) Program</strong>, we are proud to support the Federal Ministry of Women Affairs in empowering 10 million Nigerian women through structured agricultural value chains.
+                                    As the lead implementing partner for the <strong>{WAVE_PROGRAM_NAME}</strong>, we are proud to support the Federal Ministry of Women Affairs in empowering 10 million Nigerian women through structured agricultural value chains.
                                 </p>
                                 <div className="space-y-2">
                                     {[

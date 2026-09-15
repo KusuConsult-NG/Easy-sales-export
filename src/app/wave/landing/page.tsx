@@ -1,7 +1,7 @@
 /**
  * RH-WAVE 774 Public Landing Page
  * 
- * Single-page website for Women Agro-Value Expansion Programme
+ * Single-page website for the RH-WAVE 774 programme — see lib/wave-program.
  */
 
 "use client";
@@ -15,6 +15,11 @@ import Image from "next/image";
 import BackToHub from "@/components/common/BackToHub";
 import { checkWaveStatusAction } from "@/app/actions/wave";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_FULL_NAME, WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+
 function ClickToPlayVideo({ videoId }: { videoId: string }) {
     const [playing, setPlaying] = useState(false);
     const [imgSrc, setImgSrc] = useState(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
@@ -24,7 +29,7 @@ function ClickToPlayVideo({ videoId }: { videoId: string }) {
                 <iframe
                     className="absolute inset-0 w-full h-full"
                     src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
-                    title="RH-WAVE 774 Program - Women Agro-Value Expansion"
+                    title={`RH-WAVE 774 Program - ${WAVE_FULL_NAME}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                     referrerPolicy="strict-origin-when-cross-origin"
@@ -151,7 +156,7 @@ export default function WaveLandingPage() {
                                 RH-WAVE 774
                             </h1>
                             <h2 className="text-2xl sm:text-3xl font-bold bg-linear-to-r from-green-700 via-green-600 to-green-500 bg-clip-text text-transparent mb-6">
-                                Women Agro-Value Expansion Program
+                                {WAVE_PROGRAM_NAME}
                             </h2>
 
                             <p className="text-lg md:text-xl text-slate-700 mb-10">
@@ -241,7 +246,7 @@ export default function WaveLandingPage() {
                             Transforming Lives Through Agribusiness Excellence
                         </h3>
                         <p className="text-lg text-slate-700 max-w-3xl mx-auto">
-                            Watch how the Women Agro-Value Expansion Programme is empowering Nigerian women to become leaders in agriculture and export
+                            Watch how the {WAVE_FULL_NAME} Programme is empowering Nigerian women to become leaders in agriculture and export
                         </p>
                     </div>
 
@@ -283,7 +288,7 @@ export default function WaveLandingPage() {
                             RH-WAVE 774 is Nigeria's boldest answer to economic exclusion, food insecurity, and structural inequality — anchored on the <strong className="text-green-700">brilliance, courage, and economic power of Nigerian women</strong>.
                         </p>
                         <p className="text-lg mb-6">
-                            Launched under the visionary leadership of <strong>President Bola Ahmed Tinubu, GCFR</strong>, in June 2025, this flagship Women Agro-Value Expansion Programme propels women from subsistence farming to value-chain entrepreneurs, market leaders, and exporters.
+                            Launched under the visionary leadership of <strong>President Bola Ahmed Tinubu, GCFR</strong>, in June 2025, this flagship {WAVE_FULL_NAME} Programme propels women from subsistence farming to value-chain entrepreneurs, market leaders, and exporters.
                         </p>
                         <p className="text-lg font-semibold text-green-700">
                             This is not empowerment rhetoric — this is economic inclusion in practice.
@@ -628,7 +633,7 @@ export default function WaveLandingPage() {
             <footer className="bg-slate-900 text-white py-12">
                 <div className="max-w-7xl mx-auto px-6 text-center">
                     <p className="text-slate-400 mb-4">
-                        RH-WAVE 774 • Women Agro-Value Expansion Programme
+                        RH-WAVE 774 • {WAVE_FULL_NAME} Programme
                     </p>
                     <p className="text-slate-500 text-sm">
                         Federal Ministry of Women Affairs • Renewed Hope Agenda • Presidential Mandate

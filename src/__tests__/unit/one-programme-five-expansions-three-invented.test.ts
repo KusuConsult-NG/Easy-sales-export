@@ -94,8 +94,9 @@ import {
     WAVE_FULL_NAME, WAVE_PROGRAM_NAME, WAVE_NAME_WITH_ACRONYM, WAVE_FORMAL_NAME,
 } from '@/lib/wave-program';
 import {
-    getWards, getPollingUnits, hasVerifiedWards, hasVerifiedPollingUnits,
+    getWards, getPollingUnits, hasVerifiedWards, hasVerifiedPollingUnits, NIGERIAN_LOCATIONS,
 } from '@/lib/locations';
+import { WARDS_BY_STATE_AND_LGA } from '@/lib/nigeria-wards.generated';
 import { requiredNationalIdField, requiredVotersCardField, nationalIdField } from '@/lib/kyc-validators';
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
@@ -104,27 +105,72 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 describe('#774(a) — the acronym expands one way', () => {
     it('THE CONSTANT IS THE OWNER\'S WORDING', () => {
         /*
-         *   #785 CORRECTED BY THE OWNER A SECOND TIME, and this assertion
-         *   moving is the constant earning its keep rather than a regression.
+         *   #785 / #788 CORRECTED BY THE OWNER TWICE MORE, and this assertion
+         *   moving with them is the constant earning its keep rather than a
+         *   regression.
          *
          *   #774 was told "the WAVE acronym is Women Agro-Value Expansion
-         *   program". The formal list says: "Ensure that RH-WAVE is
-         *   consistently stated as 'Renewed Hope Women Agro Value Expansion'
-         *   wherever it is referenced." Two differences — the RENEWED HOPE
-         *   prefix, which is what the RH stands for and was missing entirely,
-         *   and no hyphen in "Agro Value".
+         *   program". The formal list then said "Ensure that RH-WAVE is
+         *   consistently stated as 'Renewed Hope Women Agro Value Expansion'",
+         *   and #785 followed that spelling literally, hyphen and all — which
+         *   is to say without one. The owner's next message settles it:
          *
-         *   One line changed and all five screens followed. Before #774 this
-         *   correction meant finding six strings by hand, which is precisely
-         *   how there came to be six spellings.
+         *       "change Women Agro-Value Expansion Program to Renewed Hope
+         *        Women Agro-Value Expansion Program"
+         *
+         *   So the RENEWED HOPE prefix stays and the HYPHEN comes back, and
+         *   WAVE_PROGRAM_NAME is that sentence exactly.
+         *
+         *   One line changed and every screen followed. Before #774 this
+         *   correction meant finding strings by hand, which is precisely how
+         *   there came to be six spellings.
          */
-        expect(WAVE_FULL_NAME).toBe('Renewed Hope Women Agro Value Expansion');
-        expect(WAVE_PROGRAM_NAME).toContain(WAVE_FULL_NAME);
-        expect(WAVE_NAME_WITH_ACRONYM).toBe('Renewed Hope Women Agro Value Expansion (WAVE)');
+        expect(WAVE_FULL_NAME).toBe('Renewed Hope Women Agro-Value Expansion');
+        expect(WAVE_PROGRAM_NAME).toBe('Renewed Hope Women Agro-Value Expansion Program');
+        expect(WAVE_NAME_WITH_ACRONYM).toBe('Renewed Hope Women Agro-Value Expansion (WAVE)');
 
         //   the RH- prefix is no longer expanding to something the name lacks
         expect(WAVE_FORMAL_NAME).toContain('RH-WAVE');
         expect(WAVE_FORMAL_NAME).toContain('Renewed Hope');
+        //   and the word "Program" is NOT baked into the name, or the formal
+        //   line reads "...Expansion Program Programme".
+        expect(WAVE_FULL_NAME).not.toMatch(/Programme?$/);
+    });
+
+    it('#788 AND NOT ONE SCREEN STILL SPELLS IT BY HAND', () => {
+        /*
+         *   #774 built the constant and wired FIVE screens to it. Twenty-one
+         *   more sites went on spelling the name out — the home page, About,
+         *   Help, the WAVE landing page six times, the WAVE layout's browser
+         *   title, the cooperative landing page, the cooperative's Terms of
+         *   Reference, the application-received email and the approval and
+         *   rejection emails.
+         *
+         *   So the owner's correction reached five screens and missed
+         *   twenty-one, which is this audit's most repeated finding wearing
+         *   the constant that was supposed to prevent it: a correct rule
+         *   applied to some of the places it names. A constant only removes
+         *   the drift from the files that READ it.
+         *
+         *   SWEPT, so the next writer cannot add a twenty-second. The two
+         *   places the words are allowed to appear literally are the constant
+         *   itself and this suite.
+         */
+        const { execSync } = require('child_process');
+        const hits = execSync(
+            "grep -rl 'Agro[ -]Value Expansion' src --include=*.ts --include=*.tsx || true",
+            { encoding: 'utf8' },
+        ).split('\n').filter(Boolean);
+
+        const ALLOWED = [
+            'src/lib/wave-program.ts',
+            'src/__tests__/unit/one-programme-five-expansions-three-invented.test.ts',
+        ];
+
+        expect(hits.filter((f: string) => !ALLOWED.includes(f))).toEqual([]);
+        //   Vacuity guard: the sweep must actually be finding the two it is
+        //   allowed to find, or an empty result proves nothing.
+        expect(hits.sort()).toEqual([...ALLOWED].sort());
     });
 
     it('AND NO SCREEN INVENTS ITS OWN', () => {
@@ -225,29 +271,79 @@ describe('#774(c) — a ward list names wards', () => {
         expect(hasVerifiedPollingUnits('NO SUCH WARD')).toBe(false);
     });
 
-    it('AND NO VERIFIED LIST ANYWHERE CONTAINS A NUMBERED PLACEHOLDER', () => {
+    it('AND NO NUMBERED PLACEHOLDER SURVIVES ANYWHERE IN THE REGISTER', () => {
         /*
-         *   The sweep, not a specimen. A single leftover "Ward 4" in a real
-         *   LGA's list would be exactly the defect, and testing one unknown LGA
-         *   cannot see it.
+         *   #789 RESTATED, AND IT HAD GONE VACUOUS — which is worth saying
+         *   plainly, because it PASSED while asserting nothing.
+         *
+         *   It read the slice of locations.ts between `VERIFIED_WARDS` and
+         *   `VERIFIED_PUs`, which is where the two hand-written LGAs used to
+         *   live. The real register now lives in a generated module, so that
+         *   slice holds 544 characters of declaration and comment and not one
+         *   ward name. `not.toMatch(/"Ward \d+"/)` over a string with no wards
+         *   in it is true for the same reason it is useless.
+         *
+         *   So it sweeps the VALUES now — every one of the 8,778 names the
+         *   forms can actually offer — and it asks the real question rather
+         *   than the 2024 spelling of it. A ward name that is ONLY a number is
+         *   not a name, in any of the three ways this register writes one:
+         *
+         *       "Ward 4"      digits            "PU 001"
+         *       "Ward IV"     roman numerals
+         *       "Ward One"    words             "One"   ← no prefix at all
+         *
+         *   The last shape is the one the old assertion could never have
+         *   caught: Cross River's Calabar Municipality is written "One … Ten"
+         *   with no "Ward" in front of it. Both it and Abia's Ugwunagbo are
+         *   excluded by the generator for exactly this, so their applicants
+         *   type instead — see scripts/build-wards.ts.
          */
-        const src = read('src/lib/locations.ts');
-        const verified = src.split('VERIFIED_WARDS')[1].split('VERIFIED_PUs')[0];
+        const NUMBER_WORDS = 'one|two|three|four|five|six|seven|eight|eigth|nine|ten'
+            + '|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty';
+        const BARE = new RegExp(`^(?:ward|pu)?\\s*(?:\\d+|[ivxlc]+|${NUMBER_WORDS})$`, 'i');
 
-        expect(verified).not.toMatch(/["']Ward \d+["']/);
-        expect(verified).not.toMatch(/["']PU \d+["']/);
+        const offences: string[] = [];
+        for (const [composite, wards] of Object.entries(WARDS_BY_STATE_AND_LGA)) {
+            for (const w of wards) if (BARE.test(w)) offences.push(`${composite} -> ${w}`);
+        }
+        expect(offences).toEqual([]);
+
+        //   Vacuity guard for the guard: the sweep must be looking at a real
+        //   register, not an empty object.
+        const total = Object.values(WARDS_BY_STATE_AND_LGA).reduce((n, w) => n + w.length, 0);
+        expect(Object.keys(WARDS_BY_STATE_AND_LGA).length).toBeGreaterThan(750);
+        expect(total).toBeGreaterThan(8000);
+
+        //   and the rule itself bites, or the empty result above means nothing
+        expect(BARE.test('Ward 4')).toBe(true);
+        expect(BARE.test('Ward One')).toBe(true);
+        expect(BARE.test('One')).toBe(true);
+        expect(BARE.test('Ward IV New Layout')).toBe(false);
+        expect(BARE.test('Gwagwalada Centre')).toBe(false);
     });
 
     it('CONTROL: a real LGA still offers its real wards', () => {
-        //   The vacuity guard. Returning [] for everything would pass every
-        //   assertion above and would delete the feature.
-        const src = read('src/lib/locations.ts');
-        const known = [...src.matchAll(/^\s*["']([^"']+)["']:\s*\[/gm)].map(m => m[1]);
-        const withWards = known.find(k => getWards(k).length > 0);
+        /*
+         *   The vacuity guard. Returning [] for everything would pass every
+         *   assertion above and would delete the feature.
+         *
+         *   #789 It read LGA names out of locations.ts with a regex that
+         *   actually matched the STATE keys of NIGERIAN_LOCATIONS — so it was
+         *   passing because "Bauchi" happens to be both a state and an LGA.
+         *   It asks the list itself now.
+         */
+        const gwagwalada = getWards('Gwagwalada', 'FCT');
+        expect(gwagwalada.length).toBeGreaterThan(0);
+        expect(gwagwalada).toContain('Gwagwalada Centre');
+        expect(hasVerifiedWards('Gwagwalada', 'FCT')).toBe(true);
 
-        expect(withWards).toBeDefined();
-        expect(getWards(withWards as string).length).toBeGreaterThan(0);
-        expect(hasVerifiedWards(withWards as string)).toBe(true);
+        //   Every state has at least one LGA whose wards are known, so no
+        //   applicant anywhere opens a form with a list that is empty for her
+        //   whole state.
+        for (const [state, lgas] of Object.entries(NIGERIAN_LOCATIONS)) {
+            expect({ state, any: lgas.some(l => getWards(l, state).length > 0) })
+                .toEqual({ state, any: true });
+        }
     });
 });
 

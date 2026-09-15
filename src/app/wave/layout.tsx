@@ -7,8 +7,13 @@
 
 import { Metadata } from "next";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_FULL_NAME } from "@/lib/wave-program";
+
 export const metadata: Metadata = {
-    title: "RH-WAVE 774 | Women Agro-Value Expansion Programme",
+    title: `RH-WAVE 774 | ${WAVE_FULL_NAME} Programme`,
     description: "Presidential initiative empowering Nigerian women in agriculture through training, funding, and market access.",
 };
 

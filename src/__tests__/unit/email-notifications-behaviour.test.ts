@@ -197,7 +197,27 @@ describe('#218 — user-supplied values do not reach the markup raw', () => {
         // Kept as an explicit list rather than a rule about log lines, because a
         // rule would have to recognise a logger call and that is the sort of
         // inference this ratchet exists to avoid.
-        expect([...new Set(bare)].sort()).toEqual(['context', 'emails.length', 'sent']);
+        //
+        //   #788 WAVE_NAME_WITH_ACRONYM joins them, and it is the one shape
+        //   this ratchet can admit without weakening: a module-scope `const`
+        //   in lib/wave-program.ts built from string literals, imported here,
+        //   never assigned and never reachable from a caller. The owner has
+        //   corrected the programme's spelling twice, and the whole point of
+        //   the constant is that the correction is one line — spelling it out
+        //   here again would put this file back among the ones that drift.
+        //
+        //   Listed BY NAME rather than admitted by a rule about constants,
+        //   because "it looks like a constant" is exactly the inference this
+        //   ratchet exists to refuse. A different identifier still fails.
+        expect([...new Set(bare)].sort()).toEqual(
+            ['WAVE_NAME_WITH_ACRONYM', 'context', 'emails.length', 'sent']);
+
+        //   And the claim about it is checked rather than asserted: the value
+        //   is a literal-built constant, not a parameter.
+        const wave = require('fs').readFileSync(
+            require('path').join(process.cwd(), 'src/lib/wave-program.ts'), 'utf8');
+        expect(wave).toMatch(/export const WAVE_NAME_WITH_ACRONYM = `\$\{WAVE_FULL_NAME\} \(WAVE\)`;/);
+        expect(wave).toMatch(/export const WAVE_FULL_NAME = "[^"$]+";/);
     });
 });
 

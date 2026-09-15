@@ -717,7 +717,18 @@ describe('#329 — one convention across every writing script', () => {
                     // pure arithmetic and imports no database client at
                     // all. Listed rather than loosening the regex: a
                     // narrower detector would start missing real writes.
-                    'scripts/academy-enrolment-tally.ts'].includes(rel),
+                    'scripts/academy-enrolment-tally.ts',
+                    //   #789 NOT a writing script either, and for the same
+                    //   reason. build-wards.ts reads a published JSON register
+                    //   and writes ONE SOURCE FILE — src/lib/nigeria-wards.
+                    //   generated.ts. Its matches are `Map.set` while indexing
+                    //   and de-duplicating; it imports no database client, and
+                    //   the only thing it can damage is a file in git.
+                    //
+                    //   Listed rather than loosening the regex, on the same
+                    //   argument the entry above makes: a narrower detector
+                    //   would start missing real writes.
+                    'scripts/build-wards.ts'].includes(rel),
         );
         expect(unlisted).toEqual([]);
     });

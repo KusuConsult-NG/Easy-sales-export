@@ -24,6 +24,11 @@ import { sendEmailNotification } from "@/lib/email-notifications";
 import { nationalIdField, requiredNationalIdField, requiredVotersCardField } from '@/lib/kyc-validators';
 import { latestApplication } from "@/lib/latest-application";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_FULL_NAME, WAVE_FORMAL_NAME } from "@/lib/wave-program";
+
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
     surname: strictNameSchema,
@@ -522,11 +527,11 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <div style="background:linear-gradient(135deg,#166534,#16a34a);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
                                 <h1 style="color:white;margin:0;font-size:24px;">RH-WAVE 774</h1>
-                                <p style="color:#bbf7d0;margin:8px 0 0;">Women Agro-Value Expansion Programme</p>
+                                <p style="color:#bbf7d0;margin:8px 0 0;">${WAVE_FULL_NAME} Programme</p>
                             </div>
                             <h2 style="color:#166534;">Application Received!</h2>
                             <p style="color:#374151;">Dear <strong>${applicantName}</strong>,</p>
-                            <p style="color:#374151;">Thank you for applying to the <strong>RH-WAVE 774 Women Agro-Value Expansion Programme</strong>. Your application has been successfully submitted and is now under review.</p>
+                            <p style="color:#374151;">Thank you for applying to the <strong>${WAVE_FORMAL_NAME}</strong>. Your application has been successfully submitted and is now under review.</p>
                             <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
                                 <p style="margin:0;color:#166534;"><strong>Application ID:</strong> ${applicationId}</p>
                                 <p style="margin:8px 0 0;color:#166534;"><strong>Status:</strong> Pending Review</p>

@@ -190,28 +190,43 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                           *   known, the applicant types her own ward, which is
                           *   the only answer that can be true.
                           */}
-                        {hasVerifiedWards(data?.lgaOfResidence || "") ? (
-                            <select
-                                value={data?.ward || ""}
-                                onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                                disabled={!data?.lgaOfResidence}
-                            >
-                                <option value="">Select Ward</option>
-                                {getWards(data?.lgaOfResidence || "").map((ward) => (
-                                    <option key={ward} value={ward}>{ward}</option>
-                                ))}
-                            </select>
-                        ) : (
-                            <input
-                                type="text"
-                                value={data?.ward || ""}
-                                onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
-                                placeholder={data?.lgaOfResidence ? "Type your ward name" : "Select your LGA first"}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                                disabled={!data?.lgaOfResidence}
-                            />
-                        )}
+                        {/*
+                          *   #789 ONE CONTROL NOW, NOT TWO — and it both offers
+                          *   the real names and accepts one that is missing.
+                          *
+                          *   #774 chose between a dropdown and a text box on
+                          *   whether the LGA's wards were known, which was right
+                          *   when two LGAs were known and 772 were not. All 772
+                          *   are known now, from the published INEC register, so
+                          *   nearly every applicant would get the dropdown —
+                          *   and a dropdown is a claim that these are ALL the
+                          *   choices. 8,778 wards is what the register lists,
+                          *   not a promise that no ward is missing from it, and
+                          *   a required field an applicant cannot satisfy is
+                          *   exactly what #789 found on the cooperative form.
+                          *
+                          *   So: type or choose. The list is a help, never a wall.
+                          */}
+                        <input
+                            type="text"
+                            list="wave-ward-options"
+                            value={data?.ward || ""}
+                            onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
+                            placeholder={
+                                !data?.lgaOfResidence
+                                    ? "Select your LGA first"
+                                    : hasVerifiedWards(data?.lgaOfResidence || "", data?.stateOfResidence || "")
+                                        ? "Choose or type your ward"
+                                        : "Type your ward name"
+                            }
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            disabled={!data?.lgaOfResidence}
+                        />
+                        <datalist id="wave-ward-options">
+                            {getWards(data?.lgaOfResidence || "", data?.stateOfResidence || "").map((ward) => (
+                                <option key={ward} value={ward} />
+                            ))}
+                        </datalist>
                     </div>
 
                     <div>

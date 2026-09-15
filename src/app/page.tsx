@@ -12,6 +12,11 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+
 export default function HubPage() {
     const { data: session } = useSession();
     const isMale = session?.user?.gender?.toLowerCase() === "male";
@@ -167,7 +172,7 @@ export default function HubPage() {
                                 Our work spans commodity export, cooperative development, farm production structuring, export training, and global market access facilitation.
                             </p>
                             <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                                As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900">Women Agro Value Expansion (WAVE) Program</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
+                                As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900">{WAVE_PROGRAM_NAME}</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
                             </p>
                             <div className="bg-emerald-50 border-l-4 border-emerald-600 p-6 mb-8 rounded-r-xl">
                                 <p className="text-base italic text-slate-900 mb-3">

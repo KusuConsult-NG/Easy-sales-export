@@ -13,6 +13,11 @@ import { IdInput } from "@/components/ui/IdInput";
 import MasterUploader from "@/components/shared/MasterUploader";
 import { useToast } from "@/contexts/ToastContext";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_NAME_WITH_DOTTED_ACRONYM } from "@/lib/wave-program";
+
 interface DocumentUploadStepProps {
     data: {
         validId?: { name: string; url: string };
@@ -245,7 +250,7 @@ const TERMS_OF_REFERENCE = `TERMS OF REFERENCE (ToR)
 FOR THE EASY SALES COOPERATIVE SOCIETY
 
 1. INTRODUCTION
-This document sets out the Terms of Reference (ToR) to guide the establishment, governance, and operation of Easy Sales Cooperative Society, promoted by Easy Sales Export LTD, as part of its women empowerment and agricultural development initiative, expressed under the banner of Women Agro Value Expansion (W.A.V.E.) Program.
+This document sets out the Terms of Reference (ToR) to guide the establishment, governance, and operation of Easy Sales Cooperative Society, promoted by Easy Sales Export LTD, as part of its women empowerment and agricultural development initiative, expressed under the banner of ${WAVE_NAME_WITH_DOTTED_ACRONYM} Program.
 
 The Cooperative is designed to provide a structured savings platform for women participating in the W.A.V.E. project, enhance financial inclusion, promote economic self-reliance, and support sustainable livelihoods.
 

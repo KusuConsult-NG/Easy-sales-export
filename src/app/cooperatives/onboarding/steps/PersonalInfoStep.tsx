@@ -212,20 +212,47 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             <option key={lga} value={lga}>{lga}</option>
                         ))}
                     </FormSelect>
-                    <FormSelect
+                    {/*
+                      *   #789 THIS FIELD COULD NOT BE ANSWERED, AND IT BLOCKED
+                      *        THE WHOLE COOPERATIVE SIGN-UP.
+                      *
+                      *   It was a REQUIRED <select> whose only option came from
+                      *   getWards — and #774 emptied getWards for 772 of the 774
+                      *   LGAs when it removed the "Ward 1 … Ward 10" fallback.
+                      *   OnboardingClient then refuses to continue on
+                      *   `!personalInfo.address.ward`. So from #774 until now,
+                      *   cooperative onboarding could not be completed by anyone
+                      *   outside Ikeja or Abuja Municipal: the form asked for
+                      *   something it would not let her choose.
+                      *
+                      *   My own fix caused it. #774 gave the WAVE form a
+                      *   free-text fallback and did not give this one the same
+                      *   thing, which is the finding this audit keeps meeting —
+                      *   a correct rule applied to some of the places it names.
+                      *
+                      *   AN INPUT WITH A DATALIST, not a select, so both halves
+                      *   are true at once: the real ward names are offered, and
+                      *   a woman whose ward is missing from the register can
+                      *   still type it. 8,778 wards is the published list, not a
+                      *   guarantee, and a required dropdown built on a list that
+                      *   might be missing her ward is this same defect waiting
+                      *   to happen again.
+                      */}
+                    <FormInput
                         label="Ward"
-                       
                         required
+                        list="coop-ward-options"
                         value={data?.address?.ward || ""}
                         onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), ward: e.target.value } as any })}
                         disabled={!data?.address?.lga}
+                        placeholder={data?.address?.lga ? "Choose or type your ward" : "Select your LGA first"}
                         error={errors.ward}
-                    >
-                        <option value="">Select Ward</option>
-                        {data?.address?.lga && getWards(data.address.lga).map((ward) => (
-                            <option key={ward} value={ward}>{ward}</option>
+                    />
+                    <datalist id="coop-ward-options">
+                        {getWards(data?.address?.lga || "", data?.address?.state || "").map((ward) => (
+                            <option key={ward} value={ward} />
                         ))}
-                    </FormSelect>
+                    </datalist>
                 </div>
 
                 {/* Street Address — full width is appropriate here */}

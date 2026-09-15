@@ -14,6 +14,11 @@ import Link from "next/link";
 import { registerForBriefingAction } from "@/app/actions/briefing";
 import BackToHub from "@/components/common/BackToHub";
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_NAME_WITH_ACRONYM } from "@/lib/wave-program";
+
 const NIGERIAN_STATES = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
     "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT", "Gombe",
@@ -990,7 +995,7 @@ export default function WaveBriefingPage() {
                     <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mb-2">Convener</p>
                     <p className="text-slate-900 text-xl font-black mb-1">Sir Abdallah Mohammed Narabi</p>
                     <p className="text-green-700 font-medium">Strategic Implementing Partner</p>
-                    <p className="text-slate-500 text-sm mt-1">Women Agro-Value Expansion (WAVE)</p>
+                    <p className="text-slate-500 text-sm mt-1">{WAVE_NAME_WITH_ACRONYM}</p>
 
                     <div className="mt-12 pt-8 border-t border-slate-100">
                         <p className="text-slate-400 text-sm">© {(new Date()).getFullYear()} Easy Sales Export Hub. All rights reserved.</p>

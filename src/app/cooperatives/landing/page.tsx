@@ -13,6 +13,11 @@ import { checkCooperativeStatusAction } from '@/app/actions/cooperative';
 import { COMPANY_INFO, COOPERATIVE_CONFIG, CURRENCY_CONFIG } from '@/lib/constants';
 import { toast } from 'sonner';
 
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+
 export default function CooperativeLandingPage() {
     const { status: sessionStatus } = useSession();
     const router = useRouter();
@@ -670,7 +675,7 @@ export default function CooperativeLandingPage() {
                     </div>
 
                     <p className="text-lg text-slate-900 text-center mb-12 max-w-3xl mx-auto">
-                        Easy Sales Cooperative members have strategic positioning within the Women Agro-Value Expansion Program (RH-WAVE 774).
+                        Easy Sales Cooperative members have strategic positioning within the {WAVE_PROGRAM_NAME} (RH-WAVE 774).
                     </p>
 
                     {/* Opportunity Areas */}

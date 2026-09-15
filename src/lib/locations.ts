@@ -1,3 +1,7 @@
+//   #789 Nigeria's electoral wards, generated from the published INEC
+//   register — see scripts/build-wards.ts for the sources and the checks.
+import { WARDS_BY_STATE_AND_LGA } from "@/lib/nigeria-wards.generated";
+
 export const NIGERIAN_LOCATIONS: Record<string, string[]> = {
     "Abia": [
         "Aba North", "Aba South", "Arochukwu", "Bende", "Ikwuano", "Isiala Ngwa North",
@@ -255,10 +259,44 @@ export function isValidLGA(state: string, lga: string): boolean {
  *   answered. What remains is what somebody verified. Add an LGA here — real
  *   names, from the INEC register — and its field becomes a dropdown again.
  */
-const VERIFIED_WARDS: Record<string, string[]> = {
-    "Ikeja": ["Alausa", "Agidingbi", "Oregun", "Opebi", "GRA", "Wasimi", "Maryland", "Ojodu", "Oke-Ira", "Aguda"],
-    "Abuja Municipal": ["Garki", "Wuse", "Asokoro", "Maitama", "Gwarinpa", "Wuye", "Jabi", "Utako", "Mabushi", "Kado", "Garki II", "Wuse II", "Gwagwa", "Jiwa", "Gui", "Karshi", "Orozo", "Kar7", "Nyanya", "City Centre"]
-};
+/**
+ *   #789 THE HAND-WRITTEN TABLE IS GONE. The real register is here.
+ *
+ *   #774 removed the numbered placeholder and left two LGAs with real names,
+ *   saying the rest had to be added "one verified LGA at a time". The owner:
+ *   "do a deep search and find them. they are available and you know where to
+ *   find these details. Its public information and accessible to everyone."
+ *
+ *   They were right, and the sweep is done: 772 of 774 LGAs, 8,778 wards, from
+ *   two independently published copies of the INEC register that were measured
+ *   against each other before either was used. scripts/build-wards.ts holds the
+ *   sources, the cross-check, the hand-verified spelling aliases, and what it
+ *   refuses to guess.
+ *
+ *   Ikeja and Abuja Municipal are no longer special-cased — they are two rows
+ *   of the generated table like every other LGA.
+ */
+const VERIFIED_WARDS = WARDS_BY_STATE_AND_LGA;
+
+/**
+ * LGA names that belong to more than one state.
+ *
+ *   Bassa (Kogi, Plateau) · Ifelodun and Irepodun (Kwara, Osun) ·
+ *   Nasarawa (Kano, Nasarawa) · Obi (Benue, Nasarawa) · Surulere (Lagos, Oyo)
+ *
+ *   Computed rather than listed, so it cannot fall out of step with the table.
+ *   getWards refuses to answer for one of these without a state — see there.
+ */
+const AMBIGUOUS_LGA_NAMES: ReadonlySet<string> = (() => {
+    const states = new Map<string, Set<string>>();
+    for (const composite of Object.keys(VERIFIED_WARDS)) {
+        const [state, lga] = composite.split("|");
+        const k = normalizeLocation(lga);
+        if (!states.has(k)) states.set(k, new Set());
+        states.get(k)!.add(state);
+    }
+    return new Set([...states].filter(([, s]) => s.size > 1).map(([k]) => k));
+})();
 
 /** Polling units this platform can actually name, by ward. See above. */
 const VERIFIED_PUs: Record<string, string[]> = {
@@ -270,7 +308,7 @@ const VERIFIED_PUs: Record<string, string[]> = {
  * Returns a list of Wards for a given LGA.
  * Falls back to generic numbered wards if refined data isn't available.
  */
-export function getWards(lga: string): string[] {
+export function getWards(lga: string, state?: string): string[] {
     /**
      *   #774 "Ward 1 … Ward 10" WAS OFFERED AS THE WARD LIST FOR 772 OF
      *        NIGERIA'S 774 LGAs.
@@ -295,14 +333,39 @@ export function getWards(lga: string): string[] {
      *   change — which is the only way this gets fixed properly, one verified
      *   LGA at a time.
      */
+    /*
+     *   #789 AND THE STATE IS PART OF THE QUESTION NOW.
+     *
+     *   With two LGAs in the table this was keyed on the LGA name alone and it
+     *   did not matter. With all 772 it does: six LGA names belong to two states
+     *   each, so a name-only lookup would hand a woman in Surulere, Oyo the ward
+     *   list for Surulere, Lagos — and she would pick one, and it would look
+     *   like an answer for the rest of the record's life.
+     *
+     *   So an ambiguous name asked WITHOUT a state gets nothing, and she types
+     *   her ward instead. Both forms pass the state, so this is a guard rather
+     *   than a behaviour anybody meets.
+     */
     if (!lga) return [];
-    const key = Object.keys(VERIFIED_WARDS).find(k => normalizeLocation(k) === normalizeLocation(lga));
-    return key ? VERIFIED_WARDS[key] : [];
+    const wanted = normalizeLocation(lga);
+
+    if (state) {
+        const composite = Object.keys(VERIFIED_WARDS).find(k => {
+            const [s, l] = k.split("|");
+            return normalizeLocation(s) === normalizeLocation(state) && normalizeLocation(l) === wanted;
+        });
+        return composite ? [...VERIFIED_WARDS[composite]] : [];
+    }
+
+    if (AMBIGUOUS_LGA_NAMES.has(wanted)) return [];
+
+    const key = Object.keys(VERIFIED_WARDS).find(k => normalizeLocation(k.split("|")[1]) === wanted);
+    return key ? [...VERIFIED_WARDS[key]] : [];
 }
 
 /** True when this LGA's wards are known, so the form can offer a list. */
-export function hasVerifiedWards(lga: string): boolean {
-    return getWards(lga).length > 0;
+export function hasVerifiedWards(lga: string, state?: string): boolean {
+    return getWards(lga, state).length > 0;
 }
 
 /**

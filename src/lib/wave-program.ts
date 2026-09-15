@@ -29,27 +29,32 @@
 /**
  * The programme's name, expanded.
  *
- *   #785 CORRECTED BY THE OWNER, A SECOND TIME, AND THIS IS THE WHOLE POINT OF
- *        KEEPING IT IN ONE PLACE.
+ *   #785 / #788 CORRECTED BY THE OWNER TWICE MORE, AND THIS IS THE WHOLE POINT
+ *        OF KEEPING IT IN ONE PLACE.
  *
  *   #774 was told "The WAVE acronym is Women Agro-Value Expansion program" and
- *   set that here. The owner's formal list now says:
+ *   set that here. The owner's formal list then said "Ensure that RH-WAVE is
+ *   consistently stated as 'Renewed Hope Women Agro Value Expansion'", and #785
+ *   set that — WITHOUT the hyphen, following the list's spelling literally.
  *
- *       "Ensure that RH-WAVE is consistently stated as 'Renewed Hope Women Agro
- *        Value Expansion' wherever it is referenced."
+ *   The owner's next message settles the spelling: "change Women Agro-Value
+ *   Expansion Program to Renewed Hope Women Agro-Value Expansion Program". So
+ *   the RENEWED HOPE prefix stays — it is what the RH in RH-WAVE stands for —
+ *   and the hyphen comes back.
  *
- *   Two differences, both deliberate: the RENEWED HOPE prefix, which is what
- *   the RH in RH-WAVE stands for and was missing entirely, and no hyphen in
- *   "Agro Value".
- *
- *   Changing it is one line, and every one of the five screens follows. That is
- *   the entire argument for the constant — before #774 this correction would
- *   have meant finding six strings and would have missed at least one, which is
- *   exactly how there came to be six spellings.
+ *   `Program` is NOT part of this constant, so the name composes: the sentence
+ *   form is WAVE_PROGRAM_NAME below, and the formal designation appends
+ *   "Programme" itself. Baking the word in here would produce "…Expansion
+ *   Program Programme" in the formal line.
  */
-export const WAVE_FULL_NAME = "Renewed Hope Women Agro Value Expansion";
+export const WAVE_FULL_NAME = "Renewed Hope Women Agro-Value Expansion";
 
-/** The name as it is usually written in a sentence. */
+/**
+ * The name as it is usually written in a sentence.
+ *
+ *   #788 "Renewed Hope Women Agro-Value Expansion Program" — the exact string
+ *   the owner asked for, composed rather than repeated.
+ */
 export const WAVE_PROGRAM_NAME = `${WAVE_FULL_NAME} Program`;
 
 /**
@@ -61,5 +66,15 @@ export const WAVE_PROGRAM_NAME = `${WAVE_FULL_NAME} Program`;
  */
 export const WAVE_FORMAL_NAME = `RH-WAVE 774 ${WAVE_FULL_NAME} Programme`;
 
-/** "Renewed Hope Women Agro Value Expansion (WAVE)" — a heading needing both. */
+/** "Renewed Hope Women Agro-Value Expansion (WAVE)" — a heading needing both. */
 export const WAVE_NAME_WITH_ACRONYM = `${WAVE_FULL_NAME} (WAVE)`;
+
+/**
+ * The same name with the cooperative deed's dotted acronym.
+ *
+ *   #788 The Terms of Reference the cooperative onboarding shows defines the
+ *   short form as "W.A.V.E." and then uses it throughout. Only the DEFINITION
+ *   is a name; the later "W.A.V.E. project" references are that defined term
+ *   and are left exactly as the document has them.
+ */
+export const WAVE_NAME_WITH_DOTTED_ACRONYM = `${WAVE_FULL_NAME} (W.A.V.E.)`;

@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+//   #788 The programme's name comes from one constant. Before #774
+//   this screen spelled it out, and the owner has now corrected that
+//   spelling twice — see lib/wave-program.
+import { WAVE_FULL_NAME } from "@/lib/wave-program";
+
 import {
     Search,
     HelpCircle,
@@ -192,7 +197,7 @@ const faqs = [
         questions: [
             {
                 q: "What is RH-WAVE 774?",
-                a: "The Women Agro-Value Expansion Programme is Nigeria's flagship initiative to empower women in agriculture across all 774 Local Government Areas, launched June 2025."
+                a: `The ${WAVE_FULL_NAME} Programme is Nigeria's flagship initiative to empower women in agriculture across all 774 Local Government Areas, launched June 2025.`
             },
             {
                 q: "How do I apply?",
