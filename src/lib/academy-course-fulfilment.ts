@@ -158,6 +158,32 @@ export async function fulfilAcademyCoursePurchase(args: {
         );
     }
 
+    /*
+     *   #759 — AND THE LEARNER'S OWN RECORD SAYS THEY ARE IN THE ACADEMY.
+     *
+     *   Reported by the owner, of the Registrations by Module tile: "for academy
+     *   the 9 was payments that came from users who paid 50k, 100k and 25k."
+     *   Nine people paid and the tile read 0.
+     *
+     *   Measured: `verifyEnrollmentPaymentAction` — the whole course-purchase
+     *   path — touches the USERS collection ZERO times. No
+     *   `serviceRegistrations.academy`, no `academy_participant` role, nothing.
+     *   The purchase writes a progress row, an enrolment row and its mirror,
+     *   and the learner's own document goes on saying they have no connection
+     *   to the academy at all.
+     *
+     *   The registration-FEE path next door does write it. So the platform
+     *   records an academy member when they pay to register and not when they
+     *   pay for a course — and a course is the more expensive of the two.
+     *
+     *   WHAT IT COSTS, BEYOND THE TILE. Access itself is fine: #378 made the
+     *   progress row carry `purchased: true` and checkCourseAccess honours it.
+     *   The role is what everything ELSE keys on — module broadcasts, the admin
+     *   member list, and #752's messaging scope, under which a learner holding
+     *   no module role cannot reach the academy admin they just paid.
+     */
+    await recordAcademyParticipation(userId);
+
     // Audit only a real enrolment.
     //
     // A duplicate delivery falls through to the block above (#258), so
@@ -175,4 +201,71 @@ export async function fulfilAcademyCoursePurchase(args: {
     }
 
     return { enrolledNow, accessRecordsComplete: !records.failed };
+}
+
+/**
+ * Record that this learner belongs to the academy, without claiming anything
+ * they have not paid for.
+ *
+ *   ADDITIVE, AND IT NEVER OVERRIDES A DECISION. The sibling path in
+ *   _payment.ts spells out why that matters: when an application has been
+ *   decided against, it omits the status key entirely rather than writing
+ *   "pending", because that "would clear the rejection from the user document
+ *   while leaving it on the application". The same applies here and more
+ *   broadly — an existing status of approved, pending, rejected or
+ *   revision_required is somebody's decision, and buying a course is not a
+ *   review of it. A status is written ONLY when there is none.
+ *
+ *   AND IT DOES NOT TOUCH `plan` OR `paymentStatus`. Those belong to the
+ *   registration fee. A course purchase is not a plan, and stamping
+ *   `paymentStatus: "completed"` here would assert a fee that was never paid —
+ *   inventing the very kind of fact this audit keeps removing.
+ *
+ *   Existence-checked and idempotent, like every other write in this function,
+ *   because a webhook retry lands here too.
+ */
+export async function recordAcademyParticipation(userId: string): Promise<void> {
+    try {
+        const ref = db.collection("users").doc(userId);
+        const snap = await ref.get();
+        if (!snap.exists) return;
+
+        const data = snap.data() ?? {};
+        const roles: string[] = Array.isArray(data.roles) ? data.roles : [];
+        const academy = data.serviceRegistrations?.academy ?? {};
+
+        const patch: Record<string, unknown> = {};
+
+        if (!roles.includes("academy_participant")) {
+            patch["roles"] = FieldValue.arrayUnion("academy_participant");
+        }
+        if (!academy.status) {
+            //   "active" and not "approved": nobody reviewed anything. They
+            //   bought a course, which is a fact about them, and it is in the
+            //   set the module tiles count.
+            patch["serviceRegistrations.academy.status"] = "active";
+        }
+        if (academy.hasPurchasedCourses !== true) {
+            patch["serviceRegistrations.academy.hasPurchasedCourses"] = true;
+            patch["serviceRegistrations.academy.firstCoursePurchaseAt"] =
+                FieldValue.serverTimestamp();
+        }
+
+        if (Object.keys(patch).length === 0) return;
+
+        patch["updatedAt"] = FieldValue.serverTimestamp();
+        await ref.update(patch);
+    } catch (error) {
+        /*
+         *   NON-FATAL, AND LOUD. The money is claimed and the course is open by
+         *   this point; failing the purchase over a reporting field would be the
+         *   worse outcome. But a learner who paid and is recorded nowhere is
+         *   exactly the state this finding exists to end, so it must not vanish
+         *   into silence either.
+         */
+        logger.warn(
+            `[AcademyCourseFulfilment] Could not record academy participation for ${userId}: `
+            + `${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
 }

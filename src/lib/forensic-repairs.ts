@@ -64,7 +64,9 @@ export type RepairKind =
     /** Take a deleted seller's listings off sale. */
     | "orphaned_products"
     /** Rebuild a user's serviceRegistrations from their applications. */
-    | "service_registration_drift";
+    | "service_registration_drift"
+    /** Record academy participation for learners who paid for a course. */
+    | "academy_participation_drift";
 
 /**
  * The repair offer for each check, BY THE CHECK'S OWN NAME.
@@ -85,6 +87,15 @@ export const REPAIR_BY_CHECK: Readonly<Record<string, RepairOffer>> = {
     },
     "Approval Drift (User Record vs Application)": {
         kind: "service_registration_drift",
+        safe: true,
+    },
+    /*
+     *   #759 — learners who PAID for a course and whose own record does not say
+     *   they are in the academy. Safe because it asserts only what the payment
+     *   already proves, never overrides a decision, and claims no plan or fee.
+     */
+    "Academy Participation (Paid, Not Recorded)": {
+        kind: "academy_participation_drift",
         safe: true,
     },
 
@@ -148,6 +159,7 @@ export const REPAIR_KINDS: readonly RepairKind[] = [
     "orphaned_users",
     "orphaned_products",
     "service_registration_drift",
+    "academy_participation_drift",
 ];
 
 export function isRepairKind(value: unknown): value is RepairKind {
