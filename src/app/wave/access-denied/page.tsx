@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ShieldAlert, ArrowLeft, Users, GraduationCap, Sprout } from "lucide-react";
+import { WAVE_NAME_WITH_ACRONYM } from "@/lib/wave-program";
 
 export default function WaveAccessDeniedPage() {
     return (
@@ -26,7 +27,7 @@ export default function WaveAccessDeniedPage() {
                     {/* Explanation */}
                     <div className="bg-emerald-600/10 border border-emerald-600/30 rounded-xl p-6 mb-6">
                         <h2 className="text-lg font-semibold text-white mb-2">
-                            Women in Agri-Ventures Excellence (WAVE)
+                            {WAVE_NAME_WITH_ACRONYM}
                         </h2>
                         <p className="text-emerald-100 leading-relaxed">
                             The WAVE program is exclusively designed for female participants to empower women in agricultural exports.

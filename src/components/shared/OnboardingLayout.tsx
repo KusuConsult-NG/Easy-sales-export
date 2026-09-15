@@ -3,6 +3,7 @@
 import { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, Home } from "lucide-react";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
 interface OnboardingLayoutProps {
     children: ReactNode;
@@ -26,13 +27,22 @@ export default function OnboardingLayout({
             {/* Navigation Header */}
             <div className="border-b border-slate-200 bg-white">
                 <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-                    <Link
-                        href={backHref}
-                        className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium transition-colors"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Link>
+                    {/*
+                      *   #777 "Hub" on the right goes to /dashboard, which is
+                      *   the signed-in member area and not home — and an
+                      *   applicant part-way through onboarding may not have one
+                      *   yet. Home is its own control, on the left, as asked.
+                      */}
+                    <div className="flex items-center gap-1">
+                        <FormHomeButton />
+                        <Link
+                            href={backHref}
+                            className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back
+                        </Link>
+                    </div>
                     <Link
                         href="/dashboard"
                         className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium transition-colors"

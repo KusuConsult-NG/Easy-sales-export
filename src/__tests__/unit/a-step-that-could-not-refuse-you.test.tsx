@@ -196,25 +196,57 @@ describe('#626 — and the civic step refuses exactly what the server refuses', 
         }
     });
 
+    //   #774 The voter's card is mandatory now, so a fixture that supplies only
+    //   a NIN no longer describes a completable step. Supplied here so these
+    //   tests still measure the NIN rule rather than the card's absence.
+    const VALID_CARD = '90F5B123456789012345';
+
     it('BUT A PLAUSIBLE NIN GOES THROUGH', async () => {
         //   Without this the fix would be indistinguishable from a step that
         //   refuses everything, which is a worse defect than one that refuses
         //   nothing: it cannot be got past at all.
-        const { advanced } = await pressNext(CIVIC, { nin: '23948571062' });
+        const { advanced } = await pressNext(CIVIC, {
+            nin: '23948571062', votersCardNumber: VALID_CARD,
+        });
         expect(advanced).toBe(true);
     });
 
-    it('AND AN EMPTY NIN GOES THROUGH, because the server allows it', async () => {
+    it('AND AN EMPTY NIN IS NOW REFUSED, because the server refuses it', async () => {
         /*
-         *   The divergence that would be invisible until somebody hit it. The
-         *   submit schema has `nationalIdField('NIN')`, which is `.optional()`.
-         *   A client that demanded a NIN would refuse applicants the server was
-         *   willing to accept — the same class of defect in the other direction.
+         *   #774 THIS TEST ASSERTED THE OPPOSITE, and its reasoning was right
+         *   at the time:
+         *
+         *       "The submit schema has `nationalIdField('NIN')`, which is
+         *        `.optional()`. A client that demanded a NIN would refuse
+         *        applicants the server was willing to accept — the same class
+         *        of defect in the other direction."
+         *
+         *   That is exactly why it has to move WITH the schema. The owner made
+         *   the field mandatory — "NIN, BVN and voter's cards are mandatory but
+         *   shouldn't be checked by QoreID" — the submit schema was changed to
+         *   `requiredNationalIdField('NIN')`, and a step that still let a blank
+         *   through would send the applicant through five more steps to be
+         *   refused at the end by a message naming no field. That is #773, the
+         *   defect the owner reported one message earlier.
          */
         for (const empty of [undefined, '', '   ']) {
-            const { advanced } = await pressNext(CIVIC, empty === undefined ? {} : { nin: empty });
-            expect({ nin: String(empty), advanced }).toEqual({ nin: String(empty), advanced: true });
+            const { advanced } = await pressNext(
+                CIVIC,
+                empty === undefined
+                    ? { votersCardNumber: VALID_CARD }
+                    : { nin: empty, votersCardNumber: VALID_CARD },
+            );
+            expect({ nin: String(empty), advanced }).toEqual({ nin: String(empty), advanced: false });
         }
+    });
+
+    it('AND THE VOTER\'S CARD IS REFUSED WHEN BLANK TOO', async () => {
+        //   The third field the owner named, and the one whose input had no
+        //   `error` prop at all — so this message had nowhere to render until
+        //   #774 gave it one. A rule reaching two fields out of three is this
+        //   audit's most repeated finding.
+        const { advanced } = await pressNext(CIVIC, { nin: '23948571062', votersCardNumber: '' });
+        expect(advanced).toBe(false);
     });
 
     it('AND IT IS THE SERVER\'S OWN RULE, not a second copy of it', () => {
@@ -225,14 +257,26 @@ describe('#626 — and the civic step refuses exactly what the server refuses', 
         const { join } = require('path');
         const src = readFileSync(join(process.cwd(), 'src/app/wave/application/steps/CivicStatusStep.tsx'), 'utf8');
 
-        expect(src).toContain("nationalIdField('NIN').safeParse");
+        //   #774 The rule is the REQUIRED one on both sides now.
+        expect(src).toContain("requiredNationalIdField('NIN').safeParse");
         //   And the check that could not fail is gone.
         expect(src).not.toContain('setErrors({});\n        return true;');
 
         //   The submit action validates with the same one, so the two agree by
         //   construction rather than by somebody remembering.
         const action = readFileSync(join(process.cwd(), 'src/app/actions/wave/_wv_applications.ts'), 'utf8');
-        expect(action).toContain("nin: nationalIdField('NIN')");
+        expect(action).toContain("nin: requiredNationalIdField('NIN')");
+
+        /*
+         *   AND THE BVN IS CHECKED ON THE STEP THAT DRAWS IT. It is collected
+         *   in Section E, so an error raised on this step would be written to a
+         *   field this step does not render — the applicant stopped by a
+         *   message she cannot see, on a screen that looks complete. Same
+         *   imported rule, different screen.
+         */
+        const financial = readFileSync(join(process.cwd(), 'src/app/wave/application/steps/FinancialStep.tsx'), 'utf8');
+        expect(financial).toContain("requiredNationalIdField('BVN')");
+        expect(action).toContain("bvn: requiredNationalIdField('BVN')");
     });
 });
 

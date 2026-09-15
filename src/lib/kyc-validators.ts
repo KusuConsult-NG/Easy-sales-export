@@ -243,6 +243,44 @@ export function nationalIdField(field: 'NIN' | 'BVN') {
 }
 
 /**
+ * The same field, REQUIRED.
+ *
+ *   #774 THE OWNER MADE ALL THREE IDENTITY NUMBERS COMPULSORY.
+ *
+ *       "NIN, BVN and voter's cards are mandatory but shouldn't be checked by
+ *        QoreID"
+ *
+ *   The second half was already true and stays true: nothing in this file
+ *   contacts any provider. #487 settled that — "PASS means do not require an
+ *   external check... a well-formed number is accepted and recorded as
+ *   `self_declared`" — and making the field required does not change it. What
+ *   changes is that leaving it blank is no longer an option.
+ *
+ *   Built on nationalIdField rather than beside it, so the eleven-digit rule
+ *   and the placeholder rule have exactly one definition and a required field
+ *   cannot drift from an optional one. #501's finding was that this exact rule
+ *   reached one submission path out of five; a second spelling of it is how
+ *   that happens again.
+ */
+export function requiredNationalIdField(field: 'NIN' | 'BVN') {
+    return z
+        .string({ message: `${field} is required` })
+        .trim()
+        .min(1, `${field} is required`)
+        .refine((v) => /^\d{11}$/.test(v), { message: `${field} must be exactly 11 digits` })
+        .refine((v) => !isObviouslyFakeId(v), { message: fakeIdErrorMessage(field) });
+}
+
+/** The voter's card, REQUIRED — #774. See votersCardField for the rule. */
+export function requiredVotersCardField() {
+    return z
+        .string({ message: "Voter's Card Number is required" })
+        .trim()
+        .min(1, "Voter's Card Number is required")
+        .refine((v) => !looksLikeFakeVotersCard(v), { message: VOTERS_CARD_ERROR_MESSAGE });
+}
+
+/**
  * Human-readable label for error messages.
  */
 export function fakeIdErrorMessage(field: 'NIN' | 'BVN'): string {

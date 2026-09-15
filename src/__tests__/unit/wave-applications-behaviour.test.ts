@@ -128,7 +128,13 @@ function form(extra: Record<string, unknown> = {}): any {
         nextOfKinPhone: '08087654321',
         nextOfKinRelationship: 'Sister',
         nin: '22107458391',
-        votersCardNumber: '',
+        //   #774 The owner made the voter's card mandatory — "NIN, BVN and
+        //   voter's cards are mandatory but shouldn't be checked by QoreID" —
+        //   so a blank one is now refused by the submit schema and this
+        //   fixture, which described a valid application, had to stop being
+        //   blank. The value is a well-formed VIN; nothing checks it with
+        //   anybody.
+        votersCardNumber: '90F5B123456789012345',
         highestEducation: 'tertiary',
         currentOccupation: 'Trader',
         averageMonthlyIncome: '50k_100k',
@@ -345,13 +351,54 @@ describe('submitMultiStepWaveApplicationAction', () => {
         expect(user.kyc.nin).toBe(sha256('22107458391'));
     });
 
-    it('stores null rather than a hash of the empty string when no NIN is given', async () => {
+    it('REFUSES A BLANK NIN OR BVN — they are mandatory now', async () => {
+        /*
+         *   #774 THIS TEST USED TO ASSERT THE OPPOSITE, and was right to.
+         *
+         *   It read "stores null rather than a hash of the empty string when no
+         *   NIN is given", because the fields were optional and hashing "" to a
+         *   constant would have made every ID-less applicant collide with every
+         *   other. That property still holds in hashData's callers; what
+         *   changed is that this action can no longer be reached with a blank
+         *   one:
+         *
+         *       "NIN, BVN and voter's cards are mandatory but shouldn't be
+         *        checked by QoreID."
+         *
+         *   So the stronger property is asserted — refusal — and the branch the
+         *   old test covered is now unreachable rather than untested.
+         */
         seedUser();
         const { submitMultiStepWaveApplicationAction } = await actions();
-        await submitMultiStepWaveApplicationAction(form({ nin: '', bvn: '' }));
+        const res: any = await submitMultiStepWaveApplicationAction(form({ nin: '', bvn: '' }));
 
-        expect(onlyApplication().nin).toBeNull();
-        expect(onlyApplication().bvn).toBeNull();
+        expect(res.success).toBe(false);
+        expect(String(res.error)).toMatch(/NIN|required/i);
+        //   and nothing was written for a submission that was refused
+        expect(store.all(COLLECTIONS.WAVE_APPLICATIONS).length).toBe(0);
+    });
+
+    it('and a blank voter\'s card is refused too', async () => {
+        //   The third of the three the owner named. Asserted separately
+        //   because a rule that reaches two fields out of three is this
+        //   audit's single most repeated finding.
+        seedUser();
+        const { submitMultiStepWaveApplicationAction } = await actions();
+        const res: any = await submitMultiStepWaveApplicationAction(form({ votersCardNumber: '' }));
+
+        expect(res.success).toBe(false);
+    });
+
+    it('CONTROL: a complete application is still accepted, and the numbers are hashed', async () => {
+        //   The vacuity guard for the two above: a schema that refused
+        //   everything would pass both and would close WAVE applications.
+        seedUser();
+        const { submitMultiStepWaveApplicationAction } = await actions();
+        const res: any = await submitMultiStepWaveApplicationAction(form());
+
+        expect(res.success).toBe(true);
+        expect(onlyApplication().nin).toBe(sha256('22107458391'));
+        expect(onlyApplication().bvn).toBe(sha256('22233344455'));
     });
 
     it('never marks the identity verified from the applicant\'s own typing', async () => {
@@ -540,14 +587,26 @@ describe('the duplicate-identity gate', () => {
         expect(res.error).toContain('currently under_review');
     });
 
-    it('skips the NIN check entirely when the applicant declares none', async () => {
+    it('A BLANK NIN CANNOT COLLIDE WITH ANOTHER, because it is refused first', async () => {
+        /*
+         *   #774 This read "skips the NIN check entirely when the applicant
+         *   declares none": a foreign row holding sha256("") must not be
+         *   treated as the same person as every other applicant without a NIN.
+         *
+         *   The collision it guarded against is now impossible one step
+         *   earlier — a blank NIN never reaches the duplicate check — so the
+         *   test asserts the refusal, and the sha256("") row is kept in the
+         *   fixture to show it is not what causes it.
+         */
         seedUser();
-        // A foreign row holding the hash of the empty string must not match.
         seedForeignApplication({ nin: sha256('') });
 
         const { submitMultiStepWaveApplicationAction } = await actions();
-        expect(await submitMultiStepWaveApplicationAction(form({ nin: '' })))
-            .toMatchObject({ success: true });
+        const res: any = await submitMultiStepWaveApplicationAction(form({ nin: '' }));
+
+        expect(res.success).toBe(false);
+        //   refused for being blank, NOT for duplicating the foreign row
+        expect(String(res.error)).not.toMatch(/already|duplicate|another/i);
     });
 });
 
@@ -994,8 +1053,16 @@ describe('resubmitWaveApplicationAction', () => {
         });
         store.seed(COLLECTIONS.WAVE_APPLICATIONS, 'app-1', { userId: APPLICANT, status: 'pending' });
 
+        /*
+         *   #774 The resubmission used to carry `bvn: '', nin: ''`, because a
+         *   blank ID was the way an applicant could downgrade herself. Blank is
+         *   refused now, so the DOWNGRADE this test is about has to be shown
+         *   the way it can still happen: a resubmission that succeeds and
+         *   writes the identity fields must still not touch the verification
+         *   flags, because the action deliberately never writes them.
+         */
         const { resubmitWaveApplicationAction } = await actions();
-        await resubmitWaveApplicationAction(form({ bvn: '', nin: '' }));
+        expect(await resubmitWaveApplicationAction(form())).toMatchObject({ success: true });
 
         expect(readUser()!.kyc.bvnVerified).toBe(true);
         expect(readUser()!.kyc.ninVerified).toBe(true);

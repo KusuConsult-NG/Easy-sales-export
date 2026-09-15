@@ -9,6 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { writeDataExportRecord } from "@/lib/data-export-record";
 import { formatShortDateOrDash } from "@/lib/date-utils";
+import { WAVE_FULL_NAME } from "@/lib/wave-program";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -344,7 +345,7 @@ function generatePDFReport(applications: any[], timeframe: string) {
 
     <div class="footer">
         <p>Easy Sales Export - WAVE Program</p>
-        <p>Women in Agriculture Venture Excellence</p>
+        <p>${WAVE_FULL_NAME}</p>
     </div>
 </body>
 </html>

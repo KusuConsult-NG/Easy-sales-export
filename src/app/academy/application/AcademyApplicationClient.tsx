@@ -14,6 +14,7 @@ import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { AlertTriangle } from "lucide-react";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
 interface PersonalInfoData {
     firstName: string;
@@ -598,6 +599,12 @@ export default function AcademyApplicationClient(
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Header */}
+            {/*   #777 The way out, at the top left, as the owner asked. */}
+            <div className="bg-white border-b border-slate-200">
+                <div className="max-w-4xl mx-auto px-6 py-3">
+                    <FormHomeButton />
+                </div>
+            </div>
             <div style={{ background: "linear-gradient(to right, #2563eb, #4f46e5)" }} className="text-white py-12">
                 <div className="max-w-4xl mx-auto px-6 text-center">
                     <h1 className="text-3xl md:text-4xl font-bold mb-2">Academy Learner Application</h1>

@@ -9,6 +9,7 @@
 import { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
 interface OnboardingLayoutProps {
     children: ReactNode;
@@ -33,16 +34,27 @@ export function OnboardingLayout({
             <div className="bg-white border-b border-slate-200">
                 <div className="max-w-4xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        {/* Back Button */}
-                        {backUrl && (
-                            <Link
-                                href={backUrl}
-                                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
-                            >
-                                <ArrowLeft className="w-5 h-5" />
-                                <span>Back</span>
-                            </Link>
-                        )}
+                        {/*
+                          *   #777 Home, at the top left, as the owner asked.
+                          *   Grouped with Back rather than replacing it: Back
+                          *   goes one step to the module, Home leaves entirely,
+                          *   and the applicant who wants out wants the second.
+                          *   `backUrl` is optional, so Home also guarantees the
+                          *   left-hand slot is never empty.
+                          */}
+                        <div className="flex items-center gap-1">
+                            <FormHomeButton />
+                            {/* Back Button */}
+                            {backUrl && (
+                                <Link
+                                    href={backUrl}
+                                    className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+                                >
+                                    <ArrowLeft className="w-5 h-5" />
+                                    <span>Back</span>
+                                </Link>
+                            )}
+                        </div>
 
                         {/* Service Title */}
                         <div className="flex items-center gap-3">

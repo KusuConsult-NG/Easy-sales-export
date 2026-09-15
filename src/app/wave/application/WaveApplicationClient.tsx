@@ -14,6 +14,8 @@
 import { useState, useEffect } from "react";
 import { restoredStepIndex } from "@/lib/draft-step";
 import { logger } from '@/lib/logger';
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
+import { WAVE_FULL_NAME } from "@/lib/wave-program";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -425,13 +427,25 @@ export default function WaveApplicationClient(
     return (
         <div className="min-h-screen bg-white">
             <div className="max-w-4xl mx-auto px-4 py-12">
+                {/*   #777 The way out, at the top left, as the owner asked. */}
+                <div className="mb-8">
+                    <FormHomeButton />
+                </div>
                 {/* Header */}
                 <div className="text-center mb-12">
                     <h1 className="text-4xl font-bold text-slate-900 mb-4">
                         WAVE Program Application
                     </h1>
+                    {/*
+                      *   #777 A SIXTH EXPANSION OF THE ACRONYM, ON THE FORM
+                      *   ITSELF. "Women's Agribusiness Venture Empowerment" —
+                      *   #774 found five spellings and corrected four; this one
+                      *   sits on the application page, which is the single
+                      *   screen every WAVE applicant reads. From the constant
+                      *   now, like the rest.
+                      */}
                     <p className="text-lg text-slate-700 mb-2">
-                        Women's Agribusiness Venture Empowerment
+                        {WAVE_FULL_NAME}
                     </p>
                     <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">
                         Implemented by Easy Sales Export

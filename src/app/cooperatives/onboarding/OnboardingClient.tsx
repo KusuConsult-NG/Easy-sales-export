@@ -22,6 +22,7 @@ import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import PersonalInfoStep from "./steps/PersonalInfoStep";
 import NextOfKinStep from "./steps/NextOfKinStep";
 import DocumentUploadStep from "./steps/DocumentUploadStep";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
 interface OnboardingContentProps {
     initialTier: "Member";
@@ -607,13 +608,17 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             <div className="bg-white border-b border-slate-200">
                 <div className="max-w-4xl mx-auto px-8 py-6">
                     <div className="flex items-center justify-between mb-4">
-                        <Link
-                            href="/cooperatives"
-                            className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                            Back to Cooperatives
-                        </Link>
+                        {/*   #777 Home beside Back, at the top left, as asked. */}
+                        <div className="flex items-center gap-1">
+                            <FormHomeButton />
+                            <Link
+                                href="/cooperatives"
+                                className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                Back to Cooperatives
+                            </Link>
+                        </div>
                         <Link
                             href="/dashboard"
                             className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600 text-sm font-medium"

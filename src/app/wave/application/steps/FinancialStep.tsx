@@ -9,6 +9,8 @@ import { ChevronLeft, ChevronRight, AlertCircle, Loader2, CheckCircle } from "lu
 //   #560 The form's shape lives with the form — see ReviewStep. `page` is now
 //   the server half and exports only the page component.
 import type { WaveApplicationData } from "../WaveApplicationClient";
+//   #774 The submit schema's own rule, imported rather than restated here.
+import { requiredNationalIdField } from "@/lib/kyc-validators";
 
 interface Props {
     data: WaveApplicationData;
@@ -101,11 +103,25 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             newErrors.accountNumber = "Valid 10-digit account number required";
         }
 
-        // BVN is optional on WAVE but must be verified if provided
-        if (data.bvn && data.bvn.trim()) {
-            if (!bvnVerified) {
-                newErrors.bvn = "Please click 'Verify' to validate your BVN before continuing";
-            }
+        /**
+         *   #774 THE BVN IS REQUIRED NOW, and it is checked by the schema's own
+         *   rule rather than a second copy of it.
+         *
+         *   The owner: "NIN, BVN and voter's cards are mandatory but shouldn't
+         *   be checked by QoreID." The submit schema was changed to match, so
+         *   this screen has to move with it — a step that lets a blank BVN
+         *   through hands the applicant a refusal at the end of seven steps
+         *   naming no field, which is #773 exactly.
+         *
+         *   requiredNationalIdField is nationalIdField plus "not blank". It
+         *   contacts nobody: the "Verify" button beside this field answers
+         *   `checked: false` (#485, #522), and pressing it is NOT required —
+         *   the number is confirmed by a human during review, and gating the
+         *   step on a self-declared tick would stop applicants for nothing.
+         */
+        const bvnResult = requiredNationalIdField('BVN').safeParse(data.bvn ?? "");
+        if (!bvnResult.success) {
+            newErrors.bvn = bvnResult.error.issues[0]?.message ?? "Please check your BVN.";
         }
 
         if (data.isMemberOfCooperative && !data.cooperativeName?.trim()) {
@@ -193,10 +209,15 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         )}
                     </div>
 
-                    {/* BVN — REQUIRED on WAVE (collected, not API-verified) */}
+                    {/*
+                      *   #774 BVN — required, collected, never sent to an
+                      *   outside provider. The comment above this label already
+                      *   said "REQUIRED on WAVE" while the label beside it said
+                      *   "(Optional)" and validateForm enforced neither.
+                      */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                            Bank Verification Number (BVN) <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                            Bank Verification Number (BVN) <span className="text-red-500">*</span>
                         </label>
                         <div className="flex gap-2">
                             <div className="relative flex-1">

@@ -58,6 +58,13 @@ export interface EditableApplicationFields {
     bvn?: string;
     nin?: string;
     cacNumber?: string;
+    //   #775 flat spellings used by the wave application row
+    lgaOfOrigin?: string;
+    nextOfKinName?: string;
+    nextOfKinPhone?: string;
+    nextOfKinRelationship?: string;
+    alternativePhone?: string;
+    currentOccupation?: string;
     // Land listing editable fields
     title?: string;
     "location.state"?: string;
@@ -72,6 +79,11 @@ const ALLOWED_EDIT_FIELDS: (keyof EditableApplicationFields)[] = [
     "phone", "email",
     "stateOfOrigin", "lga", "stateOfResidence", "lgaOfResidence", "residentialAddress", "occupation",
     "membershipTier", "nextOfKin.name", "nextOfKin.phone", "nextOfKin.relationship", "nextOfKin.address",
+    //   #775 The WAVE application row's OWN spellings. It stores next of kin
+    //   and the origin LGA flat, not nested, so the dotted keys above could
+    //   never address them and there was no way to correct any of the four.
+    "lgaOfOrigin", "nextOfKinName", "nextOfKinPhone", "nextOfKinRelationship",
+    "alternativePhone", "currentOccupation",
     // Banking fields
     "bankName", "accountNumber", "accountName", "bankCode",
     "bankDetails.bankName", "bankDetails.accountNumber", "bankDetails.accountName", "bankDetails.bankCode",
@@ -300,6 +312,14 @@ async function _editApplicationAction(params: {
             if (has("phone")) {
                 userUpdate.phone = val("phone");
                 coopUpdate.phone = val("phone");
+                //   #775 The wave application's own field is `phone`;
+                //   `phoneNumber` belongs to wave REGISTRATIONS, a different
+                //   collection. Writing only the latter left the application's
+                //   real phone untouched and added a key nothing on this row
+                //   reads. Both are written — the stray one is kept because a
+                //   row somewhere may already carry it, and this finding adds
+                //   writes rather than removing them.
+                waveUpdate.phone = val("phone");
                 waveUpdate.phoneNumber = val("phone");
                 sellerUpdate.phone = val("phone");
                 exportUpdate["profile.phone"] = val("phone");
@@ -319,6 +339,9 @@ async function _editApplicationAction(params: {
                 userUpdate["address.state"] = val("stateOfOrigin");
                 coopUpdate.stateOfOrigin = val("stateOfOrigin");
                 coopUpdate.state = val("stateOfOrigin");
+                //   #775 Same shape as the phone: the wave row's field is
+                //   `stateOfOrigin`, and `state` is not on its schema at all.
+                waveUpdate.stateOfOrigin = val("stateOfOrigin");
                 waveUpdate.state = val("stateOfOrigin");
                 sellerUpdate["location.state"] = val("stateOfOrigin");
                 exportUpdate.state = val("stateOfOrigin");
@@ -492,13 +515,50 @@ async function _editApplicationAction(params: {
                 await applyIfDocExists(COLLECTIONS.FARM_NATION_APPLICATIONS, `legacy_${userId}`, farmUpdate);
             }
 
-            // If we are editing land listing directly or other fields not mapped above, update the docRef
-            if (collectionName === COLLECTIONS.LAND_LISTINGS || !ALLOWED_COLLECTIONS.includes(collectionName as any)) {
-                syncBatch.update(docRef, {
-                    ...sanitized,
-                    ...meta
-                });
-            }
+            /**
+             *   #775 THE DOCUMENT THE ADMIN WAS ACTUALLY EDITING WAS THE ONE
+             *        DOCUMENT THE EDIT DID NOT REACH.
+             *
+             *   The condition this replaces:
+             *
+             *       collectionName === LAND_LISTINGS
+             *         || !ALLOWED_COLLECTIONS.includes(collectionName)
+             *
+             *   The second half is DEAD — a collection outside ALLOWED_COLLECTIONS
+             *   returns an error two hundred lines above and never arrives here.
+             *   So the edited row itself was written for land listings and for
+             *   nothing else. Every other collection depended entirely on the
+             *   fan-out map above, which is hand-maintained, incomplete, and in
+             *   places spelled for a different collection's fields.
+             *
+             *   MEASURED on a wave_applications row, sending exactly what the
+             *   admin screen sends — surname, firstName, otherNames, phone,
+             *   stateOfResidence, lgaOfResidence:
+             *
+             *       success: true, "Application updated with audit trail."
+             *
+             *       surname           OLD-SURNAME     unchanged
+             *       firstName         NEW-FIRST       the only one that landed
+             *       otherNames        OLD-OTHER       unchanged
+             *       phone             OLD-PHONE       unchanged
+             *       stateOfResidence  OLD-STATE-RES   unchanged
+             *       lgaOfResidence    OLD-LGA-RES     unchanged
+             *       phoneNumber       NEW-PHONE       a field the row never had
+             *
+             *   ONE EDIT IN SIX, and the audit trail below records `after:
+             *   sanitized` — all six — so the log asserted changes that were
+             *   never written. An admin correcting a member's surname was told
+             *   it was done, with a receipt, and nothing had happened.
+             *
+             *   The row the admin opened is the row the admin meant. It is
+             *   written unconditionally now, and the fan-out to SIBLING
+             *   documents is left exactly as it was: this adds a write, it does
+             *   not remove or redirect one.
+             */
+            syncBatch.update(docRef, {
+                ...sanitized,
+                ...meta
+            });
 
             await syncBatch.commit();
 

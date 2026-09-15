@@ -29,6 +29,17 @@ interface WaveApplication {
     userEmail?: string;
     stateOfResidence?: string;
     lgaOfResidence?: string;
+    //   #775 The rest of what the applicant actually filled in. The editor
+    //   offered five boxes for a form with forty-seven answers, and two of the
+    //   five were never even loaded into it.
+    alternativePhone?: string;
+    residentialAddress?: string;
+    stateOfOrigin?: string;
+    lgaOfOrigin?: string;
+    currentOccupation?: string;
+    nextOfKinName?: string;
+    nextOfKinPhone?: string;
+    nextOfKinRelationship?: string;
     nin?: string;
     votersCardNumber?: string;
     bvn?: string;
@@ -44,6 +55,47 @@ interface WaveApplication {
     approvalTimestamp?: Date;
     rejectionReason?: string;
 }
+
+/**
+ *   #775 ONE LIST, USED BOTH TO LOAD THE FORM AND TO DRAW IT.
+ *
+ *   There were two, and they disagreed. The draft was seeded with surname,
+ *   firstName, otherNames and phone; the boxes rendered were surname,
+ *   firstName, phone, stateOfResidence and lgaOfResidence. So:
+ *
+ *     otherNames  was loaded and had no box — invisible, uneditable.
+ *     State, LGA  had boxes and were never loaded — they opened BLANK on an
+ *                 application that had both, which is the owner's report
+ *                 ("the edit form on the admin is not complete with all
+ *                 information") in its most literal form. An admin who typed
+ *                 into them was correcting a field they could not see, and one
+ *                 who did not was looking at an application that appeared to
+ *                 be missing answers the applicant had given.
+ *
+ *   Every key here is in ALLOWED_EDIT_FIELDS in _applications.ts, and the test
+ *   beside this finding parses that file and fails if one is not — a box whose
+ *   key the server drops is a box that silently does nothing, which is the
+ *   defect #775 is about.
+ */
+const EDITABLE_WAVE_FIELDS: ReadonlyArray<{ key: keyof WaveApplication; label: string; group: string }> = [
+    { key: "surname", label: "Surname", group: "Identity" },
+    { key: "firstName", label: "First Name", group: "Identity" },
+    { key: "otherNames", label: "Other Names", group: "Identity" },
+    { key: "phone", label: "Phone", group: "Contact" },
+    { key: "alternativePhone", label: "Alternative Phone", group: "Contact" },
+    { key: "email", label: "Email", group: "Contact" },
+    { key: "residentialAddress", label: "Residential Address", group: "Location" },
+    { key: "stateOfOrigin", label: "State of Origin", group: "Location" },
+    { key: "lgaOfOrigin", label: "LGA of Origin", group: "Location" },
+    { key: "stateOfResidence", label: "State of Residence", group: "Location" },
+    { key: "lgaOfResidence", label: "LGA of Residence", group: "Location" },
+    { key: "currentOccupation", label: "Occupation", group: "Livelihood" },
+    { key: "nextOfKinName", label: "Next of Kin", group: "Next of Kin" },
+    { key: "nextOfKinPhone", label: "Next of Kin Phone", group: "Next of Kin" },
+    { key: "nextOfKinRelationship", label: "Relationship", group: "Next of Kin" },
+    { key: "bankName", label: "Bank Name", group: "Banking" },
+    { key: "accountNumber", label: "Account Number", group: "Banking" },
+];
 
 function getDisplayName(app: WaveApplication): string {
     if (app.surname || app.firstName) {
@@ -152,12 +204,13 @@ export default function AdminWaveApplicationsPage() {
 
     function handleOpenEdit(app: StandardPendingForm<WaveApplication>) {
         setEditingApp(app.data);
-        setEditDraft({
-            surname: app.data?.surname || "",
-            firstName: app.data?.firstName || "",
-            otherNames: app.data?.otherNames || "",
-            phone: app.data?.phone || "",
-        });
+        //   #775 Seeded from the SAME list the form draws, so a box can no
+        //   longer render without its stored value behind it.
+        const seed: Record<string, string> = {};
+        for (const { key } of EDITABLE_WAVE_FIELDS) {
+            seed[key] = (app.data?.[key] as string | undefined) || "";
+        }
+        setEditDraft(seed);
         setEditNote("");
     };
 
@@ -555,8 +608,8 @@ export default function AdminWaveApplicationsPage() {
             {/* Edit Application Modal */}
             {editingApp && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
-                        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+                        <div className="p-6 border-b border-slate-200 flex items-center justify-between shrink-0">
                             <div>
                                 <h2 className="text-xl font-bold text-slate-900">Edit Application</h2>
                                 <p className="text-sm text-slate-500 mt-0.5">Changes are logged with a full audit trail</p>
@@ -565,22 +618,27 @@ export default function AdminWaveApplicationsPage() {
                                 <X className="w-5 h-5 text-slate-500" />
                             </button>
                         </div>
-                        <div className="p-6 space-y-4">
-                            {([
-                                { key: "surname", label: "Surname" },
-                                { key: "firstName", label: "First Name" },
-                                { key: "phone", label: "Phone" },
-                                { key: "stateOfResidence", label: "State" },
-                                { key: "lgaOfResidence", label: "LGA" },
-                            ] as const).map(({ key, label }) => (
-                                <div key={key}>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
-                                    <input
-                                        type="text"
-                                        value={editDraft[key] ?? ""}
-                                        onChange={(e) => setEditDraft(prev => ({ ...prev, [key]: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    />
+                        <div className="p-6 space-y-6 overflow-y-auto">
+                            {/*
+                              *   #775 Grouped, because seventeen unlabelled boxes
+                              *   in a column is its own way of hiding a field.
+                              */}
+                            {Array.from(new Set(EDITABLE_WAVE_FIELDS.map(f => f.group))).map(group => (
+                                <div key={group}>
+                                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">{group}</h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {EDITABLE_WAVE_FIELDS.filter(f => f.group === group).map(({ key, label }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+                                                <input
+                                                    type="text"
+                                                    value={editDraft[key] ?? ""}
+                                                    onChange={(e) => setEditDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             ))}
                             <div>
@@ -594,7 +652,7 @@ export default function AdminWaveApplicationsPage() {
                                 />
                             </div>
                         </div>
-                        <div className="p-6 border-t border-slate-200 flex justify-end gap-3">
+                        <div className="p-6 border-t border-slate-200 flex justify-end gap-3 shrink-0">
                             <button
                                 onClick={() => setEditingApp(null)}
                                 disabled={editSaving}

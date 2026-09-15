@@ -15,6 +15,7 @@ import { useSession } from "next-auth/react";
 import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
 import { StatusCheckNotice } from "@/components/application/StatusCheckNotice";
 import { COLLECTIONS } from "@/lib/client-collections";
+import { ApplyToAnotherProgrammeButton } from "@/components/forms/FormNavButtons";
 
 export default function ExportOnboardingPendingPage() {
     const { data: session } = useSession();
@@ -132,6 +133,10 @@ export default function ExportOnboardingPendingPage() {
                             <ArrowLeft className="w-4 h-4" />
                             Back to Export Windows
                         </Link>
+                        {/*   #777 "Apply to another programme" — see
+                          *   FormNavButtons for why it is not a second
+                          *   application to the SAME programme. */}
+                        <ApplyToAnotherProgrammeButton />
                     </div>
                 </div>
 

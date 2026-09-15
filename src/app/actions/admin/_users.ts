@@ -597,8 +597,32 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 query = query.where("createdAt", "<=", endObj);
             }
             
-            // Order chronologically
-            query = query.orderBy("createdAt", "desc");
+            /**
+             *   #776 "OLDEST FIRST" FETCHED THE NEWEST PAGE AND SORTED IT.
+             *
+             *   This read `orderBy("createdAt", "desc")` — a literal, ignoring
+             *   options.sortOrder — while the in-memory sort two hundred lines
+             *   below honours it. So the database was asked for the NEWEST
+             *   (page+1)*pageSize+100 rows and the sort then ordered that
+             *   window ascending.
+             *
+             *   MEASURED on 301 accounts, "Sort by Date Joined / Oldest First",
+             *   first page of ten:
+             *
+             *       returned   u190 … u199
+             *       correct    the 2020 account, then u0, u1, u2 …
+             *
+             *   The oldest accounts on the platform were not on page one, page
+             *   two, or any page: every page re-fetches from the newest end, so
+             *   no amount of paging ever reaches them. The control looked like
+             *   it worked — the rows DID reorder — which is why this reads as
+             *   "not completely functional" rather than as obviously broken.
+             *
+             *   The direction now comes from the request, so the database
+             *   returns the right END of the collection and the in-memory sort
+             *   agrees with it instead of fighting it.
+             */
+            query = query.orderBy("createdAt", options.sortOrder === "asc" ? "asc" : "desc");
         }
 
         /**

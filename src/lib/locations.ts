@@ -246,14 +246,22 @@ export function isValidLGA(state: string, lga: string): boolean {
 
 // MOCK DATA FOR WARDS AND POLLING UNITS
 // In a real application, this would be fetched from an API or a large database
-const MOCK_WARDS: Record<string, string[]> = {
-    "default": ["Ward 1", "Ward 2", "Ward 3", "Ward 4", "Ward 5", "Ward 6", "Ward 7", "Ward 8", "Ward 9", "Ward 10"],
+/**
+ * Wards this platform can actually name, by LGA.
+ *
+ *   #774 RENAMED FROM MOCK_WARDS, and the numbered "default" is GONE.
+ *
+ *   The placeholder row was the defect: it made every unlisted LGA look
+ *   answered. What remains is what somebody verified. Add an LGA here — real
+ *   names, from the INEC register — and its field becomes a dropdown again.
+ */
+const VERIFIED_WARDS: Record<string, string[]> = {
     "Ikeja": ["Alausa", "Agidingbi", "Oregun", "Opebi", "GRA", "Wasimi", "Maryland", "Ojodu", "Oke-Ira", "Aguda"],
     "Abuja Municipal": ["Garki", "Wuse", "Asokoro", "Maitama", "Gwarinpa", "Wuye", "Jabi", "Utako", "Mabushi", "Kado", "Garki II", "Wuse II", "Gwagwa", "Jiwa", "Gui", "Karshi", "Orozo", "Kar7", "Nyanya", "City Centre"]
 };
 
-const MOCK_PUs: Record<string, string[]> = {
-    "default": ["PU 001", "PU 002", "PU 003", "PU 004", "PU 005", "PU 006", "PU 007", "PU 008", "PU 009", "PU 010"],
+/** Polling units this platform can actually name, by ward. See above. */
+const VERIFIED_PUs: Record<string, string[]> = {
     "Alausa": ["Secretariat Gate 1", "Secretariat Gate 2", "Awolowo Way Junction", "Oregun Road/Alausa"],
     "Garki": ["Garki Area 1 Primary School", "Garki Area 2 Shopping Complex", "Garki Village Square", "Area 10 UTC", "Area 7 UTC", "Area 8 UTC", "Area 3 Junction"]
 };
@@ -263,11 +271,38 @@ const MOCK_PUs: Record<string, string[]> = {
  * Falls back to generic numbered wards if refined data isn't available.
  */
 export function getWards(lga: string): string[] {
+    /**
+     *   #774 "Ward 1 … Ward 10" WAS OFFERED AS THE WARD LIST FOR 772 OF
+     *        NIGERIA'S 774 LGAs.
+     *
+     *   The owner: "ward should be names of wards not ward 1 ward 2 etc."
+     *
+     *   MOCK_WARDS holds real names for Ikeja and Abuja Municipal. Every other
+     *   LGA fell through to `MOCK_WARDS["default"]` — a numbered placeholder —
+     *   and the form presented it as a DROPDOWN, which is a claim that these
+     *   are the choices. An applicant in Gwagwalada picked "Ward 3", and "Ward
+     *   3" is not the name of anywhere.
+     *
+     *   NO WARD NAMES ARE INVENTED HERE, and that is the point. Nigeria has
+     *   roughly 8,800 wards; writing plausible-looking names for them would put
+     *   a REAL-LOOKING wrong answer on a member's record, which is worse than an
+     *   obviously-placeholder one — it would survive every review precisely
+     *   because it reads as data.
+     *
+     *   So an LGA with no verified list returns EMPTY, and the form asks the
+     *   applicant to type her ward instead of choosing a fiction. Adding a real
+     *   list for an LGA turns its field back into a dropdown with no other
+     *   change — which is the only way this gets fixed properly, one verified
+     *   LGA at a time.
+     */
     if (!lga) return [];
-    // Try to find specific wards for the LGA
-    // Check various normalizations or keys
-    const key = Object.keys(MOCK_WARDS).find(k => normalizeLocation(k) === normalizeLocation(lga));
-    return key ? MOCK_WARDS[key] : MOCK_WARDS["default"];
+    const key = Object.keys(VERIFIED_WARDS).find(k => normalizeLocation(k) === normalizeLocation(lga));
+    return key ? VERIFIED_WARDS[key] : [];
+}
+
+/** True when this LGA's wards are known, so the form can offer a list. */
+export function hasVerifiedWards(lga: string): boolean {
+    return getWards(lga).length > 0;
 }
 
 /**
@@ -275,9 +310,21 @@ export function getWards(lga: string): string[] {
  * Falls back to generic numbered units if refined data isn't available.
  */
 export function getPollingUnits(ward: string): string[] {
+    /*
+     *   #774 The same defect one level down: "PU 001 … PU 010" was offered for
+     *   every ward but two. A polling unit is a named place — "Secretariat Gate
+     *   1", "Area 10 UTC" — and a number that matches nothing on the voter's
+     *   card is not an answer. Empty when unknown, and the form takes the
+     *   applicant's own words.
+     */
     if (!ward) return [];
-    const key = Object.keys(MOCK_PUs).find(k => normalizeLocation(k) === normalizeLocation(ward));
-    return key ? MOCK_PUs[key] : MOCK_PUs["default"];
+    const key = Object.keys(VERIFIED_PUs).find(k => normalizeLocation(k) === normalizeLocation(ward));
+    return key ? VERIFIED_PUs[key] : [];
+}
+
+/** True when this ward's polling units are known. */
+export function hasVerifiedPollingUnits(ward: string): boolean {
+    return getPollingUnits(ward).length > 0;
 }
 
 

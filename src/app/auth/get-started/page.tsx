@@ -14,6 +14,7 @@ import {
     TrendingUp,
     Home
 } from "lucide-react";
+import { WAVE_FULL_NAME } from "@/lib/wave-program";
 
 /**
  * Module Selection Page
@@ -26,7 +27,7 @@ const modules = [
     {
         id: "wave",
         name: "WAVE",
-        description: "Women Agro-processors Venture Empowerment",
+        description: WAVE_FULL_NAME,
         icon: Waves,
         color: "from-pink-500 to-rose-600",
         onboardingUrl: "/wave/application",

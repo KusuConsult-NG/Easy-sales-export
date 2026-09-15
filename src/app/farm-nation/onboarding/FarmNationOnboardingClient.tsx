@@ -17,6 +17,7 @@ import RoleSelectionStep from "./steps/RoleSelectionStep";
 import ProfileStep from "./steps/ProfileStep";
 import InterestsStep from "./steps/InterestsStep";
 import TermsStep from "./steps/TermsStep";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
 type RoleType = "buyer" | "seller" | "both";
 
@@ -364,13 +365,17 @@ export default function FarmNationOnboardingClient({ initial = null }: {
             <div style={{ background: "linear-gradient(to right, #0d9488, #0891b2)" }} className="text-white py-6 px-4 md:px-8">
                 <div className="max-w-4xl mx-auto">
                     <div className="flex items-center justify-between mb-3">
-                        <Link
-                            href="/farm-nation"
-                            className="inline-flex items-center gap-2 text-teal-100 hover:text-white text-sm font-medium transition-colors"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                            Back
-                        </Link>
+                        {/*   #777 Home beside Back, at the top left, as asked. */}
+                        <div className="flex items-center gap-1">
+                            <FormHomeButton className="text-teal-100! hover:text-white! hover:bg-white/10!" />
+                            <Link
+                                href="/farm-nation"
+                                className="inline-flex items-center gap-2 text-teal-100 hover:text-white text-sm font-medium transition-colors"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                Back
+                            </Link>
+                        </div>
                         <Link
                             href="/dashboard"
                             className="inline-flex items-center gap-2 text-teal-100 hover:text-white text-sm font-medium transition-colors"

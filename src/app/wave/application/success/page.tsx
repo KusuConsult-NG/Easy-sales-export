@@ -7,16 +7,43 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { CheckCircle, ArrowRight, AlertTriangle, Flame, ShieldCheck, DoorOpen } from "lucide-react";
+import { CheckCircle, ArrowRight, AlertTriangle, Flame, ShieldCheck, DoorOpen, Home } from "lucide-react";
+import { ApplyToAnotherProgrammeButton } from "@/components/forms/FormNavButtons";
 
 export default function ApplicationSuccessPage() {
     const { data: session, status } = useSession();
 
-    // Determine the correct activation link based on auth status
+    /**
+     *   #774 "ACTIVATE MY MEMBERSHIP NOW" SENT THE APPLICANT TO A MODULE SHE
+     *        HAD JUST BEEN TOLD SHE WAS WAITING TO JOIN.
+     *
+     *   Reported by the owner: "after submitting WAVE application and the
+     *   activate my button was clicked, the button took the user to the user's
+     *   account and then nothing showed just the sidebar and a blank page and
+     *   the button doesn't return to cooperative which was why the activate
+     *   button was there."
+     *
+     *   The destination was `/wave/dashboard`. The person clicking it submitted
+     *   her WAVE application SECONDS EARLIER, so her registration is `pending`
+     *   and she holds no `wave_participant` role — checkModuleAccess refuses,
+     *   the member layout bounces her to /wave/application, and she lands back
+     *   on the form she has just completed with nothing explaining why.
+     *
+     *   AND THE MEMBERSHIP IT MEANT WAS NEVER THE WAVE ONE. This page is a
+     *   pitch for the cooperative, in its own words — "This Is Where EasySales
+     *   Cooperative Comes In", "EasySales Cooperative is not open to everyone",
+     *   "Position themselves closer to WAVE execution". The button is the call
+     *   to action for THAT, which is exactly what the owner says it was for.
+     *
+     *   So it goes to the cooperative, where the membership being sold actually
+     *   lives, and the WAVE application it was mistakenly pointing at is left
+     *   to the review it is waiting for.
+     */
     const isLoggedIn = status === "authenticated" && !!session;
+    const COOPERATIVE_ACTIVATION = "/cooperatives/onboarding";
     const activationHref = isLoggedIn
-        ? "/wave/dashboard"  // Already logged in, go straight to WAVE dashboard
-        : "/auth/login?callbackUrl=/wave/dashboard";  // Not logged in, login first
+        ? COOPERATIVE_ACTIVATION
+        : `/auth/login?callbackUrl=${encodeURIComponent(COOPERATIVE_ACTIVATION)}`;
 
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center px-4 py-12">
@@ -185,6 +212,23 @@ export default function ApplicationSuccessPage() {
                             </p>
                         </div>
                     </div>
+                </div>
+
+                {/*
+                  *   #777 The two controls the owner asked for on a completed
+                  *   application. See FormNavButtons for why "apply to another
+                  *   programme" is not a second WAVE application — the server
+                  *   refuses that by name, and rightly.
+                  */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
+                    <ApplyToAnotherProgrammeButton />
+                    <Link
+                        href="/"
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-slate-600 font-semibold hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                    >
+                        <Home className="w-4 h-4" aria-hidden="true" />
+                        Return home
+                    </Link>
                 </div>
 
             </div>

@@ -20,7 +20,7 @@ import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { toMillis } from "@/lib/firestore-serialize";
 import { sendEmailNotification } from "@/lib/email-notifications";
-import { nationalIdField } from '@/lib/kyc-validators';
+import { nationalIdField, requiredNationalIdField, requiredVotersCardField } from '@/lib/kyc-validators';
 import { latestApplication } from "@/lib/latest-application";
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
@@ -45,8 +45,9 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
 
     // SECTION B: National Identity & Civic Status
     //   #501 The WAVE application had no check on either field.
-    nin: nationalIdField('NIN'),
-    votersCardNumber: z.string().optional().or(z.literal("")),
+    //   #774 Mandatory, at the owner's instruction. Still no external check.
+    nin: requiredNationalIdField('NIN'),
+    votersCardNumber: requiredVotersCardField(),
     pollingUnit: z.string().optional(),
     ward: z.string().optional(),
     yearOfVoterRegistration: z.string().optional(),
@@ -71,7 +72,7 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
     hasBankAccount: z.boolean().optional(),
     bankName: z.string().min(2, "Bank name is required"),
     accountNumber: z.string().min(10, "Valid 10-digit account number required"),
-    bvn: nationalIdField('BVN'),
+    bvn: requiredNationalIdField('BVN'),
     isMemberOfCooperative: z.boolean(),
     cooperativeName: z.string().optional(),
     willingToJoinCooperative: z.boolean(),

@@ -2,6 +2,7 @@
 
 import { Waves, FileText, CheckCircle, Users, Video } from "lucide-react";
 import Link from "next/link";
+import { WAVE_NAME_WITH_ACRONYM } from "@/lib/wave-program";
 
 export default function AdminWavePage() {
     const cards = [
@@ -62,7 +63,7 @@ export default function AdminWavePage() {
                     WAVE Program Administration
                 </h1>
                 <p className="text-slate-600">
-                    Manage Women in Agriculture (WAVE) program applications and members
+                    Manage {WAVE_NAME_WITH_ACRONYM} program applications and members
                 </p>
             </div>
 

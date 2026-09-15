@@ -64,13 +64,27 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
         }
     }
 
-    const toggleValueChain = (area: "crop_production" | "livestock" | "processing_packaging" | "aggregation_trading" | "export_market") => {
-        const current = data?.valueChainAreas || [];
-        if (current.includes(area)) {
-            updateData({ valueChainAreas: current.filter((a) => a !== area) });
-        } else {
-            updateData({ valueChainAreas: [...current, area] });
-        }
+    /**
+     *   #774 SECTION D ASKED FOR ONE AREA AND ACCEPTED SEVERAL.
+     *
+     *   The owner: "Section D on wave application (which area would you like to
+     *   participate) should have single option not multiple, there should be
+     *   single selection of category under wave."
+     *
+     *   It was a checkbox grid captioned "(Select all that apply)", so an
+     *   applicant could claim crop production, livestock, processing,
+     *   aggregation AND export at once — and the placement she is being sorted
+     *   into is a single one.
+     *
+     *   STORED AS A ONE-ELEMENT ARRAY, deliberately. `valueChainAreas` is an
+     *   array in the submission schema, on every stored application, in the
+     *   admin screens, the CSV export and the forensic sweep. Changing the
+     *   field's TYPE to satisfy a UI change would break every one of those and
+     *   orphan the applications already recorded; selecting one and storing one
+     *   changes nothing downstream.
+     */
+    const selectValueChain = (area: "crop_production" | "livestock" | "processing_packaging" | "aggregation_trading" | "export_market") => {
+        updateData({ valueChainAreas: [area] });
     };
 
     const toggleCommodity = (commodity: "rice" | "maize" | "sesame" | "soybeans" | "ginger" | "cassava" | "vegetables" | "other") => {
@@ -96,7 +110,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Which area would you like to participate in under WAVE? *
-                        <span className="text-xs font-normal text-slate-500 ml-1">(Select all that apply)</span>
+                        <span className="text-xs font-normal text-slate-500 ml-1">(Select one)</span>
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[
@@ -114,10 +128,11 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                                     }`}
                             >
                                 <input
-                                    type="checkbox"
+                                    type="radio"
+                                    name="waveValueChainArea"
                                     checked={(data?.valueChainAreas || []).includes(area.value)}
-                                    onChange={() => toggleValueChain(area.value)}
-                                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                                    onChange={() => selectValueChain(area.value)}
+                                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                 />
                                 <span className="text-lg">{area.icon}</span>
                                 <span className="font-medium">{area.label}</span>

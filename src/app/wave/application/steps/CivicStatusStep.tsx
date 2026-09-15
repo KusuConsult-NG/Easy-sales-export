@@ -20,8 +20,8 @@ interface Props {
 }
 
 import { useToast } from "@/contexts/ToastContext";
-import { getWards, getPollingUnits } from "@/lib/locations";
-import { nationalIdField } from "@/lib/kyc-validators";
+import { getWards, getPollingUnits, hasVerifiedWards, hasVerifiedPollingUnits } from "@/lib/locations";
+import { nationalIdField, requiredNationalIdField, requiredVotersCardField } from "@/lib/kyc-validators";
 
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
     const { showToast } = useToast();
@@ -53,18 +53,43 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
      *   would start accepting what the server refuses, which is how you get a
      *   form that submits and fails.
      *
-     *   ONLY `nin` IS CHECKED, because it is the only field in Section B the
-     *   schema constrains; the voter's card, ward, polling unit and year are all
-     *   optional there. Validating them here would refuse applicants the server
-     *   would have accepted, which is a worse defect than the one being fixed.
-     *   And an EMPTY nin still passes, because the server's rule is optional.
+     *   #774 NIN, BVN AND THE VOTER'S CARD ARE ALL CHECKED NOW, because the
+     *   owner made all three compulsory — "NIN, BVN and voter's cards are
+     *   mandatory but shouldn't be checked by QoreID" — and the submit schema
+     *   was changed to match.
+     *
+     *   The note this replaces said only `nin` was checked, "because it is the
+     *   only field in Section B the schema constrains... Validating them here
+     *   would refuse applicants the server would have accepted." That reasoning
+     *   is exactly right and it is why this must move WITH the schema: the
+     *   moment the server started requiring three fields and the step asked for
+     *   one, an applicant would have filled seven steps and been refused at the
+     *   end by a message naming no field — which is #773, the defect the owner
+     *   reported one message earlier.
+     *
+     *   STILL THE SAME RULES THE SERVER USES, imported rather than restated.
+     *   And still no external provider: requiredNationalIdField is
+     *   nationalIdField plus "not blank", and nothing in kyc-validators.ts
+     *   contacts anybody.
+     *
+     *   THE BVN IS CHECKED ON ITS OWN SCREEN, not here. It is collected in
+     *   Section E (FinancialStep), and an error raised here would be written to
+     *   a field this step does not render: the applicant would be stopped by a
+     *   message she cannot see, on a screen that looks complete. Each of the
+     *   three is validated by the step that draws it, with the same imported
+     *   rule — which is the thing that must not be duplicated, not the call.
      */
     const validateForm = (): boolean => {
         const next: Record<string, string> = {};
 
-        const ninResult = nationalIdField('NIN').safeParse(data?.nin ?? "");
+        const ninResult = requiredNationalIdField('NIN').safeParse(data?.nin ?? "");
         if (!ninResult.success) {
             next.nin = ninResult.error.issues[0]?.message ?? "Please check your NIN.";
+        }
+
+        const cardResult = requiredVotersCardField().safeParse(data?.votersCardNumber ?? "");
+        if (!cardResult.success) {
+            next.votersCardNumber = cardResult.error.issues[0]?.message ?? "Please check your Voter's Card Number.";
         }
 
         setErrors(next);
@@ -98,14 +123,22 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
                 <div className="flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                    {/*
+                      *   #774 THE BANNER PROMISED WHAT THE SUBMIT SCHEMA NOW
+                      *   REFUSES. The owner made both compulsory; a screen that
+                      *   still reads "optional… not enforced" sends the
+                      *   applicant through five more steps to be rejected.
+                      */}
                     <p className="text-sm text-amber-700">
-                        <strong>NIN is optional</strong> but recommended for identity and eligibility verification. Voter&apos;s Card details are supported but not enforced. All data is securely encrypted.
+                        <strong>Your NIN and Voter&apos;s Card Number are both required.</strong> They are used for
+                        identity and eligibility validation, and are checked by our team during review — never sent to
+                        an outside verification service. All data is securely encrypted.
                     </p>
                 </div>
             </div>
 
             <div className="space-y-6">
-                {/* NIN — Optional */}
+                {/*   #774 NIN — required. The `optional` flag went with it. */}
                 <div>
                     <IdInput
                         label="National Identification Number (NIN) 🔒"
@@ -117,7 +150,6 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         placeholder="Enter your NIN"
                         error={errors.nin}
                         hint="Dial *346# on your registered phone to retrieve your NIN."
-                        optional
                         accentColor="emerald"
                     />
                 </div>
@@ -135,6 +167,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         value={data?.votersCardNumber || ""}
                         onChange={(v) => updateData({ votersCardNumber: v })}
                         placeholder="e.g. 90F5B123456789012345"
+                        error={errors.votersCardNumber}
                         hint="Enter the Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                         accentColor="emerald"
                     />
@@ -147,17 +180,38 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             Ward (based on Residence){" "}
                             <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
-                        <select
-                            value={data?.ward || ""}
-                            onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data?.lgaOfResidence}
-                        >
-                            <option value="">Select Ward</option>
-                            {(data?.lgaOfResidence && getWards(data.lgaOfResidence).map((ward) => (
-                                <option key={ward} value={ward}>{ward}</option>
-                            ))) || []}
-                        </select>
+                        {/*
+                          *   #774 A DROPDOWN ONLY WHERE THE WARDS ARE KNOWN.
+                          *
+                          *   This offered "Ward 1 … Ward 10" for 772 of the 774
+                          *   LGAs, because getWards fell back to a numbered
+                          *   placeholder — and a dropdown is a claim that these
+                          *   are the choices. Where the real names are not
+                          *   known, the applicant types her own ward, which is
+                          *   the only answer that can be true.
+                          */}
+                        {hasVerifiedWards(data?.lgaOfResidence || "") ? (
+                            <select
+                                value={data?.ward || ""}
+                                onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                disabled={!data?.lgaOfResidence}
+                            >
+                                <option value="">Select Ward</option>
+                                {getWards(data?.lgaOfResidence || "").map((ward) => (
+                                    <option key={ward} value={ward}>{ward}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                type="text"
+                                value={data?.ward || ""}
+                                onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
+                                placeholder={data?.lgaOfResidence ? "Type your ward name" : "Select your LGA first"}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                disabled={!data?.lgaOfResidence}
+                            />
+                        )}
                     </div>
 
                     <div>
@@ -165,17 +219,29 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             Polling Unit{" "}
                             <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
-                        <select
-                            value={data?.pollingUnit || ""}
-                            onChange={(e) => updateData({ pollingUnit: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data?.ward}
-                        >
-                            <option value="">Select Polling Unit</option>
-                            {(data?.ward && getPollingUnits(data.ward).map((pu) => (
-                                <option key={pu} value={pu}>{pu}</option>
-                            ))) || []}
-                        </select>
+                        {/*   #774 Same rule one level down — "PU 001" is not a place. */}
+                        {hasVerifiedPollingUnits(data?.ward || "") ? (
+                            <select
+                                value={data?.pollingUnit || ""}
+                                onChange={(e) => updateData({ pollingUnit: e.target.value })}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                disabled={!data?.ward}
+                            >
+                                <option value="">Select Polling Unit</option>
+                                {getPollingUnits(data?.ward || "").map((pu) => (
+                                    <option key={pu} value={pu}>{pu}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                type="text"
+                                value={data?.pollingUnit || ""}
+                                onChange={(e) => updateData({ pollingUnit: e.target.value })}
+                                placeholder={data?.ward ? "Type your polling unit" : "Enter your ward first"}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                disabled={!data?.ward}
+                            />
+                        )}
                     </div>
                 </div>
 
