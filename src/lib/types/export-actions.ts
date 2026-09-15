@@ -109,7 +109,48 @@ export const exportOnboardingSchema = z.object({
         votersCardVerified: z.boolean().optional(),
         ninVerified: z.boolean().optional(),
         bvnVerified: z.boolean().optional(),
+        /**
+         *   #773 THE NINE FIELDS THE STEP REQUIRED AND THIS SCHEMA DISCARDED.
+         *
+         *   KYCVerificationStep will not let a member past without firstName,
+         *   lastName, dateOfBirth, phoneNumber, address, city and state, and it
+         *   also collects otherNames, idType and idNumber. Measured against
+         *   this schema, `kycData` kept four keys — nin, bvn and the two
+         *   verification flags — and dropped the rest, because Zod strips what
+         *   is not declared. #349 recorded that exact mechanism on this exact
+         *   object and fixed it for the voter's card alone.
+         *
+         *   The NAME, PHONE, ADDRESS and STATE now travel in `profile`, where
+         *   the server already wanted them and where the record and the admin
+         *   Users list read them. What stays here is what belongs to the
+         *   identity document rather than the profile — and `city` with it,
+         *   because `profile.lga` is filled from the city and the member's own
+         *   answer should not be silently renamed.
+         */
+        dateOfBirth: z.string().optional().or(z.literal("")),
+        otherNames: z.string().optional().or(z.literal("")),
+        city: z.string().optional().or(z.literal("")),
+        idType: z.string().optional().or(z.literal("")),
+        idNumber: z.string().optional().or(z.literal("")),
     }),
+    /**
+     *   #773 THE FIRST STEP OF THE WIZARD WAS STORED NOWHERE.
+     *
+     *   InvestmentProfileStep collects minInvestment, maxInvestment,
+     *   investmentGoals and riskTolerance and writes them into the wizard's
+     *   `profile` bag. `profile` here is the IDENTITY, so all four were
+     *   stripped — the member answered the step, the client required it, and
+     *   nothing was ever recorded.
+     *
+     *   OPTIONAL, so an older payload still parses. A submission that predates
+     *   this is not invalid, it simply has nothing to put here.
+     */
+    investment: z.object({
+        minInvestment: z.number().optional(),
+        maxInvestment: z.number().optional(),
+        investmentGoals: z.array(z.string()).optional(),
+        riskTolerance: z.string().optional().or(z.literal("")),
+    }).optional(),
     bank: z.object({
         accountNumber: z.string().length(10, "Account number must be 10 digits"),
         bankName: z.string().min(2, "Bank name is required"),
@@ -123,5 +164,16 @@ export const exportOnboardingSchema = z.object({
     terms: z.object({
         termsAccepted: z.boolean(),
         privacyAccepted: z.boolean(),
+        /**
+         *   #773 WHEN they accepted, which was being dropped.
+         *
+         *   TermsAcceptanceStep records the instant and the mapper carries it;
+         *   this object declared only the two booleans, so Zod discarded it —
+         *   the same silent strip as the nine KYC fields, on the one field that
+         *   evidences a consent. Found by the key-set assertion in this
+         *   finding's suite rather than by reading, which is why that
+         *   assertion exists.
+         */
+        acceptedAt: z.string().optional().or(z.literal("")),
     })
 });

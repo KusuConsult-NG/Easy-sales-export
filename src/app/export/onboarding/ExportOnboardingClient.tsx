@@ -27,6 +27,7 @@ import { KYCVerificationStep } from "./steps/KYCVerificationStep";
 import { BankAccountStep } from "./steps/BankAccountStep";
 import { TermsAcceptanceStep } from "./steps/TermsAcceptanceStep";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import { toExportOnboardingPayload } from "@/lib/export-onboarding-payload";
 
 /**
  * What the server read before the page was sent.
@@ -314,12 +315,19 @@ export default function ExportOnboardingClient(
         try {
             if (isRevisionMode || isEditMode) {
                 // Resubmit — send text fields only (no file re-upload required)
-                const result = await resubmitExportApplicationAction({
-                    profile: finalData.profile,
-                    kyc: finalData.kyc,
-                    bank: finalData.bank,
-                    terms: finalData.terms,
-                });
+                /*
+                 *   #773 THE MAPPED PAYLOAD, not the wizard's own bags.
+                 *
+                 *   `profile` here is the INVESTMENT step and `kyc` is
+                 *   `{ kycData, documents }`; the server's schema wants an
+                 *   identity profile and the kycData itself. Sent raw, the
+                 *   resubmission failed on eight undefined required fields and
+                 *   silently dropped nine more — see the mapper for the
+                 *   measurement.
+                 */
+                const result = await resubmitExportApplicationAction(
+                    toExportOnboardingPayload(finalData, session?.user?.email),
+                );
                 if (result.success) {
                     showToast("Application resubmitted for review!", "success");
                     // STUCK BUTTON FIX: reset before navigating so button is never
@@ -376,15 +384,25 @@ export default function ExportOnboardingClient(
                 }
             }
 
+            /*
+             *   #773 ONE MAPPER BUILDS THE SUBMISSION, so the form and the
+             *   server cannot describe it differently. Measured before the
+             *   fix: this form, filled exactly as its own Zod guard demands,
+             *   was refused with "Invalid input: expected string, received
+             *   undefined" and wrote no application row at all.
+             */
+            const payload = toExportOnboardingPayload(finalData, session?.user?.email);
+
             const fd = new FormData();
-            if (finalData.profile) fd.append("profile", JSON.stringify(finalData.profile));
-            if (finalData.kyc?.kycData) fd.append("kycData", JSON.stringify(finalData.kyc.kycData));
+            fd.append("profile", JSON.stringify(payload.profile));
+            fd.append("kycData", JSON.stringify(payload.kycData));
+            fd.append("investment", JSON.stringify(payload.investment));
             
             if (uploadedIdDocument) fd.append("idDocument", uploadedIdDocument);
             if (uploadedProofOfAddress) fd.append("proofOfAddress", uploadedProofOfAddress);
             
-            if (finalData.bank) fd.append("bank", JSON.stringify(finalData.bank));
-            if (finalData.terms) fd.append("terms", JSON.stringify(finalData.terms));
+            fd.append("bank", JSON.stringify(payload.bank));
+            fd.append("terms", JSON.stringify(payload.terms));
 
             const result = await submitExportOnboardingAction(null, fd);
 

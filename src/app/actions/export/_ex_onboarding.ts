@@ -63,9 +63,17 @@ export async function submitExportOnboardingAction(
         catch { return { success: false as const, error: "Invalid bank data", meta: null }; }
         try { terms = JSON.parse((formData.get("terms") as string | null) ?? "{}"); }
         catch { return { success: false as const, error: "Invalid terms data", meta: null }; }
+        /*
+         *   #773 The investment step's own answers. They used to travel inside
+         *   `profile`, where the schema does not declare them, so all four were
+         *   stripped and the first step of the wizard was recorded nowhere.
+         */
+        let investment: Record<string, unknown>;
+        try { investment = JSON.parse((formData.get("investment") as string | null) ?? "{}"); }
+        catch { return { success: false as const, error: "Invalid investment data", meta: null }; }
 
         // Validate payload using Zod schema
-        const validation = exportOnboardingSchema.safeParse({ profile, kycData, bank, terms });
+        const validation = exportOnboardingSchema.safeParse({ profile, kycData, bank, terms, investment });
         if (!validation.success) {
             return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", meta: null };
         }
@@ -155,6 +163,8 @@ export async function submitExportOnboardingAction(
             },
             bank: verifiedBank,
             terms: validatedData.terms,
+            //   #773 Recorded, rather than collected and dropped.
+            investment: validatedData.investment ?? null,
             status: "pending_review",
             submittedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
@@ -668,13 +678,26 @@ export async function resubmitExportApplicationAction(
 
         if (!appRef) return { success: false as const, data: null, error: 'No existing application found', meta: null };
 
+        /*
+         *   #773 `fields.kyc` IS `{ kycData, documents }`, NOT THE kycData.
+         *
+         *   This read the wrapper and handed it to a schema expecting the
+         *   inner object, so every KYC field parsed as undefined — optional,
+         *   so it passed, storing nothing. The resubmit path had the same
+         *   shape mismatch as the submit path and one extra level of it.
+         *
+         *   The client sends the mapped payload now (see
+         *   lib/export-onboarding-payload.ts); `fields.kyc` is still accepted
+         *   so a request in flight during the deploy is not refused.
+         */
         const profile = fields.profile || {};
-        const kycData = fields.kyc || {};
+        const kycData = fields.kycData || fields.kyc?.kycData || fields.kyc || {};
         const bank = fields.bank || {};
         const terms = fields.terms || {};
+        const investment = fields.investment || {};
 
         // Validate payload using Zod schema
-        const validation = exportOnboardingSchema.safeParse({ profile, kycData, bank, terms });
+        const validation = exportOnboardingSchema.safeParse({ profile, kycData, bank, terms, investment });
         if (!validation.success) {
             return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null, meta: null };
         }
