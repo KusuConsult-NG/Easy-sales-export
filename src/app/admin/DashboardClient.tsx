@@ -329,7 +329,30 @@ export default function AdminDashboardPage() {
                                     <p className="text-sm font-medium text-slate-500 mb-1">
                                         {stat.label}
                                     </p>
-                                    <p className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">
+                                    {/*
+                                      *   #758 A TILE SIZED FOR A NUMBER NOW HAS
+                                      *   TO HOLD WORDS.
+                                      *
+                                      *   At xl the stat grid is four columns, so
+                                      *   a card has roughly 238px of content
+                                      *   width. `text-3xl` bold fits a formatted
+                                      *   count comfortably and does NOT fit
+                                      *   "at least ₦1,234,567,890" — the partial
+                                      *   revenue figure #665 introduced — nor,
+                                      *   on a narrow card, the "Unavailable"
+                                      *   #753 added to six more tiles. Long
+                                      *   values ran into the label beneath them.
+                                      *
+                                      *   `break-words` lets a long value wrap
+                                      *   instead of overflowing its box, and the
+                                      *   responsive step keeps the common case —
+                                      *   a number — at the size it was designed
+                                      *   at while giving prose somewhere to go.
+                                      */}
+                                    <p
+                                        data-testid="stat-value"
+                                        className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 tracking-tight break-words"
+                                    >
                                         {stat.value}
                                     </p>
                                     <p className="text-xs text-slate-400 font-medium">

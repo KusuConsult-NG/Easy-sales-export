@@ -478,7 +478,37 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
          * Same permission as the export, so the two surfaces now agree.
          */
         //   #535 The LIVE roles, not the token's — see lib/member-pii-visibility.
-        const maySeePii = await mayRevealMemberPii("users:export");
+        /*
+         *   #758 THE ADMIN USER LIST READ THE CALLER'S OWN ROW TWICE PER LOAD.
+         *
+         *   Reported by the owner: the Users app loads slowly.
+         *
+         *   `requireAdmin("users:read")` above reads the caller's user document
+         *   to resolve their live roles, and #532 made it RETURN them precisely
+         *   so a second live decision would not need a second query. This line
+         *   then called `mayRevealMemberPii`, which calls `liveAdminRoles`,
+         *   which calls `requireAdmin` — reading the identical row again, on
+         *   the heaviest admin screen on the platform.
+         *
+         *   The answer is the same either way: `mayRevealMemberPii` asks
+         *   `hasAdminPermission(liveRoles, permission)`, and `gate.roles` IS
+         *   that live set, resolved microseconds earlier in the same request.
+         *   So the live roles are PASSED to the shared rule instead. One fewer
+         *   round trip, and the decision still belongs to
+         *   `mayRevealMemberPii` — a first version inlined
+         *   `hasAdminPermission` here and #535's ratchet failed it, correctly:
+         *   that would have left a second spelling of the one rule this
+         *   platform has for handing over a member's bank details.
+         *
+         *   NOT converted to a per-request memo, which is the tempting general
+         *   fix. `cache()` from React 19 would dedupe every one of these across
+         *   the twelve files that call mayRevealMemberPii — and putting a
+         *   caching primitive inside an AUTHORISATION gate is exactly the
+         *   change that, if its scope is ever wrong, serves one administrator's
+         *   verdict to another. The eleven other files are measured and
+         *   recorded rather than swept; see the finding.
+         */
+        const maySeePii = await mayRevealMemberPii("users:export", gate.roles);
 
         const pageSize = options.search ? 5000 : (options.limit || 50);
         const page = options.page ?? 0; // page offset (0-indexed)

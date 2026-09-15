@@ -257,7 +257,14 @@ describe('#753 — an unreadable figure says so, where the owner was reading a z
          *   (an icon's stroke width, a chart axis). The lie this finding is
          *   about lives in the tile, so the tile is what is asked.
          */
-        const tileValues = Array.from(document.querySelectorAll('p.text-3xl'))
+        /*
+         *   Selected by data-testid, not by class. A first draft used
+         *   `p.text-3xl` and broke the moment #758 made the tile responsive —
+         *   `text-2xl sm:text-3xl` — for a change that made the tile BETTER.
+         *   That is the "pins the spelling, not the property" trap this audit
+         *   filed as #741, committed in a test I wrote for it.
+         */
+        const tileValues = Array.from(document.querySelectorAll('[data-testid="stat-value"]'))
             .map((el) => el.textContent?.trim());
         expect(tileValues).not.toContain('0');
         expect(tileValues.length).toBeGreaterThan(0);

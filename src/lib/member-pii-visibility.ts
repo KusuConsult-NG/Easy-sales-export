@@ -68,8 +68,32 @@ import { logger } from "@/lib/logger";
  *   account numbers is a working screen; one that renders them because a lookup
  *   failed is the defect this exists to prevent.
  */
-export async function mayRevealMemberPii(permission: AdminPermission): Promise<boolean> {
+export async function mayRevealMemberPii(
+    permission: AdminPermission,
+    /**
+     *   #758 THE CALLER'S LIVE ROLES, WHEN THEY ALREADY HAVE THEM.
+     *
+     *   Reported by the owner: the admin Users list loads slowly. It calls
+     *   `requireAdmin("users:read")`, which reads the caller's user document to
+     *   resolve their live roles — and #532 made that gate RETURN them
+     *   precisely so a second live decision would not need a second query. Then
+     *   it called this function, which calls `liveAdminRoles`, which calls
+     *   `requireAdmin`, reading the identical row again.
+     *
+     *   Passing them keeps ONE rule for who may see a member's bank details —
+     *   which is the whole of #535, and its ratchet correctly failed a first
+     *   version of this fix that inlined `hasAdminPermission` at the call site
+     *   and left a second spelling of the rule behind. The saving belongs in
+     *   this function's signature, not in a caller that stops using it.
+     *
+     *   Optional: a caller with no gate of its own passes nothing and this
+     *   resolves the roles itself, exactly as before.
+     */
+    liveRoles?: readonly string[],
+): Promise<boolean> {
     try {
+        if (liveRoles) return hasAdminPermission([...liveRoles], permission);
+
         const live = await liveAdminRoles();
         if ("error" in live) return false;
         return hasAdminPermission(live.roles, permission);
