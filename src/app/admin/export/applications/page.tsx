@@ -43,6 +43,9 @@ import { recordExport } from "@/lib/record-export";
 import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
 import { formatDateOrDash } from "@/lib/date-utils";
+import AdminRecordEditor from "@/components/admin/AdminRecordEditor";
+import { EXPORT_EDITABLE_FIELDS } from "@/lib/admin-editable-fields";
+import { editApplicationAction } from "@/app/actions/admin";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -140,6 +143,37 @@ export default function AdminExportApplicationsPage() {
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
     const [selectedApp, setSelectedApp] = useState<StandardPendingForm<ExportApplication> | null>(null);
+
+    //   #783 The shared record editor — see lib/admin-editable-fields.
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editorSaving, setEditorSaving] = useState(false);
+
+    async function handleEditorSave(fields: Record<string, string>, editNote: string) {
+        if (!selectedApp) return;
+        setEditorSaving(true);
+        try {
+            const result = await editApplicationAction({
+                collection: "export_onboarding_applications",
+                docId: selectedApp.id,
+                fields: fields as any,
+                editNote: editNote || undefined,
+            });
+            if (result.success) {
+                showToast("Application updated. The member has been notified.", "success");
+                setEditorOpen(false);
+                await fetchData();
+            } else {
+                showToast(result.error || "Failed to update application", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not save. Re-open the record to check whether the edit was recorded.",
+                "error",
+            );
+        } finally {
+            setEditorSaving(false);
+        }
+    }
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
@@ -513,6 +547,22 @@ export default function AdminExportApplicationsPage() {
                                                 <FileText className="w-4 h-4" />
                                             </button>
 
+                                            {/*
+                                              *   #783 CORRECT A FIELD, which is
+                                              *   different from the button below
+                                              *   it: that one asks the APPLICANT
+                                              *   to revise, this one lets the
+                                              *   admin fix a typo themselves.
+                                              *   This screen had only the first.
+                                              */}
+                                            <button
+                                                onClick={() => { setSelectedApp(standardApp); setEditorOpen(true); }}
+                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                                title="Correct applicant details"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+
                                             {/* Edit / Request Revision */}
                                             {(standardApp.status === "pending_review" || standardApp.status === "pending" || standardApp.status === "revision_required") && (
                                                 <button
@@ -705,6 +755,23 @@ export default function AdminExportApplicationsPage() {
                     </div>
                 </div>
             )}
+
+            {/*
+              *   #783 THIS SCREEN HAD NO EDITOR AT ALL. An admin could read the
+              *   whole application through the detail modal and correct nothing
+              *   in it. Three of the six admin application screens were like
+              *   this. One shared component now, because six copies is how the
+              *   others drifted to five, fourteen and seventeen fields.
+              */}
+            <AdminRecordEditor
+                open={editorOpen}
+                title="Edit Export Application"
+                fields={EXPORT_EDITABLE_FIELDS}
+                record={selectedApp?.data ?? null}
+                saving={editorSaving}
+                onCancel={() => setEditorOpen(false)}
+                onSave={handleEditorSave}
+            />
 
             {selectedApp && (
                 <DynamicDetailModal

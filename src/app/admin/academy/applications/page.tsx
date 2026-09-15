@@ -5,7 +5,7 @@ import {
     FileText, CheckCircle, XCircle, Loader2, Filter,
     Search, Eye, BookOpen, GraduationCap, DollarSign,
     X, User, Phone, Mail, MapPin, Briefcase, Calendar,
-    Target, Award, Download, Users, SlidersHorizontal
+    Target, Award, Download, Users, SlidersHorizontal, Pencil,
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -25,6 +25,9 @@ import { numberOrZero } from "@/lib/numbers";
 import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 import { csvDocument } from "@/lib/csv-safe";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+import AdminRecordEditor from "@/components/admin/AdminRecordEditor";
+import { ACADEMY_EDITABLE_FIELDS } from "@/lib/admin-editable-fields";
+import { editApplicationAction } from "@/app/actions/admin";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -384,6 +387,35 @@ export default function AdminAcademyApplicationsPage() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
+
+    //   #783 The shared record editor — see lib/admin-editable-fields. This
+    //   screen previously had no way to correct a field at all.
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editorSaving, setEditorSaving] = useState(false);
+
+    async function handleEditorSave(fields: Record<string, string>, editNote: string) {
+        if (!selectedApp) return;
+        setEditorSaving(true);
+        try {
+            const result = await editApplicationAction({
+                collection: "academy_applications",
+                docId: (selectedApp as any).id,
+                fields: fields as any,
+                editNote: editNote || undefined,
+            });
+            if (result.success) {
+                showToast("Record updated. The member has been notified.", "success");
+                setEditorOpen(false);
+                await fetchData();
+            } else {
+                showToast(result.error || "Failed to update record", "error");
+            }
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : "Could not save the record.", "error");
+        } finally {
+            setEditorSaving(false);
+        }
+    }
     const [stats, setStats] = useState<{ totalApplications: number; pending: number; under_review: number; approved: number; rejected: number; } | null>(null);
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
@@ -924,6 +956,15 @@ export default function AdminAcademyApplicationsPage() {
                                         <FileText className="w-4 h-4" /> Full Details
                                     </button>
 
+                                    {/*   #783 Correct a field. This screen could
+                                      *   show everything and change nothing. */}
+                                    <button
+                                        onClick={() => { setSelectedApp(app); setEditorOpen(true); }}
+                                        className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50 transition flex items-center gap-1.5"
+                                    >
+                                        <Pencil className="w-4 h-4" /> Edit
+                                    </button>
+
                                     {/* Quick Actions */}
                                     {app.status === "pending" && (
                                         <>
@@ -1115,6 +1156,17 @@ export default function AdminAcademyApplicationsPage() {
                     </div>
                 </div>
             )}
+
+            {/* #783 One shared editor, on every admin record screen. */}
+                <AdminRecordEditor
+                    open={editorOpen}
+                    title="Edit Academy Application"
+                    fields={ACADEMY_EDITABLE_FIELDS}
+                    record={(selectedApp) as any ?? null}
+                    saving={editorSaving}
+                    onCancel={() => setEditorOpen(false)}
+                    onSave={handleEditorSave}
+                />
 
             {selectedApp && (
                 <DynamicDetailModal

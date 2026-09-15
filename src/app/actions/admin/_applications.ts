@@ -59,6 +59,24 @@ export interface EditableApplicationFields {
     bvn?: string;
     nin?: string;
     cacNumber?: string;
+    /*
+     *   #783 TWO BOXES ON THE COOPERATIVE MEMBERS SCREEN THAT DID NOTHING.
+     *
+     *   That editor renders "Date of Birth" and "Ward". Neither key was on the
+     *   allow-list, so the sanitiser dropped both: an admin typed a correction,
+     *   the dialog said "updated successfully", and the record was unchanged.
+     *   #775 found exactly this on the WAVE screen and its ratchet checked only
+     *   that screen — which is this audit's most repeated finding, arriving
+     *   inside the fix for itself.
+     *
+     *   dateOfBirth is deliberately editable HERE and nowhere else: the
+     *   submission paths write it only when the user record has none, because
+     *   "an application is a declaration, not a correction" (#156). This
+     *   audited admin route is the correction, which is what that note says it
+     *   is for.
+     */
+    dateOfBirth?: string;
+    ward?: string;
     //   #775 flat spellings used by the wave application row
     lgaOfOrigin?: string;
     nextOfKinName?: string;
@@ -85,6 +103,8 @@ const ALLOWED_EDIT_FIELDS: (keyof EditableApplicationFields)[] = [
     //   never address them and there was no way to correct any of the four.
     "lgaOfOrigin", "nextOfKinName", "nextOfKinPhone", "nextOfKinRelationship",
     "alternativePhone", "currentOccupation",
+    //   #783 — rendered by the cooperative members editor and dropped here.
+    "dateOfBirth", "ward",
     // Banking fields
     "bankName", "accountNumber", "accountName", "bankCode",
     "bankDetails.bankName", "bankDetails.accountNumber", "bankDetails.accountName", "bankDetails.bankCode",

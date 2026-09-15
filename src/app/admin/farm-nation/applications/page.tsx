@@ -7,7 +7,7 @@ import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useToast } from "@/contexts/ToastContext";
-import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X, Eye, FileText } from "lucide-react";
+import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X, Eye, FileText, Pencil } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
@@ -17,6 +17,9 @@ import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
 import { numberOrZero } from "@/lib/numbers";
 import { formatDateOrDash, formatShortDateOrDash } from "@/lib/date-utils";
+import AdminRecordEditor from "@/components/admin/AdminRecordEditor";
+import { FARM_NATION_EDITABLE_FIELDS } from "@/lib/admin-editable-fields";
+import { editApplicationAction } from "@/app/actions/admin";
 
 interface SellerProfile {
     id: string;
@@ -53,6 +56,35 @@ const formatRole = (role?: string) => {
 export default function FarmNationApplicationsPage() {
     const { showToast } = useToast();
     const [selectedSeller, setSelectedSeller] = useState<StandardPendingForm<SellerProfile> | null>(null);
+
+    //   #783 The shared record editor — see lib/admin-editable-fields. This
+    //   screen previously had no way to correct a field at all.
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editorSaving, setEditorSaving] = useState(false);
+
+    async function handleEditorSave(fields: Record<string, string>, editNote: string) {
+        if (!selectedSeller) return;
+        setEditorSaving(true);
+        try {
+            const result = await editApplicationAction({
+                collection: "farm_nation_applications",
+                docId: selectedSeller.id,
+                fields: fields as any,
+                editNote: editNote || undefined,
+            });
+            if (result.success) {
+                showToast("Record updated. The member has been notified.", "success");
+                setEditorOpen(false);
+                await refresh();
+            } else {
+                showToast(result.error || "Failed to update record", "error");
+            }
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : "Could not save the record.", "error");
+        } finally {
+            setEditorSaving(false);
+        }
+    }
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -338,6 +370,14 @@ export default function FarmNationApplicationsPage() {
                     >
                         <Eye className="w-3.5 h-3.5" />
                         Full Details
+                    </button>
+                    {/*   #783 Correct a field — this screen had no editor. */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedSeller(item); setEditorOpen(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                    >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
                     </button>
                     {item.status === "pending" && (
                         <>
@@ -639,6 +679,17 @@ export default function FarmNationApplicationsPage() {
                     </div>
                 )}
             </Modal>
+
+            {/* #783 One shared editor, on every admin record screen. */}
+                <AdminRecordEditor
+                    open={editorOpen}
+                    title="Edit Farm Nation Application"
+                    fields={FARM_NATION_EDITABLE_FIELDS}
+                    record={(selectedSeller?.data) as any ?? null}
+                    saving={editorSaving}
+                    onCancel={() => setEditorOpen(false)}
+                    onSave={handleEditorSave}
+                />
 
             {selectedSeller && (
                 <DynamicDetailModal

@@ -16,6 +16,10 @@ import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+//   #783 The shared list. Two of this screen's own boxes — Date of Birth and
+//   Ward — were dropped by the server, so they accepted typing and changed
+//   nothing. Both are on the allow-list now.
+import { COOPERATIVE_EDITABLE_FIELDS, seedEditDraft } from "@/lib/admin-editable-fields";
 
 type MembershipApplication = {
     id: string;
@@ -274,21 +278,16 @@ export default function CooperativeMembersPage() {
 
     function handleStartEdit() {
         if (!selectedApplication) return;
-        setEditFields({
-            firstName: selectedApplication.data.firstName || "",
-            lastName: selectedApplication.data.lastName || "",
-            otherName: selectedApplication.data.otherName || "",
-            phone: selectedApplication.data.phone || "",
-            email: selectedApplication.data.email || "",
-            stateOfOrigin: selectedApplication.data.stateOfOrigin || "",
-            lga: selectedApplication.data.lga || "",
-            ward: selectedApplication.data.ward || "",
-            residentialAddress: selectedApplication.data.residentialAddress || "",
-            occupation: selectedApplication.data.occupation || "",
-            "nextOfKin.name": selectedApplication.data.nextOfKin?.name || "",
-            "nextOfKin.phone": selectedApplication.data.nextOfKin?.phone || "",
-            "nextOfKin.address": selectedApplication.data.nextOfKin?.address || "",
-        });
+        /*
+         *   #783 SEEDED FROM THE SAME LIST THE FORM DRAWS.
+         *
+         *   The literal this replaces loaded THIRTEEN fields into a form that
+         *   now draws twenty-two, so seven would have opened blank — and two of
+         *   the thirteen ("Date of Birth", "Ward") were being dropped by the
+         *   server anyway. #775 found this exact shape on the WAVE screen; one
+         *   list and one loop is what stops it recurring.
+         */
+        setEditFields(seedEditDraft(selectedApplication.data as any, COOPERATIVE_EDITABLE_FIELDS));
         setIsEditMode(true);
     };
 
@@ -1009,22 +1008,7 @@ export default function CooperativeMembersPage() {
                             <div className="space-y-3">
                                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Edit Member Details</h4>
                                 <div className="grid grid-cols-2 gap-3">
-                                    {[
-                                        { key: "firstName", label: "First Name" },
-                                        { key: "lastName", label: "Last Name" },
-                                        { key: "otherName", label: "Other Name" },
-                                        { key: "phone", label: "Phone" },
-                                        { key: "email", label: "Email" },
-                                        { key: "dateOfBirth", label: "Date of Birth" },
-                                        { key: "stateOfOrigin", label: "State of Origin" },
-                                        { key: "lga", label: "LGA" },
-                                        { key: "ward", label: "Ward" },
-                                        { key: "occupation", label: "Occupation" },
-                                        { key: "residentialAddress", label: "Residential Address" },
-                                        { key: "nextOfKin.name", label: "Next of Kin Name" },
-                                        { key: "nextOfKin.phone", label: "Next of Kin Phone" },
-                                        { key: "nextOfKin.address", label: "Next of Kin Address" },
-                                    ].map(({ key, label }) => (
+                                    {[...COOPERATIVE_EDITABLE_FIELDS].map(({ key, label }) => (
                                         <div key={key} className={key === "residentialAddress" || key === "nextOfKin.address" ? "col-span-2" : ""}>
                                             <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
                                             <input

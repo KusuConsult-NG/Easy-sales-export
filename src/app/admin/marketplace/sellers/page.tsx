@@ -21,6 +21,9 @@ import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFil
 import { recordExport } from "@/lib/record-export";
 import { humaniseCapitalised } from "@/lib/humanise";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+//   #783 The shared list — five fields here, and a seller's bank details
+//   (where their payouts land) were not correctable at all.
+import { MARKETPLACE_EDITABLE_FIELDS, seedEditDraft } from "@/lib/admin-editable-fields";
 
 type SellerVerification = {
     id: string;
@@ -252,13 +255,14 @@ export default function AdminSellersPage() {
     function handleOpenEdit(standardApp: StandardPendingForm<SellerVerification>) {
         const v = standardApp.data;
         setEditingVerification(v);
-        setEditDraft({
-            businessName: v.businessName || "",
-            phone: v.phone || "",
-            address: v.address || "",
-            state: v.state || "",
-            lga: v.lga || "",
-        });
+        /*
+         *   #783 Seeded from the SAME list the form draws. The literal this
+         *   replaces seeded `address` and `state` while the form rendered
+         *   `residentialAddress` and `stateOfOrigin` — so both boxes opened
+         *   BLANK on a seller who had them, and an admin correcting one was
+         *   typing into a field they could not see the current value of.
+         */
+        setEditDraft(seedEditDraft(v as any, MARKETPLACE_EDITABLE_FIELDS));
         setEditNote("");
     };
 
@@ -734,13 +738,7 @@ export default function AdminSellersPage() {
                             </button>
                         </div>
                         <div className="p-6 space-y-4">
-                            {([
-                                { key: "businessName", label: "Business Name" },
-                                { key: "phone", label: "Phone" },
-                                { key: "residentialAddress", label: "Address" },
-                                { key: "stateOfOrigin", label: "State" },
-                                { key: "lga", label: "LGA" },
-                            ] as const).map(({ key, label }) => (
+                            {([...MARKETPLACE_EDITABLE_FIELDS] as const).map(({ key, label }) => (
                                 <div key={key}>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
                                     <input
