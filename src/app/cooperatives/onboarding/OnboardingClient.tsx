@@ -24,6 +24,8 @@ import NextOfKinStep from "./steps/NextOfKinStep";
 import DocumentUploadStep from "./steps/DocumentUploadStep";
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
+import ListLoadFailed from "@/components/common/ListLoadFailed";
+
 interface OnboardingContentProps {
     initialTier: "Member";
     paymentStatus: string; // "pending" | "completed"
@@ -37,6 +39,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
     // If payment is already done, start at step 4 (review & submit)
     const [currentStep, setCurrentStep] = useState(paymentStatus === "completed" ? 4 : 1);
+    //   #793 The read failed, as distinct from finding nothing.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
@@ -153,7 +157,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
                 if (isEditParam) {
                     const result = await getCooperativeApplicationAction();
-                    if (result.success && result.data?.application) {
+                    if (!result.success) {
+                                //   #793 The read FAILED. Entering edit mode now
+                                //   would present a blank form as her application.
+                                setLoadFailed(true); return;
+                            }
+                            if (result.success && result.data?.application) {
                         const d = result.data.application;
                         if (d.firstName || d.fullName) {
                             setPersonalInfo((prev: any) => ({
@@ -595,7 +604,37 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     }
     // Show spinner while checking status to avoid flash of incorrect step
     if (isCheckingStatus) {
+        /*
+     *   #793 A FAILED READ IS NOT AN EMPTY APPLICATION.
+     *
+     *   #588 established this exact rule for LISTS and swept thirty-six screens
+     *   with it — "a refusal and an empty result collapsed into one branch". It
+     *   was never applied to the FORMS, where the same collapse costs more: the
+     *   edit path read the member's existing application, prefilled on success,
+     *   and entered edit mode REGARDLESS. So a failed read handed her a BLANK
+     *   form presented as an edit of the application she had already filled in.
+     *
+     *   She then re-types it, or submits it missing the fields she cannot see —
+     *   which is the owner's report, "details added to the form and some are
+     *   missing in the process of submission".
+     */
+    if (loadFailed) {
         return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+                <div className="w-full max-w-lg space-y-4">
+                    <ListLoadFailed
+                        what="your membership application"
+                        onRetry={() => window.location.reload()}
+                    />
+                    <div className="flex justify-center">
+                        <FormHomeButton />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" />
             </div>

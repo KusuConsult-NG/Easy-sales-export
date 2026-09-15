@@ -39,6 +39,9 @@ import BankAccountStep from "./steps/BankAccountStep";
 //   #790 One rule for where a submitted application goes, shared with the
 //   gate above it — see lib/onboarding-destination.
 import { onboardingDestination } from "@/lib/onboarding-destination";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
+
 type AccountType = "buyer" | "seller" | "both";
 
 interface OnboardingData {
@@ -103,6 +106,8 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
     const router = useRouter();
     const { data: session, status } = useSession();
     const [currentStep, setCurrentStep] = useState(1);
+    //   #793 The read failed, as distinct from finding nothing.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [formData, setFormData] = useState<Partial<OnboardingData>>({});
     const [isRevisionMode, setIsRevisionMode] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -128,7 +133,12 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
 
                     if (isEditParam) {
                         const verif = await getSellerVerificationAction();
-                        if (verif.success && verif.data?.verification) {
+                        if (!verif.success) {
+                                //   #793 The read FAILED. Entering edit mode now
+                                //   would present a blank form as her application.
+                                setLoadFailed(true); return;
+                            }
+                            if (verif.success && verif.data?.verification) {
                             const v = verif.data.verification as any;
                             setFormData(prev => ({
                                 ...prev,
@@ -198,7 +208,37 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
 
     // Show loading while checking auth
     if (status === "loading") {
+        /*
+     *   #793 A FAILED READ IS NOT AN EMPTY APPLICATION.
+     *
+     *   #588 established this exact rule for LISTS and swept thirty-six screens
+     *   with it — "a refusal and an empty result collapsed into one branch". It
+     *   was never applied to the FORMS, where the same collapse costs more: the
+     *   edit path read the member's existing application, prefilled on success,
+     *   and entered edit mode REGARDLESS. So a failed read handed her a BLANK
+     *   form presented as an edit of the application she had already filled in.
+     *
+     *   She then re-types it, or submits it missing the fields she cannot see —
+     *   which is the owner's report, "details added to the form and some are
+     *   missing in the process of submission".
+     */
+    if (loadFailed) {
         return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+                <div className="w-full max-w-lg space-y-4">
+                    <ListLoadFailed
+                        what="your seller details"
+                        onRetry={() => window.location.reload()}
+                    />
+                    <div className="flex justify-center">
+                        <FormHomeButton />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>

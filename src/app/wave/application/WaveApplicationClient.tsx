@@ -39,6 +39,8 @@ import FinancialStep from "./steps/FinancialStep";
 import TrainingStep from "./steps/TrainingStep";
 import ReviewStep from "./ReviewStep";
 
+import ListLoadFailed from "@/components/common/ListLoadFailed";
+
 export interface WaveApplicationData {
     // SECTION A: Personal Identification
     surname: string;
@@ -195,6 +197,8 @@ export default function WaveApplicationClient(
 ) {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(0);
+    //   #793 The read failed, as distinct from finding nothing.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [formData, setFormData] = useState<WaveApplicationData>(INITIAL_DATA);
     const [submitting, setSubmitting] = useState(false);
     const [restored, setRestored] = useState(false);
@@ -282,7 +286,12 @@ export default function WaveApplicationClient(
                 if (isEditParam) {
                     // Enter manual edit mode when explicitly requested
                     const result = seed?.application ?? await getWaveApplicationAction();
-                    if (result.success && result.data) {
+                    if (!result.success) {
+                                //   #793 The read FAILED. Entering edit mode now
+                                //   would present a blank form as her application.
+                                setLoadFailed(true); return;
+                            }
+                            if (result.success && result.data) {
                         setFormData((prev: any) => ({ ...prev, ...result.data }));
                     }
                     setIsEditMode(true);
@@ -313,6 +322,36 @@ export default function WaveApplicationClient(
         }
     };
 
+
+    /*
+     *   #793 A FAILED READ IS NOT AN EMPTY APPLICATION.
+     *
+     *   #588 established this exact rule for LISTS and swept thirty-six screens
+     *   with it — "a refusal and an empty result collapsed into one branch". It
+     *   was never applied to the FORMS, where the same collapse costs more: the
+     *   edit path read the member's existing application, prefilled on success,
+     *   and entered edit mode REGARDLESS. So a failed read handed her a BLANK
+     *   form presented as an edit of the application she had already filled in.
+     *
+     *   She then re-types it, or submits it missing the fields she cannot see —
+     *   which is the owner's report, "details added to the form and some are
+     *   missing in the process of submission".
+     */
+    if (loadFailed) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+                <div className="w-full max-w-lg space-y-4">
+                    <ListLoadFailed
+                        what="your WAVE application"
+                        onRetry={() => window.location.reload()}
+                    />
+                    <div className="flex justify-center">
+                        <FormHomeButton />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (status === "loading" || !restored) {
         return (

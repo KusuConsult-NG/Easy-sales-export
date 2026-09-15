@@ -32,6 +32,9 @@ import { toExportOnboardingPayload } from "@/lib/export-onboarding-payload";
 //   #790 One rule for where a submitted application goes, shared with the
 //   gate above it — see lib/onboarding-destination.
 import { onboardingDestination } from "@/lib/onboarding-destination";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
+
 /**
  * What the server read before the page was sent.
  *
@@ -84,6 +87,8 @@ export default function ExportOnboardingClient(
     const { showToast } = useToast();
     const { uploadFile, uploadState } = useStorage();
     const [isUploadingClient, setIsUploadingClient] = useState(false);
+    //   #793 The read failed, as distinct from finding nothing.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [filesUploading, setFilesUploading] = useState<{ file: File; field: string }[]>([]);
     const [currentStepId, setCurrentStepId] = useState("profile");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,7 +126,12 @@ export default function ExportOnboardingClient(
 
                     if (isEditParam) {
                         const result = seed?.application ?? await getExportApplicationAction();
-                        if (result.success ) {
+                        if (!result.success) {
+                                //   #793 The read FAILED. Entering edit mode now
+                                //   would present a blank form as her application.
+                                setLoadFailed(true); setIsLoading(false); return;
+                            }
+                            if (result.success ) {
                             setFormData((prev: any) => ({ ...prev, ...result }));
                         }
                         setIsEditMode(true);
@@ -172,6 +182,36 @@ export default function ExportOnboardingClient(
         checkStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status]); // re-run once session transitions from "loading" → "authenticated"
+
+    /*
+     *   #793 A FAILED READ IS NOT AN EMPTY APPLICATION.
+     *
+     *   #588 established this exact rule for LISTS and swept thirty-six screens
+     *   with it — "a refusal and an empty result collapsed into one branch". It
+     *   was never applied to the FORMS, where the same collapse costs more: the
+     *   edit path read the member's existing application, prefilled on success,
+     *   and entered edit mode REGARDLESS. So a failed read handed her a BLANK
+     *   form presented as an edit of the application she had already filled in.
+     *
+     *   She then re-types it, or submits it missing the fields she cannot see —
+     *   which is the owner's report, "details added to the form and some are
+     *   missing in the process of submission".
+     */
+    if (loadFailed) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+                <div className="w-full max-w-lg space-y-4">
+                    <ListLoadFailed
+                        what="your onboarding details"
+                        onRetry={() => window.location.reload()}
+                    />
+                    <div className="flex justify-center">
+                        <FormHomeButton />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (
