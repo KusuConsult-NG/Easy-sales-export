@@ -65,6 +65,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
+import { stripComments } from '@/lib/testing/strip-comments';
 
 //   #750 — this suite drives an action that now asks the LIVE gate.
 //   The mock decides (roles still matter); see lib/testing/require-admin-mock.
@@ -221,12 +222,32 @@ describe('#498 — the count is about the same set as the list', () => {
     });
 
     it('and a bounded count says that it is bounded', () => {
-        //   Asserted on the rule rather than by seeding two thousand rows: the
-        //   flag is only ever true when in-memory narrowing happened AND the
-        //   scan filled its limit.
+        /*
+         *   #780 THE CONDITION CHANGED, AND THE OLD ONE HAD STOPPED MEANING
+         *   ANYTHING.
+         *
+         *   It read `deduplicatedUsers.length >= FETCH_LIMIT` — "did we fill
+         *   the window?" — which was the right question while the row fetch was
+         *   a single fixed window. It is not a window any more: the filters
+         *   were searching 2,000 rows of 42,000 and presenting the result as
+         *   complete, so the fetch is now a paged scan that stops when it has
+         *   enough. Filling a page is then ordinary, not evidence of a cap.
+         *
+         *   `scan.bounded` is true only when the CEILING cut the read short
+         *   with rows still unread — which is exactly when the count is a lower
+         *   bound. Same property, asked of the thing that now decides it.
+         */
         const src = require('fs').readFileSync(
             require('path').join(process.cwd(), 'src/app/actions/admin/_users.ts'), 'utf8');
 
-        expect(src).toContain('countIsBounded: narrowedInMemory && deduplicatedUsers.length >= FETCH_LIMIT');
+        expect(src).toContain('countIsBounded: narrowedInMemory && scan.bounded');
+        /*
+         *   COMMENTS STRIPPED. The first draft of this clause failed on the
+         *   PROSE — both this finding's note and #498's older one name
+         *   FETCH_LIMIT in order to explain what replaced it. That is the
+         *   #741 trap, met for the fifth time in this audit: an assertion
+         *   reading the explanation rather than the code.
+         */
+        expect(stripComments(src)).not.toContain('FETCH_LIMIT');
     });
 });

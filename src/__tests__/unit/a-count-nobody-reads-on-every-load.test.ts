@@ -142,12 +142,23 @@ describe('#766 — the count runs only when its answer is used', () => {
          *   request cost both. Asserted by ORDER again: the promise is created
          *   before the rows are awaited, and resolved after.
          */
+        /*
+         *   #780 THE ROW FETCH IS A SCAN NOW, not a single awaited get.
+         *
+         *   This anchored on `const snapshot = await runQueryWithRetry`, which
+         *   stopped existing when the fixed 2,000-row window became a paged
+         *   scan — the filters were searching 2,000 rows of 42,000 and calling
+         *   it the answer. The PROPERTY is unchanged and still worth pinning:
+         *   the count goes out BEFORE the rows are waited on and is collected
+         *   AFTER, so the request costs the slower of the two rather than both.
+         */
         const body = getUsersBody();
         const started = body.indexOf('countPromise = runQueryWithRetry');
-        const rowsAwaited = body.indexOf('const snapshot = await runQueryWithRetry');
+        const rowsAwaited = body.indexOf('const scan = await scanUsers');
         const countAwaited = body.indexOf('countPromise ? await countPromise');
 
         expect(started).toBeGreaterThan(-1);
+        expect(rowsAwaited).toBeGreaterThan(-1);
         expect(started).toBeLessThan(rowsAwaited);
         expect(rowsAwaited).toBeLessThan(countAwaited);
     });

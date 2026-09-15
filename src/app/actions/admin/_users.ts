@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { FieldValue } from "@/lib/firestore-compat";
+import { scanUsers, activeModulesOf, genderOf, USER_SCAN_CEILING, USER_SCAN_PAGE } from "@/lib/admin-user-scan";
 import { FieldPath } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
@@ -718,16 +719,87 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 .then((snap) => snap.data().count);
         }
 
-        // Fetch a dynamic batch — no orderBy (avoids missing-field exclusion).
-        // We page in-memory after sort.
-        // If searching or applying an unindexed filter, fetch a larger batch (5000) to ensure high search/filter coverage.
-        // If doing standard navigation, scale limit based on the requested page to reduce expensive reads by 97%+
-        const FETCH_LIMIT = (options.search || hasUnindexedFilter || options.fromDate || options.toDate || (options.role && options.role !== "all") || options.sortBy === "gender" || (options.gender && options.gender !== "all"))
-            ? 2000
-            : Math.min(2000, (page + 1) * pageSize + 100);
-        query = query.limit(FETCH_LIMIT);
+        /**
+         *   #780 THE FILTERS SEARCHED 2,000 ROWS OF 42,000 AND CALLED IT THE
+         *        ANSWER.
+         *
+         *   Reported by the owner twice — "sorting users is not completely
+         *   functional (using the filter button)", then "filtering is still not
+         *   fixed."
+         *
+         *   What stood here took ONE window and applied `gender`, `status`,
+         *   `modules` and the date range to it in memory. MEASURED on 3,002
+         *   accounts with the targets at the old end:
+         *
+         *       gender = female      expected 1     returned NOTHING
+         *       status = verified    expected 1     returned NOTHING
+         *       status = unverified  expected 1     returned 50 WRONG rows
+         *       module = wave        expected 1     returned NOTHING
+         *       module = academy     expected 1     returned NOTHING
+         *
+         *   A two-user fixture passes every one of those. The instrument was
+         *   smaller than the window it was supposed to be measuring, which is
+         *   how this survived a suite of 14,000 tests.
+         *
+         *   NOW A PAGED SCAN, with a cheap prefilter on the RAW row so that
+         *   rows which cannot match never reach the mapper — #766 is the
+         *   owner's other report about this screen ("Users app loading slowly")
+         *   and mapping 42,000 rows per request would trade one of his
+         *   complaints for the other. See lib/admin-user-scan: the prefilter
+         *   discards only rows that CANNOT match and keeps anything it is
+         *   unsure of, because wrongly hiding a user is the same defect from
+         *   the other side.
+         */
+        const rawFilters = {
+            gender: options.gender,
+            modules: options.modules,
+            status: options.status,
+            fromDate: options.fromDate,
+            toDate: options.toDate,
+            //   The mapper's own rule, handed over rather than restated.
+            verificationStateOf: verificationState as (d: Record<string, any>) => string,
+        };
 
-        const snapshot = await runQueryWithRetry(() => query.get());
+        /*
+         *   How many matching rows the page being served can possibly need.
+         *   The `+ 1` is what `hasMore` is decided from; the in-memory filters
+         *   below may still discard some of these, which is why the scan is
+         *   asked for more than the page when one of them is active.
+         */
+        const needForPage = (page + 1) * pageSize + 1;
+        const needsDeepScan = Boolean(
+            options.search || hasUnindexedFilter || options.fromDate || options.toDate
+            || (options.role && options.role !== "all")
+            || options.sortBy === "gender"
+            || (options.gender && options.gender !== "all")
+            || (options.modules && options.modules !== "all")
+            || (options.status && options.status !== "all"),
+        );
+
+        const scan = await scanUsers<any>(
+            async (afterDoc, limit) => {
+                let q = query.limit(limit);
+                if (afterDoc) q = q.startAfter(afterDoc);
+                const snap = await runQueryWithRetry(() => q.get());
+                return snap.docs;
+            },
+            (doc) => doc.data(),
+            rawFilters,
+            {
+                need: needsDeepScan ? Math.max(needForPage, USER_SCAN_PAGE) : needForPage,
+                //   Unfiltered navigation still reads only what the page needs.
+                ceiling: needsDeepScan ? USER_SCAN_CEILING : Math.max(needForPage + 100, USER_SCAN_PAGE),
+                pageSize: USER_SCAN_PAGE,
+            },
+        );
+
+        const snapshot = { docs: scan.docs };
+        if (scan.bounded) {
+            logger.warn(
+                `[getUsersAction] the scan stopped at ${scan.scanned} rows before the collection ended; ` +
+                `the count reported for this filter is a lower bound, not a total.`,
+            );
+        }
         /*
          *   Resolved here, with the rows already back. On the narrowed path
          *   there is no promise and nothing was asked of the database; the
@@ -950,31 +1022,28 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 serviceRegistrations: maySeePii
                     ? (data.serviceRegistrations || {})
                     : stripRegistrationPii(data.serviceRegistrations),
-                gender: data.gender || data.kyc?.gender || data.kyc?.kycData?.gender || Object.values(data.serviceRegistrations || {}).map((reg: any) => reg?.profile?.gender || reg?.gender).find(Boolean) || "",
+                //   #780 The SHARED rule — lib/admin-user-scan. The scan in
+                //   front of this filter has to agree with it, and two
+                //   spellings of one derivation is how they stop agreeing.
+                gender: genderOf(data),
                 identityDocument: data.identityDocument || "",
             };
         });
 
         // ── Derive activeModules for each user (in-memory, zero extra Firestore reads) ──
-        const MODULE_KEYS = ['marketplace', 'academy', 'wave', 'cooperatives', 'export', 'farmNation', 'farm_nation'];
-        const ENROLLED_STATUSES = new Set(['pending', 'under_review', 'approved', 'active', 'paid', 'completed', 'suspended']);
+        /*
+         *   #780 THE SHARED RULE — lib/admin-user-scan.
+         *
+         *   This derivation decided what the `modules` filter matched while
+         *   living only inside this mapper, so the scan standing in front of
+         *   the filter could not agree with it by construction. It is one
+         *   exported function now, called here and by the prefilter.
+         */
         const usersWithModules = users.map(u => {
-            const regs = u.serviceRegistrations as Record<string, any>;
-            const active: string[] = [];
-            for (const key of MODULE_KEYS) {
-                const reg = regs[key];
-                if (reg && ENROLLED_STATUSES.has(reg.status)) {
-                    // Normalise to URL-friendly label
-                    const label = key === 'farmNation' || key === 'farm_nation' ? 'farm-nation' : key;
-                    if (!active.includes(label)) active.push(label);
-                }
-            }
-            
-            // Legacy marketplace fallback
-            if (!active.includes('marketplace') && u.accountType) {
-                active.push('marketplace');
-            }
-            
+            const active = activeModulesOf({
+                serviceRegistrations: u.serviceRegistrations,
+                accountType: u.accountType,
+            });
             return { ...u, activeModules: active, moduleCount: active.length };
         })
 
@@ -1208,12 +1277,13 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                  *        is simply: if anything narrowed the set after the query,
                  *        the count has to come from the narrowed set.
                  *
-                 *        IT IS BOUNDED, AND THAT IS SAID RATHER THAN HIDDEN.
-                 *        In-memory filtering only ever sees FETCH_LIMIT rows, so
-                 *        a filtered count is "of those scanned", not of the
-                 *        collection. `countIsBounded` lets a caller render 2000+
-                 *        instead of presenting a capped number as exact. The
-                 *        unfiltered count stays the true database count.
+                 *        IT MAY BE BOUNDED, AND THAT IS SAID RATHER THAN
+                 *        HIDDEN. #780 replaced the fixed 2,000-row window this
+                 *        paragraph used to describe with a paged scan, so a
+                 *        filtered count is now the true total UNLESS the scan
+                 *        ceiling cut the read short — which is what
+                 *        `countIsBounded` reports. The unfiltered count stays
+                 *        the true database count.
                  *
                  *        NOTHING RENDERS THIS TODAY — admin/users/page.tsx does
                  *        not destructure `meta`. Corrected anyway: a returned
@@ -1223,7 +1293,18 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                  *        estimatedDeliveryDate in #493.
                  */
                 totalCount: narrowedInMemory ? filteredUsers.length : absoluteDbCount,
-                countIsBounded: narrowedInMemory && deduplicatedUsers.length >= FETCH_LIMIT,
+                /*
+                 *   #780 THE SCAN NOW DECIDES THIS, not a fixed window.
+                 *
+                 *   It read `deduplicatedUsers.length >= FETCH_LIMIT`, which
+                 *   asked "did we fill the window?" — a question that stopped
+                 *   meaning anything once the window became a scan that stops
+                 *   when it has enough. `scan.bounded` is true only when the
+                 *   CEILING cut the read short with rows still unread, which is
+                 *   exactly when the count below is a lower bound rather than a
+                 *   total. #772's rule: a sample is never presented as a total.
+                 */
+                countIsBounded: narrowedInMemory && scan.bounded,
             }
         };
     } catch (error: any) {
