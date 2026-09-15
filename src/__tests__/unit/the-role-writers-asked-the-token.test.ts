@@ -463,21 +463,21 @@ describe('#750 — and the advice that went with the old gate went with it', () 
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#750 — and the stale-JWT ledger recorded the progress', () => {
-    it('THE COUNT IS DOWN FROM 80 TO 78', () => {
+    it('THE COUNT IS DOWN FROM 80 TO 78 (77 AS OF #757)', () => {
         /*
          *   #743's mechanism, third finding running. Two files left the
          *   population; under the `<= 88` ceiling that ledger replaced, this
          *   would have been silence and the slack would have grown again.
          */
         expect(code('src/__tests__/unit/half-converted-off-the-stale-token.test.ts'))
-            .toContain('ledgerVerdict(jwtOnly.length, 78)');
+            .toContain('ledgerVerdict(jwtOnly.length, 77)');
     });
 
-    it('AND THE NAMED-PERMISSION CENSUS COUNTED THE TWELVE NEW GATES', () => {
+    it('AND THE NAMED-PERMISSION CENSUS COUNTED THE TWELVE NEW GATES (69 AS OF #757)', () => {
         //   55 → 67. That suite pins the permission each site names, so a gate
         //   added and forgotten fails it.
         expect(code('src/__tests__/unit/require-admin-names-its-permission.test.ts'))
-            .toContain('expect(callSites().length).toBe(67)');
+            .toContain('expect(callSites().length).toBe(69)');
     });
 });
 

@@ -3,8 +3,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { requireSession } from "@/lib/session-guard";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 import { FieldValue } from "@/lib/firestore-compat";
 import { recordAdminAction } from "@/lib/audit-log";
 import { registrationProgressScore } from "@/lib/registration-progress";
@@ -155,9 +154,24 @@ export async function runServiceRegistrationRecoveryAction(
     };
 
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session || !hasAdminPermission(sessionResult.session.user.roles, "users:update")) {
-            throw new Error("Unauthorized: Admin access required.");
+        /*
+         *   #757 THIS GATE READ THE TOKEN, ON A JOB THAT WRITES EVERY USER.
+         *
+         *   It was `hasAdminPermission(sessionResult.session.user.roles, ...)`.
+         *   #356 established that a JWT role claim "keeps its value for hours
+         *   after the database loses it", and #532/#750 converted the platform's
+         *   other write paths off it. This one runs a paginated repair across
+         *   the whole user table and was still asking the claim — and it became
+         *   reachable from the forensic screen in this same finding, which is
+         *   the wrong moment to leave a stale gate on it.
+         *
+         *   requireAdmin re-reads the roles from the user document, refuses a
+         *   suspended account on the way past, and names the permission it
+         *   refused.
+         */
+        const gate = await requireAdmin("users:update");
+        if ("error" in gate) {
+            throw new Error(gate.error);
         }
 
         logger.info("[DataRecovery] Starting serviceRegistrations recovery audit...");
@@ -406,7 +420,9 @@ export async function runServiceRegistrationRecoveryAction(
         logger.info(`[DataRecovery] Audit complete. Processed: ${stats.totalUsersProcessed}, Fixed: ${stats.fixedCount}`);
         await recordAdminAction({
             action: 'data_recovery_run',
-            userId: sessionResult.session.user.id,
+            //   #757 — the acting id from the live gate, which is the same
+            //   session and one fewer thing to keep in step.
+            userId: gate.userId,
             targetType: 'service_registrations',
             // stats already carries dryRun, so the log distinguishes a run that
             // wrote from one that only reported — they were indistinguishable

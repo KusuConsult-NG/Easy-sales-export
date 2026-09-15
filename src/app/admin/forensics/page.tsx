@@ -45,7 +45,7 @@ import {
     ShieldAlert,
     Stethoscope,
 } from "lucide-react";
-import { runForensicScanAction, type ScanResult } from "@/app/actions/forensics";
+import { runForensicScanAction, repairForensicFindingAction, type ScanResult } from "@/app/actions/forensics";
 
 type Status = ScanResult["status"];
 
@@ -69,6 +69,10 @@ export default function ForensicsPage() {
     const [error, setError] = useState<string | null>(null);
     const [running, setRunning] = useState(false);
     const [ranAt, setRanAt] = useState<Date | null>(null);
+    //   #757 — which repair is running, and what the last one said.
+    const [repairing, setRepairing] = useState<string | null>(null);
+    const [repairMessage, setRepairMessage] =
+        useState<{ kind: string; ok: boolean; text: string } | null>(null);
 
     async function runScan() {
         setRunning(true);
@@ -91,6 +95,37 @@ export default function ForensicsPage() {
             setResults(null);
         } finally {
             setRunning(false);
+        }
+    }
+
+    /**
+     *   #757 RUN A REPAIR, THEN RE-SCAN.
+     *
+     *   The re-scan is the point. A repair that reports "fixed 12" and leaves
+     *   the screen showing the same twelve findings has told an administrator
+     *   nothing they can trust — and this audit has spent several findings on
+     *   the difference between a claim and a measurement. Re-running turns the
+     *   result into one.
+     */
+    async function runRepair(kind: string) {
+        setRepairing(kind);
+        setRepairMessage(null);
+        try {
+            const res: any = await repairForensicFindingAction(kind);
+            if (res?.success) {
+                setRepairMessage({ kind, ok: true, text: `${res.details} Re-scanning…` });
+                await runScan();
+                setRepairMessage({ kind, ok: true, text: res.details });
+            } else {
+                setRepairMessage({
+                    kind, ok: false,
+                    text: res?.error || "The repair could not be run.",
+                });
+            }
+        } catch {
+            setRepairMessage({ kind, ok: false, text: "The repair could not be run." });
+        } finally {
+            setRepairing(null);
         }
     }
 
@@ -210,6 +245,44 @@ export default function ForensicsPage() {
                                     </div>
 
                                     <p className="mt-2 text-sm text-slate-700">{r.details}</p>
+
+                                    {/*
+                                      *   #757 — THE REPAIR, OR THE REASON THERE IS NOT ONE.
+                                      *
+                                      *   The scan reported ten defect classes and repaired
+                                      *   none, while the repairs for three of them already
+                                      *   existed in this tree with no caller. Offered only
+                                      *   where a machine can act without deciding anything a
+                                      *   person should decide; everywhere else the reason is
+                                      *   printed, because "no button" and "no explanation"
+                                      *   together read as an oversight.
+                                      */}
+                                    {r.status !== "pass" && r.repair?.safe && r.repair.kind && (
+                                        <button
+                                            type="button"
+                                            onClick={() => runRepair(r.repair!.kind!)}
+                                            disabled={repairing !== null}
+                                            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            {repairing === r.repair.kind ? "Repairing…" : "Repair these"}
+                                        </button>
+                                    )}
+
+                                    {r.status !== "pass" && r.repair && !r.repair.safe && r.repair.reason && (
+                                        <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                                            <span className="font-semibold">Not repaired automatically. </span>
+                                            {r.repair.reason}
+                                        </p>
+                                    )}
+
+                                    {repairMessage?.kind === r.repair?.kind && repairMessage && (
+                                        <p
+                                            role="status"
+                                            className={`mt-2 text-xs font-semibold ${repairMessage.ok ? "text-emerald-700" : "text-red-700"}`}
+                                        >
+                                            {repairMessage.text}
+                                        </p>
+                                    )}
 
                                     {/*
                                       *   #475 THE FINDING AND THE GAP ARE NOT THE SAME LIST.

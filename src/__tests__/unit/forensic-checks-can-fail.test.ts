@@ -531,15 +531,47 @@ describe('#331 — a check that cannot run must not report a pass', () => {
         expect(src).toContain('Unauthorized: Admin access required');
     });
 
-    it('and the scan still writes nothing, which is what makes it safe to expose', () => {
-        // The measurement behind #266's decision. Every mutation-looking call
-        // in the file is a JavaScript Set or Map; a document write would show
-        // up as one of these on a `db` reference.
-        const src = source('src/app/actions/forensics.ts');
+    it('and the SCAN still writes nothing, which is what makes it safe to expose', () => {
+        /*
+         *   #757 NARROWED THIS FROM THE FILE TO THE FUNCTION, AND THE PROPERTY
+         *   IS UNCHANGED.
+         *
+         *   The owner asked for the scan's findings to be repairable, so this
+         *   file now also contains `repairForensicFindingAction` — a separate,
+         *   explicitly-invoked action, gated on config:update and audited,
+         *   which does write. A file-level sweep therefore fails, and the claim
+         *   it was making was never about the file: it is that RUNNING A SCAN
+         *   changes nothing, which is what lets an administrator press it
+         *   without thinking.
+         *
+         *   Scoped to `runForensicScanAction` itself, that claim still holds
+         *   exactly as it did — and it now also guards the boundary between the
+         *   two, which matters more than it did before: the day a write creeps
+         *   into the scan is the day "just run the scan" stops being safe
+         *   advice.
+         */
+        const whole = source('src/app/actions/forensics.ts');
+        const a = whole.indexOf('export async function runForensicScanAction');
+        const b = whole.indexOf('export async function repairForensicFindingAction');
 
-        expect(src).not.toMatch(/\bRef\.(set|update|delete)\s*\(/);
-        expect(src).not.toMatch(/\.collection\([^)]*\)\.(add|doc)\([^)]*\)\.(set|update|delete)\s*\(/);
-        expect(src).not.toMatch(/FieldValue\./);
-        expect(src).not.toMatch(/db\.batch\(/);
+        expect({ found: a > -1 && b > a }).toEqual({ found: true });
+        const scan = whole.slice(a, b);
+
+        expect(scan).not.toMatch(/\bRef\.(set|update|delete)\s*\(/);
+        expect(scan).not.toMatch(/\.collection\([^)]*\)\.(add|doc)\([^)]*\)\.(set|update|delete)\s*\(/);
+        expect(scan).not.toMatch(/FieldValue\./);
+        expect(scan).not.toMatch(/db\.batch\(/);
+    });
+
+    it('AND THE REPAIR THAT DOES WRITE IS GATED AND AUDITED', () => {
+        //   The other side of that boundary. A write behind the forensic screen
+        //   is acceptable because of what stands in front of it, so the two
+        //   facts belong in one place.
+        const whole = source('src/app/actions/forensics.ts');
+        const repair = whole.slice(whole.indexOf('export async function repairForensicFindingAction'));
+
+        expect(repair).toContain('await requireAdmin("config:update")');
+        expect(repair).toContain('recordAdminAction');
+        expect(repair).toContain('if (!isRepairKind(kind))');
     });
 });

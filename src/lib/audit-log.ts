@@ -226,6 +226,11 @@ export type AuditAction =
     | 'academy_revision_request'
     | 'export_revision_request'
     | 'data_recovery_run'
+    //   #757 — the forensic screen's repair. It rewrites serviceRegistrations
+    //   across the user table, creates missing profiles, or takes a deleted
+    //   seller's listings off sale, so it belongs in this vocabulary like every
+    //   other bulk mutation an administrator can start.
+    | 'forensic_repair'
     | 'escrow_status_update'
     | 'export_catalog_delete'
     | 'export_product_delete'

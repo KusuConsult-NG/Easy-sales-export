@@ -283,6 +283,24 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/actions/admin/_legacy.ts': ['users:create'],
 
         /*
+         *   #757 — THE FORENSIC SCAN'S REPAIR, AND THE RECOVERY IT DISPATCHES TO.
+         *
+         *   The scan reported ten defect classes and repaired none, while the
+         *   repairs for three of them already existed with no caller. Wiring
+         *   them together put a WRITE behind the forensic screen, so it is
+         *   gated like one: `config:update`, the same permission maintenance's
+         *   repair actions hold.
+         *
+         *   `data-recovery.ts` joined the census in the same change. It gated on
+         *   `hasAdminPermission(session.user.roles, ...)` — the stale JWT — on a
+         *   job that rewrites serviceRegistrations for every user, and became
+         *   reachable from that screen, which is the wrong moment to leave the
+         *   claim deciding it.
+         */
+        'src/app/actions/forensics.ts': ['config:update'],
+        'src/app/actions/data-recovery.ts': ['users:update'],
+
+        /*
          *   #750 — THE TWO ENDPOINTS THAT WRITE ROLES, taken off the stale JWT.
          *
          *   Both `_updateUserRolesAction` and `bulkAssignRolesAction` gated on
@@ -501,11 +519,14 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // and that is still true at 51. 49 → 51: #726 added the cooperative
         // membership repair's two.
         // 51 → 55: #748 converted the four money-OUT gates off the stale JWT.
+        // 67 → 69: #757 wired the forensic scan to its repairs, which put a
+        // write behind that screen, and took data-recovery off the stale token
+        // on the way.
         // 55 → 67: #750 converted the two files that WRITE roles — all twelve
         // gates in them, because converting only the role writer would leave
         // each file gated two ways, which is the half-converted shape #532's
         // ledger exists to catch.
-        expect(callSites().length).toBe(67);
+        expect(callSites().length).toBe(69);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

@@ -462,6 +462,6 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         //   their role-assignment functions left each file asking the database
         //   in one place and the token in another, which the ratchet above
         //   refuses, and was right to.
-        expect(ledgerVerdict(jwtOnly.length, 78)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(jwtOnly.length, 77)).toBe(LEDGER_HELD);
     });
 });

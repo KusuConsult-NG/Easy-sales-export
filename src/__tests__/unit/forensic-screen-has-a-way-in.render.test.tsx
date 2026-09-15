@@ -231,11 +231,32 @@ describe('#266 — it runs on demand, and only reads', () => {
         expect(screen.getByText(/samples each/i)).toBeInTheDocument();
     });
 
-    it('and it does not offer to fix anything, because the action cannot', async () => {
-        // A "repair" button on a read-only scan would be #337's shape — a
-        // control that does not perform the operation it names.
+    it('AND IT OFFERS A REPAIR ONLY WHERE ONE EXISTS AND IS SAFE', async () => {
+        /*
+         *   #757 REVERSED THIS ASSERTION, AND THE OWNER MADE THAT DECISION.
+         *
+         *   It read "it does not offer to fix anything, because the action
+         *   cannot", and the reasoning was right for the code at the time: "a
+         *   'repair' button on a read-only scan would be #337's shape — a
+         *   control that does not perform the operation it names."
+         *
+         *   The owner asked for the other thing: "I want you to fix all the
+         *   issues on forensic scan so that when admin scan all the defects
+         *   should be healed." So the action CAN now, for the three classes
+         *   where a machine may act without deciding anything a person should
+         *   decide — and the repairs for all three already existed in this tree
+         *   with no caller.
+         *
+         *   #337's shape is what this now guards against from the other side: a
+         *   button appears only when `repair.safe` names a kind the dispatcher
+         *   knows, so it never promises an operation it cannot perform. Where
+         *   there is no safe repair the screen prints the REASON instead, which
+         *   a bare absence never did.
+         */
         const src = source(PAGE);
 
-        expect(src).not.toMatch(/\b(fix|repair|resolve|purge|delete)[A-Za-z]*Action\b/i);
+        expect(src).toContain('repairForensicFindingAction');
+        expect(src).toContain('r.repair?.safe');
+        expect(src).toContain('Not repaired automatically.');
     });
 });

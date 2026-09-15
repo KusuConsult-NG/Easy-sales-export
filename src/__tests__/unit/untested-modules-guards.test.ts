@@ -88,7 +88,24 @@ jest.mock('@/lib/cache-invalidation', () => ({
  * written and is the reason they can be written at all.
  */
 function setAdmin(is: boolean) {
-    mockRequireAdmin.mockResolvedValue(is ? { userId: ADMIN } : { error: 'Unauthenticated' });
+    /*
+     *   #757 — THE REFUSAL NOW READS LIKE THE REAL GATE'S.
+     *
+     *   This stubbed `{ error: 'Unauthenticated' }`, which requireAdmin returns
+     *   only when there is no session at all. A caller who IS signed in and
+     *   simply lacks the permission gets "Unauthorized: Permission required -
+     *   <permission>", and that is the case every test in this file sets up.
+     *
+     *   It mattered as soon as an action stopped hand-writing its own refusal
+     *   and started relaying the gate's: data-recovery did exactly that when it
+     *   came off the stale token, and this suite's assertion — that the refusal
+     *   says "unauthorised" — then failed against a message the harness had
+     *   invented. The stub was describing a different refusal from the one
+     *   under test.
+     */
+    mockRequireAdmin.mockResolvedValue(
+        is ? { userId: ADMIN, roles: ['admin'] }
+           : { error: 'Unauthorized: Permission required - users:update' });
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
         session: { user: { id: is ? ADMIN : MEMBER, email: 'a@e.com', roles: is ? ['admin'] : [] } },
         error: null,

@@ -47,6 +47,12 @@ import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { registrationProgressScore, isFurtherAlong } from '@/lib/registration-progress';
 
+//   #757 — this suite drives a recovery that now asks the LIVE gate rather than
+//   the session's role claim. The mock decides (roles still matter); see
+//   lib/testing/require-admin-mock for why it is not a blanket pass.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null, setCache: async () => undefined,
     deleteCache: async () => undefined, redis: null,

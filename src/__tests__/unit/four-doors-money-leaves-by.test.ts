@@ -148,14 +148,14 @@ describe('#748 — and the gate they moved onto is the live one', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#748 — and the ledger recorded the progress', () => {
-    it('THE STALE-JWT COUNT IS DOWN FROM 84 TO 80', () => {
+    it('THE STALE-JWT COUNT IS DOWN FROM 84 TO 80 (77 AS OF #757)', () => {
         /*
          *   Four converted, four fewer. Asserted here as well as in that file
          *   because the number moving is the evidence that these four left the
          *   population rather than merely gaining a second gate.
          */
         expect(code('src/__tests__/unit/half-converted-off-the-stale-token.test.ts'))
-            .toContain('ledgerVerdict(jwtOnly.length, 78)');
+            .toContain('ledgerVerdict(jwtOnly.length, 77)');
     });
 
     it('AND THE LEDGER IS STILL AN EXACT PIN, NOT A CEILING', () => {

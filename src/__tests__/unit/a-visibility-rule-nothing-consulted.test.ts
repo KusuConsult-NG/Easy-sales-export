@@ -139,13 +139,23 @@ describe('#624 — the visibility rule now decides what is selected', () => {
         expect(productVisibilityHandWritten(code(TALLY_NOT_VISIBILITY))).toBe(true);
     });
 
-    it('AND THE QUERIES ASK THE CONSTANT, in all four files that read products', () => {
+    it('AND THE QUERIES ASK THE CONSTANT, in all five files that read products', () => {
         //   The other half: "nobody hand-writes it" would also be satisfied by
         //   deleting the queries. They have to be asking the rule.
         const asking = SOURCES.filter(f =>
             code(f).includes('where("status", "in", [...PRODUCT_VISIBLE_STATUSES])'));
 
         expect(asking.sort()).toEqual([
+            /*
+             *   #757 — the forensic repair joined them. It takes a deleted
+             *   seller's listings off sale, so it has to know which listings
+             *   are ON sale, and a first version of it hand-wrote
+             *   `status == "active"` — leaving every out-of-stock orphan
+             *   visible while reporting the repair complete. This ratchet is
+             *   what that class of mistake is for, and the entry here is the
+             *   record that it asks the rule rather than restating it.
+             */
+            'src/app/actions/forensics.ts',
             'src/app/actions/marketplace/_buyer.ts',
             'src/app/actions/marketplace/_mp_catalog.ts',
             'src/app/api/marketplace/products/route.ts',

@@ -23,6 +23,11 @@ import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { findFarmNationApplications } from "@/lib/farm-nation-application-lookup";
 import { classifyGroup } from "@/lib/duplicate-profile-resolution";
 import { sampleOf, verdictFor, describeSample } from "@/lib/forensic-scan-scope";
+//   #757 — what each finding can be repaired by, and why some cannot be.
+import { repairFor, isRepairKind, type RepairKind, type RepairOffer } from "@/lib/forensic-repairs";
+import { requireAdmin } from "@/lib/require-admin";
+import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /*
  * ── #728 THE CEILINGS, NAMED ONCE ───────────────────────────────────────────
@@ -137,6 +142,16 @@ export interface ScanResult { module: string;
      */
     status: "pass" | "fail" | "warning" | "inconclusive";
     details: string;
+    /**
+     *   #757 HOW THIS FINDING CAN BE PUT RIGHT, IF IT CAN.
+     *
+     *   The scan listed ten defect classes and repaired none, while the repairs
+     *   for three of them already existed in this tree and were reachable from
+     *   nowhere it knew about. Filled in by the scan from
+     *   lib/forensic-repairs.ts, so the screen never has to guess and a check
+     *   with no safe automatic repair says WHY rather than offering a button.
+     */
+    repair?: RepairOffer;
     /**
      * The records that ARE the finding — the ones somebody has to act on.
      *
@@ -1504,9 +1519,144 @@ export async function runForensicScanAction(): Promise<
             });
         }
 
-        return { error: null, success: true as const, results , data: null };
+        /*
+         *   #757 — every finding leaves here knowing whether it can be put
+         *   right. Attached HERE rather than at each of the ten push sites: a
+         *   check added later gets an answer automatically, and the answer for
+         *   an unknown check is "no automatic repair is defined", which is the
+         *   safe direction.
+         */
+        const withRepairs = results.map((r) => ({ ...r, repair: repairFor(r.check) }));
+
+        return { error: null, success: true as const, results: withRepairs, data: null };
 
     } catch (error: any) { logger.error("Forensic scan failed:", error);
         return { success: false as const, results: [], error: error.message, data: null };
     }
+}
+
+/**
+ *   #757 RUN THE REPAIR FOR A FINDING THE SCAN JUST REPORTED.
+ *
+ *   The scan's three repairable classes, each dispatched to machinery that
+ *   already existed and had no caller:
+ *
+ *     orphaned_users              lib/orphaned-user-repair.ts — creates the
+ *                                 missing profile for an auth account that has
+ *                                 none, with the minimal role.
+ *     orphaned_products           takes a deleted seller's listings off sale.
+ *                                 Suspends rather than deletes: the owner's
+ *                                 standing instruction on this audit is that
+ *                                 nothing is destroyed, and a suspended listing
+ *                                 can be restored while a deleted one cannot.
+ *     service_registration_drift  actions/data-recovery.ts — rebuilds a user's
+ *                                 serviceRegistrations from their applications.
+ *
+ *   GATED ON config:update AND AUDITED. This writes across the user table and
+ *   the product catalogue; #532 and #750 established that such a gate must ask
+ *   the database rather than the token, and #375 that it must name its
+ *   permission. An unaudited bulk mutation is the defect maintenance.ts was
+ *   pulled up for.
+ */
+export async function repairForensicFindingAction(kind: string): Promise<
+    { success: true; error: null; repaired: number; details: string }
+    | { success: false; error: string; repaired: 0; details: string }
+> {
+    const gate = await requireAdmin("config:update");
+    if ("error" in gate) {
+        return { success: false as const, error: gate.error, repaired: 0, details: "" };
+    }
+
+    //   Validated against the known set rather than trusted. This is a server
+    //   action, so the argument is whatever a browser sent.
+    if (!isRepairKind(kind)) {
+        return {
+            success: false as const,
+            error: `Unknown repair: ${String(kind)}`,
+            repaired: 0,
+            details: "",
+        };
+    }
+
+    try {
+        const outcome = await runRepair(kind);
+
+        await recordAdminAction({
+            action: "forensic_repair",
+            userId: gate.userId,
+            targetType: "system",
+            targetId: kind,
+            metadata: { kind, repaired: outcome.repaired, details: outcome.details },
+        } as never);
+
+        return { success: true as const, error: null, ...outcome };
+    } catch (error: any) {
+        logger.error("[forensics] repair failed", { kind, error: error?.message });
+        return {
+            success: false as const,
+            error: error?.message ?? "Repair failed",
+            repaired: 0,
+            details: "",
+        };
+    }
+}
+
+async function runRepair(kind: RepairKind): Promise<{ repaired: number; details: string }> {
+    if (kind === "orphaned_users") {
+        const { repairAllOrphanedUsers } = await import("@/lib/orphaned-user-repair");
+        const r: any = await repairAllOrphanedUsers();
+        const repaired = Number(r?.repaired ?? r?.fixed ?? 0) || 0;
+        return { repaired, details: `Created ${repaired} missing profile(s).` };
+    }
+
+    if (kind === "service_registration_drift") {
+        const { runServiceRegistrationRecoveryAction } = await import("@/app/actions/data-recovery");
+        const r = await runServiceRegistrationRecoveryAction({ dryRun: false });
+        const repaired = r.stats.fixedCount ?? 0;
+        return { repaired, details: `Rebuilt serviceRegistrations for ${repaired} user(s).` };
+    }
+
+    /*
+     *   orphaned_products — SUSPENDED, NOT DELETED.
+     *
+     *   A listing whose seller no longer exists cannot be fulfilled, so leaving
+     *   it on sale takes money for goods nobody will ship. Suspending removes it
+     *   from every buyer-facing read (they all filter `status == "active"`) and
+     *   keeps the row, its images and its order history intact — which is what
+     *   the owner's instruction that nothing be destroyed requires, and what
+     *   makes the repair reversible if a seller is restored.
+     */
+    const liveSellerIds = new Set<string>();
+    const usersSnap = await db.collection(COLLECTIONS.USERS).all().get();
+    for (const u of usersSnap.docs) liveSellerIds.add(u.id);
+
+    /*
+     *   EVERY VISIBLE STATUS, not just "active".
+     *
+     *   A first version filtered `status == "active"` and my own test for it
+     *   caught the gap: lib/product-status.ts defines visibility as
+     *   PRODUCT_VISIBLE_STATUSES — ["active", "out_of_stock"] — and an
+     *   out-of-stock listing is still on the shop, still reachable, and still
+     *   belongs to a seller who no longer exists. Repairing one of the two
+     *   would have looked complete and left half the orphans on sale.
+     */
+    const productsSnap = await db.collection(COLLECTIONS.PRODUCTS)
+        .where("status", "in", [...PRODUCT_VISIBLE_STATUSES]).all().get();
+
+    let repaired = 0;
+    const batch = db.batch();
+    for (const doc of productsSnap.docs) {
+        const sellerId = doc.data()?.sellerId;
+        if (!sellerId || liveSellerIds.has(sellerId)) continue;
+        batch.update(doc.ref, {
+            status: "suspended",
+            suspendedReason: "seller_no_longer_exists",
+            _system_healed: true,
+            updatedAt: new Date(),
+        });
+        repaired++;
+    }
+    if (repaired > 0) await batch.commit();
+
+    return { repaired, details: `Suspended ${repaired} listing(s) whose seller no longer exists.` };
 }
