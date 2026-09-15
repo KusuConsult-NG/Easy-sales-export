@@ -3,6 +3,7 @@
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db, getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS, User } from "@/lib/types/firestore";
+import { scanOrphanedApplications } from "@/lib/orphaned-applications";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { getRedisClientStatus, redisConfigState, missingRedisVariable } from "@/lib/redis";
 import { logger } from "@/lib/logger";
@@ -62,6 +63,14 @@ export interface HealthReport {
     stats: {
         corruptedUsers: number;
         orphanedApplications: number;
+        /** #772 How many application rows the figure above was measured over. */
+        orphanedApplicationsScanned?: number;
+        /** #772 True when a collection hit the scan limit, so the count is a floor. */
+        orphanedApplicationsBounded?: boolean;
+        /** #772 Which module each orphan is in — where an operator has to go. */
+        orphanedApplicationsByModule?: Record<string, number>;
+        /** #772 Modules whose read failed; their rows are in neither count. */
+        orphanedApplicationsUnreadable?: string[];
     };
     timestamp: string;
 }
@@ -195,18 +204,33 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
             logger.error("Health probe: database read failed", probeError);
         }
 
-        // 5. Orphaned Apps Check (Sample)
-        let orphanedApps = 0;
-        const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(50).get();
-        const userChecks = await Promise.all(waveSnap.docs.map(async (doc) => {
-            const userId = doc.data().userId;
-            if (!userId) {
-                return true;
-            }
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-            return !userDoc.exists;
-        }));
-        orphanedApps = userChecks.filter(Boolean).length;
+        /*
+         * 5. Orphaned Apps Check
+         *
+         *   #772 THIS READ FIFTY WAVE ROWS AND THE TILE PRINTED THE ANSWER AS
+         *        A COUNT.
+         *
+         *   Two defects in one figure, and the owner found them by asking what
+         *   the tile meant:
+         *
+         *     a SAMPLE shown as a total   `.limit(50)`, no ordering, and the
+         *                                 screen rendered a bare number under
+         *                                 "Orphaned Apps".
+         *     a QUARTER of what it names  only WAVE_APPLICATIONS was read.
+         *                                 Academy, Export and Farm Nation
+         *                                 carry the same `userId`, and all
+         *                                 four approval paths read it.
+         *
+         *   It also did one `.doc().get()` PER APPLICATION — up to fifty round
+         *   trips on the page an administrator opens because something is
+         *   wrong. The shared scan batches the existence checks, so covering
+         *   four modules costs about seven queries instead of two hundred.
+         *
+         *   `scanned` and `bounded` come back with the count so the screen can
+         *   say what it looked at, rather than presenting a floor as a finding.
+         */
+        const orphanScan = await scanOrphanedApplications(db);
+        const orphanedApps = orphanScan.orphaned;
 
         // 6. Feature Toggles
         const featureToggles: Record<string, boolean> = { ...DEFAULT_TOGGLES };
@@ -243,6 +267,13 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
             stats: {
                 corruptedUsers: issues.filter(i => i.issueType.includes("Corruption")).length,
                 orphanedApplications: orphanedApps,
+                //   #772 What the figure above was measured over. Without
+                //   these the screen cannot tell a finding from a floor, which
+                //   is the whole of this finding.
+                orphanedApplicationsScanned: orphanScan.scanned,
+                orphanedApplicationsBounded: orphanScan.bounded,
+                orphanedApplicationsByModule: orphanScan.byModule,
+                orphanedApplicationsUnreadable: orphanScan.unreadable,
             },
             timestamp: new Date().toISOString()
         };

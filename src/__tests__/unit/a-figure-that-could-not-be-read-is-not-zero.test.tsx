@@ -478,7 +478,7 @@ describe('#753 — and the rest of the class is measured, not swept', () => {
         return { total, screens };
     };
 
-    it('THE REMAINING POPULATION IS TEN FIGURES ON THREE SCREENS', () => {
+    it('THE REMAINING POPULATION IS EIGHT FIGURES ON TWO SCREENS', () => {
         /*
          *   Sixteen, not the eighteen a first pass reported. That sweep ran
          *   over RAW source and counted two mentions inside COMMENTS — #601's
@@ -527,10 +527,22 @@ describe('#753 — and the rest of the class is measured, not swept', () => {
          *   the screen straight back into the class. The test below is what
          *   makes that a check rather than a number.
          */
+        /*
+         *   #772 TEN BECAME EIGHT, and system-health/diagnostics left the
+         *   population for the right reason rather than by being excused.
+         *
+         *   That screen's "Orphaned Apps" figure was a fifty-row sample of ONE
+         *   application collection out of four, printed as a count. Fixing it
+         *   gave both health screens a real availability concept — what was
+         *   scanned, whether the number is a floor, and which collections could
+         *   not be read at all — expressed in the platform's own word,
+         *   "Unavailable". The sweep's exclusion asks exactly that question, so
+         *   they drop out because they now answer it.
+         */
         const { total, screens } = figures();
 
-        expect(ledgerVerdict(total, 10)).toBe(LEDGER_HELD);
-        expect(ledgerVerdict(screens.length, 3)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(total, 8)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(screens.length, 2)).toBe(LEDGER_HELD);
     });
 
     it('AND THE TEN THAT REMAIN ARE EACH BEHIND A GUARD', () => {
@@ -542,8 +554,13 @@ describe('#753 — and the rest of the class is measured, not swept', () => {
          */
         expect(code('src/app/admin/audit-logs/page.tsx')).toContain('{stats && (');
         expect(code('src/app/admin/wave/compliance/page.tsx')).toContain('{stats && (');
-        //   The em-dash branch, which is this screen's way of saying the same
-        //   thing inline rather than hiding a block.
+        /*
+         *   #772 system-health/diagnostics is no longer in the population — it
+         *   gained a full availability concept — but its em-dash branch is
+         *   still the thing that stops a missing read rendering as a figure, so
+         *   the assertion stays. A guard is worth checking whether or not the
+         *   sweep still counts the file.
+         */
         expect(code('src/app/admin/system-health/diagnostics/page.tsx')).toContain("data ? numberOrZero(");
     });
 

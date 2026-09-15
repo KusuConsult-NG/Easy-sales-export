@@ -223,8 +223,24 @@ export default function AdminDiagnosticsPage() {
                               *   here: THE FIX REACHED ONE OF TWO DOORS, which is the
                               *   shape #595 and #601 each recorded.
                               */}
+                            {/*
+                              *   #772 The count, and what it was counted over.
+                              *   Both doors this time — the sibling tile on
+                              *   /admin/system-health says the same thing, and
+                              *   the note above records what it cost when a fix
+                              *   reached one of the two.
+                              */}
                             <span className={`text-sm font-bold ${numberOrZero(data?.stats?.orphanedApplications) > 0 ? 'text-red-600' : 'text-slate-900'}`}>
                                 {data ? numberOrZero(data.stats?.orphanedApplications) : '—'}
+                                {data && typeof data.stats?.orphanedApplicationsScanned === "number" ? (
+                                    <span className="font-normal text-slate-500">
+                                        {" "}of {numberOrZero(data.stats.orphanedApplicationsScanned).toLocaleString()} checked
+                                        {data.stats?.orphanedApplicationsBounded ? " (a floor)" : ""}
+                                        {data.stats?.orphanedApplicationsUnreadable?.length
+                                            ? ` — Unavailable for ${data.stats.orphanedApplicationsUnreadable.join(", ")}`
+                                            : ""}
+                                    </span>
+                                ) : null}
                             </span>
                         </div>
                     </div>

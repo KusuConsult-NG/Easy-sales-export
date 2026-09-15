@@ -126,7 +126,49 @@ export default function SystemHealthPage() {
                                   */}
                                 {numberOrZero(report.stats?.orphanedApplications)}
                             </span>
-                            <div className="mt-2 text-xs text-slate-500">Missing User Linkages</div>
+                            {/*
+                              *   #772 WHAT THE NUMBER WAS MEASURED OVER.
+                              *
+                              *   "Missing User Linkages" under a bare figure
+                              *   read as a platform total. It is a bounded scan
+                              *   — and it used to read one module of the four
+                              *   the heading names. Saying what was checked is
+                              *   the difference between a finding and a floor.
+                              */}
+                            <div className="mt-2 text-xs text-slate-500">
+                                Missing User Linkages
+                                {typeof report.stats?.orphanedApplicationsScanned === "number" && (
+                                    <> — of {numberOrZero(report.stats.orphanedApplicationsScanned).toLocaleString()} checked
+                                    {report.stats?.orphanedApplicationsBounded ? " (scan limit reached, so this is a floor)" : ""}</>
+                                )}
+                            </div>
+                            {/*
+                              *   Which module, because that is where whoever
+                              *   reads this has to go. An orphan cannot be
+                              *   approved: all four approval paths read the
+                              *   `userId` that is missing.
+                              */}
+                            {report.stats?.orphanedApplicationsByModule
+                                && Object.entries(report.stats.orphanedApplicationsByModule)
+                                    .some(([, n]) => numberOrZero(n) > 0) && (
+                                <div className="mt-1 text-xs text-orange-700">
+                                    {Object.entries(report.stats.orphanedApplicationsByModule)
+                                        .filter(([, n]) => numberOrZero(n) > 0)
+                                        .map(([m, n]) => `${m}: ${numberOrZero(n)}`)
+                                        .join(", ")}
+                                </div>
+                            )}
+                            {/*
+                              *   A module whose read FAILED is in neither
+                              *   count. Reporting that as "no orphans" is the
+                              *   defect #516 and #753 spent their findings on.
+                              */}
+                            {report.stats?.orphanedApplicationsUnreadable?.length ? (
+                                <div className="mt-1 text-xs text-amber-700">
+                                    Unavailable for {report.stats.orphanedApplicationsUnreadable.join(", ")} — those
+                                    reads failed, so their rows are in neither figure.
+                                </div>
+                            ) : null}
                         </div>
 
                         {/*

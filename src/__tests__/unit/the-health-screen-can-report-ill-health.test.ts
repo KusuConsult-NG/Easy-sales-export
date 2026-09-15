@@ -173,8 +173,52 @@ describe('#440 — a field nobody computes is not reported', () => {
     });
 
     it('and the report really does not carry it', async () => {
+        /*
+         *   #772 THE KEY SET GREW, AND THE PROPERTY IS UNCHANGED.
+         *
+         *   This pinned the exact two keys to prove `desyncedRegistrations` —
+         *   produced by `const desyncedRegs = 0;`, declared and never computed
+         *   — had left the payload. #772 added four, and every one of them IS
+         *   computed: the scan returns `scanned`, `bounded`, `byModule` and
+         *   `unreadable` from what it actually read, so that the screen can say
+         *   what the orphan figure was measured over instead of printing a
+         *   fifty-row sample of one module as a platform count.
+         *
+         *   The list is still pinned EXACTLY, so a field nobody computes still
+         *   cannot arrive quietly — which is the whole of #440 — and the
+         *   negative assertion below is the one that carries its meaning.
+         */
         const result: any = await runDiagnostic();
-        expect(Object.keys(result.data.stats).sort()).toEqual(['corruptedUsers', 'orphanedApplications']);
+
+        expect(Object.keys(result.data.stats).sort()).toEqual([
+            'corruptedUsers',
+            'orphanedApplications',
+            'orphanedApplicationsBounded',
+            'orphanedApplicationsByModule',
+            'orphanedApplicationsScanned',
+            'orphanedApplicationsUnreadable',
+        ]);
+        //   #440's actual claim, restated so it cannot be lost in a key list.
+        expect(Object.keys(result.data.stats)).not.toContain('desyncedRegistrations');
+    });
+
+    it('AND EVERY ONE OF THEM WAS COMPUTED, not declared', async () => {
+        /*
+         *   #772 The vacuity guard on the list above, and #440's real rule: a
+         *   field is allowed to exist only if something measured it. `scanned`
+         *   is the count of rows actually read, so it moves with the data —
+         *   `const desyncedRegs = 0` could never have satisfied this.
+         */
+        const result: any = await runDiagnostic();
+        const stats = result.data.stats;
+
+        expect(typeof stats.orphanedApplicationsScanned).toBe('number');
+        expect(typeof stats.orphanedApplicationsBounded).toBe('boolean');
+        expect(Array.isArray(stats.orphanedApplicationsUnreadable)).toBe(true);
+        //   Every module the label names has an entry, so a zero is a measured
+        //   zero rather than a module nobody looked at.
+        expect(Object.keys(stats.orphanedApplicationsByModule).sort())
+            .toEqual(['academy', 'export', 'farm-nation', 'wave']);
     });
 });
 
