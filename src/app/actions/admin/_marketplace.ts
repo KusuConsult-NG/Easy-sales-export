@@ -28,6 +28,7 @@ import {
 } from "@/lib/product-status";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { notifyBadgeUpdated } from "@/lib/marketplace-notifications";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -959,6 +960,20 @@ async function _approveMarketplaceUserAction(userId: string): Promise<ActionResp
 
         revalidatePath("/admin/marketplace/buyers");
 
+        /*
+         *   #782 AND THE MEMBER IS TOLD. #690 closed eleven silent decision
+         *   doors across five modules; the marketplace buyer verdict is one it
+         *   did not reach, and this action wrote an audit log and nothing else.
+         *   The person whose access was just decided learned nothing.
+         */
+        await notifyMemberDecision({
+            userId,
+            subject: "Your marketplace account",
+            outcome: "approved",
+            link: "/marketplace",
+            note: "You can now buy on the marketplace.",
+        });
+
         try {
             const { invalidateUserCache } = await import("@/lib/cache-invalidation");
             await invalidateUserCache(userId);
@@ -1013,6 +1028,16 @@ async function _rejectMarketplaceUserAction(options: { userId: string; reason: s
         });
 
         revalidatePath("/admin/marketplace/buyers");
+
+        //   #782 — see the approve path. The reason is already required by this
+        //   action (#612); it is what the member most needs to be told.
+        await notifyMemberDecision({
+            userId: options.userId,
+            subject: "Your marketplace account",
+            outcome: "rejected",
+            reason,
+            link: "/marketplace",
+        });
 
         try {
             const { invalidateUserCache } = await import("@/lib/cache-invalidation");

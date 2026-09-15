@@ -22,6 +22,7 @@ import { balanceFieldOf } from "@/lib/cooperative-member-balance";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 
 // ============================================================================
 // TRANSACTION MONITORING
@@ -499,7 +500,25 @@ export async function approveWithdrawalAction(
                         notificationData.name,
                         notificationData.amount,
                         withdrawalId
-                    ) : Promise.resolve()
+                    ) : Promise.resolve(),
+                    /*
+                     *   #782 AND AN IN-APP NOTICE, because the email above was
+                     *   the only thing telling the member and it tells nobody
+                     *   when RESEND_API_KEY is unset — which it is on this
+                     *   deployment, as the boot log says on every start. This
+                     *   decides a member's MONEY, and there was no record in
+                     *   the app for them to go back and read.
+                     *
+                     *   Inside the existing allSettled, so a failed notice
+                     *   cannot undo a committed payout decision.
+                     */
+                    notifyMemberDecision({
+                        userId: notificationData.userId,
+                        subject: "Your withdrawal request",
+                        outcome: "approved",
+                        amount: notificationData.amount,
+                        link: "/cooperatives/withdrawals",
+                    }),
                 ]);
             }
         } catch (sideEffectError) {
@@ -691,7 +710,16 @@ export async function rejectWithdrawalAction(
                         notificationData.name,
                         notificationData.amount,
                         reason
-                    ) : Promise.resolve()
+                    ) : Promise.resolve(),
+                    //   #782 — see the approve path above.
+                    notifyMemberDecision({
+                        userId: notificationData.userId,
+                        subject: "Your withdrawal request",
+                        outcome: "rejected",
+                        amount: notificationData.amount,
+                        reason,
+                        link: "/cooperatives/withdrawals",
+                    }),
                 ]);
             }
         } catch (sideEffectError) {

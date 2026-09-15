@@ -14,6 +14,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { z } from "zod";
 import { nationalIdField } from "@/lib/kyc-validators";
 import { nubanAccountNumber } from "@/lib/validations/shared";
+import { notifyMemberRecordEdited } from "@/lib/admin-edit-notice";
 
 // ============================================
 // Admin Edit Application with Audit Trail
@@ -589,6 +590,39 @@ async function _editApplicationAction(params: {
                 after: sanitized,
                 editNote: editNote || null,
             },
+        });
+
+        /**
+         *   #782 AND THE MEMBER IS TOLD.
+         *
+         *   The owner: "when admin edits or approves, users should get
+         *   notification on what was done and should be able to read the notice
+         *   of what was done."
+         *
+         *   This function wrote an admin audit log and stopped — no email, no
+         *   in-app notice, nothing the member could read. The fields it can
+         *   change include `accountNumber`, `bankName`, `bvn` and `nin`, and
+         *   #775 had just widened it from five fields to seventeen AND made it
+         *   actually write them, so the silence covered more ground than
+         *   before.
+         *
+         *   A payout destination altered without the account holder being told
+         *   is the shape of every account-takeover story there is. The audit
+         *   trail records it as a legitimate admin edit, which it almost always
+         *   is — and the member is the only person who can tell the difference.
+         *
+         *   AFTER the write and the audit log, deliberately: the edit is
+         *   committed by this point, and notifyMemberRecordEdited never throws,
+         *   so a failed notice cannot turn a completed write into an error the
+         *   admin retries. A retried edit is a second write to a member's
+         *   record. See lib/admin-edit-notice — it names the FIELDS and not the
+         *   values, because a notification is not a place to put a BVN.
+         */
+        await notifyMemberRecordEdited({
+            userId,
+            before,
+            after: sanitized,
+            editNote,
         });
 
         // Bust Next.js route cache so the admin users list shows fresh data

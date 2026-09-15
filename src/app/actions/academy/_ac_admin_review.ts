@@ -13,6 +13,7 @@ import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 
 /**
  * Academy Admin Actions - Application Approval/Rejection
@@ -103,6 +104,27 @@ async function _approveAcademyApplicationAction(
         } catch (cacheError) {
             logger.error('[Academy Approval] Cache clear error:', cacheError);
         }
+
+        /*
+         *   #782 AN IN-APP NOTICE, BEFORE THE EMAIL BELOW.
+         *
+         *   The email was the only thing telling the learner, and it tells
+         *   nobody when RESEND_API_KEY is unset — which it is on this
+         *   deployment, as the boot log says on every start. `canSendEmail`
+         *   below returns false in exactly that case, so the whole block is
+         *   skipped and the decision reached the learner nowhere.
+         *
+         *   It also left no record IN THE APP to go back and read, which is the
+         *   owner's own wording: "should be able to read the notice of what was
+         *   done."
+         */
+        await notifyMemberDecision({
+            userId,
+            subject: "Your Academy application",
+            outcome: "approved",
+            link: "/academy/dashboard",
+            note: "You can now access your Academy dashboard.",
+        });
 
         // 5. Send Approval Email (Post-Commit Side Effect)
         if (canSendEmail("academy decision email", appData.personalInfo?.email)) {
@@ -231,6 +253,18 @@ async function _rejectAcademyApplicationAction(
             } catch (cacheError) {
                 logger.error('[Academy Rejection] Cache clear error:', cacheError);
             }
+        }
+
+        //   #782 — see the approve path. The reason is what the learner most
+        //   needs, and it was reaching them only by an email nobody sends.
+        if (userId) {
+            await notifyMemberDecision({
+                userId,
+                subject: "Your Academy application",
+                outcome: "rejected",
+                reason,
+                link: "/academy/application",
+            });
         }
 
         // 3. Send Rejection Email

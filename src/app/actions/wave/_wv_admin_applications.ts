@@ -18,6 +18,7 @@ import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { revealedIdentityFields } from "@/lib/kyc-identity-store";
 
 // ============================================================================
@@ -346,6 +347,17 @@ async function _approveWaveApplicationAction(
                     await sendWaveApplicationEmail(userEmail, userName, 'approved');
                     logger.info(`[WAVE Admin] Approval email sent to: ${userEmail}`);
                 }
+
+                //   #782 — see the rejection path. The email was the only thing
+                //   telling the applicant, and it tells nobody when
+                //   RESEND_API_KEY is unset, which it is on this deployment.
+                await notifyMemberDecision({
+                    userId: targetUserId,
+                    subject: "Your WAVE application",
+                    outcome: "approved",
+                    link: "/wave/dashboard",
+                    note: "You can now access your WAVE dashboard.",
+                });
             } catch (err) {
                 logger.error("[WAVE Admin] Failed to send approval email:", err);
             }
@@ -487,6 +499,27 @@ async function _rejectWaveApplicationAction(
                     await sendWaveApplicationEmail(userEmail, userName, 'rejected', reason);
                     logger.info(`[WAVE Admin] Rejection email sent to: ${userEmail}`);
                 }
+
+                /*
+                 *   #782 AND AN IN-APP NOTICE, because the email above is the
+                 *   only thing that told the applicant and it frequently tells
+                 *   nobody: RESEND_API_KEY is unset on this deployment and the
+                 *   boot log says so on every start. There was also no record
+                 *   in the app for her to go back and READ, which is the owner's
+                 *   own wording — "should be able to read the notice of what was
+                 *   done".
+                 *
+                 *   notifyMemberDecision writes the in-app notice AND the email,
+                 *   and never throws: the decision is already committed, and a
+                 *   failed notice must not become an error the admin retries.
+                 */
+                await notifyMemberDecision({
+                    userId: targetUserId,
+                    subject: "Your WAVE application",
+                    outcome: "rejected",
+                    reason,
+                    link: "/wave/application",
+                });
             } catch (err) {
                 logger.error("[WAVE Admin] Failed to send rejection email:", err);
             }
