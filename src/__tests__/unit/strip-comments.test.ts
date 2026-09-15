@@ -313,6 +313,20 @@ describe('it agrees with the naive version everywhere the naive version is right
         'src/__tests__/unit/the-audit-log-had-two-vocabularies.test.ts',
         'src/__tests__/unit/the-export-sweep-only-walked-the-browser.test.ts',
         'src/__tests__/unit/the-spreadsheet-half-of-the-export-rule.test.ts',
+        //   #787 — joined by the RATIO, not by newly acquiring the trap, which
+        //   is the mechanism this list has now recorded six times. That file's
+        //   own codeOnly() has always carried `t.startsWith('//')` and
+        //   `t.startsWith('/*')` on one line, so the naive regex has always
+        //   opened a block comment at that literal and eaten to the next real
+        //   close. What moved was the prose: a paragraph explaining why the
+        //   reader's inline projection became a named projectSession pushed the
+        //   damage from under the 10% threshold to over it.
+        //
+        //   Raised rather than relaxed, for the usual reason: that file strips
+        //   OTHER files with its own line-based codeOnly(), never the
+        //   block-eating regex measured here, and no assertion in it reads its
+        //   own text.
+        'src/__tests__/unit/wave-training-access.test.ts',
         'src/app/api/id-card/pdf/route.ts',
         'src/lib/csp.ts',
     ];

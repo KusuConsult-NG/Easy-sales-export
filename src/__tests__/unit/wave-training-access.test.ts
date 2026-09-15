@@ -179,19 +179,30 @@ describe('the response is bounded and current', () => {
         expect(codeOnly(route)).not.toContain('...doc.data()');
     });
 
-    it('does not return the admin who scheduled it', () => {
-        const mapper = route.slice(route.indexOf('const sessions = docs.map'), route.indexOf('const nextCursor'));
+    /*
+     *   #787 RESTATED, NOT RELAXED. The projection was an inline `docs.map`
+     *   with the field list in its body; it is now `projectSession`, a named
+     *   function, because there are TWO callers — the page and the lookup that
+     *   finds the session actually running. Both assertions below still read
+     *   the projection an attendee receives; they just read it where it lives.
+     *
+     *   The move is the point: a second inline copy is how the running session
+     *   would come back missing `roomKey` while the rows on the page carried it.
+     */
+    const projector = () => {
+        const at = route.indexOf('function projectSession');
+        expect(at).toBeGreaterThan(-1);
+        return route.slice(at);
+    };
 
-        expect(mapper).not.toContain('createdBy');
+    it('does not return the admin who scheduled it', () => {
+        expect(projector()).not.toContain('createdBy');
     });
 
     it('still returns what a participant needs to attend', () => {
         // Vacuity guard: stripping the meeting link would make the endpoint
         // pointless. It is the payload — the fix is who receives it.
-        const mapper = route.slice(
-            route.indexOf('const sessions: WaveTrainingSession[] = docs.map'),
-            route.indexOf('const nextCursor'),
-        );
+        const mapper = projector();
 
         for (const field of ['title', 'scheduledAt', 'durationMinutes', 'roomName', 'customMeetingLink']) {
             expect(mapper).toContain(field);

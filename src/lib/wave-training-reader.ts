@@ -3,6 +3,9 @@ import "server-only";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { canReadWaveProgramme } from "@/lib/wave-access";
+//   #787 The running session is selected with the same rule the member screen
+//   applies, rather than a second copy of it — see findRunningSession.
+import { findOpenSession, type LiveSessionWindow } from "@/lib/live-session-window";
 import { logger } from "@/lib/logger";
 
 /**
@@ -146,13 +149,99 @@ export async function readWaveTrainingSessions(
     const hasMore = snap.docs.length > limit;
     const docs = hasMore ? snap.docs.slice(0, limit) : snap.docs;
 
-    // Named fields, not the document.
-    //
-    // The spread also carried createdBy — the user id of the admin who
-    // scheduled the session — which no participant needs.
-    const sessions: WaveTrainingSession[] = docs.map((doc: any) => {
-        const data = doc.data() ?? {};
-        return {
+    const sessions: WaveTrainingSession[] = docs.map(projectSession);
+
+    const nextCursor = hasMore && docs.length > 0
+        ? docs[docs.length - 1].data().scheduledAt?.toDate?.()?.toISOString() ?? null
+        : null;
+
+    /*
+     *   #787 AND THE SESSION THAT IS ACTUALLY RUNNING, WHICH THE PAGE ABOVE
+     *        COULD NOT REACH.
+     *
+     *   The query is `isActive == true`, ORDERED OLDEST FIRST, capped at twenty,
+     *   and the member screen asks for one page and never follows the cursor. So
+     *   the twenty rows it receives are the twenty OLDEST sessions that have not
+     *   been ended — and nothing ends them except an administrator remembering to
+     *   press End, which closing the browser tab does not do.
+     *
+     *   Measured: twenty stale rows and one session started a minute ago, and
+     *   the member's screen shows "No live session is running right now" while
+     *   the host sits in the room. That is the owner's report — "Live Training
+     *   is not connecting and does not allow end users to join" — and it gets
+     *   worse every week the platform runs, because the list of never-ended
+     *   sessions only grows.
+     *
+     *   So the running session is found separately and put at the front, and it
+     *   is found NEWEST-FIRST because startWaveLiveSessionAction stamps
+     *   `scheduledAt: new Date()` at the moment of starting. The page itself
+     *   keeps its ascending order, which is the order the schedule is read in.
+     */
+    const running = await findRunningSession(db, new Set(sessions.map(s => s.id)));
+    if (running) sessions.unshift(running);
+
+    return { allowed: true, sessions, cursor: nextCursor, hasMore };
+}
+
+/**
+ * How far back the running-session lookup reads.
+ *
+ * A running session is among the most recently scheduled by construction, so
+ * this is slack rather than a real bound. It is stated and capped anyway: an
+ * unbounded read of this collection is the defect on the other side of the one
+ * above.
+ */
+const RUNNING_SESSION_SCAN = 200;
+
+/**
+ * The session open right now, if it is not already on the caller's page.
+ *
+ * THE SERVER DECIDES INCLUSION; THE CLIENT DECIDES DISPLAY. LiveTrainingClient
+ * runs findOpenSession itself against the viewer's own clock — deliberately, see
+ * its header — so an extra row here costs nothing and a missing one cannot be
+ * recovered. That asymmetry is why the window below is widened by ten minutes
+ * either side: a viewer whose clock is a few minutes off must still RECEIVE the
+ * row, and it is their clock, not this one, that decides whether they are shown
+ * the classroom.
+ */
+async function findRunningSession(
+    db: ReturnType<typeof getAdminDb>,
+    alreadyOnPage: ReadonlySet<string>,
+): Promise<WaveTrainingSession | null> {
+    const snap = await db
+        .collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
+        .where("isActive", "==", true)
+        .orderBy("scheduledAt", "desc")
+        .limit(RUNNING_SESSION_SCAN)
+        .get();
+
+    const rows = snap.docs.map(projectSession).filter(r => !alreadyOnPage.has(r.id));
+    if (rows.length === 0) return null;
+
+    const GRACE_MS = 10 * 60_000;
+    const now = Date.now();
+    for (const at of [now, now - GRACE_MS, now + GRACE_MS]) {
+        const open = findOpenSession(rows as unknown as LiveSessionWindow[], at);
+        if (open) return open as unknown as WaveTrainingSession;
+    }
+    return null;
+}
+
+/**
+ * One row, projected field by field.
+ *
+ * NAMED FIELDS, NOT THE DOCUMENT — the spread this replaced also carried
+ * `createdBy`, the user id of the admin who scheduled the session, which no
+ * participant needs.
+ *
+ *   #787 ONE PROJECTOR, because there are two callers now. A second copy is how
+ *   the running session would come back missing `roomKey` while the page's rows
+ *   carried it — the #349/#773 shape, where a correct rule elsewhere is inert
+ *   because something in between drops the key.
+ */
+function projectSession(doc: any): WaveTrainingSession {
+    const data = doc.data() ?? {};
+    return {
             id: doc.id,
             title: data.title ?? "",
             description: data.description ?? "",
@@ -182,12 +271,5 @@ export async function readWaveTrainingSessions(
                 ? { startedAt: data.startedAt?.toDate?.()?.toISOString() ?? String(data.startedAt) }
                 : {}),
             createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
-        };
-    });
-
-    const nextCursor = hasMore && docs.length > 0
-        ? docs[docs.length - 1].data().scheduledAt?.toDate?.()?.toISOString() ?? null
-        : null;
-
-    return { allowed: true, sessions, cursor: nextCursor, hasMore };
+    };
 }

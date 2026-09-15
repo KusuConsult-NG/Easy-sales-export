@@ -207,7 +207,21 @@ export default function LiveTrainingClient(
                     <div className="space-y-4">
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
                             <Lock className="w-5 h-5 text-amber-600 shrink-0" />
-                            <p className="text-amber-800 text-sm">No live session is running right now. The room opens automatically when a scheduled session begins.</p>
+                            {/*
+                              *   #787 THE SENTENCE WAS TRUE BEFORE #778 AND
+                              *   FALSE AFTER IT.
+                              *
+                              *   "The room opens automatically when a scheduled
+                              *   session begins" is the rule #778 REPLACED: the
+                              *   room now opens when the host presses Start,
+                              *   because on a JWT-less classroom the first
+                              *   person in is the moderator and members were
+                              *   arriving first. So a member sitting on this
+                              *   screen at the scheduled minute was told to
+                              *   expect something that no longer happens, and
+                              *   waited on a clock that means nothing.
+                              */}
+                            <p className="text-amber-800 text-sm">No live session is running right now. The room opens as soon as your trainer starts the session — this page checks every minute, so you can leave it open.</p>
                         </div>
 
                         {loadFailed && sessions.length === 0 ? (
