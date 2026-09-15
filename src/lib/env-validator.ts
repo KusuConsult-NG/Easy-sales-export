@@ -3,6 +3,11 @@
  * Checks for required environment variables on application startup
  */
 
+//   #771 The enforcement date and its grace test, so this file can say what a
+//   missing MFA_SECRET_KEY costs TODAY rather than what it cost when the
+//   description was written. One definition of the deadline, in mfa-policy.
+import { graceActive, MFA_ADMIN_ENFORCE_FROM } from '@/lib/mfa-policy';
+
 interface EnvValidationResult {
     valid: boolean;
     missing: string[];
@@ -102,12 +107,60 @@ const WHAT_BREAKS: Record<string, string> = {
     NEXT_PUBLIC_URL: 'links in emails and Paystack callbacks fall back to a guessed host',
     RESEND_API_KEY: 'no email leaves the platform — verification, receipts, invitations',
     PAYSTACK_SECRET_KEY: 'no payment can be initialised or verified',
+    /*
+     *   #771 THIS DESCRIPTION EXPIRES ON 26 SEPTEMBER 2026.
+     *
+     *   "multi-factor enrolment and verification fail" is true today and files
+     *   this key under the tier the startup log calls "break one feature each,
+     *   BUT STILL SERVE". From MFA_ADMIN_ENFORCE_FROM that sentence stops being
+     *   true, and the honest one is much worse. The chain, read end to end:
+     *
+     *     mfa-policy.ts   MFA_ADMIN_ENFORCE_FROM = 2026-09-26. After it,
+     *                     adminMfaVerdict returns `enrol` for any admin without
+     *                     mfaEnabled — a redirect on a page, a refusal on an
+     *                     API route.
+     *     that file also  "NOT ONE ADMINISTRATOR ACCOUNT HAS MFA TODAY."
+     *     api/auth/mfa/setup  returns 500 "Service configuration error" when
+     *                     this variable is unset.
+     *
+     *   So on that date, with this key missing, every administrator is sent to
+     *   enrol and enrolment fails — nobody can reach /admin, and nobody can fix
+     *   it from inside the product. "One feature" is the wrong tier for that.
+     *
+     *   IT IS STILL NOT FATAL, DELIBERATELY. Refusing to boot would take the
+     *   whole platform down — every member, every module — because a key the
+     *   ADMIN area needs is absent. That trades a bad outcome for a worse one.
+     *   What changes is that the log stops describing it as survivable, before
+     *   the date rather than after.
+     *
+     *   The text is date-aware rather than rewritten once, so it is right on
+     *   both sides of the deadline without anyone remembering to come back.
+     */
     MFA_SECRET_KEY: 'multi-factor enrolment and verification fail',
     QR_ENCRYPTION_KEY: 'QR codes cannot be issued or read',
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_KEY: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_SECRET: 'every upload fails — marketplace media, certificates, export documents',
 };
+
+/**
+ * What a missing variable costs, as of now.
+ *
+ *   #771 A FUNCTION, because one of these answers changes with the date. See
+ *   the note on MFA_SECRET_KEY above. Every other key returns its fixed text,
+ *   and an unknown key returns the same fallback the call site used to inline.
+ */
+export function whatBreaks(
+    key: string,
+    env: NodeJS.ProcessEnv = process.env,
+    now: number = Date.now(),
+): string {
+    if (key === 'MFA_SECRET_KEY' && !graceActive(env, now)) {
+        return 'EVERY ADMINISTRATOR IS LOCKED OUT — admin two-factor is mandatory '
+            + 'and enrolment cannot complete without this key';
+    }
+    return WHAT_BREAKS[key] ?? 'the feature that reads it';
+}
 
 const RECOMMENDED_ENV_VARS = [
     /**
@@ -389,7 +442,30 @@ export function logEnvValidation() {
                 `   ${degrades.length} that break one feature each, but still serve: ${degrades.join(', ')}`,
             );
             for (const key of degrades) {
-                console.error(`     - ${key}: ${WHAT_BREAKS[key] ?? 'the feature that reads it'}`);
+                console.error(`     - ${key}: ${whatBreaks(key)}`);
+            }
+
+            /*
+             *   #771 The one that is not "one feature", said where it cannot be
+             *   scrolled past. See the note on MFA_SECRET_KEY above for the
+             *   chain; the short version is that after MFA_ADMIN_ENFORCE_FROM
+             *   this key missing means no administrator can reach /admin and
+             *   none of them can fix it from inside the product.
+             */
+            if (degrades.includes('MFA_SECRET_KEY')) {
+                console.error('');
+                console.error(
+                    graceActive()
+                        ? `   ⏳ MFA_SECRET_KEY: administrator two-factor becomes MANDATORY on `
+                          + `${MFA_ADMIN_ENFORCE_FROM.slice(0, 10)}. From that date every admin is sent `
+                          + `to enrol, and enrolment returns 500 without this key — locking every `
+                          + `administrator out of /admin. Set it before then.`
+                        : `   🚨 MFA_SECRET_KEY IS MISSING AND ADMIN TWO-FACTOR IS NOW MANDATORY `
+                          + `(since ${MFA_ADMIN_ENFORCE_FROM.slice(0, 10)}). Every administrator is being sent `
+                          + `to enrol and enrolment CANNOT SUCCEED. Set this variable, or set `
+                          + `MFA_ADMIN_GRACE_UNTIL to a future date to reopen the window.`,
+                );
+                console.error('');
             }
         }
     }

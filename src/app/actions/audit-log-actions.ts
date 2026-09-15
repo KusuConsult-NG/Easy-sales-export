@@ -13,6 +13,7 @@ import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log"
 import { getCached, setCache } from "@/lib/redis";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { redactAuditEntries } from "@/lib/audit-metadata-privacy";
+import { attachActorEmails } from "@/lib/audit-actor";
 
 /**
  * How many rows the statistics panel will read.
@@ -137,9 +138,29 @@ export async function getAuditLogsAction(filters: { userId?: string;
          *   collection but returns only counts, and analytics.service.ts takes a
          *   count. Both were checked.
          */
-        const logs = redactAuditEntries(
+        const redacted = redactAuditEntries(
             serializeDocs(snapshot.docs) as unknown as AuditLogEntry[],
         );
+
+        /**
+         *   #770 AND THE ACTOR IS RESOLVED HERE FOR THE SAME REASON.
+         *
+         *   The owner photographed this screen with "Unknown" against every
+         *   row. `userEmail` is optional on AuditLogEntry and 179 of the 189
+         *   audit writes in this repository do not pass it, so the reader's
+         *   honest `log.userEmail || "Unknown"` is what shows.
+         *
+         *   Fixed at the READER, exactly as #474 above fixed the redaction —
+         *   and for the stronger half of that reasoning: the writers can only
+         *   help rows created after they ship, and the owner is looking at
+         *   months of history. The stored rows are not touched; the email is
+         *   resolved from the id they already carry, one query per page.
+         *
+         *   Placed AFTER the redaction so this cannot reintroduce a field that
+         *   #468 and #474 took out, and so the CSV export — which pages through
+         *   this function rather than querying the collection — inherits both.
+         */
+        const logs = await attachActorEmails(redacted, db);
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 

@@ -95,11 +95,37 @@ export function humaniseActionName(action: string | undefined): string {
  * summary without having to enumerate every spelling of them.
  */
 const FACT_KEYS = [
-    "decision", "outcome", "status", "newStatus", "previousStatus", "from", "to",
-    "reason", "rejectionReason", "note",
+    /*
+     *   #770 `action` WAS MISSING, AND IT WAS THE WHOLE OF SOME ROWS.
+     *
+     *   The owner photographed a WAVE row whose entire metadata is
+     *
+     *       { "action": "application_resubmitted" }
+     *
+     *   and this list did not contain `action`, so the summary would have read
+     *   "User Update on wave application WAVE-1789416719051-W0JBEH0H7" and
+     *   dropped the one fact the row carries — the thing that distinguishes it
+     *   from every other User Update in the log.
+     *
+     *   MEASURED, NOT GUESSED. The keys below were counted across all 189
+     *   recordAdminAction / createAdminAuditLog / createAuditLog calls in the
+     *   repository; the ones added here are the descriptive keys that occur and
+     *   were absent — action (5), notes (6), title (4), purpose (3), approved
+     *   (3), previousRoles (3), tier (2), phase (2), certificateNumber (2),
+     *   location (2).
+     *
+     *   Identifier keys that also occur — userId, applicantId, sellerUserId,
+     *   buyerId, memberId, escrowId — are deliberately NOT added: the row
+     *   already prints its Target ID, and a sentence made of opaque ids reads
+     *   like the JSON blob this function exists to replace.
+     */
+    "action", "decision", "outcome", "approved", "status", "newStatus", "previousStatus",
+    "from", "to", "phase",
+    "reason", "rejectionReason", "note", "notes",
     "amount", "totalPrice", "price", "fee", "quantity",
-    "role", "roles", "module", "plan", "type",
-    "reference", "orderId", "applicationId", "propertyId", "courseId",
+    "role", "roles", "previousRoles", "module", "plan", "tier", "type",
+    "title", "purpose", "location",
+    "reference", "orderId", "applicationId", "propertyId", "courseId", "certificateNumber",
     "total", "synced", "skipped", "errors", "unhandled", "count", "sent", "failed",
     "truncated",
 ] as const;
