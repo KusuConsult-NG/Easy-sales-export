@@ -155,7 +155,22 @@ describe('#484 — and once it knows, it answers exactly as before', () => {
 
         expect(screen.getByText('Super Admin')).toBeInTheDocument();
         expect(screen.getByText('Dashboard')).toBeInTheDocument();
-        expect(screen.getByText('Forensic Scan')).toBeInTheDocument();
+        /*
+         *   'Duplicate Profiles', not 'Forensic Scan'.
+         *
+         *   #765 THE OWNER TOOK THE FORENSIC SCAN BUTTON OFF THE UI, so the
+         *   label this test used as its platform-admin-only witness is no
+         *   longer rendered for anybody. It was standing in for "a nav entry
+         *   gated on isPlatformAdmin rather than on a permission" — and
+         *   Duplicate Profiles (#724) is the same gate, still shown, so the
+         *   property this control exists to pin is unchanged.
+         *
+         *   Substituted rather than dropped: without a platformOnly item here,
+         *   a component that rendered only the permission-gated half of the nav
+         *   would satisfy this test, which is exactly what it was written to
+         *   stop.
+         */
+        expect(screen.getByText('Duplicate Profiles')).toBeInTheDocument();
         expect(navLinks().length).toBeGreaterThanOrEqual(20);
         for (const heading of SECTION_HEADINGS) {
             expect(screen.getByText(heading)).toBeInTheDocument();
@@ -222,7 +237,8 @@ describe('#484 — and the window is removed, not merely made honest', () => {
 
         expect(screen.queryByTestId('admin-nav-loading')).not.toBeInTheDocument();
         expect(screen.getByText('Super Admin')).toBeInTheDocument();
-        expect(screen.getByText('Forensic Scan')).toBeInTheDocument();
+        //   #765 — same substitution as above, for the same reason.
+        expect(screen.getByText('Duplicate Profiles')).toBeInTheDocument();
         expect(navLinks().length).toBeGreaterThanOrEqual(20);
     });
 
@@ -239,7 +255,13 @@ describe('#484 — and the window is removed, not merely made honest', () => {
 
         expect(screen.getByText(FALLBACK_LABEL)).toBeInTheDocument();
         expect(screen.queryByText('Super Admin')).not.toBeInTheDocument();
-        expect(screen.queryByText('Forensic Scan')).not.toBeInTheDocument();
+        /*
+         *   #765 — this one is a NEGATIVE assertion, so the hidden button would
+         *   satisfy it for the wrong reason: a moderator must not see a
+         *   platform-admin entry, and nobody sees the scan now. Moved to the
+         *   same still-rendered witness so it keeps testing the ROLE rule.
+         */
+        expect(screen.queryByText('Duplicate Profiles')).not.toBeInTheDocument();
     });
 
     it('AND THE ADMIN LAYOUT ACTUALLY PASSES THEM', () => {

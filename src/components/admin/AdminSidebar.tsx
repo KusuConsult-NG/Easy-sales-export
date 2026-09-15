@@ -40,6 +40,7 @@ import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { canAccessAdminRoute, hasAdminPermission, isPlatformAdmin, type AdminPermission } from "@/lib/admin-permissions";
+import { FORENSIC_SCAN_IN_NAV } from "@/lib/forensic-scan-visibility";
 
 
 const NAV_ITEMS = [
@@ -313,6 +314,21 @@ export default function AdminSidebar({ initialRoles }: { initialRoles?: string[]
                                              *        Items with no named permission keep the
                                              *        route rule, unchanged.
                                              */
+                                            /*
+                                             *   #765 The owner asked for the Forensic
+                                             *   Scan button to come off the UI for now.
+                                             *   Hidden here rather than removed from the
+                                             *   table above, so the entry — and #266's
+                                             *   note on why it exists — survives until
+                                             *   they want it back. One constant restores
+                                             *   it. Only the scan: the three queues that
+                                             *   share the /admin/forensics prefix are
+                                             *   separate tools and stay.
+                                             */
+                                            if (!FORENSIC_SCAN_IN_NAV && item.href === "/admin/forensics") {
+                                                return null;
+                                            }
+
                                             const mayUse = item.platformOnly
                                                 // #266 — the same predicate the action behind it
                                                 // asks, for the one audience the permission

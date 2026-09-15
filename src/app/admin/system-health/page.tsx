@@ -6,6 +6,7 @@ import { runSystemHealthDiagnostic, type HealthReport, type HealthIssue } from "
 import { Activity, AlertTriangle, CheckCircle, RefreshCw, ShieldAlert, Server, Database, CreditCard, Mail, ToggleLeft, ToggleRight, Search } from "lucide-react";
 import { numberOrZero } from "@/lib/numbers";
 import { formatTimeOrDash } from "@/lib/date-utils";
+import { FORENSIC_SCAN_IN_NAV } from "@/lib/forensic-scan-visibility";
 
 export default function SystemHealthPage() {
     const [loading, setLoading] = useState(true);
@@ -142,6 +143,13 @@ export default function SystemHealthPage() {
                           * (#266, #331). This points there instead of showing a
                           * number nobody computed.
                           */}
+                        {/*
+                          *   #765 Hidden while the owner has the scan off the
+                          *   UI. The whole tile goes, not just the link — a
+                          *   card headed "Cross-module checks" with nothing to
+                          *   click is worse than no card.
+                          */}
+                        {FORENSIC_SCAN_IN_NAV && (
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                             <div className="flex items-center gap-3 text-slate-500 mb-4">
                                 <ShieldAlert className="w-5 h-5 text-purple-500" />
@@ -155,6 +163,7 @@ export default function SystemHealthPage() {
                             </Link>
                             <div className="mt-2 text-xs text-slate-500">Eight collections, reported per check</div>
                         </div>
+                        )}
                     </div>
 
                     {/* Service Health & Feature Toggles */}

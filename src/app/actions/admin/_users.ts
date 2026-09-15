@@ -601,20 +601,98 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             query = query.orderBy("createdAt", "desc");
         }
 
+        /**
+         *   #498 Whether anything narrows the set AFTER the query — which
+         *   decides whether the reported total may come from the database count
+         *   or must come from the filtered list.
+         *
+         *   #766 HOISTED. It used to be declared two hundred lines below, beside
+         *   the filters it describes, and the count below ran unconditionally —
+         *   so on every narrowed request the database counted rows whose answer
+         *   was then discarded in favour of `filteredUsers.length`. Reading it
+         *   before the count is what lets the count be skipped. Adding a filter
+         *   without extending this list is still a visible omission; the filters
+         *   themselves carry a pointer back here.
+         */
+        const narrowedInMemory =
+            (!!options.state && options.state !== "all") ||
+            (!!options.lga && options.lga !== "all") ||
+            (!!options.role && options.role !== "all") ||
+            (!!options.modules && options.modules !== "all") ||
+            (!!options.gender && options.gender !== "all") ||
+            (!!options.status && options.status !== "all") ||
+            !!options.search || !!options.fromDate || !!options.toDate;
+
         // ---------------------------------------------------------
         // EXACT DATABASE COUNT (Satisfies Data Consistency Audit)
         // ---------------------------------------------------------
-        let countQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
-        if (options.search) {
-            countQuery = countQuery.where(FieldPath.documentId(), "in", matchingUserIds);
-        } else {
-            if (options.role && options.role !== "all") {
-                countQuery = countQuery.where("roles", "array-contains", options.role);
-            }
-        }
+        /**
+         *   #766 THE HEAVIEST QUERY ON THE HEAVIEST ADMIN SCREEN PRODUCED A
+         *        NUMBER NOTHING RENDERS, AND RAN BEFORE THE ROWS.
+         *
+         *   Reported by the owner, twice: "the Users app is also loading
+         *   slowly", and then "Users app loading slowly — Not investigated."
+         *
+         *   MEASURED, against real Postgres seeded with 42,000 rows widened to
+         *   the shape this platform actually stores (module registrations, kyc
+         *   block, bank details, next of kin — about 3.5 KB of raw_data each):
+         *
+         *       the rows the screen shows                     0.14 ms
+         *         Index Scan using idx_users_created_at, LIMIT 120
+         *       SELECT count(*) FROM users                   12.19 ms
+         *         Seq Scan on users, 42,000 rows
+         *
+         *   Eighty-seven times the cost of the data being displayed, and it is
+         *   the half that GROWS with the platform: the index scan stops after
+         *   120 rows however large the table gets, and an exact count cannot
+         *   stop at all. Those figures are a warm local socket; the real one is
+         *   a hosted Postgres reached over the network with
+         *   `Prefer: count=exact`.
+         *
+         *   AND IT WAS WASTED TWICE OVER.
+         *
+         *   (1) ON EVERY NARROWED REQUEST THE ANSWER WAS THROWN AWAY. #498's
+         *       own rule at the foot of this function is
+         *       `narrowedInMemory ? filteredUsers.length : absoluteDbCount` —
+         *       so searching, or filtering by role, module, gender, status or a
+         *       date range, ran this scan and then used the other branch. On a
+         *       SEARCH it was worse than a plain count: the count query carries
+         *       `where(documentId, "in", matchingUserIds)`, so it is the
+         *       expensive form of the query, discarded.
+         *
+         *   (2) NOTHING RENDERS IT EVEN WHEN IT IS KEPT. #498 recorded that
+         *       already — "NOTHING RENDERS THIS TODAY — admin/users/page.tsx
+         *       does not destructure `meta`" — and it is still true: the page
+         *       takes data, loading, error, search, filters, hasMore, the page
+         *       controls and setData, and never meta. The cost is paid on every
+         *       load and every page turn to compute a figure no screen reads.
+         *
+         *   WHAT CHANGED, AND WHAT DID NOT. The count is not deleted: #498 kept
+         *   it correct deliberately, "a returned field that is quietly wrong is
+         *   what the next person builds a header on", and that reasoning still
+         *   holds. It is now only RUN when its answer will be used, and when it
+         *   is run it goes out CONCURRENTLY with the page fetch instead of in
+         *   front of it — the two share nothing, and awaiting them in sequence
+         *   made the request as slow as both.
+         */
+        const needsDbCount = !narrowedInMemory;
 
-        const countSnap = await runQueryWithRetry(() => countQuery.count().get());
-        const absoluteDbCount = countSnap.data().count;
+        let countPromise: Promise<number> | null = null;
+        if (needsDbCount) {
+            let countQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
+            if (options.search) {
+                countQuery = countQuery.where(FieldPath.documentId(), "in", matchingUserIds);
+            } else {
+                if (options.role && options.role !== "all") {
+                    countQuery = countQuery.where("roles", "array-contains", options.role);
+                }
+            }
+            //   Started, not awaited. The await is after the page fetch is also
+            //   in flight, so the request costs the slower of the two rather
+            //   than the sum.
+            countPromise = runQueryWithRetry(() => countQuery.count().get())
+                .then((snap) => snap.data().count);
+        }
 
         // Fetch a dynamic batch — no orderBy (avoids missing-field exclusion).
         // We page in-memory after sort.
@@ -626,6 +704,12 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         query = query.limit(FETCH_LIMIT);
 
         const snapshot = await runQueryWithRetry(() => query.get());
+        /*
+         *   Resolved here, with the rows already back. On the narrowed path
+         *   there is no promise and nothing was asked of the database; the
+         *   value is unused on that branch, exactly as #498 specified.
+         */
+        const absoluteDbCount = countPromise ? await countPromise : 0;
 
         const users = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -911,21 +995,15 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // Client-side search + date range filtering
         let filteredUsers = deduplicatedUsers;
 
-        /**
-         *   #498 Whether anything narrows the set AFTER the query — which
-         *   decides whether the reported total may come from the database count
-         *   or must come from the filtered list. Declared beside the filters it
-         *   describes, so adding a filter without extending it is a visible
-         *   omission rather than a silent one.
+        /*
+         *   #498's `narrowedInMemory` used to be declared here, beside the
+         *   filters it describes. #766 moved it above the database count,
+         *   which is the only way that count can be skipped when its answer
+         *   would be discarded — see the note there. THE LIST IT HOLDS IS THE
+         *   LIST OF FILTERS BELOW: adding one here without adding it there
+         *   makes the reported total wrong, which is the omission #498 wrote
+         *   the declaration to keep visible.
          */
-        const narrowedInMemory =
-            (!!options.state && options.state !== "all") ||
-            (!!options.lga && options.lga !== "all") ||
-            (!!options.role && options.role !== "all") ||
-            (!!options.modules && options.modules !== "all") ||
-            (!!options.gender && options.gender !== "all") ||
-            (!!options.status && options.status !== "all") ||
-            !!options.search || !!options.fromDate || !!options.toDate;
 
         // In-memory Location filtering (State and LGA) — resolves the bug where direct Firestore
         // where("address.state") equality checks silently excluded users with state stored in other properties

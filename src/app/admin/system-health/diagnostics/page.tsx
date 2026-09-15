@@ -40,6 +40,7 @@ import type { HealthReport } from "@/app/actions/health";
 import { useToast } from "@/contexts/ToastContext";
 import { formatDate } from "@/lib/utils";
 import { numberOrZero } from "@/lib/numbers";
+import { FORENSIC_SCAN_IN_NAV } from "@/lib/forensic-scan-visibility";
 
 /**
  * A dependency card.
@@ -228,6 +229,13 @@ export default function AdminDiagnosticsPage() {
                         </div>
                     </div>
 
+                    {/*
+                      *   #765 The blurb goes with the button. It exists to
+                      *   explain what the scan does before you press it, and
+                      *   describing a tool with no way to reach it just raises
+                      *   a question the screen cannot answer.
+                      */}
+                    {FORENSIC_SCAN_IN_NAV && (<>
                     <p className="text-xs text-slate-500 leading-relaxed mb-4">
                         This page checks dependencies and user profiles. The
                         cross-module integrity scan reads eight collections and
@@ -241,6 +249,7 @@ export default function AdminDiagnosticsPage() {
                         Run the forensic scan
                         <ArrowRight className="w-4 h-4 shrink-0" />
                     </Link>
+                    </>)}
                 </div>
 
                 {/*
