@@ -14,6 +14,7 @@ import { COMPANY_INFO } from "@/lib/constants";
 import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
 import { StatusCheckNotice } from "@/components/application/StatusCheckNotice";
 import { COLLECTIONS } from "@/lib/client-collections";
+import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
 export default function ReviewPendingPage() {
     const { data: session } = useSession();
@@ -104,13 +105,23 @@ export default function ReviewPendingPage() {
                 <StatusCheckNotice checkFailed={checkFailed} sessionExpired={sessionExpired} />
                 {/* Top Navigation */}
                 <div className="flex items-center justify-between mb-8">
-                    <Link
-                        href="/wave"
-                        className="inline-flex items-center gap-2 text-slate-600 hover:text-emerald-700 transition-colors"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to WAVE Home
-                    </Link>
+                    {/*
+                      *   #781 HOME, at the top left, on the waiting screen too.
+                      *
+                      *   "Back to WAVE Home" goes to /wave — the module's own
+                      *   landing page, not the platform's. An applicant waiting
+                      *   on a decision had no way out of the module from here.
+                      */}
+                    <div className="flex items-center gap-1">
+                        <FormHomeButton />
+                        <Link
+                            href="/wave"
+                            className="inline-flex items-center gap-2 text-slate-600 hover:text-emerald-700 transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back to WAVE Home
+                        </Link>
+                    </div>
 
                     {applicationStatus === "pending" && !isLoading && (
                         <Link

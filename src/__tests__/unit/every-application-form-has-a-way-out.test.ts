@@ -141,6 +141,45 @@ describe('#777 — every application form has a way home', () => {
             expect(read(p)).toMatch(/<ApplyToAnotherProgrammeButton\b/);
         }
     });
+
+    it('AND EVERY WAITING SCREEN HAS A WAY HOME', () => {
+        /*
+         *   #781 The owner, on the second pass: "for the forms without
+         *   auto-approval, they should be redirected to a pending page with a
+         *   home button on the page."
+         *
+         *   Not one of them had one. What they carried was a link back into the
+         *   MODULE — "Back to WAVE Home" goes to /wave, not to / — so an
+         *   applicant waiting on somebody else's decision, with nothing to do
+         *   on the screen, could not leave the module from it.
+         *
+         *   The cooperative's pending-payment route is deliberately absent from
+         *   this list: it is a retired redirect (#384), and a button on a
+         *   screen nobody reaches is the defect that retired it.
+         */
+        const WAITING = [
+            'src/app/export/onboarding/pending/page.tsx',
+            'src/app/farm-nation/onboarding/pending/page.tsx',
+            'src/app/marketplace/onboarding/pending/page.tsx',
+            'src/app/academy/application/pending/page.tsx',
+            'src/app/wave/application/review-pending/page.tsx',
+        ];
+
+        expect(WAITING.length).toBe(5);
+        for (const p of WAITING) {
+            expect(read(p)).toMatch(/<FormHomeButton\b/);
+        }
+    });
+
+    it('and an approved applicant is taken to their dashboard rather than left waiting', () => {
+        //   The other half of the owner's sentence: "once approved, they should
+        //   have a direct access to their dashboard." WAVE's waiting screen
+        //   watches the status and moves the applicant itself.
+        const src = stripComments(read('src/app/wave/application/review-pending/page.tsx'));
+
+        expect(src).toMatch(/applicationStatus === "approved"/);
+        expect(src).toMatch(/router\.push\("\/wave\/dashboard"\)/);
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
