@@ -45,7 +45,8 @@
 "use client";
 
 import Link from "next/link";
-import { Home, LayoutGrid } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { Home, LayoutGrid, UserPlus } from "lucide-react";
 
 /**
  * A link home, for the top-left corner of a form.
@@ -69,10 +70,50 @@ export function FormHomeButton({ className = "" }: { className?: string }) {
 }
 
 /**
- * The "apply to another programme" control, for a completed application.
+ * "Register another user", for a completed application.
  *
- * See the header for why this is not a second application to the same
- * programme.
+ *   #785 THE OWNER'S OWN WORDING, REPLACING MY GUESS AT IT.
+ *
+ *   #777 met the instruction "add a button to submit another application when
+ *   one is completed", judged it ambiguous, and built "Apply to another
+ *   programme" — stating the assumption and saying which other reading it had
+ *   rejected. The owner's formal list settles it:
+ *
+ *       "After successful submission, there are no options for users to
+ *        register another user or return to the homepage. Add clear 'Register
+ *        Another User' and 'Homepage' buttons after successful submission."
+ *
+ *   ANOTHER USER, not another programme. This is a field officer or agent
+ *   enrolling several people from one device, which is a real way these forms
+ *   get filled.
+ *
+ *   IT HAS TO SIGN OUT FIRST, and that is not incidental. RegisterForm
+ *   redirects an authenticated visitor away — `if (status === "authenticated")
+ *   router.replace(callbackUrl)` — so a plain link to /auth/register would
+ *   bounce the agent straight back to the dashboard. A button that does nothing
+ *   is the defect this audit keeps finding, so this ends the session and lands
+ *   on the registration form in one move.
+ */
+export function RegisterAnotherUserButton({ className = "" }: { className?: string }) {
+    return (
+        <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/auth/register" })}
+            className={`inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 transition-colors ${className}`}
+        >
+            <UserPlus className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Register Another User</span>
+        </button>
+    );
+}
+
+/**
+ * Apply to another programme — kept, and no longer the answer to #777.
+ *
+ * The platform runs six programmes and the get-started page is the chooser for
+ * all of them, so this is still a real thing a member may want. It is simply
+ * not what the owner was asking for, which is why it is no longer what the
+ * completion screens lead with.
  */
 export function ApplyToAnotherProgrammeButton({ className = "" }: { className?: string }) {
     return (

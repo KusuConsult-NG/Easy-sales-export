@@ -14,7 +14,7 @@ import { useSession } from "next-auth/react";
 import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
 import { StatusCheckNotice } from "@/components/application/StatusCheckNotice";
 import { COLLECTIONS } from "@/lib/client-collections";
-import { ApplyToAnotherProgrammeButton, FormHomeButton } from "@/components/forms/FormNavButtons";
+import { RegisterAnotherUserButton, FormHomeButton } from "@/components/forms/FormNavButtons";
 
 export default function FarmNationPendingPage() {
     const { data: session } = useSession();
@@ -105,7 +105,7 @@ export default function FarmNationPendingPage() {
                         {/*   #777 "Apply to another programme" — see
                           *   FormNavButtons for why it is not a second
                           *   application to the SAME programme. */}
-                        <ApplyToAnotherProgrammeButton />
+                        <RegisterAnotherUserButton />
                         {/*   #781 A way home from the waiting screen. */}
                         <FormHomeButton />
                     </div>

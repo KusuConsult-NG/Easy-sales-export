@@ -325,8 +325,29 @@ describe('the approved tab does not call a role holder an applicant', () => {
         // Fifteen thousand lookups per page load would be a different defect.
         const src = code(ADMIN_APPLICATIONS);
 
-        expect(src).toContain('const pageUserIds = slicedDocs.map((d: any) => d.id)');
+        /*
+         *   #786 RESTATED, NOT RELAXED — and the property is now stricter than
+         *   it was when this line was written.
+         *
+         *   It read `slicedDocs`, which was the FETCH WINDOW: fifty rows
+         *   normally, but five thousand the moment a search, a date range or a
+         *   sort was in play. So this loop, one query per thirty ids, was making
+         *   a hundred and sixty-seven sequential round trips on a filtered
+         *   approved tab — the test named the right property and the variable it
+         *   pinned had quietly stopped meaning "the page".
+         *
+         *   `pageRows` is the slice actually being returned, after the sort and
+         *   after the paging, so the count really is the fifty this test is
+         *   about. The name is asserted because it is what distinguishes the two.
+         */
+        expect(src).toContain('const pageUserIds = pageRows.map((r: any) => r.uDoc.id)');
+        expect(src).not.toContain('const pageUserIds = slicedDocs');
         expect(src).toMatch(/for \(let i = 0; i < pageUserIds\.length; i \+= 30\)/);
+
+        //   And the page is cut BEFORE this loop, not after it — that ordering is
+        //   the whole of the property.
+        expect(src.indexOf('const pageRows = useMemoryPagination'))
+            .toBeLessThan(src.indexOf('const pageUserIds ='));
     });
 
     it('links a backed row to its real application id', () => {

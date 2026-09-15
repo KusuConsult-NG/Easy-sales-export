@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { CheckCircle, ArrowRight, AlertTriangle, Flame, ShieldCheck, DoorOpen, Home } from "lucide-react";
-import { ApplyToAnotherProgrammeButton } from "@/components/forms/FormNavButtons";
+import { RegisterAnotherUserButton } from "@/components/forms/FormNavButtons";
 
 export default function ApplicationSuccessPage() {
     const { data: session, status } = useSession();
@@ -221,7 +221,7 @@ export default function ApplicationSuccessPage() {
                   *   refuses that by name, and rightly.
                   */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
-                    <ApplyToAnotherProgrammeButton />
+                    <RegisterAnotherUserButton />
                     <Link
                         href="/"
                         className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-slate-600 font-semibold hover:text-slate-900 hover:bg-slate-100 transition-colors"

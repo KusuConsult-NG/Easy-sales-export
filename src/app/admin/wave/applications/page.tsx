@@ -341,6 +341,16 @@ export default function AdminWaveApplicationsPage() {
                         className="px-3 py-1.5 rounded-lg text-slate-900 outline-none hover:bg-slate-50 cursor-pointer"
                     >
                         <option value="createdAt">Sort by Date</option>
+                        {/*
+                          *   #786 The owner: "Sorting/filtering by applicant
+                          *   name in the WAVE Admin Dashboard is not
+                          *   functioning correctly." It was not functioning
+                          *   incorrectly — it was not here. Date and Gender
+                          *   were the only two options this control has ever
+                          *   offered, on a table whose first column is the
+                          *   applicant's name.
+                          */}
+                        <option value="name">Sort by Name</option>
                         <option value="gender">Sort by Gender</option>
                     </select>
                     <div className="w-px h-6 bg-slate-200"></div>
@@ -353,6 +363,11 @@ export default function AdminWaveApplicationsPage() {
                             <>
                                 <option value="asc">Gender (M-F)</option>
                                 <option value="desc">Gender (F-M)</option>
+                            </>
+                        ) : filters.sortBy === "name" ? (
+                            <>
+                                <option value="asc">Name (A-Z)</option>
+                                <option value="desc">Name (Z-A)</option>
                             </>
                         ) : (
                             <>
@@ -399,6 +414,46 @@ export default function AdminWaveApplicationsPage() {
                     )} */}
                 </div>
             </div>
+
+            {/*
+              *   #786 WHEN THIS LIST IS ONLY PART OF THE ANSWER, IT SAYS SO.
+              *
+              *   Two bounds the admin could not previously see. A search returns
+              *   at most thirty members — the `in`-clause limit the queries are
+              *   built on — so a common surname matched sixty-one people and
+              *   rendered thirty of them as though they were all of them. And a
+              *   name or gender sort orders the FETCH WINDOW, which on the
+              *   approved tab is 5,000 of 15,128 accounts.
+              *
+              *   Neither bound can be removed here; both can be stated. #772 is
+              *   this codebase's record of what a sample presented as a total
+              *   costs, and a warning in a server log is not something an admin
+              *   reading the table will ever see.
+              */}
+            {!isLoading && !error && ((meta as any)?.searchTruncated || (meta as any)?.sortIsPartial) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 mb-6">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-900">
+                        {(meta as any)?.searchTruncated && (
+                            <p>
+                                <strong>This is a partial list.</strong> More members match
+                                &ldquo;{search}&rdquo; than a single search can return, so the first{" "}
+                                {(meta as any)?.searchCap ?? 30} are shown. Add a surname, a phone
+                                number or an email address to narrow it.
+                            </p>
+                        )}
+                        {(meta as any)?.sortIsPartial && (
+                            <p className={(meta as any)?.searchTruncated ? "mt-2" : ""}>
+                                <strong>Sorted within the first{" "}
+                                    {((meta as any)?.sortedWindow ?? 0).toLocaleString()} records.</strong>{" "}
+                                There are more than that in this tab, so this ordering covers the
+                                records loaded and not the whole list. Filter by date or status to
+                                bring the whole set inside it.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Loading State */}
             {isLoading && (

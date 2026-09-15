@@ -20,6 +20,14 @@ import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { revealedIdentityFields } from "@/lib/kyc-identity-store";
+//   #786 The cap itself, so the screen can name the number it is showing.
+//   searchUserIdsByQuery stays a dynamic import — this is a constant.
+import { SEARCH_RESULT_CAP } from "@/lib/admin-search-helper";
+//   #786 The name and gender sorts. They live in lib, not here: this file is
+//   "use server", which may export nothing but async functions, and a sort that
+//   cannot be called directly from a test is a sort that gets asserted through
+//   six layers of mock or not at all.
+import { sortIsInMemory, sortResolvedRows } from "@/lib/admin-row-sort";
 
 // ============================================================================
 // APPLICATIONS MANAGEMENT
@@ -554,7 +562,16 @@ async function _getStandardWaveApplicationsAction(options: {
     status?: "pending" | "under_review" | "approved" | "rejected" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-    sortBy?: "createdAt" | "gender";
+    /*
+     *   #786 "name" IS NEW, AND ITS ABSENCE WAS THE DEFECT.
+     *
+     *   The owner: "Sorting/filtering by applicant name in the WAVE Admin
+     *   Dashboard is not functioning correctly and returns an error." The
+     *   dashboard's sort control offered Date and Gender and nothing else, so
+     *   there was no name sort to be broken — an admin looking for a way to
+     *   order 480 applications by the name in the first column had none.
+     */
+    sortBy?: "createdAt" | "gender" | "name";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<
@@ -584,7 +601,24 @@ async function _getStandardWaveApplicationsAction(options: {
          */
         const maySeeBankDetails = await mayRevealMemberPii("wave:approve_applications");
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || options.sortBy === "gender";
+        /*
+         *   #786 THE SORTS A DATABASE COLUMN CANNOT DO.
+         *
+         *   A row's NAME is not a column. extractCanonicalUser resolves it from
+         *   verificationProfile, then the user document, then whichever module
+         *   registration has one — so `orderBy("fullName")` would order by a
+         *   field that is empty on the very members whose name the screen still
+         *   shows, and hand the admin a list that is sorted and visibly out of
+         *   order. Gender has the same shape and has always been done this way.
+         *
+         *   Both therefore force the in-memory path, and both are applied by
+         *   sortResolvedRows — in BOTH branches of this reader, which is the
+         *   half that was missing: the approved tab returns before the tail, so
+         *   "Sort by Gender" on the largest tab in the dashboard has been doing
+         *   nothing at all.
+         */
+        const sortsInMemory = sortIsInMemory(options.sortBy);
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || sortsInMemory;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
 
@@ -605,6 +639,17 @@ async function _getStandardWaveApplicationsAction(options: {
         let applications: any[] = [];
         let hasMoreRaw = false;
         let nextCursor: string | undefined = undefined;
+
+        /*
+         *   #786 WHETHER THE SEARCH GAVE BACK EVERYONE IT MATCHED.
+         *
+         *   searchUserIdsByQuery returns at most SEARCH_RESULT_CAP ids — thirty,
+         *   the `in`-clause limit the queries below are built on — and until now
+         *   the cap was applied in silence. Sixty-one members share a surname;
+         *   an admin searching it was handed thirty and a table that presented
+         *   them as all of them.
+         */
+        let searchTruncated = false;
 
         /**
          * The "approved" tab counts a DIFFERENT POPULATION from every other tab.
@@ -649,8 +694,9 @@ async function _getStandardWaveApplicationsAction(options: {
                 .orderBy("createdAt", orderDirection);
 
             if (options.search) {
-                const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+                const { searchUserIdsByQuery, searchWasTruncated } = await import("@/lib/admin-search-helper");
                 const matchingUserIds = await searchUserIdsByQuery(options.search);
+                searchTruncated = searchWasTruncated(matchingUserIds);
                 if (matchingUserIds.length === 0) {
                     return {
                         error: null, success: true as const,
@@ -665,7 +711,11 @@ async function _getStandardWaveApplicationsAction(options: {
                     .where(FieldPath.documentId(), "in", matchingUserIds);
             }
 
-            if (options.lastDocId) {
+            //   #786 A numeric cursor is a MEMORY page number, not a user id.
+            //   Looking it up as a document asks the users table for the account
+            //   whose id is "1", which no account has — so it was a wasted round
+            //   trip that quietly paged nothing.
+            if (options.lastDocId && !useMemoryPagination) {
                 const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
                 if (lastDoc.exists) {
                     q = q.startAfter(lastDoc);
@@ -677,7 +727,59 @@ async function _getStandardWaveApplicationsAction(options: {
             const userDocs = snapshot.docs;
 
             const hasMoreRaw = userDocs.length > fetchLimit;
-            const slicedDocs = hasMoreRaw ? userDocs.slice(0, fetchLimit) : userDocs;
+            const windowDocs = hasMoreRaw ? userDocs.slice(0, fetchLimit) : userDocs;
+
+            /*
+             *   #786 SORT THE WINDOW, THEN TAKE THE PAGE — in that order.
+             *
+             *   The other order is what a sort applied after paging gives you: a
+             *   list that is alphabetical within each fifty rows and nowhere
+             *   else. Gender never reached this branch at all — the approved tab
+             *   returns a hundred lines before the tail sort — so "Sort by
+             *   Gender" on the largest tab in this dashboard has been a control
+             *   that does nothing since the day it was added.
+             *
+             *   Ordered on values from the USER document, resolved by the same
+             *   canonical function the rows below are built from, because the
+             *   name the admin reads is not a column and no `orderBy` can
+             *   reproduce it. See sortResolvedRows.
+             */
+            const windowRows = windowDocs.map((uDoc: any) => {
+                const uData = uDoc.data();
+                const canonical = extractCanonicalUser(uData);
+                return {
+                    uDoc,
+                    uData,
+                    canonical,
+                    user: { name: canonical.name, gender: uData.gender || canonical.gender || "" },
+                    data: { createdAt: uData.createdAt },
+                };
+            });
+            sortResolvedRows(windowRows, options.sortBy, options.sortOrder);
+
+            /*
+             *   #786 AND THE PAGE IS CUT HERE, rather than the whole window
+             *   being sent to the browser.
+             *
+             *   It was not. `fetchLimit` rises to 5,000 the moment a search, a
+             *   date range or a sort is in play, and this branch returned every
+             *   row it had fetched — the in-memory paging the tail branch does
+             *   was simply never written for this one. Five thousand members'
+             *   contact details crossing the wire to draw a table of fifty.
+             */
+            const pageSize = options.limit || 50;
+            let memoryPage = 0;
+            if ((options as any).page !== undefined) {
+                memoryPage = Number((options as any).page) || 0;
+            } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+                memoryPage = Number(options.lastDocId);
+            }
+            const pageRows = useMemoryPagination
+                ? windowRows.slice(memoryPage * pageSize, memoryPage * pageSize + pageSize)
+                : windowRows;
+            const pageHasMore = useMemoryPagination
+                ? (memoryPage + 1) * pageSize < windowRows.length
+                : hasMoreRaw;
 
             /**
              * Which of the users on THIS PAGE actually have an approved application.
@@ -685,8 +787,14 @@ async function _getStandardWaveApplicationsAction(options: {
              * Resolved for the page slice only — fifty ids, chunked into `in`
              * queries — rather than for all 15,128, so the tab stays as cheap as it
              * was while no longer asserting something it had not checked.
+             *
+             *   #786 AND IT IS THE PAGE AGAIN. Once fetchLimit reached 5,000
+             *   this loop ran one query per thirty ids against the whole window
+             *   — a hundred and sixty-seven sequential round trips to decorate
+             *   rows that were about to be discarded. Cutting the page first
+             *   puts it back to the two the comment above describes.
              */
-            const pageUserIds = slicedDocs.map((d: any) => d.id);
+            const pageUserIds = pageRows.map((r: any) => r.uDoc.id);
             const backedByApplication = new Set<string>();
             const applicationIdFor = new Map<string, string>();
 
@@ -705,10 +813,9 @@ async function _getStandardWaveApplicationsAction(options: {
                 });
             }
 
-            const finalForms = slicedDocs.map((uDoc: any) => {
-                const uData = uDoc.data();
-                const uid = uDoc.id;
-                const canonical = extractCanonicalUser(uData);
+            const finalForms = pageRows.map((row: any) => {
+                const { uData, canonical } = row;
+                const uid = row.uDoc.id;
                 const hasApplication = backedByApplication.has(uid);
 
                 /**
@@ -775,7 +882,12 @@ async function _getStandardWaveApplicationsAction(options: {
                 };
             });
 
-            const nextCursor = finalForms.length > 0 ? finalForms[finalForms.length - 1].user.id as string : undefined;
+            //   #786 A memory-paged list advances by page NUMBER — the user-id
+            //   cursor means nothing once the window has been re-ordered, and
+            //   startAfter on a sorted window would skip to the wrong place.
+            const nextCursor = useMemoryPagination
+                ? (pageHasMore ? String(memoryPage + 1) : undefined)
+                : (finalForms.length > 0 ? finalForms[finalForms.length - 1].user.id as string : undefined);
 
             // Both counts, because one number was standing in for two different
             // things. `totalCount` stays the role-holder total so pagination keeps
@@ -820,23 +932,38 @@ async function _getStandardWaveApplicationsAction(options: {
                 error: null,
                 data: serializeValue(finalForms),
                 lastDocId: nextCursor,
-                hasMore: hasMoreRaw,
+                hasMore: pageHasMore,
                 meta: {
                     totalFetched: finalForms.length,
                     totalCount,
-                    hasMore: hasMoreRaw,
+                    hasMore: pageHasMore,
                     // Named so a screen can say "15,128 members, 474 of them from an
                     // application" rather than calling all of them applications.
                     roleHolderCount: totalCount,
                     approvedApplicationCount,
                     countsDifferentPopulations: true,
+                    /*
+                     *   #786 THE SORT IS OVER A WINDOW, AND SAYS SO.
+                     *
+                     *   15,128 accounts hold wave_participant and the window is
+                     *   5,000, so "sort by name" on this tab orders the first
+                     *   5,000 BY SIGN-UP DATE and alphabetises those. That is a
+                     *   sample, and #772 is this codebase's record of what a
+                     *   sample presented as a total costs — so the screen is
+                     *   told, and prints it above the table.
+                     */
+                    ...(sortsInMemory && hasMoreRaw
+                        ? { sortedWindow: windowRows.length, sortIsPartial: true }
+                        : {}),
+                    ...(searchTruncated ? { searchTruncated: true, searchCap: SEARCH_RESULT_CAP } : {}),
                 }
             };
         }
 
         if (options.search) {
-            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+            const { searchUserIdsByQuery, searchWasTruncated } = await import("@/lib/admin-search-helper");
             const matchingUserIds = await searchUserIdsByQuery(options.search);
+            searchTruncated = searchWasTruncated(matchingUserIds);
             if (matchingUserIds.length === 0) {
                 return {
                     error: null, success: true as const,
@@ -1024,19 +1151,10 @@ async function _getStandardWaveApplicationsAction(options: {
             });
         }
 
-        if (options.sortBy === "gender") {
-            const order = options.sortOrder || "desc";
-            finalForms.sort((a, b) => {
-                const ga = (a.user?.gender || "").toLowerCase();
-                const gb = (b.user?.gender || "").toLowerCase();
-                if (ga === gb) {
-                    const aTime = a.data?.createdAt?.seconds ? a.data.createdAt.seconds * 1000 : new Date(a.data?.createdAt || 0).getTime();
-                    const bTime = b.data?.createdAt?.seconds ? b.data.createdAt.seconds * 1000 : new Date(b.data?.createdAt || 0).getTime();
-                    return bTime - aTime;
-                }
-                return order === "asc" ? ga.localeCompare(gb) : gb.localeCompare(ga);
-            });
-        }
+        //   #786 Gender as before, and name — the sort the owner asked for and
+        //   the dashboard did not offer. One function, shared with the approved
+        //   branch above, which had no sort at all.
+        sortResolvedRows(finalForms, options.sortBy, options.sortOrder);
 
         const limit = options.limit || 50;
         let page = 0;
@@ -1064,7 +1182,14 @@ async function _getStandardWaveApplicationsAction(options: {
             meta: {
                 totalFetched: applications.length,
                 totalCount: totalCount,
-                hasMore: _hasMore
+                hasMore: _hasMore,
+                //   #786 The same two honesty flags the approved branch carries.
+                //   A sorted or searched list that is only part of the answer
+                //   says so on the screen rather than in a log nobody reads.
+                ...(sortsInMemory && hasMoreRaw
+                    ? { sortedWindow: finalForms.length, sortIsPartial: true }
+                    : {}),
+                ...(searchTruncated ? { searchTruncated: true, searchCap: SEARCH_RESULT_CAP } : {}),
             }
         };
     } catch (error) {

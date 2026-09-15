@@ -91,7 +91,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 import {
-    WAVE_FULL_NAME, WAVE_PROGRAM_NAME, WAVE_NAME_WITH_ACRONYM,
+    WAVE_FULL_NAME, WAVE_PROGRAM_NAME, WAVE_NAME_WITH_ACRONYM, WAVE_FORMAL_NAME,
 } from '@/lib/wave-program';
 import {
     getWards, getPollingUnits, hasVerifiedWards, hasVerifiedPollingUnits,
@@ -103,9 +103,28 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#774(a) — the acronym expands one way', () => {
     it('THE CONSTANT IS THE OWNER\'S WORDING', () => {
-        expect(WAVE_FULL_NAME).toBe('Women Agro-Value Expansion');
+        /*
+         *   #785 CORRECTED BY THE OWNER A SECOND TIME, and this assertion
+         *   moving is the constant earning its keep rather than a regression.
+         *
+         *   #774 was told "the WAVE acronym is Women Agro-Value Expansion
+         *   program". The formal list says: "Ensure that RH-WAVE is
+         *   consistently stated as 'Renewed Hope Women Agro Value Expansion'
+         *   wherever it is referenced." Two differences — the RENEWED HOPE
+         *   prefix, which is what the RH stands for and was missing entirely,
+         *   and no hyphen in "Agro Value".
+         *
+         *   One line changed and all five screens followed. Before #774 this
+         *   correction meant finding six strings by hand, which is precisely
+         *   how there came to be six spellings.
+         */
+        expect(WAVE_FULL_NAME).toBe('Renewed Hope Women Agro Value Expansion');
         expect(WAVE_PROGRAM_NAME).toContain(WAVE_FULL_NAME);
-        expect(WAVE_NAME_WITH_ACRONYM).toBe('Women Agro-Value Expansion (WAVE)');
+        expect(WAVE_NAME_WITH_ACRONYM).toBe('Renewed Hope Women Agro Value Expansion (WAVE)');
+
+        //   the RH- prefix is no longer expanding to something the name lacks
+        expect(WAVE_FORMAL_NAME).toContain('RH-WAVE');
+        expect(WAVE_FORMAL_NAME).toContain('Renewed Hope');
     });
 
     it('AND NO SCREEN INVENTS ITS OWN', () => {

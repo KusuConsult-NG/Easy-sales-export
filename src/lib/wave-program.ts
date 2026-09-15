@@ -26,14 +26,40 @@
  *   how there came to be five.
  */
 
-/** The programme's name, expanded. */
-export const WAVE_FULL_NAME = "Women Agro-Value Expansion";
+/**
+ * The programme's name, expanded.
+ *
+ *   #785 CORRECTED BY THE OWNER, A SECOND TIME, AND THIS IS THE WHOLE POINT OF
+ *        KEEPING IT IN ONE PLACE.
+ *
+ *   #774 was told "The WAVE acronym is Women Agro-Value Expansion program" and
+ *   set that here. The owner's formal list now says:
+ *
+ *       "Ensure that RH-WAVE is consistently stated as 'Renewed Hope Women Agro
+ *        Value Expansion' wherever it is referenced."
+ *
+ *   Two differences, both deliberate: the RENEWED HOPE prefix, which is what
+ *   the RH in RH-WAVE stands for and was missing entirely, and no hyphen in
+ *   "Agro Value".
+ *
+ *   Changing it is one line, and every one of the five screens follows. That is
+ *   the entire argument for the constant — before #774 this correction would
+ *   have meant finding six strings and would have missed at least one, which is
+ *   exactly how there came to be six spellings.
+ */
+export const WAVE_FULL_NAME = "Renewed Hope Women Agro Value Expansion";
 
 /** The name as it is usually written in a sentence. */
 export const WAVE_PROGRAM_NAME = `${WAVE_FULL_NAME} Program`;
 
-/** The formal designation, with the presidential mandate's own prefix. */
+/**
+ * The formal designation, with the presidential mandate's own prefix.
+ *
+ *   #785 The name now CONTAINS "Renewed Hope", so the RH- prefix is no longer
+ *   repeating something the rest of the string lacks. Kept because "RH-WAVE
+ *   774" is the mandate's own designation and appears on official material.
+ */
 export const WAVE_FORMAL_NAME = `RH-WAVE 774 ${WAVE_FULL_NAME} Programme`;
 
-/** "Women Agro-Value Expansion (WAVE)" — for a heading that needs both. */
+/** "Renewed Hope Women Agro Value Expansion (WAVE)" — a heading needing both. */
 export const WAVE_NAME_WITH_ACRONYM = `${WAVE_FULL_NAME} (WAVE)`;

@@ -116,11 +116,27 @@ describe('#777 — every application form has a way home', () => {
         expect(home).not.toMatch(/href="\/dashboard"/);
     });
 
-    it('and the completed-application control offers another programme', () => {
+    it('AND THE COMPLETED-APPLICATION CONTROL IS THE OWNER\'S, not my guess at it', () => {
+        /*
+         *   #785 #777 judged "add a button to submit another application when
+         *   one is completed" ambiguous, built "Apply to another programme",
+         *   and said which reading it had rejected. The owner's formal list
+         *   settles it: "Add clear 'Register Another User' and 'Homepage'
+         *   buttons after successful submission." ANOTHER USER — a field
+         *   officer enrolling several people from one device.
+         *
+         *   It SIGNS OUT first, and that is the load-bearing part: RegisterForm
+         *   redirects an authenticated visitor away, so a plain link to
+         *   /auth/register would bounce the agent back to their dashboard. A
+         *   button that does nothing is the defect this audit keeps finding.
+         */
         const src = read('src/components/forms/FormNavButtons.tsx');
-        const apply = src.split('export function ApplyToAnotherProgrammeButton')[1];
+        const register = src.split('export function RegisterAnotherUserButton')[1].split('export function')[0];
 
-        expect(apply).toMatch(/href="\/auth\/get-started"/);
+        expect(register).toMatch(/signOut\(\{ callbackUrl: "\/auth\/register" \}\)/);
+        expect(register).toMatch(/Register Another User/);
+        //   and it is a button, not a link — a link cannot end a session
+        expect(register).not.toMatch(/<Link/);
     });
 
     it('the completion screens carry it', () => {
@@ -138,7 +154,7 @@ describe('#777 — every application form has a way home', () => {
         ];
         expect(DONE.length).toBe(5);
         for (const p of DONE) {
-            expect(read(p)).toMatch(/<ApplyToAnotherProgrammeButton\b/);
+            expect(read(p)).toMatch(/<RegisterAnotherUserButton\b/);
         }
     });
 
