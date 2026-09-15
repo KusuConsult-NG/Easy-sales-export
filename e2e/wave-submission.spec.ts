@@ -71,8 +71,20 @@ test.describe('WAVE Application Flow', () => {
 
         await page.click('button:has-text("Continue")');
 
-        // Step 4: Agri Interest
-        await page.check('label:has-text("Crop Production") input[type="checkbox"]');
+        /*
+         *   Step 4: Agri Interest
+         *
+         *   #774 THE VALUE-CHAIN CONTROL IS A RADIO, NOT A CHECKBOX. The owner:
+         *   "Section D on wave application (which area would you like to
+         *   participate) should have single option not multiple." This spec
+         *   pinned the checkbox and correctly failed when it became a radio —
+         *   the control it drives is genuinely different now, so the locator
+         *   follows it rather than being loosened to match both.
+         *
+         *   The COMMODITY question below is still multi-select and is
+         *   deliberately unchanged; the owner named one question, not two.
+         */
+        await page.check('label:has-text("Crop Production") input[type="radio"]');
         await page.check('label:has-text("Maize") input[type="checkbox"]');
         await page.check('label:has-text("No") input[name="hasAccessToFarmland"]');
 

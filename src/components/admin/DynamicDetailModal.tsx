@@ -37,7 +37,28 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
         "reviewedAt", "reviewedBy", "approvedAt", "approvedBy", 
         "rejectionReason", "status", "userEmail", "fullName",
         "bvnVerified", "bvnStatus", "bvnVerificationDetails",
-        "ninVerified", "ninStatus", "ninVerificationDetails"
+        "ninVerified", "ninStatus", "ninVerificationDetails",
+        /*
+         *   #779 THE TWO FIELDS THE OWNER WAS LOOKING AT.
+         *
+         *   "the BVN and NIN are reported as a long line of numbers and
+         *   characters not the Users inputs" — that line is a SHA-256 digest.
+         *   The submit path hashes both, this modal renders whatever is on the
+         *   row, and so it rendered sixty-four hex characters under the label
+         *   "Nin".
+         *
+         *   They are hidden rather than deleted: the row still carries them,
+         *   because findConflictingApplication queries them to refuse a second
+         *   application on one identity. What changes is that a digest is no
+         *   longer shown to a human as if it were their member's NIN. The
+         *   readable number arrives separately, decrypted on the server, as
+         *   `ninNumber` / `bvnNumber`.
+         *
+         *   The ciphertext is hidden for the same reason and a plainer one: it
+         *   is a longer line of even less meaningful characters.
+         */
+        "nin", "bvn", "ninEncrypted", "bvnEncrypted",
+        "kyc.nin", "kyc.bvn",
     ];
     
     const allExcluded = [...defaultExclude, ...excludeKeys];

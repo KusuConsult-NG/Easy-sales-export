@@ -154,13 +154,33 @@ describe('#338 — the sites that already had it still do', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#338 — why it mattered: the modal renders whatever it is handed', () => {
-    it('excludes the bvn STATUS fields and not the number itself', () => {
+    it('excludes the bvn STATUS fields, and still shows the NUMBER', () => {
         // The reason a server-side strip is the fix rather than a UI tweak: the
         // modal is a denylist over an arbitrary document, so anything the
         // server sends and the list does not name is displayed.
         const modal = source(MODAL);
         expect(modal).toContain('"bvnVerified", "bvnStatus", "bvnVerificationDetails"');
-        expect(modal).not.toMatch(/defaultExclude[\s\S]{0,400}"bvn",/);
+
+        /*
+         *   #779 THIS ASSERTED THAT `"bvn"` WAS NOT ON THE DENYLIST, and its
+         *   intent was right: an admin reviewing a KYC record must see the
+         *   member's number, not merely a tick saying somebody checked it.
+         *
+         *   What it could not see is that `bvn` has never held the number. The
+         *   submit path writes `hashData(applicantBvn)`, so the field this test
+         *   was protecting rendered sixty-four hex characters — which is the
+         *   owner's report, made while this assertion was green.
+         *
+         *   So the PROPERTY is restated rather than dropped: the number is
+         *   shown. It now arrives as `bvnNumber`, decrypted on the server
+         *   behind the same gate as the bank details, and the digest and the
+         *   ciphertext are hidden because neither is the number. Asserting the
+         *   KEY `"bvn"` was a proxy for the property, and the proxy was wrong.
+         */
+        expect(modal).toMatch(/defaultExclude[\s\S]{0,900}"bvn",/);
+        expect(source('src/lib/kyc-identity-store.ts')).toMatch(/bvnNumber:/);
+        expect(source('src/app/actions/wave/_wv_admin_applications.ts'))
+            .toMatch(/revealedIdentityFields\(app\)/);
     });
 
     it('and both screens hand it their record', () => {

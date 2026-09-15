@@ -8,6 +8,15 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
 import { writeDataExportRecord } from "@/lib/data-export-record";
+import { revealedIdentityFields } from "@/lib/kyc-identity-store";
+import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
+
+/** #779 What an exporter without the live permission sees in those columns. */
+const WITHHELD_IDENTITY = {
+    ninNumber: "Withheld",
+    bvnNumber: "Withheld",
+    votersCardNumberDisplay: "Withheld",
+} as const;
 
 export async function GET(request: NextRequest) {
     try {
@@ -40,15 +49,56 @@ export async function GET(request: NextRequest) {
             logger.error("[export/users] user sweep hit the unbounded ceiling — the CSV below is incomplete.");
         }
         
+        /*
+         *   #779 THE COLUMNS SAID "BVN" AND CARRIED THE WORD "Provided".
+         *
+         *   The owner: "when users are CSV files are exported no BVN and
+         *   NIN and Voter's card numbers that users inputed." Exactly so —
+         *   the two columns existed and held the literal strings
+         *   "Provided"/"No", never a number, and the voter's card had no
+         *   column at all.
+         *
+         *   The numbers come from the shared reader, which decrypts the
+         *   readable copy where one exists and says plainly why it cannot
+         *   where one does not. See lib/kyc-identity-store: a number hashed
+         *   before that copy existed is NOT recoverable, and the cell says
+         *   so rather than being left blank for somebody to read as
+         *   "the member gave none".
+         */
         const headers = [
             "ID", "Name", "Email", "Phone", "Gender", "Roles", "Verified",
-            "BVN", "BVN Verified", "NIN", "NIN Verified",
+            "BVN", "BVN Verified", "NIN", "NIN Verified", "Voter's Card",
             "TIN", "TIN Verified", "CAC", "CAC Verified",
             "KYC Status", "State", "LGA", "Date Joined"
         ];
 
+        /*
+         *   #779 THE IDENTITY NUMBERS FOLLOW #535's RULE, not this route's own.
+         *
+         *   The route gate above reads `session.user.roles` — the TOKEN's copy.
+         *   #535 established one rule for who may see a member's bank details
+         *   and ID papers, resolved against the caller's LIVE roles, precisely
+         *   because a token outlives a revocation. This CSV now carries real
+         *   NIN and BVN numbers, which is the same class of data, so it asks
+         *   the same question. A caller who passes the route gate but not this
+         *   one still gets their export — with the numbers withheld rather
+         *   than the download refused, because the rest of the file is what
+         *   most exports are for.
+         */
+        const mayRevealIdentity = await mayRevealMemberPii("users:export");
+
         const rows = snapshot.docs.map(doc => {
             const data = doc.data();
+            /*
+             *   #779 Read once per row. `data.kyc` and the top level have both
+             *   carried these numbers across schema generations, so the reader
+             *   is asked for each in turn rather than guessing which one this
+             *   row uses.
+             */
+            const identity = mayRevealIdentity
+                ? revealedIdentityFields({ ...(data.kyc ?? {}), ...data })
+                : WITHHELD_IDENTITY;
+
             const derivedName = data.firstName
                 ? [data.firstName, data.otherName, data.lastName].filter(Boolean).join(" ").trim()
                 : (data.fullName || data.name || data.displayName || data.email || "Unknown");
@@ -109,10 +159,11 @@ export async function GET(request: NextRequest) {
                 data.gender || data.kyc?.gender || "",
                 (data.roles || []).join(";"),
                 (data.isVerified ?? data.verified ?? false) ? "Yes" : "No",
-                (data.kyc?.bvn || data.bvn) ? "Provided" : "No",
+                identity.bvnNumber,
                 (data.kyc?.bvnVerified ?? data.bvnVerified ?? false) ? "Yes" : "No",
-                (data.kyc?.nin || data.nin) ? "Provided" : "No",
+                identity.ninNumber,
                 (data.kyc?.ninVerified ?? data.ninVerified ?? false) ? "Yes" : "No",
+                identity.votersCardNumberDisplay,
                 data.taxId ? "Provided" : "No",
                 data.tinVerified ? "Yes" : "No",
                 data.cacNumber ? "Provided" : "No",

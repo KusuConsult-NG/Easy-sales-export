@@ -15,6 +15,7 @@ import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/sc
 import { phoneLookupVariants } from "@/lib/phone";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { kycReadableField } from '@/lib/kyc-identity-store';
 import { hashData } from "@/lib/security";
 import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
@@ -379,6 +380,13 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 ...validatedData,
                 bvn: applicantBvn ? hashData(applicantBvn) : null,
                 nin: applicantNin ? hashData(applicantNin) : null,
+                //   #779 THE READABLE COPY, beside the hash and not instead of
+                //   it. The hash stays because findConflictingApplication
+                //   queries it; the ciphertext is what lets a reviewer read the
+                //   number the member actually typed. Absent when no
+                //   KYC_ENCRYPTION_KEY is set, which changes nothing.
+                ...kycReadableField('bvn', applicantBvn),
+                ...kycReadableField('nin', applicantNin),
                 age: calculatedAge,
                 userId: session.user.id,
                 userEmail: session.user.email || validatedData.email,
@@ -412,6 +420,9 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 nin: applicantNin ? hashData(applicantNin) : null,
                 "kyc.bvn": applicantBvn ? hashData(applicantBvn) : null,
                 "kyc.nin": applicantNin ? hashData(applicantNin) : null,
+                //   #779 — see the application row above.
+                ...kycReadableField('bvn', applicantBvn),
+                ...kycReadableField('nin', applicantNin),
                 // "kyc.bvnVerified" / "kyc.ninVerified" are deliberately NOT
                 // written here.
                 //
@@ -990,6 +1001,11 @@ async function _resubmitWaveApplicationAction(
                 ...validatedData,
                 bvn: applicantBvn ? hashData(applicantBvn) : null,
                 nin: applicantNin ? hashData(applicantNin) : null,
+                //   #779 The RESUBMIT path's application row. Four write sites
+                //   carry these two numbers and a readable copy on three of
+                //   them would be the audit's most repeated finding again.
+                ...kycReadableField('bvn', applicantBvn),
+                ...kycReadableField('nin', applicantNin),
                 status: 'pending',
                 revisionNote: null,
                 resubmittedAt: FieldValue.serverTimestamp(),
@@ -1016,6 +1032,9 @@ async function _resubmitWaveApplicationAction(
                 nin: applicantNin ? hashData(applicantNin) : null,
                 "kyc.bvn": applicantBvn ? hashData(applicantBvn) : null,
                 "kyc.nin": applicantNin ? hashData(applicantNin) : null,
+                //   #779 — see the application row above.
+                ...kycReadableField('bvn', applicantBvn),
+                ...kycReadableField('nin', applicantNin),
                 // "kyc.bvnVerified" / "kyc.ninVerified" are deliberately NOT
                 // written here.
                 //

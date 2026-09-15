@@ -158,6 +158,8 @@ const CONFIGURED = {
     PAYSTACK_SECRET_KEY: 'sk_test',
     MFA_SECRET_KEY: 'm'.repeat(64),
     QR_ENCRYPTION_KEY: 'q'.repeat(64),
+    //   #779 — see lib/kyc-identity-store. A fully configured container sets it.
+    KYC_ENCRYPTION_KEY: 'k'.repeat(64),
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'demo',
     CLOUDINARY_API_KEY: 'ck',
     CLOUDINARY_API_SECRET: 'cs',
@@ -293,6 +295,15 @@ describe('#450 — one list of required variables, not two', () => {
 
     it('VACUITY GUARD: the container we are describing really was missing all of these', () => {
         // The fixture is the log, not an invention.
+        /*
+         *   #779 DELIBERATELY NOT UPDATED when KYC_ENCRYPTION_KEY joined the
+         *   required list. This array is a RECORD of one observed boot — "the
+         *   fixture is the log, not an invention" — and a variable that did not
+         *   exist when that log was captured was not missing from it. Adding it
+         *   to make a count line up would turn a piece of evidence into a
+         *   restatement of the current code, which is the one thing it must not
+         *   be.
+         */
         expect(THE_RAILWAY_CONTAINER).toHaveLength(15);
         expect(THE_RAILWAY_CONTAINER).toContain('NEXTAUTH_SECRET');
         expect(THE_RAILWAY_CONTAINER).toContain('SUPABASE_SERVICE_ROLE_KEY');

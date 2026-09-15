@@ -103,6 +103,10 @@ const DEGRADES = [
     'PAYSTACK_SECRET_KEY',
     'MFA_SECRET_KEY',
     'QR_ENCRYPTION_KEY',
+    //   #779 Without it a NIN or BVN is stored as a digest only and can never
+    //   be read back — degrades, like the rest of this list, rather than
+    //   blocking the boot. See lib/kyc-identity-store.
+    'KYC_ENCRYPTION_KEY',
     'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
@@ -160,7 +164,7 @@ describe('#457 — a boot with nothing set says what to do first', () => {
     it('AND SAYS THE OTHERS STILL SERVE — the whole point', () => {
         // Without this line the thirteen names read as thirteen blockers, and
         // the operator hunts a Cloudinary key before the site can come up.
-        expect(output).toMatch(/9 that break one feature each, but still serve/);
+        expect(output).toMatch(/10 that break one feature each, but still serve/);
     });
 
     it('AND SAYS WHAT EACH DEGRADED ONE COSTS', () => {

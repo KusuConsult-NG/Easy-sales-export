@@ -18,6 +18,7 @@ import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
+import { revealedIdentityFields } from "@/lib/kyc-identity-store";
 
 // ============================================================================
 // APPLICATIONS MANAGEMENT
@@ -931,6 +932,26 @@ async function _getStandardWaveApplicationsAction(options: {
                     // Inject SSOT fields directly into the data object
                     ...(maySeeBankDetails ? canonical : canonicalWithoutBank),
                     ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
+                    /*
+                     *   #779 THE NUMBER THE MEMBER TYPED, where it can be read.
+                     *
+                     *   The owner: "the BVN and NIN are reported as a long line
+                     *   of numbers and characters not the Users inputs." That
+                     *   line is a SHA-256 digest — the submit path hashes both,
+                     *   and the detail modal renders whatever is on the row.
+                     *
+                     *   DECRYPTED HERE, ON THE SERVER, and behind the same
+                     *   mayRevealMemberPii gate that withholds bank details: the
+                     *   key never reaches the browser, and an admin role that
+                     *   may not see a member's account number may not see their
+                     *   NIN either. Sending the ciphertext to the client and
+                     *   decrypting there would put the key in a bundle.
+                     *
+                     *   `nin` and `bvn` keep holding the hash — the duplicate
+                     *   check queries them — so these are separate keys the
+                     *   screen renders in their place.
+                     */
+                    ...(maySeeBankDetails ? revealedIdentityFields(app) : {}),
                 }
             };
         });

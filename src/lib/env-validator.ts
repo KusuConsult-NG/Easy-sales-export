@@ -82,6 +82,17 @@ const PRODUCTION_REQUIRED_ENV_VARS = [
     'PAYSTACK_SECRET_KEY',
     'MFA_SECRET_KEY',
     'QR_ENCRYPTION_KEY',
+    /*
+     *   #779 Without this, a NIN or BVN is stored ONLY as a SHA-256 digest and
+     *   can never be read back — which is the defect #779 is about, and it is
+     *   not retroactively fixable. Listed here so the gap is visible BEFORE a
+     *   year of applications is collected unreadably, rather than after.
+     *
+     *   Its absence is not fatal: submissions still succeed and the duplicate
+     *   check still works. See lib/kyc-identity-store for why failing safe
+     *   matters more than failing loudly here.
+     */
+    'KYC_ENCRYPTION_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
     // Server-side uploads (marketplace media, certificates, export documents)
     // go to Cloudinary — without these every upload fails at request time.
@@ -138,6 +149,7 @@ const WHAT_BREAKS: Record<string, string> = {
      */
     MFA_SECRET_KEY: 'multi-factor enrolment and verification fail',
     QR_ENCRYPTION_KEY: 'QR codes cannot be issued or read',
+    KYC_ENCRYPTION_KEY: 'NIN and BVN are stored hashed only — admins and CSV exports cannot read them back, and this cannot be undone later',
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_KEY: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_SECRET: 'every upload fails — marketplace media, certificates, export documents',
