@@ -134,7 +134,6 @@ const PUBLIC_BY_DESIGN: Record<string, string> = {
     'marketplace/products': 'the public product catalogue',
     'marketplace/sellers/[sellerId]': 'a public seller profile; the projection is pinned by #105',
     'export/catalog': 'the public export-opportunity catalogue',
-    'locations/polling-units': 'INEC publishes the polling-unit register and prints it on every voter\'s card; reference data like the state and LGA lists already compiled into the forms, bounded to one ward per request',
     'cooperative/loan-products': 'published loan terms, shown before joining',
     'academy/verify/[certificateId]': 'the public certificate verifier — a third party with a certificate number, and no account, is the whole point (#430)',
     'academy/verify-payment': 'the post-checkout return URL Paystack sends the payer to',

@@ -224,15 +224,29 @@ describe('#792 — the form asks for one ward at a time', () => {
         expect(src).toMatch(/Type your polling unit/);
     });
 
-    it('and the route exists and is not gated', () => {
-        //   Reference data INEC publishes and prints on every voter's card —
-        //   unlike the WAVE training listing, which is gated because it carries
-        //   the key that opens a live classroom (#567).
+    it('AND THE ROUTE REFUSES AN ANONYMOUS CALLER', () => {
+        /*
+         *   #792 THIS ASSERTION USED TO SAY THE OPPOSITE, and the end-to-end
+         *   auth contract was right to fail it.
+         *
+         *   The route shipped public on the argument that INEC publishes this
+         *   register and prints it on every voter's card — true, and not the
+         *   question. api-auth-contract discovers every route under src/app/api
+         *   and requires each to refuse an anonymous caller unless listed there
+         *   as well; being told twice by the platform's own rules was the cue to
+         *   re-examine the decision rather than add a second exemption.
+         *
+         *   It does not survive re-examination: the only caller is the WAVE
+         *   application form, which is BEHIND A LOGIN. A session check costs a
+         *   member nothing, and public access left 172,000 records free to
+         *   enumerate for callers who have no use for them.
+         */
         const p = 'src/app/api/locations/polling-units/route.ts';
         expect(existsSync(join(process.cwd(), p))).toBe(true);
 
         const src = stripComments(read(p));
         expect(src).toMatch(/pollingUnitsFor\(/);
-        expect(src).not.toMatch(/requireSession|checkModuleAccess/);
+        expect(src).toMatch(/requireSession\(\)/);
+        expect(src).toMatch(/status: 401/);
     });
 });

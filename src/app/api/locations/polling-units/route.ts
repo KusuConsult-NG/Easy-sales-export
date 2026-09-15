@@ -7,26 +7,49 @@ export const dynamic = "force-dynamic";
  *   a request rather than a module the form imports: the register is about five
  *   megabytes and a form needs one ward's worth.
  *
- * ── WHY THIS IS NOT GATED ───────────────────────────────────────────────────
+ * ── IT IS GATED, AND MY FIRST VERSION WAS NOT ───────────────────────────────
  *
- *   Deliberately, and worth stating because #567's header is the opposite case.
- *   The WAVE training listing is gated because it carries `roomKey`, the secret
- *   that opens a live classroom. THIS carries the names of polling units, which
- *   INEC publishes for the whole country and prints on every voter's card. It
- *   is reference data, like the state and LGA lists already compiled into the
- *   pages that use it.
+ *   The first version of this route was deliberately public, and the argument
+ *   was not silly: INEC publishes the polling-unit register for the whole
+ *   country and prints it on every voter's card, so it is reference data like
+ *   the state and LGA lists already compiled into the pages that use it. The
+ *   unit ratchet was told so, in as many words, on its public-by-design list.
  *
- *   It is still bounded: one ward per request, and a request naming a ward that
- *   is not in the register gets an empty list rather than an error, because
- *   "there is no list for this ward" is the ordinary answer for 93 of them.
+ *   THE END-TO-END AUTH CONTRACT CAUGHT IT ANYWAY. api-auth-contract discovers
+ *   every route under src/app/api and requires each one to refuse an anonymous
+ *   caller unless it is listed public THERE too — a second, independent guard
+ *   that I did not know about and had not satisfied.
+ *
+ *   Told twice by the platform's own rules, the right move was to re-examine
+ *   the decision rather than add a second exemption. And it does not survive:
+ *   THE ONLY CALLER IS THE WAVE APPLICATION FORM, WHICH IS BEHIND A LOGIN. A
+ *   member filling it in is signed in, so a session check costs her nothing —
+ *   while public access buys nobody anything and leaves 172,000 records free to
+ *   enumerate on the owner's hosting.
+ *
+ *   "Published elsewhere" is a reason it would not be a LEAK. It is not a
+ *   reason to serve it to callers who have no use for it.
+ *
+ *   Still bounded: one ward per request, and a request naming a ward that is
+ *   not in the register gets an empty list rather than an error, because "there
+ *   is no list for this ward" is the ordinary answer for 93 of them.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { pollingUnitsFor } from "@/lib/polling-units";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
     try {
+        const session = (await requireSession()).session;
+        if (!session?.user) {
+            return NextResponse.json(
+                { success: false, data: null, error: "Unauthorized" },
+                { status: 401 },
+            );
+        }
+
         const { searchParams } = new URL(request.url);
         const state = searchParams.get("state") ?? "";
         const lga = searchParams.get("lga") ?? "";
