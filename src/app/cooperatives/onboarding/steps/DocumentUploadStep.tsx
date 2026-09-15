@@ -115,6 +115,8 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     accept="image/*,application/pdf"
                     maxSize={5}
                     onComplete={(res) => onChange({ ...data, validId: { name: "ID Document", url: res.url } })}
+                    existing={data.validId ?? null}
+                    onRemove={() => onChange({ ...data, validId: undefined })}
                     description="Government-issued ID (NIN slip, Driver's License, International Passport)"
                 />
 
@@ -129,6 +131,8 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                             accept="image/*"
                             maxSize={5}
                             onComplete={(res) => onChange({ ...data, passportPhoto: { name: "Passport Photo", url: res.url } })}
+                    existing={data.passportPhoto ?? null}
+                    onRemove={() => onChange({ ...data, passportPhoto: undefined })}
                             description="Recent passport-sized photograph"
                         />
                     </div>
@@ -157,6 +161,8 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     accept="image/*,application/pdf"
                     maxSize={5}
                     onComplete={(res) => onChange({ ...data, proofOfAddress: { name: "Proof of Address", url: res.url } })}
+                    existing={data.proofOfAddress ?? null}
+                    onRemove={() => onChange({ ...data, proofOfAddress: undefined })}
                     description="Utility bill, bank statement, or tenancy agreement"
                 />
 

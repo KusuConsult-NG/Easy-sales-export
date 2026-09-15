@@ -15,6 +15,28 @@ interface MasterUploaderProps {
     onError?: (error: string) => void;
     required?: boolean;
     description?: string;
+    /**
+     *   #784 A DOCUMENT THAT IS ALREADY ATTACHED.
+     *
+     *   This component had no way to be told about one, so a member reopening a
+     *   saved or rejected application saw every document box EMPTY while the
+     *   record held her files. She could not see what she had sent, could not
+     *   check it was the right one, and the only way forward was to upload
+     *   again — #775's "opens blank" defect, in the document dimension.
+     */
+    existing?: { name?: string; url: string } | null;
+    /**
+     *   Detach the attached document from the record.
+     *
+     *   DETACH, NOT DELETE. The owner's standing instruction is that nothing on
+     *   Cloudinary is destroyed; the asset stays exactly where it is and the
+     *   record stops pointing at it. That also means a mistaken removal is
+     *   recoverable from the audit trail rather than gone.
+     *
+     *   Omit it and no Remove control is offered — a screen that cannot handle
+     *   a removal should not appear to.
+     */
+    onRemove?: () => void;
 }
 
 /**
@@ -71,7 +93,9 @@ export default function MasterUploader({
     onComplete,
     onError,
     required = false,
-    description
+    description,
+    existing = null,
+    onRemove
 }: MasterUploaderProps) {
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -184,7 +208,66 @@ export default function MasterUploader({
             </label>
             {description && <p className="text-xs text-slate-500 mb-2">{description}</p>}
 
-            {!file && !completed && (
+            {/*
+              *   #784 WHAT IS ALREADY ATTACHED, and the two things a member can
+              *   do about it. Shown only while nothing new is in flight, so a
+              *   replacement in progress does not sit under the old file.
+              */}
+            {existing?.url && !file && !completed && (
+                <div className="border border-emerald-200 rounded-2xl p-4 bg-emerald-50/20">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                            <CheckCircle className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">
+                                {existing.name || "Document on file"}
+                            </p>
+                            <a
+                                href={existing.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline"
+                            >
+                                View the document you sent
+                            </a>
+                        </div>
+                        <label className="text-xs font-bold text-slate-600 hover:text-slate-900 px-3 py-1.5 bg-white border border-slate-200 rounded-lg cursor-pointer">
+                            <input type="file" accept={accept} onChange={handleFileChange} className="hidden" />
+                            Replace
+                        </label>
+                        {/*
+                          *   #784 REMOVE IS OFFERED ONLY FOR AN OPTIONAL
+                          *   DOCUMENT, and that is not a nicety.
+                          *
+                          *   A REQUIRED document cannot be absent — the step
+                          *   refuses to advance without it — so a Remove button
+                          *   beside one would promise something the form will
+                          *   not accept. And on the server side the resubmit
+                          *   path writes a document field only when a new URL
+                          *   arrives (`|| existingMemberData?.documents…`), so a
+                          *   removal would not propagate anyway: the stored file
+                          *   survives, deliberately, because nothing here is
+                          *   destroyed.
+                          *
+                          *   REPLACE is the control that does the job a member
+                          *   actually has — "I sent the wrong photograph" — and
+                          *   it is offered on both.
+                          */}
+                        {onRemove && !required && (
+                            <button
+                                type="button"
+                                onClick={onRemove}
+                                className="text-xs font-bold text-rose-600 hover:text-rose-700 px-3 py-1.5 bg-rose-50 rounded-lg"
+                            >
+                                Remove
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {!existing?.url && !file && !completed && (
                 <label className={`block border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
                     error ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-slate-50 hover:border-emerald-500 hover:bg-emerald-50/30"
                 }`}>
