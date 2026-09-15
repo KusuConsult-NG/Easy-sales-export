@@ -10,6 +10,10 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { useSearchParams, useRouter } from "next/navigation";
 import { firstImageSrcOr } from "@/lib/first-image";
 
+//   #791 A broken thumbnail must not paint its alt text over the
+//   badges in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+
 function PropertiesContent({ initial }: { initial: any | null }) {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -285,12 +289,14 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                                 >
                                     {/* Property Image */}
                                     <div className="relative h-48 bg-slate-200">
-                                        <Image
+                                        {/*   #791 A broken image here printed the property
+                                          *   title under the category pills opposite it. */}
+                                        <ThumbnailImage
                                             src={firstImageSrcOr(property.images, "/placeholder-land.jpg")}
                                             alt={property.title}
-                                            fill
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                                             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                            fallback={<MapPin className="w-12 h-12 text-slate-400" />}
                                         />
                                         <div className="absolute top-4 right-4 flex flex-wrap gap-1">
                                             {Array.isArray(property.category) ? (

@@ -14,6 +14,10 @@ import { isPurchasable } from "@/lib/land-listing-status";
 import { firstImageSrc } from "@/lib/first-image";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 
+//   #791 A broken thumbnail must not paint its alt text over the
+//   badges in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+
 const categories = [
     { name: "Arable Land", icon: "🌾" },
     { name: "Leasing Options", icon: "📋" },
@@ -204,16 +208,12 @@ export default function FarmNationLandingClient({ initial = null }: {
                                 className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift block"
                             >
                                 <div className="relative h-56 bg-slate-200">
-                                    {firstImageSrc(property.images) ? (
-                                        <Image
-                                            src={firstImageSrc(property.images)!}
-                                            alt={property.title}
-                                            fill
-                                            className="object-cover"
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-6xl">🌾</div>
-                                    )}
+                                    {/*   #791 See components/ui/ThumbnailImage. */}
+                                    <ThumbnailImage
+                                        src={firstImageSrc(property.images)}
+                                        alt={property.title}
+                                        fallback={<span className="text-6xl">🌾</span>}
+                                    />
                                     <div className="absolute top-4 right-4">
                                         <span className={`px-3 py-1 text-white text-xs font-bold rounded-full ${
                                             property.status === "sold" ? "bg-red-600" :

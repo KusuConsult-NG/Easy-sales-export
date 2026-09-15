@@ -15,6 +15,10 @@ import { getUserTierAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
 import { imageSrcOr } from "@/lib/first-image";
 
+//   #791 A broken thumbnail must not paint its alt text over the
+//   badges in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+
 export default function PropertyDetailsClient({ initial = null }: {
     /**  #553 The property the server already fetched. A refusal passes null, so
      *   "Property not found" is still the client's own message. */
@@ -140,13 +144,14 @@ export default function PropertyDetailsClient({ initial = null }: {
                             {property.images && property.images.length > 0 ? (
                                 <div className="relative">
                                     <div className="aspect-video relative bg-slate-200">
-                                        <Image
+                                        {/*   #791 See components/ui/ThumbnailImage. */}
+                                        <ThumbnailImage
                                             src={imageSrcOr(property.images?.[currentImageIndex], "/placeholder-land.jpg")}
                                             alt={property.title}
-                                            fill
                                             className="object-cover"
                                             priority
                                             sizes="(max-width: 1024px) 100vw, 66vw"
+                                            fallback={<MapPin className="w-16 h-16 text-slate-400" />}
                                         />
                                     </div>
                                     {property.images.length > 1 && (

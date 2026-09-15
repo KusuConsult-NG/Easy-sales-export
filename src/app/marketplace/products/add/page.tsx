@@ -13,6 +13,11 @@ import LoadingButton from "@/components/ui/LoadingButton";
 import { useStorage } from "@/hooks/use-storage";
 import { logger } from "@/lib/logger";
 
+//   #791 A broken preview must not paint its alt text over the remove
+//   button in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+import { ImageOff } from "lucide-react";
+
 const CATEGORY_TITLES: Record<string, string[]> = {
     grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
     cereal: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
@@ -660,13 +665,14 @@ export default function AddProductPage() {
                                                 {media.images.map((img, index) => (
                                                     <div key={`img-${img.name}-${img.size}-${index}`} className="relative">
                                                         <div className="relative w-full h-32 rounded-lg overflow-hidden">
-                                                            <Image
+                                                            {/*   #791 See components/ui/ThumbnailImage. */}
+                                                            <ThumbnailImage
                                                                 src={URL.createObjectURL(img)}
                                                                 alt={`Product ${index + 1}`}
-                                                                fill
                                                                 className="object-cover"
                                                                 sizes="200px"
                                                                 unoptimized
+                                                                fallback={<ImageOff className="w-6 h-6" />}
                                                             />
                                                         </div>
                                                         <button

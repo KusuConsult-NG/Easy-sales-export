@@ -22,6 +22,11 @@ import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
 import { useStorage } from "@/hooks/use-storage";
 
+//   #791 A broken preview must not paint its alt text over the remove
+//   button in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+import { ImageOff } from "lucide-react";
+
 const initialState = { success: false as const, error: "", data: null };
 
 const productCategories = [
@@ -398,13 +403,14 @@ export default function CreateProductPage() {
                             {images.map((img, idx) => (
                                 <div key={idx} className="relative group">
                                     <div className="relative w-full h-32 rounded-xl overflow-hidden">
-                                        <Image
+                                        {/*   #791 See components/ui/ThumbnailImage. */}
+                                        <ThumbnailImage
                                             src={img}
                                             alt={`Product ${idx + 1}`}
-                                            fill
                                             sizes="200px"
                                             className="object-cover"
                                             unoptimized
+                                            fallback={<ImageOff className="w-6 h-6" />}
                                         />
                                     </div>
                                     <button

@@ -15,6 +15,11 @@ import { submitLandListingAction } from "@/app/actions/land-listings";
 import { useToast } from "@/contexts/ToastContext";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 
+//   #791 A broken preview must not paint its alt text over the remove
+//   button in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+import { ImageOff } from "lucide-react";
+
 type LandCategory = "farmland" | "ranch" | "forest" | "mixed" | "orchard" | "aquaculture";
 
 export default function ListLandPage() {
@@ -556,13 +561,14 @@ export default function ListLandPage() {
                                                             </div>
                                                         )}
                                                         <div className="relative w-full h-24 rounded-lg overflow-hidden">
-                                                            <Image
+                                                            {/*   #791 See components/ui/ThumbnailImage. */}
+                                                            <ThumbnailImage
                                                                 src={URL.createObjectURL(img)}
                                                                 alt={`Land ${index + 1}`}
-                                                                fill
                                                                 className="object-cover"
                                                                 sizes="150px"
                                                                 unoptimized
+                                                                fallback={<ImageOff className="w-6 h-6" />}
                                                             />
                                                         </div>
                                                         <button

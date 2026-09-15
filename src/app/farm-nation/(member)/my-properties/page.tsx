@@ -15,6 +15,10 @@ import { useToast } from "@/contexts/ToastContext";
 import { firstImageSrc } from "@/lib/first-image";
 import { humanise } from "@/lib/humanise";
 
+//   #791 A broken thumbnail must not paint its alt text over the
+//   badges in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+
 export default function MyPropertiesPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
@@ -187,18 +191,14 @@ export default function MyPropertiesPage() {
                                 className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
                             >
                                 <div className="relative aspect-video bg-slate-200">
-                                    {firstImageSrc(property.images) ? (
-                                        <Image
-                                            src={firstImageSrc(property.images)!}
-                                            alt={property.title}
-                                            fill
-                                            className="object-cover"
-                                        />
-                                    ) : (
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <MapPin className="w-12 h-12 text-slate-400" />
-                                        </div>
-                                    )}
+                                    {/*   #791 The empty case was handled; a set-but-broken
+                                      *   image was not, and painted the property title
+                                      *   under the badge positioned in this same box. */}
+                                    <ThumbnailImage
+                                        src={firstImageSrc(property.images)}
+                                        alt={property.title}
+                                        fallback={<MapPin className="w-12 h-12 text-slate-400" />}
+                                    />
 
                                     <div className="absolute top-3 right-3">
                                         <span

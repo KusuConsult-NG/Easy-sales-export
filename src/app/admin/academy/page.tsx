@@ -12,6 +12,10 @@ import { formatDate } from "@/lib/utils";
 import { humaniseCapitalised } from "@/lib/humanise";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
 
+//   #791 A broken thumbnail must not paint its alt text over the
+//   badges in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+
 export default function AcademyAdminPage() {
     const router = useRouter();
     const {
@@ -180,13 +184,20 @@ export default function AcademyAdminPage() {
                         {filteredCourses.map((course) => (
                             <div key={course.id} className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-100 overflow-hidden flex flex-col">
                                 <div className="h-40 bg-slate-100 relative">
-                                    {course.thumbnail ? (
-                                        <Image src={course.thumbnail} alt={course.title} fill className="object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                            <BookOpen className="w-12 h-12" />
-                                        </div>
-                                    )}
+                                    {/*
+                                      *   #791 The card the owner photographed. A
+                                      *   thumbnail that is set but does not load
+                                      *   used to paint `alt` — the course title —
+                                      *   inside this box, underneath the tier and
+                                      *   level pills positioned in the same box.
+                                      *   The title appeared twice on the card and
+                                      *   the badges sat on top of the first one.
+                                      */}
+                                    <ThumbnailImage
+                                        src={course.thumbnail}
+                                        alt={course.title}
+                                        fallback={<BookOpen className="w-12 h-12" />}
+                                    />
                                     <div className="absolute top-4 right-4 flex gap-2">
                                         {course.tier && (
                                             <span className="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">

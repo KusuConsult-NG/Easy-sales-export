@@ -16,6 +16,10 @@ import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 import { firstImageSrc } from "@/lib/first-image";
 import { isSellableProductStatus } from "@/lib/product-status";
 
+//   #791 A broken thumbnail must not paint its alt text over the
+//   badges in the same box — see components/ui/ThumbnailImage.
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+
 export default function ProductDetailClient({ initial = null }: {
     /**
      *   #554 The product and its related products, already fetched in parallel.
@@ -208,13 +212,14 @@ export default function ProductDetailClient({ initial = null }: {
                     {/* Product Image */}
                     <div className="space-y-4">
                         <div className="relative h-96 lg:h-[500px] bg-white rounded-2xl overflow-hidden shadow-xl">
-                            <Image
+                            {/*   #791 See components/ui/ThumbnailImage. */}
+                            <ThumbnailImage
                                 src={mainImage}
                                 alt={product.title}
-                                fill
                                 className="object-cover transition-opacity duration-300"
                                 priority
                                 sizes="(max-width: 1024px) 100vw, 50vw"
+                                fallback={<Package className="w-20 h-20 text-slate-300" />}
                             />
                             <div className="absolute top-6 right-6">
                                 <span className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-full shadow-lg">
