@@ -193,6 +193,19 @@ const EXPECTED = [
              "under a lock_timeout, per #469; transaction-safe, and it takes effect " +
              "the moment it is applied — the code needs no change to benefit.",
     },
+    {
+        n: "037",
+        why: "the segment counts exclude erased and superseded accounts. It must " +
+             "come AFTER 029 and 034, which create user_segment() and " +
+             "count_user_segments(); this replaces the latter and adds " +
+             "is_live_person(). #756 added the same exclusion to the JavaScript " +
+             "fallback and that is NOT the live path — analytics.service.ts calls " +
+             "this function first and only falls back when it is unavailable — so " +
+             "until this is applied the owner goes on reading deleted accounts in " +
+             "the Ghost bucket. A scrub leaves no application, bank details or " +
+             "address, which is the exact definition of that segment, so every " +
+             "erasure honoured made the figure larger.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
