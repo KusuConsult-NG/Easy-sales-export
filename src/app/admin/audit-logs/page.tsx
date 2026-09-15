@@ -32,6 +32,7 @@ import { toSafeDate } from "@/lib/utils";
 import { recordExport } from "@/lib/record-export";
 import { numberOrZero } from "@/lib/numbers";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+import { describeAuditEntry, hasWrittenDetails } from "@/lib/audit-entry-description";
 
 const severityConfig = {
     info: { color: "blue", icon: Info, label: "Info" },
@@ -66,6 +67,17 @@ export default function AdminAuditLogsPage() {
 
     const [exporting, setExporting] = useState(false);
     const [expandedRow, setExpandedRow] = useState<string | null>(null);
+    //   #764 Which rows have their raw metadata open. A set rather than a
+    //   single id: comparing two rows' raw bags is a real forensic move, and
+    //   the row expander above already allows one at a time for its own
+    //   reasons.
+    const [rawMetadataOpen, setRawMetadataOpen] = useState<Set<string>>(new Set());
+    const toggleRawMetadata = (id: string) =>
+        setRawMetadataOpen((open) => {
+            const next = new Set(open);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
 
     // Stats
     const [stats, setStats] = useState<{
@@ -356,18 +368,51 @@ export default function AdminAuditLogsPage() {
                                                                         <span className="text-white ml-2 font-mono">{log.targetId}</span>
                                                                     </div>
                                                                 )}
-                                                                {log.details && (
-                                                                    <div>
-                                                                        <span className="text-blue-300">Details:</span>
-                                                                        <span className="text-white ml-2">{log.details}</span>
-                                                                    </div>
-                                                                )}
+                                                                {/*
+                                                                  *   #764 EVERY ROW GETS A SENTENCE.
+                                                                  *
+                                                                  *   `details` is optional on AuditLogEntry and 112
+                                                                  *   of the 183 write sites omit it, so this block
+                                                                  *   used to render nothing but a JSON blob for the
+                                                                  *   majority of rows — which is what the owner was
+                                                                  *   reading when they asked why the logs show
+                                                                  *   metadata instead of text.
+                                                                  *
+                                                                  *   describeAuditEntry composes one from the fields
+                                                                  *   the row already carries. It never invents: a row
+                                                                  *   with nothing in it yields its action name.
+                                                                  *
+                                                                  *   LABELLED HONESTLY. A derived summary is not a
+                                                                  *   record of what somebody wrote, and an audit log
+                                                                  *   is the one screen where that distinction has to
+                                                                  *   be visible.
+                                                                  */}
+                                                                <div>
+                                                                    <span className="text-blue-300">
+                                                                        {hasWrittenDetails(log) ? "Details:" : "Summary:"}
+                                                                    </span>
+                                                                    <span className="text-white ml-2">{describeAuditEntry(log)}</span>
+                                                                </div>
                                                                 {log.metadata && Object.keys(log.metadata).length > 0 && (
                                                                     <div>
-                                                                        <span className="text-blue-300">Metadata:</span>
-                                                                        <pre className="mt-2 text-xs bg-black/30 p-3 rounded-lg overflow-x-auto">
-                                                                            {JSON.stringify(log.metadata, null, 2)}
-                                                                        </pre>
+                                                                        {/*
+                                                                          *   The raw bag stays — it is what a forensic
+                                                                          *   question actually needs — but behind a
+                                                                          *   click, so it is no longer the first thing
+                                                                          *   the eye lands on.
+                                                                          */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => toggleRawMetadata(log.id ?? "")}
+                                                                            className="text-blue-300 hover:text-blue-200 underline underline-offset-2 transition"
+                                                                        >
+                                                                            {rawMetadataOpen.has(log.id ?? "") ? "Hide raw metadata" : "Show raw metadata"}
+                                                                        </button>
+                                                                        {rawMetadataOpen.has(log.id ?? "") && (
+                                                                            <pre className="mt-2 text-xs bg-black/30 p-3 rounded-lg overflow-x-auto">
+                                                                                {JSON.stringify(log.metadata, null, 2)}
+                                                                            </pre>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>

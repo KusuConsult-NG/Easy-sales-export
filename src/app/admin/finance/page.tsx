@@ -28,6 +28,7 @@ import { csvDocument } from "@/lib/csv-safe";
 import { numberOrZero } from "@/lib/numbers";
 import { formatDateOrDash } from "@/lib/date-utils";
 import { revenueDisplay, revenuePrefix, revenueNote } from "@/lib/revenue-display";
+import { summarisePaystackSync, type SyncSummary } from "@/lib/paystack-sync-summary";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -93,7 +94,7 @@ export default function AdminFinancePage() {
     const [isSending, setIsSending] = useState(false);
     const [sendResult, setSendResult] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
-    const [syncResult, setSyncResult] = useState<string | null>(null);
+    const [syncResult, setSyncResult] = useState<SyncSummary | null>(null);
     const [lastSynced, setLastSynced] = useState<string | null>(null);
 
     // Reset pagination + selection when switching tabs
@@ -234,13 +235,31 @@ export default function AdminFinancePage() {
             const now = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
             setLastSynced(now);
             if (!silent) {
-                const msg = data.synced > 0
-                    ? `✓ Synced ${data.synced} new transaction${data.synced !== 1 ? 's' : ''} from Paystack (success: ${data.breakdown?.success ?? "?"}, failed: ${data.breakdown?.failed ?? "?"}, abandoned: ${data.breakdown?.abandoned ?? "?"})`
-                    : `✓ All Paystack transactions are up to date`;
-                setSyncResult(msg);
+                /*
+                 *   #764 THIS SAID ✓ WHATEVER HAPPENED.
+                 *
+                 *   It was built from `data.synced` alone, and both branches
+                 *   opened with a tick — so a run that fulfilled ten payments
+                 *   and threw on five reported an unqualified success, and a run
+                 *   that synced nothing, hit its page ceiling and could not route
+                 *   forty payments printed, in green, "All Paystack transactions
+                 *   are up to date".
+                 *
+                 *   `errors`, `unhandled`, `unhandledReferences` and `truncated`
+                 *   were all in the response. #531 put them there in as many
+                 *   words — "Named in the response so the admin who pressed the
+                 *   button sees them" — and this, the only reader, dropped every
+                 *   one of them. It is why the owner was reading a sync run out
+                 *   of the audit log rather than off this screen.
+                 *
+                 *   The verdict lives in lib/paystack-sync-summary.ts so it can
+                 *   be asked directly with known inputs rather than only through
+                 *   a rendered page.
+                 */
+                setSyncResult(summarisePaystackSync(data));
             }
         } catch (err: any) {
-            if (!silent) setSyncResult(`✗ Sync error: ${err.message}`);
+            if (!silent) setSyncResult({ tone: "error", message: `✗ Sync error: ${err.message}`, details: [] });
         } finally {
             setIsSyncing(false);
             // Always reload finance data after sync — counts + tables reflect the latest Firestore state
@@ -477,19 +496,39 @@ export default function AdminFinancePage() {
                         </div>
                     )}
 
-                    {/* Paystack Sync Result Banner */}
+                    {/*
+                      *   Paystack Sync Result Banner
+                      *
+                      *   #764 THREE TONES, NOT TWO. It was green when the text
+                      *   began with a tick and red otherwise, and the text always
+                      *   began with a tick — so a partly-failed run was green and
+                      *   a run that did nothing at all said "up to date".
+                      *
+                      *   `warning` is the tone that was missing, and it is the
+                      *   one this job produces most: the sync finished, and some
+                      *   of it needs a person.
+                      */}
                     {syncResult && (
-                        <div className={`px-6 py-3 border-b flex items-center justify-between gap-4 flex-wrap ${
-                            syncResult.startsWith("✓")
-                                ? "bg-emerald-50 border-emerald-100"
-                                : "bg-red-50 border-red-100"
+                        <div className={`px-6 py-3 border-b flex items-start justify-between gap-4 flex-wrap ${
+                            syncResult.tone === "ok" ? "bg-emerald-50 border-emerald-100"
+                            : syncResult.tone === "warning" ? "bg-amber-50 border-amber-200"
+                            : "bg-red-50 border-red-100"
                         }`}>
-                            <p className={`text-sm font-semibold ${
-                                syncResult.startsWith("✓") ? "text-emerald-800" : "text-red-700"
-                            }`}>{syncResult}</p>
+                            <div className="min-w-0">
+                                <p className={`text-sm font-semibold ${
+                                    syncResult.tone === "ok" ? "text-emerald-800"
+                                    : syncResult.tone === "warning" ? "text-amber-900"
+                                    : "text-red-700"
+                                }`}>{syncResult.message}</p>
+                                {syncResult.details.length > 0 && (
+                                    <ul className="mt-2 space-y-1 text-xs text-amber-900/90 list-disc pl-5 break-words">
+                                        {syncResult.details.map((d, i) => <li key={i}>{d}</li>)}
+                                    </ul>
+                                )}
+                            </div>
                             <button
                                 onClick={() => setSyncResult(null)}
-                                className="text-xs text-slate-500 hover:text-slate-700 transition"
+                                className="text-xs text-slate-500 hover:text-slate-700 transition shrink-0"
                             >
                                 Dismiss
                             </button>

@@ -148,7 +148,6 @@ async function paystackSyncHandler(_req: NextRequest) {
         // ── Back-fill missing docs into Firestore ──────────────────────────────
         let synced = 0;
         let skipped = 0;
-        let errors = 0;
         //   #531 Payments nothing here can fulfil, counted and NAMED.
         //
         //   They used to be written as `status: "completed"` and added to
@@ -158,6 +157,53 @@ async function paystackSyncHandler(_req: NextRequest) {
         //   figure with nobody credited and could never be healed afterwards.
         let unhandled = 0;
         const unhandledReferences: string[] = [];
+        /**
+         *   #764 THE ONLY LINE IN THIS RECORD AN ADMIN COULD NOT ACT ON.
+         *
+         *   The owner read a real run's audit row:
+         *
+         *       total 5517   synced 10   skipped 5502   errors 5   unhandled 0
+         *
+         *   Every other figure there answers a question. `skipped` means already
+         *   recorded; `synced` means fulfilled by this run; `unhandled` NAMES
+         *   its references, because #531 established that a count of payments
+         *   needing a human is not something a human can use. `errors` was a
+         *   bare integer, and it is the one bucket where something went wrong.
+         *
+         *   AND NOTHING ELSE RECORDED THEM EITHER. The catch below increments
+         *   and logs; it writes no row. So there is no collection to search —
+         *   unlike an unroutable payment, which at least leaves a
+         *   processed_payments row in UNHANDLED_PAYMENT_STATUS. #760 settled
+         *   what a log line is worth as a record of money that stopped halfway:
+         *   "the only record was a log line".
+         *
+         *   THE SAME JOB'S OTHER DOOR ALREADY DID THIS. cron/reconcile-paystack
+         *   pushes `{ reference, amount, email, date, channel }` onto
+         *   `missingInFirebase` when its processing throws, and persists it to
+         *   system_health. One door names its failures, the other counted them —
+         *   and the one that counted is the MANUAL repair tool, reached
+         *   precisely when an admin is chasing a payment that did not land.
+         *
+         *   WHY IT MATTERS MORE THAN A COUNT SUGGESTS. Nothing is written for an
+         *   errored transaction, so the next run retries it from scratch. That
+         *   is the right behaviour — and it means five transactions failing
+         *   permanently, run after run, look exactly like five different
+         *   transient blips. The number alone cannot tell those apart.
+         *
+         *   NO CUSTOMER EMAIL, DELIBERATELY. #468 found that audit metadata is
+         *   rendered as raw JSON on /admin/audit-logs and that `audit:read` is
+         *   held by all ten admin roles. A Paystack reference, the payment type
+         *   and the amount are what a reconciliation needs; the payer's address
+         *   is not, and the cron twin's copy is written to system_health rather
+         *   than to the audit log.
+         */
+        let errors = 0;
+        const errorReferences: Array<{
+            reference: string;
+            type: string | null;
+            amount: number;
+            reason: string;
+        }> = [];
 
         // Process in chunks to avoid overwhelming Firestore
         const CHUNK = 50;
@@ -312,6 +358,28 @@ async function paystackSyncHandler(_req: NextRequest) {
                         }
                     } catch (err: any) {
                         errors++;
+                        /*
+                         *   #764 NAMED, not only counted — see the declaration
+                         *   above for what the count alone cost.
+                         *
+                         *   Read off `tx` rather than off the locals, because
+                         *   the throw may have happened before any of them were
+                         *   assigned: resolveActiveUserId is an await on the
+                         *   third line of the try. `tx.reference` is the one
+                         *   thing that is certainly in scope.
+                         *
+                         *   The reason is TRUNCATED. A provider error can carry
+                         *   a response body, and a row that cannot be written is
+                         *   the same as no row at all — which is the defect
+                         *   being fixed.
+                         */
+                        const reason = String(err?.message ?? err ?? "unknown error").slice(0, 200);
+                        errorReferences.push({
+                            reference: tx.reference,
+                            type: tx.metadata?.type ?? tx.metadata?.purpose ?? null,
+                            amount: tx.amount / 100,
+                            reason,
+                        });
                         logger.error(`[PaystackSync] Error processing ${tx.reference}:`, err);
                     }
                 })
@@ -346,6 +414,10 @@ async function paystackSyncHandler(_req: NextRequest) {
                 synced, skipped, errors, unhandled,
                 truncated: syncTruncated,
                 unhandledReferences: unhandledReferences.slice(0, 50),
+                //   #764 The failures, named. Same cap as the line above, for
+                //   the same reason: an audit row that grows without bound is a
+                //   row nobody can open.
+                errorReferences: errorReferences.slice(0, 50),
             },
         });
         return NextResponse.json({
@@ -369,6 +441,10 @@ async function paystackSyncHandler(_req: NextRequest) {
             //   job that needs a human.
             unhandled,
             unhandledReferences: unhandledReferences.slice(0, 50),
+            //   #764 And the ones that threw. The admin pressing this button is
+            //   usually chasing one specific payment; "5 errors" cannot tell
+            //   them whether theirs was among them.
+            errorReferences: errorReferences.slice(0, 50),
         });
     } catch (error: any) {
         logger.error("[PaystackSync] Fatal error:", error);
