@@ -10,6 +10,7 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
+import { checkProductPricing } from "@/lib/product-pricing-guard";
 
 /**
  * API Route: Create Product Listing
@@ -87,21 +88,23 @@ export async function POST(request: NextRequest) {
         // minOrder is multiplied by 5 and by 10 below to derive the bulk and
         // export tier thresholds, so a nonsense minOrder propagates into three
         // tiers rather than one.
-        const numericFields: Array<[string, number]> = [
-            ["retail price", retailPrice],
-            ["bulk price", bulkPrice],
-            ["export price", exportPrice],
-            ["minimum order", minOrder],
-            ["stock quantity", stockQuantity],
-        ];
-        for (const [label, value] of numericFields) {
-            // bulk/export default to 0 when absent — 0 means "not offered".
-            if (!Number.isFinite(value) || value < 0) {
-                return NextResponse.json(
-                    { success: false, message: `The ${label} must be a positive number` },
-                    { status: 400 }
-                );
-            }
+        //   #794 The same rule all four product doors now apply, in one place.
+        //   This route was the ONLY one that had it; the server action had none
+        //   and neither update door had any. ProductSchema's own comments record
+        //   the two creators drifting twice before, which is why it is shared
+        //   rather than copied a fourth time.
+        const pricing = checkProductPricing([
+            { label: "retail price", value: retailPrice },
+            { label: "bulk price", value: bulkPrice, zeroMeansAbsent: true },
+            { label: "export price", value: exportPrice, zeroMeansAbsent: true },
+            { label: "minimum order", value: minOrder },
+            { label: "stock quantity", value: stockQuantity, zeroMeansAbsent: true },
+        ]);
+        if (!pricing.ok) {
+            return NextResponse.json(
+                { success: false, message: pricing.message },
+                { status: 400 }
+            );
         }
 
         // ✅ FIXED: Upload images to Firebase Storage (was placeholder stub, now supports pre-uploaded URLs)

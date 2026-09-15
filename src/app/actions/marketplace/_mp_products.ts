@@ -11,6 +11,9 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { ProductSchema } from "@/lib/validations/marketplace";
+//   #794 One rule for what a product may be listed at, shared with both API
+//   routes — see lib/product-pricing-guard.
+import { checkProductPricing } from "@/lib/product-pricing-guard";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
@@ -87,6 +90,32 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
         const bulkMinQuantity = formData.get("bulkMinQuantity") ? parseInt(formData.get("bulkMinQuantity") as string) : undefined;
         const exportMinQuantity = formData.get("exportMinQuantity") ? parseInt(formData.get("exportMinQuantity") as string) : undefined;
 
+        /*
+         *   #794 THE DOOR THAT DID NOT CHECK.
+         *
+         *   ProductSchema below accepts a negative price and negative stock —
+         *   measured, not assumed — so this creator could list a product nobody
+         *   could ever buy: checkout refuses a non-positive stored price, and
+         *   nothing told the seller. /api/marketplace/create-product has checked
+         *   this all along; this door never did.
+         *
+         *   The rule is SHARED rather than copied; lib/product-pricing-guard
+         *   explains why tightening the schema instead would have shown live
+         *   products as free.
+         */
+        const availableQuantity = parseInt(formData.get("availableQuantity") as string || "0");
+        const minimumOrderQuantity = parseInt(formData.get("minimumOrderQuantity") as string || "1");
+        const pricing = checkProductPricing([
+            { label: "retail price", value: retailPrice },
+            { label: "bulk price", value: bulkPrice ?? 0, zeroMeansAbsent: true },
+            { label: "export price", value: exportPrice ?? 0, zeroMeansAbsent: true },
+            { label: "stock quantity", value: availableQuantity, zeroMeansAbsent: true },
+            { label: "minimum order quantity", value: minimumOrderQuantity },
+        ]);
+        if (!pricing.ok) {
+            return { success: false as const, error: pricing.message, data: null };
+        }
+
         const pricingTiers: any[] = [];
         pricingTiers.push({ type: "retail", price: retailPrice, minQuantity: 1 });
 
@@ -116,8 +145,8 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             description: formData.get("description") || undefined,
             category: formData.get("category") || undefined,
             pricingTiers,
-            availableQuantity: parseInt(formData.get("availableQuantity") as string || "0"),
-            minimumOrderQuantity: parseInt(formData.get("minimumOrderQuantity") as string || "1"),
+            availableQuantity,
+            minimumOrderQuantity,
             unit: formData.get("unit") || undefined,
             location: {
                 state: formData.get("state") as string || "Lagos",
@@ -323,6 +352,28 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
         const bulkMinQuantity = formData.get("bulkMinQuantity") ? parseInt(formData.get("bulkMinQuantity") as string) : undefined;
         const exportMinQuantity = formData.get("exportMinQuantity") ? parseInt(formData.get("exportMinQuantity") as string) : undefined;
 
+        /*
+         *   #794 AND THE EDIT DOOR, which is the half the first pass missed.
+         *
+         *   Found by an anchor that matched TWICE: create and update build their
+         *   pricing tiers with the same lines, and NEITHER update door checked
+         *   anything — /api/marketplace/update-product carries no range check at
+         *   all. So a seller could not only list an unsellable product, they
+         *   could turn a working listing into one by editing it.
+         */
+        const availableQuantity = parseInt(formData.get("availableQuantity") as string || "0");
+        const minimumOrderQuantity = parseInt(formData.get("minimumOrderQuantity") as string || "1");
+        const pricing = checkProductPricing([
+            { label: "retail price", value: retailPrice },
+            { label: "bulk price", value: bulkPrice ?? 0, zeroMeansAbsent: true },
+            { label: "export price", value: exportPrice ?? 0, zeroMeansAbsent: true },
+            { label: "stock quantity", value: availableQuantity, zeroMeansAbsent: true },
+            { label: "minimum order quantity", value: minimumOrderQuantity },
+        ]);
+        if (!pricing.ok) {
+            return { success: false as const, error: pricing.message, data: null };
+        }
+
         const pricingTiers: any[] = [];
         pricingTiers.push({ type: "retail", price: retailPrice, minQuantity: 1 });
 
@@ -353,8 +404,8 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             description: formData.get("description") || undefined,
             category: formData.get("category") || undefined,
             pricingTiers,
-            availableQuantity: parseInt(formData.get("availableQuantity") as string || "0"),
-            minimumOrderQuantity: parseInt(formData.get("minimumOrderQuantity") as string || "1"),
+            availableQuantity,
+            minimumOrderQuantity,
             unit: formData.get("unit") || undefined,
             location: {
                 state: formData.get("state") as string || "Lagos",

@@ -7,6 +7,9 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 
+//   #794 One rule for what a product may be priced at, shared with the other
+//   three product doors — see lib/product-pricing-guard.
+import { checkProductPricing, type PricingCheck } from "@/lib/product-pricing-guard";
 /**
  * Fields a seller may change on their own product.
  *
@@ -116,6 +119,53 @@ export async function POST(request: NextRequest) {
         if (Object.keys(patch).length === 0) {
             return NextResponse.json(
                 { success: false, message: "No editable fields were supplied" },
+                { status: 400 }
+            );
+        }
+
+        /*
+         *   #794 THE NUMBERS IN THE PATCH ARE NUMBERS SOMETHING CAN BE SOLD AT.
+         *
+         *   This route had no range check of any kind, and `pricingTiers`,
+         *   `availableQuantity` and `minimumOrderQuantity` are all on the
+         *   editable list — so a seller could take a working listing and PATCH
+         *   it to a negative price. Checkout then refuses every cart containing
+         *   it with "Invalid price", and nothing tells the seller their product
+         *   has stopped being buyable.
+         *
+         *   ONLY WHAT IS PRESENT is checked. This is a partial update: a patch
+         *   that does not mention the price must not be failed for the price the
+         *   product already has, which may predate this rule.
+         */
+        const checks: PricingCheck[] = [];
+        for (const tier of Array.isArray(patch.pricingTiers) ? patch.pricingTiers : []) {
+            checks.push({
+                label: `${tier?.type ?? "retail"} price`,
+                value: Number(tier?.price),
+                //   Bulk and export tiers are only pushed when offered, so a 0
+                //   here is a price, not an absence — unlike the create doors,
+                //   where 0 is how "not offered" arrives.
+            });
+        }
+        for (const [field, label] of [
+            ["availableQuantity", "stock quantity"],
+            ["stockQuantity", "stock quantity"],
+            ["minimumOrderQuantity", "minimum order quantity"],
+            ["minOrder", "minimum order quantity"],
+        ] as const) {
+            if (Object.prototype.hasOwnProperty.call(patch, field)) {
+                checks.push({
+                    label,
+                    value: Number(patch[field]),
+                    zeroMeansAbsent: field === "availableQuantity" || field === "stockQuantity",
+                });
+            }
+        }
+
+        const pricing = checkProductPricing(checks);
+        if (!pricing.ok) {
+            return NextResponse.json(
+                { success: false, message: pricing.message },
                 { status: 400 }
             );
         }
