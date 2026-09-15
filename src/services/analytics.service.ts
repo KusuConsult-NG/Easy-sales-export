@@ -7,6 +7,9 @@ import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
 import { countLivePeople } from "@/lib/user-population";
+//   #756 — one accepted-status list for every module tile, measured against
+//   what the code actually writes rather than spelled out per query.
+import { registrationStatusFilter } from "@/lib/module-registration-status";
 import type {
     AnalyticsServiceContract,
     PlatformHealthMetrics,
@@ -388,7 +391,9 @@ export class AnalyticsService implements AnalyticsServiceContract {
             promises.push(
                 supabaseAdmin
                     .from("users")
-                    .select("raw_data->serviceRegistrations, raw_data->verificationProfile, raw_data->bankDetails, raw_data->address")
+                    //   #756 — the two tombstone fields come with the row so the
+                    //   loop can skip them. See the note on the loop below.
+                    .select("raw_data->serviceRegistrations, raw_data->verificationProfile, raw_data->bankDetails, raw_data->address, raw_data->deleted, raw_data->_migratedTo")
                     .range(page * pageSize, (page + 1) * pageSize - 1)
             );
         }
@@ -405,6 +410,39 @@ export class AnalyticsService implements AnalyticsServiceContract {
             if (res.error) continue;
             const users = res.data || [];
             for (const u of users) {
+                /*
+                 *   #756 AN ERASED ACCOUNT WAS COUNTED, AND COUNTED AS A GHOST.
+                 *
+                 *   Reported by the owner, who had two different platform
+                 *   populations on one screen: "41,696 Unique Accounts" beside
+                 *   "Total Analyzed 42,566".
+                 *
+                 *   #747 made the headline exclude tombstones — an account
+                 *   erased at the person's request, and a profile superseded by
+                 *   the duplicate resolver, are not people. This segmentation
+                 *   never got that rule: it reads every row in the table.
+                 *
+                 *   And the bucket they land in is the worst one available. A
+                 *   scrub removes the application, the bank details and the
+                 *   address, which is the EXACT definition of `ghost_users` —
+                 *   "No application, bank details or address on record". So
+                 *   every erasure honoured made the Ghost figure bigger, and
+                 *   the owner reading "Ghost 19,981 (46.9%)" was being shown
+                 *   deleted accounts as a problem to fix.
+                 *
+                 *   Skipped in JS rather than filtered in the query,
+                 *   deliberately: the negative PostgREST filter for "does not
+                 *   have this key" is the one this codebase has already been
+                 *   caught by — `raw_data->>'f' <> 'x'` is NULL, and therefore
+                 *   not true, for a row missing the key, so it excludes exactly
+                 *   the rows it should keep. The rows are already being read and
+                 *   walked; two more fields on the select costs nothing and the
+                 *   rule is then plain and testable.
+                 */
+                if ((u as any).deleted === true) continue;
+                const migratedTo = (u as any)._migratedTo;
+                if (typeof migratedTo === "string" && migratedTo !== "") continue;
+
                 const reconstructed = {
                     serviceRegistrations: (u as any).serviceRegistrations,
                     verificationProfile: (u as any).verificationProfile,
@@ -1288,6 +1326,16 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
         const db = getAdminDb();
         const { supabaseAdmin } = await import("@/lib/supabase");
 
+        /*
+         *   #756 — the accepted status list comes from ONE place now. It was
+         *   spelled out inline, once per module, and measured against every
+         *   `serviceRegistrations.<module>.status` write in the codebase it was
+         *   wrong in both directions. See lib/module-registration-status.ts.
+         */
+        const ST = registrationStatusFilter();
+        const reg = (module: string) => `raw_data->serviceRegistrations->${module}->>status.in.${ST}`;
+        const anyRole = (...roles: string[]) => roles.map((r) => `roles.cs.{"${r}"}`).join(",");
+
         const [
             waveBriefing,
             waveRes,
@@ -1296,6 +1344,7 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
             coopOnbRes,
             farmNationRes,
             exportHubRes,
+            exportOnbRes,
             marketplaceRes
         ] = await Promise.all([
             // WAVE Briefing registrations (keep direct dedicated table count)
@@ -1305,13 +1354,13 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
             supabaseAdmin
                 .from('users')
                 .select('*', { count: 'exact', head: true })
-                .or('raw_data->serviceRegistrations->wave->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"wave_participant"}'),
+                .or(`${reg('wave')},${anyRole('wave_participant')}`),
 
             // Academy
             supabaseAdmin
                 .from('users')
                 .select('*', { count: 'exact', head: true })
-                .or('raw_data->serviceRegistrations->academy->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"academy_participant"}'),
+                .or(`${reg('academy')},${anyRole('academy_participant')}`),
 
             // Cooperatives (active/approved)
             supabaseAdmin
@@ -1323,25 +1372,75 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
             supabaseAdmin
                 .from('users')
                 .select('*', { count: 'exact', head: true })
-                .or('raw_data->serviceRegistrations->cooperatives->>status.in.(pending,legacy_pending_onboarding),raw_data->serviceRegistrations->cooperative->>status.in.(pending,legacy_pending_onboarding)'),
+                //   #756 — `revision_required` is written by
+                //   _coop_admin_members when an admin asks for corrections, and
+                //   was in neither the active list nor this one, so a member
+                //   mid-review appeared in no tile at all.
+                .or('raw_data->serviceRegistrations->cooperatives->>status.in.(pending,pending_approval,revision_required,legacy_pending_onboarding),raw_data->serviceRegistrations->cooperative->>status.in.(pending,pending_approval,revision_required,legacy_pending_onboarding)'),
 
             // Farm Nation
             supabaseAdmin
                 .from('users')
                 .select('*', { count: 'exact', head: true })
-                .or('raw_data->serviceRegistrations->farmNation->>status.in.(pending,under_review,approved,active,paid,completed,suspended),raw_data->serviceRegistrations->farm_nation->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"farm-nation-buyer"},roles.cs.{"farm-nation-seller"}'),
+                /*
+                 *   #756 FARM NATION ASKED FOR TWO STRINGS THAT ARE NOT ROLES.
+                 *
+                 *   It matched `roles.cs.{"farm-nation-buyer"}` and
+                 *   `{"farm-nation-seller"}`. Neither appears anywhere else in
+                 *   this codebase — not in UserRole, not in ALL_USER_ROLES, not
+                 *   in any writer — so the clause matched nobody and the module
+                 *   was counted on its serviceRegistrations mirror alone.
+                 *
+                 *   The real participant roles are `farmer`, `land_owner` and
+                 *   `investor`, which lib/conversation-scope.ts already maps to
+                 *   the farmnation module. This is #96's defect —
+                 *   "farmnation_admin" for `farm_nation_admin` — a third time,
+                 *   in a third file.
+                 */
+                .or(`${reg('farmNation')},${reg('farm_nation')},${anyRole('farmer', 'land_owner', 'investor')}`),
 
             // Export Hub
             supabaseAdmin
                 .from('users')
                 .select('*', { count: 'exact', head: true })
-                .or('raw_data->serviceRegistrations->export->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"export_participant"}'),
+                /*
+                 *   #756 — THE REPORTED ZERO. `_ex_onboarding.ts` writes
+                 *   "pending_approval" on both of its paths and that is the
+                 *   only status an export applicant holds before approval; it
+                 *   was not in the accepted list, so every pending export
+                 *   registration was invisible.
+                 */
+                .or(`${reg('export')},${anyRole('export_participant')}`),
+
+            /*
+             *   #756 EXPORT ONBOARDING WAS NOT A QUERY AT ALL.
+             *
+             *   The payload read `exportOnboarding: exportHubRes.count` — the
+             *   SAME number as Export Hub, presented to an administrator as a
+             *   second, independent figure. Two tiles, one measurement, and
+             *   nothing on the screen to tell them apart. While both read 0
+             *   that is invisible; the moment Export Hub is non-zero it becomes
+             *   a duplicated count inside a breakdown that sums to a total.
+             *
+             *   It has its own query now, on the shape the cooperative pair
+             *   already uses: the Hub counts settled registrations, Onboarding
+             *   counts the ones still in flight. `pending_approval` is the
+             *   value _ex_onboarding.ts actually writes.
+             */
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->export->>status.in.(pending,pending_approval,under_review,revision_required)'),
 
             // Marketplace
             supabaseAdmin
                 .from('users')
                 .select('*', { count: 'exact', head: true })
-                .or('raw_data->serviceRegistrations->marketplace->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"seller"},roles.cs.{"marketplace_buyer"}')
+                //   #756 — `marketplace_seller` and `buyer` were missing.
+                //   Both are in ALL_USER_ROLES, and the legacy import writes an
+                //   accountType of "buyer", so sellers on the newer spelling
+                //   and plain buyers went uncounted.
+                .or(`${reg('marketplace')},${anyRole('seller', 'marketplace_seller', 'buyer', 'marketplace_buyer')}`)
         ]);
 
         return {
@@ -1352,7 +1451,7 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
             cooperativeOnboarding: coopOnbRes.count ?? 0,
             farmNation: farmNationRes.count ?? 0,
             exportHub: exportHubRes.count ?? 0,
-            exportOnboarding: exportHubRes.count ?? 0,
+            exportOnboarding: exportOnbRes.count ?? 0,
             marketplace: marketplaceRes.count ?? 0
         };
     },
