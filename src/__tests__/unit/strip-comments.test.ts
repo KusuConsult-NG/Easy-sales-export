@@ -310,6 +310,16 @@ describe('it agrees with the naive version everywhere the naive version is right
         'src/__tests__/unit/status-vocabulary-drift.test.ts',
         'src/__tests__/unit/storage-backend-single-rule.test.ts',
         'src/__tests__/unit/strip-comments.test.ts',
+        //   #790 — joined on the plainest form. That file's route-existence
+        //   check shells out to `find … | sed 's|/([^)]*)|/|g; s|//*|/|g'` to
+        //   resolve Next route groups, so it holds `//` and `/*` inside a
+        //   string, and its own block comments supply the closing `*/` the
+        //   naive regex needs.
+        //
+        //   Raised rather than relaxed, for the usual reason: it strips OTHER
+        //   files with lib/testing/strip-comments — the good one — and nothing
+        //   strips it, so no assertion in it can be misled by the mangling.
+        'src/__tests__/unit/submitted-and-sent-to-a-door-she-could-not-open.test.ts',
         'src/__tests__/unit/the-audit-log-had-two-vocabularies.test.ts',
         'src/__tests__/unit/the-export-sweep-only-walked-the-browser.test.ts',
         'src/__tests__/unit/the-spreadsheet-half-of-the-export-rule.test.ts',

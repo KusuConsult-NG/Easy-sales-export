@@ -19,6 +19,9 @@ import InterestsStep from "./steps/InterestsStep";
 import TermsStep from "./steps/TermsStep";
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
+//   #790 One rule for where a submitted application goes, shared with the
+//   gate above it — see lib/onboarding-destination.
+import { onboardingDestination } from "@/lib/onboarding-destination";
 type RoleType = "buyer" | "seller" | "both";
 
 interface OnboardingStep {
@@ -109,7 +112,32 @@ export default function FarmNationOnboardingClient({ initial = null }: {
                             setIsEditMode(true);
                             setIsLoading(false);
                         } else {
-                            router.replace("/farm-nation/onboarding/pending");
+                            /*
+                             *   #790 "PENDING" AND FULLY ADMITTED AT THE SAME TIME.
+                             *
+                             *   This sent every member whose status reads pending
+                             *   to a screen saying she is waiting for approval —
+                             *   but Farm Nation's submit grants `farmer` or
+                             *   `investor` there and then, and those roles admit
+                             *   her at Layer 1 of checkModuleAccess. So the same
+                             *   person was inside the module through one door and
+                             *   told she was queuing at another.
+                             *
+                             *   The gate asks what the member area will actually
+                             *   allow, which is the one answer that cannot bounce.
+                             */
+                            const access = await checkFarmNationAccessAction().catch(() => null);
+                            //   #790 A FAILED ACCESS CHECK IS NOT A "NO".
+                    //   Swallowing it would route an APPROVED member to a screen
+                    //   saying she is pending — #786's class exactly, where a
+                    //   query that failed is presented as a legitimate empty
+                    //   answer. The pending page is still the safe landing (it
+                    //   has a way home, and her next visit re-asks), but the
+                    //   failure is recorded rather than dropped.
+                    if (!access?.success) logger.error("[farm-nation onboarding] access check failed", { reason: access?.error });
+                            router.replace(onboardingDestination("farm-nation", {
+                                hasAccess: !!(access?.success && access.data),
+                            }));
                         }
                     } else if (status === "approved" || status === "active") {
                         const hasAccessResult = await checkFarmNationAccessAction();
@@ -288,7 +316,13 @@ export default function FarmNationOnboardingClient({ initial = null }: {
                 if (result.success) {
                     showToast(isEditMode ? "Application updated successfully!" : "Application resubmitted for review!", "success");
                     setIsSubmitting(false);
-                    router.push("/farm-nation/dashboard");
+                    //   #790 The resubmit path, same rule — see the submit
+                    //   handler below and lib/onboarding-destination.
+                    const reAccess = await checkFarmNationAccessAction().catch(() => null);
+                    if (!reAccess?.success) logger.error("[farm-nation onboarding] access check failed after resubmit", { reason: reAccess?.error });
+                    router.push(onboardingDestination("farm-nation", {
+                        hasAccess: !!(reAccess?.success && reAccess.data),
+                    }));
                 } else {
                     showToast(result.error || "Failed to submit updates", "error");
                     setIsSubmitting(false);
@@ -303,7 +337,19 @@ export default function FarmNationOnboardingClient({ initial = null }: {
                 if (userId) { try { localStorage.removeItem(`farmnation_draft_${userId}`); } catch { /* non-blocking */ } }
                 showToast("Onboarding completed successfully!", "success");
                 setIsSubmitting(false);
-                router.push("/farm-nation/dashboard");
+                /*
+                 *   #790 Farm Nation grants `farmer`/`investor` AT SUBMIT, and
+                 *   those roles admit her at Layer 1 — so she really is
+                 *   auto-approved and the dashboard really is right for her.
+                 *   It is asked rather than assumed because the record says
+                 *   "pending" at the same moment, and the two have to agree
+                 *   about where she goes.
+                 */
+                const access = await checkFarmNationAccessAction().catch(() => null);
+                if (!access?.success) logger.error("[farm-nation onboarding] access check failed after submit", { reason: access?.error });
+                router.push(onboardingDestination("farm-nation", {
+                    hasAccess: !!(access?.success && access.data),
+                }));
             } else {
                 showToast(result.error || "Failed to complete onboarding", "error");
                 setIsSubmitting(false);

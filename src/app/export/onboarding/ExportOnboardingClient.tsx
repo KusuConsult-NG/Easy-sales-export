@@ -29,6 +29,9 @@ import { TermsAcceptanceStep } from "./steps/TermsAcceptanceStep";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { toExportOnboardingPayload } from "@/lib/export-onboarding-payload";
 
+//   #790 One rule for where a submitted application goes, shared with the
+//   gate above it — see lib/onboarding-destination.
+import { onboardingDestination } from "@/lib/onboarding-destination";
 /**
  * What the server read before the page was sent.
  *
@@ -124,13 +127,14 @@ export default function ExportOnboardingClient(
                         setIsEditMode(true);
                         setIsLoading(false);
                     } else {
-                        router.replace("/export/onboarding/pending");
+                        //   #790 The same rule the submit handler below uses.
+                        router.replace(onboardingDestination("export", { hasAccess: false }));
                     }
                 } else if (status === "approved" || status === "active") {
                     const hasAccess = seed?.hasAccess ?? await checkExportAccessAction();
                     setIsLoading(false);
                     if (hasAccess) {
-                        router.replace("/export/dashboard");
+                        router.replace(onboardingDestination("export", { hasAccess: true }));
                     }
                 } else if (status === "revision_required" || status === "rejected") {
                     const result = seed?.application ?? await getExportApplicationAction();
@@ -333,7 +337,16 @@ export default function ExportOnboardingClient(
                     // STUCK BUTTON FIX: reset before navigating so button is never
                     // permanently disabled if navigation is slow or fails.
                     setIsSubmitting(false);
-                    router.replace("/export/dashboard");
+                    /*
+                     *   #790 THE RESUBMIT PATH HAD IT WORSE. The toast says
+                     *   "resubmitted for review" and the next line sent her to
+                     *   a dashboard — a member correcting a rejected
+                     *   application goes back to pending, so this destination
+                     *   contradicted the sentence above it.
+                     */
+                    router.replace(onboardingDestination("export", {
+                        hasAccess: await checkExportAccessAction().catch(() => false),
+                    }));
                 } else {
                     showToast(`Failed to resubmit: ${result.error}`, "error");
                     setIsSubmitting(false);
@@ -414,7 +427,20 @@ export default function ExportOnboardingClient(
                 // STUCK BUTTON FIX: reset before navigating so button is never
                 // permanently disabled if navigation is slow or fails.
                 setIsSubmitting(false);
-                router.replace("/export/dashboard");
+                /*
+                 *   #790 ASK THE GATE, DO NOT GUESS.
+                 *
+                 *   This was router.replace("/export/dashboard"), and the action
+                 *   that had just run writes status "pending_approval" and grants
+                 *   no role — so checkModuleAccess refuses, the member layout
+                 *   bounces her to /export/onboarding, and THAT screen's gate
+                 *   sends her to the pending page. Two redirects and a flash of
+                 *   the form she has just finished, to reach the screen she
+                 *   should have been sent to directly.
+                 */
+                router.replace(onboardingDestination("export", {
+                    hasAccess: await checkExportAccessAction().catch(() => false),
+                }));
             } else {
                 logger.error("Onboarding submission failed:", result.error);
                 showToast(`Failed to submit: ${result.error}`, "error");

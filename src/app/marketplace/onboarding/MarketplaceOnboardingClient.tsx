@@ -36,6 +36,9 @@ import TermsStep from "./steps/TermsStep";
 import BusinessVerificationStep from "./steps/BusinessVerificationStep";
 import BankAccountStep from "./steps/BankAccountStep";
 
+//   #790 One rule for where a submitted application goes, shared with the
+//   gate above it — see lib/onboarding-destination.
+import { onboardingDestination } from "@/lib/onboarding-destination";
 type AccountType = "buyer" | "seller" | "both";
 
 interface OnboardingData {
@@ -137,16 +140,15 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                         }
                         setIsEditMode(true);
                     } else {
-                        router.replace("/marketplace/onboarding/pending");
+                        //   #790 The same rule the submit handler below uses.
+                        router.replace(onboardingDestination("marketplace", { hasAccess: false }));
                     }
                 } else if (marketplaceStatus === "approved" || marketplaceStatus === "active") {
                     const hasAccessResult = await checkMarketplaceAccessAction();
                     if (hasAccessResult.success && hasAccessResult.data) {
-                        if (accountType === "seller" || accountType === "both") {
-                            router.replace("/marketplace/seller/dashboard");
-                        } else {
-                            router.replace("/marketplace/buyer/dashboard");
-                        }
+                        router.replace(onboardingDestination("marketplace", {
+                            hasAccess: true, accountType,
+                        }));
                     }
                 } else if (marketplaceStatus === "rejected" || marketplaceStatus === "suspended") {
                     // Prefill form from Firestore for rejected / suspended users
@@ -327,7 +329,15 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                     if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                     toast.success("Resubmitted successfully!");
                     setIsSubmitting(false);
-                    router.push("/marketplace/dashboard");
+                    //   #790 The resubmit path, same rule. A seller correcting a
+                    //   rejected verification goes back to pending, so the
+                    //   dashboard was never where she was going.
+                    const reAccess = await checkMarketplaceAccessAction().catch(() => null);
+                    if (!reAccess?.success) logger.error("[marketplace onboarding] access check failed after resubmit", { reason: reAccess?.error });
+                    router.push(onboardingDestination("marketplace", {
+                        hasAccess: !!(reAccess?.success && reAccess.data),
+                        accountType: formData.accountType,
+                    }));
                 } else {
                     logger.error("Resubmission failed:", result.error);
                     toast.error(result.error || "Resubmission failed");
@@ -367,7 +377,22 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                 if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                 toast.success("Onboarding completed!");
                 setIsSubmitting(false);
-                router.push("/marketplace/dashboard");
+                /*
+                 *   #790 THE TWO ANSWERS THIS FORM HAS, and it gave neither.
+                 *
+                 *   A BUYER-ONLY submission writes status "active" and grants
+                 *   marketplace_buyer — auto-approved, and her screen is the
+                 *   BUYER dashboard. A seller writes "pending" with no role and
+                 *   belongs on the pending page. Both were sent to
+                 *   /marketplace/dashboard: the buyer to a screen that is not
+                 *   hers, the seller to one she cannot open at all.
+                 */
+                const access = await checkMarketplaceAccessAction().catch(() => null);
+                if (!access?.success) logger.error("[marketplace onboarding] access check failed after submit", { reason: access?.error });
+                router.push(onboardingDestination("marketplace", {
+                    hasAccess: !!(access?.success && access.data),
+                    accountType: formData.accountType,
+                }));
             } else {
                 logger.error("Submission failed:", result.error);
                 toast.error(result.error || "Submission failed");
