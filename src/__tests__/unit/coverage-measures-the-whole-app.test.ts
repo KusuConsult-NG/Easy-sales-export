@@ -105,6 +105,12 @@ const DELIBERATELY_OUT: Record<string, string> = {
     // eslint, and #329 gave them a dry-run contract. Coverage of a script that
     // is run by hand against a database measures nothing useful.
     scripts: 'maintenance scripts, gated by #328/#329 instead',
+    //   #792 src/data is GENERATED DATA — thirty-seven JSON shards of INEC's
+    //   polling-unit register, plus one generated index.ts whose entire body is
+    //   a map of `() => import("./<state>.json")`. There is no branch in it to
+    //   cover, and the thing that actually needs testing is the LOOKUP, which
+    //   lives in src/lib/polling-units.ts and is measured there.
+    data: 'generated reference data and a map of imports; no executable logic',
 };
 
 function sourceDirsUnderSrc(): string[] {

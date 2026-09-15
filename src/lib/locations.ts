@@ -298,12 +298,6 @@ const AMBIGUOUS_LGA_NAMES: ReadonlySet<string> = (() => {
     return new Set([...states].filter(([, s]) => s.size > 1).map(([k]) => k));
 })();
 
-/** Polling units this platform can actually name, by ward. See above. */
-const VERIFIED_PUs: Record<string, string[]> = {
-    "Alausa": ["Secretariat Gate 1", "Secretariat Gate 2", "Awolowo Way Junction", "Oregun Road/Alausa"],
-    "Garki": ["Garki Area 1 Primary School", "Garki Area 2 Shopping Complex", "Garki Village Square", "Area 10 UTC", "Area 7 UTC", "Area 8 UTC", "Area 3 Junction"]
-};
-
 /**
  * Returns a list of Wards for a given LGA.
  * Falls back to generic numbered wards if refined data isn't available.
@@ -369,26 +363,24 @@ export function hasVerifiedWards(lga: string, state?: string): boolean {
 }
 
 /**
- * Returns a list of Polling Units for a given Ward.
- * Falls back to generic numbered units if refined data isn't available.
+ *   #792 THE POLLING-UNIT LOOKUP LEFT THIS FILE.
+ *
+ *   `getPollingUnits(ward)` and `hasVerifiedPollingUnits(ward)` are gone with
+ *   the hand-written table they read — two wards, and not merely incomplete:
+ *   FOUR units for Alausa where INEC's register has EIGHTY-FOUR, seven for
+ *   Garki against a hundred and sixty-nine. A dropdown offering four of
+ *   eighty-four is a claim that those are the choices.
+ *
+ *   The real register is 172,000 units, about five megabytes, so it cannot be a
+ *   synchronous function in a module the browser downloads. It is sharded by
+ *   state and read on the server: see lib/polling-units.ts and
+ *   /api/locations/polling-units.
+ *
+ *   They are DELETED rather than left returning nothing, so a caller that still
+ *   expects the old answer fails to compile instead of silently showing an empty
+ *   list — which is how a removed feature goes unnoticed.
  */
-export function getPollingUnits(ward: string): string[] {
-    /*
-     *   #774 The same defect one level down: "PU 001 … PU 010" was offered for
-     *   every ward but two. A polling unit is a named place — "Secretariat Gate
-     *   1", "Area 10 UTC" — and a number that matches nothing on the voter's
-     *   card is not an answer. Empty when unknown, and the form takes the
-     *   applicant's own words.
-     */
-    if (!ward) return [];
-    const key = Object.keys(VERIFIED_PUs).find(k => normalizeLocation(k) === normalizeLocation(ward));
-    return key ? VERIFIED_PUs[key] : [];
-}
 
-/** True when this ward's polling units are known. */
-export function hasVerifiedPollingUnits(ward: string): boolean {
-    return getPollingUnits(ward).length > 0;
-}
 
 
 /**

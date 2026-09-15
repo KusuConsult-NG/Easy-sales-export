@@ -728,7 +728,12 @@ describe('#329 — one convention across every writing script', () => {
                     //   Listed rather than loosening the regex, on the same
                     //   argument the entry above makes: a narrower detector
                     //   would start missing real writes.
-                    'scripts/build-wards.ts'].includes(rel),
+                    'scripts/build-wards.ts',
+                    //   #792 Same again: build-polling-units.ts reads a
+                    //   published JSON register and writes JSON shards plus one
+                    //   index. Its matches are Map.set while indexing; it
+                    //   imports no database client.
+                    'scripts/build-polling-units.ts'].includes(rel),
         );
         expect(unlisted).toEqual([]);
     });

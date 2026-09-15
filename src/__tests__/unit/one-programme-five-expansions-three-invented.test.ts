@@ -94,7 +94,7 @@ import {
     WAVE_FULL_NAME, WAVE_PROGRAM_NAME, WAVE_NAME_WITH_ACRONYM, WAVE_FORMAL_NAME,
 } from '@/lib/wave-program';
 import {
-    getWards, getPollingUnits, hasVerifiedWards, hasVerifiedPollingUnits, NIGERIAN_LOCATIONS,
+    getWards, hasVerifiedWards, NIGERIAN_LOCATIONS,
 } from '@/lib/locations';
 import { WARDS_BY_STATE_AND_LGA } from '@/lib/nigeria-wards.generated';
 import { requiredNationalIdField, requiredVotersCardField, nationalIdField } from '@/lib/kyc-validators';
@@ -266,9 +266,28 @@ describe('#774(c) — a ward list names wards', () => {
         expect(hasVerifiedWards('AN LGA THAT DOES NOT EXIST')).toBe(false);
     });
 
-    it('nor as a polling unit', () => {
-        expect(getPollingUnits('NO SUCH WARD')).toEqual([]);
-        expect(hasVerifiedPollingUnits('NO SUCH WARD')).toBe(false);
+    it('nor as a polling unit — and there are 172,000 real ones now', async () => {
+        /*
+         *   #792 RESTATED. This asked a synchronous getPollingUnits, which read
+         *   a hand-written table of TWO wards — and not merely incomplete: four
+         *   units for Alausa where INEC's register has eighty-four.
+         *
+         *   Both the table and the function are gone; the register is five
+         *   megabytes and is read on the server, one state at a time. The
+         *   property is unchanged: a ward nobody has a list for gets NOTHING,
+         *   and the applicant types it.
+         */
+        const { pollingUnitsFor } = await import('@/lib/polling-units');
+
+        expect(await pollingUnitsFor('Lagos', 'Ikeja', 'NO SUCH WARD')).toEqual([]);
+        expect(await pollingUnitsFor('NO SUCH STATE', 'x', 'y')).toEqual([]);
+        expect(await pollingUnitsFor('', '', '')).toEqual([]);
+
+        //   CONTROL: a real ward really does answer, or the three above are
+        //   satisfied by a lookup that returns nothing to anybody.
+        const alausa = await pollingUnitsFor('Lagos', 'Ikeja', 'Alausa/Oregun/Olusosun');
+        expect(alausa.length).toBeGreaterThan(50);
+        expect(alausa.some(pu => /^\s*(PU\s*)?\d+\s*$/i.test(pu))).toBe(false);
     });
 
     it('AND NO NUMBERED PLACEHOLDER SURVIVES ANYWHERE IN THE REGISTER', () => {

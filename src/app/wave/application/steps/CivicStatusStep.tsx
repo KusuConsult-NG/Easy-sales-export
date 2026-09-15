@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
 //   #560 The form's shape lives with the form — see ReviewStep. `page` is now
 //   the server half and exports only the page component.
@@ -20,10 +20,38 @@ interface Props {
 }
 
 import { useToast } from "@/contexts/ToastContext";
-import { getWards, getPollingUnits, hasVerifiedWards, hasVerifiedPollingUnits } from "@/lib/locations";
+import { getWards, hasVerifiedWards } from "@/lib/locations";
+import { logger } from "@/lib/logger";
 import { nationalIdField, requiredNationalIdField, requiredVotersCardField } from "@/lib/kyc-validators";
 
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
+    /*
+     *   #792 The polling units for the chosen ward, fetched when it changes.
+     *
+     *   A FAILED REQUEST IS NOT "no polling units". It leaves the list empty —
+     *   which degrades to the typed answer, and is safe — and says so in the
+     *   log, because #786 is this codebase's record of what a failure dressed as
+     *   a legitimate empty answer costs.
+     */
+    const [pollingUnits, setPollingUnits] = useState<string[]>([]);
+    useEffect(() => {
+        const state = data?.stateOfResidence;
+        const lga = data?.lgaOfResidence;
+        const ward = data?.ward;
+        if (!state || !lga || !ward) { setPollingUnits([]); return; }
+
+        let live = true;
+        const params = new URLSearchParams({ state, lga, ward });
+        fetch(`/api/locations/polling-units?${params}`)
+            .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+            .then(j => { if (live) setPollingUnits(j?.data?.pollingUnits ?? []); })
+            .catch(err => {
+                if (live) setPollingUnits([]);
+                logger.error("[wave] polling units could not be loaded", err);
+            });
+        return () => { live = false; };
+    }, [data?.stateOfResidence, data?.lgaOfResidence, data?.ward]);
+
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -234,29 +262,38 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             Polling Unit{" "}
                             <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
-                        {/*   #774 Same rule one level down — "PU 001" is not a place. */}
-                        {hasVerifiedPollingUnits(data?.ward || "") ? (
-                            <select
-                                value={data?.pollingUnit || ""}
-                                onChange={(e) => updateData({ pollingUnit: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                                disabled={!data?.ward}
-                            >
-                                <option value="">Select Polling Unit</option>
-                                {getPollingUnits(data?.ward || "").map((pu) => (
-                                    <option key={pu} value={pu}>{pu}</option>
-                                ))}
-                            </select>
-                        ) : (
-                            <input
-                                type="text"
-                                value={data?.pollingUnit || ""}
-                                onChange={(e) => updateData({ pollingUnit: e.target.value })}
-                                placeholder={data?.ward ? "Type your polling unit" : "Enter your ward first"}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                                disabled={!data?.ward}
-                            />
-                        )}
+                        {/*
+                          *   #774 "PU 001" is not a place. #792 And now there are
+                          *   real ones: 172,000 polling units from INEC's
+                          *   register, covering 99% of wards.
+                          *
+                          *   FETCHED, not imported. The register is about five
+                          *   megabytes — twenty times the ward list — and this
+                          *   field needs ONE WARD'S WORTH, so it is asked for
+                          *   when a ward is chosen. Type or choose, like the ward
+                          *   above: the 93 wards with no list, and any unit
+                          *   missing from one, still take a typed answer.
+                          */}
+                        <input
+                            type="text"
+                            list="wave-polling-unit-options"
+                            value={data?.pollingUnit || ""}
+                            onChange={(e) => updateData({ pollingUnit: e.target.value })}
+                            placeholder={
+                                !data?.ward
+                                    ? "Enter your ward first"
+                                    : pollingUnits.length > 0
+                                        ? "Choose or type your polling unit"
+                                        : "Type your polling unit"
+                            }
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            disabled={!data?.ward}
+                        />
+                        <datalist id="wave-polling-unit-options">
+                            {pollingUnits.map((pu) => (
+                                <option key={pu} value={pu} />
+                            ))}
+                        </datalist>
                     </div>
                 </div>
 
