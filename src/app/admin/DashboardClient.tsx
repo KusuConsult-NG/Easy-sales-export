@@ -351,7 +351,12 @@ export default function AdminDashboardPage() {
                                       */}
                                     <p
                                         data-testid="stat-value"
-                                        className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 tracking-tight break-words"
+                                        //   #805 tabular-nums, which this codebase already uses on the
+                                        //   forensics screens. Stat tiles sit in a row and
+                                        //   their figures are read DOWN the column as much as
+                                        //   across — proportional digits make the same number
+                                        //   render a different width on every card.
+                                        className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 tracking-tight break-words tabular-nums"
                                     >
                                         {stat.value}
                                     </p>

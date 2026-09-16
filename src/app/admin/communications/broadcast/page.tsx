@@ -26,6 +26,7 @@ import {
 import { type BroadcastAudience, type BroadcastFilters } from "@/lib/broadcast-logic";
 import { diagnoseBroadcastAction } from "@/app/actions/diagnose-broadcast";
 import { useToast } from "@/contexts/ToastContext";
+import { BROADCAST_SEGMENT_LABELS } from "@/lib/user-segments";
 
 const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; label: string; desc: string }[] }[] = [
     {
@@ -39,7 +40,9 @@ const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; lab
             { value: "stalled_users" as BroadcastAudience, label: "⚠️ Stalled Users", desc: "Started a module but profile is incomplete (missing bank/address)." },
             // #536 "Zero platform data" was never true — it is zero data in the
             // fields the segmenter reads. Says what is measured now.
-            { value: "ghost_users" as BroadcastAudience, label: "👻 Ghost Users", desc: "No application, bank details or address on record." },
+            //   #805 Was "👻 Ghost Users". The key is the stored targeting value and
+            //   does not move; the label and the emoji do.
+            { value: "ghost_users" as BroadcastAudience, label: BROADCAST_SEGMENT_LABELS.ghost_users.label, desc: BROADCAST_SEGMENT_LABELS.ghost_users.description },
             { value: "active_last_30_days" as BroadcastAudience, label: "🟢 Active Last 30 Days", desc: "Users who logged in or performed an action in the last 30 days" },
             { value: "fully_verified_sellers" as BroadcastAudience, label: "✅ Fully Verified Sellers", desc: "Marketplace sellers who have passed full KYC and admin approval" },
             { value: "csv_upload" as BroadcastAudience, label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },

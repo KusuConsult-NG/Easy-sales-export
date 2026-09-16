@@ -4,17 +4,31 @@ import { useState, useEffect } from "react";
 import { Database, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { formatDateTimeOrDash } from "@/lib/date-utils";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 export default function SystemLogsPage() {
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    /**
+     * #804 Did the read FAIL, or are there genuinely no logs?
+     *
+     * `logs` is empty in both cases and this screen makes a CLAIM about which
+     * one it is — "No logs recorded yet" — so it has to know.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         async function fetchLogs() {
             try {
                 const { getDashboardStatsAction } = await import("@/app/actions/admin-analytics");
                 const data = await getDashboardStatsAction();
-                if (data?.recentTransactions) {
+                if (!data?.recentTransactions) {
+                    /*
+                     *   #804 The read answered, but not with what this screen
+                     *   needs. Not the same as an empty platform.
+                     */
+                    setLoadFailed(true);
+                } else {
                     setLogs(data.recentTransactions.map(t => ({
                         ...t,
                         level: "info",
@@ -22,7 +36,19 @@ export default function SystemLogsPage() {
                     })));
                 }
             } catch {
-                // No logs yet
+                /*
+                 *   #804 THE COMMENT HERE SAID "No logs yet", AND IT HAD NOT
+                 *   CHECKED.
+                 *
+                 *   An empty catch, and then the render below states
+                 *   "No logs recorded yet — Logs will appear as users interact
+                 *   with the platform". That is a confident claim about an
+                 *   empty platform, made on the strength of a read that threw.
+                 *
+                 *   A comment asserting the thing it has not established is the
+                 *   same defect as a screen doing it, written one line higher.
+                 */
+                setLoadFailed(true);
             } finally {
                 setLoading(false);
             }
@@ -46,7 +72,11 @@ export default function SystemLogsPage() {
                 </button>
             </div>
 
-            {loading ? (
+            {loadFailed ? (
+                //   #588's component. "Nothing is lost" is its sentence, and
+                //   this screen needed it rather than a fifth copy.
+                <ListLoadFailed what="the system logs" onRetry={() => window.location.reload()} />
+            ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                 </div>

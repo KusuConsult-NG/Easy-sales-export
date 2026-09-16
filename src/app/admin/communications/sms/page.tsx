@@ -12,6 +12,7 @@ import {
 import { getSMSInfo, sanitiseForGSM7, findNonGSM7Chars } from "@/lib/sms-utils";
 import { toast } from "sonner";
 import { numberOrZero } from "@/lib/numbers";
+import { BROADCAST_SEGMENT_LABELS } from "@/lib/user-segments";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -36,7 +37,8 @@ const AUDIENCES: { value: SmsAudience; label: string; description: string }[] = 
     { value: "stalled_users", label: "Stalled Users", description: "Users who started profile/KYC/bank setup but haven't submitted any applications" },
     // #536 See UserSegmentsChart: this is a statement about three fields,
     // not about a person having done nothing.
-    { value: "ghost_users", label: "Ghost Users", description: "No application, bank details or address on record" },
+    //   #805 The stored key is unchanged; only the words are. See lib/user-segments.
+    { value: "ghost_users", label: BROADCAST_SEGMENT_LABELS.ghost_users.label, description: BROADCAST_SEGMENT_LABELS.ghost_users.description },
     { value: "active_last_30_days", label: "Active Last 30 Days", description: "Users who logged in or updated their profile in the last 30 days" },
     { value: "fully_verified_sellers", label: "Fully Verified Sellers", description: "Approved sellers who also have a verified KYC profile" },
     { value: "custom", label: "Custom Recipients", description: "Upload a CSV or manually enter numbers" },

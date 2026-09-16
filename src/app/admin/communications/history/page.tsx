@@ -17,6 +17,7 @@ import { getBroadcastHistoryAction } from "@/app/actions/broadcast";
 import type { BroadcastLog } from "@/app/actions/broadcast";
 import { type BroadcastAudience } from "@/lib/broadcast-logic";
 import { formatDateTime } from "@/lib/utils";
+import { BROADCAST_SEGMENT_LABELS } from "@/lib/user-segments";
 
 const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     all: "All Users",
@@ -35,10 +36,15 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     pending_applicants: "All Pending Applicants",
     unpaid_applicants: "Unpaid Applicants",
     abandoned_failed_transactions: "Abandoned / Failed Transactions",
-    stalled_users: "⚠️ Stalled Users",
-    ghost_users: "👻 Ghost Users",
-    pending_users: "Pending Users",
-    active_users: "Active Users",
+    //   #805 The four segmentation buckets read from one place, so the wording
+    //   cannot differ between the picker that SENDS a broadcast and the history
+    //   that reports it. This map is the FOURTH site that spelled them out —
+    //   the first three were the chart, the SMS picker and the broadcast
+    //   picker, and "👻 Ghost Users" was in two of them.
+    stalled_users: BROADCAST_SEGMENT_LABELS.stalled_users.label,
+    ghost_users: BROADCAST_SEGMENT_LABELS.ghost_users.label,
+    pending_users: BROADCAST_SEGMENT_LABELS.pending_users.label,
+    active_users: BROADCAST_SEGMENT_LABELS.active_users.label,
     csv_upload: "CSV Upload",
     active_last_30_days: "🟢 Active Last 30 Days",
     fully_verified_sellers: "✅ Fully Verified Sellers",

@@ -88,6 +88,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 import { categorizeUser } from '@/lib/broadcast-logic';
+import { USER_SEGMENT_LABELS } from '@/lib/user-segments';
 
 const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: p });
@@ -252,40 +253,68 @@ describe('#536 — the SQL moved with it', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#536 — the labels say what is measured', () => {
-    it('GHOST NO LONGER CALLS ITSELF AN INCOMPLETE REGISTRATION', () => {
+    /*
+     *   #805 THESE NOW ASSERT THE PROPERTY, NOT THE SOURCE TEXT OF ONE FILE.
+     *
+     *   #536's finding is that the wording says what the classifier MEASURES,
+     *   and that the screens describing this audience AGREE with each other.
+     *   Both still hold — more strongly, because the wording moved into
+     *   lib/user-segments and the four screens now read it rather than each
+     *   spelling it out.
+     *
+     *   The old assertions read the chart file for literal strings, so moving
+     *   the strings one level up failed them while making the thing they
+     *   protect harder to break. Rewritten rather than deleted: deleting them
+     *   would drop #536's guarantee at the moment it became enforceable.
+     */
+    it('NOT-STARTED NO LONGER CALLS ITSELF AN INCOMPLETE REGISTRATION', () => {
         //   That phrasing is what the owner read as a sync fault. A row is here
         //   because three fields are empty, not because a sign-up broke.
-        const src = code(CHART);
-
-        expect(src).not.toContain('Incomplete registrations / minimal data');
-        expect(src).toContain('No application, bank details or address on record');
+        expect(USER_SEGMENT_LABELS.ghost.description)
+            .toBe('No application, bank details or address on record');
+        expect(USER_SEGMENT_LABELS.ghost.description)
+            .not.toContain('Incomplete registration');
     });
 
-    it('AND STALLED NO LONGER CLAIMS A COMPLETE PROFILE', () => {
+    it('AND IN-PROGRESS NO LONGER CLAIMS A COMPLETE PROFILE', () => {
         //   The classifier never looks at profileComplete, which is decided by
         //   an entirely different rule.
-        const src = code(CHART);
-
-        expect(src).not.toContain('Profile complete but no module application');
-        expect(src).toContain('Some details on file, no live application');
+        expect(USER_SEGMENT_LABELS.stalled.description)
+            .toBe('Some details on file, no live application');
+        expect(USER_SEGMENT_LABELS.stalled.description)
+            .not.toContain('Profile complete');
     });
 
     it('AND THE BROADCAST SCREENS AGREE WITH THE DASHBOARD', () => {
-        //   Three screens describe this audience. One saying "zero platform
-        //   data" while the dashboard says something else is how a number comes
-        //   to mean two things.
+        /*
+         *   One saying "zero platform data" while the dashboard says something
+         *   else is how a number comes to mean two things. They cannot disagree
+         *   now — they read the same constant — so this asserts that they read
+         *   it, which is the condition that makes agreement automatic.
+         */
         expect(code('src/app/admin/communications/broadcast/page.tsx'))
             .not.toContain('Zero platform data');
-        expect(code('src/app/admin/communications/sms/page.tsx'))
-            .toContain('No application, bank details or address on record');
+
+        for (const screen of [
+            'src/app/admin/communications/broadcast/page.tsx',
+            'src/app/admin/communications/sms/page.tsx',
+            'src/app/admin/communications/history/page.tsx',
+            CHART,
+        ]) {
+            expect({ screen, shared: /USER_SEGMENT_LABELS|BROADCAST_SEGMENT_LABELS/.test(code(screen)) })
+                .toEqual({ screen, shared: true });
+        }
     });
 
     it('and the four segments still render', () => {
-        //   #484's shape — the assertions above are about text in a file that
-        //   has to still be the chart.
+        //   #484's shape — the assertions above are about wording that has to
+        //   still reach the chart. The names changed with #805; the count and
+        //   the fact that each is drawn did not.
         const src = code(CHART);
-        for (const label of ['Active', 'Pending', 'Stalled', 'Ghost']) {
-            expect(src).toContain(`label: "${label}"`);
+        for (const key of ['active', 'pending', 'stalled', 'ghost']) {
+            expect({ key, rendered: src.includes(`USER_SEGMENT_LABELS.${key}`) })
+                .toEqual({ key, rendered: true });
         }
     });
 });
+

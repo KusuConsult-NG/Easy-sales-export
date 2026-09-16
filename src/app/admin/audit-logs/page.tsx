@@ -33,6 +33,7 @@ import { recordExport } from "@/lib/record-export";
 import { numberOrZero } from "@/lib/numbers";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import { describeAuditEntry, hasWrittenDetails } from "@/lib/audit-entry-description";
+import { logger } from '@/lib/logger';
 
 const severityConfig = {
     info: { color: "blue", icon: Info, label: "Info" },
@@ -80,6 +81,8 @@ export default function AdminAuditLogsPage() {
         });
 
     // Stats
+    /** #804 The counters were asked for and did not answer. Not the same as zero. */
+    const [statsFailed, setStatsFailed] = useState(false);
     const [stats, setStats] = useState<{
         totalLogs: number;
         bySeverity: { info: number; warning: number; critical: number };
@@ -91,15 +94,52 @@ export default function AdminAuditLogsPage() {
         }
     }, [status, router]);
 
-    useEffect(() => {
-        async function loadStats() {
+    async function loadStats() {
             if (status !== "authenticated") return;
+            /*
+             *   #804 AND A THROW IS THE OTHER ROAD TO NO ANSWER.
+             *
+             *   The first version of this repair handled a REFUSAL and left a
+             *   thrown read unhandled entirely — so the flag was never set on
+             *   the very failure most likely to occur, and the rejection
+             *   escaped the effect instead. The suite's "sets its flag on both
+             *   roads" case is what caught it.
+             */
+            try {
             const statsResult = await getAuditStatsAction(30);
             if (statsResult.success && statsResult.data) {
                 setStats(statsResult.data);
+                setStatsFailed(false);
+            } else {
+                /*
+                 *   #804 A REFUSAL IS NOT "NO ACTIVITY".
+                 *
+                 *   This branch did not exist. `stats` stayed null and the
+                 *   panel below is `{stats && (…)}`, so the four counters —
+                 *   total, info, warning, CRITICAL — simply vanished, with
+                 *   nothing saying why.
+                 *
+                 *   MILDER THAN THE SIBLINGS IN THIS FINDING, and worth saying
+                 *   so: no WRONG number is shown, because the panel is hidden
+                 *   rather than zeroed. But this is the screen an administrator
+                 *   opens to ask "did anything unusual happen", and a page with
+                 *   no critical-event count reads as reassurance.
+                 *
+                 *   The log TABLE below has its own read and is unaffected, so
+                 *   this is a notice rather than a whole-page failure — the
+                 *   panel is what could not be loaded, not the screen.
+                 */
+                setStatsFailed(true);
             }
-        }
+            } catch (error) {
+                logger.error("[audit-logs] stats read failed", error);
+                setStatsFailed(true);
+            }
+    }
+
+    useEffect(() => {
         loadStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status]);
 
     async function handleExport() {
@@ -183,33 +223,50 @@ export default function AdminAuditLogsPage() {
                     </button> */}
                 </div>
 
+                {/* #804 The counters could not be read. Say so where they would be. */}
+                {statsFailed && !stats && (
+                    <div className="mb-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200 flex items-center justify-between gap-4">
+                        <span>
+                            The activity counters could not be loaded, so they are not shown.
+                            This does not mean there was no activity — the log entries below
+                            are unaffected.
+                        </span>
+                        <button
+                            onClick={() => loadStats()}
+                            className="shrink-0 rounded-xl border border-amber-400/40 px-4 py-2 font-semibold hover:bg-amber-500/20 transition"
+                        >
+                            Try again
+                        </button>
+                    </div>
+                )}
+
                 {/* Stats Cards */}
                 {stats && (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-blue-300 mb-1">Total Logs (30 days)</div>
-                            <div className="text-3xl font-bold text-white">{numberOrZero(stats.totalLogs).toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-white tabular-nums">{numberOrZero(stats.totalLogs).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-blue-300 mb-1 flex items-center space-x-2">
                                 <Info className="w-4 h-4" />
                                 <span>Info</span>
                             </div>
-                            <div className="text-3xl font-bold text-blue-400">{numberOrZero(stats.bySeverity?.info).toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-blue-400 tabular-nums">{numberOrZero(stats.bySeverity?.info).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-yellow-300 mb-1 flex items-center space-x-2">
                                 <AlertTriangle className="w-4 h-4" />
                                 <span>Warning</span>
                             </div>
-                            <div className="text-3xl font-bold text-yellow-400">{numberOrZero(stats.bySeverity?.warning).toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-yellow-400 tabular-nums">{numberOrZero(stats.bySeverity?.warning).toLocaleString()}</div>
                         </div>
                         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
                             <div className="text-sm text-red-300 mb-1 flex items-center space-x-2">
                                 <AlertCircle className="w-4 h-4" />
                                 <span>Critical</span>
                             </div>
-                            <div className="text-3xl font-bold text-red-400">{numberOrZero(stats.bySeverity?.critical).toLocaleString()}</div>
+                            <div className="text-3xl font-bold text-red-400 tabular-nums">{numberOrZero(stats.bySeverity?.critical).toLocaleString()}</div>
                         </div>
                     </div>
                 )}

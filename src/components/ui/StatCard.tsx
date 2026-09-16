@@ -41,8 +41,13 @@ export function StatCard({
     return (
         <div
             className={cn(
-                "bg-white rounded-2xl p-6 elevation-2 hover-lift",
+                //   #805 The admin surface's own card: the ring is what the
+                //   dashboard's tiles already use, and without it this
+                //   component sat a shade flatter than everything beside it.
+                "bg-white rounded-2xl p-6 elevation-2 hover-lift ring-1 ring-slate-200/50",
                 "animate-[slideInUp_0.6s_cubic-bezier(0.4,0,0.2,1)_both]",
+                //   Respect a reader who has asked for less movement.
+                "motion-reduce:animate-none motion-reduce:transition-none",
                 className
             )}
             style={{ animationDelay: `${delay}ms` }}
@@ -52,7 +57,13 @@ export function StatCard({
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                         {title}
                     </p>
-                    <h3 className="text-3xl font-bold text-slate-900 mb-1">
+                    {/*
+                      *   #805 tabular-nums. Stat tiles sit in a row and their
+                      *   figures are read DOWN the column as much as across —
+                      *   proportional digits make the same number look like a
+                      *   different length on every card.
+                      */}
+                    <h3 className="text-3xl font-bold text-slate-900 mb-1 tabular-nums">
                         {value}
                     </h3>
                     {subtitle && (

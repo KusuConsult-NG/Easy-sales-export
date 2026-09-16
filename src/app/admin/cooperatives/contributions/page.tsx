@@ -13,6 +13,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { getContributionReportsAction } from "@/app/actions/cooperative";
 import dynamic from "next/dynamic";
+import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 const ContributionTrendChart = dynamic(() => import("@/components/admin/ContributionTrendChart"), {
     ssr: false,
@@ -27,6 +28,13 @@ const ContributionTrendChart = dynamic(() => import("@/components/admin/Contribu
 export default function AdminContributionsPage() {
     const [loading, setLoading] = useState(true);
     const [reports, setReports] = useState<any>(null);
+    /**
+     * #804 Did the read FAIL, as opposed to finding no contributions?
+     *
+     * `reports` is null in both cases, and this screen answers a question an
+     * administrator acts on — so the two must not look alike.
+     */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         loadReports();
@@ -34,13 +42,29 @@ export default function AdminContributionsPage() {
 
     async function loadReports() {
         setLoading(true);
+        setLoadFailed(false);
         try {
             const result = await getContributionReportsAction();
             if (result.success && result.data?.reports) {
                 setReports(result.data.reports);
+            } else {
+                /*
+                 *   #804 A REFUSAL IS NOT "NOBODY CONTRIBUTED".
+                 *
+                 *   This branch did not exist. A failed read left `reports`
+                 *   at null, the spinner stopped, and the screen rendered its
+                 *   empty state — an administrator looking at cooperative
+                 *   contributions was shown nothing and had no way to know
+                 *   the question had not been answered.
+                 *
+                 *   #588's rule, on the screen where an administrator decides
+                 *   whether members have been paying.
+                 */
+                setLoadFailed(true);
             }
         } catch (error) {
             logger.error("Failed to load reports:", error);
+            setLoadFailed(true);
         } finally {
             setLoading(false);
         }
@@ -50,6 +74,20 @@ export default function AdminContributionsPage() {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-green-600" />
+            </div>
+        );
+    }
+
+    if (loadFailed) {
+        //   #588's component, not a fifth restatement of its sentence.
+        return (
+            <div className="min-h-screen bg-gray-50 py-8">
+                <div className="max-w-7xl mx-auto px-4">
+                    <ListLoadFailed
+                        what="the contribution reports"
+                        onRetry={() => loadReports()}
+                    />
+                </div>
             </div>
         );
     }

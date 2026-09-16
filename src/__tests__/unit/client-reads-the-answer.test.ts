@@ -221,7 +221,11 @@ describe('a server answer must not be silently discarded', () => {
     });
 
     it('D5 — a catch that swallows the failure', () => {
-        expect(ledgerVerdict(n('D5'), 44)).toBe(LEDGER_HELD);
+        //   44 -> 43: #804 converted admin/settings/logs, whose catch was
+        //   literally `catch { // No logs yet }` — a comment asserting the
+        //   thing it had not checked, above a screen that then stated "No logs
+        //   recorded yet" to an administrator whose read had thrown.
+        expect(ledgerVerdict(n('D5'), 43)).toBe(LEDGER_HELD);
     });
 });
 
