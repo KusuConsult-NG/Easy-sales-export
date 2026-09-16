@@ -251,14 +251,39 @@ describe('#450 — the failure banner means something again', () => {
             .toContain('QOREID_CLIENT_ID or QOREID_SECRET_KEY is missing');
     });
 
-    it('THE FAILURE BANNER STILL FIRES for something genuinely required', () => {
-        // Vacuity guard: the two tests above would both pass if the banner had
-        // simply been deleted.
-        const outcome = boot({ ...CONFIGURED, NEXTAUTH_URL: undefined });
+    it('THE FAILURE BANNER STILL FIRES for something genuinely FATAL', () => {
+        /*
+         *   Vacuity guard: the two tests above would both pass if the banner
+         *   had simply been deleted.
+         *
+         *   #828 CHANGED WHICH VARIABLE THIS HAS TO USE, and the reason is the
+         *   finding. It used to unset NEXTAUTH_URL — "required, but not fatal",
+         *   as its own comment said — and assert the banner fired. That was
+         *   true and it was the defect: the owner pasted a real startup log
+         *   reading "❌ Environment validation failed!" for a container that
+         *   started, served, and answered every request. A red ❌ on a working
+         *   deploy is how a red ❌ stops being read, and the one below it was
+         *   the one that mattered.
+         *
+         *   The banner is not deleted. It is conditional, so the guard points
+         *   at a variable where it still fires — and gains a second half that
+         *   makes it a STRICTLY STRONGER vacuity check than before: a non-fatal
+         *   gap must produce the other notice rather than nothing at all. A
+         *   validator that had stopped reporting entirely would now fail twice.
+         */
+        const fatal = boot({ ...CONFIGURED, NEXTAUTH_SECRET: undefined });
 
-        expect(outcome.output).toContain('Environment validation failed');
-        expect(outcome.output).toContain('NEXTAUTH_URL');
-        expect(outcome.exited).toBe(false);   // required, but not fatal
+        expect(fatal.output).toContain('Environment validation failed');
+        expect(fatal.output).toContain('NEXTAUTH_SECRET');
+        expect(fatal.output).toContain('STOP THE CONTAINER STARTING');
+
+        //   And the non-fatal half still reports, under the honest headline.
+        const degraded = boot({ ...CONFIGURED, NEXTAUTH_URL: undefined });
+
+        expect(degraded.output).not.toContain('Environment validation failed');
+        expect(degraded.output).toContain('THE CONTAINER IS STARTING NORMALLY');
+        expect(degraded.output).toContain('NEXTAUTH_URL');
+        expect(degraded.exited).toBe(false);   // required, but not fatal
     });
 });
 

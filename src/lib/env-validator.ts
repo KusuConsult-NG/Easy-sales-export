@@ -443,10 +443,39 @@ export function logEnvValidation() {
         const fatal = result.missing.filter((k) => (FATAL_ENV_VARS as readonly string[]).includes(k));
         const degrades = result.missing.filter((k) => !(FATAL_ENV_VARS as readonly string[]).includes(k));
 
-        console.error('❌ Environment validation failed!');
+        /*
+         *   #828 THE HEADLINE SAID "FAILED" ON A DEPLOY THAT SUCCEEDED.
+         *
+         *   The owner, pasting a real startup log:
+         *
+         *       ❌ Environment validation failed!
+         *          1 that break one feature each, but still serve: KYC_ENCRYPTION_KEY
+         *
+         *   Nothing fatal was missing. The container started, served, and
+         *   answered every request — and the first line told its operator the
+         *   deploy had failed. Reproduced exactly, by running this function
+         *   with every fatal key set and that one absent.
+         *
+         *   #457's note sits directly above and describes this harm precisely:
+         *   an operator reading "❌ Environment validation failed!" reasonably
+         *   concludes the container needs everything named. #457 then split the
+         *   BODY into the two tiers and left the HEADLINE undifferentiated —
+         *   "a correct rule applied to some of the places it names", which is
+         *   the shape this audit has found more often than any other.
+         *
+         *   A red ❌ that appears on a working deploy is also how a red ❌ stops
+         *   being read. The one that matters is the one below it.
+         */
         if (fatal.length > 0) {
+            console.error('❌ Environment validation failed!');
             console.error(
                 `   ${fatal.length} that STOP THE CONTAINER STARTING: ${fatal.join(', ')}`,
+            );
+        } else {
+            console.error('⚠️  Environment incomplete — THE CONTAINER IS STARTING NORMALLY.');
+            console.error(
+                '   Nothing required to serve a request is missing. What follows costs a '
+                + 'feature each, not the deploy.',
             );
         }
         if (degrades.length > 0) {
@@ -464,6 +493,49 @@ export function logEnvValidation() {
              *   this key missing means no administrator can reach /admin and
              *   none of them can fix it from inside the product.
              */
+            /*
+             *   #828 AND THE ONE WHOSE DAMAGE IS PERMANENT AND ACCRUES.
+             *
+             *   Same reasoning #771 applied to MFA_SECRET_KEY, applied to the
+             *   key it was not applied to. That note says "'One feature' is the
+             *   wrong tier for that" — and it is the wrong tier for this one
+             *   too, for a different and worse reason.
+             *
+             *   Every other name in this list describes something that STOPS
+             *   working and starts again the moment the key is set. No email
+             *   goes out; set RESEND_API_KEY and email goes out. Uploads fail;
+             *   set the Cloudinary keys and uploads work.
+             *
+             *   THIS ONE IS NOT LIKE THAT. Verified by reading the write path:
+             *   with no key, lib/kyc-identity-store writes NO ciphertext at all
+             *   — only the SHA-256 digest the duplicate check needs. The
+             *   submission succeeds, the applicant is told nothing is wrong,
+             *   and her NIN and BVN are unreadable BY ANYONE, FOREVER. Setting
+             *   the key later fixes the next application and cannot recover a
+             *   single earlier one.
+             *
+             *   So the cost is not a feature that is off. It is a quantity of
+             *   permanently unreviewable KYC records that grows every day the
+             *   key stays unset, on a programme whose whole approval step is a
+             *   human comparing that number against a document.
+             *
+             *   Said where it cannot be scrolled past, and said in the tense
+             *   that is true: this is not "will break", it is "is being lost".
+             */
+            if (degrades.includes('KYC_ENCRYPTION_KEY')) {
+                console.error('');
+                console.error(
+                    '   🚨 KYC_ENCRYPTION_KEY IS MISSING AND THE LOSS IS PERMANENT AND ONGOING. '
+                    + 'Every NIN and BVN submitted while this is unset is stored as a one-way '
+                    + 'digest and nothing can ever read it back — not an administrator, not a '
+                    + 'CSV export, not a later fix. Registration keeps working and applicants '
+                    + 'see no error, so this is silent from every side except this line. '
+                    + 'Setting the key repairs the NEXT application and none of the previous '
+                    + 'ones. Set it before the next intake, not after.',
+                );
+                console.error('');
+            }
+
             if (degrades.includes('MFA_SECRET_KEY')) {
                 console.error('');
                 console.error(

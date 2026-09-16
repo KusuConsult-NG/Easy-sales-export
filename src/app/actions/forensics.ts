@@ -50,6 +50,15 @@ const SCAN_CEILING = {
     products: 200,
     verifications: 100,
     waveApplicants: 200,
+    /**
+     *   #828 — deliberately far higher than its neighbours, because this check
+     *   exists to answer "how many", and a sample cannot. `.select()` narrows
+     *   the read to six fields, so the cost is a fraction of a row each. 5,000
+     *   is the adapter's own default ceiling; above it the result would be
+     *   silently truncated rather than reported, and describeSample says so
+     *   whenever the collection is larger.
+     */
+    kycReadback: 5000,
     coopMembers: 20,
     farmers: 50,
     enrolments: 50,
@@ -823,6 +832,96 @@ export async function runForensicScanAction(): Promise<
                 notCheckedIds: [...unknownGenderIds, ...undatedIds]
             });
         } catch (e: any) { results.push({ module: "WAVE", check: "Eligibility Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
+        }
+
+        /*
+         *   #828 CHECK: HOW MANY IDENTITY NUMBERS CAN NEVER BE READ BACK.
+         *
+         *   The owner's startup log carried "KYC_ENCRYPTION_KEY: NIN and BVN
+         *   are stored hashed only … this cannot be undone later", and the key
+         *   was then set. Setting it repairs the NEXT application and not one
+         *   earlier one — so the question it leaves is the only question that
+         *   matters afterwards: HOW MANY, AND WHOSE.
+         *
+         *   Nothing could answer it. The reviewer's screen says "Stored, but
+         *   KYC_ENCRYPTION_KEY is not configured" one applicant at a time, and
+         *   a number you can only learn by opening rows one by one is a number
+         *   nobody learns. This counts them.
+         *
+         *   THE SHAPE, from lib/kyc-identity-store and the WAVE writer: `nin`
+         *   always holds the SHA-256 digest; `ninEncrypted` holds the readable
+         *   copy and is written ONLY when a key was configured at submission.
+         *   So a row with a hash and no ciphertext is one whose number is gone
+         *   — and the two causes are worth separating, because only one of them
+         *   is anybody's fault:
+         *
+         *     written before the readable copy existed   #779's legacy cohort,
+         *                                                never recoverable
+         *     written after it, with no key set          the window this
+         *                                                finding is about
+         *
+         *   applicationDate tells them apart. They are reported together and
+         *   counted separately, because the second number is the one that says
+         *   how long the key was missing and the first is just history.
+         *
+         *   A LIST, NOT JUST A COUNT. affectedIds is what turns this from a
+         *   statistic into an action: those are the applicants who would have
+         *   to supply their NIN and BVN again for a reviewer to ever see one.
+         */
+        try {
+            const kycSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .select("nin", "bvn", "ninEncrypted", "bvnEncrypted", "applicationDate", "createdAt")
+                .limit(SCAN_CEILING.kycReadback)
+                .get();
+
+            const kycScope = sampleOf(kycSnap.docs.length, SCAN_CEILING.kycReadback);
+
+            const unreadableIds: string[] = [];
+            let ninGone = 0;
+            let bvnGone = 0;
+            let newestLoss = "";
+
+            for (const doc of kycSnap.docs) {
+                const d = doc.data() as any;
+                //   A number that was never given is not a number that was
+                //   lost. #779's own rule: `hashData("")` is never written, so
+                //   a blank stays null and must not be counted as a casualty.
+                const ninLost = Boolean(d.nin) && !d.ninEncrypted;
+                const bvnLost = Boolean(d.bvn) && !d.bvnEncrypted;
+                if (!ninLost && !bvnLost) continue;
+
+                if (ninLost) ninGone++;
+                if (bvnLost) bvnGone++;
+                unreadableIds.push(doc.id);
+
+                const when = d.applicationDate?.seconds
+                    ? new Date(d.applicationDate.seconds * 1000).toISOString()
+                    : typeof d.applicationDate === "string" ? d.applicationDate
+                    : typeof d.createdAt === "string" ? d.createdAt : "";
+                if (when && when > newestLoss) newestLoss = when;
+            }
+
+            results.push({
+                module: "WAVE",
+                check: "KYC numbers that cannot be read back (#828)",
+                //   A hit is a `fail` and not a warning: these are not degraded,
+                //   they are gone, and the approval step this platform runs on
+                //   is a human comparing that number against a document.
+                status: verdictFor(kycScope, unreadableIds.length, "fail"),
+                details: `${describeSample(kycScope, "WAVE applications")} `
+                    + `${unreadableIds.length} application(s) hold an identity number that NOTHING `
+                    + `can read back — ${ninGone} NIN, ${bvnGone} BVN. `
+                    + (newestLoss
+                        ? `The most recent was submitted ${newestLoss.slice(0, 10)}; if that is after `
+                          + `KYC_ENCRYPTION_KEY was set, the key is not reaching this process. `
+                        : "")
+                    + `Setting the key fixes new submissions only. These applicants would have to `
+                    + `supply their numbers again for a reviewer to see one.`,
+                affectedIds: unreadableIds,
+            });
+        } catch (e: any) {
+            //   #465 — "could not look" is not "found nothing".
+            results.push({ module: "WAVE", check: "KYC numbers that cannot be read back (#828)", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         // ============================================================================

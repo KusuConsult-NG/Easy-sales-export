@@ -301,14 +301,54 @@ describe('#465 — a scan that could not run is not a scan that found something'
         //   detail stood in the way of correct work. So it now asserts the rule
         //   instead: every catch in this file reports inconclusive, however many
         //   checks there are.
+        /*
+         *   #828 AND THE EIGHTH TIME WAS THIS TEST ITSELF.
+         *
+         *   The note above records seven occasions where a test pinned to an
+         *   incidental detail stood in the way of correct work, and says "it
+         *   now asserts the rule instead". It did not. It counted catches with
+         *
+         *       /\} catch \(e: any\) \{ results\.push\(/g
+         *
+         *   — which only matches a catch whose body starts ON THE SAME LINE. A
+         *   correctly written multi-line catch was INVISIBLE to it, so the
+         *   ratchet undercounted, and a multi-line catch reporting "fail" —
+         *   exactly the defect #465 exists to prevent — would have sailed
+         *   through both this assertion and the one above it.
+         *
+         *   Found by adding one: #828's KYC read-back check has a catch with a
+         *   comment in it, and this failed on the count while following the
+         *   rule perfectly. The same failure the note describes, in the test
+         *   written to stop repeating it.
+         *
+         *   COUNTED BY THE CATCH, NOT BY ITS FORMATTING, and each one's body is
+         *   then read. `source()` has already stripped comments, so a comment
+         *   mentioning "fail" near an error path is not read as an error path —
+         *   and #827 is what makes that reliable, because this file is full of
+         *   regexes containing quotes and the stripper used to desync on them.
+         *
+         *   THE `fail: 0` HALF SUBSUMES the assertion above it, which has the
+         *   same single-line blind spot. That one is left where it is: it names
+         *   the exact shape #465 found, and a narrower assertion that agrees
+         *   with a broader one costs nothing.
+         */
         const code = forensics();
 
-        const catches = (code.match(/\} catch \(e: any\) \{ results\.push\(/g) ?? []);
-        const inconclusive = (code.match(/status: "inconclusive", details: `Could not complete this scan/g) ?? []);
+        const catches = [...code.matchAll(/\}\s*catch\s*\(e: any\)\s*\{/g)];
+        //   The body of each, to the start of the next catch or the end.
+        const bodies = catches.map((m, i) => code.slice(
+            m.index!, i + 1 < catches.length ? catches[i + 1].index! : code.length,
+        ).slice(0, 600));
+
+        const reportsInconclusive = bodies.filter((b) => b.includes('status: "inconclusive"'));
+        const reportsFail = bodies.filter((b) => /status: "fail"/.test(b.split('results.push(')[1] ?? ''));
 
         expect(catches.length).toBeGreaterThanOrEqual(8);
-        expect({ catches: catches.length, inconclusive: inconclusive.length })
-            .toEqual({ catches: catches.length, inconclusive: catches.length });
+        expect({
+            catches: catches.length,
+            inconclusive: reportsInconclusive.length,
+            fail: reportsFail.length,
+        }).toEqual({ catches: catches.length, inconclusive: catches.length, fail: 0 });
     });
 
     it('and still says what went wrong, rather than swallowing it', () => {
