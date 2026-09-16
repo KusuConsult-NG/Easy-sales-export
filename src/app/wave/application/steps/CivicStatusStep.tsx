@@ -23,6 +23,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { getWards, hasVerifiedWards } from "@/lib/locations";
 import { logger } from "@/lib/logger";
 import { nationalIdField, requiredNationalIdField, optionalVotersCardField } from "@/lib/kyc-validators";
+import ComboBox from "@/components/ui/ComboBox";
 
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
     /*
@@ -245,11 +246,29 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                           *
                           *   So: type or choose. The list is a help, never a wall.
                           */}
-                        <input
-                            type="text"
-                            list="wave-ward-options"
+                        {/*
+                          *   #823 A REAL LIST, BECAUSE <datalist> DREW NOTHING
+                          *   ON A PHONE AND NOTHING ON THE WAY BACK.
+                          *
+                          *   iOS Safari renders no suggestion UI for a datalist
+                          *   at all, so on the device most applicants use this
+                          *   was a plain text box and the ward register might
+                          *   as well not have existed. And a datalist filters
+                          *   its options by the input's CURRENT VALUE, so an
+                          *   applicant returning to correct an answer — with
+                          *   her ward already in the box — saw no list unless
+                          *   she knew to clear the field first.
+                          *
+                          *   ComboBox opens on the FULL list whatever is
+                          *   already typed, and still keeps a ward that is not
+                          *   on the register.
+                          */}
+                        <ComboBox
+                            ariaLabel="Ward (based on residence)"
                             value={data?.ward || ""}
-                            onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
+                            onChange={(ward) => updateData({ ward, pollingUnit: "" })}
+                            options={getWards(data?.lgaOfResidence || "", data?.stateOfResidence || "")}
+                            disabled={!data?.lgaOfResidence}
                             placeholder={
                                 !data?.lgaOfResidence
                                     ? "Select your LGA first"
@@ -257,14 +276,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                                         ? "Choose or type your ward"
                                         : "Type your ward name"
                             }
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data?.lgaOfResidence}
                         />
-                        <datalist id="wave-ward-options">
-                            {getWards(data?.lgaOfResidence || "", data?.stateOfResidence || "").map((ward) => (
-                                <option key={ward} value={ward} />
-                            ))}
-                        </datalist>
                     </div>
 
                     <div>
@@ -284,11 +296,16 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                           *   above: the 93 wards with no list, and any unit
                           *   missing from one, still take a typed answer.
                           */}
-                        <input
-                            type="text"
-                            list="wave-polling-unit-options"
+                        {/*   #823 Same control, same reasons — this field was a
+                          *   datalist too, so it was equally invisible on a
+                          *   phone. Fixing the ward alone would have been the
+                          *   partial fix this audit keeps finding.  */}
+                        <ComboBox
+                            ariaLabel="Polling unit"
                             value={data?.pollingUnit || ""}
-                            onChange={(e) => updateData({ pollingUnit: e.target.value })}
+                            onChange={(pollingUnit) => updateData({ pollingUnit })}
+                            options={pollingUnits}
+                            disabled={!data?.ward}
                             placeholder={
                                 !data?.ward
                                     ? "Enter your ward first"
@@ -296,14 +313,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                                         ? "Choose or type your polling unit"
                                         : "Type your polling unit"
                             }
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data?.ward}
                         />
-                        <datalist id="wave-polling-unit-options">
-                            {pollingUnits.map((pu) => (
-                                <option key={pu} value={pu} />
-                            ))}
-                        </datalist>
                     </div>
                 </div>
 

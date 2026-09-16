@@ -70,16 +70,28 @@ describe('#789 — the required field can be answered', () => {
     });
 
     it('AND THE WARD FIELD ACCEPTS A TYPED ANSWER', () => {
-        //   THE test. A <select> here is the defect, whatever it is populated
-        //   with: its options are the only answers, and for 772 LGAs there
-        //   were none.
+        /*
+         *   THE test. A <select> here is the defect, whatever it is populated
+         *   with: its options are the only answers, and for 772 LGAs there
+         *   were none.
+         *
+         *   #823 THE CONTROL CHANGED AND THE PROPERTY DID NOT. This asserted
+         *   `list="coop-ward-options"` — the datalist MECHANISM — which drew
+         *   nothing at all on iOS Safari and went blank whenever the field
+         *   already held a value. It is a ComboBox now, which keeps a typed
+         *   answer that matches no option.
+         *
+         *   The assertion follows the property rather than the spelling: a
+         *   control that TAKES A TYPED ANSWER. ComboBox's own suite proves it
+         *   does, by typing one.
+         */
         const src = stripComments(read(COOP_STEP));
-        const field = src.split('label="Ward"')[1].split('/>')[0];
 
-        expect(src).toMatch(/<FormInput\s[^>]*label="Ward"|label="Ward"/);
-        expect(field).toMatch(/list="coop-ward-options"/);
-        //   and it is not a dropdown again
+        expect(src).toMatch(/label="Ward"|ariaLabel="Ward"/);
+        expect(src).toContain('<ComboBox');
+        //   and it is not a dropdown again — a select is the original defect
         expect(src).not.toMatch(/<FormSelect[^>]*\n?[^>]*label="Ward"/);
+        expect(src).not.toMatch(/<select/);
     });
 
     it('AND IT STILL OFFERS THE REAL NAMES', () => {
@@ -88,15 +100,18 @@ describe('#789 — the required field can be answered', () => {
         //   does, and she cannot know how.
         const src = stripComments(read(COOP_STEP));
 
-        expect(src).toMatch(/<datalist id="coop-ward-options">/);
+        //   #823 The options reach a ComboBox now rather than a <datalist>.
+        //   What matters is unchanged: the real ward names are OFFERED, from
+        //   the register, for the LGA and state she has already given.
+        expect(src).toMatch(/options=\{getWards\(/);
         expect(src).toMatch(/getWards\(data\?\.address\?\.lga \|\| "", data\?\.address\?\.state \|\| ""\)/);
     });
 
     it('and the WAVE form does both too', () => {
         const src = stripComments(read(WAVE_STEP));
 
-        expect(src).toMatch(/<datalist id="wave-ward-options">/);
-        expect(src).toMatch(/list="wave-ward-options"/);
+        expect(src).toContain('<ComboBox');
+        expect(src).toMatch(/options=\{getWards\(/);
         expect(src).toMatch(/getWards\(data\?\.lgaOfResidence \|\| "", data\?\.stateOfResidence \|\| ""\)/);
     });
 });

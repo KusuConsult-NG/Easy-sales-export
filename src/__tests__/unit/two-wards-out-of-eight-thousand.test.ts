@@ -207,8 +207,16 @@ describe('#792 — the form asks for one ward at a time', () => {
         const src = stripComments(read(STEP));
 
         expect(src).toMatch(/\/api\/locations\/polling-units\?/);
-        expect(src).toMatch(/<datalist id="wave-polling-unit-options">/);
-        expect(src).toMatch(/list="wave-polling-unit-options"/);
+        /*
+         *   #823 The units reach a ComboBox now, not a <datalist>. That control
+         *   drew nothing at all on iOS Safari — no element, so nothing to
+         *   style — and filtered itself to the value already in the field, so
+         *   an applicant coming back to correct her answer saw an empty list.
+         *
+         *   The property here is unchanged and is what is asserted: the units
+         *   that come back from the route are OFFERED to her.
+         */
+        expect(src).toMatch(/options=\{pollingUnits\}/);
         //   re-asked when the ward changes, or it shows the previous ward's units
         expect(src).toMatch(/\[data\?\.stateOfResidence, data\?\.lgaOfResidence, data\?\.ward\]/);
     });

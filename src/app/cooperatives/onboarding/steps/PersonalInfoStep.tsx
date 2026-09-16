@@ -4,6 +4,7 @@ import { useState } from "react";
 import { NIGERIAN_LOCATIONS, STATES, getWards } from "@/lib/locations";
 import { useToast } from "@/contexts/ToastContext";
 import { FormInput, FormSelect, FormField } from "@/components/ui/FormField";
+import ComboBox from "@/components/ui/ComboBox";
 
 interface PersonalInfoData {
     firstName: string;
@@ -238,21 +239,31 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                       *   might be missing her ward is this same defect waiting
                       *   to happen again.
                       */}
-                    <FormInput
-                        label="Ward"
-                        required
-                        list="coop-ward-options"
+                    {/*
+                      *   #823 AND THE SAME CONTROL HERE, for the same reasons.
+                      *
+                      *   The note above records that #774 gave WAVE a free-text
+                      *   fallback and did not give this form one — "a correct
+                      *   rule applied to some of the places it names". The
+                      *   datalist that fixed it brought its own defect: iOS
+                      *   Safari draws no suggestion UI for one at all, and it
+                      *   filters by the field's current value, so a member
+                      *   returning to correct her ward saw no list.
+                      *
+                      *   Fixed on both forms together this time.
+                      */}
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        Ward <span className="text-red-500">*</span>
+                    </label>
+                    <ComboBox
+                        ariaLabel="Ward"
                         value={data?.address?.ward || ""}
-                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), ward: e.target.value } as any })}
+                        onChange={(ward) => onChange({ ...data, address: { ...(data?.address || {}), ward } as any })}
+                        options={getWards(data?.address?.lga || "", data?.address?.state || "")}
                         disabled={!data?.address?.lga}
                         placeholder={data?.address?.lga ? "Choose or type your ward" : "Select your LGA first"}
                         error={errors.ward}
                     />
-                    <datalist id="coop-ward-options">
-                        {getWards(data?.address?.lga || "", data?.address?.state || "").map((ward) => (
-                            <option key={ward} value={ward} />
-                        ))}
-                    </datalist>
                 </div>
 
                 {/* Street Address — full width is appropriate here */}
