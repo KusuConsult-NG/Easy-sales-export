@@ -240,12 +240,30 @@ describe('#626 — and the civic step refuses exactly what the server refuses', 
         }
     });
 
-    it('AND THE VOTER\'S CARD IS REFUSED WHEN BLANK TOO', async () => {
-        //   The third field the owner named, and the one whose input had no
-        //   `error` prop at all — so this message had nowhere to render until
-        //   #774 gave it one. A rule reaching two fields out of three is this
-        //   audit's most repeated finding.
+    it('#820 BUT A BLANK VOTER\'S CARD NOW LETS HER THROUGH — the owner reversed it', async () => {
+        /*
+         *   #774 made the card mandatory to a direct instruction, and this test
+         *   pinned that. The owner has since said "make voter's card optional",
+         *   which supersedes it.
+         *
+         *   REWRITTEN, NOT DELETED. The requirement was asserted here for a
+         *   reason, and a reader finding it gone could not tell whether it had
+         *   been decided or had simply lapsed. It was decided.
+         */
         const { advanced } = await pressNext(CIVIC, { nin: '23948571062', votersCardNumber: '' });
+        expect(advanced).toBe(true);
+    });
+
+    it('AND A CARD THAT CANNOT BE ONE IS STILL REFUSED', async () => {
+        /*
+         *   Optional is not unvalidated, and this is the half that could have
+         *   been lost while making the field optional: somebody who DOES fill
+         *   the box in must be told at the form rather than at review.
+         *
+         *   The input's `error` prop is what makes that message visible at all
+         *   — it had none until #774 — so this also keeps that alive.
+         */
+        const { advanced } = await pressNext(CIVIC, { nin: '23948571062', votersCardNumber: '0000000000' });
         expect(advanced).toBe(false);
     });
 

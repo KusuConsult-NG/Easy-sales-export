@@ -15,17 +15,30 @@
  *   cases, "Abuba" and "AISH", the only two that are PARTIAL names. Every
  *   whole-name case passed on both machines.
  *
- * ── WHY ─────────────────────────────────────────────────────────────────────
+ * ── WHY, AND WHAT I COULD NOT PROVE ─────────────────────────────────────────
  *
- *   U+F8FF is a PRIVATE-USE code point. Under a byte-ordered collation it sorts
- *   above every letter and the range does what it looks like. Under a
- *   locale-aware collation — en_US.UTF-8, or ICU — an unassigned private-use
- *   character can be IGNORABLE in comparison, so "ABUBA" collates equal
- *   to "ABUBA" and `"ABUBAKAR" <= "ABUBA"` is FALSE.
+ *   The obvious explanation is collation. U+F8FF is a PRIVATE-USE code point,
+ *   and a locale-aware collation can treat an unassigned one as IGNORABLE,
+ *   which would collapse "ABUBA" to "ABUBA" and make
+ *   `"ABUBAKAR" <= "ABUBA"` false.
  *
- *   A whole-name query survives that, because `>= "ABUBAKAR"` matches the row
- *   on its own. Only a partial prefix depends on the upper bound, which is why
- *   the defect could exist for as long as it did with no test able to see it.
+ *   I TESTED THAT AND IT IS NOT WHAT HAPPENED. Against this project's own
+ *   Postgres, both collations accept the old bound:
+ *
+ *       collation        >= 'ABUBA'   <= 'ABUBA'||U+F8FF   < 'ABUBB'
+ *       C                    t               t                t
+ *       en-US-x-icu          t               t                t
+ *
+ *   So the difference between the two machines is NOT established, and this
+ *   header does not pretend otherwise. What IS certain: these filters reach
+ *   the database as a PostgREST URL query string, not as SQL, so the old bound
+ *   depended on a private-use character surviving percent-encoding and
+ *   transport across whatever versions each environment runs. The new bound is
+ *   pure ASCII and depends on none of that.
+ *
+ *   A whole-name query survives either way, because `>= "ABUBAKAR"` matches the
+ *   row on its own. Only a partial prefix depends on the upper bound, which is
+ *   why only two of eleven cases could ever have shown this.
  *
  * ── THE FIX, AND WHY IT IS A UNIT TEST ──────────────────────────────────────
  *
@@ -136,7 +149,18 @@ describe('#814(b) — and the search uses it', () => {
 
         expect(fn).toContain('.where(field, ">=", value)');
         expect(fn).toContain('.where(field, "<", prefixUpperBound(value))');
-        expect(fn).not.toContain('');
+
+        /*
+         *   BOTH SPELLINGS, because they are not the same string in source and
+         *   the first draft of this assertion counted the wrong one.
+         *
+         *   The five legacy sites are written as the ESCAPE TEXT `\\uf8ff` —
+         *   six ASCII characters — while the version this finding removed used
+         *   the LITERAL U+F8FF character. A check for one finds none of the
+         *   other, which is how a count of five measured as zero.
+         */
+        expect(fn).not.toMatch(/\\uf8ff/);
+        expect(fn).not.toMatch(//);
     });
 
     it('AND THE USER SEARCH IS RECORDED AS STILL CARRYING THE OLD FORM', () => {
@@ -154,7 +178,9 @@ describe('#814(b) — and the search uses it', () => {
             src.indexOf('export async function searchUserIdsByQuery'),
             src.indexOf('export function searchWasTruncated'),
         );
-        const legacy = (userSearch.match(//g) ?? []).length;
+        //   The ESCAPE TEXT, which is how those five are written in source —
+        //   not the literal character, which appears nowhere in this file.
+        const legacy = (userSearch.match(/\\uf8ff/g) ?? []).length;
 
         expect({ sitesStillUsingThePrivateUseBound: legacy })
             .toEqual({ sitesStillUsingThePrivateUseBound: 5 });

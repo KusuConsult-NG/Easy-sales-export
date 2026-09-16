@@ -378,15 +378,29 @@ describe('submitMultiStepWaveApplicationAction', () => {
         expect(store.all(COLLECTIONS.WAVE_APPLICATIONS).length).toBe(0);
     });
 
-    it('and a blank voter\'s card is refused too', async () => {
-        //   The third of the three the owner named. Asserted separately
-        //   because a rule that reaches two fields out of three is this
-        //   audit's single most repeated finding.
+    it('#820 and a blank voter\'s card is ACCEPTED now — the owner reversed it', async () => {
+        /*
+         *   "make voter's card optional." #774 had made it mandatory to an
+         *   earlier instruction; this supersedes it. Rewritten rather than
+         *   removed so the reversal is legible.
+         */
         seedUser();
         const { submitMultiStepWaveApplicationAction } = await actions();
         const res: any = await submitMultiStepWaveApplicationAction(form({ votersCardNumber: '' }));
 
+        expect(res.success).toBe(true);
+    });
+
+    it('but a voter\'s card that cannot be one is still refused', async () => {
+        //   Optional is not unvalidated. This is the half a looser schema would
+        //   have quietly dropped.
+        seedUser();
+        const { submitMultiStepWaveApplicationAction } = await actions();
+        const res: any = await submitMultiStepWaveApplicationAction(form({ votersCardNumber: '0000000000' }));
+
         expect(res.success).toBe(false);
+        //   and nothing was written for a submission that was refused
+        expect(store.all(COLLECTIONS.WAVE_APPLICATIONS).length).toBe(0);
     });
 
     it('CONTROL: a complete application is still accepted, and the numbers are hashed', async () => {

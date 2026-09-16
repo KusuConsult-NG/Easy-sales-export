@@ -248,19 +248,32 @@ export function searchWasTruncated(ids: readonly string[]): boolean {
  *   It passed locally and FAILED IN CI on exactly the two partial-name cases —
  *   "Abuba" and "AISH" — while every whole-name case passed on both machines.
  *
- *   THE REASON. U+F8FF is a PRIVATE-USE code point. Under a byte-ordered
- *   collation it sorts above every letter and the range works. Under a
- *   locale-aware collation (en_US.UTF-8, ICU) an unassigned private-use
- *   character can be IGNORABLE — "ABUBA" then collates equal to "ABUBA",
- *   and `"ABUBAKAR" <= "ABUBA"` is false. Two databases, two answers, one
- *   piece of code. A whole-name query matched by its lower bound alone, which
- *   is why only the partial cases could ever have shown this.
+ *   WHAT IS MEASURED, AND WHAT IS NOT. The obvious explanation is collation:
+ *   U+F8FF is a PRIVATE-USE code point, and a locale-aware collation can treat
+ *   an unassigned one as ignorable, which would collapse "ABUBA" to
+ *   "ABUBA" and make `"ABUBAKAR" <= "ABUBA"` false.
  *
- *   INCREMENTING THE LAST CHARACTER needs no character outside the alphabet
- *   already in the data: "ABUBA" bounds at "ABUBB", and "ABUBAKAR" sorts below
- *   that under byte order AND under locale order, because the two strings
- *   differ at a plain letter. It is the standard way to express a prefix range
- *   and it does not ask the database to rank a character nobody types.
+ *   THAT WAS TESTED AND IT IS NOT WHAT HAPPENED HERE. Run against this
+ *   project's own Postgres:
+ *
+ *       collation        >= 'ABUBA'   <= 'ABUBA'||U+F8FF   < 'ABUBB'
+ *       C                    t               t                t
+ *       en-US-x-icu          t               t                t
+ *
+ *   So the comparison itself is sound under both. The difference between the
+ *   two machines is therefore NOT proven, and is not claimed here.
+ *
+ *   WHAT IS CERTAIN is narrower and still enough. These filters do not reach
+ *   the database as SQL — they go through PostgREST as a URL query string, so
+ *   the old bound required a private-use character to survive percent-encoding
+ *   and transport intact, across whatever supabase/PostgREST versions the two
+ *   environments happen to run. The new bound is pure ASCII drawn from the
+ *   alphabet already in the data: "ABUBA" bounds at "ABUBB", and the two
+ *   strings differ at a plain letter.
+ *
+ *   Removing an exotic character from a query string is defensible on its own
+ *   terms, whatever the CI database turns out to have been doing. A cause I
+ *   cannot demonstrate is not written down as though I could.
  *
  *   The five existing uses in searchUserIdsByQuery are deliberately left alone:
  *   changing a search that is working in production, on the strength of a
