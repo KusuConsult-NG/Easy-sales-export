@@ -148,19 +148,77 @@ export async function GET(request: NextRequest) {
         const skipped: Array<{ id: string; status: string | null }> = [];
         const failed: Array<{ id: string; reason: string }> = [];
         /**
-         * Holds this job cannot date, reported rather than silently passed
-         * over. Both writers stamp `pendingSince`, so there should be none; one
-         * appearing means a row was written by something that does not, and
-         * that row can never be swept.
+         * Holds that arrived with no `pendingSince`.
+         *
+         * Both reservation paths stamp it, so there should be none; one
+         * appearing means a row was written by something that does not.
+         *
+         *   #831 — this used to say "that row can never be swept", and that was
+         *   true: the job reported the id and moved on, every run, for ever.
+         *   The owner's production log carried the same line for
+         *   `sample-land-listing-e2e`. Such a row is given a clock now and
+         *   lapses on the ordinary schedule; see the stamp below.
          */
         const undatable: string[] = [];
+        /** #831 — the undatable holds this run gave a clock to. */
+        const dated: string[] = [];
 
         for (const doc of snapshot.docs) {
             const listing = doc.data() as { status?: unknown; pendingSince?: unknown; pendingBuyerId?: unknown };
             const verdict = reservationHasLapsed(listing, now);
 
             if (!verdict.lapsed) {
-                if (verdict.reason === "no_timestamp") undatable.push(doc.id);
+                if (verdict.reason === "no_timestamp") {
+                    /*
+                     *   #831 AN UNDATABLE HOLD IS NOW DATED INSTEAD OF REPORTED
+                     *   FOREVER.
+                     *
+                     *   From the owner's production log, on a run of this job:
+                     *
+                     *       1 held listing(s) carry no pendingSince and can
+                     *       never be swept: sample-land-listing-e2e
+                     *
+                     *   The comment above `undatable` says the right thing —
+                     *   "that row can never be swept" — and then the code only
+                     *   WRITES IT DOWN. So the parcel stays off the market for
+                     *   good, the buyer slot stays occupied by nobody, and the
+                     *   job reports the same line every run until somebody
+                     *   reads a log and edits the database by hand. "Reported
+                     *   rather than silently passed over" was an improvement on
+                     *   silence; it is not a fix.
+                     *
+                     *   STAMPED, NOT RELEASED. The hold gets `pendingSince` of
+                     *   NOW, which makes it datable — and then the ordinary
+                     *   lapse rule sweeps it on a later run, after the same
+                     *   window every other hold gets. That matters: the row's
+                     *   real age is unknown, so releasing it here would be this
+                     *   job inventing a duration it cannot know. Giving it a
+                     *   clock costs one more hold period and is the only
+                     *   honest reading of a hold with no start time.
+                     *
+                     *   Self-healing by construction: it needs no operator, it
+                     *   fixes the row that exists today and any future one
+                     *   written by a path that forgets the stamp, and the
+                     *   report below still names what it did.
+                     */
+                    undatable.push(doc.id);
+                    try {
+                        await db.collection(COLLECTIONS.LAND_LISTINGS).doc(doc.id).update({
+                            pendingSince: now.toISOString(),
+                            //   Recorded so the next reader knows this clock was
+                            //   started by the sweeper and is not the buyer's
+                            //   original reservation time.
+                            pendingSinceBackfilledBy: "release-stale-reservations",
+                            pendingSinceBackfilledAt: now.toISOString(),
+                        });
+                        dated.push(doc.id);
+                    } catch (err) {
+                        failed.push({
+                            id: doc.id,
+                            reason: `could not stamp pendingSince: ${err instanceof Error ? err.message : String(err)}`,
+                        });
+                    }
+                }
                 continue;
             }
 
@@ -232,9 +290,15 @@ export async function GET(request: NextRequest) {
         }
 
         if (undatable.length > 0) {
-            logger.error(
-                `[cron/release-stale-reservations] ${undatable.length} held listing(s) carry no `
-                + `pendingSince and can never be swept: ${undatable.join(", ")}`,
+            /*
+             *   #831 — the same finding, said in the tense that is now true.
+             *   "Can never be swept" was accurate and is not any more: the row
+             *   has a clock, and the next run applies the ordinary rule to it.
+             */
+            logger.warn(
+                `[cron/release-stale-reservations] ${undatable.length} held listing(s) carried no `
+                + `pendingSince; ${dated.length} were stamped with one and will lapse on the normal `
+                + `schedule from now: ${undatable.join(", ")}`,
             );
         }
 
@@ -247,10 +311,13 @@ export async function GET(request: NextRequest) {
             failed: failed.length,
             paidButHeld: paidButHeld.length,
             undatable: undatable.length,
+            //   #831 — of those, the ones this run gave a clock to.
+            dated: dated.length,
             // Named, not merely counted: each is a row somebody has to look at.
             failures: failed,
             paidButHeldIds: paidButHeld,
             undatableIds: undatable,
+            datedIds: dated,
             mayHaveMore: snapshot.docs.length >= MAX_PER_RUN,
         });
     } catch (error: any) {

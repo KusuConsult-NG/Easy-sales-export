@@ -35,6 +35,8 @@
  * both.
  */
 
+import { PUBLIC_ASSETS } from "@/lib/public-assets.generated";
+
 /**
  * A src `next/image` will accept: an absolute URL, or a path from the root.
  *
@@ -50,7 +52,38 @@ function isRenderableSrc(value: unknown): value is string {
     const src = value.trim();
     if (src === "") return false;
     if (src.startsWith("http://") || src.startsWith("https://")) return true;
-    return src.startsWith("/") && !src.startsWith("//");
+    if (!src.startsWith("/") || src.startsWith("//")) return false;
+
+    /*
+     *   #831 AND A LOCAL PATH THIS APPLICATION NEVER SHIPPED IS NOT RENDERABLE
+     *   EITHER.
+     *
+     *   From the owner's production log, on every render of one product:
+     *
+     *       ⨯ The requested resource isn't a valid image for
+     *         /images/products/yams.jpg received null
+     *
+     *   `public/images/products/` has never existed in this repository. The path
+     *   is in DATA — a row written by a seed or an import that pointed at a file
+     *   nobody uploaded — so #829's sweep of src/ could not see it, and no
+     *   change to src/ could fix it.
+     *
+     *   What the application CAN know is what it ships. The generated manifest
+     *   beside this file is exactly that, so a stored local path that is not in
+     *   it is dead and is treated as no image at all: the caller's placeholder
+     *   renders, the optimiser is never asked, and the error stops.
+     *
+     *   ABSOLUTE URLs ARE UNTOUCHED, which is the important half — every image
+     *   this platform actually uploads goes to Cloudinary and arrives as an
+     *   https:// URL. This rule only ever governs paths that claim to be local,
+     *   and the only local images that exist are the ones in the manifest.
+     *
+     *   The manifest is generated from disk and a test regenerates and compares
+     *   it, so adding an asset without running `npm run assets:manifest` fails
+     *   CI with the command to run rather than silently hiding the picture.
+     */
+    const [path] = src.split(/[?#]/);
+    return PUBLIC_ASSETS.has(path);
 }
 
 /**

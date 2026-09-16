@@ -575,3 +575,111 @@ describe('#140 — the premise, re-measured', () => {
         }
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#831 — a hold with no clock is given one instead of reported forever', () => {
+    /**
+     *   From the owner's production log, on a real run of this job:
+     *
+     *       [cron/release-stale-reservations] 1 held listing(s) carry no
+     *       pendingSince and can never be swept: sample-land-listing-e2e
+     *
+     *   The route's own comment said the same thing — "that row can never be
+     *   swept" — and then the code only WROTE IT DOWN. So the parcel stayed off
+     *   the market for good, the buyer slot stayed occupied by nobody, and the
+     *   job printed the same line every run until somebody read a log and
+     *   edited the database by hand.
+     *
+     *   "Reported rather than silently passed over" was an improvement on
+     *   silence. It is not a fix, and #465's lesson applies to the job as much
+     *   as to a scanner: naming a problem is not resolving one.
+     *
+     *   STAMPED, NOT RELEASED. The row's real age is unknown, so releasing it
+     *   here would be this job inventing a duration it cannot know. It gets
+     *   `pendingSince` of NOW, becomes datable, and lapses on the ordinary
+     *   schedule one window later — the only honest reading of a hold with no
+     *   start time, and self-healing with no operator.
+     */
+
+    it('THE ROW FROM THE LOG IS GIVEN A CLOCK', async () => {
+        seedHold('sample-land-listing-e2e', { pendingSince: undefined });
+
+        const { body } = await cron();
+
+        expect(body.undatable).toBe(1);
+        expect(body.dated).toBe(1);
+        expect(body.datedIds).toEqual(['sample-land-listing-e2e']);
+
+        const row = store.get(LISTINGS, 'sample-land-listing-e2e') as any;
+        expect(typeof row.pendingSince).toBe('string');
+        expect(Number.isFinite(Date.parse(row.pendingSince))).toBe(true);
+    });
+
+    it('AND IS NOT RELEASED ON THE SAME RUN', async () => {
+        /*
+         *   The half that keeps this safe. A hold with no timestamp might be
+         *   ten minutes old; releasing it immediately would put a parcel
+         *   somebody is actively paying for back on the market, which is #135 —
+         *   two buyers, one parcel — rebuilt by the sweeper.
+         */
+        seedHold('no-clock', { pendingSince: null });
+
+        const { body } = await cron();
+
+        expect(body.released).toBe(0);
+        expect(mockClaim).not.toHaveBeenCalled();
+        expect((store.get(LISTINGS, 'no-clock') as any).status).toBe('pending_escrow');
+    });
+
+    it('AND LAPSES NORMALLY ONCE THE WINDOW HAS PASSED', async () => {
+        //   The point of stamping: the row rejoins the ordinary rule. Seeded
+        //   with the clock the previous run would have written, aged past the
+        //   window.
+        seedHold('was-undatable', { pendingSince: hoursAgo(48) });
+
+        const { body } = await cron();
+
+        expect(body.released).toBe(1);
+        expect(body.undatable).toBe(0);
+    });
+
+    it('AND THE STAMP SAYS WHO STARTED THE CLOCK', async () => {
+        //   A reader must be able to tell the sweeper's clock from the buyer's
+        //   own reservation time, or a support query about "when did she
+        //   reserve this" gets a manufactured answer.
+        seedHold('no-clock', { pendingSince: undefined });
+
+        await cron();
+
+        const row = store.get(LISTINGS, 'no-clock') as any;
+        expect(row.pendingSinceBackfilledBy).toBe('release-stale-reservations');
+        expect(typeof row.pendingSinceBackfilledAt).toBe('string');
+    });
+
+    it('CONTROL: A HOLD THAT ALREADY HAS A CLOCK IS NOT RESTAMPED', async () => {
+        /*
+         *   THE control. If this stamped every hold it saw, no reservation
+         *   would ever lapse — each run would reset the clock and the sweep
+         *   would do nothing for ever, which is a worse version of the defect
+         *   it fixes.
+         */
+        const original = hoursAgo(2);
+        seedHold('ticking', { pendingSince: original });
+
+        const { body } = await cron();
+
+        expect(body.undatable).toBe(0);
+        expect(body.dated).toBe(0);
+        expect((store.get(LISTINGS, 'ticking') as any).pendingSince).toBe(original);
+        expect((store.get(LISTINGS, 'ticking') as any).pendingSinceBackfilledBy).toBeUndefined();
+    });
+
+    it('CONTROL: THE REPORT NO LONGER CLAIMS THE ROW IS UNSWEEPABLE', () => {
+        //   The sentence was true and is not any more. A log that keeps saying
+        //   "can never be swept" about rows the job just fixed is how an
+        //   operator learns to ignore the log.
+        const src = source('src/app/api/cron/release-stale-reservations/route.ts');
+        expect(src).not.toContain('and can never be swept');
+        expect(src).toContain('will lapse on the normal');
+    });
+});

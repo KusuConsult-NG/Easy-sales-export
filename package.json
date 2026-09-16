@@ -59,7 +59,8 @@
     "test:pg": "jest --config jest.config.pg.js --runInBand",
     "stack:up": "bash scripts/local-stack/up.sh",
     "stack:down": "bash scripts/local-stack/down.sh",
-    "sql:only": "node scripts/build-deploy-sql.mjs --only"
+    "sql:only": "node scripts/build-deploy-sql.mjs --only",
+    "assets:manifest": "node scripts/generate-public-asset-manifest.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

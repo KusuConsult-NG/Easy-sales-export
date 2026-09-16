@@ -116,6 +116,26 @@ describe('#439 — the rule for showing a record\'s picture', () => {
         // ratchet failed on my first version of the helper for exactly this,
         // and was right.
         ['a protocol-relative URL to a third-party host', ['//evil.example/x.jpg']],
+        /*
+         *   #831 — AND A LOCAL PATH THIS APPLICATION NEVER SHIPPED.
+         *
+         *   The owner's production log, on every render of one product:
+         *
+         *       ⨯ The requested resource isn't a valid image for
+         *         /images/products/yams.jpg received null
+         *
+         *   `public/images/products/` has never existed. The path is in DATA,
+         *   so no change to src/ could reach it — what the application can know
+         *   is what it ships, and lib/public-assets.generated is that list.
+         *
+         *   The two cases below moved OUT of the renderable group for this
+         *   reason. `/placeholder-land.jpg` was #439's own fixture and is one of
+         *   the three placeholders #829 found referenced and never shipped, so
+         *   it was always the wrong example of a working path.
+         */
+        ['a local path the app does not ship', ['/images/products/yams.jpg']],
+        ['the placeholder #829 found was never shipped', ['/placeholder-land.jpg']],
+        ['an invented local path', ['  /a.jpg  ']],
     ])('and null for %s', (_label, value) => {
         expect(firstImageSrc(value)).toBeNull();
     });
@@ -123,8 +143,11 @@ describe('#439 — the rule for showing a record\'s picture', () => {
     it.each([
         ['an https URL', ['https://cdn.example/x.jpg'], 'https://cdn.example/x.jpg'],
         ['an http URL', ['http://cdn.example/x.jpg'], 'http://cdn.example/x.jpg'],
-        ['a root-relative path', ['/placeholder-land.jpg'], '/placeholder-land.jpg'],
-        ['surrounding whitespace trimmed', ['  /a.jpg  '], '/a.jpg'],
+        //   A path this application REALLY ships, read from the manifest's
+        //   source of truth rather than invented — an invented one is what the
+        //   two cases above turned out to be.
+        ['a root-relative path that exists', ['/images/hero-1.jpg'], '/images/hero-1.jpg'],
+        ['surrounding whitespace trimmed', ['  /images/hero-1.jpg  '], '/images/hero-1.jpg'],
     ])('and the value for %s', (_label, value, expected) => {
         expect(firstImageSrc(value)).toBe(expected);
     });
