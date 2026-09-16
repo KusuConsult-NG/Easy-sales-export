@@ -164,8 +164,8 @@ been **executed and proved**, not when the code looks right — see §C.
 
 | # | Module | Why here | Est. |
 |---|--------|----------|------|
-| 1 | **Marketplace** | Has confirmed A4 defects (`both` gets no buyer role; `marketplace_seller` missing from access list). Highest user-visible impact; it is the only module where signup type and capability already disagree. | 1 session |
-| 2 | **Cooperative** | Money module — savings, loans, withdrawals. Dual-spelling keys make A1.6 a live risk. Scoped admin views need care (a platform-wide count must not be substituted into a per-cooperative view). | 1–2 sessions |
+| 1 | **Cooperative** | **Owner's call — money first.** Savings, loans, withdrawals, member contributions. Dual-spelling keys (`cooperative`/`cooperatives`, written to the *same* user) make A1.6 a live risk, and the scoped admin views need care: a platform-wide count must never be substituted into a per-cooperative view. | 1–2 sessions |
+| 2 | **Marketplace** | Confirmed A4 defects (`both` gets no buyer role; `marketplace_seller` missing from the access list) — the only module where signup type and capability already disagree. | 1 session |
 | 3 | **Export** | Its own status vocabulary (`pending_approval`, `revision_required`) that no other module writes — the exact shape A1.8 exists for. Also money (bookings, idempotency). | 1 session |
 | 4 | **Farm Nation** | Land verification + listings. A1.4/A1.5 risk on listing sweeps. | 1 session |
 | 5 | **Academy** | `totalStudents` counts paid applications only; needs an A2.5 label decision. Lowest risk. | 1 session |
