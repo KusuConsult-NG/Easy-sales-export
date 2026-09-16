@@ -15,6 +15,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { MODULE_CONFIGS, type ChatbotModule } from "@/lib/chatbot-knowledge";
+import { randomIdOrNull } from "@/lib/random-id";
 
 interface Message {
   id: string;
@@ -58,11 +59,34 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Generate a stable session ID once on mount
+  /*
+   *   #833 THIS LINE TOOK THE WHOLE SITE DOWN FOR OLDER BROWSERS.
+   *
+   *   From the owner's production log, repeatedly, and FATAL:
+   *
+   *       [ERROR] Next.js Global UI Boundary Caught Exception
+   *       {"message":"crypto.randomUUID is not a function",
+   *        "path":"/","fatal":true}
+   *
+   *   `crypto.randomUUID` is Chrome 92 and Safari 15.4 — 2021-22. On anything
+   *   older it is undefined, calling it throws, and because this widget is
+   *   rendered by ClientLayout on EVERY page, the throw unwound the entire
+   *   React tree into the global error boundary. Not a broken chat button: a
+   *   dead site, for every visitor on an older phone.
+   *
+   *   lib/random-id falls back to `crypto.getRandomValues`, which predates
+   *   randomUUID by about a decade and is in every browser that can run this
+   *   application at all.
+   *
+   *   AND `…OrNull`, BECAUSE THIS IS DECORATION. If some future browser has
+   *   neither source, a chat widget must turn itself off rather than take the
+   *   homepage with it. The two modals that mint idempotency keys for money use
+   *   the throwing form on purpose — see lib/random-id.
+   */
   const initSession = useMemo(() => {
     return () => {
       if (!sessionIdRef.current) {
-        sessionIdRef.current = crypto.randomUUID();
+        sessionIdRef.current = randomIdOrNull() ?? undefined;
       }
     };
   }, []);
@@ -73,7 +97,16 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
 
   // Initialise greeting on open
   useEffect(() => {
-    initSession(); // ensure sessionId is ready
+    /*
+     *   #833 — AND ONLY WHEN THE CHAT IS ACTUALLY OPEN.
+     *
+     *   This ran on every mount of every page, so the cost of the line above
+     *   was paid by every visitor to every route rather than by the few who
+     *   open the chat. Narrowing it is not the fix — lib/random-id is — but a
+     *   decorative feature doing work on the homepage of a platform its
+     *   visitors never asked it to be on is how one line reached everybody.
+     */
+    if (isOpen) initSession();
     if (isOpen && messages.length === 0) {
       setMessages([
         {
@@ -93,7 +126,8 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
   useEffect(() => {
     if (isOpen) {
       // Reset session so a new one is created in Firestore for the new module
-      sessionIdRef.current = crypto.randomUUID();
+      //   #833 — see initSession above.
+      sessionIdRef.current = randomIdOrNull() ?? undefined;
       setIsEscalated(false);
       setIsRateLimited(false);
       setMessages([

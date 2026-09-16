@@ -162,6 +162,38 @@ beforeAll(async () => {
             }),
         ],
     );
+
+    /*
+     *   #832 — two more rows, for the question a prefix range cannot answer.
+     *
+     *   LEGACY carries ONE combined string the way a bulk import writes it, so
+     *   her surname sits in the MIDDLE of it and no prefix of the query matches
+     *   the field. WILDCARD exists to prove the escaping: a name holding a
+     *   literal `%` must not become a pattern meaning "anything".
+     */
+    await c.query(
+        `insert into public.users (id, email, roles, raw_data) values
+             ($1, $2, array['user'], '{"fullName":"L. Import"}'::jsonb),
+             ($3, $4, array['user'], '{"fullName":"P. Cent"}'::jsonb)`,
+        [LEGACY, `${TAG}-legacy@example.com`, WILDCARD, `${TAG}-wild@example.com`],
+    );
+    await c.query(
+        `insert into public.academy_applications (id, user_id, status, raw_data) values
+             ($1, $2, 'pending', $3::jsonb),
+             ($4, $5, 'pending', $6::jsonb)`,
+        [
+            LEGACY, LEGACY,
+            JSON.stringify({
+                userId: LEGACY, status: 'pending',
+                personalInfo: { fullName: 'NGOZI ELEDUMARE' },
+            }),
+            WILDCARD, WILDCARD,
+            JSON.stringify({
+                userId: WILDCARD, status: 'pending',
+                personalInfo: { fullName: '100% Cotton Ltd' },
+            }),
+        ],
+    );
 }, 300_000);
 
 afterAll(async () => {
@@ -171,6 +203,10 @@ afterAll(async () => {
 }, 300_000);
 
 /** Only the rows this suite seeded — the table has others. */
+/** #832 — the combined-name row, and the one with a wildcard in its name. */
+const LEGACY = `${TAG}-legacy`;
+const WILDCARD = `${TAG}-wild`;
+
 const ours = (ids: string[]) => ids.filter((id) => id.startsWith(TAG)).sort();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,5 +260,98 @@ restDescribe('#814 — she is found by the name printed on her row', () => {
         const { searchUserIdsByQuery } = await import('@/lib/admin-search-helper');
         const ids = ours(await searchUserIdsByQuery('Musa'));
         expect(ids).toEqual([HER]);
+    }, 60_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+restDescribe('#832 — a surname in the MIDDLE of a combined name', () => {
+    beforeAll(assertRestReachable);
+
+    /**
+     *   THE BOUND #825 RECORDED AND LEFT OPEN.
+     *
+     *   `searchDocIdsByNameFields` worked by PREFIX RANGE, and a prefix only
+     *   matches a field that STARTS with the term. A member whose name the bulk
+     *   import wrote as one string — `fullName: "NGOZI ELEDUMARE"` — was
+     *   therefore not findable by her SURNAME, which is how most administrators
+     *   search. #825 said closing it needed `ilike` on the data layer that
+     *   everything shares, or a written name-token index, and that neither was
+     *   a change to make on local evidence alone.
+     *
+     *   The adapter has `ilike` now, and this is the evidence: executed against
+     *   real PostgREST and real Postgres, not against the fake.
+     */
+
+    it('FINDS HER BY THE SURNAME, WHICH IS NOT A PREFIX OF THE FIELD', async () => {
+        const ids = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, 'ELEDUMARE'));
+        expect(ids).toEqual([LEGACY]);
+    }, 60_000);
+
+    it('AND CASE DOES NOT MATTER — ilike is why the casing variants are not needed here', async () => {
+        for (const spelling of ['eledumare', 'Eledumare', 'eLeDuMaRe']) {
+            const ids = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, spelling));
+            expect({ spelling, found: ids }).toEqual({ spelling, found: [LEGACY] });
+        }
+    }, 60_000);
+
+    it('AND A MIDDLE FRAGMENT WORKS, not just a whole word', async () => {
+        //   "DUMA" is inside "ELEDUMARE", which is inside "NGOZI ELEDUMARE" —
+        //   two levels of middle, and the case a prefix range cannot reach at
+        //   either level.
+        const ids = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, 'DUMA'));
+        expect(ids).toEqual([LEGACY]);
+    }, 60_000);
+
+    it('AND THE PREFIX PATH STILL WORKS — this supplements, it does not replace', async () => {
+        /*
+         *   The fast path is the one that uses an index. If adding ilike had
+         *   quietly replaced it, every search on this platform would have
+         *   become a sequential scan.
+         */
+        const ids = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, 'Abuba'));
+        expect(ids).toEqual([HER]);
+    }, 60_000);
+
+    it('CONTROL: A LITERAL % IN A NAME IS NOT A WILDCARD', async () => {
+        /*
+         *   THE escaping case. `%` and `_` are ilike wildcards, and they arrive
+         *   in real searches — a company called "100% Cotton Ltd" is seeded
+         *   above. Unescaped, a search for "100%" would mean "starts with 100,
+         *   then anything", and worse, a search for "%" alone would return the
+         *   entire table as a name match.
+         */
+        const found = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, '100% Cotton'));
+        expect(found).toEqual([WILDCARD]);
+
+        /*
+         *   AND THE WILDCARD ALONE IS A LITERAL, NOT "EVERYBODY".
+         *
+         *   The first draft of this assertion expected `[]` and was WRONG — the
+         *   run returned the one row whose name really does contain a percent
+         *   sign, which is the correct answer to searching for "%". The defect
+         *   this guards against is the OTHER outcome: an unescaped pattern
+         *   makes `%` mean "any characters", and the query returns the entire
+         *   table as a name match.
+         *
+         *   So the claim is the one that distinguishes those two — the rows
+         *   that do NOT contain a percent sign are absent.
+         */
+        const forWildcard = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, '%'));
+        expect(forWildcard).toEqual([WILDCARD]);
+        expect(forWildcard).not.toContain(HER);
+        expect(forWildcard).not.toContain(OTHER);
+        expect(forWildcard).not.toContain(LEGACY);
+    }, 60_000);
+
+    it('CONTROL: AN UNDERSCORE IS NOT A SINGLE-CHARACTER WILDCARD EITHER', async () => {
+        //   `_` matches exactly one character in LIKE. "N_OZI" would otherwise
+        //   find "NGOZI".
+        const ids = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, 'N_OZI'));
+        expect(ids).toEqual([]);
+    }, 60_000);
+
+    it('CONTROL: a name nobody has still finds nobody', async () => {
+        const ids = ours(await searchDocIdsByNameFields(TABLE, NAME_FIELDS, 'Zzzznobody'));
+        expect(ids).toEqual([]);
     }, 60_000);
 });

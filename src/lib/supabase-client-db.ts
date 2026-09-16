@@ -117,6 +117,11 @@ function applyClientFilter(query: any, tableName: string, f: WhereFilter): any {
         case '>=': return query.gte(column, value);
         case 'in':
             return query.in(column, (Array.isArray(f.value) ? f.value : [f.value]).map(v => nativeCol ? v : String(v)));
+        //   #832 — case-insensitive substring. Added to all THREE doors at
+        //   once: the server adapter, this one, and the test double. An
+        //   operator that exists in one and throws in another is a query that
+        //   works until it runs somewhere else.
+        case 'ilike': return query.ilike(column, String(f.value));
         default:
             // Fail loudly rather than returning an unfiltered collection.
             throw new Error(`[supabase-client-db] Unsupported query operator "${f.op}" on field "${f.field}"`);

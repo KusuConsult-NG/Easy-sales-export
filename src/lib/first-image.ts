@@ -83,6 +83,23 @@ function isRenderableSrc(value: unknown): value is string {
      *   CI with the command to run rather than silently hiding the picture.
      */
     const [path] = src.split(/[?#]/);
+
+    /*
+     *   RUNTIME UPLOADS ARE NOT IN THE MANIFEST AND MUST NOT BE JUDGED BY IT.
+     *
+     *   lib/storage-backend writes to `public/uploads/local/` when
+     *   isLocalStack() is true, so those files appear AFTER the build and the
+     *   manifest cannot know them. Checking them against it would blank every
+     *   locally uploaded image — and the first full run of the drift test
+     *   caught exactly that, with a dozen E2E artefacts in a committed list.
+     *
+     *   Production never takes this path: isLocalStack() is false off
+     *   localhost and uploads go to Cloudinary as https:// URLs, which never
+     *   reach the manifest check at all. So this exemption governs local
+     *   development, where the file really is there.
+     */
+    if (path.startsWith("/uploads/")) return true;
+
     return PUBLIC_ASSETS.has(path);
 }
 

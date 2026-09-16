@@ -501,6 +501,61 @@ describe('#825 Cooperative — the same window, the same repair', () => {
         expect(rowIds(res)).toContain('mid-member');
     }, 120_000);
 
+    it('AND FINDS HER BY A SURNAME IN THE MIDDLE, from the DATABASE now', async () => {
+        /*
+         *   #832 CLOSED THE BOUND #825 RECORDED.
+         *
+         *   A prefix range only matches a field that STARTS with the term, so a
+         *   member the bulk import wrote as one string —
+         *   `fullName: "NGOZI ELEDUMARE"` — was not findable by her surname.
+         *   #825 said closing it needed `ilike` on the shared data layer or a
+         *   written name-token index, and that neither was a change to make on
+         *   local evidence alone.
+         *
+         *   The adapter has `ilike` now, proved against real Postgres in the pg
+         *   suite. This is the same property at the ACTION level, and it is
+         *   seeded OUTSIDE the page window so only the database read can find
+         *   her — the in-memory substring check never sees this row.
+         */
+        store.seed(COLLECTIONS.USERS, 'mid-db-user', {
+            roles: ['user'], email: 'middb@example.com', fullName: 'J. Musa',
+        });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'mid-db-member', {
+            userId: 'mid-db-user',
+            fullName: 'NGOZI ELEDUMARE',
+            membershipStatus: 'pending',
+            paymentStatus: 'pending',
+            createdAt: daysAgo(WINDOW + 20),
+        });
+
+        const res = await members({ search: 'ELEDUMARE' });
+        expect(rowIds(res)).toContain('mid-db-member');
+    }, 120_000);
+
+    it('AND A WILDCARD IN THE QUERY IS A LITERAL, not "everybody"', async () => {
+        /*
+         *   `%` and `_` are ilike wildcards and arrive in real searches.
+         *   Unescaped, a search for "%" would return the whole register as a
+         *   name match — which on 15,000 members is not a search, it is a dump.
+         */
+        store.seed(COLLECTIONS.USERS, 'pct-user', {
+            roles: ['user'], email: 'pct@example.com', fullName: 'P. Cent',
+        });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'pct-member', {
+            userId: 'pct-user',
+            fullName: '100% Cotton Co',
+            membershipStatus: 'pending',
+            paymentStatus: 'pending',
+            createdAt: daysAgo(0),
+        });
+
+        const res = await members({ search: '%' });
+        const ids = rowIds(res);
+        expect(ids).toContain('pct-member');
+        //   and NOT the five thousand fillers seeded above
+        expect(ids.filter((id) => id.startsWith('filler-'))).toEqual([]);
+    }, 120_000);
+
     it('CONTROL: a name nobody has still finds nobody', async () => {
         const res = await members({ search: 'Zzzznobody' });
         expect(rowIds(res)).toEqual([]);

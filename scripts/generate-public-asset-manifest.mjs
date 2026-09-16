@@ -27,8 +27,24 @@ const OUT = join(ROOT, "src/lib/public-assets.generated.ts");
 /** Extensions next/image may be pointed at. */
 const RENDERABLE = /\.(?:jpg|jpeg|png|webp|svg|gif|avif|ico)$/i;
 
+/**
+ * Directories under public/ that are WRITTEN AT RUNTIME, not shipped.
+ *
+ *   `public/uploads/local/` is where storage-backend puts a file when
+ *   isLocalStack() is true, and it is gitignored. Walking it put a dozen
+ *   machine-local E2E artefacts into a COMMITTED manifest — paths that exist
+ *   for nobody else, and that reappear every time somebody runs the suite. The
+ *   drift test would then fail on a clean checkout and fail again after every
+ *   local run, which is how a guard that fires on good input gets switched off.
+ *
+ *   Caught by that drift test on its first full run, which is the argument for
+ *   having written it.
+ */
+const RUNTIME_DIRS = new Set(["uploads"]);
+
 function walk(dir, out = []) {
     for (const entry of readdirSync(dir)) {
+        if (dir === PUBLIC && RUNTIME_DIRS.has(entry)) continue;
         const full = join(dir, entry);
         if (statSync(full).isDirectory()) walk(full, out);
         else if (RENDERABLE.test(entry)) out.push(full);

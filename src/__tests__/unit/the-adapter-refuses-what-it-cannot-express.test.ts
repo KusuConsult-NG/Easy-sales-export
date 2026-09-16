@@ -116,6 +116,10 @@ jest.mock('@/lib/supabase', () => {
         in: record('in'), is: record('is'),
         not: record('not'), filter: record('filter'), or: record('or'),
         contains: record('contains'), overlaps: record('overlaps'),
+        //   #832 — the substring filter. A double missing a method the adapter
+        //   calls reports "THREW SOMETHING ELSE", which is how this ratchet
+        //   told me the operator was real but the stand-in was not.
+        ilike: record('ilike'),
         order: jest.fn(() => chain),
         limit: jest.fn(() => chain),
         range: jest.fn(() => Promise.resolve({ data: [], error: null })),
@@ -139,9 +143,24 @@ const SERVER = 'src/lib/supabase-db.ts';
 const BROWSER = 'src/lib/supabase-client-db.ts';
 const DOUBLE = 'src/lib/testing/fake-db.ts';
 
-/** Every operator the adapter's own type says it accepts. */
+/**
+ * Every operator the adapter's own type says it accepts.
+ *
+ *   #832 ADDED `ilike`, and this ratchet caught it — which is what it is for.
+ *   The list is compared against the union in supabase-db, so an operator added
+ *   to the type without a filter behind it, or a filter added without the type,
+ *   fails here rather than silently returning the wrong rows.
+ *
+ *   `ilike` is CASE-INSENSITIVE SUBSTRING, and it was added for the one
+ *   question a prefix range cannot answer: a surname in the MIDDLE of a
+ *   combined name — `fullName: "NGOZI ELEDUMARE"` searched for "ELEDUMARE".
+ *   #825 recorded that as an open bound. It is executed against real Postgres
+ *   in the pg suite, including the escaping of `%` and `_`, which are wildcards
+ *   and arrive in real searches.
+ */
 const DECLARED_OPERATORS = [
     '==', '!=', '<', '<=', '>', '>=', 'in', 'not-in', 'array-contains', 'array-contains-any',
+    'ilike',
 ] as const;
 
 const callFor = (method: string) => CALLS.find((c) => c.method === method);
@@ -333,7 +352,34 @@ describe('#434 — the three doors', () => {
             'in': 'filtered', 'not-in': 'filtered',
             'array-contains': 'filtered',
             'array-contains-any': 'filtered',
+            //   #832 — case-insensitive substring; see DECLARED_OPERATORS.
+            'ilike': 'filtered',
         });
+    });
+
+    it('AND ON A NATIVE COLUMN TOO, not only the JSONB path', () => {
+        /*
+         *   #832 — FOUND BY MUTATION. Deleting `case 'ilike'` from the
+         *   NATIVE-COLUMN switch left every assertion here green, because the
+         *   loop above queries `jest_ops`, which has no dedicated table — so
+         *   every one of its filters takes the JSONB path and the native switch
+         *   is never reached.
+         *
+         *   An operator handled on one path and missing on the other is the
+         *   shape this whole file exists for: it works until a caller happens
+         *   to name a column the table really has, and then it refuses.
+         *   `users.email` is one, so this asks for it by name.
+         */
+        CALLS.length = 0;
+        return supabaseDb.collection('users').where('email', 'ilike', '%ada%').get()
+            .then(() => {
+                const call = CALLS.find((c) => c.method === 'ilike');
+                expect(call).toBeDefined();
+                //   The NATIVE column, not a raw_data path — which is the whole
+                //   distinction the mutant slipped through.
+                expect(call!.a).toBe('email');
+                expect(call!.b).toBe('%ada%');
+            });
     });
 
     it('and the declared list here is the adapter\'s own, not a copy that can drift', () => {

@@ -163,26 +163,58 @@ describe('#814(b) — and the search uses it', () => {
         expect(fn).not.toMatch(//);
     });
 
-    it('AND THE USER SEARCH IS RECORDED AS STILL CARRYING THE OLD FORM', () => {
+    it('AND THE USER SEARCH NOW CARRIES THE SAME BOUND — all five', () => {
         /*
-         *   NOT a failure — a deliberate, named limit. searchUserIdsByQuery is
-         *   live and unreported; this finding was proved in its sibling. The
-         *   count is pinned so that "we always knew" cannot be said later, and
-         *   so that whoever does change it has to come here and say so.
+         *   #832 THE FIVE ARE FIXED, AND THIS IS THE NOTE THE OLD ONE ASKED FOR.
          *
-         *   If somebody fixes those five, this fails and the note gets updated
-         *   rather than the knowledge being lost.
+         *   What stood here pinned the count at FIVE and said: "NOT a failure —
+         *   a deliberate, named limit … If somebody fixes those five, this fails
+         *   and the note gets updated rather than the knowledge being lost."
+         *
+         *   The reason for leaving them was that searchUserIdsByQuery is live
+         *   and unreported, and the defect had been proved only against the
+         *   local database. That was the right call THEN and it stopped being
+         *   right: prefixUpperBound has since been executed against Postgres by
+         *   the pg suite, on the same operator, for the sibling function — so
+         *   the replacement is no longer a hypothesis. Leaving a known
+         *   fragility in the live path because it had not bitten yet is how it
+         *   gets to bite.
+         *
+         *   AND ONE BEHAVIOUR IMPROVED ON THE WAY, which the old form got
+         *   wrong: a whitespace-only query trimmed to "", and `>= "" AND
+         *   <= "" + U+F8FF` matched EVERY user with a phone number — thirty
+         *   arbitrary members returned for a search of nothing.
+         *   `prefixUpperBound("")` is "", so the range is empty and the answer
+         *   is now none. The case is asserted below.
          */
         const src = read(HELPER);
         const userSearch = src.slice(
             src.indexOf('export async function searchUserIdsByQuery'),
             src.indexOf('export function searchWasTruncated'),
         );
-        //   The ESCAPE TEXT, which is how those five are written in source —
-        //   not the literal character, which appears nowhere in this file.
-        const legacy = (userSearch.match(/\\uf8ff/g) ?? []).length;
 
-        expect({ sitesStillUsingThePrivateUseBound: legacy })
-            .toEqual({ sitesStillUsingThePrivateUseBound: 5 });
+        //   Neither spelling survives — the escape text nor the literal
+        //   character. Both are checked because they are different strings in
+        //   source and a check for one finds none of the other, which is how a
+        //   count of five once measured as zero.
+        expect(userSearch).not.toMatch(/\\uf8ff/);
+        expect(userSearch).not.toMatch(/\uf8ff/);
+
+        //   And the replacement is actually there, on all five — a file that
+        //   simply deleted the upper bounds would pass the two lines above.
+        const bounded = (userSearch.match(/prefixUpperBound\(/g) ?? []).length;
+        expect({ sitesUsingTheSharedAsciiBound: bounded })
+            .toEqual({ sitesUsingTheSharedAsciiBound: 5 });
+    });
+
+    it('AND A SEARCH FOR NOTHING RETURNS NOTHING, not thirty arbitrary members', () => {
+        /*
+         *   The behaviour the old bound got wrong, executed rather than
+         *   reasoned about. `prefixUpperBound("")` must be "" so that
+         *   `>= "" AND < ""` is an empty range; the old `<= "" + U+F8FF` was
+         *   an upper bound above every ordinary name and phone number on the
+         *   platform.
+         */
+        expect(prefixUpperBound('')).toBe('');
     });
 });

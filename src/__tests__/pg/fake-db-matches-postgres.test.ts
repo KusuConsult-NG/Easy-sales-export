@@ -111,7 +111,7 @@ async function seed(docs: Record<string, Record<string, unknown>>): Promise<void
 // surface, which is the point: this tests the thing the tests will use, not a
 // private helper.
 
-type Op = '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in' | 'array-contains';
+type Op = '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in' | 'array-contains' | 'ilike';
 
 async function fromPostgres(
     filters: Array<[string, Op, unknown]>,
@@ -147,6 +147,13 @@ async function fromPostgres(
                 where.push(`raw_data->${literal(field)} @> $${params.length}::jsonb`);
                 break;
             }
+            /*
+             *   #832 — written as SQL Postgres runs directly, not through the
+             *   adapter, which is the point of this file: the adapter's answer
+             *   and the fake's answer are both compared against what the
+             *   DATABASE says, so neither can define the truth for itself.
+             */
+            case 'ilike': where.push(`${text} ilike $${params.length}`); break;
         }
     }
 
@@ -484,4 +491,86 @@ dbDescribe('the declared divergences', () => {
             expect(d.why.length).toBeGreaterThan(60);
         }
     });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#832 — ilike, run both ways', () => {
+    /**
+     *   A NEW OPERATOR IS EXACTLY WHAT THIS SUITE IS FOR.
+     *
+     *   `ilike` was added to the adapter so an administrator could find a
+     *   surname in the MIDDLE of a combined name — `fullName: "NGOZI ELEDUMARE"`
+     *   searched for "ELEDUMARE", which a prefix range cannot answer and #825
+     *   recorded as an open bound.
+     *
+     *   The test double had to learn it too, and a double that treats an ilike
+     *   PATTERN as a literal passes every escaping test in the unit suite while
+     *   the real database fails them. So each case below runs against Postgres
+     *   AND against the fake and requires the same answer — which is the only
+     *   way the fake's hand-written pattern-to-regex translation is worth
+     *   anything.
+     */
+
+    const NAMES = {
+        legacy: { name: 'NGOZI ELEDUMARE' },
+        other: { name: 'Chinwe Okafor' },
+        pct: { name: '100% Cotton Ltd' },
+        under: { name: 'a_b Holdings' },
+    };
+
+    it('FINDS A SUBSTRING IN THE MIDDLE, and both agree', async () => {
+        const ids = await both(NAMES, [['name', 'ilike', '%ELEDUMARE%']]);
+        expect(ids).toEqual(['legacy']);
+    }, 60_000);
+
+    it('AND IS CASE-INSENSITIVE, which is the whole difference from like', async () => {
+        for (const pattern of ['%eledumare%', '%Eledumare%', '%eLeDuMaRe%']) {
+            const ids = await both(NAMES, [['name', 'ilike', pattern]]);
+            expect({ pattern, ids }).toEqual({ pattern, ids: ['legacy'] });
+        }
+    }, 60_000);
+
+    it('AND % IS A WILDCARD WHEN IT IS MEANT TO BE', async () => {
+        //   The pattern is the adapter's contract: callers pass a PATTERN, and
+        //   likeContains is what turns a user's text into one.
+        const ids = await both(NAMES, [['name', 'ilike', 'NGOZI%']]);
+        expect(ids).toEqual(['legacy']);
+    }, 60_000);
+
+    it('AND AN ESCAPED % IS A LITERAL, in both', async () => {
+        /*
+         *   THE case that makes the double worth having. `\\%` means a real
+         *   percent sign; a fake that ignored the backslash would return the
+         *   whole table here and agree with nothing.
+         */
+        const ids = await both(NAMES, [['name', 'ilike', '%100\\%%']]);
+        expect(ids).toEqual(['pct']);
+    }, 60_000);
+
+    it('AND AN ESCAPED _ IS A LITERAL TOO', async () => {
+        //   `_` is LIKE's single-character wildcard, so an unescaped "a_b"
+        //   would also match "aXb". Escaped, it matches only itself.
+        const literal = await both(NAMES, [['name', 'ilike', '%a\\_b%']]);
+        expect(literal).toEqual(['under']);
+    }, 60_000);
+
+    it('AND AN UNESCAPED _ REALLY IS A WILDCARD, in both', async () => {
+        //   The other direction — proving the escape above was doing something.
+        const ids = await both(NAMES, [['name', 'ilike', '%a_b%']]);
+        expect(ids).toEqual(['under']);
+        const wild = await both({ ...NAMES, axb: { name: 'aXb Holdings' } }, [['name', 'ilike', '%a_b%']]);
+        expect(wild.sort()).toEqual(['axb', 'under']);
+    }, 60_000);
+
+    it('CONTROL: A PATTERN NOBODY MATCHES RETURNS NOTHING IN BOTH', async () => {
+        const ids = await both(NAMES, [['name', 'ilike', '%Zzzznobody%']]);
+        expect(ids).toEqual([]);
+    }, 60_000);
+
+    it('CONTROL: A MISSING FIELD IS NOT A MATCH IN EITHER', async () => {
+        //   NULL ilike anything is NULL, not true — the same rule this suite
+        //   already records for `!=` and the ordering comparisons.
+        const ids = await both({ ...NAMES, nameless: { other: 'x' } }, [['name', 'ilike', '%o%']]);
+        expect(ids).not.toContain('nameless');
+    }, 60_000);
 });

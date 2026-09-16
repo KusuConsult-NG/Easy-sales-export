@@ -8,6 +8,7 @@ import LoadingButton from "@/components/ui/LoadingButton";
 import { useToast } from "@/contexts/ToastContext";
 import { submitWithdrawalAction, type WithdrawalActionState } from "@/app/actions/platform";
 import { formatCurrency } from "@/lib/utils";
+import { randomId } from "@/lib/random-id";
 
 const initialState: WithdrawalActionState = { error: "Initializing...", success: false };
 
@@ -32,7 +33,19 @@ export default function WithdrawalModal({
      
     useEffect(() => {
         if (isOpen) {
-            setTimeout(() => setIdempotencyKey(crypto.randomUUID()), 0);
+            /*
+             *   #833 — `crypto.randomUUID` does not exist on Chrome before 92
+             *   or Safari before 15.4, and it threw here inside a setTimeout,
+             *   where nothing catches it. lib/random-id falls back to
+             *   `crypto.getRandomValues`, which every browser running this app
+             *   has, and assembles the same v4 UUID.
+             *
+             *   randomId, NOT randomIdOrNull: this key is what stops a double
+             *   withdrawal being submitted twice. A null key is a
+             *   duplicate guard that has quietly stopped guarding, and that is
+             *   worse than a visible failure.
+             */
+            setTimeout(() => setIdempotencyKey(randomId()), 0);
         }
     }, [isOpen]);
 

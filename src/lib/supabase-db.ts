@@ -1065,7 +1065,7 @@ async function supabaseDelete(collection: string, id: string): Promise<void> {
 
 // ─── Query Builder ────────────────────────────────────────────────────────────
 
-type FilterOperator = '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in' | 'not-in' | 'array-contains' | 'array-contains-any';
+type FilterOperator = '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in' | 'not-in' | 'array-contains' | 'array-contains-any' | 'ilike';
 
 interface WhereFilter {
     field: string;
@@ -1323,6 +1323,12 @@ function applySimpleFilter(query: any, column: string, op: FilterOperator, value
         case '>=': return query.gte(column, value);
         case 'in': return query.in(column, Array.isArray(value) ? value : [value]);
         case 'not-in': return query.not(column, 'in', inList(value));
+        /*
+         *   #832 CASE-INSENSITIVE SUBSTRING, for the one question a prefix
+         *   range cannot answer. See likePattern for why the value is escaped
+         *   and lib/admin-search-helper for what needed it.
+         */
+        case 'ilike': return query.ilike(column, String(value));
         default:
             return unsupportedOperator(op, `native column "${column}"`,
                 'the adapter has no filter for it, and guessing one silently returns the wrong rows');
@@ -1417,6 +1423,21 @@ function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: 
         // does with a missing field, so the two agree.
         case 'not-in':
             return query.not(jsonPath, 'in', inList(value));
+        /*
+         *   #832 CASE-INSENSITIVE SUBSTRING on a JSONB field.
+         *
+         *   `->>` already yields text, so ilike applies to it directly and
+         *   needs none of the casting numericAware exists for.
+         *
+         *   IT CANNOT USE AN INDEX — a leading `%` makes a btree useless, so
+         *   this is a sequential scan of the collection. That is why the one
+         *   caller issues it with an explicit `.limit()` and only for a
+         *   question a prefix range genuinely cannot answer: finding a surname
+         *   in the MIDDLE of a combined name. Prefix ranges stay the fast path
+         *   and answer everything they can.
+         */
+        case 'ilike':
+            return query.ilike(jsonPath, String(value));
         case 'array-contains': {
             // For JSONB arrays, use the @> (contains) operator
             const arrPath = parts.length === 1

@@ -285,7 +285,7 @@ function applyPatch(target: Doc, patch: Doc, now: string, deep: boolean): void {
 // ─── query evaluation ────────────────────────────────────────────────────────
 
 type Op = '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in' | 'not-in'
-    | 'array-contains' | 'array-contains-any';
+    | 'array-contains' | 'array-contains-any' | 'ilike';
 
 interface Filter { field: string; op: Op; value: any }
 interface Order { field: string; dir: 'asc' | 'desc' }
@@ -373,6 +373,34 @@ function matches(doc: Doc, filter: Filter): boolean {
             const values = (Array.isArray(f.value) ? f.value : [f.value]).map(String);
             if (actual === undefined || actual === null) return false;
             return !values.includes(String(actual));
+        }
+        /*
+         *   #832 CASE-INSENSITIVE SUBSTRING, modelled the way Postgres does it.
+         *
+         *   The value is an ilike PATTERN, so `%` and `_` are wildcards and a
+         *   backslash escapes them — lib/admin-search-helper's likeContains is
+         *   what produces one. A double that treated the pattern as a literal
+         *   would pass every escaping test while the real database failed them,
+         *   which is the whole reason this file exists and is ratcheted against
+         *   the adapter.
+         */
+        case 'ilike': {
+            if (actual === undefined || actual === null) return false;
+            const pattern = String(f.value);
+            let rx = '';
+            for (let i = 0; i < pattern.length; i += 1) {
+                const ch = pattern[i];
+                if (ch === '\\') {
+                    //   Escaped: the NEXT character is a literal, wildcard or not.
+                    i += 1;
+                    if (i < pattern.length) rx += pattern[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    continue;
+                }
+                if (ch === '%') { rx += '[\\s\\S]*'; continue; }
+                if (ch === '_') { rx += '[\\s\\S]'; continue; }
+                rx += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+            return new RegExp(`^${rx}$`, 'i').test(String(actual));
         }
         case 'array-contains':
             return Array.isArray(actual)

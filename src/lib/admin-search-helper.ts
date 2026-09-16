@@ -63,12 +63,12 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
             // Prefix range on phone field
             db.collection(COLLECTIONS.USERS)
                 .where("phone", ">=", rawPhone)
-                .where("phone", "<=", rawPhone + "\uf8ff")
+                .where("phone", "<", prefixUpperBound(rawPhone))
                 .limit(30).get(),
             // Prefix range on phoneNumber field
             db.collection(COLLECTIONS.USERS)
                 .where("phoneNumber", ">=", rawPhone)
-                .where("phoneNumber", "<=", rawPhone + "\uf8ff")
+                .where("phoneNumber", "<", prefixUpperBound(rawPhone))
                 .limit(30).get(),
         ];
         const phoneSnaps = await Promise.all(phonePromises);
@@ -97,21 +97,21 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
             namePromises.push(
                 db.collection(COLLECTIONS.USERS)
                     .where("fullName", ">=", val)
-                    .where("fullName", "<=", val + "\uf8ff")
+                    .where("fullName", "<", prefixUpperBound(val))
                     .limit(30)
                     .get()
             );
             namePromises.push(
                 db.collection(COLLECTIONS.USERS)
                     .where("firstName", ">=", val)
-                    .where("firstName", "<=", val + "\uf8ff")
+                    .where("firstName", "<", prefixUpperBound(val))
                     .limit(30)
                     .get()
             );
             namePromises.push(
                 db.collection(COLLECTIONS.USERS)
                     .where("lastName", ">=", val)
-                    .where("lastName", "<=", val + "\uf8ff")
+                    .where("lastName", "<", prefixUpperBound(val))
                     .limit(30)
                     .get()
             );
@@ -289,6 +289,25 @@ export function prefixUpperBound(prefix: string): string {
     return prefix.slice(0, -1) + String.fromCharCode(last + 1);
 }
 
+/**
+ * A literal string, as an `ilike` pattern that matches it anywhere.
+ *
+ *   #832. `%` and `_` are WILDCARDS to ilike, and they arrive in real searches:
+ *   an admin pasting "50%" or an account named "a_b" would otherwise be asking
+ *   for "any characters" and matching the whole table. Escaped with a backslash,
+ *   which is Postgres's default escape character for LIKE.
+ *
+ *   The backslash itself goes first, or escaping the wildcards would then
+ *   escape the escapes.
+ */
+export function likeContains(term: string): string {
+    const escaped = term
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
+    return `%${escaped}%`;
+}
+
 export async function searchDocIdsByNameFields(
     collection: string,
     fields: readonly string[],
@@ -313,19 +332,45 @@ export async function searchDocIdsByNameFields(
     const docIds = new Set<string>();
 
     try {
-        const snaps = await Promise.all(
-            fields.flatMap((field) => values.map((value) =>
-                db.collection(collection)
-                    .where(field, ">=", value)
-                    //   The high sentinel that makes this a PREFIX range
-                    //   rather than an equality: without it, only a whole
-                    //   name would ever match. The partial-prefix case in
-                    //   the suite is what holds this to a range.
-                    .where(field, "<", prefixUpperBound(value))
-                    .limit(SEARCH_RESULT_CAP)
-                    .get(),
-            )),
+        const prefixQueries = fields.flatMap((field) => values.map((value) =>
+            db.collection(collection)
+                .where(field, ">=", value)
+                //   The high sentinel that makes this a PREFIX range
+                //   rather than an equality: without it, only a whole
+                //   name would ever match. The partial-prefix case in
+                //   the suite is what holds this to a range.
+                .where(field, "<", prefixUpperBound(value))
+                .limit(SEARCH_RESULT_CAP)
+                .get(),
+        ));
+
+        /*
+         *   #832 AND THE ONE QUESTION A PREFIX RANGE CANNOT ANSWER.
+         *
+         *   A prefix only matches a field that STARTS with the term. So a
+         *   member whose name the bulk import wrote as one string —
+         *   `fullName: "NGOZI ELEDUMARE"` — was not findable by her SURNAME,
+         *   because "ELEDUMARE" is not a prefix of it. #825 recorded that as an
+         *   open bound and said closing it needed `ilike` on the data layer or
+         *   a written name-token index.
+         *
+         *   It needed `ilike`, which the adapter now has. One query per FIELD,
+         *   not per casing variant, because ilike is case-insensitive — so this
+         *   costs `fields.length` queries and subsumes every variant at once.
+         *
+         *   THE PREFIX RANGES STAY AND STAY FIRST. They use an index; this
+         *   cannot, because a leading `%` makes a btree useless. Every question
+         *   they can answer is still answered the fast way, and this is the
+         *   supplement for the one they cannot — bounded by the same cap.
+         */
+        const substringQueries = fields.map((field) =>
+            db.collection(collection)
+                .where(field, "ilike", likeContains(raw))
+                .limit(SEARCH_RESULT_CAP)
+                .get(),
         );
+
+        const snaps = await Promise.all([...prefixQueries, ...substringQueries]);
         snaps.forEach((snap) => snap.docs.forEach((doc) => docIds.add(doc.id)));
     } catch (err) {
         /*

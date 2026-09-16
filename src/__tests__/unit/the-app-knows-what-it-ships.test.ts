@@ -42,6 +42,8 @@
  *     isRenderableSrc back to accepting any leading slash             KILLED
  *     the query-string strip removed                                  KILLED
  *     absolute URLs put through the manifest check too                KILLED
+ *     the runtime-upload exemption removed                            KILLED
+ *     the generator walking public/uploads again                      KILLED
  *     reword this header                                  SURVIVED, intended
  */
 
@@ -66,9 +68,18 @@ function walk(dir: string, out: string[] = []): string[] {
     return out;
 }
 
+/**
+ * Runtime directories the generator skips — see the script for why.
+ *
+ *   `public/uploads/local/` is gitignored and written by storage-backend during
+ *   local development and E2E. It is not shipped content.
+ */
+const RUNTIME_DIRS = new Set(['uploads']);
+
 function onDisk(): string[] {
     return walk(PUBLIC)
         .map((p) => '/' + relative(PUBLIC, p).split(sep).join('/'))
+        .filter((p) => !RUNTIME_DIRS.has(p.split('/')[1]))
         .sort();
 }
 
@@ -101,6 +112,30 @@ describe('#831 — the manifest is what is actually on disk', () => {
         });
     });
 
+    it('AND IT HOLDS NOTHING WRITTEN AT RUNTIME', () => {
+        /*
+         *   The footgun this fix nearly shipped, and the drift test caught it
+         *   on its first full run: the generator walked `public/uploads/local/`
+         *   — gitignored, written by storage-backend during E2E — and put a
+         *   dozen machine-local artefacts into a COMMITTED manifest.
+         *
+         *   Those paths exist for nobody else, and they reappear after every
+         *   local run, so the drift test above would fail on a clean checkout
+         *   and keep failing. A guard that fires on good input gets switched
+         *   off, and then guards nothing.
+         */
+        const runtime = [...PUBLIC_ASSETS].filter((p) => p.startsWith('/uploads/'));
+        expect(runtime).toEqual([]);
+    });
+
+    it('AND A RUNTIME UPLOAD IS STILL RENDERABLE, manifest or not', () => {
+        //   The other half. Local development really does serve these, so
+        //   judging them by a build-time list would blank every image a
+        //   developer uploads.
+        expect(imageSrcOrNull('/uploads/local/farm-nation/x/images/y/land1.png'))
+            .toBe('/uploads/local/farm-nation/x/images/y/land1.png');
+    });
+
     it('AND IT IS NOT EMPTY, which would make every local image dead', () => {
         //   Vacuity guard. An empty manifest passes the comparison above only
         //   if public/ is also empty — but a generator that wrote `new Set([])`
@@ -125,7 +160,10 @@ describe('#831 — and a path that was never shipped is not an image', () => {
             '/placeholder-land.jpg',
             '/images/placeholder-product.jpg',
             '/images/export-placeholder.jpg',
-            '/uploads/legacy/whatever.png',
+            //   NOT `/uploads/…` — that prefix is exempt on purpose, because
+            //   storage-backend writes it after the build and the manifest
+            //   cannot know it. The case above asserts that exemption; listing
+            //   one here was this suite contradicting itself.
         ]) {
             expect({ dead, src: imageSrcOrNull(dead) }).toEqual({ dead, src: null });
         }
