@@ -137,13 +137,13 @@ export default function FarmNationOnboardingClient({ initial = null }: {
                              */
                             const access = await checkFarmNationAccessAction().catch(() => null);
                             //   #790 A FAILED ACCESS CHECK IS NOT A "NO".
-                    //   Swallowing it would route an APPROVED member to a screen
-                    //   saying she is pending — #786's class exactly, where a
-                    //   query that failed is presented as a legitimate empty
-                    //   answer. The pending page is still the safe landing (it
-                    //   has a way home, and her next visit re-asks), but the
-                    //   failure is recorded rather than dropped.
-                    if (!access?.success) logger.error("[farm-nation onboarding] access check failed", { reason: access?.error });
+                            //   Swallowing it would route an APPROVED member to a
+                            //   screen saying she is pending — #786's class, where
+                            //   a query that failed is presented as a legitimate
+                            //   empty answer. The pending page is still the safe
+                            //   landing (it has a way home, and her next visit
+                            //   re-asks), but the failure is recorded not dropped.
+                            if (!access?.success) logger.error("[farm-nation onboarding] access check failed", { reason: access?.error });
                             router.replace(onboardingDestination("farm-nation", {
                                 hasAccess: !!(access?.success && access.data),
                             }));
@@ -156,6 +156,20 @@ export default function FarmNationOnboardingClient({ initial = null }: {
                         }
                     } else if (status === "rejected" || status === "revision_required") {
                         const result = await getFarmNationApplicationAction();
+                        /*
+                         *   #795 THE SAME BRANCH AGAIN, AND #793 REACHED ONE OF THEM.
+                         *
+                         *   #793 guarded the EDIT branch of each form and stopped
+                         *   there. Every form reads its application in two or three
+                         *   branches, so six of fourteen reads were guarded and eight
+                         *   were not — my own fix being the defect it was about.
+                         *
+                         *   And the branch it missed is the worse one: REVISION. A
+                         *   member told to correct a rejected application, handed a
+                         *   blank form, resubmits blank over the record she was
+                         *   fixing.
+                         */
+                        if (!result.success) { setLoadFailed(true); setIsLoading(false); return; }
                         if (result.success && result.data?.application) {
                             setFormData((prev: any) => ({ ...prev, ...result.data.application }));
                         }

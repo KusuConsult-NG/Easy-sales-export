@@ -127,11 +127,11 @@ export default function ExportOnboardingClient(
                     if (isEditParam) {
                         const result = seed?.application ?? await getExportApplicationAction();
                         if (!result.success) {
-                                //   #793 The read FAILED. Entering edit mode now
-                                //   would present a blank form as her application.
-                                setLoadFailed(true); setIsLoading(false); return;
-                            }
-                            if (result.success ) {
+                            //   #793 The read FAILED. Entering edit mode now
+                            //   would present a blank form as her application.
+                            setLoadFailed(true); setIsLoading(false); return;
+                        }
+                        if (result.success) {
                             setFormData((prev: any) => ({ ...prev, ...result }));
                         }
                         setIsEditMode(true);
@@ -148,6 +148,20 @@ export default function ExportOnboardingClient(
                     }
                 } else if (status === "revision_required" || status === "rejected") {
                     const result = seed?.application ?? await getExportApplicationAction();
+                    /*
+                     *   #795 THE SAME BRANCH AGAIN, AND #793 REACHED ONE OF THEM.
+                     *
+                     *   #793 guarded the EDIT branch of each form and stopped
+                     *   there. Every form reads its application in two or three
+                     *   branches, so six of fourteen reads were guarded and eight
+                     *   were not — my own fix being the defect it was about.
+                     *
+                     *   And the branch it missed is the worse one: REVISION. A
+                     *   member told to correct a rejected application, handed a
+                     *   blank form, resubmits blank over the record she was
+                     *   fixing.
+                     */
+                    if (!result.success) { setLoadFailed(true); setIsLoading(false); return; }
                     if (result.success ) {
                         setFormData((prev: any) => ({ ...prev, ...result }));
                     }

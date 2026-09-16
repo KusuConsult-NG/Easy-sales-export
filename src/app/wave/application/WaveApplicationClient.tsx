@@ -287,11 +287,11 @@ export default function WaveApplicationClient(
                     // Enter manual edit mode when explicitly requested
                     const result = seed?.application ?? await getWaveApplicationAction();
                     if (!result.success) {
-                                //   #793 The read FAILED. Entering edit mode now
-                                //   would present a blank form as her application.
-                                setLoadFailed(true); return;
-                            }
-                            if (result.success && result.data) {
+                        //   #793 The read FAILED. Entering edit mode now
+                        //   would present a blank form as her application.
+                        setLoadFailed(true); return;
+                    }
+                    if (result.success && result.data) {
                         setFormData((prev: any) => ({ ...prev, ...result.data }));
                     }
                     setIsEditMode(true);
@@ -306,6 +306,20 @@ export default function WaveApplicationClient(
             } else if (waveStatus === "revision_required") {
                 // Pre-populate form with existing data for editing
                 const result = seed?.application ?? await getWaveApplicationAction();
+                /*
+                 *   #795 THE SAME BRANCH AGAIN, AND #793 REACHED ONE OF THEM.
+                 *
+                 *   #793 guarded the EDIT branch of each form and stopped
+                 *   there. Every form reads its application in two or three
+                 *   branches, so six of fourteen reads were guarded and eight
+                 *   were not — my own fix being the defect it was about.
+                 *
+                 *   And the branch it missed is the worse one: REVISION. A
+                 *   member told to correct a rejected application, handed a
+                 *   blank form, resubmits blank over the record she was
+                 *   fixing.
+                 */
+                if (!result.success) { setLoadFailed(true); return; }
                 if (result.success && result.data) {
                     setFormData((prev: any) => ({ ...prev, ...result.data }));
                     setCurrentStep(0); // Start from beginning so user can review all steps

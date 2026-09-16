@@ -212,11 +212,11 @@ export default function AcademyApplicationClient(
                     if (isEditParam) {
                         const result = await getAcademyApplicationAction();
                         if (!result.success) {
-                                //   #793 The read FAILED. Entering edit mode now
-                                //   would present a blank form as her application.
-                                setLoadFailed(true); return;
-                            }
-                            if (result.success) {
+                            //   #793 The read FAILED. Entering edit mode now
+                            //   would present a blank form as her application.
+                            setLoadFailed(true); return;
+                        }
+                        if (result.success) {
                             const d = result.data ?? {};
                             if (d.personalInfo) {
                                 const pi = d.personalInfo;
@@ -283,6 +283,18 @@ export default function AcademyApplicationClient(
                             // so we must check the ACADEMY_APPLICATIONS collection to distinguish
                             // "paid but form not submitted yet" from "application submitted and pending review".
                             const appResult = await getAcademyApplicationAction();
+                            /*
+                             *   #795 A FAILED READ IS NOT "SHE NEVER APPLIED".
+                             *
+                             *   This read decides a ROUTE rather than a prefill:
+                             *   `hasSubmittedApplication` is false when the read
+                             *   fails, so a learner who HAS applied is sent back
+                             *   to fill the form again. Same class as the blank
+                             *   form — a failure wearing a legitimate answer —
+                             *   and it is the only one of the fourteen reads that
+                             *   costs a redirect rather than a field.
+                             */
+                            if (!appResult.success) { setLoadFailed(true); return; }
                             const hasSubmittedApplication = appResult.success && appResult.data && (
                                 appResult.data.personalInfo?.firstName || appResult.data.firstName
                             );
@@ -315,6 +327,20 @@ export default function AcademyApplicationClient(
                 } else if (status.data === "revision_required") {
                     // Pre-populate form with existing data
                     const result = await getAcademyApplicationAction();
+                    /*
+                     *   #795 THE SAME BRANCH AGAIN, AND #793 REACHED ONE OF THEM.
+                     *
+                     *   #793 guarded the EDIT branch of each form and stopped
+                     *   there. Every form reads its application in two or three
+                     *   branches, so six of fourteen reads were guarded and eight
+                     *   were not — my own fix being the defect it was about.
+                     *
+                     *   And the branch it missed is the worse one: REVISION. A
+                     *   member told to correct a rejected application, handed a
+                     *   blank form, resubmits blank over the record she was
+                     *   fixing.
+                     */
+                    if (!result.success) { setLoadFailed(true); return; }
                     if (result.success) {
                         const d = result.data ?? {};
                         if (d.personalInfo) {

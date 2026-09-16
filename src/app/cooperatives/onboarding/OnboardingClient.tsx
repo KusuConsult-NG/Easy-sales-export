@@ -158,11 +158,11 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 if (isEditParam) {
                     const result = await getCooperativeApplicationAction();
                     if (!result.success) {
-                                //   #793 The read FAILED. Entering edit mode now
-                                //   would present a blank form as her application.
-                                setLoadFailed(true); return;
-                            }
-                            if (result.success && result.data?.application) {
+                        //   #793 The read FAILED. Entering edit mode now
+                        //   would present a blank form as her application.
+                        setLoadFailed(true); return;
+                    }
+                    if (result.success && result.data?.application) {
                         const d = result.data.application;
                         if (d.firstName || d.fullName) {
                             setPersonalInfo((prev: any) => ({
@@ -216,6 +216,20 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             }
             if (coopStatus === "payment_required") {
                 const result = await getCooperativeApplicationAction();
+                /*
+                 *   #795 THE SAME BRANCH AGAIN, AND #793 REACHED ONE OF THEM.
+                 *
+                 *   #793 guarded the EDIT branch of each form and stopped
+                 *   there. Every form reads its application in two or three
+                 *   branches, so six of fourteen reads were guarded and eight
+                 *   were not — my own fix being the defect it was about.
+                 *
+                 *   And the branch it missed is the worse one: REVISION. A
+                 *   member told to correct a rejected application, handed a
+                 *   blank form, resubmits blank over the record she was
+                 *   fixing.
+                 */
+                if (!result.success) { setLoadFailed(true); return; }
                 if (result.success && result.data?.application) {
                     const d = result.data.application;
                     if (d.firstName || d.fullName) {
@@ -274,6 +288,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             if (coopStatus === "revision_required" || coopStatus === "rejected") {
                 // Pre-populate form with existing data
                 const result = await getCooperativeApplicationAction();
+                if (!result.success) { setLoadFailed(true); return; }
                 if (result.success && result.data?.application) {
                     const d = result.data.application;
                     if (d.firstName || d.fullName) {

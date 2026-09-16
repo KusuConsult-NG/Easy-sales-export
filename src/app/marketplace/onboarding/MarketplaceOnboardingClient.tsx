@@ -134,11 +134,11 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                     if (isEditParam) {
                         const verif = await getSellerVerificationAction();
                         if (!verif.success) {
-                                //   #793 The read FAILED. Entering edit mode now
-                                //   would present a blank form as her application.
-                                setLoadFailed(true); return;
-                            }
-                            if (verif.success && verif.data?.verification) {
+                            //   #793 The read FAILED. Entering edit mode now
+                            //   would present a blank form as her application.
+                            setLoadFailed(true); return;
+                        }
+                        if (verif.success && verif.data?.verification) {
                             const v = verif.data.verification as any;
                             setFormData(prev => ({
                                 ...prev,
@@ -163,6 +163,20 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                 } else if (marketplaceStatus === "rejected" || marketplaceStatus === "suspended") {
                     // Prefill form from Firestore for rejected / suspended users
                     const verif = await getSellerVerificationAction();
+                    /*
+                     *   #795 THE SAME BRANCH AGAIN, AND #793 REACHED ONE OF THEM.
+                     *
+                     *   #793 guarded the EDIT branch of each form and stopped
+                     *   there. Every form reads its application in two or three
+                     *   branches, so six of fourteen reads were guarded and eight
+                     *   were not — my own fix being the defect it was about.
+                     *
+                     *   And the branch it missed is the worse one: REVISION. A
+                     *   member told to correct a rejected application, handed a
+                     *   blank form, resubmits blank over the record she was
+                     *   fixing.
+                     */
+                    if (!verif.success) { setLoadFailed(true); return; }
                     if (verif.success && verif.data?.verification) {
                         const v = verif.data.verification as any;
                         setFormData(prev => ({

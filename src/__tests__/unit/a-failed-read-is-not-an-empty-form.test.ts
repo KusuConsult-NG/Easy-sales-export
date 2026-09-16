@@ -54,6 +54,35 @@
  *   occurrence, for the ninth time in this audit, and this time the wrong
  *   occurrence was real code rather than a comment. Bounded to the panel now,
  *   with a length check so it cannot silently widen again.
+ *
+ * ── #795: AND #793 WAS ITSELF PARTIAL ───────────────────────────────────────
+ *
+ *   #793 fixed the EDIT branch of each of the six forms. Each form reads its
+ *   application in two or three branches, so the count was:
+ *
+ *       fourteen reads, SIX guarded, EIGHT not — and the suite was green,
+ *       because every assertion above asked "does this file contain a guard".
+ *
+ *   The eight it missed include the REVISION branch of all six forms, which is
+ *   the worse one: a member told to correct a rejected application is handed a
+ *   blank form and resubmits blank over the record she was fixing. The
+ *   fourteenth is the academy ROUTING read, where a failed read reads as "she
+ *   never applied" and sends a learner who HAS applied back to the form.
+ *
+ *   A correct rule applied to some of the places it names — this audit's most
+ *   repeated finding, twice now inside my own fixes. The new assertion COUNTS.
+ *
+ * ── #795 MUTATION LOG ───────────────────────────────────────────────────────
+ *
+ *     each of the six revision reads unguarded again (as #793 left it)  KILLED
+ *     the academy ROUTING read unguarded — "she never applied"          KILLED
+ *     the cooperative revision guard set to setLoadFailed(false)        KILLED
+ *     the WAVE revision guard's early `return` dropped                  KILLED
+ *     the marketplace flag set, then a long way to the return           KILLED
+ *     reword a guard's comment                             SURVIVED, intended
+ *     baseline, unmutated                                  SURVIVED, intended
+ *
+ *   Eleven mutants, eleven killed, two controls survived.
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -80,6 +109,36 @@ describe('#793 — a failed read is not an empty application', () => {
         //   whose file has been renamed.
         expect(FORMS.length).toBe(6);
         for (const { file } of FORMS) expect(read(file).length).toBeGreaterThan(1000);
+    });
+
+    it.each(FORMS)('$name GUARDS EVERY READ, not just the first', ({ name, file }) => {
+        /*
+         *   #795 THE ASSERTION #793 SHOULD HAVE WRITTEN, and the reason it is
+         *   here now: #793 guarded the EDIT branch of each form and its tests
+         *   asked only "does this file contain a guard". It did. Every form
+         *   reads its application in TWO OR THREE branches, so six of fourteen
+         *   reads were guarded and eight were not, and the suite was green.
+         *
+         *   The branch it missed is the worse one — REVISION. A member told to
+         *   correct a rejected application, handed a blank form, resubmits blank
+         *   over the record she was fixing.
+         *
+         *   COUNTED, not sampled. "Contains a guard" is exactly the shape of
+         *   assertion that let a partial fix look complete, and this audit's
+         *   most repeated finding is a correct rule applied to some of the
+         *   places it names — including, twice now, by me.
+         */
+        const src = stripComments(read(file));
+        const reads = (src.match(/await get\w*(Application|Verification)Action\(/g) ?? []).length;
+        const guards = (src.match(/setLoadFailed\(true\)/g) ?? []).length;
+        //   and every one of them STOPS. A flag set on a read that then falls
+        //   through into the prefill is the defect with a variable added — the
+        //   same thing the single-site test below says, said once per read.
+        const stops = (src.match(/setLoadFailed\(true\);[\s\S]{0,40}return;/g) ?? []).length;
+
+        expect({ name, reads: reads > 0 }).toEqual({ name, reads: true });
+        expect({ name, guards }).toEqual({ name, guards: reads });
+        expect({ name, stops }).toEqual({ name, stops: reads });
     });
 
     it.each(FORMS)('$name STOPS instead of opening blank', ({ file }) => {
