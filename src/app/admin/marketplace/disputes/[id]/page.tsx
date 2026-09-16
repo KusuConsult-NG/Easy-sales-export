@@ -122,6 +122,15 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     const [resolution, setResolution] = useState<DisputeResolution>("refund_buyer");
     const [adminNotes, setAdminNotes] = useState("");
     const [refundAmount, setRefundAmount] = useState("0");
+    /**
+     * #797 Did the order or escrow behind this dispute fail to load?
+     *
+     * Not the same as "this dispute has no order" — an escrow-origin dispute
+     * legitimately has none. This is a read that was ATTEMPTED and did not
+     * answer, which is why it is set in the `else` of each read rather than
+     * derived from `order === null` afterwards.
+     */
+    const [contextFailed, setContextFailed] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -144,6 +153,34 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
             // Load notes for escalated disputes
             if ((d as any).escalated) loadNotes(d.id);
 
+            /*
+             *   #797 THE GUARD BELOW DESCRIBES A CHECK THAT WAS NOT THERE.
+             *
+             *   Its comment reads "dispute must exist; order OR escrowData
+             *   must be set (but not necessarily both)" and the code was
+             *   `if (!dispute) return null;`. Half the stated rule.
+             *
+             *   Each read below is `if (success) { set… }` with no else, so a
+             *   FAILED read left `order` null, `escrowData` null and
+             *   `refundAmount` at its initial "0" — and the screen rendered
+             *   anyway, showing the dispute with a context amount of ₦0 and
+             *   empty order and escrow panels. An administrator then chose
+             *   release-to-seller or refund-to-buyer against that.
+             *
+             *   STATED ACCURATELY, BECAUSE THE FIRST DRAFT OF THIS SAID
+             *   "MONEY IS LOST" AND THAT IS WRONG. The server does the
+             *   arithmetic from the escrow row it fetches itself:
+             *   refund_buyer and release_seller send no amount at all, and a
+             *   partial refund of 0 is refused ("A partial refund needs a
+             *   refund amount greater than zero"), as is one above the escrow.
+             *   No wrong figure can be paid out from this screen.
+             *
+             *   What it costs is an ADMINISTRATOR DECIDING BLIND: a dispute
+             *   resolved on a screen that showed ₦0 and no order, with nothing
+             *   saying a read had failed. #588's rule — "a refusal and an
+             *   empty result collapsed into one branch" — applied to the
+             *   screen that moves money out of escrow.
+             */
             if (d.orderId) {
                 // ── Marketplace order-origin dispute ──────────────────────
                 const orderResult = await getOrderByIdAction(d.orderId);
@@ -151,10 +188,14 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                     const o = orderResult.data.order as unknown as Order;
                     setOrder(o);
                     setRefundAmount(o.totalAmount.toString());
+                } else {
+                    setContextFailed(true);
                 }
                 const escrowResult = await getEscrowTransactionByOrderIdAction(d.orderId);
                 if (escrowResult.success && escrowResult.data) {
                     setEscrowData(escrowResult.data);
+                } else {
+                    setContextFailed(true);
                 }
             } else if (d.escrowId) {
                 // ── Escrow-origin dispute (standalone escrow) ─────────────
@@ -162,6 +203,8 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                 if (escrowResult.success && escrowResult.data) {
                     setEscrowData(escrowResult.data);
                     setRefundAmount(String(escrowResult.data.amount ?? 0));
+                } else {
+                    setContextFailed(true);
                 }
             }
         } catch (error) {
@@ -230,6 +273,16 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
 
     // Guard: dispute must exist; order OR escrowData must be set (but not necessarily both)
     if (!dispute) return null;
+
+    /*
+     *   #797 AND NOW THE SECOND HALF OF THAT SENTENCE IS ENFORCED.
+     *
+     *   `contextFailed` is set by the else of each read above. The screen still
+     *   renders — an administrator who cannot see the dispute at all is worse
+     *   off than one who can see it and is told what is missing — but the
+     *   resolution controls are withheld, because a decision that releases or
+     *   refunds escrow must not be made against panels that silently read ₦0.
+     */
 
     const contextAmount = order?.totalAmount ?? escrowData?.amount ?? 0;
     const isEscrowDispute = !dispute.orderId && !!dispute.escrowId;
@@ -483,7 +536,32 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                 </div>
 
                 {/* Resolution Section */}
-                {dispute.status !== "resolved" ? (
+                {dispute.status !== "resolved" && contextFailed ? (
+                    /*
+                     *   #797 The order or escrow behind this dispute did not
+                     *   load. Say so, and do not offer the button that moves
+                     *   the money — the amounts on this screen are not the
+                     *   record's, they are the defaults.
+                     */
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
+                        <h3 className="font-bold text-amber-900 mb-2 flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5" />
+                            This dispute cannot be resolved right now
+                        </h3>
+                        <p className="text-sm text-amber-900 mb-4">
+                            We could not load the order or escrow record behind this dispute,
+                            so the amounts shown above are incomplete. Nothing is lost and the
+                            dispute is unchanged — but resolving it from here would mean
+                            deciding without the figures.
+                        </p>
+                        <button
+                            onClick={() => loadData()}
+                            className="px-6 py-3 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition"
+                        >
+                            Try again
+                        </button>
+                    </div>
+                ) : dispute.status !== "resolved" ? (
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <button
                             onClick={() => setShowResolutionModal(true)}

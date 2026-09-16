@@ -162,7 +162,12 @@ describe('#743 — and every population ledger is on it', () => {
         expect(cra).toContain("ledgerVerdict(n('D1'), 61)");
         expect(cra).toContain("ledgerVerdict(n('D2'), 17)");
         expect(cra).toContain("ledgerVerdict(n('D3'), 6)");
-        expect(cra).toContain("ledgerVerdict(n('D4'), 40)");
+        //   40 → 39 when #796 converted the certificate verification page.
+        //   This line moving is the mechanism working, the same way the JWT
+        //   ledger's did below: the sweep REPORTED the improvement instead of
+        //   absorbing it, and the number had to be lowered by hand in both
+        //   places it is written down.
+        expect(cra).toContain("ledgerVerdict(n('D4'), 39)");
         expect(cra).toContain("ledgerVerdict(n('D5'), 44)");
 
         expect(code('src/__tests__/unit/half-converted-off-the-stale-token.test.ts'))

@@ -212,7 +212,12 @@ describe('a server answer must not be silently discarded', () => {
     });
 
     it('D4 — a fetch response never checked for ok or status', () => {
-        expect(ledgerVerdict(n('D4'), 40)).toBe(LEDGER_HELD);
+        //   40 -> 39: #796 converted the certificate verification page, which
+        //   was the worst of them — it read `data.success` and never the
+        //   status, so a 500 and a 404 both printed "this certificate ID does
+        //   not exist in our records" at whoever was checking a graduate's CV.
+        //   Recorded here rather than absorbed, which is this ledger's point.
+        expect(ledgerVerdict(n('D4'), 39)).toBe(LEDGER_HELD);
     });
 
     it('D5 — a catch that swallows the failure', () => {
