@@ -12,7 +12,7 @@ import { logger } from "@/lib/logger";
 //   #788 The programme's name comes from one constant. Before #774
 //   this screen spelled it out, and the owner has now corrected that
 //   spelling twice — see lib/wave-program.
-import { WAVE_NAME_WITH_ACRONYM } from "@/lib/wave-program";
+import { WAVE_NAME_WITH_ACRONYM, WAVE_PROGRAM_NAME } from "@/lib/wave-program";
 
 /**
  * EVERY VALUE INTERPOLATED INTO A TEMPLATE BELOW IS ESCAPED.
@@ -967,7 +967,7 @@ export async function sendWaveWhatsAppInviteEmail(
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background: #14532d; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 22px;">WAVE Briefing</h1>
-                    <p style="color: #bbf7d0; margin: 6px 0 0; font-size: 14px;">Women Agripreneurs Value-creation Empowerment</p>
+                    <p style="color: #bbf7d0; margin: 6px 0 0; font-size: 14px;">${WAVE_PROGRAM_NAME}</p>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
                     <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName ?? ""}</strong>,</p>

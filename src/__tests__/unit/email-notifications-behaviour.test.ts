@@ -209,15 +209,24 @@ describe('#218 — user-supplied values do not reach the markup raw', () => {
         //   Listed BY NAME rather than admitted by a rule about constants,
         //   because "it looks like a constant" is exactly the inference this
         //   ratchet exists to refuse. A different identifier still fails.
+        //
+        //   #824 WAVE_PROGRAM_NAME joins WAVE_NAME_WITH_ACRONYM on the same
+        //   terms and for the same reason. An EIGHTH invented expansion of the
+        //   acronym — "Women Agripreneurs Value-creation Empowerment" — was
+        //   found written out longhand in three live places, one of them the
+        //   body of an email sent to applicants. The remedy is the constant,
+        //   and admitting it here is what lets the next correction stay one
+        //   line. It is checked below exactly as its sibling is.
         expect([...new Set(bare)].sort()).toEqual(
-            ['WAVE_NAME_WITH_ACRONYM', 'context', 'emails.length', 'sent']);
+            ['WAVE_NAME_WITH_ACRONYM', 'WAVE_PROGRAM_NAME', 'context', 'emails.length', 'sent']);
 
-        //   And the claim about it is checked rather than asserted: the value
-        //   is a literal-built constant, not a parameter.
+        //   And the claim about them is checked rather than asserted: both are
+        //   literal-built module constants, not parameters.
         const wave = require('fs').readFileSync(
             require('path').join(process.cwd(), 'src/lib/wave-program.ts'), 'utf8');
         expect(wave).toMatch(/export const WAVE_NAME_WITH_ACRONYM = `\$\{WAVE_FULL_NAME\} \(WAVE\)`;/);
         expect(wave).toMatch(/export const WAVE_FULL_NAME = "[^"$]+";/);
+        expect(wave).toMatch(/export const WAVE_PROGRAM_NAME = `\$\{WAVE_FULL_NAME\} Program`;/);
     });
 });
 

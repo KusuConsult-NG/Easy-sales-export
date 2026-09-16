@@ -15,7 +15,26 @@ import { COMPANY_INFO } from "@/lib/constants";
 
 export type ModuleConfig = {
     name: string;
-    description: string;
+    /**
+     * The strapline under the module name in the sidebar.
+     *
+     *   #824 OPTIONAL, because WAVE's was a SEVENTH INVENTED EXPANSION.
+     *
+     *   It read "Women's Agribusiness" — sitting under "WAVE Program" in the
+     *   top-left of every WAVE screen, where it reads as what the letters stand
+     *   for. It is not. #774 found five expansions and corrected them, #777 a
+     *   sixth on the application form, and this was a seventh that no sweep
+     *   reached because it is not a sentence about the programme at all, just a
+     *   two-word strapline in a config file.
+     *
+     *   The owner: "at the Top left of the sidebar remove wave agribusiness
+     *   completely."
+     *
+     *   Omitted rather than blanked: the sidebar used to fall back to "Hub" for
+     *   an empty string, so setting it to "" would have put a different wrong
+     *   word in the same place.
+     */
+    description?: string;
     theme: string; // Tailwind color name (e.g., "emerald", "blue", "teal")
     icon: LucideIcon;
     pathPrefix: string;
@@ -32,7 +51,9 @@ export const DEFAULT_MODULE: ModuleConfig = {
 export const MODULE_CONFIGS: Record<string, ModuleConfig> = {
     wave: {
         name: "WAVE Program",
-        description: "Women's Agribusiness",
+        //   #824 No strapline. See the note on `description` above: the one
+        //   that was here read as an expansion of the acronym and was not one.
+        //   The name alone is correct and complete.
         theme: "emerald",
         icon: Sparkles,
         pathPrefix: "/wave",

@@ -24,6 +24,58 @@ import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 
+/**
+ *   #825 THE EXPORT APPROVAL QUEUE PRINTED THE WORD "undefined" AS A NAME.
+ *
+ *   What stood at both hydration sites in this file, twice, identically:
+ *
+ *       const userName = uData.name || uData.firstName
+ *           ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+ *           : (profile?.fullName || kycName || "Unknown User");
+ *
+ *   `||` binds tighter than `?:`, so that reads as
+ *   `(uData.name || uData.firstName) ? … : …`. The TRUE branch then
+ *   interpolates `uData.firstName` — the value the condition did not
+ *   establish. An account carrying `name` but no `firstName` therefore
+ *   rendered the template literal `${undefined} ` and trimmed it to the
+ *   five-letter string "undefined", and the `profile.fullName` fallback the
+ *   author wrote for exactly that case was unreachable.
+ *
+ *   MEASURED, not read — the expression was executed against the four account
+ *   shapes this collection holds:
+ *
+ *       name only                  ->  "undefined"     ← the defect
+ *       name + firstName           ->  "Aishat Abubakar"
+ *       neither, app has fullName  ->  "AISHAT Yahaya ABUBAKAR"
+ *       neither, kyc name only     ->  "Aishat Abubakar"
+ *
+ *   `name` without `firstName` is the ordinary shape for an account created by
+ *   OAuth or by a bulk import, which is most of the legacy register.
+ *
+ *   ONE FUNCTION, CALLED TWICE, because the duplicated expression is how this
+ *   would be fixed in one site and left in the other — the shape this audit
+ *   keeps finding. The preference ORDER is unchanged from what the broken
+ *   expression actually produced, so the only rows whose label moves are the
+ *   ones that read "undefined".
+ *
+ *   It matters beyond the label: an admin cannot search for a person whose
+ *   name the screen refuses to show them.
+ */
+function exportApplicantName(
+    uData: Record<string, any>,
+    profile: Record<string, any> | undefined,
+    kycName: string | null,
+): string {
+    const fromAccount = uData?.firstName
+        ? `${uData.firstName} ${uData.lastName || ""}`.trim()
+        : "";
+    return fromAccount
+        || uData?.name
+        || profile?.fullName
+        || kycName
+        || "Unknown User";
+}
+
 // ============================================
 // Export Window Management (Admin)
 // ============================================
@@ -629,9 +681,51 @@ async function _getStandardExportApplicationsAction(options: {
             // Apply in-memory search
             if (options.search) {
                 const s = options.search.toLowerCase().trim();
-                const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
-                const matchingUserIds = await searchUserIdsByQuery(options.search);
+                const { searchUserIdsByQuery, searchDocIdsByNameFields } =
+                    await import("@/lib/admin-search-helper");
+                const [matchingUserIds, matchingAppIds] = await Promise.all([
+                    searchUserIdsByQuery(options.search),
+                    searchDocIdsByNameFields(
+                        COLLECTIONS.EXPORT_APPLICATIONS,
+                        ["profile.fullName", "profile.firstName", "profile.lastName",
+                         "kyc.kycData.firstName", "kyc.kycData.lastName"],
+                        options.search,
+                    ),
+                ]);
                 const matchingUserIdsSet = new Set(matchingUserIds);
+
+                /*
+                 *   #825 THE SEARCH COULD ONLY SEE THE NEWEST 5,000 ROWS.
+                 *
+                 *   The filter below reads the application's OWN name fields,
+                 *   which is right — but it runs over `applications`, and that
+                 *   is one `.limit(5000)` window ordered by createdAt desc. An
+                 *   applicant who registered before the newest five thousand
+                 *   was not filtered out; she was never fetched. The screen
+                 *   then said no such person, which is the confusion #786 and
+                 *   #814 are both about, arrived at a third way.
+                 *
+                 *   The register is already past that mark on WAVE — the owner
+                 *   counts "over 15k" — so this is a live bound, not a
+                 *   theoretical one, and the same code shape runs on every
+                 *   module's queue.
+                 *
+                 *   So the name search is ALSO issued against the database,
+                 *   where it is bounded by the query rather than by the page,
+                 *   and any document it finds outside the window is pulled in
+                 *   before the filter runs. The filter is unchanged and still
+                 *   does the deciding.
+                 */
+                const missingIds = matchingAppIds.filter(
+                    (id) => !applications.some((app: any) => app.id === id),
+                );
+                if (missingIds.length > 0) {
+                    const extra = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                        .where(FieldPath.documentId(), "in", missingIds).get();
+                    applications = applications.concat(serializeDocs(extra.docs));
+                }
+                const matchingAppIdSet = new Set(matchingAppIds);
+
                 applications = applications.filter((app: any) => {
                     const profile = (app.profile || {}) as any;
                     const kyc = (app.kyc?.kycData || {}) as any;
@@ -640,12 +734,23 @@ async function _getStandardExportApplicationsAction(options: {
                         app.userId,
                         app.userEmail,
                         profile.fullName,
+                        //   #825 — the pair the database searches and this
+                        //   string did not. The two lists have to agree, or a
+                        //   row is fetched by one and discarded by the other.
+                        profile.firstName,
+                        profile.lastName,
                         profile.phone,
                         kyc.firstName,
                         kyc.lastName,
                         kyc.phone
                     ].filter(Boolean).map(String).join(" ").toLowerCase();
-                    return searchString.includes(s) || matchingUserIdsSet.has(app.userId as string);
+                    return searchString.includes(s)
+                        || matchingUserIdsSet.has(app.userId as string)
+                        //   #825 — the database found this row by a name field
+                        //   the string above does not join (profile.firstName,
+                        //   profile.lastName). Dropping it here would fetch the
+                        //   right document and then discard it.
+                        || matchingAppIdSet.has(app.id as string);
                 });
             }
 
@@ -720,7 +825,9 @@ async function _getStandardExportApplicationsAction(options: {
                 const kyc = (app.kyc || {}) as any;
                 const profile = (app.profile || {}) as any;
                 const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
-                const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
+                //   #825 — see exportApplicantName. This read "undefined" for
+                //   any account with `name` and no `firstName`.
+                const userName = exportApplicantName(uData, profile, kycName);
                 
                 let status = app.status || "pending";
                 if (status === "pending_review") status = "pending";
@@ -794,7 +901,9 @@ async function _getStandardExportApplicationsAction(options: {
                 const kyc = (app.kyc || {}) as any;
                 const profile = (app.profile || {}) as any;
                 const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
-                const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
+                //   #825 — see exportApplicantName. This read "undefined" for
+                //   any account with `name` and no `firstName`.
+                const userName = exportApplicantName(uData, profile, kycName);
                 
                 let status = app.status || "pending";
                 if (status === "pending_review") status = "pending";

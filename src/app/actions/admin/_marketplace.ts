@@ -713,7 +713,23 @@ async function _getMarketplaceUsersAction(options: {
         //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
         const maySeeBankDetails = await mayRevealMemberPii("marketplace:approve_sellers");
 
-        const fetchLimit = options.search ? 5000 : (options.limit || 50);
+        /*
+         *   #825 — a `fetchLimit` stood here, computed on every call and never
+         *   applied to anything. It read
+         *
+         *       const fetchLimit = options.search ? 5000 : (options.limit || 50);
+         *
+         *   which describes a query this action does not issue: the `.get()`
+         *   below takes no limit, and BOTH the list and the stats are paged in
+         *   memory afterwards (`users.slice(startIndex, …)`). Applying it would
+         *   have been the wrong repair — a 50-row query with in-memory paging
+         *   returns an empty second page.
+         *
+         *   Removed rather than wired up, so the next reader is not told the
+         *   result is bounded at a number that never reaches the database. The
+         *   bound that DOES apply is the adapter's DEFAULT_QUERY_LIMIT, and
+         *   supabase-db reports reaching it rather than truncating quietly.
+         */
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
 
         // Query by roles array — flat indexed field, no composite index needed.

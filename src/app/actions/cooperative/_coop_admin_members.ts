@@ -120,7 +120,38 @@ async function _getAllMembersAction(options?: {
             throw error;
         }
 
-        const allMembersRaw = serializeDocs(snapshot.docs);
+        let allMembersRaw = serializeDocs(snapshot.docs);
+
+        if (options?.search) {
+            /*
+             *   #825 — the same 5,000-row window as the standard members
+             *   reader, and the same repair. The filter further down reads
+             *   `m.firstName`/`m.lastName`/`m.fullName` off the MEMBER
+             *   document, but only for members that this page happened to
+             *   fetch. Any member the database matches by name outside the
+             *   window is pulled in HERE, before hydration, so she is joined to
+             *   her user record like every other row rather than appearing
+             *   half-built.
+             *
+             *   This reader has no screen today; it is exported through
+             *   actions/cooperative/index and returns member PII, so it is held
+             *   to the same behaviour as the one that does.
+             */
+            const { searchDocIdsByNameFields } = await import("@/lib/admin-search-helper");
+            const matchingMemberIds = await searchDocIdsByNameFields(
+                COLLECTIONS.COOPERATIVE_MEMBERS,
+                ["firstName", "lastName", "fullName", "otherNames"],
+                options.search,
+            );
+            const missingIds = matchingMemberIds.filter(
+                (id) => !allMembersRaw.some(m => m.id === id),
+            );
+            if (missingIds.length > 0) {
+                const extra = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where(FieldPath.documentId(), "in", missingIds).get();
+                allMembersRaw = allMembersRaw.concat(serializeDocs(extra.docs));
+            }
+        }
 
         // Show ALL members who have a cooperative_members document (including pending/submitted).
         // Previously this filter hid users whose membershipStatus was still "pending" after
@@ -173,6 +204,9 @@ async function _getAllMembersAction(options?: {
                     m.firstName,
                     m.lastName,
                     m.fullName,
+                    //   #825 — searched in the database above, so it has to be
+                    //   searchable here too or a row is fetched and discarded.
+                    m.otherNames,
                     m.email,
                     m.phone,
                     m.bankName,
@@ -799,9 +833,44 @@ export async function getStandardCooperativeMembersAction(
         if (useMemoryPagination) {
             // Apply search filter if active
             if (search) {
-                const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
-                const matchingUserIds = await searchUserIdsByQuery(search);
+                const { searchUserIdsByQuery, searchDocIdsByNameFields } =
+                    await import("@/lib/admin-search-helper");
+                const [matchingUserIds, matchingMemberIds] = await Promise.all([
+                    searchUserIdsByQuery(search),
+                    searchDocIdsByNameFields(
+                        COLLECTIONS.COOPERATIVE_MEMBERS,
+                        ["firstName", "lastName", "fullName", "otherNames"],
+                        search,
+                    ),
+                ]);
                 const matchingUserIdsSet = new Set(matchingUserIds);
+
+                /*
+                 *   #825 THE SEARCH COULD ONLY SEE THE NEWEST 5,000 MEMBERS.
+                 *
+                 *   The filter below reads `app.firstName` and `app.lastName`
+                 *   off the MEMBER document, which is right — the members table
+                 *   labels each row from those same two fields. But it runs
+                 *   over `applications`, and that is one `.limit(5000)` window
+                 *   ordered by createdAt desc. A member enrolled before the
+                 *   newest five thousand was not filtered out; she was never
+                 *   fetched, and the screen reported no such person.
+                 *
+                 *   The name search is issued against the database as well, so
+                 *   it is bounded by the query rather than by the page, and any
+                 *   member it finds outside the window is pulled in before the
+                 *   filter runs. The filter is unchanged and still decides.
+                 */
+                const missingIds = matchingMemberIds.filter(
+                    (id) => !applications.some(app => app.id === id),
+                );
+                if (missingIds.length > 0) {
+                    const extra = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                        .where(FieldPath.documentId(), "in", missingIds).get();
+                    applications = applications.concat(serializeDocs(extra.docs));
+                }
+                const matchingMemberIdSet = new Set(matchingMemberIds);
+
                 const s = search.toLowerCase().trim();
                 applications = applications.filter(app => {
                     const shortId = `ese-coop-${app.id.slice(-4).toLowerCase()}`;
@@ -810,10 +879,31 @@ export async function getStandardCooperativeMembersAction(
                         shortId,
                         app.firstName,
                         app.lastName,
+                        /*
+                         *   #825 — fullName and otherNames were missing, and
+                         *   they are where a LEGACY member's name lives: the
+                         *   bulk import wrote one string, not a first/last
+                         *   pair. This check is a SUBSTRING match, so it is
+                         *   also the only thing that finds a surname sitting in
+                         *   the middle of a combined name — the query layer
+                         *   offers prefix ranges and no `like`, so
+                         *   "ELEDUMARE" cannot be found in "NGOZI ELEDUMARE"
+                         *   by the database. Within the page it is found here.
+                         *   Beyond the page it is not findable at all, and that
+                         *   bound is recorded rather than papered over.
+                         */
+                        app.fullName,
+                        app.otherNames,
                         app.phone,
                         app.email
                     ].filter(Boolean).map(String).join(" ").toLowerCase();
-                    return docSearchString.includes(s) || matchingUserIdsSet.has(app.userId);
+                    return docSearchString.includes(s)
+                        || matchingUserIdsSet.has(app.userId)
+                        //   #825 — found by a name field the string above does
+                        //   not join (fullName, otherNames). Fetching the right
+                        //   document and then discarding it is no better than
+                        //   never fetching it.
+                        || matchingMemberIdSet.has(app.id);
                 });
             }
 

@@ -474,9 +474,21 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                                     <p className={cn("font-bold text-sm leading-tight", theme.heading)}>
                                         {moduleConfig.name || COMPANY_INFO.name}
                                     </p>
-                                    <p className={cn("text-[10px] font-semibold tracking-widest uppercase mt-0.5", theme.subheading)}>
-                                        {moduleConfig.description || "Hub"}
-                                    </p>
+                                    {/*
+                                      *   #824 RENDERED ONLY WHEN THERE IS ONE.
+                                      *
+                                      *   This fell back to "Hub" for a module
+                                      *   with no strapline, so removing WAVE's
+                                      *   text would have replaced one wrong
+                                      *   word with another in the same place.
+                                      *   A module that has nothing to say here
+                                      *   now says nothing.
+                                      */}
+                                    {moduleConfig.description && (
+                                        <p className={cn("text-[10px] font-semibold tracking-widest uppercase mt-0.5", theme.subheading)}>
+                                            {moduleConfig.description}
+                                        </p>
+                                    )}
                                 </div>
                             </Link>
                             <div className="flex items-center gap-1">

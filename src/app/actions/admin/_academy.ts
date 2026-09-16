@@ -79,6 +79,42 @@ async function _getAcademyApplicationsAction(options: {
         }
         const nextCursor = rawApplications.length > 0 ? rawApplications[rawApplications.length - 1].id as string : undefined;
 
+        let searchMatchedIds = new Set<string>();
+        if (options.search) {
+            /*
+             *   #825 — the fifth copy of the window, and the same repair.
+             *
+             *   The filter further down reads `app.personalInfo?.fullName` and
+             *   `app.user?.name`, which is right, but it runs over
+             *   `rawApplications` — one `.limit(5000)` page ordered by
+             *   createdAt descending. A student who applied before the newest
+             *   five thousand was not filtered out; she was never fetched.
+             *
+             *   #814 fixed the Academy queue the screen calls
+             *   (_ac_admin_applications). THIS reader was left, which is the
+             *   shape this whole finding is about: a correct rule applied to
+             *   some of the places it names. No screen calls it today; it is
+             *   exported and returns applicant rows, so it is held to the same
+             *   behaviour as the one that does.
+             */
+            const { searchDocIdsByNameFields } = await import("@/lib/admin-search-helper");
+            const matchedIds = await searchDocIdsByNameFields(
+                COLLECTIONS.ACADEMY_APPLICATIONS,
+                ["personalInfo.surname", "personalInfo.firstName",
+                 "personalInfo.otherNames", "personalInfo.fullName"],
+                options.search,
+            );
+            searchMatchedIds = new Set(matchedIds);
+            const missingIds = matchedIds.filter(
+                (id) => !rawApplications.some((app: any) => app.id === id),
+            );
+            if (missingIds.length > 0) {
+                const extra = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where(FieldPath.documentId(), "in", missingIds).get();
+                rawApplications = rawApplications.concat(serializeDocs(extra.docs));
+            }
+        }
+
         // --- HYDRATION START ---
         const userIds = [...new Set(rawApplications.map((app: any) => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
@@ -171,9 +207,31 @@ async function _getAcademyApplicationsAction(options: {
                     app.user?.name,
                     app.user?.email,
                     app.user?.phone,
-                    app.personalInfo?.fullName
+                    app.personalInfo?.fullName,
+                    //   #825 — the three the database searches and this string
+                    //   did not. The two lists have to agree, or a row is
+                    //   fetched by one and discarded by the other. It is also a
+                    //   SUBSTRING match, so it is what finds a surname sitting
+                    //   in the middle of a combined name — the query layer has
+                    //   prefix ranges and no `like`, so the database cannot.
+                    app.personalInfo?.surname,
+                    app.personalInfo?.firstName,
+                    app.personalInfo?.otherNames
                 ].filter(Boolean).map(String).join(" ").toLowerCase();
-                return searchString.includes(s);
+                return searchString.includes(s)
+                    /*
+                     *   AND THE DATABASE'S ANSWER STANDS ON ITS OWN.
+                     *
+                     *   With the lists above in agreement this is usually
+                     *   redundant, which is the point: it is what stops the two
+                     *   drifting apart again from silently costing a row. The
+                     *   query is the authority on why a document was fetched,
+                     *   and a JavaScript re-check that disagrees is wrong about
+                     *   which of the two knows — the database answers "Abuba"
+                     *   with ABUBAKAR through a prefix range that no substring
+                     *   test reproduces.
+                     */
+                    || searchMatchedIds.has(app.id as string);
             });
         }
 

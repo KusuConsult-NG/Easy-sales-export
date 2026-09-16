@@ -196,13 +196,31 @@ describe('#774(a) — the acronym expands one way', () => {
          *   finding quote the wrong wordings in order to explain them — the
          *   #741 trap, met once already in #777's first draft.
          */
-        const INVENTED: ReadonlyArray<[string, RegExp]> = [
-            ['Women Agro-processors Venture Empowerment', /Women Agro-processors Venture Empowerment/],
-            ['Women in Agri-Ventures Excellence', /Women in Agri-Ventures Excellence/],
-            ['Women in Agriculture Venture Excellence', /Women in Agriculture Venture Excellence/],
-            ['Agribusiness Venture Empowerment', /Agribusiness Venture Empowerment/],
-            ['Women in Agriculture', /Women in Agriculture(?![ -]Venture)/],
-        ];
+        /*
+         *   #824 THE SHAPE, NOT A LIST OF THE ONES ALREADY FOUND.
+         *
+         *   This used to enumerate the wordings known to be wrong. An
+         *   enumerated list can only ever catch an expansion somebody has
+         *   already invented — and the count kept going up precisely because
+         *   people kept inventing new ones:
+         *
+         *       #774   five, four corrected
+         *       #777   a sixth, on the application form
+         *       #811   a seventh, on the main dashboard
+         *       #824   an EIGHTH — "Women Agripreneurs Value-creation
+         *              Empowerment" — in THREE places at once: the WAVE
+         *              dashboard, the WAVE profile, and the email that goes to
+         *              applicants. Plus a strapline, "Women's Agribusiness", in
+         *              the sidebar config.
+         *
+         *   Not one of those matched any entry in the old list, because each
+         *   was a fresh invention. So the sweep asks the SHAPE instead: a
+         *   phrase beginning "Women" followed by three or more capitalised
+         *   words is somebody expanding the acronym, whatever words they chose.
+         *
+         *   That catches the ninth one too.
+         */
+        const EXPANSION_SHAPE = /Women[\u2019']?s?\s+(?:[A-Z][A-Za-z-]+[ -]){2,}[A-Z][A-Za-z-]+/g;
 
         /*
          *   The two files allowed to spell the wrong wordings out: the constant
@@ -238,8 +256,8 @@ describe('#774(a) — the acronym expands one way', () => {
         const offenders: string[] = [];
         for (const f of files) {
             const src = stripComments(read(f));
-            for (const [label, bad] of INVENTED) {
-                if (bad.test(src)) offenders.push(`${f} — "${label}"`);
+            for (const hit of src.match(EXPANSION_SHAPE) ?? []) {
+                offenders.push(`${f} — "${hit}"`);
             }
         }
 
@@ -318,6 +336,41 @@ describe('#774(b) — Section D takes one answer', () => {
         expect(src).toContain('Preferred Crop');
         expect(section.length).toBeGreaterThan(200);
         expect(section.length).toBeLessThan(src.length);
+    });
+
+    /*
+     *   #825 AND THE COMMODITY QUESTION WAS NEVER PINNED AT ALL.
+     *
+     *   The owner: "on the WAVE form confirm if the crop selection is now
+     *   single selection instead of multiple selection."
+     *
+     *   It is — and nothing here said so. The three assertions above name
+     *   `waveValueChainArea` and `valueChainAreas`, so the commodity question
+     *   was covered only by the comment recording that its prompt had changed.
+     *   That is the shape this audit keeps finding: a correct rule applied to
+     *   some of the places it names, and its test written for some of them too.
+     *   Reverting the commodity grid to checkboxes would have left this file
+     *   green.
+     *
+     *   SCOPED TO THE SLICE BELOW the split point, for the same reason the
+     *   value-chain assertions are scoped above it: an assertion satisfied by
+     *   the wrong occurrence is the trap, and both questions live in one file.
+     */
+    it('AND THE COMMODITY QUESTION IS A RADIO GROUP TOO', () => {
+        const src = step();
+        const commoditySection = src.split('Preferred Crop')[1] ?? '';
+
+        expect(commoditySection).toMatch(/type="radio"/);
+        expect(commoditySection).toMatch(/name="wavePreferredCommodity"/);
+        expect(commoditySection).not.toMatch(/type="checkbox"/);
+    });
+
+    it('AND CHOOSING A COMMODITY REPLACES RATHER THAN ACCUMULATES', () => {
+        //   The property, not the spelling. An additive setter behind radio
+        //   inputs looks single-select on screen and stores two answers.
+        const src = step();
+        expect(src).toMatch(/preferredCommodities:\s*\[\s*commodity\s*\]/);
+        expect(src).not.toMatch(/preferredCommodities:\s*\[\s*\.\.\./);
     });
 });
 

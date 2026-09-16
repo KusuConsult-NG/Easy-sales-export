@@ -35,18 +35,92 @@ async function _getFarmNationRegistrantsAction(options: {
         const pageSize = options.search ? 5000 : (options.limit || 20);
         const page = options.page ?? 0;
 
-        // Note: This fetches a large set of users and filters in memory. 
-        // This is not ideal for massive scale but works for the current user base.
-        const snapshot = await db.collection(COLLECTIONS.USERS).limit(500).get();
+        /*
+         *   #825 THIS LISTED FARM NATION REGISTRANTS BY READING 500 ARBITRARY
+         *        USERS.
+         *
+         *        What stood here:
+         *
+         *            // Note: This fetches a large set of users and filters in
+         *            // memory. This is not ideal for massive scale but works
+         *            // for the current user base.
+         *            const snapshot = await db.collection(COLLECTIONS.USERS)
+         *                .limit(500).get();
+         *
+         *        then kept whichever of those 500 happened to carry a
+         *        `serviceRegistrations.farmNation`. The note is wrong about
+         *        what it costs: the bound is not a performance trade, it is a
+         *        CEILING ON WHO EXISTS. There is no orderBy, so which 500 rows
+         *        come back is whatever the database returns first, and #495
+         *        measured 42,160 user documents — so this action could see
+         *        about one registrant in eighty, chosen arbitrarily, and
+         *        reported the rest as not registered. `pageSize = 5000` on a
+         *        search was describing a page it could never fill.
+         *
+         *        DRIVEN OFF THE AUTHORITATIVE RECORD NOW. _fn_onboarding writes
+         *        FARM_NATION_APPLICATIONS as "the authoritative record" and
+         *        mirrors onto the user; this reads that collection to learn who
+         *        is registered, then hydrates those users. Same output shape,
+         *        same fields, no arbitrary bound — and the search is unioned the
+         *        way the registrant queue's is, so a woman whose application
+         *        carries a fuller name than her account is findable here too.
+         *
+         *        No screen calls this action; it is reachable through
+         *        actions/farm-nation-admin/index and returns registrant rows, so
+         *        it is held to what the screen's reader does.
+         */
+        const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+            .select("userId", "profile", "personalInfo", "status", "submittedAt").get();
 
-        let users = snapshot.docs
+        /** user id -> what their application says about them. */
+        const appById = new Map<string, { name: string; status: string; submittedAt: any }>();
+        for (const doc of appSnap.docs) {
+            const d = doc.data() as any;
+            if (!d?.userId) continue;
+            const p = (d.profile || d.personalInfo || {}) as any;
+            const name = [p.firstName, p.otherName, p.lastName].filter(Boolean).join(" ").trim()
+                || p.fullName || "";
+            const existing = appById.get(d.userId);
+            //   One user may hold more than one application; the first with a
+            //   name on it is enough to find them by.
+            if (!existing || (!existing.name && name)) {
+                appById.set(d.userId, { name, status: d.status || "pending", submittedAt: d.submittedAt });
+            }
+        }
+
+        const registrantUserIds = Array.from(appById.keys());
+        const userDocs: any[] = [];
+        for (let i = 0; i < registrantUserIds.length; i += 30) {
+            const chunk = registrantUserIds.slice(i, i + 30);
+            if (chunk.length === 0) continue;
+            const snap = await db.collection(COLLECTIONS.USERS)
+                .where(FieldPath.documentId(), "in", chunk).get();
+            userDocs.push(...snap.docs);
+        }
+
+        let users = userDocs
             .map(doc => {
                 const data = doc.data();
-                const farmNation = data.serviceRegistrations?.farmNation;
-                if (!farmNation) return null;
+                const app = appById.get(doc.id);
+                /*
+                 *   The application is the authoritative record of the
+                 *   registration; `serviceRegistrations.farmNation` is the
+                 *   mirror _fn_onboarding writes onto the account in the same
+                 *   transaction. A row whose mirror is missing — a legacy
+                 *   import, or a transaction that wrote one half — used to be
+                 *   dropped, so a real registrant disappeared because of a
+                 *   bookkeeping field rather than anything about her. The
+                 *   mirror is used when it is there and stood in for from the
+                 *   application when it is not.
+                 */
+                const farmNation = data.serviceRegistrations?.farmNation
+                    ?? { status: app?.status ?? "pending", submittedAt: app?.submittedAt };
                 return {
                     id: doc.id,
-                    name: data.fullName || data.name || "Unknown",
+                    //   The name on her APPLICATION first, which is what she
+                    //   wrote and what the registrant queue prints, then the
+                    //   account's. #814's rule, applied to this reader too.
+                    name: app?.name || data.fullName || data.name || "Unknown",
                     email: data.email,
                     phone: data.phone,
                     role: data.roles?.[0] || "general_user",
@@ -66,6 +140,9 @@ async function _getFarmNationRegistrantsAction(options: {
         if (options.search) {
             const q = options.search.toLowerCase().trim();
             users = users.filter((u: any) => {
+                //   `u.name` is now the application's name when there is one,
+                //   so the field an admin reads off the row is the field this
+                //   searches. That is the whole of #814, stated as one line.
                 const searchString = [u.name, u.email, u.phone].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(q);
             });
@@ -145,9 +222,54 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         let hasMoreRaw = false;
 
         if (options.search) {
-            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
-            const matchingUserIds = await searchUserIdsByQuery(options.search);
-            if (matchingUserIds.length === 0) {
+            /*
+             *   #825 THE NAME ON THE ROW IS SEARCHED HERE TOO.
+             *
+             *   #814 fixed this for WAVE and Academy. Farm Nation had the same
+             *   shape, untouched — "a correct rule applied to some of the
+             *   places it names", which is this audit's most frequent defect.
+             *
+             *   The row's label is built at the hydration step below:
+             *
+             *       const userName = profile.firstName
+             *           ? `${profile.firstName} ${profile.lastName || ''}`.trim()
+             *           : (profile.fullName || uData.fullName || uData.name || "Unknown");
+             *
+             *   — the APPLICATION's `profile`, preferred over the account. So
+             *   the name an admin reads off the row comes from the registrant
+             *   document, while this search resolved the query against USERS
+             *   alone and, when nothing matched, RETURNED EMPTY WITHOUT EVER
+             *   QUERYING FARM_NATION_APPLICATIONS. Same words on the screen and
+             *   in the box, and "no such person" while looking at her.
+             *
+             *   Both are searched now and the results unioned.
+             */
+            const { searchUserIdsByQuery, searchDocIdsByNameFields } =
+                await import("@/lib/admin-search-helper");
+
+            const [matchingUserIds, matchingAppIds] = await Promise.all([
+                searchUserIdsByQuery(options.search),
+                searchDocIdsByNameFields(
+                    COLLECTIONS.FARM_NATION_APPLICATIONS,
+                    /*
+                     *   The registrant document's own identity fields. `profile`
+                     *   is what _fn_onboarding writes; `personalInfo` is the
+                     *   legacy spelling the hydration step above still reads
+                     *   (`app.profile || app.personalInfo`), so a search that
+                     *   covered only one would miss whichever cohort wrote the
+                     *   other.
+                     */
+                    [
+                        "profile.firstName", "profile.lastName",
+                        "profile.otherName", "profile.fullName",
+                        "personalInfo.firstName", "personalInfo.lastName",
+                        "personalInfo.fullName",
+                    ],
+                    options.search,
+                ),
+            ]);
+
+            if (matchingUserIds.length === 0 && matchingAppIds.length === 0) {
                 return {
                     success: true,
                     error: null,
@@ -160,11 +282,27 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 };
             }
 
-            const querySnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("userId", "in", matchingUserIds)
-                .get();
+            //   Two reads, unioned by document id. Each `in` is issued only
+            //   when it has something to look for — an empty `in` is an illegal
+            //   query, and it is also the state this finding is about.
+            const [byUser, byName] = await Promise.all([
+                matchingUserIds.length > 0
+                    ? db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                        .where("userId", "in", matchingUserIds).get()
+                    : null,
+                matchingAppIds.length > 0
+                    ? db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                        .where(FieldPath.documentId(), "in", matchingAppIds).get()
+                    : null,
+            ]);
 
-            applications = serializeDocs(querySnap.docs);
+            const byId = new Map<string, any>();
+            for (const snap of [byUser, byName]) {
+                if (!snap) continue;
+                for (const doc of snap.docs) byId.set(doc.id, doc);
+            }
+
+            applications = serializeDocs(Array.from(byId.values()));
             if (options.status && options.status !== "all") {
                 applications = applications.filter(app => app.status === options.status);
             }
@@ -307,24 +445,44 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             });
         }
 
-        // 4. Client-side Search (if requested)
-        if (options.search) {
-            const s = options.search.toLowerCase().trim();
-            finalApplications = finalApplications.filter((app: any) => {
-                const searchString = [
-                    app.id,
-                    app.userId,
-                    app.user?.name,
-                    app.user?.email,
-                    app.user?.phone,
-                    app.data?.firstName,
-                    app.data?.lastName,
-                    app.data?.fullName,
-                    app.data?.stateOfOrigin
-                ].filter(Boolean).map(String).join(" ").toLowerCase();
-                return searchString.includes(s);
-            });
-        }
+        /*
+         *   #825 STEP 4 USED TO THROW AWAY THE ROWS STEP 1 WENT AND FETCHED.
+         *
+         *   What stood here — "4. Client-side Search (if requested)" — re-ran
+         *   the search in JavaScript over the hydrated rows:
+         *
+         *       const searchString = [
+         *           app.id, app.userId, app.user?.name, app.user?.email,
+         *           app.user?.phone, app.data?.firstName, app.data?.lastName,
+         *           app.data?.fullName, app.data?.stateOfOrigin
+         *       ].join(" ").toLowerCase();
+         *       return searchString.includes(s);
+         *
+         *   Every one of those fields resolves to the APPLICATION's name —
+         *   `user.name` is built `profile.firstName ? … : …` a hundred lines
+         *   up, and `data.firstName` is `profile.firstName || uData.firstName`.
+         *   The ACCOUNT's own name is not among them.
+         *
+         *   So the user-side half of the search was decorative. The database
+         *   resolved "Musa" to her account, fetched her registrant document by
+         *   `userId in (…)`, hydrated it — and then this filter dropped it,
+         *   because "Musa" is not in the name her form carries. A round trip to
+         *   fetch the right row and a line of JavaScript to discard it.
+         *
+         *   MEASURED, not read: the suite for this finding searched her account
+         *   name against the seeded pair, watched the union return `["her-doc"]`
+         *   and watched the action return `[]`. It is why that suite executes
+         *   the action instead of asserting about the source.
+         *
+         *   THE FILTER IS GONE RATHER THAN WIDENED. Whenever `options.search`
+         *   is set, `applications` came from the union above and from nowhere
+         *   else — every row in it was SELECTED BY the search. A second pass
+         *   can therefore only ever remove a correct answer, and adding the
+         *   account fields to the string would fix this instance of that while
+         *   leaving the shape that caused it. Prefix matches are the plain
+         *   case: the database answers "Abuba" with ABUBAKAR, and a substring
+         *   re-check that disagrees is wrong about which of the two knows.
+         */
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {

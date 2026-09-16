@@ -25,6 +25,7 @@ import type { WaveResource, WaveTrainingEvent } from "@/app/actions/wave";
 import { toSafeDate } from "@/lib/utils";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { numberOrZero } from "@/lib/numbers";
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
 
 export default function WaveDashboardPage() {
     const router = useRouter();
@@ -171,7 +172,23 @@ export default function WaveDashboardPage() {
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold">Welcome to WAVE</h1>
-                                <p className="text-emerald-100">Women Agripreneurs Value-creation Empowerment</p>
+                                {/*
+                                  *   #824 AN EIGHTH INVENTED EXPANSION, on the
+                                  *   dashboard every WAVE member lands on.
+                                  *
+                                  *   It read "Women Agripreneurs Value-creation
+                                  *   Empowerment" — a phrase built to fit the
+                                  *   letters, and not the programme's name.
+                                  *
+                                  *   #774 corrected five, #777 a sixth, #811 a
+                                  *   seventh on the main dashboard, #824 an
+                                  *   eighth in the sidebar strapline — and each
+                                  *   sweep looked for the wordings ALREADY
+                                  *   KNOWN TO BE WRONG, which cannot find one
+                                  *   nobody had invented yet. This is the
+                                  *   constant.
+                                  */}
+                                <p className="text-emerald-100">{WAVE_PROGRAM_NAME}</p>
                             </div>
                         </div>
                         <p className="text-lg text-emerald-50 mb-6">

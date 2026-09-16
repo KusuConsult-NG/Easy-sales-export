@@ -20,6 +20,7 @@ import {
 import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave";
 import { toSafeDate } from "@/lib/utils";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
 
 /**
  * What the server sends when it managed to walk the whole chain.
@@ -128,7 +129,9 @@ export default function WaveProfileClient({ initial = null }: { initial?: WavePr
                         My WAVE Profile
                     </h1>
                     <p className="text-gray-600">
-                        Your journey in the Women Agripreneurs Value-creation Empowerment program
+                        {/*   #824 The constant. This was a third copy of an
+                          *   invented expansion — see the dashboard.  */}
+                        Your journey in the {WAVE_PROGRAM_NAME}
                     </p>
                 </div>
 
