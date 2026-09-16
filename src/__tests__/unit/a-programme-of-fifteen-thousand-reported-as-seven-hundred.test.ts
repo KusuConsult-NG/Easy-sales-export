@@ -479,54 +479,43 @@ describe('#835 — every module counts its applicants the same way', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#837 — the compliance count and the dashboard pie agree on who exists', () => {
-    it('AN ACCOUNT WITH THE ROLE BUT NO REGISTRATION OBJECT IS COUNTED', async () => {
-        /*
-         *   The owner asked for stats that will not confuse the QA team
-         *   certifying this platform — and two admin screens were counting the
-         *   same programme differently:
-         *
-         *     analytics.service (the pie)  status IN (active…) OR roles ∋ role
-         *     this module (compliance)     status IS NOT NULL
-         *
-         *   So an account holding `wave_participant` with no
-         *   `serviceRegistrations.wave` object showed on one screen and not the
-         *   other. That population is the whole reason #835 exists: ~15,128
-         *   accounts hold that role.
-         */
+describe('#839 — a module role is not evidence that somebody applied', () => {
+    /**
+     *   #837 UNIONED THE ROLE IN AND OVERSTATED WAVE BY ~17,000 PEOPLE.
+     *
+     *   The owner, from the deployed screen:
+     *
+     *       Total Applications   36,748
+     *       Approved (40%)       14,668
+     *       Pending Review        5,083
+     *
+     *   14,668 + 5,083 = 19,751. The remaining 16,997 were accounts counted
+     *   only because they hold `wave_participant` with no
+     *   `serviceRegistrations.wave` object at all.
+     *
+     *   AND THE CODEBASE ALREADY SAID WHY THAT IS WRONG.
+     *   _wv_admin_applications.ts records that the role "was auto-assigned by an
+     *   earlier registration flow… and is also granted by the legacy import".
+     *   It is evidence of having registered on the PLATFORM, not of having
+     *   applied to this PROGRAMME.
+     *
+     *   #837's stated reason was to make this count agree with the dashboard
+     *   pie. But the pie answers "who is in this module" and this answers "how
+     *   many applications exist" — two different questions. Forcing them to the
+     *   same number is not agreement; it is one of them being wrong. #837 wrote
+     *   that distinction down in its own header and then collapsed it anyway.
+     */
+    it('AN ACCOUNT WITH THE ROLE AND NO REGISTRATION IS NOT AN APPLICANT', async () => {
         const { countModuleApplicants } = await import('@/lib/module-applicant-count');
         store = installFakeDb({
             [COLLECTIONS.USERS]: {
-                'with-status': {
+                'applied': {
                     roles: ['wave_participant'],
                     serviceRegistrations: { wave: { status: 'approved' } },
                 },
-                //   The account that used to be invisible here.
+                //   The 16,997. Auto-assigned the role, never applied.
                 'role-only': { roles: ['wave_participant'] },
-                //   And somebody in no module at all, who must not be counted.
                 'unrelated': { roles: ['user'] },
-            },
-        });
-
-        const c = await countModuleApplicants('wave');
-
-        expect(c.total).toBe(2);
-    });
-
-    it('AND AN ACCOUNT IS NOT COUNTED TWICE BY BOTH ARMS', async () => {
-        /*
-         *   The union is built as two ANDed queries rather than an OR the
-         *   adapter cannot express, so the role arm is filtered to `status ==
-         *   null`. If that filter were dropped, every ordinary applicant would
-         *   be counted once for her status and again for her role.
-         */
-        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
-        store = installFakeDb({
-            [COLLECTIONS.USERS]: {
-                'both': {
-                    roles: ['wave_participant'],
-                    serviceRegistrations: { wave: { status: 'approved' } },
-                },
             },
         });
 
@@ -536,19 +525,49 @@ describe('#837 — the compliance count and the dashboard pie agree on who exist
         expect(c.approved).toBe(1);
     });
 
-    it('AND A MULTI-ROLE MODULE COUNTS A PERSON ONCE', async () => {
-        //   A marketplace user is routinely both buyer and seller. Counted once
-        //   per role, she would be two people on an admin card.
+    it('AND THE BUCKETS STILL ACCOUNT FOR EVERY APPLICANT', async () => {
+        /*
+         *   The invariant that made the defect visible on the owner's screen:
+         *   total was 36,748 while the named buckets summed to 19,751. With the
+         *   role arm gone the two agree again, which is what makes a future
+         *   discrepancy legible instead of looking like rounding.
+         */
         const { countModuleApplicants } = await import('@/lib/module-applicant-count');
         store = installFakeDb({
             [COLLECTIONS.USERS]: {
-                'trader': { roles: ['buyer', 'seller'] },
+                'a': { serviceRegistrations: { wave: { status: 'approved' } } },
+                'b': { serviceRegistrations: { wave: { status: 'pending' } } },
+                'c': { serviceRegistrations: { wave: { status: 'rejected' } } },
+                'd': { roles: ['wave_participant'] },
             },
         });
 
-        const c = await countModuleApplicants('marketplace');
+        const c = await countModuleApplicants('wave');
 
-        expect(c.total).toBeLessThanOrEqual(1);
+        expect(c.total).toBe(3);
+        expect(c.approved! + c.pending! + c.rejected! + c.revisionRequired! + c.other!)
+            .toBe(c.total);
+    });
+
+    it('AND NO CLAIM IS MADE ABOUT THE ROLE-ONLY ACCOUNTS', async () => {
+        /*
+         *   They are not counted as applicants and they are not described as
+         *   lacking anything — the owner's correction on "14k+ without
+         *   application" applies just as much to this direction. The module
+         *   simply does not answer questions about them.
+         */
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        const src = require('fs').readFileSync(
+            require('path').join(process.cwd(), 'src/lib/module-applicant-count.ts'), 'utf-8',
+        ) as string;
+
+        expect(src).not.toContain('MODULE_ROLES');
+        expect(src).not.toContain('roleOnly');
+
+        store = installFakeDb({ [COLLECTIONS.USERS]: { 'x': { roles: ['wave_participant'] } } });
+        const c = await countModuleApplicants('wave');
+        expect(c.total).toBe(0);
+        expect(c.counted).toBe(true);
     });
 });
 

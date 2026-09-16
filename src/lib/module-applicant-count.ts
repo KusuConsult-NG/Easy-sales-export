@@ -74,43 +74,6 @@ export type ModuleKey =
  *   double the truth, on the same class of screen this finding exists to
  *   correct. Counted by inclusion-exclusion below for exactly that reason.
  */
-/**
- * The roles that mean "this person is in this module", even with no
- * registration object on their account.
- *
- *   #837 THE COMPLIANCE COUNT AND THE DASHBOARD PIE DISAGREED ABOUT THE SAME
- *   PROGRAMME, AND BOTH ARE ADMIN SCREENS.
- *
- *   The owner asked for stats that will not confuse the quality assurance team
- *   certifying this platform. Two of them were counting WAVE differently:
- *
- *     analytics.service (the pie)   status IN (active…) OR roles ∋ wave_participant
- *     this module (compliance)      status IS NOT NULL
- *
- *   So an account carrying the ROLE but no `serviceRegistrations.wave` object
- *   appeared on one screen and not the other — and that population is not
- *   hypothetical: #835's whole finding began with ~15,128 accounts holding
- *   `wave_participant`, and _wv_admin_applications reads the register by ROLE
- *   for exactly that reason.
- *
- *   The two screens still answer different questions on purpose — the pie counts
- *   people currently IN a module, this counts every application ever RECEIVED,
- *   so a rejected applicant belongs here and not there. What they must not do is
- *   disagree about who exists. Both populations are the union of the two signals
- *   now.
- *
- *   The role lists are copied from the same queries analytics.service issues,
- *   so the two definitions are visibly the same set.
- */
-const MODULE_ROLES: Record<ModuleKey, readonly string[]> = {
-    wave: ["wave_participant"],
-    academy: ["academy_participant"],
-    export: ["export_participant"],
-    cooperative: ["cooperative_member"],
-    farmNation: ["farmer", "land_owner", "investor"],
-    marketplace: ["seller", "marketplace_seller", "buyer", "marketplace_buyer"],
-};
-
 const REGISTRATION_KEYS: Record<ModuleKey, readonly string[]> = {
     wave: ["wave"],
     academy: ["academy"],
@@ -286,44 +249,53 @@ export async function countModuleApplicants(
         ]);
 
         /**
-         * The role-only arm of the union.
+         *   #839 THE ROLE IS NOT EVIDENCE THAT SOMEBODY APPLIED, AND UNIONING IT
+         *   IN OVERSTATED THE PROGRAMME BY ~17,000 PEOPLE.
          *
-         * Accounts carrying a module ROLE but no registration object at all.
+         *   The owner, from the deployed screen:
          *
-         *   ONE QUERY, NOT ONE PER ROLE. The first version looped the roles and
-         *   summed, then tried to divide the double-counting back out by the
-         *   number of aliases — which does not describe the overlap at all. A
-         *   marketplace trader holding BOTH `buyer` and `seller` was counted
-         *   twice and the division could not know it; the suite caught her.
+         *       Total Applications   36,748
+         *       Approved (40%)       14,668
+         *       Pending Review        5,083
          *
-         *   `array-contains-any` asks the question once: does this account hold
-         *   ANY of the module's roles. And `status == null` for EVERY alias is
-         *   ANDed into the same query, so an account that has a registration
-         *   under either spelling is already in `total` and cannot be added
-         *   again. No arithmetic, nothing to get wrong.
+         *   14,668 + 5,083 = 19,751. The other 16,997 were accounts this count
+         *   added because they hold `wave_participant`, with no
+         *   `serviceRegistrations.wave` object at all.
          *
-         *   Best-effort: a module whose roles do not resolve must not cost the
-         *   counts that did.
+         *   AND THIS CODEBASE ALREADY SAID WHY THAT IS WRONG.
+         *   _wv_admin_applications.ts records that the role "was auto-assigned by
+         *   an earlier registration flow (see the comment at auth.ts:38) and is
+         *   also granted by the legacy import". A role handed out by a
+         *   registration flow is evidence of having REGISTERED ON THE PLATFORM.
+         *   It is not evidence of having applied to this programme.
+         *
+         *   WHY IT WAS ADDED, AND WHY THAT REASONING WAS WRONG. #837 unioned the
+         *   role in so this count would agree with the dashboard pie, which uses
+         *   `status IN (active…) OR role`. But the pie answers "who is in this
+         *   module" — a participation question, where an auto-assigned role is
+         *   arguably the point. This screen answers "how many applications exist".
+         *   Making two different questions return the same number is not
+         *   agreement; it is one of them being wrong. The distinction #837 wrote
+         *   down and then collapsed is the correct one, and it is restored here.
+         *
+         *   THE REGISTRATION OBJECT IS THE SIGNAL, and the owner settled that it
+         *   is complete: "all the users had applications submitted." Every
+         *   enrolment path writes it — each module's apply action, the admin
+         *   approve/reject actions, and _legacy.ts on import.
+         *
+         *   NOTHING IS CLAIMED ABOUT THE ROLE-ONLY ACCOUNTS. They are not counted
+         *   as applicants and they are not described as lacking anything; this
+         *   module simply does not answer questions about them. Whether their
+         *   access is correctly provisioned is a separate question and the
+         *   owner's to make, exactly as _wv_admin_applications already notes.
          */
-        let roleOnly = 0;
-        const roles = MODULE_ROLES[module] ?? [];
-        if (roles.length > 0) {
-            let q: import("@/lib/supabase-db").SupabaseQuery = base(keys[0]).q
-                .where("roles", "array-contains-any", [...roles]);
-            for (const key of keys) {
-                q = q.where(`serviceRegistrations.${key}.status`, "==", null);
-            }
-            roleOnly = (await q.count().get()).data().count ?? 0;
-        }
-
-        const totalWithRoles = total + roleOnly;
 
         //   Never negative: if a future status were somehow matched by two of the
         //   lists above, the named buckets could exceed the total, and a negative
         //   "other" on an admin card is worse than an understated one.
-        const other = Math.max(0, totalWithRoles - approved - pending - rejected - revisionRequired);
+        const other = Math.max(0, total - approved - pending - rejected - revisionRequired);
 
-        return { total: totalWithRoles, approved, pending, rejected, revisionRequired, other, counted: true };
+        return { total, approved, pending, rejected, revisionRequired, other, counted: true };
     } catch (e) {
         logger.error(`[applicant-count] ${module} applicant counts could not be computed`, e);
         return EMPTY;
