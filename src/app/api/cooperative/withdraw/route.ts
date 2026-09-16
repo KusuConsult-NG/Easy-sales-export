@@ -71,19 +71,59 @@ export async function POST(request: NextRequest) {
 
 
         const userId = session.user.id;
-        const { amount, reason, accountNumber, bankName, accountName } = await request.json();
+        const body = await request.json();
 
-        // Validation
-        if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
+        /*
+         *   #807 THE SECOND WITHDRAWAL DOOR VALIDATED LESS THAN THE FIRST.
+         *
+         *   requestWithdrawalAction — the door the app actually uses — parses
+         *   through `withdrawalSchema`. This route checked truthiness:
+         *
+         *       if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL)
+         *       if (!accountNumber || !bankName || !accountName)
+         *
+         *   so it accepted things the live door refuses:
+         *
+         *     amount as a STRING     "5000" is truthy and "5000" < 1000 is
+         *                            false, so it passed — and then reached a
+         *                            ledger helper whose guard is
+         *                            Number.isFinite, which a string fails. The
+         *                            member got "Internal server error".
+         *     amount Infinity        both checks false. Same road.
+         *     NO UPPER BOUND         the schema caps at ₦100,000,000.
+         *     ACCOUNT NUMBER         the schema requires exactly ten digits.
+         *                            This accepted "1", and an admin marking
+         *                            that request completed would be paying a
+         *                            number that cannot be an account.
+         *
+         *   NOTHING CALLS THIS ROUTE — _withdrawal.ts says so in as many words
+         *   — so the gap is LATENT, and it is recorded as latent rather than
+         *   dressed up. But #432 already set this platform's policy for an
+         *   uncalled route: "an API route is reachable by URL whether or not a
+         *   screen calls it: unlike a dead module, this one answers."
+         *
+         *   ONE SCHEMA, not a second spelling of it. Two doors carrying their
+         *   own copy of one rule is the defect this audit has now found in
+         *   marketplace (#794, #802), farm nation (#803) and here.
+         */
+        const { withdrawalSchema } = await import("@/lib/schemas");
+        const parsed = withdrawalSchema.omit({ cooperativeId: true }).safeParse(body);
+
+        if (!parsed.success) {
             return NextResponse.json(
-                { success: false, message: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}` },
+                { success: false, message: parsed.error.issues[0]?.message || "Invalid withdrawal data" },
                 { status: 400 }
             );
         }
 
-        if (!accountNumber || !bankName || !accountName) {
+        const { amount, reason, accountNumber, bankName, accountName } = parsed.data;
+
+        //   The schema asks only for a POSITIVE amount; the cooperative's own
+        //   floor is higher and is applied here, exactly as the live action
+        //   applies it after its own parse.
+        if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
             return NextResponse.json(
-                { success: false, message: 'Bank account details are required' },
+                { success: false, message: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}` },
                 { status: 400 }
             );
         }

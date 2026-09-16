@@ -78,6 +78,30 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                             <p className="font-medium text-slate-900">{data.phone}</p>
                         </div>
                         <div>
+                            {/*
+                              *   #806 THE ONE FIELD THIS SCREEN COLLECTED AND
+                              *   NEVER SHOWED BACK.
+                              *
+                              *   Counted rather than sampled: the six steps
+                              *   collect 43 fields between them and this review
+                              *   displayed 42. A member confirming her
+                              *   application — the screen whose entire job is
+                              *   "check this is right before you submit" — was
+                              *   asked to vouch for a number she could not see.
+                              *
+                              *   "Not provided" because it is optional, the
+                              *   same treatment Email beside it already uses.
+                              *   Rendering a blank would leave her unable to
+                              *   tell an empty field from a missing one, which
+                              *   is this audit's own recurring complaint in
+                              *   miniature.
+                              */}
+                            <p className="text-slate-600">Alternative Phone</p>
+                            <p className="font-medium text-slate-900">
+                                {data.alternativePhone || "Not provided"}
+                            </p>
+                        </div>
+                        <div>
                             <p className="text-slate-600">Email</p>
                             <p className="font-medium text-slate-900">{data.email || "Not provided"}</p>
                         </div>

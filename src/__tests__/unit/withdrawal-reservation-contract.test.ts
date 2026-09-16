@@ -420,7 +420,12 @@ describe('and one minimum withdrawal, not three answers', () => {
     // with `false` left the import and the message in place, so an
     // import-level assertion passed against a door that enforced nothing.
     const GUARDS: Array<[string, string]> = [
-        ['src/app/api/cooperative/withdraw/route.ts', 'if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+        //   #807 — spelling changed again, constant unchanged. The route's
+        //   `!amount ||` caught NaN on its way past but admitted a STRING
+        //   amount, an Infinity and any account number at all; it parses
+        //   `withdrawalSchema` now, like _withdrawal.ts, and applies the shared
+        //   minimum after it. Same figure, same table, stronger door.
+        ['src/app/api/cooperative/withdraw/route.ts', 'if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
         ['src/app/actions/cooperative/_withdrawal.ts', 'if (validatedData.amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
         //   #606 — spelling changed, constant unchanged. `if (amount < MIN)` let
         //   NaN through, because every comparison with NaN is false; the guard
