@@ -48,55 +48,44 @@ export type WithdrawalActionState = ActionErrorState | WithdrawalSuccessState;
 // WAVE Application Actions
 // ============================================
 
-export async function submitWaveApplicationAction(
-    prevState: WaveApplicationState,
-    formData: FormData
-): Promise<WaveApplicationState> { try {
-        // Get authenticated user
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
-        const { session } = sessionResult;
-
-        // Extract and validate form data
-        const applicationData = { fullName: (formData.get("fullName") as string | null)?.trim() ?? "",
-            email: (formData.get("email") as string | null)?.trim() ?? "",
-            phone: (formData.get("phone") as string | null)?.trim() ?? "",
-            gender: (formData.get("gender") as string | null)?.trim() ?? "",
-            businessName: (formData.get("businessName") as string | null)?.trim() ?? "",
-            businessType: (formData.get("businessType") as string | null)?.trim() ?? "",
-            yearsInBusiness: (() => { const y = parseInt((formData.get("yearsInBusiness") as string | null) ?? "0", 10); return isNaN(y) ? 0 : y; })(),
-            reasonForApplying: (formData.get("reasonForApplying") as string | null)?.trim() ?? "" };
-
-        // Validate with Zod (enforces female-only validation)
-        const validatedData = waveApplicationSchema.parse(applicationData);
-
-        // Double-check gender enforcement at server level
-        if (validatedData.gender.toLowerCase() !== "female") { return { error: "WAVE Program is exclusively for female entrepreneurs", success: false as const };
-        }
-
-        // Generate application ID
-        const applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-        // Save to Firestore
-        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).set({ ...validatedData,
-            userId: session.user.id,
-            status: "pending", // pending | approved | rejected
-            applicationDate: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() });
-
-        return { error: null, success: true as const, message: "Application submitted successfully! We'll review it within 1 week.", applicationId  };
-    } catch (error: any) { logger.error("WAVE application error:", error);
-
-        if (error.name === "ZodError") {
-            const zodError = error as ZodError;
-            const firstError = zodError.issues[0];
-            return { error: firstError?.message || "Please fill in all required fields correctly", success: false as const };
-        }
-
-        return { error: "Failed to submit application. Please try again.", success: false as const };
-    }
-}
+/*
+ *   #827 RETIRED — A SECOND WAVE APPLICATION WRITER, EIGHT FIELDS WIDE.
+ *
+ *        Exactly the shape the note below this one records for
+ *        enrollInCourseAction, in the same module, for the same reason: an
+ *        action nothing imports, exported from "@/app/actions/platform" — which
+ *        the UI ALREADY imports for submitWithdrawalAction — under a name an
+ *        autocomplete offers beside the correct one.
+ *
+ *        WHAT THE LIVE APPLICATION COLLECTS, AND THIS DID NOT. The wired path
+ *        is submitMultiStepWaveApplicationAction: roughly fifty fields, NIN and
+ *        BVN, state, LGA, ward and polling unit, next of kin, consent. This
+ *        wrote eight — fullName, email, phone, gender, businessName,
+ *        businessType, yearsInBusiness, reasonForApplying — straight into
+ *        WAVE_APPLICATIONS with status "pending".
+ *
+ *        So a row written here would have arrived in the admin approval queue
+ *        missing every field that screen reads. It writes no `surname` and no
+ *        `firstName`, which are the two the table builds its label from — the
+ *        row would have shown a BLANK NAME, and #814's and #825's name search
+ *        looks at exactly those fields, so nobody could have found her by
+ *        typing it either. An applicant would have appeared as an unnamed
+ *        pending row that no administrator could action.
+ *
+ *        It also took no duplicate check, so it could add a second application
+ *        for a woman who already had one, and it minted its own document id
+ *        (`WAVE-${Date.now()}-${random}`) rather than an auto id.
+ *
+ *        HOW IT SURVIVED THIS LONG is the part worth recording. The orphan
+ *        scanner counted it as CALLED — by a `@deprecated` comment in
+ *        lib/schemas.ts naming it as uncalled. A quote inside a regex literal
+ *        had desynced the comment stripper (#827), so that prose was being read
+ *        as code. The action nothing calls looked like an action something
+ *        calls, because of the sentence saying nothing calls it.
+ *
+ *        Retired rather than wired: the multi-step form is the application, and
+ *        a second writer that produces unactionable rows is not a fallback.
+ */
 
 // ============================================
 // Academy Enrollment — REMOVED, see academy/_ac_enrollment.ts

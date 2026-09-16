@@ -1,21 +1,22 @@
 import { z } from "zod";
 import { PASSWORD_RULES } from "@/lib/password-policy";
 import { nationalIdField } from '@/lib/kyc-validators';
+import { personNameField } from '@/lib/types/person-name-field';
 import { ALL_USER_ROLES } from "@/lib/types/roles";
 
 // ============================================
 // STRICT UNIFIED PII VALIDATORS (Anti-Abuse)
 // ============================================
 
-export const strictNameSchema = z.string()
-    .min(2, "Name must be at least 2 characters")
-    .max(50, "Name cannot exceed 50 characters")
-    .regex(/^[a-zA-Z\s\-']+$/, "Name can only contain letters, spaces, hyphens and apostrophes")
-    .refine(val => {
-        // Prevent pentester keyboard smashes: no single block of letters longer than 15 chars
-        const words = val.split(/\s|\-|_/);
-        return words.every(word => word.length <= 15);
-    }, { message: "Name contains unusually long continuous characters (bot detection)" });
+/**
+ *   #826 — one rule, in lib/types/person-name-field, and it is not twenty-six
+ *   letters.
+ *
+ *   What stood here rejected Adéwálé, Ngọzị, O’Brien and J. Musa, and accepted
+ *   "  Ada". The whole measurement, and why the apostrophe one is the worst of
+ *   them, is in that file's header.
+ */
+export const strictNameSchema = personNameField(2, 50);
 
 export const strictEmailSchema = z.string()
     .email("Invalid email address")

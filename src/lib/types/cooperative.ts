@@ -3,10 +3,20 @@ import { z } from "zod";
 // ─── Inline schema primitives ─────────────────────────────────────────────
 // Defined inline to avoid relative path issues when this file is consumed
 // from packages/types/src/ via symlink.
-const strictNameSchema = z.string()
-    .min(1, "This field is required")
-    .max(100, "Too long")
-    .regex(/^[a-zA-Z\s'\-]+$/, "Only letters, spaces, hyphens and apostrophes allowed");
+/*
+ *   #826 — THE SECOND COPY OF THE NAME RULE, and it had drifted from the first:
+ *   the same twenty-six letters, different bounds (min 1 / max 100 against min
+ *   2 / max 50). Two copies of a rule is how one of them gets fixed.
+ *
+ *   Imported RELATIVELY rather than through `@/`, which is the constraint the
+ *   note below is about — this file is consumed both from src/ and through the
+ *   symlink at packages/types/src/cooperative.ts, and the path alias does not
+ *   resolve from the second. A relative specifier does, because TypeScript
+ *   resolves symlinks to their real path. Both typechecks are run over this.
+ */
+import { personNameField } from "./person-name-field";
+
+const strictNameSchema = personNameField(1, 100);
 
 const strictEmailSchema = z.string()
     .email("Invalid email address")

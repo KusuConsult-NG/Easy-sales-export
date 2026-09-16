@@ -336,10 +336,36 @@ describe('#399 — the queue is closed and pinned', () => {
          * 69, measured with THIS suite's stripper — the same one the rest of the
          * ratchets use. #396 said 45 because its counter read prose as callers.
          *
-         * A hand-rolled stripper used while triaging said 70, disagreeing on
-         * submitWaveApplicationAction. The real stripper wins: the number is a
-         * property of the tool that enforces it, and a second implementation
-         * that "mostly" agrees is how #75 started.
+         *   #827 THE HAND-ROLLED STRIPPER WAS RIGHT AND THIS NOTE CHOSE WRONG.
+         *
+         *   What stood here: "A hand-rolled stripper used while triaging said
+         *   70, disagreeing on submitWaveApplicationAction. The real stripper
+         *   wins: the number is a property of the tool that enforces it, and a
+         *   second implementation that 'mostly' agrees is how #75 started."
+         *
+         *   The reasoning is sound and the conclusion was wrong, because the
+         *   premise — that the real stripper was the more trustworthy of the
+         *   two — was never checked. It had no state for a REGEX LITERAL, so
+         *   the `'` in `/^[a-zA-Z\s\-']+$/` in lib/schemas.ts opened a phantom
+         *   string and every comment after it survived stripping. One of them
+         *   was the `@deprecated` note naming submitWaveApplicationAction as
+         *   uncalled — which then counted as an IDENTIFIER, i.e. as a caller.
+         *
+         *   So the action nothing calls was excluded from this count by the
+         *   sentence saying nothing calls it, and the disagreement the note
+         *   above records was the instrument's fault. The true count was 70.
+         *
+         *   IT IS 69 AGAIN, AND FOR A REAL REASON NOW. The seventieth was
+         *   triaged on being revealed and RETIRED: a second WAVE application
+         *   writer, eight fields wide, exported from a module the UI already
+         *   imports, which would have written an unnamed pending row into the
+         *   approval queue that no administrator could action. See the note at
+         *   its removal in actions/platform.ts.
+         *
+         *   "The number is a property of the tool that enforces it" is still
+         *   true. It is the reason a wrong tool produces a wrong number that
+         *   looks exactly like a right one, and the reason this assertion could
+         *   not have caught it: both sides of it moved together.
          */
         expect(unreached().length).toBe(Object.keys(TRIAGED).length + PENDING.length);
         expect(unreached().length).toBe(69);
