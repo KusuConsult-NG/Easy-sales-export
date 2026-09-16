@@ -14,13 +14,14 @@ import {
     TrendingUp,
     XCircle,
 } from "lucide-react";
-import { getAdminDisputesAction } from "@/app/actions/disputes";
+import { getAdminDisputesAction, getAdminDisputeStatsAction } from "@/app/actions/disputes";
 import type { Dispute, DisputeStatus } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { humanise } from "@/lib/humanise";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+import { statText } from "@/lib/admin-stat-display";
 
 const DISPUTE_REASON_LABELS: Record<string, string> = {
     not_received: "Item Not Received",
@@ -72,22 +73,40 @@ export default function AdminDisputesPage() {
         dependencies: [statusFilter, searchQuery, sortOrder]
     });
 
-    // Note: To get accurate global stats you would need a separate stats endpoint
-    // since we use cursor pagination which only returns the current page
-    const stats = {
-        open: filteredDisputes.filter((d) => d.status === "open").length,
-        under_review: filteredDisputes.filter((d) => d.status === "under_review").length,
-        /*
-         *   #629 COUNTED ONE SPELLING OF TWO. These three numbers are a
-         *   three-way split of FOUR statuses, so a dispute stored as `closed`
-         *   appeared in none of them and the totals silently under-counted.
-         *
-         *   dispute-status says exactly why the constant exists: `"closed"` is
-         *   "included so that asking for settled disputes never silently omits
-         *   one". This tally omitted one.
-         */
-        resolved: filteredDisputes.filter((d) => isDisputeSettled(d.status)).length,
-    };
+    /*
+     *   #822 THESE THREE COUNTED ONE PAGE OF TWENTY, and the note that used to
+     *   sit here said so: "To get accurate global stats you would need a
+     *   separate stats endpoint since we use cursor pagination which only
+     *   returns the current page."
+     *
+     *   That endpoint exists now. The old tally could never exceed twenty
+     *   between the three cards, and it INVERTED under a filter — narrowing
+     *   the list to "open" made "Resolved" read 0, because no resolved dispute
+     *   was on the page.
+     *
+     *   #629's correction is kept and moved to the server: settled means
+     *   `resolved` OR `closed`, from DISPUTE_TERMINAL_STATUSES, so a dispute
+     *   stored as closed is still counted.
+     *
+     *   Unavailable rather than zero on a failed read: "no open disputes" is
+     *   good news, and it must not be what a broken query looks like.
+     */
+    const [stats, setStats] = useState<
+        { open: number; under_review: number; resolved: number } | null
+    >(null);
+    const [statsFailed, setStatsFailed] = useState(false);
+
+    useEffect(() => {
+        let live = true;
+        getAdminDisputeStatsAction()
+            .then((res: any) => {
+                if (!live) return;
+                if (res?.success && res.data) { setStats(res.data); setStatsFailed(false); }
+                else setStatsFailed(true);
+            })
+            .catch(() => { if (live) setStatsFailed(true); });
+        return () => { live = false; };
+    }, []);
 
     const getStatusStyles = (status: DisputeStatus): { badge: string; icon: string } => {
         switch (status) {
@@ -160,7 +179,7 @@ export default function AdminDisputesPage() {
                             <AlertTriangle className="w-5 h-5 text-yellow-600" />
                         </div>
                         <p className="text-3xl font-bold text-yellow-900">
-                            {stats.open}
+                            {statText(stats?.open, statsFailed)}
                         </p>
                     </div>
 
@@ -172,7 +191,7 @@ export default function AdminDisputesPage() {
                             <Clock className="w-5 h-5 text-blue-600" />
                         </div>
                         <p className="text-3xl font-bold text-blue-900">
-                            {stats.under_review}
+                            {statText(stats?.under_review, statsFailed)}
                         </p>
                     </div>
 
@@ -184,7 +203,7 @@ export default function AdminDisputesPage() {
                             <CheckCircle className="w-5 h-5 text-green-600" />
                         </div>
                         <p className="text-3xl font-bold text-green-900">
-                            {stats.resolved}
+                            {statText(stats?.resolved, statsFailed)}
                         </p>
                     </div>
                 </div>

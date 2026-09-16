@@ -28,6 +28,7 @@ import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import AdminRecordEditor from "@/components/admin/AdminRecordEditor";
 import { ACADEMY_EDITABLE_FIELDS } from "@/lib/admin-editable-fields";
 import { editApplicationAction } from "@/app/actions/admin";
+import { statText } from "@/lib/admin-stat-display";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -417,16 +418,26 @@ export default function AdminAcademyApplicationsPage() {
         }
     }
     const [stats, setStats] = useState<{ totalApplications: number; pending: number; under_review: number; approved: number; rejected: number; } | null>(null);
+    const [statsFailed, setStatsFailed] = useState(false);
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
+    /*
+     *   #822 A FAILED STATS READ FELL BACK TO COUNTING THE PAGE, SILENTLY.
+     *
+     *   `stats` was set only on success, and the tally below then counted the
+     *   four statuses across `applications` — ONE PAGE OF FIFTY — with nothing
+     *   on the screen to say the figures had changed meaning. Four tiles that
+     *   normally report the platform quietly started reporting a page.
+     */
     useEffect(() => {
-        getAcademyApplicationStatsAction().then(res => {
-            if (res.success && res.data?.stats) {
-                setStats(res.data.stats);
-            }
-        });
+        getAcademyApplicationStatsAction()
+            .then(res => {
+                if (res.success && res.data?.stats) { setStats(res.data.stats); setStatsFailed(false); }
+                else setStatsFailed(true);
+            })
+            .catch(() => setStatsFailed(true));
     }, []);
 
     const {
@@ -630,16 +641,20 @@ export default function AdminAcademyApplicationsPage() {
     const isFiltered = !!(search || dateRange.from || dateRange.to || paymentFilter !== "all" || registryFilter !== "all");
     const displayStats = isFiltered && meta?.stats ? meta.stats : stats;
 
-    const counts = displayStats ? {
-        pending: displayStats.pending,
-        under_review: displayStats.under_review,
-        approved: displayStats.approved,
-        rejected: displayStats.rejected
-    } : { pending: 0, under_review: 0, approved: 0, rejected: 0 };
-    
-    if (!displayStats) {
-        applications.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
-    }
+    /*
+     *   #822 NO PAGE-COUNT FALLBACK. When the platform figures are unavailable
+     *   the tiles say so; they do not quietly become a count of fifty rows
+     *   wearing the label of a total.
+     */
+    const counts: { pending: number; under_review: number; approved: number; rejected: number } | null =
+        displayStats
+            ? {
+                pending: displayStats.pending,
+                under_review: displayStats.under_review,
+                approved: displayStats.approved,
+                rejected: displayStats.rejected,
+            }
+            : null;
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportConfig, setExportConfig] = useState({
@@ -751,7 +766,12 @@ export default function AdminAcademyApplicationsPage() {
             <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 mb-1">Academy Applications</h1>
-                    <p className="text-slate-600">Live — {displayStats ? numberOrZero(displayStats.totalApplications).toLocaleString() : applications.length} total applications</p>
+                    <p className="text-slate-600">Live — {displayStats
+                        ? `${numberOrZero(displayStats.totalApplications).toLocaleString()} total applications`
+                        //   #822 Not `applications.length` with the word "total"
+                        //   beside it: that is a page of fifty claiming to be
+                        //   the platform.
+                        : `${numberOrZero(applications.length).toLocaleString()} shown on this page`}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Temporarily removed Export CSV button */}
@@ -800,7 +820,7 @@ export default function AdminAcademyApplicationsPage() {
                         onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
                         className={`rounded-xl p-4 text-left transition border bg-white border-slate-200 ${statusFilter === s ? "ring-2 ring-blue-500" : ""}`}
                     >
-                        <p className="text-2xl font-bold text-slate-900">{counts[s]}</p>
+                        <p className="text-2xl font-bold text-slate-900">{statText(counts?.[s], statsFailed)}</p>
                         <p className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full inline-block mt-1 ${statusColor(s)}`}>
                             {s.replace("_", " ")}
                         </p>

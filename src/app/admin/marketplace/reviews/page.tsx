@@ -19,6 +19,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { formatLocalDate } from "@/lib/date-utils";
 import { humaniseCapitalised, shortId } from "@/lib/humanise";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+import { statText } from "@/lib/admin-stat-display";
 
 function StarDisplay({ rating }: { rating: number }) {
     return (
@@ -68,10 +69,38 @@ export default function AdminReviewsPage() {
                 lastDocId: opts.lastDocId,
                 sortOrder: sortOrder
             });
+            /*
+             *   #822 THE WHOLE SCREEN READ THE PAYLOAD AT THE WRONG LEVEL.
+             *
+             *   The owner: the cards are not returning the correct totals.
+             *   On this screen they were not merely wrong, they were 0/0/0
+             *   ALWAYS — and the table beneath them was empty always, for the
+             *   same reason.
+             *
+             *   getAdminReviewsAction returns an ActionResponse:
+             *
+             *       { error: null, success: true,
+             *         data: { reviews, stats, lastDocId, hasMore } }
+             *
+             *   and this read `result.reviews`, `result.stats` and
+             *   `result.lastDocId` at the TOP level, where none of them exist.
+             *   Every one resolved to undefined, so `data` fell to `[]`, `stats`
+             *   to undefined, and the fallback below counted three statuses over
+             *   an empty array.
+             *
+             *   The action was computing the right numbers the whole time —
+             *   three exact `.count()` queries — and nothing read them.
+             *
+             *   WHY IT LOOKED PLAUSIBLE: the sibling getAdminDisputesAction
+             *   returns its rows BOTH nested and at the top level, so the same
+             *   idiom copied from the disputes screen works there and silently
+             *   does nothing here.
+             */
+            const payload = (result as any).data ?? {};
             return {
                 success: result.success,
-                data: (result as any).reviews || [],
-                meta: { lastDocId: (result as any).lastDocId, hasMore: (result as any).hasMore, stats: (result as any).stats },
+                data: payload.reviews || [],
+                meta: { lastDocId: payload.lastDocId, hasMore: payload.hasMore, stats: payload.stats },
                 error: (result as any).error
             };
         },
@@ -121,14 +150,29 @@ export default function AdminReviewsPage() {
         }
     }
 
-    // Global stats derived from server action meta
-    const totalStats = meta?.stats || null;
+    /*
+     *   #822 THE FALLBACK COUNTED THE PAGE AND CALLED IT THE TOTAL.
+     *
+     *   When `stats` was absent this counted three statuses across `reviews` —
+     *   at most one page of twenty — and rendered the result under "Pending
+     *   Reviews", "Approved", "Rejected". A page is not a total, and the
+     *   difference is invisible to the admin reading it.
+     *
+     *   AND IT IS ABSENT MORE OFTEN THAN IT LOOKS: the action computes the
+     *   counts only on the first page (`if (!options.lastDocId)`), so paging
+     *   forward dropped them and the cards silently became page counts.
+     *
+     *   LATCHED, so the exact figures survive paging, and shown as "—" when
+     *   they have genuinely never arrived. An em dash says "not counted"; a
+     *   number says "this is how many there are", and only one of those was
+     *   ever true here.
+     */
+    const [latchedStats, setLatchedStats] = useState<{ pending: number; approved: number; rejected: number } | null>(null);
+    useEffect(() => {
+        if (meta?.stats) setLatchedStats(meta.stats);
+    }, [meta?.stats]);
 
-    const stats = totalStats || {
-        pending: reviews.filter((r) => r.status === "pending").length,
-        approved: reviews.filter((r) => r.status === "approved").length,
-        rejected: reviews.filter((r) => r.status === "rejected").length,
-    };
+    const stats = latchedStats;
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
@@ -153,7 +197,7 @@ export default function AdminReviewsPage() {
                             <Clock className="w-5 h-5 text-yellow-600" />
                         </div>
                         <p className="text-3xl font-bold text-yellow-900">
-                            {stats.pending}
+                            {statText(stats?.pending)}
                         </p>
                     </div>
 
@@ -165,7 +209,7 @@ export default function AdminReviewsPage() {
                             <CheckCircle className="w-5 h-5 text-green-600" />
                         </div>
                         <p className="text-3xl font-bold text-green-900">
-                            {stats.approved}
+                            {statText(stats?.approved)}
                         </p>
                     </div>
 
@@ -177,7 +221,7 @@ export default function AdminReviewsPage() {
                             <XCircle className="w-5 h-5 text-red-600" />
                         </div>
                         <p className="text-3xl font-bold text-red-900">
-                            {stats.rejected}
+                            {statText(stats?.rejected)}
                         </p>
                     </div>
                 </div>

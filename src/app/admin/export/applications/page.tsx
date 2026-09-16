@@ -46,6 +46,7 @@ import { formatDateOrDash } from "@/lib/date-utils";
 import AdminRecordEditor from "@/components/admin/AdminRecordEditor";
 import { EXPORT_EDITABLE_FIELDS } from "@/lib/admin-editable-fields";
 import { editApplicationAction } from "@/app/actions/admin";
+import { statText } from "@/lib/admin-stat-display";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -183,8 +184,22 @@ export default function AdminExportApplicationsPage() {
     const [revisionNote, setRevisionNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
     
-    // Global Stats state
-    const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0, resubmitted: 0 });
+    /*
+     *   #822 A FAILED STATS READ RENDERED AS FOUR REAL ZEROS.
+     *
+     *   This initialised to {0,0,0,0} and was only ever REPLACED on success —
+     *   the catch was `console.error`. So an outage, or an authorisation
+     *   refusal, drew "Pending Review 0 / Approved 0 / Rejected 0 /
+     *   Resubmitted 0", which is indistinguishable from an empty queue and is
+     *   the more reassuring of the two readings.
+     *
+     *   The sibling Export dashboard already does this correctly with a
+     *   `statsFailed` flag; this screen is brought up to it.
+     */
+    const [stats, setStats] = useState<
+        { pending: number; approved: number; rejected: number; resubmitted: number } | null
+    >(null);
+    const [statsFailed, setStatsFailed] = useState(false);
 
     const statusFilter = (filters.status as AppStatus | "all") || "pending";
 
@@ -198,10 +213,9 @@ export default function AdminExportApplicationsPage() {
     // Fetch Global Stats when applications array changes (e.g., after approval/rejection)
     useEffect(() => {
         getExportApplicationsStatsAction().then((res) => {
-            if (res.success && res.data) {
-                setStats(res.data);
-            }
-        }).catch(console.error);
+            if (res.success && res.data) { setStats(res.data as any); setStatsFailed(false); }
+            else setStatsFailed(true);
+        }).catch(() => setStatsFailed(true));
     }, [applications]);
 
     const isFiltered = !!(search || dateRange.from || dateRange.to);
@@ -368,14 +382,14 @@ export default function AdminExportApplicationsPage() {
             {/* Stats Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                 {[
-                    { label: "Pending Review", value: displayStats.pending, color: "text-yellow-600" },
-                    { label: "Approved", value: displayStats.approved, color: "text-green-600" },
-                    { label: "Rejected", value: displayStats.rejected, color: "text-red-600" },
-                    { label: "Resubmitted", value: displayStats.resubmitted, color: "text-orange-600" },
+                    { label: "Pending Review", value: displayStats?.pending ?? null, color: "text-yellow-600" },
+                    { label: "Approved", value: displayStats?.approved ?? null, color: "text-green-600" },
+                    { label: "Rejected", value: displayStats?.rejected ?? null, color: "text-red-600" },
+                    { label: "Resubmitted", value: displayStats?.resubmitted ?? null, color: "text-orange-600" },
                 ].map((s) => (
                     <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4">
                         <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">{s.label}</p>
-                        <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                        <p className={`text-2xl font-bold ${s.color}`}>{statText(s.value, statsFailed)}</p>
                     </div>
                 ))}
             </div>

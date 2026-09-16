@@ -167,11 +167,25 @@ describe('#629 — the settled rule is now the one everybody asks', () => {
                 .toEqual({ screen, countsOneSpelling: false });
         }
 
-        //   And the two tallies ask the rule, by the expression and not the import.
-        expect(BODIES.get('src/app/admin/marketplace/disputes/page.tsx'))
-            .toContain('filter((d) => isDisputeSettled(d.status))');
-        expect(BODIES.get('src/app/admin/marketplace/disputes/escalated/page.tsx'))
-            .toContain('filter(d => isDisputeSettled(d.status))');
+        /*
+         *   #822 THE TWO TALLIES MOVED TO THE SERVER, AND THE RULE WENT WITH
+         *   THEM.
+         *
+         *   These two screens used to count settled disputes in the browser with
+         *   `filter(d => isDisputeSettled(d.status))`, and this asserted that
+         *   expression. They no longer count anything: the tally was over ONE
+         *   PAGE of twenty and is now a `.count()` in getAdminDisputeStatsAction.
+         *
+         *   So the assertion follows the rule to where it lives. What it is
+         *   really about — that settled means BOTH terminal spellings and not
+         *   just "resolved" — is unchanged and is checked at the new site.
+         */
+        const disputeStats = BODIES.get('src/app/actions/disputes.ts')
+            ?? strip(readFileSync(join(ROOT, 'src/app/actions/disputes.ts'), 'utf8'));
+        const statsFn = disputeStats.slice(disputeStats.indexOf('_getAdminDisputeStatsAction'));
+
+        expect(statsFn).toContain('DISPUTE_TERMINAL_STATUSES');
+        expect(statsFn).not.toMatch(/where\("status", "==", "resolved"\)/);
     });
 
     it('AND THE FILTER STILL ASKS ITS OWN, which was right all along', () => {

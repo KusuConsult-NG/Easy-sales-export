@@ -195,7 +195,73 @@ async function _getWaveShipmentsAction(): Promise<ActionResponse<any[]>> {
             .limit(WAVE_SHIPMENT_PAGE_SIZE)
             .get();
 
-        return { error: null, success: true as const, data: serializeDocs(snapshot.docs) };
+        /*
+         *   #822 AND THE TOTALS ARE COUNTED, NOT INFERRED FROM THE PAGE.
+         *
+         *   The screen built five cards — Total, Pending, In Transit,
+         *   Delivered, Cancelled — with `shipments.length` and four filters
+         *   over THIS ARRAY, which is bounded at WAVE_SHIPMENT_PAGE_SIZE. So
+         *   "Total" read at most 500 however many shipments existed, and the
+         *   four status tiles described only the newest 500.
+         *
+         *   The bound above is deliberate and stays — it is what keeps this
+         *   query inside the statement timeout. What changes is that the CARDS
+         *   no longer derive from it.
+         */
+        /*
+         *   THE COUNTS CANNOT TAKE THE LIST DOWN WITH THEM.
+         *
+         *   The shipments are what this screen is FOR; the five cards are
+         *   supplementary. A first draft awaited the counts alongside the list,
+         *   so a failure in any one of them rejected the whole action and the
+         *   admin got an error page instead of their shipments — trading a
+         *   wrong number for no screen at all.
+         *
+         *   They are gathered separately and resolve to null on failure. The
+         *   screen renders "—" for a null, which is the same distinction the
+         *   rest of this finding is about: unknown is not zero.
+         */
+        const ref = () => db.collection(COLLECTIONS.WAVE_SHIPMENTS);
+        let stats: {
+            total: number; pending: number; inTransit: number;
+            delivered: number; cancelled: number;
+        } | null = null;
+
+        try {
+            const [total, pending, inTransit, delivered, cancelled] = await Promise.all([
+                ref().count().get(),
+                ref().where("status", "==", "pending").count().get(),
+                ref().where("status", "==", "in_transit").count().get(),
+                ref().where("status", "==", "delivered").count().get(),
+                ref().where("status", "==", "cancelled").count().get(),
+            ]);
+            stats = {
+                total: total.data().count,
+                pending: pending.data().count,
+                inTransit: inTransit.data().count,
+                delivered: delivered.data().count,
+                cancelled: cancelled.data().count,
+            };
+        } catch (statsError) {
+            //   Logged, not swallowed: the cards going blank should leave a
+            //   trace, or the next person sees dashes and no reason for them.
+            logger.error("[wave/shipments] the totals could not be counted", {
+                error: statsError instanceof Error ? statsError.message : String(statsError),
+            });
+        }
+
+        return {
+            error: null,
+            success: true as const,
+            data: serializeDocs(snapshot.docs),
+            meta: {
+                stats,
+                //   So the screen can say the LIST is a window even though the
+                //   counts are not. #772 is what a sample shown as a total costs.
+                listTruncated: snapshot.docs.length >= WAVE_SHIPMENT_PAGE_SIZE,
+                listCap: WAVE_SHIPMENT_PAGE_SIZE,
+            },
+        };
     } catch (error: any) {
         logger.error("Get wave shipments error:", error);
         return { success: false as const, error: error.message || "Failed to fetch wave shipments", data: null };

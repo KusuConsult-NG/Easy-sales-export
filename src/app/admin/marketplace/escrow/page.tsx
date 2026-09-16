@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import {
     getAllEscrowTransactionsAdmin,
+    getEscrowStatsAdmin,
     releaseEscrowFunds,
     refundEscrowToBuyer,
 } from "@/app/actions/marketplace";
@@ -50,6 +51,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
 import { useAdminData } from "@/hooks/useAdminData";
+import { statText, statMoney } from "@/lib/admin-stat-display";
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string; icon: React.ElementType }> = {
     pending: { label: "Pending", badge: "bg-gray-100 text-gray-700", icon: Clock },
@@ -149,14 +151,35 @@ export default function AdminEscrowPage() {
     // but the backend handles basic fields.
     const filtered = transactions;
 
-    const stats = {
-        funded: transactions.filter((t) => t.status === "funded").length,
-        disputed: transactions.filter((t) => t.status === "disputed").length,
-        released: transactions.filter((t) => t.status === "released").length,
-        totalHeld: transactions
-            .filter((t) => t.status === "funded" || t.status === "disputed")
-            .reduce((sum, t) => sum + (t.amount ?? 0), 0),
-    };
+    /*
+     *   #822 THESE FOUR CARDS COUNTED ONE PAGE OF FIFTY.
+     *
+     *   They were computed here, over `transactions` — a single cursor page —
+     *   so between them they could never exceed fifty, and they CHANGED as the
+     *   admin paged forward or picked a status filter. "Total Held (₦)" was a
+     *   money figure summed over at most fifty escrows.
+     *
+     *   Read from the database now: three exact `.count()` queries and a
+     *   paging sum. `null` means the read failed, and the cards say so rather
+     *   than drawing ₦0 over it — an escrow balance of zero is a sentence
+     *   about the platform's money, not a placeholder.
+     */
+    const [stats, setStats] = useState<
+        { funded: number; disputed: number; released: number; totalHeld: number } | null
+    >(null);
+    const [statsFailed, setStatsFailed] = useState(false);
+
+    useEffect(() => {
+        let live = true;
+        getEscrowStatsAdmin()
+            .then((res: any) => {
+                if (!live) return;
+                if (res?.success && res.data) { setStats(res.data); setStatsFailed(false); }
+                else setStatsFailed(true);
+            })
+            .catch(() => { if (live) setStatsFailed(true); });
+        return () => { live = false; };
+    }, []);
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
@@ -177,19 +200,19 @@ export default function AdminEscrowPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
                         <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Funded (Held)</p>
-                        <p className="text-3xl font-bold text-blue-900">{stats.funded}</p>
+                        <p className="text-3xl font-bold text-blue-900">{statText(stats?.funded, statsFailed)}</p>
                     </div>
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
                         <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1">Disputed</p>
-                        <p className="text-3xl font-bold text-red-900">{stats.disputed}</p>
+                        <p className="text-3xl font-bold text-red-900">{statText(stats?.disputed, statsFailed)}</p>
                     </div>
                     <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
                         <p className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-1">Released</p>
-                        <p className="text-3xl font-bold text-green-900">{stats.released}</p>
+                        <p className="text-3xl font-bold text-green-900">{statText(stats?.released, statsFailed)}</p>
                     </div>
                     <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5">
                         <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-1">Total Held (₦)</p>
-                        <p className="text-2xl font-bold text-purple-900">{formatCurrency(stats.totalHeld)}</p>
+                        <p className="text-2xl font-bold text-purple-900">{statMoney(stats?.totalHeld, formatCurrency, statsFailed)}</p>
                     </div>
                 </div>
 

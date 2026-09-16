@@ -11,6 +11,7 @@ import {
     Activity,
     FileText,
     Loader2,
+    AlertTriangle,
     ArrowUp,
     ArrowDown,
 } from "lucide-react";
@@ -33,11 +34,13 @@ const DashboardLineChart = dynamic(() => import("@/components/admin/DashboardLin
     )
 });
 import Link from "next/link";
+import { statText, statMoney } from "@/lib/admin-stat-display";
 
 export default function AdminCooperativeDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
+    const [statsFailed, setStatsFailed] = useState(false);
     const [reports, setReports] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
 
@@ -54,8 +57,21 @@ export default function AdminCooperativeDashboardPage() {
                 getRecentActivityAction(),
             ]);
 
+            /*
+             *   #822 A FAILED READ WAS DRAWN AS A REAL COOPERATIVE WITH NO
+             *   MEMBERS AND NO MONEY.
+             *
+             *   `stats` stayed null on failure and every tile below read
+             *   `stats?.x || 0` — so an outage or a permission refusal rendered
+             *   0 members, 0 applications and ₦0 contributions. That is not a
+             *   blank screen an admin would question; it is a plausible,
+             *   catastrophic answer.
+             */
             if (statsRes.success && statsRes.data?.stats) {
                 setStats(statsRes.data.stats);
+                setStatsFailed(false);
+            } else {
+                setStatsFailed(true);
             }
 
             if (reportsRes.success && reportsRes.data?.reports) {
@@ -73,12 +89,25 @@ export default function AdminCooperativeDashboardPage() {
     }
 
     if (loading) {
+
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-green-600" />
             </div>
         );
     }
+
+    /*
+     *   #822 ONE PLACE THAT DECIDES WHAT AN UNREADABLE FIGURE LOOKS LIKE.
+     *
+     *   Twelve tiles read `stats?.x || 0`, so a failed read drew a real
+     *   cooperative with no members and no money. These two helpers make
+     *   the unknown case look unknown, and they are the only place that
+     *   choice is made — twelve separate ternaries is how the next one
+     *   gets forgotten.
+     */
+    const num = (v: unknown) => statText(v, statsFailed);
+    const money = (v: unknown) => statMoney(v, formatCurrency, statsFailed);
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
@@ -92,6 +121,47 @@ export default function AdminCooperativeDashboardPage() {
                         Overview of cooperative activities and performance
                     </p>
                 </div>
+
+                {/*
+                  *   #822 THE TWO THINGS A NUMBER ON THIS SCREEN CAN FAIL TO BE.
+                  *
+                  *   UNREADABLE — the tiles show "—" rather than 0, and this
+                  *   says why. A cooperative with no members and no money is a
+                  *   plausible answer, which is exactly what made the old ₦0
+                  *   dangerous: nobody questions it.
+                  *
+                  *   PARTIAL — _coop_admin_reports already returns `truncated`
+                  *   "so a partial total must be distinguishable from a complete
+                  *   one", and NOTHING READ IT. A partial Total Contributions
+                  *   was drawn identically to a complete one.
+                  */}
+                {statsFailed && (
+                    <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                        <div className="text-sm text-red-900">
+                            <p className="font-semibold">These figures could not be read.</p>
+                            <p className="mt-1">
+                                The totals below are shown as &mdash; rather than zero, because zero
+                                would look like a real answer. Refresh, and if it persists the
+                                cooperative reporting query needs looking at.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {!statsFailed && stats?.truncated && (
+                    <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-900">
+                            <p className="font-semibold">These totals are partial.</p>
+                            <p className="mt-1">
+                                More transactions or loans matched than the report reads in one
+                                pass, so the money figures below are a floor rather than the
+                                whole sum.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -110,12 +180,12 @@ export default function AdminCooperativeDashboardPage() {
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Paid Members</p>
                         <p className="text-3xl font-bold text-gray-900">
-                            {stats?.paidMembers || 0}
-                            <span className="text-lg font-medium text-gray-400 ml-2">/ {stats?.totalMembers || 0} Apps</span>
+                            {num(stats?.paidMembers)}
+                            <span className="text-lg font-medium text-gray-400 ml-2">/ {num(stats?.totalMembers)} Apps</span>
                         </p>
                         <div className="flex items-center gap-2 mt-2 text-sm">
-                            <span className="text-green-600">Active: {stats?.activeMembers || 0}</span>
-                            <span className="text-yellow-600">Pending: {stats?.pendingMembers || 0}</span>
+                            <span className="text-green-600">Active: {num(stats?.activeMembers)}</span>
+                            <span className="text-yellow-600">Pending: {num(stats?.pendingMembers)}</span>
                         </div>
                     </div>
 
@@ -134,12 +204,12 @@ export default function AdminCooperativeDashboardPage() {
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Total Contributions</p>
                         <p className="text-3xl font-bold text-gray-900">
-                            {formatCurrency(stats?.totalContributions || 0)}
+                            {money(stats?.totalContributions)}
                         </p>
                         <div className="flex items-center gap-1 mt-2 text-sm">
                             <span className="text-gray-600">This month:</span>
                             <span className="font-semibold text-green-600">
-                                {formatCurrency(stats?.monthlyContributions || 0)}
+                                {money(stats?.monthlyContributions)}
                             </span>
                         </div>
                     </div>
@@ -159,11 +229,11 @@ export default function AdminCooperativeDashboardPage() {
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Active Loans</p>
                         <p className="text-3xl font-bold text-gray-900">
-                            {stats?.activeLoans || 0}
+                            {num(stats?.activeLoans)}
                         </p>
                         <div className="flex items-center gap-2 mt-2 text-sm">
-                            <span className="text-yellow-600">Pending: {stats?.pendingLoans || 0}</span>
-                            <span className="text-gray-600">Total: {formatCurrency(stats?.totalLoans || 0)}</span>
+                            <span className="text-yellow-600">Pending: {num(stats?.pendingLoans)}</span>
+                            <span className="text-gray-600">Total: {money(stats?.totalLoans)}</span>
                         </div>
                     </div>
 
@@ -180,7 +250,7 @@ export default function AdminCooperativeDashboardPage() {
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Total Savings</p>
                         <p className="text-3xl font-bold text-gray-900">
-                            {formatCurrency(stats?.totalSavings || 0)}
+                            {money(stats?.totalSavings)}
                         </p>
                         <p className="text-sm text-gray-600 mt-2">Fixed savings deposits</p>
                     </Link>

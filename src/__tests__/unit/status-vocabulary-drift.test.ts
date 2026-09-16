@@ -226,10 +226,35 @@ describe('the scanner that narrowed the search', () => {
     it('runs and returns a readable number of leads', () => {
         // A lead list, not a gate. It went through three revisions to get here:
         // per-payload, then file-wide, then including union-typed parameters.
+        //
+        //   #822 RAISED FROM 15 TO 18, and the three new leads are all the same
+        //   known blind spot rather than a new defect.
+        //
+        //   The WAVE shipments screen gained five counted cards, so the action
+        //   now QUERIES wave_shipments for "in_transit", "delivered" and
+        //   "cancelled". The scanner reports that the only value ever WRITTEN
+        //   to that collection is "pending", which reads like three dead
+        //   queries.
+        //
+        //   IT IS NOT. updateShipmentStatusAction writes all four, and
+        //   /admin/wave/shipments calls it — but its parameter is typed
+        //   `ShipmentTracking["status"]`, an INDEXED ACCESS type. The revision
+        //   that taught this scanner about union-typed parameters (see the test
+        //   directly below) resolves an inline union and not an indexed access,
+        //   so the values are invisible to it.
+        //
+        //   CHECKED RATHER THAN ASSUMED: the writer is
+        //   src/app/actions/wave/_wv_shipments.ts:_updateShipmentStatusAction,
+        //   and its caller is src/app/admin/wave/shipments/page.tsx:190.
+        //
+        //   Raised rather than the scanner extended: teaching it indexed access
+        //   types is a real change to the instrument, and doing that while
+        //   using its output to judge a change is how an instrument gets bent
+        //   to fit the measurement.
         const drift = statusVocabularyDrift();
 
         expect(Array.isArray(drift)).toBe(true);
-        expect(drift.length).toBeLessThan(15);
+        expect(drift.length).toBeLessThan(18);
     });
 
     it('no longer reports a status set through a union-typed parameter', () => {

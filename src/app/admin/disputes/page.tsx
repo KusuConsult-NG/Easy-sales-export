@@ -20,6 +20,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { humanise } from "@/lib/humanise";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import { humaniseUpper } from "@/lib/humanise";
+import { numberOrZero } from "@/lib/numbers";
 
 export default function AdminDisputesPage() {
     const { showToast } = useToast();
@@ -108,7 +109,18 @@ export default function AdminDisputesPage() {
             {/* Header */}
             <div className="mb-8">
                 <h1 className="text-3xl font-bold text-slate-900 mb-2">Dispute Management</h1>
-                <p className="text-slate-600">Review and resolve member disputes ({disputes.length} total)</p>
+                {/*
+                  *   #822 THIS SAID "50 total" FOREVER ONCE THERE WERE FIFTY.
+                  *
+                  *   `disputes.length` is one cursor page — the hook asks for
+                  *   twenty at a time here — and the word "total" beside it made
+                  *   a page count into a claim about the platform.
+                  *
+                  *   It counts what is ON THE SCREEN now, and says so. That is
+                  *   the honest version of a number derived from a page, and it
+                  *   needs no query at all.
+                  */}
+                <p className="text-slate-600">Review and resolve member disputes ({numberOrZero(disputes.length).toLocaleString()} shown)</p>
             </div>
 
             {/* Filters */}

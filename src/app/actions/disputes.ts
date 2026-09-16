@@ -6,7 +6,10 @@
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { disputeStatusesForFilter, isDisputeSettled } from "@/lib/dispute-status";
+import { disputeStatusesForFilter, isDisputeSettled, DISPUTE_TERMINAL_STATUSES } from "@/lib/dispute-status";
+
+/** How many open disputes the unassigned tally will scan. */
+const DISPUTE_STATS_SCAN = 2000;
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -978,3 +981,98 @@ async function _updateDisputeStatusAction(
     }
 }
 export const updateDisputeStatusAction = withFlexibleSafeAction("updateDisputeStatusAction", _updateDisputeStatusAction);
+
+/**
+ * The dispute figures the admin screens put on their cards.
+ *
+ *   #822 THE CARDS COUNTED THE PAGE, AND THE CODE SAID SO.
+ *
+ *   The owner: the cards are not returning the correct totals.
+ *
+ *   /admin/marketplace/disputes computed its three in the browser over
+ *   `filteredDisputes` — ONE CURSOR PAGE of twenty — with a comment admitting
+ *   it:
+ *
+ *       // Note: To get accurate global stats you would need a separate stats
+ *       // endpoint since we use cursor pagination which only returns the
+ *       // current page
+ *
+ *   This is that endpoint. The three numbers could never exceed twenty between
+ *   them, and they INVERTED under a filter: narrowing the list to "open" made
+ *   the "Resolved" card read 0, because there were no resolved disputes on the
+ *   page. /admin/marketplace/disputes/escalated had the identical shape and the
+ *   identical admission.
+ *
+ * ── AND IT COUNTS ALL FOUR STATUSES ─────────────────────────────────────────
+ *
+ *   Settled is `resolved` OR `closed`, taken from DISPUTE_TERMINAL_STATUSES
+ *   rather than respelled. #629 is the finding about exactly this tally
+ *   omitting `closed`, and lib/dispute-status exists so that "asking for
+ *   settled disputes never silently omits one". The platform-wide aggregate in
+ *   global-aggregation still counts only `status == "resolved"`; it is not
+ *   changed here, because it feeds a different screen and is its own decision.
+ */
+async function _getAdminDisputeStatsAction(): Promise<
+    | { success: true; error: null; data: { open: number; under_review: number; resolved: number; unassigned: number } }
+    | { success: false; error: string; data: null }
+> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session?.user?.id) {
+            return { success: false as const, error: "Authentication required", data: null };
+        }
+        if (!isAdmin(sessionResult.session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const ref = () => db.collection(COLLECTIONS.DISPUTES);
+
+        const [openSnap, reviewSnap, settledSnap] = await Promise.all([
+            ref().where("status", "==", "open").count().get(),
+            ref().where("status", "==", "under_review").count().get(),
+            //   Both terminal spellings, from the constant.
+            ref().where("status", "in", [...DISPUTE_TERMINAL_STATUSES]).count().get(),
+        ]);
+
+        /*
+         *   "Unassigned" is what the escalated screen shows, and it cannot be
+         *   counted with a `.count()`: the field is ABSENT on an unassigned
+         *   row rather than null, and an absent field is not something the
+         *   adapter can filter for. It is derived instead — every open dispute
+         *   minus those that carry an admin — over the open set only, which is
+         *   the population that screen lists.
+         */
+        const openDocs = await ref()
+            .where("status", "in", ["open", "under_review"])
+            .limit(DISPUTE_STATS_SCAN)
+            .get();
+        const unassigned = openDocs.docs.filter((d) => !d.data()?.assignedAdminId).length;
+
+        if (openDocs.docs.length >= DISPUTE_STATS_SCAN) {
+            logger.warn(
+                `[disputes] the unassigned tally read ${DISPUTE_STATS_SCAN} open disputes and may be partial.`,
+            );
+        }
+
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                open: openSnap.data().count,
+                under_review: reviewSnap.data().count,
+                resolved: settledSnap.data().count,
+                unassigned,
+            },
+        };
+    } catch (error: any) {
+        //   Refused rather than zeroed: "no open disputes" and "we could not
+        //   count them" are different answers, and only one is good news.
+        logger.error("Get admin dispute stats error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return { success: false as const, error: "Dispute totals could not be read", data: null };
+    }
+}
+export const getAdminDisputeStatsAction = withFlexibleSafeAction("getAdminDisputeStatsAction", _getAdminDisputeStatsAction);

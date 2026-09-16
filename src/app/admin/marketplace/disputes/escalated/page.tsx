@@ -15,7 +15,7 @@ import {
     UserCheck,
     ChevronDown,
 } from "lucide-react";
-import { getAdminDisputesAction } from "@/app/actions/disputes";
+import { getAdminDisputesAction, getAdminDisputeStatsAction } from "@/app/actions/disputes";
 import { getAdminUsersAction, assignDisputeAction } from "@/app/actions/admin-users";
 import type { Dispute } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
@@ -23,6 +23,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { humanise } from "@/lib/humanise";
 import { formatDateTimeOrDash } from "@/lib/date-utils";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+import { statText } from "@/lib/admin-stat-display";
 
 //   #600 — one reading, in lib/date-utils.
 function fmtDate(val: any) {
@@ -68,6 +69,27 @@ export default function EscalatedDisputesPage() {
 
     // Per-card state: which card has the dropdown open + currently selected assignee
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    /*
+     *   #822 The platform's dispute figures, read from the database rather than
+     *   counted over whichever twenty rows this page happens to hold.
+     */
+    const [stats, setStats] = useState<
+        { open: number; under_review: number; resolved: number; unassigned: number } | null
+    >(null);
+    const [statsFailed, setStatsFailed] = useState(false);
+
+    useEffect(() => {
+        let live = true;
+        getAdminDisputeStatsAction()
+            .then((res: any) => {
+                if (!live) return;
+                if (res?.success && res.data) { setStats(res.data); setStatsFailed(false); }
+                else setStatsFailed(true);
+            })
+            .catch(() => { if (live) setStatsFailed(true); });
+        return () => { live = false; };
+    }, []);
+
     const [selectedAssignee, setSelectedAssignee] = useState<Record<string, string>>({});
     const [assigningId, setAssigningId] = useState<string | null>(null);
 
@@ -128,17 +150,26 @@ export default function EscalatedDisputesPage() {
                     </div>
                 </div>
 
-                {/* Stats row (counts will be local to the current page data) */}
+                {/*
+                  *   #822 THESE COUNTED ONE PAGE OF TWENTY, and the heading that
+                  *   used to sit here admitted it: "counts will be local to the
+                  *   current page data". They are the platform's figures now.
+                  *
+                  *   "Assigned" is derived rather than counted separately: it is
+                  *   the open population minus the unassigned, so the two cards
+                  *   cannot disagree about a dispute the way two independent
+                  *   queries could.
+                  */}
                 <div className="grid grid-cols-3 gap-4 mb-8">
                     {[
-                        { label: "Unassigned", count: disputes.filter(d => !(d as any).assignedAdminId).length, color: "orange" },
-                        { label: "Assigned", count: disputes.filter(d => !!(d as any).assignedAdminId).length, color: "blue" },
-                        //   #629 — settled, not one spelling of it. See the sibling screen.
-                        { label: "Resolved", count: disputes.filter(d => isDisputeSettled(d.status)).length, color: "green" },
+                        { label: "Unassigned", count: stats ? stats.unassigned : null, color: "orange" },
+                        { label: "Assigned", count: stats ? Math.max(0, (stats.open + stats.under_review) - stats.unassigned) : null, color: "blue" },
+                        //   #629 — settled, not one spelling of it. Counted on the server now.
+                        { label: "Resolved", count: stats ? stats.resolved : null, color: "green" },
                     ].map(({ label, count, color }) => (
                         <div key={label} className={`bg-white border-2 border-${color}-200 rounded-2xl p-5`}>
                             <p className={`text-sm font-semibold text-${color}-700 mb-1`}>{label}</p>
-                            <p className={`text-3xl font-bold text-${color}-900`}>{count}</p>
+                            <p className={`text-3xl font-bold text-${color}-900`}>{statText(count, statsFailed)}</p>
                         </div>
                     ))}
                 </div>

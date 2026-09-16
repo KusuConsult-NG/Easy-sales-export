@@ -95,6 +95,11 @@ jest.mock('@/app/actions/marketplace', () => ({
     getAllEscrowTransactionsAdmin: jest.fn(),
     releaseEscrowFunds: jest.fn(),
     refundEscrowToBuyer: jest.fn(),
+    //   #822 The screen's four cards are read from the database now rather than
+    //   tallied over the page, so the screen calls this on mount. Resolved
+    //   rather than left undefined: an unmocked call throws inside an effect and
+    //   the assertions below would be about a crash instead of the panel.
+    getEscrowStatsAdmin: jest.fn(async () => ({ success: false, error: 'stats unavailable', data: null })),
 }));
 jest.mock('next-auth/react', () => ({ useSession: () => ({ data: null, status: 'unauthenticated' }), signOut: jest.fn() }));
 

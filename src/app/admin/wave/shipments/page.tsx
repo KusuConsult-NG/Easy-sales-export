@@ -17,6 +17,7 @@ import {
 import type { ShipmentTracking } from "@/app/actions/wave";
 import { humanise } from "@/lib/humanise";
 import { formatDateTimeOrDash, formatShortDateOrDash } from "@/lib/date-utils";
+import { statText } from "@/lib/admin-stat-display";
 
 interface UserSearchRef {
     id: string;
@@ -31,6 +32,11 @@ export default function AdminWaveShipmentsPage() {
 
     // Data states
     const [shipments, setShipments] = useState<ShipmentTracking[]>([]);
+    const [stats, setStats] = useState<
+        { total: number; pending: number; inTransit: number; delivered: number; cancelled: number } | null
+    >(null);
+    //   The LIST is a window even when the counts are not; the screen says so.
+    const [listTruncated, setListTruncated] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     
@@ -77,6 +83,10 @@ export default function AdminWaveShipmentsPage() {
             const result = await getWaveShipmentsAction();
             if (result.success && result.data) {
                 setShipments(result.data as any);
+                //   #822 The platform's counts, which are NOT derived from the
+                //   bounded list above.
+                setStats(((result as any).meta?.stats) ?? null);
+                setListTruncated(Boolean((result as any).meta?.listTruncated));
             } else {
                 showToast(result.error || "Failed to load shipments", "error");
             }
@@ -238,14 +248,11 @@ export default function AdminWaveShipmentsPage() {
         return matchesSearch && matchesStatus;
     });
 
-    // Stats
-    const stats = {
-        total: shipments.length,
-        pending: shipments.filter(s => s.status === "pending").length,
-        inTransit: shipments.filter(s => s.status === "in_transit").length,
-        delivered: shipments.filter(s => s.status === "delivered").length,
-        cancelled: shipments.filter(s => s.status === "cancelled").length,
-    };
+    /*
+     *   #822 These five were `shipments.length` and four filters over it — and
+     *   `shipments` is capped at 500 by the action, so "Total" could never read
+     *   higher however many shipments existed. They come from the database now.
+     */
 
     const getStatusBadge = (status: ShipmentTracking["status"]) => {
         const classes: Record<ShipmentTracking["status"], string> = {
@@ -310,23 +317,23 @@ export default function AdminWaveShipmentsPage() {
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                     <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total</div>
-                    <div className="text-3xl font-extrabold text-slate-800">{stats.total}</div>
+                    <div className="text-3xl font-extrabold text-slate-800">{statText(stats?.total)}</div>
                 </div>
                 <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                     <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Pending</div>
-                    <div className="text-3xl font-extrabold text-yellow-600">{stats.pending}</div>
+                    <div className="text-3xl font-extrabold text-yellow-600">{statText(stats?.pending)}</div>
                 </div>
                 <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                     <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">In Transit</div>
-                    <div className="text-3xl font-extrabold text-blue-600">{stats.inTransit}</div>
+                    <div className="text-3xl font-extrabold text-blue-600">{statText(stats?.inTransit)}</div>
                 </div>
                 <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                     <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Delivered</div>
-                    <div className="text-3xl font-extrabold text-green-600">{stats.delivered}</div>
+                    <div className="text-3xl font-extrabold text-green-600">{statText(stats?.delivered)}</div>
                 </div>
                 <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                     <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Cancelled</div>
-                    <div className="text-3xl font-extrabold text-red-600">{stats.cancelled}</div>
+                    <div className="text-3xl font-extrabold text-red-600">{statText(stats?.cancelled)}</div>
                 </div>
             </div>
 

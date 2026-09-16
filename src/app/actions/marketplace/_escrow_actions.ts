@@ -8,7 +8,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
-import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
+import { FieldValue, Timestamp, FieldPath, AggregateField } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -947,3 +947,88 @@ async function _refundEscrowToBuyer(
 }
 export const refundEscrowToBuyer = withFlexibleSafeAction("refundEscrowToBuyer", _refundEscrowToBuyer);
 
+
+/**
+ * The escrow figures the admin screen puts on its four cards.
+ *
+ *   #822 THE CARDS COUNTED ONE PAGE AND PRESENTED IT AS THE PLATFORM.
+ *
+ *   The owner: the cards are not returning the correct totals.
+ *
+ *   /admin/marketplace/escrow computed all four in the browser:
+ *
+ *       funded:    transactions.filter(t => t.status === "funded").length
+ *       disputed:  …
+ *       released:  …
+ *       totalHeld: …reduce((sum, t) => sum + (t.amount ?? 0), 0)
+ *
+ *   over `transactions`, which is ONE CURSOR PAGE of fifty rows. So the
+ *   four numbers could never exceed fifty between them, and they CHANGED as
+ *   the admin paged forward or picked a status filter — the same platform
+ *   reporting different totals depending on where you were standing in a list.
+ *
+ *   "Total Held (₦)" is the one that matters most: a money figure, on the
+ *   escrow screen, that was the sum of at most fifty transactions.
+ *
+ * ── COUNTED BY THE DATABASE, AND SUMMED BY THE PAGING AGGREGATE ─────────────
+ *
+ *   `.count()` for the three statuses, and `aggregate(AggregateField.sum)` for
+ *   the money — which #455 rebuilt to page through EVERY matching row rather
+ *   than read PostgREST's first thousand, precisely because financial totals
+ *   were under-reporting once a collection passed 1k.
+ *
+ *   NOT FILTERED BY THE SCREEN'S STATUS FILTER, deliberately. These are the
+ *   totals for the platform; narrowing them to whatever the admin is currently
+ *   looking at is how a total became a page count in the first place.
+ */
+async function _getEscrowStatsAdmin(): Promise<
+    | { success: true; error: null; data: { funded: number; disputed: number; released: number; totalHeld: number } }
+    | { success: false; error: string; data: null }
+> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session?.user?.id) {
+            return { success: false as const, error: "Authentication required", data: null };
+        }
+        if (!isAdmin(sessionResult.session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const ref = () => db.collection(COLLECTIONS.ESCROW_TRANSACTIONS);
+
+        const [fundedSnap, disputedSnap, releasedSnap, heldFunded, heldDisputed] = await Promise.all([
+            ref().where("status", "==", "funded").count().get(),
+            ref().where("status", "==", "disputed").count().get(),
+            ref().where("status", "==", "released").count().get(),
+            //   Two sums rather than one `in` aggregate: "held" is funded plus
+            //   disputed, which is what the screen has always meant by it.
+            ref().where("status", "==", "funded").aggregate({ total: AggregateField.sum("amount") }).get(),
+            ref().where("status", "==", "disputed").aggregate({ total: AggregateField.sum("amount") }).get(),
+        ]);
+
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                funded: fundedSnap.data().count,
+                disputed: disputedSnap.data().count,
+                released: releasedSnap.data().count,
+                totalHeld: (heldFunded.data().total ?? 0) + (heldDisputed.data().total ?? 0),
+            },
+        };
+    } catch (error: any) {
+        /*
+         *   REFUSED, NOT ZEROED. #822's sibling finding is screens that render
+         *   a failed read as a real ₦0, and an escrow balance of zero is a
+         *   sentence about the platform's money. The caller shows that the
+         *   figures are unavailable instead.
+         */
+        logger.error("Get escrow stats error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return { success: false as const, error: "Escrow totals could not be read", data: null };
+    }
+}
+export const getEscrowStatsAdmin = withFlexibleSafeAction("getEscrowStatsAdmin", _getEscrowStatsAdmin);
