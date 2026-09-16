@@ -337,7 +337,46 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   block-eating regex measured here, and no assertion in it reads its
         //   own text.
         'src/__tests__/unit/wave-training-access.test.ts',
-        'src/app/api/id-card/pdf/route.ts',
+        //   #810 REMOVED src/app/api/id-card/pdf/route.ts — THE FIRST FILE TO
+        //   LEAVE THIS LIST, which is the direction #676 said a set records and
+        //   a ceiling does not. So it is explained at more length than the
+        //   additions, because "it got better" is the claim that deserves the
+        //   most suspicion.
+        //
+        //   MEASURED, both versions, same method:
+        //
+        //       before   naive 289 / good 347 = 0.833   AFFECTED
+        //       after    naive 305 / good 332 = 0.919   not affected
+        //
+        //   Note the good baseline FELL, 347 → 332, while the naive count
+        //   rose. The file gained lines; it did not lose thirty. So the honest
+        //   reading is NOT "the watermark made the file bigger and diluted the
+        //   damage" — it is that THE SHARED STRIPPER STARTED WORKING BETTER ON
+        //   THIS FILE, and the 10% comparison moved underneath it.
+        //
+        //   THE MECHANISM, and it is worth knowing about:
+        //
+        //       function esc(s: string) { … .replace(/"/g, "&quot;") }
+        //
+        //   `/"/g` is a regex literal containing a double quote — the same
+        //   shape the csv-safe entry below records. lib/testing/strip-comments
+        //   loses its place there and treats the REST OF THE FILE as string,
+        //   so it stops stripping comments from that point on. Counted, of 76
+        //   comment lines:
+        //
+        //       before   58 survived stripping
+        //       after    27 survived stripping
+        //
+        //   Both are wrong; the second is less wrong. What changed is where
+        //   the stripper re-syncs on a later quote, which the added SVG markup
+        //   moved. Nothing about the defect was fixed by this finding, and
+        //   nothing about it was caused by it either — it predates the change
+        //   and it is recorded here rather than quietly benefited from.
+        //
+        //   Removed rather than kept "to be safe": this list is a record of
+        //   what IS. A file left on it after it stopped qualifying is the same
+        //   stale-pin problem in the other direction, and it would mask the
+        //   day the route crosses back.
         'src/lib/csp.ts',
     ];
 
@@ -608,14 +647,17 @@ describe('it agrees with the naive version everywhere the naive version is right
         // recorded here is what the naive stripper WOULD do to that text, which
         // nothing in the repository asks it to do.
 
-    it('only two of them are application source, which is what narrows the risk', () => {
-        // The other seven are test files: they CARRY the naive helper, and
-        // nothing strips them, so their own text being mangled by it is
-        // hypothetical. These two are stripped by real suites.
+    it('only ONE of them is application source, which is what narrows the risk', () => {
+        // The rest are test files: they CARRY the naive helper, and nothing
+        // strips them, so their own text being mangled by it is hypothetical.
+        //
+        // #810 took this from two to one. The ID card route fell below the 10%
+        // threshold — see the long note at its removal from KNOWN_AFFECTED —
+        // leaving csp.ts as the only application file the naive stripper
+        // mangles. The narrower this is, the better; it is down to one.
         const appSource = AFFECTED.filter((f) => !f.includes('__tests__'));
 
         expect(appSource.sort()).toEqual([
-            'src/app/api/id-card/pdf/route.ts',
             'src/lib/csp.ts',
         ]);
     });

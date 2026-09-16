@@ -1,6 +1,7 @@
 "use client";
 
 import { academyVerificationPath } from "@/lib/academy-certificate";
+import { CREDENTIAL_BRAND } from "@/lib/credential-brand";
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import { Download } from 'lucide-react';
 import { useState } from 'react';
@@ -14,7 +15,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Helvetica',
     },
     border: {
-        border: '8px solid #10b981',
+        border: `8px solid ${CREDENTIAL_BRAND.purple}`,
         borderRadius: 8,
         padding: 40,
         height: '100%',
@@ -22,7 +23,7 @@ const styles = StyleSheet.create({
     header: {
         fontSize: 36,
         textAlign: 'center',
-        color: '#10b981',
+        color: CREDENTIAL_BRAND.purpleDeep,
         fontWeight: 'bold',
         marginBottom: 10,
         textTransform: 'uppercase',
@@ -46,14 +47,14 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginVertical: 25,
         color: '#0f172a',
-        borderBottom: '2px solid #10b981',
+        borderBottom: `2px solid ${CREDENTIAL_BRAND.purple}`,
         paddingBottom: 10,
     },
     courseName: {
         fontSize: 22,
         textAlign: 'center',
         marginVertical: 20,
-        color: '#10b981',
+        color: CREDENTIAL_BRAND.purpleDeep,
         fontWeight: 'bold',
     },
     date: {
@@ -86,6 +87,21 @@ const styles = StyleSheet.create({
 });
 
 // Certificate Document Component
+/*
+ *   #808 AND THIS SECOND CERTIFICATE WAS GREEN.
+ *
+ *   The platform has TWO certificate documents: the one the live route renders
+ *   (components/pdf/CertificateDocument) and this one, which #430 identified as
+ *   belonging to "an orphaned component" — it has no callers anywhere in
+ *   src/app. So the platform carried two certificate designs in two different
+ *   colours, and NEITHER was the company's.
+ *
+ *   Recoloured rather than left alone because it costs nothing and closes the
+ *   drift: if this is ever wired up it matches the certificate the platform
+ *   actually issues, instead of being emerald. It is NOT
+ *   merged into the live document here — that is a real refactor of a dead path
+ *   and a decision for the owner, not something to slip into a colour change.
+ */
 const CertificateDocument = ({
     userName,
     courseName,

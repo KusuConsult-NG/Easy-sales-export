@@ -19,6 +19,8 @@ import { requireSession } from "@/lib/session-guard";
 import { getCooperativeMemberIdCardAction } from "@/app/actions/cooperative";
 import { logger } from "@/lib/logger";
 import { jsPDF } from "jspdf";
+import { brandLogoWatermarkSvg } from "@/lib/brand-logo";
+import { CREDENTIAL_BRAND } from "@/lib/credential-brand";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 // CR80 card: 86mm × 54mm at 264 dpi → 893×561px. Round to 900×567 for clean scaling.
@@ -160,7 +162,7 @@ function buildSVG(opts: {
         const y = rowsStartY + i * ROW_H;
         rowsSvg += `
         <!-- Row: ${label} -->
-        <text x="${DETAIL_X}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#a088d8">${esc(label)}</text>
+        <text x="${DETAIL_X}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="${CREDENTIAL_BRAND.lavenderMuted}">${esc(label)}</text>
         <text x="${W - PAD}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="end">${esc(value)}</text>`;
     });
 
@@ -181,12 +183,12 @@ function buildSVG(opts: {
     const tierText = (membershipTier || "Member").replace(" Member", "").toUpperCase();
     const dynamicBadgeW = Math.max(130, tierText.length * 15 + 30);
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%"   stop-color="#6b21a8"/>
-      <stop offset="40%"  stop-color="#7e22ce"/>
-      <stop offset="100%" stop-color="#3730a3"/>
+      <stop offset="0%"   stop-color="${CREDENTIAL_BRAND.purpleDeep}"/>
+      <stop offset="40%"  stop-color="${CREDENTIAL_BRAND.purple}"/>
+      <stop offset="100%" stop-color="${CREDENTIAL_BRAND.indigo}"/>
     </linearGradient>
     <linearGradient id="shimmer" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%"   stop-color="rgba(255,255,255,0.6)"/>
@@ -201,6 +203,15 @@ function buildSVG(opts: {
   <!-- Background -->
   <rect width="${W}" height="${H}" rx="18" fill="url(#bg)"/>
 
+  <!--
+        #810 THE COMPANY MARK, WATERMARKED.
+        Placed here — after the ground, before every piece of text — so it sits
+        BEHIND the member's name rather than over it. Compositing it with sharp
+        after the render was the obvious route and would have put it on top.
+        Offset right of centre to clear the passport photo.
+  -->
+  ${brandLogoWatermarkSvg({ cx: DETAIL_X + DETAIL_W / 2, cy: H / 2, size: 300, opacity: 0.07, id: "wmFront" })}
+
   <!-- Shimmer strip (top) -->
   <rect width="${W}" height="10" rx="18" fill="url(#shimmer)" opacity="0.5"/>
 
@@ -212,7 +223,7 @@ function buildSVG(opts: {
 
   <!-- MEMBER badge -->
   <rect x="${W - PAD - dynamicBadgeW}" y="22" width="${dynamicBadgeW}" height="${BADGE_H}" rx="10" fill="rgba(196,181,253,1)"/>
-  <text x="${W - PAD - dynamicBadgeW / 2}" y="${22 + BADGE_H * 0.68}" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#581c87" text-anchor="middle" letter-spacing="2">${esc(tierText)}</text>
+  <text x="${W - PAD - dynamicBadgeW / 2}" y="${22 + BADGE_H * 0.68}" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${CREDENTIAL_BRAND.purpleInk}" text-anchor="middle" letter-spacing="2">${esc(tierText)}</text>
 
   <!-- Header divider -->
   <line x1="${PAD}" y1="${HEADER_H}" x2="${W - PAD}" y2="${HEADER_H}" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
@@ -248,7 +259,7 @@ function buildBackSVG(opts: {
 }): string {
     const { joinedAt, validUntil } = opts;
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="backBg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%"   stop-color="#1e293b"/>
@@ -258,6 +269,13 @@ function buildBackSVG(opts: {
 
   <!-- Background -->
   <rect width="${W}" height="${H}" rx="18" fill="url(#backBg)"/>
+
+  <!--
+        #810 The same mark on the back, below the magnetic stripe and behind
+        the terms. Carried at a lower opacity than the front: this ground is
+        near-black, where the same figure reads considerably stronger.
+  -->
+  ${brandLogoWatermarkSvg({ cx: W / 2, cy: 355, size: 260, opacity: 0.05, id: "wmBack" })}
 
   <!-- Decorative circles -->
   <circle cx="80" cy="500" r="120" fill="white" opacity="0.02"/>
@@ -270,7 +288,7 @@ function buildBackSVG(opts: {
   <rect x="${PAD}" y="165" width="480" height="80" fill="rgba(255,255,255,0.08)" rx="6"/>
   <text x="${PAD + 20}" y="212" font-family="Arial, Helvetica, sans-serif" font-size="20" font-style="italic" fill="rgba(255,255,255,0.3)">Authorized Signature</text>
   
-  <text x="560" y="212" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#c4b5fd">EASY SALES COOPERATIVE</text>
+  <text x="560" y="212" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="${CREDENTIAL_BRAND.lavender}">EASY SALES COOPERATIVE</text>
 
   <!-- Terms and Conditions -->
   <text x="${W / 2}" y="320" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#e2e8f0" text-anchor="middle">TERMS OF USE</text>
