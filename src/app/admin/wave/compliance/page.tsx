@@ -6,6 +6,7 @@ import { Users, TrendingUp, DollarSign, CheckCircle, XCircle, Clock, Download, B
 import { formatCurrency } from "@/lib/utils";
 import { recordExport } from "@/lib/record-export";
 import { percentage, numberOrZero } from "@/lib/numbers";
+import { statText } from "@/lib/admin-stat-display";
 
 type ComplianceStats = {
     totalApplications: number;
@@ -18,6 +19,18 @@ type ComplianceStats = {
     // The API used to return a hardcoded 85 when there were no loans at all.
     repaymentRate: number | null;
     activeMembers: number;
+    /**
+     * #835 The programme's real applicant figures, counted over every applicant
+     * rather than over the detailed-form collection alone.
+     *
+     * null when the count failed, which must not render as 0. See the route.
+     */
+    applicantsTotal?: number | null;
+    applicantsApproved?: number | null;
+    applicantsPending?: number | null;
+    applicantsRejected?: number | null;
+    /** How many applicants have the long form on file. A record count. */
+    detailedApplicationRecords?: number | null;
 };
 
 type DemographicBreakdown = {
@@ -41,6 +54,15 @@ export default function WAVECompliancePage() {
         disbursementTracked: boolean;
         disbursementNote: string | null;
         repaymentMeasured: boolean;
+        /** #835 What the age/state/occupation panels are actually computed over. */
+        demographicsBasis?: {
+            rowsCounted: number;
+            truncated: boolean;
+            population: string;
+            ofApplicants: number | null;
+            note: string | null;
+        } | null;
+        applicantsCounted?: boolean;
     } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [timeframe, setTimeframe] = useState("all");
@@ -116,6 +138,31 @@ export default function WAVECompliancePage() {
         }
     };
 
+
+    /**
+     *   #835 AN OLDER PAYLOAD MUST NOT BLANK THE WHOLE REPORT.
+     *
+     *   These tiles read the applicant-register fields, which this release adds.
+     *   A response that predates them — a rolling deploy, a cached body, a
+     *   client held open across a release — carries only `totalApplications`,
+     *   `approved`, `pending`, `rejected`, and the screen rendered "—" across
+     *   the board against figures that were right there in the payload. #610's
+     *   suite caught exactly that.
+     *
+     *   ABSENT AND NULL ARE DIFFERENT ANSWERS, which is the whole reason this is
+     *   not `??`:
+     *
+     *       undefined  the field was never sent   → use the legacy figure
+     *       null       it was counted and FAILED  → "—", never a substitute
+     *
+     *   Collapsing the two would print the applications-table number as though
+     *   it were the applicant total, which is the defect this finding is about.
+     */
+    const preferRegister = (
+        registerValue: number | null | undefined,
+        legacy: number | undefined,
+    ): number | null | undefined => (registerValue === undefined ? legacy : registerValue);
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -172,7 +219,48 @@ export default function WAVECompliancePage() {
                     </div>
                 </div>
 
-                {/* Stats Cards */}
+                {/*
+                  *   #835 THE PROGRAMME'S SIZE, WHICH THIS SCREEN USED TO OMIT.
+                  *
+                  *   The owner, reading this page: "the numbers are more than
+                  *   this and the application is far more than 15k" — next to a
+                  *   card showing 716.
+                  *
+                  *   716 is the row count of WAVE_APPLICATIONS, the DETAILED-FORM
+                  *   collection. It is not the applicant register. ~15,130 people
+                  *   have applied and carry `serviceRegistrations.wave.status`,
+                  *   which both the web form and the import maintain — so that is
+                  *   what the figures here are counted over now.
+                  *
+                  *   AND THE FIRST ATTEMPT AT THIS PUT A FALSE STATEMENT ON THE
+                  *   SCREEN. It read the difference as "14,655 without an approved
+                  *   application", taking a sentence from another module's comment
+                  *   as though it were a measurement. The owner: "14k+ without
+                  *   application is a false statement … all the users had
+                  *   applications submitted." Nothing on this page makes a claim
+                  *   about what any applicant lacks any more; where the two
+                  *   collections differ it is reported as a fact about RECORDS.
+                  */}
+                {stats && (
+                    <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border-l-4 border-primary">
+                        <p className="text-sm font-semibold text-slate-600 mb-1">
+                            Total Applications
+                        </p>
+                        <p className="text-5xl font-bold text-slate-900">
+                            {statText(preferRegister(stats.applicantsTotal, stats.totalApplications), dataAvailability?.applicantsCounted === false)}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Everyone who has applied to the WAVE programme, by any enrolment route
+                        </p>
+                    </div>
+                )}
+
+                {/* Stats Cards — the APPLICATION FUNNEL, over every applicant */}
+                {stats && (
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">
+                        Application Status
+                    </h2>
+                )}
                 {stats && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                         <div className="bg-white rounded-xl shadow-lg p-6">
@@ -181,7 +269,7 @@ export default function WAVECompliancePage() {
                                     <Users className="w-6 h-6 text-blue-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {numberOrZero(stats.totalApplications)}
+                                    {statText(preferRegister(stats.applicantsTotal, stats.totalApplications), dataAvailability?.applicantsCounted === false)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
@@ -195,11 +283,11 @@ export default function WAVECompliancePage() {
                                     <CheckCircle className="w-6 h-6 text-green-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {numberOrZero(stats.approved)}
+                                    {statText(preferRegister(stats.applicantsApproved, stats.approved), dataAvailability?.applicantsCounted === false)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
-                                Approved ({percentage(stats.approved, stats.totalApplications)}%)
+                                Approved ({percentage(preferRegister(stats.applicantsApproved, stats.approved), preferRegister(stats.applicantsTotal, stats.totalApplications))}%)
                             </p>
                         </div>
 
@@ -209,7 +297,7 @@ export default function WAVECompliancePage() {
                                     <Clock className="w-6 h-6 text-yellow-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {numberOrZero(stats.pending)}
+                                    {statText(preferRegister(stats.applicantsPending, stats.pending), dataAvailability?.applicantsCounted === false)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
@@ -223,11 +311,11 @@ export default function WAVECompliancePage() {
                                     <XCircle className="w-6 h-6 text-red-600" />
                                 </div>
                                 <span className="text-2xl font-bold text-slate-900">
-                                    {numberOrZero(stats.rejected)}
+                                    {statText(preferRegister(stats.applicantsRejected, stats.rejected), dataAvailability?.applicantsCounted === false)}
                                 </span>
                             </div>
                             <p className="text-sm font-semibold text-slate-600">
-                                Rejected ({percentage(stats.rejected, stats.totalApplications)}%)
+                                Rejected ({percentage(preferRegister(stats.applicantsRejected, stats.rejected), preferRegister(stats.applicantsTotal, stats.totalApplications))}%)
                             </p>
                         </div>
                     </div>
@@ -284,6 +372,34 @@ export default function WAVECompliancePage() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/*
+                  *   #835 THE BREAKDOWNS SAY WHAT THEY ARE COMPUTED OVER.
+                  *
+                  *   Age, state and occupation only exist on the long application
+                  *   form, so these panels can only be built from the applicants
+                  *   whose form data is in WAVE_APPLICATIONS — 716 of ~15,130.
+                  *   "Top States" was therefore describing under 5% of the
+                  *   programme while being read, on a compliance report, as the
+                  *   programme's geography.
+                  *
+                  *   The note is about RECORDS, not about people: it says which
+                  *   applicants the charts could be drawn from, and makes no claim
+                  *   that anybody failed to apply.
+                  */}
+                {demographics && dataAvailability?.demographicsBasis?.note && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+                        <p className="text-sm text-amber-900">
+                            <span className="font-semibold">Basis for the breakdowns below: </span>
+                            {dataAvailability.demographicsBasis.note}
+                        </p>
+                        {dataAvailability.demographicsBasis.truncated && (
+                            <p className="text-sm text-amber-900 font-semibold mt-2">
+                                This sweep hit its row ceiling — the breakdowns are incomplete.
+                            </p>
+                        )}
                     </div>
                 )}
 

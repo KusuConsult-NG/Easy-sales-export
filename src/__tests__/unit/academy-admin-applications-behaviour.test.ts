@@ -226,7 +226,10 @@ describe('getAcademyApplicationStatsAction', () => {
     });
 
     it('is all zeroes when there are no applications', async () => {
-        expect((await stats()).data.stats).toEqual({
+        //   #835 added the applicant-register fields. toMatchObject rather than a
+        //   widened toEqual, so the four counts this case exists to pin stay
+        //   pinned and a future field cannot silently change one of them.
+        expect((await stats()).data.stats).toMatchObject({
             totalApplications: 0, pending: 0, under_review: 0, approved: 0, rejected: 0,
         });
     });
@@ -240,9 +243,24 @@ describe('getAcademyApplicationStatsAction', () => {
         // A status outside the four is counted nowhere — including in the total.
         seedApplication('x1', { status: 'revision_required' });
 
-        expect((await stats()).data.stats).toEqual({
+        expect((await stats()).data.stats).toMatchObject({
             totalApplications: 5, pending: 2, under_review: 1, approved: 1, rejected: 1,
         });
+
+        /*
+         *   #835 AND THESE FIGURES COME FROM THE APPLICATIONS COLLECTION HERE,
+         *   which is what `applicantsCounted: false` reports.
+         *
+         *   This fixture seeds applications with no matching user records, so the
+         *   applicant register is empty. The first wiring of #835 read
+         *   `applicants.total ?? detailCount` — and `??` does not fall back on
+         *   zero, so this case reported 0 against five real applications. THIS
+         *   SUITE CAUGHT IT. The register is now used only when it is at least as
+         *   complete as the detail collection (registerIsUsable), and says which
+         *   source answered.
+         */
+        expect((await stats()).data.stats.applicantsCounted).toBe(false);
+        expect((await stats()).data.stats.detailedApplicationRecords).toBe(5);
     });
 });
 

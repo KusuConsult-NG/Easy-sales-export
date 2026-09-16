@@ -17,7 +17,7 @@ import { creditWalletOnce } from "@/lib/wallet-ledger";
 /**
  * Get global stats for Farm Nation admin dashboard
  */
-async function _getFarmNationStatsAction(): Promise<ActionResponse<{ stats: { totalApplications: number } }>> {
+async function _getFarmNationStatsAction(): Promise<ActionResponse<{ stats: { totalApplications: number; detailedApplicationRecords: number; applicantsCounted: boolean } }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -28,7 +28,7 @@ async function _getFarmNationStatsAction(): Promise<ActionResponse<{ stats: { to
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
-        const cacheKey = "admin:farm-nation-stats:global";
+        const cacheKey = "admin:farm-nation-stats:global:v2";
 
         try {
             const cached = await getCached<any>(cacheKey);
@@ -40,12 +40,36 @@ async function _getFarmNationStatsAction(): Promise<ActionResponse<{ stats: { to
         const countSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
             .count()
             .get();
-        const totalApplications = countSnap.data().count;
+        const detailedApplicationRecords = countSnap.data().count;
 
-        const response: ActionResponse<{ stats: { totalApplications: number } }> = {
+        /**
+         *   #835 THE APPLICANT REGISTER, not just the detailed-form collection.
+         *
+         *   The owner, of the WAVE compliance screen: "the number are more than
+         *   this and the application is far more than 15k" — and then, of the
+         *   first fix for it, "all the users had applications submitted."
+         *
+         *   Every module has the same split. The `*_APPLICATIONS` collection
+         *   holds the detailed form and only for the route that writes one;
+         *   `serviceRegistrations.<module>.status` on the USER is maintained by
+         *   every enrolment path including the legacy import, so it is the
+         *   register of who actually applied.
+         *
+         *   Counted through lib/module-applicant-count so all six modules share
+         *   ONE definition — including the dual-spelling keys and the status
+         *   vocabulary, which is exactly the detail six separate copies would
+         *   drift on. The detail counts below are kept and renamed for what they
+         *   count, so nothing that read them breaks.
+         */
+        const { countModuleApplicants, registerIsUsable } = await import("@/lib/module-applicant-count");
+        const applicants = await countModuleApplicants("farmNation");
+        const useRegister = registerIsUsable(applicants, detailedApplicationRecords);
+        const totalApplications = useRegister ? applicants.total! : detailedApplicationRecords;
+
+        const response: ActionResponse<{ stats: { totalApplications: number; detailedApplicationRecords: number; applicantsCounted: boolean } }> = {
             success: true,
             error: null,
-            data: { stats: { totalApplications } }
+            data: { stats: { totalApplications, detailedApplicationRecords, applicantsCounted: useRegister } }
         };
 
         try {

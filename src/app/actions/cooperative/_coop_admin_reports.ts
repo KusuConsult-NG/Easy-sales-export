@@ -47,7 +47,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         const adminScope = await getAdminScope(session.user.id, roles);
 
         const { getCached, setCache } = await import("@/lib/redis");
-        const cacheKey = adminScope ? `admin:coop-stats:${adminScope}` : "admin:coop-stats:global";
+        const cacheKey = adminScope ? `admin:coop-stats:v2:${adminScope}` : "admin:coop-stats:global:v2";
 
         try {
             const cached = await getCached<any>(cacheKey);
@@ -82,6 +82,37 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             suspendedCount: suspendedMembers,
             orphanedPaymentsCount
         } = metricsData;
+
+        /**
+         *   #835 THE APPLICANT REGISTER, for the platform-wide view only.
+         *
+         *   COOPERATIVE_MEMBERS holds the detailed membership record and only for
+         *   the route that writes one; `serviceRegistrations.cooperative(s).status`
+         *   on the USER is maintained by every enrolment path including the legacy
+         *   import, so it is the register of who actually applied.
+         *
+         *   ONLY WHEN UNSCOPED, and that restriction is the point.
+         *   countModuleApplicants is platform-wide — the registration object on a
+         *   user says WHICH MODULE, not which cooperative — so substituting it
+         *   into a view scoped to one cooperative would report the whole
+         *   platform's members as that cooperative's. A scoped admin keeps the
+         *   metrics service's answer, which is the one that knows about scope.
+         *
+         *   This is the "correct rule applied to some of the places it names"
+         *   shape running in reverse: the danger here is applying it to a place
+         *   it does NOT name.
+         */
+        let totalApplicantsCount: number | null = null;
+        let applicantsCounted = false;
+        if (!adminScope) {
+            const { countModuleApplicants, registerIsUsable } = await import("@/lib/module-applicant-count");
+            const applicants = await countModuleApplicants("cooperative");
+            if (registerIsUsable(applicants, totalMembersCount)) {
+                totalApplicantsCount = applicants.total;
+                applicantsCounted = true;
+            }
+        }
+        const reportedTotalMembers = totalApplicantsCount ?? totalMembersCount;
 
 
         let txnQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
@@ -192,7 +223,12 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             error: null, success: true as const,
             data: {
                 stats: {
-                    totalMembers: totalMembersCount,
+                    totalMembers: reportedTotalMembers,
+                    //   The membership-record count, kept and named for what it
+                    //   counts, and a flag for whether the register was reachable.
+                    detailedMembershipRecords: totalMembersCount,
+                    applicantsCounted,
+                    scopedToCooperative: Boolean(adminScope),
                     paidMembers: paidMembersCount,
                     unpaidMembers,
                     activeMembers,

@@ -176,10 +176,48 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        /**
+         *   #835 THE REPORT COUNTS EVERY APPLICANT, NOT JUST THE LONG FORMS.
+         *
+         *   This document is the artefact that leaves the building — it is what
+         *   gets attached to an email and quoted to a funder. It reported
+         *   "Total Applications: 716", the row count of WAVE_APPLICATIONS, while
+         *   ~15,130 people have applied to the programme.
+         *
+         *   WAVE_APPLICATIONS holds the DETAILED FORM and only for the route that
+         *   writes one. `serviceRegistrations.wave.status` on the user is the
+         *   field both enrolment paths maintain, so it is the applicant register
+         *   and it is what the headline figure is counted from now.
+         *
+         *   Under-reporting a programme by 95% on its own compliance report is
+         *   worse here than on the screen, because the screen can be re-read and
+         *   a sent report cannot.
+         *
+         *   The count is best-effort: a failure must not cost the admin the
+         *   export they asked for, so it degrades to null and the report says the
+         *   figure is unavailable rather than printing a zero.
+         */
+        let applicantsTotal: number | null = null;
+        try {
+            let applicantQuery: import("@/lib/supabase-db").SupabaseQuery = db
+                .collection(COLLECTIONS.USERS)
+                .where("serviceRegistrations.wave.status", "!=", null);
+            if (dateFilter) {
+                applicantQuery = applicantQuery.where("createdAt", ">=", dateFilter);
+            }
+            applicantsTotal = (await applicantQuery.count().get()).data().count ?? 0;
+        } catch (e) {
+            logger.error("[wave/reports/export] Applicant count failed; the report will say so.", e);
+        }
+
         if (format === "csv") {
+            //   The CSV stays a pure row-per-application extract: it is parsed by
+            //   spreadsheets and scripts, and a reconciliation banner injected as a
+            //   pseudo-row would corrupt every reader of it. Its columns say what
+            //   it is. The narrative report below carries the reconciliation.
             return generateCSV(applications, timeframe);
         } else if (format === "pdf") {
-            return generatePDFReport(applications, timeframe);
+            return generatePDFReport(applications, timeframe, applicantsTotal);
         }
 
         return NextResponse.json(
@@ -259,7 +297,7 @@ function generateCSV(applications: any[], timeframe: string) {
     });
 }
 
-function generatePDFReport(applications: any[], timeframe: string) {
+function generatePDFReport(applications: any[], timeframe: string, applicantsTotal: number | null = null) {
     const totalApplications = applications.length;
     const approved = applications.filter(app => app.status === "approved").length;
     const rejected = applications.filter(app => app.status === "rejected").length;
@@ -305,11 +343,19 @@ function generatePDFReport(applications: any[], timeframe: string) {
     <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
 
     <div class="stats">
-        <div class="stat-card"><div class="stat-label">Total Applications</div><div class="stat-value">${totalApplications}</div></div>
-        <div class="stat-card"><div class="stat-label">Approved</div><div class="stat-value">${approved}</div></div>
-        <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">${pending}</div></div>
-        <div class="stat-card"><div class="stat-label">Rejected</div><div class="stat-value">${rejected}</div></div>
+        <div class="stat-card"><div class="stat-label">Total Applications</div><div class="stat-value">${applicantsTotal === null ? "Unavailable" : applicantsTotal.toLocaleString()}</div></div>
+        <div class="stat-card"><div class="stat-label">Approved</div><div class="stat-value">${approved.toLocaleString()}</div></div>
+        <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">${pending.toLocaleString()}</div></div>
+        <div class="stat-card"><div class="stat-label">Rejected</div><div class="stat-value">${rejected.toLocaleString()}</div></div>
     </div>
+
+    ${applicantsTotal !== null && applicantsTotal > totalApplications ? `
+    <p><strong>About the detail table below.</strong> ${applicantsTotal.toLocaleString()} applications
+    have been made to the programme. The itemised table lists the
+    ${totalApplications.toLocaleString()} applicants whose long-form record is held in the
+    applications table; applicants enrolled through another route are counted in the totals above
+    but have no long-form row to itemise here.</p>
+    ` : ``}
 
     <h2>Financial Summary</h2>
     ${disbursementTracked ? `

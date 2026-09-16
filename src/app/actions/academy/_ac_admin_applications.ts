@@ -123,16 +123,47 @@ async function _getAcademyApplicationStatsAction(): Promise<ActionResponse<any>>
         const rejected = rejectedSnap.data().count;
         const totalApplications = pending + under_review + approved + rejected;
 
+        /**
+         *   #835 THE APPLICANT REGISTER, not just the detailed-form collection.
+         *
+         *   The owner, of the WAVE compliance screen: "the number are more than
+         *   this and the application is far more than 15k" — and then, of the
+         *   first fix for it, "all the users had applications submitted."
+         *
+         *   Every module has the same split. The `*_APPLICATIONS` collection
+         *   holds the detailed form and only for the route that writes one;
+         *   `serviceRegistrations.<module>.status` on the USER is maintained by
+         *   every enrolment path including the legacy import, so it is the
+         *   register of who actually applied.
+         *
+         *   Counted through lib/module-applicant-count so all six modules share
+         *   ONE definition — including the dual-spelling keys and the status
+         *   vocabulary, which is exactly the detail six separate copies would
+         *   drift on. The detail counts below are kept and renamed for what they
+         *   count, so nothing that read them breaks.
+         */
+        const { countModuleApplicants, registerIsUsable } = await import("@/lib/module-applicant-count");
+        const applicants = await countModuleApplicants("academy");
+        const useRegister = registerIsUsable(applicants, totalApplications);
+
         return {
             success: true,
             error: null,
             data: {
                 stats: {
-                    totalApplications,
-                    pending,
+                    //   The headline: everyone who has applied to Academy.
+                    //   Falls back to the detail-collection total only when the
+                    //   register could not be counted.
+                    totalApplications: useRegister ? applicants.total! : totalApplications,
+                    pending: useRegister ? applicants.pending! : pending,
                     under_review,
-                    approved,
-                    rejected
+                    approved: useRegister ? applicants.approved! : approved,
+                    rejected: useRegister ? applicants.rejected! : rejected,
+                    revisionRequired: useRegister ? applicants.revisionRequired : null,
+                    otherStatus: useRegister ? applicants.other : null,
+                    applicantsCounted: useRegister,
+                    //   The old figure, kept and named for what it counts.
+                    detailedApplicationRecords: totalApplications,
                 }
             }
         };

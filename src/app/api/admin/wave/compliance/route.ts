@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { AggregateField } from "@/lib/firestore-compat";
+import { countModuleApplicants, registerIsUsable } from "@/lib/module-applicant-count";
 
 /**
  * API Route: Get WAVE Compliance Data (Admin)
@@ -75,6 +76,73 @@ export async function GET(request: NextRequest) {
         const approved = approvedSnap.data().count ?? 0;
         const rejected = rejectedSnap.data().count ?? 0;
         const pending = pendingSnap.data().count ?? 0;
+
+        /**
+         * --- THE REAL APPLICANT POPULATION ---
+         *
+         *   #835 THE COMPLIANCE SCREEN UNDER-REPORTED WAVE BY 95%.
+         *
+         *   The owner, looking at this page: "the numbers are more than this and
+         *   the application is far more than 15k" — beside a card reading 716.
+         *
+         *   And then, decisively, when a first pass at this described the gap as
+         *   members lacking an application: "14k+ without application is a false
+         *   statement … all the users had applications submitted."
+         *
+         *   THE OWNER IS RIGHT AND THE FIRST DIAGNOSIS WAS WRONG. It is recorded
+         *   here because the mistake is the more instructive half.
+         *
+         * ── WHAT THE FIRST PASS DID ────────────────────────────────────────────
+         *
+         *   _wv_admin_applications.ts carries a note reading "the 14,654 without
+         *   an application may well be real members". That sentence was taken as
+         *   a measurement, hardened into `membersWithoutApprovedApplication`, and
+         *   PRINTED ON THE SCREEN as a statement about fourteen thousand real
+         *   women. Nothing had checked whether their applications existed; a
+         *   comment's framing had simply been believed.
+         *
+         *   That is the same shape as the invented funding ledger #829 removed —
+         *   a figure presented as measured that was inferred — committed while
+         *   fixing an instance of it.
+         *
+         * ── WHERE THE APPLICATIONS ACTUALLY ARE ────────────────────────────────
+         *
+         *   WAVE_APPLICATIONS is not the register of who applied. It holds the
+         *   detailed form payload, and only for the route that writes one.
+         *
+         *   `serviceRegistrations.wave.status` on the USER is the field BOTH
+         *   enrolment paths maintain:
+         *
+         *     _wv_applications.ts  writes it "pending" on submit, and the admin
+         *                          actions move it to "approved" / "rejected"
+         *     _legacy.ts           writes it "approved" on import
+         *
+         *   So it is complete where the applications collection is partial, and
+         *   it is the authoritative status for every applicant however she
+         *   reached the programme. It is what this screen counts now.
+         *
+         *   WAVE_APPLICATIONS is still read, for the demographic breakdowns —
+         *   that is where age, state and occupation live — and the basis is
+         *   declared so nobody reads a 716-row breakdown as the whole programme.
+         *
+         *   NO CLAIM IS MADE ABOUT WHAT ANY MEMBER LACKS. The difference between
+         *   the two collections is reported, where it is reported at all, as a
+         *   fact about RECORDS — detailed form data on file — and never as a
+         *   fact about people.
+         */
+        const applicants = await countModuleApplicants("wave", dateFilter);
+        /*
+         *   The register is used only when it is at least as complete as the
+         *   applications table — see registerIsUsable. An unpopulated register
+         *   otherwise turns a real total into a confident zero, which is the
+         *   defect this whole finding is about, pointing the other way.
+         */
+        const useRegister = registerIsUsable(applicants, totalApplications);
+        const applicantsTotal = useRegister ? applicants.total : totalApplications;
+        const applicantsApproved = useRegister ? applicants.approved : approved;
+        const applicantsPending = useRegister ? applicants.pending : pending;
+        const applicantsRejected = useRegister ? applicants.rejected : rejected;
+        const applicantCountFailed = !useRegister && !applicants.counted;
 
         // --- Disbursed amount: aggregate sum on approved docs ---
         let totalDisbursed = 0;
@@ -163,7 +231,27 @@ export async function GET(request: NextRequest) {
             : db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .select(...DEMOGRAPHIC_FIELDS);
 
-        const demographicsSnap = await demographicsQuery.get();
+        /**
+         * `.all()`, not `.get()`.
+         *
+         *   #835 `.get()` without a `.limit()` stops at DEFAULT_QUERY_LIMIT —
+         *   5,000 rows. At today's 716 applications that changes nothing, which
+         *   is exactly why it would not have been noticed: the breakdowns would
+         *   simply start describing the first 5,000 applications as the whole
+         *   programme on the day the 5,001st arrived, on the screen whose figures
+         *   are reported outward.
+         *
+         *   The sibling export route already made this call correctly and says
+         *   why — "this is an EXPORT, so a silent cap hands the admin a file that
+         *   looks complete and is not". A compliance dashboard has the same
+         *   property and had the other implementation.
+         */
+        const demographicsSnap = await demographicsQuery.all().get();
+        if (demographicsSnap.truncated) {
+            logger.error(
+                "[WAVE Compliance] Demographics sweep hit the unbounded ceiling — the breakdowns below are incomplete."
+            );
+        }
 
         const ageGroups: Record<string, number> = {
             "18-25": 0,
@@ -209,8 +297,24 @@ export async function GET(request: NextRequest) {
             // number of accounts holding the WAVE role — see
             // _wv_admin_applications.ts for the two populations and why they differ
             // by an order of magnitude. Named for what it counts.
-            activeMembers: approved,
-            approvedApplications: approved,
+            activeMembers: applicantsApproved ?? approved,
+            approvedApplications: applicantsApproved ?? approved,
+            /**
+             *   #835 THE HEADLINE FIGURES, counted over every applicant.
+             *
+             *   `totalApplications` above counts rows in WAVE_APPLICATIONS, which
+             *   is the detailed-form collection and not the applicant register.
+             *   These are the programme's real numbers. null means the count
+             *   failed — never 0.
+             */
+            applicantsTotal,
+            applicantsApproved,
+            applicantsPending,
+            applicantsRejected,
+            //   Kept, and named for exactly what it is: how many applicants have
+            //   the long form on file. A RECORD-COMPLETENESS figure, never a
+            //   claim that anybody did not apply.
+            detailedApplicationRecords: totalApplications,
         };
 
         /**
@@ -235,6 +339,32 @@ export async function GET(request: NextRequest) {
                 : "WAVE applications do not record a disbursed amount; this figure is not tracked, not nil.",
             repaymentMeasured: repaymentRate !== null,
             repaymentBasis,
+            /**
+             * #835 WHAT THE DEMOGRAPHIC BREAKDOWNS ARE ACTUALLY COMPUTED OVER.
+             *
+             * The age, state and occupation panels are built from the
+             * WAVE_APPLICATIONS rows and nothing else, because those are the only
+             * records carrying the fields. With 716 applications against 15,130
+             * enrolled members, "Top States" describes under 5% of the programme
+             * while being read as the programme's geography — on a compliance
+             * report.
+             *
+             * The breakdowns are NOT extended to cover role-only members: their
+             * accounts do not hold an age or a state of residence, so including
+             * them would add 14,414 rows of "Unknown" and make the panels worse,
+             * not broader. What is fixed is that the basis is now stated, so a
+             * reader knows the denominator they are looking at.
+             */
+            demographicsBasis: {
+                rowsCounted: demographicsSnap.docs.length,
+                truncated: Boolean(demographicsSnap.truncated),
+                population: "detailed_application_records",
+                ofApplicants: applicantsTotal,
+                note: applicantsTotal !== null && applicantsTotal > demographicsSnap.docs.length
+                    ? `Breakdowns are computed from the ${demographicsSnap.docs.length.toLocaleString()} applicants whose detailed form data is held in the applications table, out of ${applicantsTotal.toLocaleString()} applicants in total. Age, state and occupation are only recorded on that long form, so applicants enrolled through another route are not represented in the charts below.`
+                    : null,
+            },
+            applicantsCounted: !applicantCountFailed,
         };
 
         if (totalDisbursed === 0) {

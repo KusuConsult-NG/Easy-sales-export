@@ -748,8 +748,26 @@ async function _getMarketplaceUsersAction(options: {
 
         q = q.orderBy("createdAt", sortDirection);
 
-        // Fetch ALL matching marketplace users (approx 600+) for accurate memory filtering
-        const snapshot = await q.get();
+        /*
+         *   #835 `.all()`, because `stats.total` below is an AGGREGATE over this
+         *   result and `.get()` stops at DEFAULT_QUERY_LIMIT — 5,000 rows.
+         *
+         *   The comment above said "approx 600+", and at 600 the cap is
+         *   invisible. That is precisely the condition under which it ships: the
+         *   screen would begin reporting 5,000 as the marketplace's total on the
+         *   day the 5,001st buyer or seller registered, with every proportion
+         *   below it computed over the same truncated set, and nothing on the
+         *   page to say so.
+         *
+         *   `.all()` is the adapter's answer for a caller that genuinely needs
+         *   every row — an aggregation is exactly that — and its `truncated` flag
+         *   is surfaced so a partial total can be told from a complete one.
+         */
+        const snapshot = await q.all().get();
+        const usersTruncated = Boolean((snapshot as any).truncated);
+        if (usersTruncated) {
+            logger.error("[admin/marketplace] user sweep hit the unbounded ceiling — the totals below are incomplete.");
+        }
 
         let filteredDocs = snapshot.docs;
 
@@ -841,6 +859,8 @@ async function _getMarketplaceUsersAction(options: {
 
         const stats = {
             total: users.length,
+            //   So a caller can tell a complete total from a capped one.
+            truncated: usersTruncated,
             buyerOnly: users.filter((u: any) => u.buyerRole === "buyer_only").length,
             sellerOnly: users.filter((u: any) => u.buyerRole === "seller_only").length,
             both: users.filter((u: any) => u.buyerRole === "both").length,

@@ -539,10 +539,30 @@ describe('#753 — and the rest of the class is measured, not swept', () => {
          *   "Unavailable". The sweep's exclusion asks exactly that question, so
          *   they drop out because they now answer it.
          */
+        /*
+         *   #835 EIGHT BECAME FOUR, and wave/compliance left the population the
+         *   same way system-health did — by answering the question, not by being
+         *   excused from it.
+         *
+         *   Its four figures were `numberOrZero(stats.totalApplications)` and the
+         *   three status counts beside it. They now go through `statText`, which
+         *   is the platform's own three-state decision — a figure, "—" for not
+         *   yet, "Unavailable" for a read that failed — so a count that could not
+         *   be taken no longer renders as a confident number.
+         *
+         *   That happened while fixing #835, where the owner found this screen
+         *   reporting 716 applications for a programme of 15,000. Wiring the
+         *   applicant register through the same nullable path is what took these
+         *   four figures out of the class.
+         *
+         *   The ledger is lowered rather than left, exactly as its own note
+         *   demands: the difference would otherwise be room for four new
+         *   instances that no test would notice.
+         */
         const { total, screens } = figures();
 
-        expect(ledgerVerdict(total, 8)).toBe(LEDGER_HELD);
-        expect(ledgerVerdict(screens.length, 2)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(total, 4)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(screens.length, 1)).toBe(LEDGER_HELD);
     });
 
     it('AND THE TEN THAT REMAIN ARE EACH BEHIND A GUARD', () => {
@@ -582,8 +602,11 @@ describe('#753 — and the rest of the class is measured, not swept', () => {
     });
 
     it('and the sweep finds real screens rather than nothing at all', () => {
-        expect(figures().screens).toContain('src/app/admin/wave/compliance/page.tsx');
+        //   #835 wave/compliance is no longer among them — its four figures went
+        //   through statText. audit-logs is what keeps this a live measurement
+        //   rather than a sweep that has quietly stopped matching anything.
         expect(figures().screens).toContain('src/app/admin/audit-logs/page.tsx');
+        expect(figures().screens.length).toBeGreaterThan(0);
     });
 });
 

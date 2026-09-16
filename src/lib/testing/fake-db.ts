@@ -756,6 +756,33 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
                 docSnapshot(d.id!, collectionOf(d.collection!).get(d.id!), d.collection!));
         }
 
+        /**
+         *   #835 A COUNT IS NOT A PAGE OF ROWS, AND MUST NOT BE CAPPED LIKE ONE.
+         *
+         *   `count` and `aggregate` were resolved through the same `runQuery` as
+         *   an ordinary read, so they inherited the DEFAULT_QUERY_LIMIT ceiling
+         *   and answered `FAKE_DEFAULT_LIMIT` for any population above it.
+         *
+         *   The real adapter does not work that way and never did.
+         *   supabase-db's `count()` issues
+         *
+         *       .select('*', { count: 'exact', head: true })
+         *
+         *   applies the FILTERS and nothing else — no limit, no rows fetched. So
+         *   an exact count of 15,130 is 15,130 in Postgres and was 5,000 here.
+         *
+         *   THIS IS THE DOUBLE LYING IN THE SAFE-LOOKING DIRECTION. A suite
+         *   asserting that a large count is reported correctly PASSED against a
+         *   fake that had quietly truncated it, so the double could not have
+         *   caught a real capping defect — it reproduced one. #835 found it by
+         *   seeding 15,130 members and being handed 5,000, which is precisely
+         *   the "audit the instrument before believing the measurement" rule
+         *   this audit opened with.
+         *
+         *   An EXPLICIT `.limit(n)` is still honoured, because a caller who
+         *   wrote one meant it; what is removed is the implicit default ceiling.
+         */
+        const counting = d.kind === 'count' || d.kind === 'aggregate';
         const rows = runQuery(store, {
             collection: d.collection!,
             filters: d.query?.filters ?? [],
@@ -764,7 +791,7 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
             offset: d.query?.offset,
             startAfterValues: d.query?.startAfterValues,
             startAfterDoc: d.query?.startAfterDoc,
-            unbounded: d.query?.unbounded,
+            unbounded: d.query?.unbounded || (counting && d.query?.limit == null),
         });
 
         if (d.kind === 'count') return Promise.resolve({ data: () => ({ count: rows.length }) });

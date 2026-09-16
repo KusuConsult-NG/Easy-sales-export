@@ -545,7 +545,7 @@ async function _getExportApplicationsStatsAction(): Promise<ActionResponse<any>>
 
 
         const { getCached, setCache } = await import("@/lib/redis");
-        const cacheKey = "admin:export-stats:global";
+        const cacheKey = "admin:export-stats:global:v2";
 
         try {
             const cached = await getCached<any>(cacheKey);
@@ -574,11 +574,41 @@ async function _getExportApplicationsStatsAction(): Promise<ActionResponse<any>>
             .get()
             .catch(() => ({ data: () => ({ count: 0 }) })); 
 
+
+        /**
+         *   #835 THE APPLICANT REGISTER, not just the detailed-form collection.
+         *
+         *   EXPORT_APPLICATIONS holds the detailed form and only for the route
+         *   that writes one. `serviceRegistrations.export.status` on the USER is
+         *   maintained by every enrolment path including the legacy import, so
+         *   it is the register of who actually applied.
+         *
+         *   Through lib/module-applicant-count so all six modules share ONE
+         *   definition — including this module's own `pending_approval` and
+         *   `revision_required`, which no other module writes and which a
+         *   locally-written status list would have missed.
+         */
+        const { countModuleApplicants, registerIsUsable } = await import("@/lib/module-applicant-count");
+        const applicants = await countModuleApplicants("export");
+
+        const detailedPending = (pendingReviewCountSnap.data().count || 0) + (pendingCountSnap.data().count || 0);
+        const detailedApproved = approvedCountSnap.data().count || 0;
+        const detailedRejected = rejectedCountSnap.data().count || 0;
+
+        const detailedTotal = detailedPending + detailedApproved + detailedRejected;
+        const useRegister = registerIsUsable(applicants, detailedTotal);
+
         const payload = {
-            pending: (pendingReviewCountSnap.data().count || 0) + (pendingCountSnap.data().count || 0),
-            approved: approvedCountSnap.data().count || 0,
-            rejected: rejectedCountSnap.data().count || 0,
-            resubmitted: resubmittedSnap.data().count || 0
+            total: useRegister ? applicants.total! : detailedTotal,
+            pending: useRegister ? applicants.pending! : detailedPending,
+            approved: useRegister ? applicants.approved! : detailedApproved,
+            rejected: useRegister ? applicants.rejected! : detailedRejected,
+            revisionRequired: useRegister ? applicants.revisionRequired : null,
+            otherStatus: useRegister ? applicants.other : null,
+            applicantsCounted: useRegister,
+            resubmitted: resubmittedSnap.data().count || 0,
+            //   The old figures, kept and named for what they count.
+            detailedApplicationRecords: detailedTotal,
         };
 
         try {

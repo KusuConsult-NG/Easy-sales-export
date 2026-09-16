@@ -245,14 +245,46 @@ describe('the downloaded report is named for what it is', () => {
 });
 
 describe('the approved count is named for what it counts', () => {
-    it('exposes it as approvedApplications alongside activeMembers', () => {
-        // `activeMembers: approved` is the count of approved APPLICATIONS — 474 in
-        // production — not the number of accounts holding the WAVE role, which is
-        // 15,128. The two were being reported under one name.
+    /**
+     *   #835 THIS CASE'S PREMISE WAS CORRECTED BY THE OWNER.
+     *
+     *   It used to require `activeMembers: approved` — the count of approved rows
+     *   in WAVE_APPLICATIONS — on the reasoning that those rows were a different
+     *   and smaller population than the ~15,128 accounts holding the WAVE role,
+     *   and that reporting the larger figure would overstate who had applied.
+     *
+     *   The owner: "all the users had applications submitted." The larger number
+     *   is the applicant count. WAVE_APPLICATIONS holds the DETAILED FORM and
+     *   only for the route that writes one, so the smaller figure was never the
+     *   membership and never the applications either — it was the row count of
+     *   one collection.
+     *
+     *   So both fields now carry the APPLICANT-REGISTER approved count, and the
+     *   applications-table figure is kept under `detailedApplicationRecords`,
+     *   named for what it counts. The original concern — two populations under
+     *   one name — is still what is being guarded; the correction is about which
+     *   of them is the members and which is the records.
+     */
+    it('reports the approved APPLICANT count, with the record count kept apart', () => {
         const src = code(ROUTE);
 
-        expect(src).toContain('activeMembers: approved');
-        expect(src).toContain('approvedApplications: approved');
+        expect(src).toContain('activeMembers: applicantsApproved');
+        expect(src).toContain('approvedApplications: applicantsApproved');
+        //   The old figure survives under a name that says what it is.
+        expect(src).toContain('detailedApplicationRecords: totalApplications');
+    });
+
+    it('and no longer asserts anything about applicants lacking an application', () => {
+        /*
+         *   A first pass at #835 printed "N without an approved application" on
+         *   this screen, inferred from a comment rather than measured. Pinned
+         *   here as well as in the behavioural suite, because this file is the
+         *   one about the report stating only what it measured.
+         */
+        const src = code(ROUTE) + code(EXPORT_ROUTE) + code(PAGE);
+
+        expect(src).not.toContain('without an approved application');
+        expect(src).not.toContain('membersWithoutApprovedApplication');
     });
 });
 
