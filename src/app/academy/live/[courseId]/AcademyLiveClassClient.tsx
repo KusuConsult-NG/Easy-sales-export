@@ -8,6 +8,7 @@ import VideoClassroom from "@/components/VideoClassroom";
 import { Video, BookOpen, ArrowLeft, Users } from "lucide-react";
 import { getCourseByIdAction, getLiveSessionsAction } from "@/app/actions/academy";
 import { useServerSeed } from "@/hooks/useServerSeed";
+import { isSafeMeetingHref } from "@/lib/meeting-link";
 
 interface AcademyLiveClassPageProps {
     params: Promise<{ courseId: string }>;
@@ -169,7 +170,13 @@ export default function AcademyLiveClassClient(props: {
 
                 {/* Video Classroom */}
                 <div className="h-[calc(100vh-300px)] min-h-[500px]">
-                    {liveSession?.customMeetingLink ? (
+                    {/*   #819 A link stored before normalisation may carry no
+                      *   scheme; in an href that is a relative path, and the
+                      *   learner gets a 404 instead of the class.  */}
+                    {/*   #819 A link stored before normalisation may carry no
+                      *   scheme; in an href that is a relative path, and the
+                      *   learner gets a 404 instead of the class.  */}
+                    {isSafeMeetingHref(liveSession?.customMeetingLink) ? (
                         <div className="flex items-center justify-center h-full bg-white border border-slate-200 rounded-2xl shadow-lg p-8 text-center">
                             <div className="max-w-md mx-auto">
                                 <Video className="w-16 h-16 text-primary mx-auto mb-4 animate-pulse" />

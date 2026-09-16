@@ -219,9 +219,9 @@ export function searchWasTruncated(ids: readonly string[]): boolean {
  *
  * ── AND WHY IT IS TOKENISED ─────────────────────────────────────────────────
  *
- *   These are PREFIX queries: `>= value` and `<= value + `. A prefix of
- *   the whole query only ever matches a field that STARTS with it, so with
- *   "AISHAT Yahaya ABUBAKAR" stored across three fields:
+ *   These are PREFIX queries: `>= value` and `< prefixUpperBound(value)`. A
+ *   prefix of the whole query only ever matches a field that STARTS with it, so
+ *   with "AISHAT Yahaya ABUBAKAR" stored across three fields:
  *
  *       searching "Abubakar"                 matched nothing before
  *       searching "AISHAT Yahaya ABUBAKAR"   matched nothing before
@@ -235,6 +235,47 @@ export function searchWasTruncated(ids: readonly string[]): boolean {
  * @param searchQuery what the admin typed
  * @returns matching DOCUMENT ids, capped like the user search
  */
+/**
+ * The exclusive upper bound that makes `>= prefix` a PREFIX match.
+ *
+ *   #814(b) THE U+F8FF TRICK IS COLLATION-DEPENDENT, AND CI PROVED IT.
+ *
+ *   The first version of the search below bounded its range the way the user
+ *   search above still does:
+ *
+ *       .where(field, "<=", value + "")
+ *
+ *   It passed locally and FAILED IN CI on exactly the two partial-name cases —
+ *   "Abuba" and "AISH" — while every whole-name case passed on both machines.
+ *
+ *   THE REASON. U+F8FF is a PRIVATE-USE code point. Under a byte-ordered
+ *   collation it sorts above every letter and the range works. Under a
+ *   locale-aware collation (en_US.UTF-8, ICU) an unassigned private-use
+ *   character can be IGNORABLE — "ABUBA" then collates equal to "ABUBA",
+ *   and `"ABUBAKAR" <= "ABUBA"` is false. Two databases, two answers, one
+ *   piece of code. A whole-name query matched by its lower bound alone, which
+ *   is why only the partial cases could ever have shown this.
+ *
+ *   INCREMENTING THE LAST CHARACTER needs no character outside the alphabet
+ *   already in the data: "ABUBA" bounds at "ABUBB", and "ABUBAKAR" sorts below
+ *   that under byte order AND under locale order, because the two strings
+ *   differ at a plain letter. It is the standard way to express a prefix range
+ *   and it does not ask the database to rank a character nobody types.
+ *
+ *   The five existing uses in searchUserIdsByQuery are deliberately left alone:
+ *   changing a search that is working in production, on the strength of a
+ *   defect proved only here, is the wider blast radius. They are recorded as
+ *   carrying the same latent fragility.
+ */
+export function prefixUpperBound(prefix: string): string {
+    if (!prefix) return prefix;
+    const last = prefix.charCodeAt(prefix.length - 1);
+    //   An unpaired surrogate or the top of the plane cannot be incremented
+    //   safely; append instead, which is never wrong — only wider.
+    if (last >= 0xd7ff) return prefix + "￿";
+    return prefix.slice(0, -1) + String.fromCharCode(last + 1);
+}
+
 export async function searchDocIdsByNameFields(
     collection: string,
     fields: readonly string[],
@@ -267,7 +308,7 @@ export async function searchDocIdsByNameFields(
                     //   rather than an equality: without it, only a whole
                     //   name would ever match. The partial-prefix case in
                     //   the suite is what holds this to a range.
-                    .where(field, "<=", value + "")
+                    .where(field, "<", prefixUpperBound(value))
                     .limit(SEARCH_RESULT_CAP)
                     .get(),
             )),

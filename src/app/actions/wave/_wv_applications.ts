@@ -21,7 +21,7 @@ import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { toMillis } from "@/lib/firestore-serialize";
 import { sendEmailNotification } from "@/lib/email-notifications";
-import { nationalIdField, requiredNationalIdField, requiredVotersCardField } from '@/lib/kyc-validators';
+import { nationalIdField, requiredNationalIdField, optionalVotersCardField } from '@/lib/kyc-validators';
 import { latestApplication } from "@/lib/latest-application";
 
 //   #788 The programme's name comes from one constant. Before #774
@@ -53,7 +53,8 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
     //   #501 The WAVE application had no check on either field.
     //   #774 Mandatory, at the owner's instruction. Still no external check.
     nin: requiredNationalIdField('NIN'),
-    votersCardNumber: requiredVotersCardField(),
+    //   #820 Optional, per the owner. A value that IS supplied is still checked.
+    votersCardNumber: optionalVotersCardField(),
     pollingUnit: z.string().optional(),
     ward: z.string().optional(),
     yearOfVoterRegistration: z.string().optional(),

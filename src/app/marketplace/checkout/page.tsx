@@ -50,6 +50,21 @@ import dynamicImport from "next/dynamic";
 import { NIGERIAN_STATE_COORDINATES } from "@/lib/locations";
 import { firstImageSrc } from "@/lib/first-image";
 
+/**
+ * The Google Maps key, or empty when this deployment has none.
+ *
+ *   #821 One expression, read by the loader AND by the decision not to load.
+ *   Two spellings of "do we have a key?" is how the old code came to warn about
+ *   a problem and then cause it in the next line.
+ *
+ *   The FIREBASE key is deliberately not a fallback. It is not enabled for the
+ *   Maps JavaScript API, so using it produced a rejected key and a grey box.
+ */
+const GOOGLE_MAPS_KEY =
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    || process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
+    || "";
+
 const CheckoutMapFallback = dynamicImport(
     () => import("@/components/marketplace/CheckoutMapFallback"),
     {
@@ -110,14 +125,45 @@ export default function CheckoutPage() {
             setMapsLoaded(true);
         }
         
-        // Developer warning check
-        const hasMapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
-        if (!hasMapsKey) {
-            console.warn(
-                "[Google Maps] Warning: Dedicated maps key (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_KEY) is not defined. " +
-                "Using Firebase API key, which might cause restriction errors on checkout page."
+        /*
+         *   #821 NO MAPS KEY IS A DECISION, NOT A WARNING.
+         *
+         *   This used to warn that the Firebase key "might cause restriction
+         *   errors" and then use it anyway. Without a real Maps key the Google
+         *   path is not attempted at all and checkout falls back to
+         *   Leaflet/OpenStreetMap, which needs no key.
+         */
+        /*
+         *   NOT AN ERROR STATE, deliberately. Having no Maps key is a
+         *   configuration, not a failure: `mapsLoaded` simply stays false, and
+         *   geocodeManualAddress's existing else-branch verifies the address
+         *   from NIGERIAN_STATE_COORDINATES, sets destinationCoords and renders
+         *   the Leaflet map. Flagging it red would tell the buyer something
+         *   broke while the thing worked.
+         *
+         *   `mapsError` stays reserved for Google having been TRIED and refused
+         *   — the load error below, and gm_authFailure.
+         */
+
+        /*
+         *   #821 THE CALLBACK GOOGLE ITSELF CALLS WHEN IT REFUSES A KEY.
+         *
+         *   A rejected key still serves a 200, so `onError` on the <Script>
+         *   never fires and the grey "This page can't load Google Maps
+         *   correctly" box is all anybody sees. `gm_authFailure` is the only
+         *   signal, and nothing was listening for it.
+         */
+        const previous = (window as any).gm_authFailure;
+        (window as any).gm_authFailure = () => {
+            console.error("[Google Maps] the API key was rejected");
+            setMapsError(true);
+            setMapsLoaded(false);
+            setVerificationError(
+                "The map could not be loaded. You can still enter your address and continue.",
             );
-        }
+            if (typeof previous === "function") previous();
+        };
+        return () => { (window as any).gm_authFailure = previous; };
     }, []);
 
     const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -1251,16 +1297,56 @@ export default function CheckoutPage() {
                         </div>
                     </div>
                 </div>
-                <Script
-                    src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY}&libraries=places`}
-                    onLoad={() => setMapsLoaded(true)}
-                    onError={() => {
-                        console.error("Google Maps Script failed to load");
-                        setMapsError(true);
-                        setVerificationError("Google Maps library failed to load. Please check your internet connection or click 'Use Address Anyway' below to bypass.");
-                    }}
-                    strategy="afterInteractive"
-                />
+                {/*
+                  *   #821 CHECKOUT LOADED GOOGLE MAPS WITH A KEY THAT IS NOT A
+                  *   MAPS KEY, AND CALLED THE RESULT SUCCESS.
+                  *
+                  *   The owner: "the google mapping and location is not fixed?"
+                  *
+                  *   TWO DEFECTS, and the second is why nobody could see the
+                  *   first.
+                  *
+                  *   1. THE KEY. This fell back to
+                  *      NEXT_PUBLIC_FIREBASE_API_KEY when no Maps key was set.
+                  *      A Firebase Web API key is not enabled for the Maps
+                  *      JavaScript API, so Google rejects it. The code knew:
+                  *      it console.warn'd "might cause restriction errors" and
+                  *      then did it anyway.
+                  *
+                  *   2. THE REJECTION IS NOT A LOAD ERROR. `onError` fires for
+                  *      a NETWORK failure. A rejected key is not one — the
+                  *      script is served 200, runs, and Google paints its own
+                  *      grey "This page can't load Google Maps correctly" box.
+                  *      So `onLoad` fired, mapsLoaded went true, and the app
+                  *      believed Maps was working while the buyer looked at a
+                  *      broken map and geocoding quietly returned nothing.
+                  *
+                  *   That is the silent-failure shape this audit keeps meeting:
+                  *   the call succeeded, the outcome did not, and only the
+                  *   person looking at the screen could tell.
+                  *
+                  *   WHAT CHANGES. Google is loaded ONLY with a real Maps key.
+                  *   With none configured the script is not requested at all
+                  *   and checkout uses the Leaflet/OpenStreetMap fallback,
+                  *   which needs no key and no account — so this works on a
+                  *   deployment that has never been given one.
+                  *
+                  *   And `gm_authFailure` — the callback Google itself invokes
+                  *   when it refuses a key — is wired to the same error state,
+                  *   so a WRONG key is reported instead of rendering grey.
+                  */}
+                {GOOGLE_MAPS_KEY ? (
+                    <Script
+                        src={`https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places`}
+                        onLoad={() => setMapsLoaded(true)}
+                        onError={() => {
+                            console.error("Google Maps Script failed to load");
+                            setMapsError(true);
+                            setVerificationError("Google Maps library failed to load. Please check your internet connection or click 'Use Address Anyway' below to bypass.");
+                        }}
+                        strategy="afterInteractive"
+                    />
+                ) : null}
             </div>
         </MarketplaceErrorBoundary>
     );

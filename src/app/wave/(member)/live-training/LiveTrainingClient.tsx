@@ -10,6 +10,7 @@ import { logger } from "@/lib/logger";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { isSafeMeetingHref } from "@/lib/meeting-link";
 
 interface TrainingSession {
     id: string;
@@ -155,7 +156,9 @@ export default function LiveTrainingClient(
                             <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse shrink-0" />
                             <p className="font-semibold text-emerald-800">Live now: {activeSession.title}</p>
                         </div>
-                        {activeSession.customMeetingLink ? (
+                        {/*   #819 A link stored before normalisation may have no
+                          *   scheme, which an href treats as a relative path.  */}
+                        {isSafeMeetingHref(activeSession.customMeetingLink) ? (
                             <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-8 text-center max-w-2xl mx-auto my-8">
                                 <Video className="w-16 h-16 text-primary mx-auto mb-4 animate-pulse" />
                                 <h2 className="text-2xl font-bold text-slate-900 mb-2">Live Session on Google Meet</h2>

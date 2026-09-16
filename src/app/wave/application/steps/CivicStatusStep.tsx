@@ -22,7 +22,7 @@ interface Props {
 import { useToast } from "@/contexts/ToastContext";
 import { getWards, hasVerifiedWards } from "@/lib/locations";
 import { logger } from "@/lib/logger";
-import { nationalIdField, requiredNationalIdField, requiredVotersCardField } from "@/lib/kyc-validators";
+import { nationalIdField, requiredNationalIdField, optionalVotersCardField } from "@/lib/kyc-validators";
 
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
     /*
@@ -115,7 +115,14 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             next.nin = ninResult.error.issues[0]?.message ?? "Please check your NIN.";
         }
 
-        const cardResult = requiredVotersCardField().safeParse(data?.votersCardNumber ?? "");
+        /*
+         *   #820 OPTIONAL, per the owner: "make voter's card optional."
+         *
+         *   Blank passes. A value that IS entered is still checked, so somebody
+         *   who types a card number is told when it cannot be one rather than
+         *   discovering it at review.
+         */
+        const cardResult = optionalVotersCardField().safeParse(data?.votersCardNumber ?? "");
         if (!cardResult.success) {
             next.votersCardNumber = cardResult.error.issues[0]?.message ?? "Please check your Voter's Card Number.";
         }
@@ -158,9 +165,9 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                       *   applicant through five more steps to be rejected.
                       */}
                     <p className="text-sm text-amber-700">
-                        <strong>Your NIN and Voter&apos;s Card Number are both required.</strong> They are used for
-                        identity and eligibility validation, and are checked by our team during review — never sent to
-                        an outside verification service. All data is securely encrypted.
+                        <strong>Your NIN is required. Your Voter&apos;s Card Number is optional.</strong> They are
+                        used for identity and eligibility validation, and are checked by our team during review — never
+                        sent to an outside verification service. All data is securely encrypted.
                     </p>
                 </div>
             </div>
@@ -192,6 +199,9 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                           */}
                     <IdInput
                         label="Voter's Card Number (PVC)"
+                        //   #820 Optional — the label says so, or the asterisk-free
+                        //   field still reads as required beside a required NIN.
+                        optional
                         value={data?.votersCardNumber || ""}
                         onChange={(v) => updateData({ votersCardNumber: v })}
                         placeholder="e.g. 90F5B123456789012345"

@@ -70,6 +70,27 @@
  *
  *   A test can execute the right code against the right database and still only
  *   ever ask it the easy question.
+ *
+ * ── AND THEN THOSE TWO CASES WENT RED IN CI, ON THE SAME CODE ───────────────
+ *
+ *   They passed here and failed on the CI database. Only the PARTIAL cases —
+ *   "Abuba", "AISH"; every whole-name case passed on both.
+ *
+ *   The upper bound was `value + ""`, the idiom searchUserIdsByQuery has
+ *   always used. U+F8FF is a PRIVATE-USE code point: a byte-ordered collation
+ *   sorts it above every letter and the range works, while a locale-aware
+ *   collation (en_US.UTF-8, ICU) may treat an unassigned private-use character
+ *   as IGNORABLE — collapsing "ABUBA" to "ABUBA", which makes
+ *   `"ABUBAKAR" <= "ABUBA"` false. A whole-name query never noticed, because
+ *   its lower bound alone matched.
+ *
+ *   So the suite was right, the code was environment-dependent, and the two
+ *   machines disagreed. The bound is `< prefixUpperBound(value)` now —
+ *   "ABUBA" bounds at "ABUBB" — which compares two ordinary letters and means
+ *   the same thing under either collation.
+ *
+ *   THE LESSON IS THE ONE THIS FILE KEEPS TEACHING: passing locally is not
+ *   passing. The assertion was sound and the environment was the variable.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';

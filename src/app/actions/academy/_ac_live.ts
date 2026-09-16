@@ -11,6 +11,7 @@ import { purchasedCourseIds } from "@/lib/academy-purchased-courses";
 import { isAdmin } from "@/lib/admin-permissions";
 import type { Course, LiveSession } from "@/lib/types/academy-actions";
 import { roomKeyFor } from "@/lib/classroom-room-key";
+import { normaliseMeetingLink } from "@/lib/meeting-link";
 
 /**
  * The tier a session gets when its course cannot be read.
@@ -220,7 +221,21 @@ async function _startAcademyLiveSessionAction(
 
         const title = `Live Class: ${courseData.title}`;
         const instructor = courseData.instructor || "Super Admin";
-        const meetingLink = customMeetingLink || `/academy/live/${courseId}`;
+        /*
+         *   #819 THE SAME DEFECT ON THE ACADEMY'S GO LIVE.
+         *
+         *   Found by sweeping after the owner reported WAVE's members getting a
+         *   404 from a link their admin had just pasted. This action takes the
+         *   same prompt() text and stores it the same way, and
+         *   AcademyLiveClassClient renders `customMeetingLink` in an href just
+         *   as the WAVE screen does. Fixing WAVE alone would have been this
+         *   audit's most repeated finding committed while fixing an instance.
+         */
+        const pasted = normaliseMeetingLink(customMeetingLink);
+        if (pasted.kind === "invalid") {
+            return { success: false as const, error: pasted.reason, data: null };
+        }
+        const meetingLink = pasted.kind === "ok" ? pasted.url : `/academy/live/${courseId}`;
 
         // 2. Look for active session
         const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
@@ -238,7 +253,7 @@ async function _startAcademyLiveSessionAction(
                 scheduledAt: new Date(),
                 duration: "2 hours",
                 meetingLink,
-                customMeetingLink: customMeetingLink || null,
+                customMeetingLink: pasted.kind === "ok" ? pasted.url : null,
                 // #188 — a 128-bit secret, minted here on the server. The room
                 // used to be `academy-<courseId>`, which every catalogue link
                 // spells out.
@@ -256,7 +271,7 @@ async function _startAcademyLiveSessionAction(
                 status: "live",
                 scheduledAt: new Date(),
                 meetingLink,
-                customMeetingLink: customMeetingLink || null,
+                customMeetingLink: pasted.kind === "ok" ? pasted.url : null,
                 // #188. A row written before this finding has no roomKey, or
                 // carries the derived name that was the defect; either way it
                 // gets a real one here. An existing MINTED key is kept, so

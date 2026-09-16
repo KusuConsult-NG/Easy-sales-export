@@ -272,6 +272,34 @@ export function requiredNationalIdField(field: 'NIN' | 'BVN') {
 }
 
 /** The voter's card, REQUIRED — #774. See votersCardField for the rule. */
+/**
+ * The Voter's Card field where it is OPTIONAL.
+ *
+ *   #820 THE OWNER MADE THE VOTER'S CARD OPTIONAL ON THE WAVE APPLICATION.
+ *
+ *   "make voter's card optional."
+ *
+ *   Written as its own function rather than by loosening
+ *   requiredVotersCardField, because the two are genuinely different questions
+ *   and the required one still governs any path that asks for the card outright.
+ *   Same shape as the nationalIdField / requiredNationalIdField pair directly
+ *   above, for the same reason.
+ *
+ *   BLANK IS ACCEPTED; A WRONG VALUE IS STILL REFUSED. Optional means she may
+ *   leave it out, not that anything at all may be typed into it — somebody who
+ *   DOES enter a card number is still told when it cannot be one, which is the
+ *   #487 rule this file exists for.
+ */
+export function optionalVotersCardField() {
+    return z
+        .string()
+        .trim()
+        .optional()
+        .refine((v) => !v || !looksLikeFakeVotersCard(v), {
+            message: VOTERS_CARD_ERROR_MESSAGE,
+        });
+}
+
 export function requiredVotersCardField() {
     return z
         .string({ message: "Voter's Card Number is required" })

@@ -21,6 +21,7 @@ import { toSafeDate } from "@/lib/utils";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { humaniseCapitalised } from "@/lib/humanise";
+import { isSafeMeetingHref } from "@/lib/meeting-link";
 
 /**
  * What the server sends when it managed to walk the whole chain.
@@ -331,7 +332,19 @@ export default function WaveTrainingClient({ initial = null }: { initial?: WaveT
                                         {event.title}
                                     </h3>
                                     <p className="text-gray-600 mb-4">{event.description}</p>
-                                    {event.meetingLink && (
+                                    {/*
+                                      *   #819 Rows started by the OLD code still
+                                      *   hold whatever was pasted, scheme or not.
+                                      *   A scheme-less value in an href is a
+                                      *   relative path and 404s; it is not linked.
+                                      */}
+                                    {/*
+                                      *   #819 Rows started by the OLD code still
+                                      *   hold whatever was pasted, scheme or not.
+                                      *   A scheme-less value in an href is a
+                                      *   relative path and 404s; it is not linked.
+                                      */}
+                                    {isSafeMeetingHref(event.meetingLink) && (
                                         <a
                                             href={event.meetingLink}
                                             target="_blank"
@@ -389,7 +402,9 @@ export default function WaveTrainingClient({ initial = null }: { initial?: WaveT
                                         </div>
                                     </div>
 
-                                    {event.videoUrl ? (
+                                    {/*   #819 Same guard: a recording URL is put in
+                                      *   an href by the same route.  */}
+                                    {isSafeMeetingHref(event.videoUrl) ? (
                                         <a
                                             href={event.videoUrl}
                                             target="_blank"

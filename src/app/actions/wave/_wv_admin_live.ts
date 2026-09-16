@@ -10,6 +10,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { roomKeyFor } from "@/lib/classroom-room-key";
+import { normaliseMeetingLink } from "@/lib/meeting-link";
 
 async function _startWaveLiveSessionAction(
     eventId: string,
@@ -66,7 +67,26 @@ async function _startWaveLiveSessionAction(
          * entitlement-gated reader.
          */
         const roomName = `wave-training-${eventId}`;
-        const finalMeetingLink = customMeetingLink || `/wave/live-training`;
+        /*
+         *   #819 THE PASTED LINK IS NORMALISED BEFORE IT IS STORED.
+         *
+         *   This took the admin's prompt() text verbatim. A link pasted the way
+         *   Google displays it — `meet.google.com/abc-defg-hij`, no scheme — is
+         *   a RELATIVE PATH in an href, so every member's "Join Now" resolved to
+         *   https://wave.easysalesexport.com/meet.google.com/... and 404'd,
+         *   while the admin, who is sent to the built-in classroom route and
+         *   never reads this value, saw a working session.
+         *
+         *   Refused rather than silently repaired when it cannot be made into a
+         *   URL: the admin is standing at the screen and can fix it, and a
+         *   session that starts with a broken link is the state this finding is
+         *   about.
+         */
+        const pasted = normaliseMeetingLink(customMeetingLink);
+        if (pasted.kind === "invalid") {
+            return { success: false as const, error: pasted.reason, data: null };
+        }
+        const finalMeetingLink = pasted.kind === "ok" ? pasted.url : `/wave/live-training`;
 
         /**
          * 3. CLAIM the event as ongoing, rather than declaring it so.
@@ -147,7 +167,10 @@ async function _startWaveLiveSessionAction(
                 //   arriving ahead of the host hosted the event. See
                 //   lib/live-session-window.
                 startedAt: new Date(),
-                customMeetingLink: customMeetingLink || null,
+                //   #819 The NORMALISED link, not the raw paste. LiveTrainingClient
+                //   renders this field directly as an href, so a scheme-less
+                //   value here is the same 404 by another route.
+                customMeetingLink: pasted.kind === "ok" ? pasted.url : null,
                 createdAt: new Date(),
                 createdBy: session.user.id,
             });
@@ -169,7 +192,10 @@ async function _startWaveLiveSessionAction(
                 startedAt: new Date(),
                 durationMinutes,
                 roomKey,
-                customMeetingLink: customMeetingLink || null,
+                //   #819 The NORMALISED link, not the raw paste. LiveTrainingClient
+                //   renders this field directly as an href, so a scheme-less
+                //   value here is the same 404 by another route.
+                customMeetingLink: pasted.kind === "ok" ? pasted.url : null,
                 updatedAt: new Date(),
             });
             if (!wrote) {

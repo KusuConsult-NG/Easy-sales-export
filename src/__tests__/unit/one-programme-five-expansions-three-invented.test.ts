@@ -97,7 +97,7 @@ import {
     getWards, hasVerifiedWards, NIGERIAN_LOCATIONS,
 } from '@/lib/locations';
 import { WARDS_BY_STATE_AND_LGA } from '@/lib/nigeria-wards.generated';
-import { requiredNationalIdField, requiredVotersCardField, nationalIdField } from '@/lib/kyc-validators';
+import { requiredNationalIdField, requiredVotersCardField, optionalVotersCardField, nationalIdField } from '@/lib/kyc-validators';
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 
@@ -434,10 +434,35 @@ describe('#774(c) — a ward list names wards', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#774(d) — mandatory, and still nobody is called', () => {
-    it('A BLANK NIN, BVN OR VOTER\'S CARD IS REFUSED', () => {
+    it('A BLANK NIN OR BVN IS REFUSED', () => {
         expect(requiredNationalIdField('NIN').safeParse('').success).toBe(false);
         expect(requiredNationalIdField('BVN').safeParse('').success).toBe(false);
+        //   The STRICT card rule is unchanged and still refuses a blank; what
+        //   changed is which paths ask for it. See the next test.
         expect(requiredVotersCardField().safeParse('').success).toBe(false);
+    });
+
+    it('#820 BUT THE VOTER\'S CARD IS OPTIONAL NOW — the owner reversed it', () => {
+        /*
+         *   #774(d) made NIN, BVN and the Voter's Card all mandatory, to a
+         *   direct instruction. The owner has since said "make voter's card
+         *   optional", which supersedes it for the WAVE application.
+         *
+         *   RECORDED RATHER THAN QUIETLY DELETED. The requirement was asserted
+         *   here for a reason, and a reader finding it gone would not know
+         *   whether it lapsed or was decided. It was decided.
+         *
+         *   OPTIONAL IS NOT UNVALIDATED. A blank passes; a value that cannot be
+         *   a card is still refused, so somebody who fills the box in is told
+         *   at the form rather than at review.
+         */
+        expect(optionalVotersCardField().safeParse('').success).toBe(true);
+        expect(optionalVotersCardField().safeParse(undefined).success).toBe(true);
+
+        expect(optionalVotersCardField().safeParse('90F5B123456789012345').success).toBe(true);
+        //   one character repeated, and too short — the #487 shapes
+        expect(optionalVotersCardField().safeParse('0000000000').success).toBe(false);
+        expect(optionalVotersCardField().safeParse('AB1').success).toBe(false);
     });
 
     it('AND A BLANK FIELD IS TOLD IT IS REQUIRED, not that it is the wrong length', () => {
@@ -455,6 +480,8 @@ describe('#774(d) — mandatory, and still nobody is called', () => {
         expect(blankNin.success).toBe(false);
         expect(blankNin.error!.issues[0]?.message).toMatch(/required/i);
 
+        //   #820 The card is optional on the form now, so the message that
+        //   matters for it is the one a WRONG value gets, not a blank one.
         const blankCard = requiredVotersCardField().safeParse('');
         expect(blankCard.error!.issues[0]?.message).toMatch(/required/i);
 
@@ -501,7 +528,10 @@ describe('#774(d) — mandatory, and still nobody is called', () => {
         const financial = stripComments(read('src/app/wave/application/steps/FinancialStep.tsx'));
 
         expect(civic).toMatch(/requiredNationalIdField\('NIN'\)/);
-        expect(civic).toMatch(/requiredVotersCardField\(\)/);
+        //   #820 The card is OPTIONAL on this screen now — but it is still
+        //   validated, which is the property this line is really about. A step
+        //   that dropped the check entirely must still fail here.
+        expect(civic).toMatch(/optionalVotersCardField\(\)/);
         //   the BVN is collected in Section E, so it is checked there
         expect(financial).toMatch(/requiredNationalIdField\('BVN'\)/);
     });
