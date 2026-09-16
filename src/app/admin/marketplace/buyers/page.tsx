@@ -12,6 +12,7 @@ import { recordExport } from "@/lib/record-export";
 import { csvDocument } from "@/lib/csv-safe";
 import { humanise } from "@/lib/humanise";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+import { statText } from "@/lib/admin-stat-display";
 
 type BuyerRole = "buyer_only" | "seller_only" | "both";
 
@@ -130,12 +131,29 @@ export default function MarketplaceBuyersPage() {
     // Filter logic is mostly handled at the database level now, but we'll apply it locally on fetched block
     const filtered = users;
 
-    const stats = meta?.stats || {
-        total: users.length,
-        buyerOnly: users.filter(u => u.buyerRole === "buyer_only").length,
-        sellerOnly: users.filter(u => u.buyerRole === "seller_only").length,
-        both: users.filter(u => u.buyerRole === "both").length,
-    };
+    /*
+     *   #830 A PAGE COUNT WAS THE FALLBACK FOR A PLATFORM TOTAL.
+     *
+     *   What stood here:
+     *
+     *       const stats = meta?.stats || {
+     *           total: users.length,
+     *           buyerOnly: users.filter(…).length,
+     *           …
+     *       };
+     *
+     *   `users` is the PAGE — twenty or fifty rows. So whenever the action's
+     *   own `meta.stats` was missing, for any reason, these four cards silently
+     *   became a tally of the rows on screen and presented it as the number of
+     *   marketplace users on the platform. That is #822 exactly, surviving in
+     *   the fallback of a screen whose main path #822 had already fixed: a
+     *   correct rule applied to some of the places it names.
+     *
+     *   A wrong number here is worse than no number, because nobody questions a
+     *   plausible one. Three states, decided once in lib/admin-stat-display —
+     *   counted, not yet, unreadable — and a page count is none of them.
+     */
+    const stats = meta?.stats ?? null;
 
     function handleExport() {
         const headers = ["Name", "Email", "Phone", "State", "LGA", "Role", "Status", "Joined"];
@@ -185,14 +203,18 @@ export default function MarketplaceBuyersPage() {
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
-                    { label: "Total Users", value: stats.total, color: "bg-slate-100 text-slate-700" },
-                    { label: "Buyers Only", value: stats.buyerOnly, color: "bg-green-100 text-green-700" },
-                    { label: "Sellers Only", value: stats.sellerOnly, color: "bg-blue-100 text-blue-700" },
-                    { label: "Buyer & Seller", value: stats.both, color: "bg-purple-100 text-purple-700" },
+                    //   #830 — each FIELD is guarded, not the object. #822
+                    //   recorded the trap: `stats ? stats.total : "—"` is
+                    //   truthy for a partial payload and then throws on the
+                    //   field, taking the whole screen down.
+                    { label: "Total Users", value: statText(stats?.total, Boolean(fetchError)), color: "bg-slate-100 text-slate-700" },
+                    { label: "Buyers Only", value: statText(stats?.buyerOnly, Boolean(fetchError)), color: "bg-green-100 text-green-700" },
+                    { label: "Sellers Only", value: statText(stats?.sellerOnly, Boolean(fetchError)), color: "bg-blue-100 text-blue-700" },
+                    { label: "Buyer & Seller", value: statText(stats?.both, Boolean(fetchError)), color: "bg-purple-100 text-purple-700" },
                 ].map(({ label, value, color }) => (
                     <div key={label} className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">{label}</p>
-                        <p className="text-3xl font-bold text-slate-900">{value.toLocaleString()}</p>
+                        <p className="text-3xl font-bold text-slate-900">{value}</p>
                         <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>{label}</span>
                     </div>
                 ))}

@@ -100,3 +100,22 @@ export function firstImageSrcOr(images: unknown, fallback: string): string {
 export function imageSrcOr(value: unknown, fallback: string): string {
     return isRenderableSrc(value) ? value.trim() : fallback;
 }
+
+/**
+ * One candidate, or null — for a caller whose renderer already knows what to
+ * draw when there is no image.
+ *
+ *   #829. Every caller of `imageSrcOr` in this codebase passed a path to a file
+ *   that does not exist: "/placeholder-land.jpg" and
+ *   "/images/placeholder-product.jpg" are both absent from public/, and a sweep
+ *   of every static asset path in src/ against the filesystem found three such
+ *   placeholders referenced and never shipped.
+ *
+ *   The result was a guaranteed 404 on every item without a photo, followed by
+ *   ThumbnailImage's own fallback rendering anyway — so the round trip bought
+ *   nothing and the component's designed "no image" path never ran. A caller
+ *   that has a fallback element wants null, not a fake URL.
+ */
+export function imageSrcOrNull(value: unknown): string | null {
+    return isRenderableSrc(value) ? value.trim() : null;
+}

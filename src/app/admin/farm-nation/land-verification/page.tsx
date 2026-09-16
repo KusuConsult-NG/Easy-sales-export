@@ -11,6 +11,7 @@ import { recordExport } from "@/lib/record-export";
 import { csvDocument } from "@/lib/csv-safe";
 import { formatShortDateOrDash } from "@/lib/date-utils";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
+import { statText } from "@/lib/admin-stat-display";
 
 type LandVerification = {
     id: string;
@@ -349,13 +350,21 @@ export default function AdminLandVerificationPage() {
         }
     };
 
-    // Use server-side stats when available; fall back to local page counts while loading
-    const stats = meta?.stats || serverStats || {
-        total:    verifications.length,
-        pending:  verifications.filter(v => v.verificationStatus === "pending").length,
-        verified: verifications.filter(v => v.verificationStatus === "verified").length,
-        rejected: verifications.filter(v => v.verificationStatus === "rejected").length,
-    };
+    /*
+     *   #830 AND THE SAME PAGE-COUNT FALLBACK HERE, WITH ITS OWN NOTE SAYING SO.
+     *
+     *   The comment that stood above this read "fall back to local page counts
+     *   WHILE LOADING", and that is half true. The fallback also fires when both
+     *   reads FAIL, and then it never clears — so a screen whose stats endpoint
+     *   is broken shows a tally of the twenty rows it happened to fetch, as the
+     *   number of land submissions on the platform, indefinitely and without
+     *   saying anything.
+     *
+     *   Both defects #822 named at once: a page is not a total, and a failed
+     *   read is not a zero. Three states now, decided in lib/admin-stat-display,
+     *   and a page count is none of them.
+     */
+    const stats = meta?.stats ?? serverStats ?? null;
 
     return (
         <div className="min-h-screen bg-slate-50 py-8">
@@ -384,10 +393,13 @@ export default function AdminLandVerificationPage() {
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     {[
-                        { label: "Total Submissions", value: stats.total, color: "text-slate-900" },
-                        { label: "Pending Review", value: stats.pending, color: "text-yellow-600" },
-                        { label: "Verified", value: stats.verified, color: "text-green-600" },
-                        { label: "Rejected", value: stats.rejected, color: "text-red-600" },
+                        //   #830 — each FIELD guarded, not the object: #822's
+                        //   trap is that a partial payload is truthy and then
+                        //   throws on the field, taking the screen down.
+                        { label: "Total Submissions", value: statText(stats?.total, Boolean(fetchError)), color: "text-slate-900" },
+                        { label: "Pending Review", value: statText(stats?.pending, Boolean(fetchError)), color: "text-yellow-600" },
+                        { label: "Verified", value: statText(stats?.verified, Boolean(fetchError)), color: "text-green-600" },
+                        { label: "Rejected", value: statText(stats?.rejected, Boolean(fetchError)), color: "text-red-600" },
                     ].map(({ label, value, color }) => (
                         <div key={label} className="bg-white rounded-xl shadow-lg p-6">
                             <p className="text-sm text-slate-600 mb-1">{label}</p>
@@ -401,9 +413,9 @@ export default function AdminLandVerificationPage() {
                     <div className="flex items-center gap-4">
                         {[
                             { value: "all", label: "All", activeClass: "bg-primary text-white" },
-                            { value: "pending", label: `Pending (${stats.pending})`, activeClass: "bg-yellow-600 text-white" },
-                            { value: "verified", label: `Verified (${stats.verified})`, activeClass: "bg-green-600 text-white" },
-                            { value: "rejected", label: `Rejected (${stats.rejected})`, activeClass: "bg-red-600 text-white" },
+                            { value: "pending", label: `Pending (${statText(stats?.pending, Boolean(fetchError))})`, activeClass: "bg-yellow-600 text-white" },
+                            { value: "verified", label: `Verified (${statText(stats?.verified, Boolean(fetchError))})`, activeClass: "bg-green-600 text-white" },
+                            { value: "rejected", label: `Rejected (${statText(stats?.rejected, Boolean(fetchError))})`, activeClass: "bg-red-600 text-white" },
                         ].map(({ value, label, activeClass }) => (
                             <button
                                 key={value}

@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave";
 import { getWaveResourcesAction, getWaveTrainingEventsAction } from "@/app/actions/wave";
+import { getActiveAnnouncementsAction } from "@/app/actions/cms";
+import type { Announcement } from "@/app/actions/cms";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { useSession } from "next-auth/react";
 import type { WaveResource, WaveTrainingEvent } from "@/app/actions/wave";
@@ -26,6 +28,14 @@ import { toSafeDate } from "@/lib/utils";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { numberOrZero } from "@/lib/numbers";
 import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+
+/** The chip colour for each announcement type the CMS can publish. */
+const ANNOUNCEMENT_TAG: Record<string, string> = {
+    info: "bg-blue-100 text-blue-700",
+    success: "bg-green-100 text-green-700",
+    warning: "bg-amber-100 text-amber-700",
+    emergency: "bg-red-100 text-red-700",
+};
 
 export default function WaveDashboardPage() {
     const router = useRouter();
@@ -51,6 +61,13 @@ export default function WaveDashboardPage() {
      */
     const [resourcesFailed, setResourcesFailed] = useState(false);
     const [eventsFailed, setEventsFailed] = useState(false);
+    /**
+     *   #829 — the announcements this panel shows are now the ones an
+     *   administrator actually published. See the panel itself for what was
+     *   there before.
+     */
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [announcementsFailed, setAnnouncementsFailed] = useState(false);
 
     const { data: sessionData } = useSession();
     const userId = (sessionData?.user as any)?.id;
@@ -95,10 +112,15 @@ export default function WaveDashboardPage() {
              *   allSettled, not all: one failing panel must not cost the other
              *   two, which is the rule getMyDashboard already follows.
              */
-            const [statsSettled, resourcesSettled, eventsSettled] = await Promise.allSettled([
+            const [statsSettled, resourcesSettled, eventsSettled, announcementsSettled] = await Promise.allSettled([
                 getWaveMemberStatsAction(),
                 getWaveResourcesAction(),
                 getWaveTrainingEventsAction(),
+                //   #829 — the fourth panel reads from the database like the
+                //   other three. "all" is the audience every member is in;
+                //   entitledAudiences decides the rest from roles, so this
+                //   cannot widen what a member is allowed to see.
+                getActiveAnnouncementsAction("all"),
             ]);
 
             if (statsSettled.status === "fulfilled") {
@@ -131,10 +153,18 @@ export default function WaveDashboardPage() {
             } else {
                 setEventsFailed(true);
             }
+
+            if (announcementsSettled.status === "fulfilled") {
+                setAnnouncements(announcementsSettled.value.slice(0, 3));
+                setAnnouncementsFailed(false);
+            } else {
+                setAnnouncementsFailed(true);
+            }
         } catch (error) {
             logger.error("Dashboard load error:", error);
             setResourcesFailed(true);
             setEventsFailed(true);
+            setAnnouncementsFailed(true);
         } finally {
             setLoading(false);
         }
@@ -373,96 +403,123 @@ export default function WaveDashboardPage() {
                     </div>
                 </div>
 
-                {/* Second Grid Row: Announcements & Funding Ledger */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                {/*
+                  *   Second row: announcements. It was two columns — this panel
+                  *   and the invented funding ledger removed below it — so it is
+                  *   one column now rather than a half-width panel beside a gap.
+                  */}
+                <div className="grid grid-cols-1 gap-8 mt-8">
                     {/* Announcements & Mandates */}
                     <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 flex flex-col">
                         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
                             <Sparkles className="w-5 h-5 text-emerald-700 animate-pulse" />
                             Program Announcements & Mandates
                         </h2>
+                        {/*
+                          *   #829 THIS PANEL INVENTED ITS OWN NEWS.
+                          *
+                          *   Three announcements were hardcoded here and shown
+                          *   to every WAVE member as though the programme had
+                          *   published them:
+                          *
+                          *     "Presidential Mandate — Federal Agripreneur
+                          *      Initiative Alignment … support 100,000 female
+                          *      agripreneurs … by 2027"
+                          *     "Bauchi & Kano Fertilizer Distribution — Seed
+                          *      inputs and organic fertilizer batches are now
+                          *      arriving at regional hubs for WAVE member
+                          *      collection"
+                          *     "First Organic Sesame Shipment Booked … heading
+                          *      to the Port of Rotterdam"
+                          *
+                          *   None of it came from anywhere. The middle one is
+                          *   the one to sit with: it tells a woman that inputs
+                          *   are waiting for her at a regional hub. Acting on
+                          *   that means a journey she pays for, to collect
+                          *   something that was never sent.
+                          *
+                          *   THE PLATFORM ALREADY HAS AN ANNOUNCEMENTS SYSTEM.
+                          *   actions/cms writes to COLLECTIONS.ANNOUNCEMENTS and
+                          *   /admin/cms is where staff publish; AnnouncementBanner
+                          *   already reads it. This panel is the only one that
+                          *   made its own up. It reads the same source now, so
+                          *   what a member sees here is what somebody actually
+                          *   published — and an empty programme says so rather
+                          *   than filling the space.
+                          */}
                         <div className="space-y-4 flex-1">
-                            {[
-                                {
-                                    tag: "Presidential Mandate",
-                                    tagColor: "bg-purple-100 text-purple-700",
-                                    title: "Federal Agripreneur Initiative Alignment",
-                                    desc: "Presidential mandate to support 100,000 female agripreneurs in value-chain export expansion by 2027.",
-                                    date: "June 15, 2026"
-                                },
-                                {
-                                    tag: "Local Update",
-                                    tagColor: "bg-blue-100 text-blue-700",
-                                    title: "Bauchi & Kano Fertilizer Distribution",
-                                    desc: "Seed inputs and organic fertilizer batches are now arriving at regional hubs for WAVE member collection.",
-                                    date: "June 12, 2026"
-                                },
-                                {
-                                    tag: "Export Milestone",
-                                    tagColor: "bg-green-100 text-green-700",
-                                    title: "First Organic Sesame Shipment Booked",
-                                    desc: "WAVE cooperative members successfully booked a consolidated export container heading to the Port of Rotterdam.",
-                                    date: "June 08, 2026"
-                                }
-                            ].map((ann, idx) => (
-                                <div key={idx} className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition border border-slate-100">
+                            {announcementsFailed ? (
+                                <ListLoadFailed
+                                    what="announcements"
+                                    onRetry={loadDashboard}
+                                />
+                            ) : announcements.length === 0 ? (
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                                    <p className="text-sm text-gray-500">
+                                        No announcements at the moment.
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        Programme updates and mandates will appear here when they are published.
+                                    </p>
+                                </div>
+                            ) : announcements.map((ann) => (
+                                <div key={ann.id} className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition border border-slate-100">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${ann.tagColor}`}>
-                                            {ann.tag}
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${ANNOUNCEMENT_TAG[ann.type] ?? ANNOUNCEMENT_TAG.info}`}>
+                                            {ann.type}
                                         </span>
-                                        <span className="text-xs text-gray-400">{ann.date}</span>
+                                        {toSafeDate(ann.publishedAt) && (
+                                            <span className="text-xs text-gray-400">
+                                                {toSafeDate(ann.publishedAt)!.toLocaleDateString()}
+                                            </span>
+                                        )}
                                     </div>
                                     <h3 className="font-semibold text-gray-900 text-sm mb-1">{ann.title}</h3>
-                                    <p className="text-xs text-gray-600 leading-relaxed">{ann.desc}</p>
+                                    <p className="text-xs text-gray-600 leading-relaxed">{ann.content}</p>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* NGO & Sponsor Funding Ledger */}
-                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 flex flex-col">
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
-                            <TrendingUp className="w-5 h-5 text-emerald-700" />
-                            NGO & Sponsor Funding Ledger
-                        </h2>
-                        
-                        <div className="space-y-5 flex-1">
-                            <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="text-xs font-semibold text-emerald-800">Total Program Funding Distributed</span>
-                                    <span className="text-sm font-bold text-emerald-700">₦80,500,000</span>
-                                </div>
-                                <div className="w-full bg-emerald-200/40 rounded-full h-2">
-                                    <div className="bg-emerald-600 h-2 rounded-full" style={{ width: '80%' }}></div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Regional Funding Dispersion</p>
-                                {[
-                                    { state: "Kano", amount: 24200000, sponsor: "Bill & Melinda Gates Foundation", pct: 90, barColor: "bg-emerald-600" },
-                                    { state: "Bauchi", amount: 18500000, sponsor: "UN Women / AgDevCo", pct: 75, barColor: "bg-emerald-500" },
-                                    { state: "Gombe", amount: 15400000, sponsor: "African Development Bank", pct: 60, barColor: "bg-teal-600" },
-                                    { state: "Jigawa", amount: 12800000, sponsor: "USAID Agri-Connect", pct: 50, barColor: "bg-teal-500" },
-                                    { state: "Katsina", amount: 9600000, sponsor: "Federal Ministry of Agriculture", pct: 40, barColor: "bg-sky-500" }
-                                ].map((item, idx) => (
-                                    <div key={idx} className="space-y-1">
-                                        <div className="flex justify-between text-xs">
-                                            <div>
-                                                <span className="font-bold text-gray-800">{item.state}</span>
-                                                <span className="text-gray-400 mx-2">|</span>
-                                                <span className="text-gray-500 text-[10px]">{item.sponsor}</span>
-                                            </div>
-                                            <span className="font-semibold text-gray-700">₦{numberOrZero(item.amount).toLocaleString()}</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100 rounded-full h-1.5">
-                                            <div className={`${item.barColor} h-1.5 rounded-full`} style={{ width: `${item.pct}%` }}></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+                    {/*
+                      *   #829 A FUNDING LEDGER THAT WAS ENTIRELY INVENTED, AND
+                      *   THAT NAMED REAL INSTITUTIONS.
+                      *
+                      *   What stood here told every WAVE member that
+                      *   ₦80,500,000 had been distributed, under the heading
+                      *   "Total Program Funding Distributed", with a bar at 80%
+                      *   — and then broke it down by state against NAMED
+                      *   ORGANISATIONS:
+                      *
+                      *     Kano     ₦24,200,000  Bill & Melinda Gates Foundation
+                      *     Bauchi   ₦18,500,000  UN Women / AgDevCo
+                      *     Gombe    ₦15,400,000  African Development Bank
+                      *     Jigawa   ₦12,800,000  USAID Agri-Connect
+                      *     Katsina   ₦9,600,000  Federal Ministry of Agriculture
+                      *
+                      *   Every figure was a literal in this file. Nothing reads
+                      *   a funding record anywhere in this codebase, because
+                      *   there is no funding record to read.
+                      *
+                      *   This is not a placeholder. It is a financial statement
+                      *   about money said to have been received from five real
+                      *   named bodies and distributed to members — shown to the
+                      *   people who would be its beneficiaries. A member who
+                      *   believes it is owed something; an institution named in
+                      *   it never agreed to appear.
+                      *
+                      *   REMOVED RATHER THAN WIRED, because wiring implies a
+                      *   source. There is none, and inventing a smaller number
+                      *   from real disbursement rows is a different feature
+                      *   nobody has asked for. If the programme does one day
+                      *   publish sponsor funding, it wants a collection, an
+                      *   admin screen that writes it, and consent from the
+                      *   organisations named — none of which a dashboard panel
+                      *   can stand in for.
+                      *
+                      *   The announcements panel beside it now spans the row on
+                      *   its own.
+                      */}
                 </div>
 
                 {/* Quick Actions */}

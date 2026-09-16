@@ -8,7 +8,7 @@ import Link from "next/link";
 import { searchLandListingsAction, type LandListing } from "@/app/actions/land-listings";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useSearchParams, useRouter } from "next/navigation";
-import { firstImageSrcOr } from "@/lib/first-image";
+import { firstImageSrc } from "@/lib/first-image";
 
 //   #791 A broken thumbnail must not paint its alt text over the
 //   badges in the same box — see components/ui/ThumbnailImage.
@@ -292,7 +292,12 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                                         {/*   #791 A broken image here printed the property
                                           *   title under the category pills opposite it. */}
                                         <ThumbnailImage
-                                            src={firstImageSrcOr(property.images, "/placeholder-land.jpg")}
+                                            //   #829 — `/placeholder-land.jpg` has never existed in public/.
+                                            //   Handing it here guaranteed a 404 on every property
+                                            //   with no photo, and then ThumbnailImage's own
+                                            //   `fallback` rendered anyway. Passing null lets the
+                                            //   component do the job it was written for.
+                                            src={firstImageSrc(property.images)}
                                             alt={property.title}
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                                             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"

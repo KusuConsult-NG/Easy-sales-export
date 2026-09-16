@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Package2, TrendingUp, Calendar, MapPin, ArrowRight, Filter, Search, Loader2, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { getExportOpportunities, type ExportOpportunity } from "@/app/actions/export-investments";
 import { toast } from "sonner";
 import { formatShortDateOrDash } from "@/lib/date-utils";
@@ -144,12 +145,13 @@ export default function ExportWindowsPage() {
                                 <div className="flex gap-6 p-6">
                                     {/* Commodity Image */}
                                     <div className="relative w-32 h-32 shrink-0 rounded-xl overflow-hidden bg-slate-200">
-                                        <Image
+                                        {/*   #829 — see ExportWindowDetailClient. */}
+                                        <ThumbnailImage
                                             src={window.image}
                                             alt={window.commodity}
-                                            fill
                                             className="object-cover"
                                             sizes="128px"
+                                            fallback={<Package2 className="w-10 h-10 text-slate-400" />}
                                         />
                                     </div>
 

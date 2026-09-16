@@ -172,8 +172,16 @@ export default function ProductDetailClient({ initial = null }: {
     const soldOut = !notForSale && (product.availableQuantity === 0 || product.status === "out_of_stock");
     const cannotBuy = notForSale || soldOut;
 
-    const allImages = product.images && product.images.length > 0 ? product.images : ["/images/placeholder-product.jpg"];
-    const mainImage = allImages[selectedImageIndex] || allImages[0];
+    /*
+     *   #829 — this used to append "/images/placeholder-product.jpg" when a
+     *   product had no photos. That file has never existed in public/, so every
+     *   such product fetched a 404 and ThumbnailImage's `fallback` then drew the
+     *   Package icon regardless. The synthetic entry also made `allImages`
+     *   length 1 for a product with NO images, which is a different statement
+     *   from the truth.
+     */
+    const allImages = product.images && product.images.length > 0 ? product.images : [];
+    const mainImage = allImages[selectedImageIndex] || allImages[0] || null;
     // #442. The ternary above already proves the array is non-empty, so this
     // was never at risk. It is spelled `?.[0]?.` anyway so that ONE shape means
     // "reading the first pricing tier" everywhere — the eleven sites that did

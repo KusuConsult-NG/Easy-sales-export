@@ -36,7 +36,30 @@ export type ExportOpportunity = { id: string;
      */
     fundingGoal: number;
     fundedAmount: number;
-    image: string;
+    /**
+     *   #829 NULL WHEN THERE IS NO IMAGE, rather than a path to a file that
+     *   does not exist.
+     *
+     *   This was `string`, and both readers below filled it with
+     *   "/images/export-placeholder.jpg" when a window had no image of its own.
+     *   Nothing has ever shipped that file — `public/images/` contains no
+     *   `export-placeholder.jpg`, and a sweep of every static asset path in
+     *   src/ against the filesystem found it among three placeholders that are
+     *   referenced and absent.
+     *
+     *   So the field ADVERTISED an image that could not load, which is worse
+     *   than saying there is none: a caller checking `if (window.image)` is
+     *   told yes. Both export screens then rendered a bare <Image src={…}>, and
+     *   a bare <Image> that 404s paints its ALT TEXT inside the image box — the
+     *   #791 defect, which components/ui/ThumbnailImage exists to fix and which
+     *   those two screens had not been given. Their alt is `window.commodity`,
+     *   so a window with no picture printed the word "Sesame" across its own
+     *   card.
+     *
+     *   Absent is now absent. The render layer already knows what to draw for
+     *   that, and it is not a broken image.
+     */
+    image: string | null;
     // Deep data
     description?: string;
     specifications?: string[];
@@ -116,7 +139,8 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     totalSpots: Number(data.totalSpots) || 0,
                     fundingGoal: Number((data as any).fundingGoal ?? (data as any).goal) || 0,
                     fundedAmount: Number((data as any).fundedAmount ?? (data as any).currentFunding) || 0,
-                    image: data.image || "/images/export-placeholder.jpg",
+                    //   #829 — absent is absent; see the field declaration.
+                    image: data.image || null,
                     // Deep data
                     description: data.description,
                     specifications: data.specifications || [],
@@ -221,7 +245,8 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 totalSpots: Number(data.totalSpots) || 0,
                 fundingGoal: Number((data as any).fundingGoal ?? (data as any).goal) || 0,
                 fundedAmount: Number((data as any).fundedAmount ?? (data as any).currentFunding) || 0,
-                image: data.image || "/images/export-placeholder.jpg",
+                //   #829 — absent is absent; see the field declaration.
+                    image: data.image || null,
                 // Deep data
                 description: data.description,
                 specifications: data.specifications || [],

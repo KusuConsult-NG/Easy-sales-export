@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, TrendingUp, Calendar, MapPin, Clock, Shield, FileText, Users, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, TrendingUp, Calendar, MapPin, Clock, Shield, FileText, Users, CheckCircle2, AlertCircle, Loader2, Package } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
@@ -231,13 +232,21 @@ export default function ExportWindowDetailClient({ initial = null }: {
                     <div className="lg:col-span-2 space-y-8">
                         {/* Commodity Image */}
                         <div className="relative h-96 bg-white rounded-2xl overflow-hidden shadow-xl">
-                            <Image
+                            {/*
+                              *   #829 — a bare <Image> whose src 404s paints its
+                              *   ALT TEXT inside the image box, which is #791
+                              *   exactly. The alt here is the commodity, so a
+                              *   window with no picture printed "Sesame" across
+                              *   its own panel. ThumbnailImage was written for
+                              *   this and these two export screens never got it.
+                              */}
+                            <ThumbnailImage
                                 src={window.image}
                                 alt={window.commodity}
-                                fill
                                 className="object-cover"
                                 priority
                                 sizes="(max-width: 1024px) 100vw, 66vw"
+                                fallback={<Package className="w-20 h-20 text-slate-300" />}
                             />
                         </div>
 

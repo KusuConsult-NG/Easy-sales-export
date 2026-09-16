@@ -13,7 +13,7 @@ import { SaveItemButton } from "@/components/saved/SaveItemButton";
 import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
-import { imageSrcOr } from "@/lib/first-image";
+import { imageSrcOrNull } from "@/lib/first-image";
 
 //   #791 A broken thumbnail must not paint its alt text over the
 //   badges in the same box — see components/ui/ThumbnailImage.
@@ -146,7 +146,9 @@ export default function PropertyDetailsClient({ initial = null }: {
                                     <div className="aspect-video relative bg-slate-200">
                                         {/*   #791 See components/ui/ThumbnailImage. */}
                                         <ThumbnailImage
-                                            src={imageSrcOr(property.images?.[currentImageIndex], "/placeholder-land.jpg")}
+                                            //   #829 — see PropertiesClient. The file named here has
+                                            //   never existed; null lets ThumbnailImage's fallback run.
+                                            src={imageSrcOrNull(property.images?.[currentImageIndex])}
                                             alt={property.title}
                                             className="object-cover"
                                             priority
