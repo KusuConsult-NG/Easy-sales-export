@@ -93,6 +93,47 @@ const PRODUCTION_REQUIRED_ENV_VARS = [
      *   matters more than failing loudly here.
      */
     'KYC_ENCRYPTION_KEY',
+    /*
+     *   #836 WITHOUT THIS, EVERY DEPLOY BREAKS THE FORMS THAT ARE OPEN AT THE
+     *   TIME — and nothing anywhere said so.
+     *
+     *   From the owner's production log, twice in one window, either side of a
+     *   container restart, for the SAME action id:
+     *
+     *       Error: Failed to find Server Action "60931022d677bb63baf…".
+     *       This request might be from an older or newer deployment.
+     *
+     *   Next's own guide for this version names the cause exactly:
+     *
+     *       "By default, a unique encryption key is generated for each build.
+     *        When running multiple server instances, all instances must use the
+     *        same encryption key. Otherwise, a Server Function encrypted by one
+     *        instance cannot be decrypted by another, causing 'Failed to find
+     *        Server Action' errors."
+     *       — node_modules/next/dist/docs/01-app/02-guides/self-hosting.md
+     *
+     *   This platform deploys as containers and the log shows "Starting
+     *   Container" twice inside the same window, so that is not a hypothetical
+     *   multi-instance setup — it is this one, every time it redeploys.
+     *
+     *   WHAT IT COSTS A MEMBER. A Server Action is what every form on this
+     *   platform submits through. Somebody part-way through a WAVE application,
+     *   a withdrawal or a product listing when a deploy lands does not get an
+     *   error she can act on: the submit fails, and the sibling
+     *   "destination stream closed early" in the same log is that request's
+     *   response being torn down mid-flight.
+     *
+     *   LISTED HERE BECAUSE NOTHING KNEW THE VARIABLE EXISTED. It appeared in
+     *   no config, no validator and no deploy note, so a fresh key was minted on
+     *   every build and the breakage looked like random flakiness. That is the
+     *   same shape as KYC_ENCRYPTION_KEY above: absent, feature-breaking, and
+     *   unreported.
+     *
+     *   IT IS READ AT BUILD TIME, not at runtime. Next embeds it in the build
+     *   output, so setting it only on the running service changes nothing — it
+     *   has to be present in the environment `next build` runs in.
+     */
+    'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
     // Server-side uploads (marketplace media, certificates, export documents)
     // go to Cloudinary — without these every upload fails at request time.
@@ -150,6 +191,10 @@ const WHAT_BREAKS: Record<string, string> = {
     MFA_SECRET_KEY: 'multi-factor enrolment and verification fail',
     QR_ENCRYPTION_KEY: 'QR codes cannot be issued or read',
     KYC_ENCRYPTION_KEY: 'NIN and BVN are stored hashed only — admins and CSV exports cannot read them back, and this cannot be undone later',
+    //   #836 Phrased as what a member loses, not as what the framework does.
+    //   "Server Action encryption key" means nothing to the person reading a
+    //   deploy log at the moment it matters.
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: 'every deploy breaks the forms that are open at the time — a member mid-application, mid-withdrawal or mid-listing has her submit fail with "Failed to find Server Action". Must be set in the BUILD environment, not just on the running service',
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_KEY: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_SECRET: 'every upload fails — marketplace media, certificates, export documents',

@@ -74,6 +74,43 @@ export type ModuleKey =
  *   double the truth, on the same class of screen this finding exists to
  *   correct. Counted by inclusion-exclusion below for exactly that reason.
  */
+/**
+ * The roles that mean "this person is in this module", even with no
+ * registration object on their account.
+ *
+ *   #837 THE COMPLIANCE COUNT AND THE DASHBOARD PIE DISAGREED ABOUT THE SAME
+ *   PROGRAMME, AND BOTH ARE ADMIN SCREENS.
+ *
+ *   The owner asked for stats that will not confuse the quality assurance team
+ *   certifying this platform. Two of them were counting WAVE differently:
+ *
+ *     analytics.service (the pie)   status IN (active…) OR roles ∋ wave_participant
+ *     this module (compliance)      status IS NOT NULL
+ *
+ *   So an account carrying the ROLE but no `serviceRegistrations.wave` object
+ *   appeared on one screen and not the other — and that population is not
+ *   hypothetical: #835's whole finding began with ~15,128 accounts holding
+ *   `wave_participant`, and _wv_admin_applications reads the register by ROLE
+ *   for exactly that reason.
+ *
+ *   The two screens still answer different questions on purpose — the pie counts
+ *   people currently IN a module, this counts every application ever RECEIVED,
+ *   so a rejected applicant belongs here and not there. What they must not do is
+ *   disagree about who exists. Both populations are the union of the two signals
+ *   now.
+ *
+ *   The role lists are copied from the same queries analytics.service issues,
+ *   so the two definitions are visibly the same set.
+ */
+const MODULE_ROLES: Record<ModuleKey, readonly string[]> = {
+    wave: ["wave_participant"],
+    academy: ["academy_participant"],
+    export: ["export_participant"],
+    cooperative: ["cooperative_member"],
+    farmNation: ["farmer", "land_owner", "investor"],
+    marketplace: ["seller", "marketplace_seller", "buyer", "marketplace_buyer"],
+};
+
 const REGISTRATION_KEYS: Record<ModuleKey, readonly string[]> = {
     wave: ["wave"],
     academy: ["academy"],
@@ -84,21 +121,33 @@ const REGISTRATION_KEYS: Record<ModuleKey, readonly string[]> = {
 };
 
 /**
- * The statuses that mean "waiting for a decision".
+ * The status vocabulary, taken from lib/module-registration-status.
  *
- * Spelled out because the modules do not agree: WAVE writes `pending`, the
- * dashboard's own reader also admits `under_review`, `pending_review` and
- * `pending_approval`, and the cooperative flow adds `paid`. A reader that knows
- * only its own module's spelling reports the others as neither pending nor
- * approved — they simply vanish from the funnel.
+ *   #837 THE FIRST VERSION OF THIS MODULE HAND-WROTE ITS OWN LISTS, AND THEY
+ *   DISAGREED WITH THE CANONICAL ONE.
+ *
+ *   `ACTIVE_REGISTRATION_STATUSES` already existed, and #756 created it for
+ *   precisely this reason — its header says so: "Two lists maintained by hand
+ *   in different files, which is the shape this audit keeps meeting. One list
+ *   now, derived from what the code writes."
+ *
+ *   This module was written without finding it, and immediately drifted:
+ *
+ *       invented here, absent there   pending_review, legacy_pending_onboarding,
+ *                                     verified, changes_requested
+ *       canonical, missing here       suspended, completed
+ *
+ *   So a suspended cooperative member counted in the shared dashboard and not
+ *   in the compliance count, and the two screens would have disagreed about the
+ *   same person — which is #756's finding, re-created inside the fix for #835.
+ *
+ *   The buckets below are DERIVED from that list now. A status added there
+ *   reaches these counts without anybody remembering this file exists.
  */
-export const PENDING_STATUSES = [
-    "pending", "under_review", "pending_review", "pending_approval",
-    "paid", "legacy_pending_onboarding",
-] as const;
-
-/** The statuses that mean the application was accepted. */
-export const APPROVED_STATUSES = ["approved", "active", "verified"] as const;
+import {
+    ACTIVE_REGISTRATION_STATUSES,
+    INACTIVE_REGISTRATION_STATUSES,
+} from "@/lib/module-registration-status";
 
 /**
  * Sent back to the applicant for changes.
@@ -108,7 +157,25 @@ export const APPROVED_STATUSES = ["approved", "active", "verified"] as const;
  * the APPLICANT, not on a reviewer. Counting it as pending inflates the review
  * backlog with work nobody at the programme can action.
  */
-export const REVISION_STATUSES = ["revision_required", "changes_requested"] as const;
+export const REVISION_STATUSES = ["revision_required"] as const;
+
+/** Accepted — the person is in, decision made. */
+export const APPROVED_STATUSES = ACTIVE_REGISTRATION_STATUSES.filter(
+    (s) => ["approved", "active", "completed"].includes(s),
+);
+
+/**
+ * Waiting on a decision: everything active that is neither settled nor sent
+ * back. Derived by subtraction so a new value added to the canonical list lands
+ * here by default — visible — rather than in no bucket at all.
+ */
+export const PENDING_STATUSES = ACTIVE_REGISTRATION_STATUSES.filter(
+    (s) => !APPROVED_STATUSES.includes(s)
+        && !(REVISION_STATUSES as readonly string[]).includes(s),
+);
+
+/** Refused or withdrawn. */
+export const REJECTED_STATUSES = INACTIVE_REGISTRATION_STATUSES;
 
 export interface ApplicantCounts {
     /** Everyone carrying a registration for this module, whatever its status. */
@@ -214,16 +281,49 @@ export async function countModuleApplicants(
             bucketCount((q, path) => q.where(path, "!=", null)),
             bucketCount((q, path) => q.where(path, "in", [...APPROVED_STATUSES])),
             bucketCount((q, path) => q.where(path, "in", [...PENDING_STATUSES])),
-            bucketCount((q, path) => q.where(path, "==", "rejected")),
+            bucketCount((q, path) => q.where(path, "in", [...REJECTED_STATUSES])),
             bucketCount((q, path) => q.where(path, "in", [...REVISION_STATUSES])),
         ]);
+
+        /**
+         * The role-only arm of the union.
+         *
+         * Accounts carrying a module ROLE but no registration object at all.
+         *
+         *   ONE QUERY, NOT ONE PER ROLE. The first version looped the roles and
+         *   summed, then tried to divide the double-counting back out by the
+         *   number of aliases — which does not describe the overlap at all. A
+         *   marketplace trader holding BOTH `buyer` and `seller` was counted
+         *   twice and the division could not know it; the suite caught her.
+         *
+         *   `array-contains-any` asks the question once: does this account hold
+         *   ANY of the module's roles. And `status == null` for EVERY alias is
+         *   ANDed into the same query, so an account that has a registration
+         *   under either spelling is already in `total` and cannot be added
+         *   again. No arithmetic, nothing to get wrong.
+         *
+         *   Best-effort: a module whose roles do not resolve must not cost the
+         *   counts that did.
+         */
+        let roleOnly = 0;
+        const roles = MODULE_ROLES[module] ?? [];
+        if (roles.length > 0) {
+            let q: import("@/lib/supabase-db").SupabaseQuery = base(keys[0]).q
+                .where("roles", "array-contains-any", [...roles]);
+            for (const key of keys) {
+                q = q.where(`serviceRegistrations.${key}.status`, "==", null);
+            }
+            roleOnly = (await q.count().get()).data().count ?? 0;
+        }
+
+        const totalWithRoles = total + roleOnly;
 
         //   Never negative: if a future status were somehow matched by two of the
         //   lists above, the named buckets could exceed the total, and a negative
         //   "other" on an admin card is worse than an understated one.
-        const other = Math.max(0, total - approved - pending - rejected - revisionRequired);
+        const other = Math.max(0, totalWithRoles - approved - pending - rejected - revisionRequired);
 
-        return { total, approved, pending, rejected, revisionRequired, other, counted: true };
+        return { total: totalWithRoles, approved, pending, rejected, revisionRequired, other, counted: true };
     } catch (e) {
         logger.error(`[applicant-count] ${module} applicant counts could not be computed`, e);
         return EMPTY;

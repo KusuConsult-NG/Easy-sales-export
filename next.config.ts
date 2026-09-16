@@ -24,6 +24,41 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
 
+  /**
+   *   #836 VERSION SKEW, WHICH THIS DEPLOYMENT HAD NO PROTECTION AGAINST.
+   *
+   *   The owner's log shows "Starting Container" twice inside one window, with
+   *   `Failed to find Server Action` and `The destination stream closed early`
+   *   between them. During a rolling deploy a browser holds chunks, prefetched
+   *   route data and action ids from the OUTGOING build while its next request
+   *   lands on the INCOMING one.
+   *
+   *   With a deploymentId configured, Next stamps `?dpl=` on static assets and
+   *   sends `x-deployment-id` on navigation requests, so the server can
+   *   recognise a client from another deployment instead of failing to resolve
+   *   its references.
+   *
+   *   RESOLVED FROM THE PLATFORM'S OWN BUILD MARKERS, in order of how specific
+   *   they are to one deployment. This service runs on Railway — env-validator
+   *   already keys off RAILWAY_* markers — and the fallbacks keep this correct
+   *   anywhere else without special-casing a host.
+   *
+   *   `undefined` when nothing identifies the build, which is the right answer
+   *   locally: `next dev` has no deployments to skew between, and a value that
+   *   changed on every reload would be worse than none.
+   *
+   *   THIS IS HALF THE FIX AND NOT THE IMPORTANT HALF. deploymentId addresses
+   *   ASSET and navigation skew. The Server Action failure is a DECRYPTION
+   *   failure — a per-build key — and only NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+   *   fixes that. See the note on it in lib/env-validator.
+   */
+  deploymentId:
+    process.env.RAILWAY_GIT_COMMIT_SHA
+    ?? process.env.RAILWAY_DEPLOYMENT_ID
+    ?? process.env.VERCEL_GIT_COMMIT_SHA
+    ?? process.env.GIT_COMMIT_SHA
+    ?? undefined,
+
   // Reduce serverless function bundle sizes by excluding packages
   // that are available natively in the Vercel runtime or unused server-side
   outputFileTracingExcludes: {

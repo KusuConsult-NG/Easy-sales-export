@@ -160,6 +160,9 @@ const CONFIGURED = {
     QR_ENCRYPTION_KEY: 'q'.repeat(64),
     //   #779 — see lib/kyc-identity-store. A fully configured container sets it.
     KYC_ENCRYPTION_KEY: 'k'.repeat(64),
+    //   #836 — a fully configured container pins the Server Function key too,
+    //   or every deploy breaks the forms that are open at the time.
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: 'c2VydmVyLWFjdGlvbnMta2V5LTMyLWJ5dGVzISE=',
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'demo',
     CLOUDINARY_API_KEY: 'ck',
     CLOUDINARY_API_SECRET: 'cs',

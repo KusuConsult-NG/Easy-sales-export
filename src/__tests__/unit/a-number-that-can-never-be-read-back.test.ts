@@ -82,6 +82,9 @@ describe('#828 — the startup log distinguishes a broken deploy from a working 
         NEXT_PUBLIC_URL: 'https://x.example', RESEND_API_KEY: 're_' + 'x'.repeat(30),
         PAYSTACK_SECRET_KEY: 'sk_test_' + 'x'.repeat(30), MFA_SECRET_KEY: 'm'.repeat(64),
         QR_ENCRYPTION_KEY: 'q'.repeat(64), KYC_ENCRYPTION_KEY: 'k'.repeat(64),
+        //   #836 — otherwise this fixture's "everything configured" baseline
+        //   reports a variable this suite is not about.
+        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: 'c2VydmVyLWFjdGlvbnMta2V5LTMyLWJ5dGVzISE=',
         SUPABASE_SERVICE_ROLE_KEY: 'srv' + 'x'.repeat(40),
         NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: '1234567890',
         CLOUDINARY_API_SECRET: 'c'.repeat(30),

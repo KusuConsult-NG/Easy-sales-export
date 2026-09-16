@@ -107,6 +107,10 @@ const DEGRADES = [
     //   be read back — degrades, like the rest of this list, rather than
     //   blocking the boot. See lib/kyc-identity-store.
     'KYC_ENCRYPTION_KEY',
+    //   #836 Without it Next mints a fresh Server Function encryption key on
+    //   every build, so a deploy breaks every form that was open at the time.
+    //   Degrades like the rest of this list rather than blocking the boot.
+    'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY',
     'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
@@ -164,7 +168,10 @@ describe('#457 — a boot with nothing set says what to do first', () => {
     it('AND SAYS THE OTHERS STILL SERVE — the whole point', () => {
         // Without this line the thirteen names read as thirteen blockers, and
         // the operator hunts a Cloudinary key before the site can come up.
-        expect(output).toMatch(/10 that break one feature each, but still serve/);
+        //   #836 TEN BECAME ELEVEN. NEXT_SERVER_ACTIONS_ENCRYPTION_KEY joined the
+        //   degrading tier — a missing key does not stop the container, it breaks
+        //   every form open across a deploy.
+        expect(output).toMatch(/11 that break one feature each, but still serve/);
     });
 
     it('AND SAYS WHAT EACH DEGRADED ONE COSTS', () => {

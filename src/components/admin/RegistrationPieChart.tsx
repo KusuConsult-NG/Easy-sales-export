@@ -54,9 +54,43 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
 export default function RegistrationPieChart({ stats, totalAccounts }: RegistrationPieChartProps) {
     const [hovered, setHovered] = useState<number | null>(null);
 
+    /**
+     *   #837 A BRIEFING SIGN-UP IS NOT A MODULE REGISTRATION, AND WAS COUNTED
+     *   AS ONE.
+     *
+     *   The owner, of the ~36k on this panel: "does this 36k also include the
+     *   WAVE briefing registration? if yes, they should be categorised
+     *   correctly … so that the quality assurance who are certifying the app
+     *   will not be confused."
+     *
+     *   It did. "WAVE Briefings" sat here as a peer slice of Academy,
+     *   Cooperatives and Marketplace, and the line below reported the sum of
+     *   every slice as "N total module registrations".
+     *
+     *   THREE SEPARATE THINGS WERE WRONG WITH THAT:
+     *
+     *     · WAVE_BRIEFING_REGISTRATIONS is an EVENT REGISTER — people who
+     *       signed up to attend a briefing. It is not a registration for a
+     *       module, and this panel is titled "Registrations by Module".
+     *
+     *     · IT DOUBLE-COUNTS THE SAME WOMEN INSIDE ONE PROGRAMME. Somebody who
+     *       attended a WAVE briefing and then applied to WAVE appears in both
+     *       slices. The caption's "one person may appear in multiple modules"
+     *       covers overlap BETWEEN modules; this was overlap between two slices
+     *       of the SAME module, which that sentence does not excuse and a
+     *       reader would not infer.
+     *
+     *     · IT WAS THE DENOMINATOR. Every other module's percentage was
+     *       computed against a total inflated by the briefing register, so each
+     *       one read smaller than it is.
+     *
+     *   The register is not hidden — it is reported beside the chart as its own
+     *   figure, described as what it is. No panel is added and nothing is
+     *   removed from the screen; the number simply stops being filed as a
+     *   module registration.
+     */
     const rawSlices: Slice[] = [
         { label: "WAVE Applications", shortLabel: "WAVE App", value: stats?.wave ?? 0, color: COLORS[1] },
-        { label: "WAVE Briefings", shortLabel: "Briefings", value: stats?.waveBriefing ?? 0, color: COLORS[2] },
         { label: "Academy", shortLabel: "Academy", value: stats?.academy ?? 0, color: COLORS[3] },
         { label: "Cooperatives", shortLabel: "Co-ops", value: stats?.cooperatives ?? 0, color: COLORS[4] },
         { label: "Co-op Onboarding", shortLabel: "Co-op Onb.", value: stats?.cooperativeOnboarding ?? 0, color: COLORS[5] },
@@ -119,6 +153,32 @@ export default function RegistrationPieChart({ stats, totalAccounts }: Registrat
                         }}
                     >
                         {total.toLocaleString()} total module registrations
+                    </span>
+                )}
+                {/*
+                  *   #837 The briefing register, reported as itself.
+                  *
+                  *   Outside the chart and outside the total above, because it
+                  *   counts attendance at an event rather than registration for
+                  *   a module — and because many of these women are also in the
+                  *   WAVE Applications slice, so adding the two together counts
+                  *   them twice.
+                  */}
+                {(stats?.waveBriefing ?? 0) > 0 && (
+                    <span
+                        style={{
+                            marginLeft: 8,
+                            background: "#fffbeb",
+                            color: "#92400e",
+                            fontWeight: 600,
+                            padding: "2px 8px",
+                            borderRadius: 99,
+                            fontSize: 12,
+                            border: "1px solid #fde68a",
+                        }}
+                        title="People registered to attend a WAVE briefing. An event register, not a module registration — many also appear in WAVE Applications, so it is counted separately rather than added in."
+                    >
+                        {(stats?.waveBriefing ?? 0).toLocaleString()} WAVE briefing sign-ups (event register, counted separately)
                     </span>
                 )}
                 <span

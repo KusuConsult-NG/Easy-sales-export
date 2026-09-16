@@ -268,27 +268,39 @@ describe('#835 — one definition, shared by every module', () => {
         expect(counts.pending).toBe(1);
     });
 
-    it('AND THE PENDING VOCABULARY IS THE WHOLE VOCABULARY', async () => {
+    it('AND THE PENDING VOCABULARY COMES FROM THE CANONICAL LIST', async () => {
         /*
-         *   The modules do not agree on how they spell "waiting". A reader that
-         *   knows only `pending` reports the rest as neither pending nor
-         *   approved, so they vanish from the funnel entirely.
+         *   #837 THIS CASE ORIGINALLY PINNED A HAND-WRITTEN LIST OF MY OWN.
+         *
+         *   It asserted that `pending_review` and `legacy_pending_onboarding`
+         *   counted as pending — two values invented here that
+         *   ACTIVE_REGISTRATION_STATUSES does not contain and no writer in src/
+         *   produces. Meanwhile `suspended` and `completed`, which ARE canonical,
+         *   were in no bucket at all.
+         *
+         *   #756 created that canonical list precisely to stop two hand-kept
+         *   vocabularies drifting, and this module was written without finding
+         *   it. The buckets derive from it now, so this case checks the real
+         *   vocabulary rather than the one I made up.
          */
         const { countModuleApplicants } = await import('@/lib/module-applicant-count');
-        store = installFakeDb({
-            [COLLECTIONS.USERS]: {
-                'a': { serviceRegistrations: { wave: { status: 'pending' } } },
-                'b': { serviceRegistrations: { wave: { status: 'under_review' } } },
-                'c': { serviceRegistrations: { wave: { status: 'pending_review' } } },
-                'd': { serviceRegistrations: { wave: { status: 'pending_approval' } } },
-                'e': { serviceRegistrations: { wave: { status: 'paid' } } },
-            },
+        const { ACTIVE_REGISTRATION_STATUSES } = await import('@/lib/module-registration-status');
+
+        //   One user per canonical status, so nothing can be missed by omission.
+        const users: Record<string, Record<string, unknown>> = {};
+        ACTIVE_REGISTRATION_STATUSES.forEach((status, i) => {
+            users[`u${i}`] = { serviceRegistrations: { wave: { status } } };
         });
+        store = installFakeDb({ [COLLECTIONS.USERS]: users });
 
-        const counts = await countModuleApplicants('wave');
+        const c = await countModuleApplicants('wave');
 
-        expect(counts.pending).toBe(5);
-        expect(counts.total).toBe(5);
+        //   Every canonical status is counted somewhere, and nobody vanishes.
+        expect(c.total).toBe(ACTIVE_REGISTRATION_STATUSES.length);
+        expect(c.approved! + c.pending! + c.revisionRequired! + c.rejected! + c.other!)
+            .toBe(c.total);
+        //   And `other` is empty: the canonical list is fully partitioned.
+        expect(c.other).toBe(0);
     });
 
 });
@@ -467,6 +479,80 @@ describe('#835 — every module counts its applicants the same way', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#837 — the compliance count and the dashboard pie agree on who exists', () => {
+    it('AN ACCOUNT WITH THE ROLE BUT NO REGISTRATION OBJECT IS COUNTED', async () => {
+        /*
+         *   The owner asked for stats that will not confuse the QA team
+         *   certifying this platform — and two admin screens were counting the
+         *   same programme differently:
+         *
+         *     analytics.service (the pie)  status IN (active…) OR roles ∋ role
+         *     this module (compliance)     status IS NOT NULL
+         *
+         *   So an account holding `wave_participant` with no
+         *   `serviceRegistrations.wave` object showed on one screen and not the
+         *   other. That population is the whole reason #835 exists: ~15,128
+         *   accounts hold that role.
+         */
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        store = installFakeDb({
+            [COLLECTIONS.USERS]: {
+                'with-status': {
+                    roles: ['wave_participant'],
+                    serviceRegistrations: { wave: { status: 'approved' } },
+                },
+                //   The account that used to be invisible here.
+                'role-only': { roles: ['wave_participant'] },
+                //   And somebody in no module at all, who must not be counted.
+                'unrelated': { roles: ['user'] },
+            },
+        });
+
+        const c = await countModuleApplicants('wave');
+
+        expect(c.total).toBe(2);
+    });
+
+    it('AND AN ACCOUNT IS NOT COUNTED TWICE BY BOTH ARMS', async () => {
+        /*
+         *   The union is built as two ANDed queries rather than an OR the
+         *   adapter cannot express, so the role arm is filtered to `status ==
+         *   null`. If that filter were dropped, every ordinary applicant would
+         *   be counted once for her status and again for her role.
+         */
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        store = installFakeDb({
+            [COLLECTIONS.USERS]: {
+                'both': {
+                    roles: ['wave_participant'],
+                    serviceRegistrations: { wave: { status: 'approved' } },
+                },
+            },
+        });
+
+        const c = await countModuleApplicants('wave');
+
+        expect(c.total).toBe(1);
+        expect(c.approved).toBe(1);
+    });
+
+    it('AND A MULTI-ROLE MODULE COUNTS A PERSON ONCE', async () => {
+        //   A marketplace user is routinely both buyer and seller. Counted once
+        //   per role, she would be two people on an admin card.
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        store = installFakeDb({
+            [COLLECTIONS.USERS]: {
+                'trader': { roles: ['buyer', 'seller'] },
+            },
+        });
+
+        const c = await countModuleApplicants('marketplace');
+
+        expect(c.total).toBeLessThanOrEqual(1);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 //   LAST IN THE FILE, DELIBERATELY. `jest.doMock` registers for every later
 //   require, so a throwing supabase-db declared mid-file leaked into the suites
 //   after it — four failures that had nothing to do with what they tested, and
@@ -495,3 +581,5 @@ describe('#835 — a failed count is null, never zero', () => {
         }
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
