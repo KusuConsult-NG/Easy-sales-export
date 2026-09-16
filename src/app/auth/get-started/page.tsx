@@ -14,7 +14,8 @@ import {
     TrendingUp,
     Home
 } from "lucide-react";
-import { WAVE_FULL_NAME } from "@/lib/wave-program";
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+import { checkWaveEligibility } from "@/lib/wave-eligibility";
 
 /**
  * Module Selection Page
@@ -27,7 +28,8 @@ const modules = [
     {
         id: "wave",
         name: "WAVE",
-        description: WAVE_FULL_NAME,
+        //   #816 The displayed name carries "Program" — see lib/wave-program.
+        description: WAVE_PROGRAM_NAME,
         icon: Waves,
         color: "from-pink-500 to-rose-600",
         onboardingUrl: "/wave/application",
@@ -132,25 +134,26 @@ export default function GetStartedPage() {
         );
     }
 
-    const isMale = session?.user?.gender?.toLowerCase() === "male";
-    const userCreatedAt = session?.user?.createdAt;
-    
-    // Define cutoff date: June 17, 2026
-    const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
-    const registeredOnOrAfterCutoff = !!userCreatedAt && new Date(userCreatedAt) >= CUTOFF_DATE;
-    const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
-
+    /*
+     *   #817 A SIXTH COPY OF THE WAVE ELIGIBILITY RULE.
+     *
+     *   lib/wave-eligibility.ts was written to end exactly this: the rule had
+     *   been spelled out four times and the copies had drifted. This screen and
+     *   src/middleware.ts were two more, each with its own CUTOFF_DATE literal
+     *   and its own status list, and neither was on that module's list.
+     *
+     *   Asked of the shared rule now, which also means this screen picks up the
+     *   admin and Academy Elite exemptions it never had.
+     */
     const roles = (session?.user?.roles as UserRole[]) || [];
     const serviceRegistrations = session?.user?.serviceRegistrations || {};
-    const waveRegStatus = serviceRegistrations.wave?.status;
-    const hasWaveAccess = roles.includes("wave_participant") || 
-                          waveRegStatus === "approved" || 
-                          waveRegStatus === "active" || 
-                          waveRegStatus === "pending" || 
-                          waveRegStatus === "under_review" ||
-                          waveRegStatus === "revision_required";
 
-    const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccess);
+    const isWaveBlocked = !checkWaveEligibility({
+        roles,
+        gender: session?.user?.gender,
+        createdAt: session?.user?.createdAt,
+        serviceRegistrations,
+    }).eligible;
 
     const filteredModules = modules.filter(m => !(m.id === "wave" && isWaveBlocked));
 

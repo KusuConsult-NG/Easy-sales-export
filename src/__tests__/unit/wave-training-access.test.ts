@@ -134,9 +134,26 @@ describe('reading the programme requires being in it', () => {
 });
 
 describe('one definition, read by both', () => {
-    it('the middleware uses the shared helper', () => {
-        expect(middleware).toContain('from "@/lib/wave-access"');
-        expect(middleware).toContain('hasWaveAccess({ roles: userRoles, waveRegStatus })');
+    it('the middleware uses the shared helper, now one level up', () => {
+        /*
+         *   #817 THE MIDDLEWARE ASKS checkWaveEligibility, WHICH ASKS THIS.
+         *
+         *   It used to call hasWaveAccess directly and pair it with its own
+         *   gender test and its own `CUTOFF_DATE` literal — a seventh hand-
+         *   rolled copy of the WAVE eligibility rule. lib/wave-eligibility now
+         *   owns the whole decision, and reads THIS module for the status list,
+         *   so the chain is middleware → checkWaveEligibility → hasWaveAccess.
+         *
+         *   The property this suite is about is unchanged and is asserted
+         *   through the chain rather than at the first link: the middleware
+         *   must not carry its own list, and the list it ends up using must be
+         *   this one.
+         */
+        expect(middleware).toContain('checkWaveEligibility(');
+
+        const eligibility = source('src/lib/wave-eligibility.ts');
+        expect(eligibility).toContain('from "@/lib/wave-access"');
+        expect(eligibility).toContain('hasWaveAccess({ roles, waveRegStatus })');
     });
 
     it('and no longer carries its own status list', () => {
@@ -147,8 +164,15 @@ describe('one definition, read by both', () => {
     });
 
     it('the gender block still applies to pages', () => {
-        // Vacuity guard: the refactor must not have removed the page guard.
-        expect(middleware).toContain('const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccessNow)');
+        /*
+         *   Vacuity guard: the refactor must not have removed the page guard.
+         *
+         *   #817 The guard is still here and is now one expression rather than
+         *   five, because the decision moved into checkWaveEligibility. Pinning
+         *   the old spelling would have meant pinning the hand-rolled copy this
+         *   finding exists to delete.
+         */
+        expect(middleware).toContain('const isWaveBlocked = !checkWaveEligibility(');
         expect(middleware).toContain('pathname.startsWith("/wave")');
     });
 

@@ -186,3 +186,113 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
 export function searchWasTruncated(ids: readonly string[]): boolean {
     return ids.length >= SEARCH_RESULT_CAP;
 }
+
+/**
+ * Search a collection by the name fields IT carries, rather than the user's.
+ *
+ *   #814 THE ADMIN SEARCHED THE NAME ON THE SCREEN AND THE CODE LOOKED
+ *   SOMEWHERE ELSE.
+ *
+ *   Reported by the owner: "AISHAT Yahaya ABUBAKAR and others are registered
+ *   with pending status and when searched they return user not found."
+ *
+ *   The WAVE applications table prints the name from the APPLICATION —
+ *
+ *       if (app.surname || app.firstName)
+ *           return `${app.surname} ${app.firstName}`.trim();
+ *
+ *   — while the search resolved the query against the USERS collection alone
+ *   and then fetched applications by `userId in (...)`. Those are two different
+ *   records with two different names. An applicant enters her full legal name
+ *   on the form; her account may have been created earlier with a shorter name,
+ *   a maiden name, a different spelling, or none of the three fields the user
+ *   search reads.
+ *
+ *   So the admin read a name off the row in front of her, typed it into the box
+ *   above it, and was told there was no such person — WHILE LOOKING AT HER.
+ *
+ *   Worse, the caller's early return made it final:
+ *
+ *       if (matchingUserIds.length === 0) return { data: [] }
+ *
+ *   No user matched, so the applications were never queried at all.
+ *
+ * ── AND WHY IT IS TOKENISED ─────────────────────────────────────────────────
+ *
+ *   These are PREFIX queries: `>= value` and `<= value + `. A prefix of
+ *   the whole query only ever matches a field that STARTS with it, so with
+ *   "AISHAT Yahaya ABUBAKAR" stored across three fields:
+ *
+ *       searching "Abubakar"                 matched nothing before
+ *       searching "AISHAT Yahaya ABUBAKAR"   matched nothing before
+ *
+ *   Each token is therefore tried against each field as well as the whole
+ *   string. A surname alone finds her; so does her full name; so does the
+ *   middle name nobody searches by.
+ *
+ * @param collection the collection to search
+ * @param fields     that collection's own name fields, e.g. surname/firstName
+ * @param searchQuery what the admin typed
+ * @returns matching DOCUMENT ids, capped like the user search
+ */
+export async function searchDocIdsByNameFields(
+    collection: string,
+    fields: readonly string[],
+    searchQuery: string,
+): Promise<string[]> {
+    if (!searchQuery?.trim() || fields.length === 0) return [];
+
+    const raw = searchQuery.trim();
+    //   The whole string first, then its tokens. Three tokens is enough for
+    //   "first middle last" and keeps the query count bounded.
+    const terms = [raw, ...raw.split(/\s+/).filter(Boolean).slice(0, 3)];
+
+    /** Every casing a name is stored in here — the same set the user search uses. */
+    const variantsOf = (term: string) => Array.from(new Set([
+        term,
+        term.toLowerCase(),
+        term.toUpperCase(),
+        term.charAt(0).toUpperCase() + term.slice(1).toLowerCase(),
+    ])).filter(Boolean);
+
+    const values = Array.from(new Set(terms.flatMap(variantsOf)));
+    const docIds = new Set<string>();
+
+    try {
+        const snaps = await Promise.all(
+            fields.flatMap((field) => values.map((value) =>
+                db.collection(collection)
+                    .where(field, ">=", value)
+                    //   The high sentinel that makes this a PREFIX range
+                    //   rather than an equality: without it, only a whole
+                    //   name would ever match. The partial-prefix case in
+                    //   the suite is what holds this to a range.
+                    .where(field, "<=", value + "")
+                    .limit(SEARCH_RESULT_CAP)
+                    .get(),
+            )),
+        );
+        snaps.forEach((snap) => snap.docs.forEach((doc) => docIds.add(doc.id)));
+    } catch (err) {
+        /*
+         *   THROWS, for the reason #786 established: a search that fails and
+         *   returns [] is indistinguishable from "no such person", which is the
+         *   exact confusion this finding is about. Every caller sits inside a
+         *   try/catch that turns this into a visible "search failed".
+         */
+        logger.error("[searchDocIdsByNameFields] the record search failed", {
+            collection,
+            reason: err instanceof Error ? err.message : String(err),
+        });
+        throw new Error("The search could not be completed. Please try again.");
+    }
+
+    const all = Array.from(docIds);
+    if (all.length > SEARCH_RESULT_CAP) {
+        logger.warn(
+            `[searchDocIdsByNameFields] "${searchQuery}" matched ${all.length} rows in ${collection}; ` +
+            `returning the first ${SEARCH_RESULT_CAP}. The screen shows a partial list.`,
+        );
+    }
+    return all.slice(0, SEARCH_RESULT_CAP);
+}

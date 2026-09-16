@@ -96,7 +96,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                         {[
                             { value: "training" as const, label: "Training", icon: "📚" },
                             { value: "inputs" as const, label: "Inputs (Seeds, Fertilizer, Tools)", icon: "🌱" },
-                            { value: "mechanization" as const, label: "Mechanization", icon: "�" },
+                            { value: "mechanization" as const, label: "Mechanization", icon: "🚜" },
                             { value: "finance" as const, label: "Finance / Grants", icon: "💰" },
                             { value: "market_access" as const, label: "Market Access / Off-take", icon: "🏪" },
                         ].map((support) => (

@@ -81,11 +81,18 @@ test.describe('WAVE Application Flow', () => {
          *   the control it drives is genuinely different now, so the locator
          *   follows it rather than being loosened to match both.
          *
-         *   The COMMODITY question below is still multi-select and is
-         *   deliberately unchanged; the owner named one question, not two.
+         *   #813 AND THE COMMODITY QUESTION FOLLOWED IT.
+         *
+         *   This comment used to end "the COMMODITY question below is still
+         *   multi-select and is deliberately unchanged; the owner named one
+         *   question, not two." The owner has since named the second one —
+         *   "ensure you prefered crop/commodity single selection" — so it is a
+         *   radio group too, and this locator moves with it for the same reason
+         *   the one above did: the control is genuinely different now, and
+         *   loosening the selector to match both would stop it noticing.
          */
         await page.check('label:has-text("Crop Production") input[type="radio"]');
-        await page.check('label:has-text("Maize") input[type="checkbox"]');
+        await page.check('label:has-text("Maize") input[type="radio"]');
         await page.check('label:has-text("No") input[name="hasAccessToFarmland"]');
 
         await page.click('button:has-text("Continue")');

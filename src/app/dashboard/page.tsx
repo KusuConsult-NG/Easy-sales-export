@@ -14,6 +14,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { useNavSummary } from "@/contexts/NavSummaryContext";
 import { formatDateOrDash } from "@/lib/date-utils";
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+import { checkWaveEligibility } from "@/lib/wave-eligibility";
 
 const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
@@ -61,22 +63,42 @@ interface DashboardResource {
 
 /** Returns all platform modules with their dynamic application status */
 function getPlatformModules(serviceRegistrations: Record<string, any>, roles: UserRole[], gender?: string, createdAt?: string) {
-    const isMale = gender?.toLowerCase() === "male";
-    
-    // Define cutoff date: June 17, 2026
-    const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
-    const registeredOnOrAfterCutoff = !!createdAt && new Date(createdAt) >= CUTOFF_DATE;
-    const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
-
-    const waveRegStatus = serviceRegistrations?.wave?.status;
-    const hasWaveAccess = roles.includes("wave_participant") || 
-                          waveRegStatus === "approved" || 
-                          waveRegStatus === "active" || 
-                          waveRegStatus === "pending" || 
-                          waveRegStatus === "under_review" ||
-                          waveRegStatus === "revision_required";
-
-    const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccess);
+    /*
+     *   #817 A FIFTH COPY OF THE WAVE ELIGIBILITY RULE, ON THE DASHBOARD.
+     *
+     *   lib/wave-eligibility.ts exists because "may this account join WAVE?" —
+     *   an access rule with a protected characteristic in it — had been written
+     *   FOUR separate times and the copies had drifted. Its header lists them.
+     *
+     *   This screen was a fifth, and it was not on that list. It re-declared
+     *   the cutoff as its own `CUTOFF_DATE` literal and re-derived the whole
+     *   decision, so the module card on the dashboard every signed-in user
+     *   lands on answered the question its own way.
+     *
+     *   HOW IT DIFFERED, which is the part that matters:
+     *
+     *     - NO ADMIN EXEMPTION. checkWaveEligibility admits platform admins and
+     *       Academy Elite members outright. This copy did not, so a male admin
+     *       simply had the WAVE card hidden from his dashboard while every
+     *       server path admitted him.
+     *
+     *     - ONE DATE SHAPE. `new Date(createdAt)` handles a string. The shared
+     *       rule handles the four shapes createdAt actually arrives in —
+     *       Timestamp, admin Timestamp, seconds object, string — precisely
+     *       because a shape a copy missed answered "before the cutoff", which
+     *       is the PERMISSIVE direction.
+     *
+     *   This is a display filter, not the gate: the real refusals are in
+     *   checkWaveEligibility's four server call sites, and hiding a card has
+     *   never been what stops anybody. What it must not do is disagree with
+     *   them, which it did.
+     */
+    const isWaveBlocked = !checkWaveEligibility({
+        roles,
+        gender,
+        createdAt,
+        serviceRegistrations,
+    }).eligible;
 
     const modulesDef = [
         {
@@ -92,7 +114,20 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
         {
             id: "wave",
             label: "WAVE Program",
-            description: "Women Agro-processors Venture Empowerment",
+            /*
+             *   #811 THE MAIN DASHBOARD STILL CARRIED AN INVENTED EXPANSION.
+             *
+             *   #774 replaced five different spellings of what WAVE stands for
+             *   with one constant, and listed the screens it fixed. This screen
+             *   was not among them, so the module card on the dashboard EVERY
+             *   signed-in user lands on went on reading "Women Agro-processors
+             *   Venture Empowerment" — a wording that is not the programme's
+             *   name and never was.
+             *
+             *   The same finding's own note predicted this: "a constant only
+             *   removes the drift from the files that READ it."
+             */
+            description: WAVE_PROGRAM_NAME,
             icon: Sparkles,
             color: "from-purple-600 to-violet-700",
             onboardingUrl: "/wave/application",

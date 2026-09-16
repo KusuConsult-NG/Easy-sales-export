@@ -283,13 +283,47 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        {/*
+                          *   #818 SHE TYPED AN ACCOUNT NUMBER AND THE REVIEW
+                          *   TOLD HER SHE HAD NO BANK ACCOUNT.
+                          *
+                          *   The owner: "users entered account number and they
+                          *   can't see it visible on the WAVE form before they
+                          *   submit."
+                          *
+                          *   This branched on `data.hasBankAccount` — a flag
+                          *   initialised to `false` in WaveApplicationClient
+                          *   and SET BY NOTHING. Swept the whole codebase: it
+                          *   appears in the schema, the interface, that
+                          *   initialiser and this expression, and there is no
+                          *   writer anywhere. So the condition was false for
+                          *   every applicant who ever filled this form, and the
+                          *   "No bank account" string was not a branch — it was
+                          *   the only thing this panel could render.
+                          *
+                          *   Meanwhile FinancialStep marks Bank Account Details
+                          *   REQUIRED and refuses to advance without a bank name
+                          *   and ten digits. So the review contradicted the step
+                          *   that had just insisted on the data.
+                          *
+                          *   WHY #806's SWEEP DID NOT CATCH IT. That finding
+                          *   derived, from source, that every field a step
+                          *   collects is REFERENCED by this file — and
+                          *   `data.accountNumber` is referenced, right here,
+                          *   inside a branch that never runs. Presence of the
+                          *   reference is not reachability of the value. That is
+                          *   the #741 trap in its exact original shape.
+                          *
+                          *   Rendered from the values themselves now. There is
+                          *   no flag to disagree with them.
+                          */}
                         <div>
-                            <p className="text-slate-600">Bank Account</p>
-                            <p className="font-medium text-slate-900">
-                                {data.hasBankAccount
-                                    ? `${data.bankName} - ${data.accountNumber}`
-                                    : "No bank account"}
-                            </p>
+                            <p className="text-slate-600">Bank Name</p>
+                            <p className="font-medium text-slate-900">{data.bankName || "Not provided"}</p>
+                        </div>
+                        <div>
+                            <p className="text-slate-600">Account Number</p>
+                            <p className="font-medium text-slate-900">{data.accountNumber || "Not provided"}</p>
                         </div>
                         {data.bvn && (
                             <div>

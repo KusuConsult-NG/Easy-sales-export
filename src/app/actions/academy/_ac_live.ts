@@ -7,6 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { checkCourseAccess } from "@/lib/academy-plan";
+import { purchasedCourseIds } from "@/lib/academy-purchased-courses";
 import { isAdmin } from "@/lib/admin-permissions";
 import type { Course, LiveSession } from "@/lib/types/academy-actions";
 import { roomKeyFor } from "@/lib/classroom-room-key";
@@ -93,6 +94,53 @@ async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse
             tierByCourse.set(id, courseDoc.exists ? courseDoc.data()?.tier : LOCKED_TIER);
         }));
 
+        /*
+         *   #812 A COURSE BOUGHT OUTRIGHT DID NOT OPEN ITS LIVE CLASS.
+         *
+         *   checkCourseAccess takes THREE arguments —
+         *
+         *       checkCourseAccess(userPlan, courseTier, purchased)
+         *
+         *   and this call passed two. So the gate here asked only "does their
+         *   PLAN cover this tier", and a learner who bought this single course
+         *   outright (#378, the `purchased` stamp written by
+         *   academy-purchase-flow) failed it.
+         *
+         *   WHAT THAT COST THEM. Falling the gate strips `roomKey`, and
+         *   VideoClassroom refuses any key that is not a minted one — so the
+         *   learner who had paid for this exact course was shown
+         *
+         *       "This classroom is not open. Ask the instructor to start the
+         *        class, or check that your plan includes this course."
+         *
+         *   while the class ran without them. The message even tells them to
+         *   check a plan, which is precisely the thing they bought the course
+         *   INSTEAD of. It strips recordingUrl too, so they could not watch it
+         *   afterwards either.
+         *
+         *   Reported by the owner as the live video feature not working.
+         *
+         *   THE PURCHASE LIVES IN PLACE A — user_progress/{userId}/courses/
+         *   {courseId} — which is the document isPurchasedCourse reads and the
+         *   one the course page already consults to open a bought course. Read
+         *   per distinct course, alongside the tier read above, rather than per
+         *   session: the whole-platform call returns every session and most
+         *   courses carry several.
+         *
+         *   A FAILED READ IS NOT A PURCHASE. It resolves to false, so the gate
+         *   falls back to the plan check exactly as before — this widens who
+         *   gets in, and an unreadable record must never be the reason somebody
+         *   does.
+         *
+         *   Read through the SHARED reader rather than spelled out here: nine
+         *   call sites had to be corrected for this finding, and nine local
+         *   copies of the read is how there came to be nine.
+         */
+        const purchasedCourse = await purchasedCourseIds(
+            sessionResult.session.user.id,
+            courseIds,
+        );
+
         const data = snapshot.docs.map((doc) => {
             const d = doc.data();
             const row: Record<string, unknown> = {
@@ -103,7 +151,13 @@ async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse
                 scheduledAt: d.scheduledAt?.toDate?.() ?? d.scheduledAt ?? null,
             };
 
-            const opensThisTier = checkCourseAccess(viewerPlan, tierByCourse.get(d?.courseId));
+            //   #812 All THREE arguments. The third is what a learner who
+            //   bought this course outright has instead of a plan.
+            const opensThisTier = checkCourseAccess(
+                viewerPlan,
+                tierByCourse.get(d?.courseId),
+                purchasedCourse.has(d?.courseId),
+            );
             if (!viewerIsAdmin && !opensThisTier) {
                 delete row.meetingLink;
                 delete row.customMeetingLink;

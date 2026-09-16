@@ -218,7 +218,11 @@ describe('#777 — the acronym, on the form itself', () => {
         const src = stripComments(read('src/app/wave/application/WaveApplicationClient.tsx'));
 
         expect(src).not.toMatch(/Agribusiness Venture Empowerment/);
-        expect(src).toMatch(/\{WAVE_FULL_NAME\}/);
+        //   #816 The form now shows WAVE_PROGRAM_NAME — the same constant
+        //   plus the word "Program", which the owner asked the displayed
+        //   name to carry. Still the shared constant, which is what this
+        //   assertion is about; only which of the two composed forms.
+        expect(src).toMatch(/\{WAVE_(FULL|PROGRAM)_NAME\}/);
     });
 
     it('and no screen spells it out by hand', () => {

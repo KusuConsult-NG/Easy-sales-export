@@ -140,8 +140,22 @@ describe('the readers apply it', () => {
         const src = code(CATALOG);
         const fn = src.slice(src.indexOf('async function _getCourseByIdAction'));
 
-        expect(fn).toContain('checkCourseAccess(viewerPlan,');
+        expect(fn).toContain('checkCourseAccess(');
+        expect(fn).toContain('viewerPlan,');
         expect(fn).toContain('stripLockedContent(formattedCourse)');
+
+        /*
+         *   #812 AND ON THE PURCHASE, which is the argument that was missing.
+         *
+         *   checkCourseAccess takes (userPlan, courseTier, purchased) and this
+         *   reader passed two — so a learner who bought THIS course outright
+         *   failed the gate and stripLockedContent deleted every lesson's
+         *   content, videoUrl and documentUrl from the payload. The course page
+         *   then let them in, because it is the one call site that already
+         *   passed `purchased`, and rendered a course with nothing inside it.
+         */
+        expect(fn).toContain('hasPurchasedCourse(');
+        expect(fn).toContain('purchased,');
     });
 
     it('and the list does too, per course', () => {
@@ -151,8 +165,12 @@ describe('the readers apply it', () => {
         const fn = src.slice(src.indexOf('async function _getCoursesAction'));
 
         expect(fn).toContain('raw.map((c) =>');
-        expect(fn).toContain('checkCourseAccess(viewerPlan, (c as any)?.tier)');
+        expect(fn).toContain('checkCourseAccess(');
+        expect(fn).toContain('(c as any)?.tier,');
         expect(fn).toContain('stripLockedContent(c)');
+        //   #812 The purchases for this page, read once, and consulted per row.
+        expect(fn).toContain('purchasedCourseIds(');
+        expect(fn).toContain('purchased.has((c as any)?.id)');
     });
 
     it('reading the plan from the session, not from an argument', () => {

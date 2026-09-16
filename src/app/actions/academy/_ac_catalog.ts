@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { stripAnswerKey, stripLockedContent } from "@/lib/academy-grading";
 import { checkCourseAccess } from "@/lib/academy-plan";
+import { purchasedCourseIds, hasPurchasedCourse } from "@/lib/academy-purchased-courses";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -82,10 +83,29 @@ async function _getCoursesAction(
         // cursor still advances by raw rows, so pagination stays correct — a
         // page may simply be shorter.
         const raw = serializeDocs<Course>(pageDocs.filter((d: any) => !isRetired(d.data())));
+
+        /*
+         *   #812 The courses on this page that the viewer bought outright. Read
+         *   once for the page rather than per row, and only for a non-admin —
+         *   an admin is not gated here at all, so the reads would be wasted.
+         */
+        const purchased = viewerIsAdmin
+            ? new Set<string>()
+            : await purchasedCourseIds(
+                sessionResult.session?.user?.id,
+                raw.map((c) => (c as any)?.id),
+            );
+
         const courses = viewerIsAdmin
             ? raw
             : raw.map((c) => {
-                const visible = checkCourseAccess(viewerPlan, (c as any)?.tier)
+                //   All three arguments: a learner who bought THIS course keeps
+                //   its lessons even when their plan does not cover the tier.
+                const visible = checkCourseAccess(
+                    viewerPlan,
+                    (c as any)?.tier,
+                    purchased.has((c as any)?.id),
+                )
                     ? c
                     : stripLockedContent(c);
                 return stripAnswerKey(visible);
@@ -162,7 +182,34 @@ async function _getCourseByIdAction(courseId: string): Promise<ActionResponse<an
         // a caller who loaded neither page could ask for them directly.
         const viewerPlan = (sessionResult.session?.user as any)
             ?.serviceRegistrations?.academy?.plan;
-        const opensThisTier = checkCourseAccess(viewerPlan, (formattedCourse as any)?.tier);
+
+        /*
+         *   #812 AND A COURSE BOUGHT OUTRIGHT IS OPENED BY THAT PURCHASE.
+         *
+         *   This passed two arguments to a three-argument rule, so the gate
+         *   asked only about the learner's PLAN. stripLockedContent then
+         *   DELETES content, videoUrl, documentUrl and excelUrl from every
+         *   lesson and marks it `locked: true`.
+         *
+         *   CourseDetailClient is the one site that already passed `purchased`,
+         *   so it worked out access correctly and let the buyer in — to a
+         *   payload this function had already emptied. They paid, the page
+         *   opened, and there was nothing inside.
+         *
+         *   This is the comment directly above it coming true a second time:
+         *   "the tier gate is consulted by the enrolment action, by the course
+         *   page's redirect and by the catalogue's padlock — but not here, and
+         *   this is where the content is served."
+         */
+        const purchased = await hasPurchasedCourse(
+            sessionResult.session?.user?.id,
+            courseId,
+        );
+        const opensThisTier = checkCourseAccess(
+            viewerPlan,
+            (formattedCourse as any)?.tier,
+            purchased,
+        );
 
         const visible = viewerIsAdmin || opensThisTier
             ? formattedCourse

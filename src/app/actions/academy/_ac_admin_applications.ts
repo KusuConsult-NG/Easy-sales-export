@@ -189,9 +189,33 @@ async function _getStandardAcademyApplicationsAction(options: {
         let applications: any[] = [];
 
         if (options.search) {
-            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
-            const matchingUserIds = await searchUserIdsByQuery(options.search);
-            if (matchingUserIds.length === 0) {
+            /*
+             *   #814 THE SAME DEFECT, ON THE ACADEMY'S APPLICATIONS TABLE.
+             *
+             *   Found by sweeping the callers of searchUserIdsByQuery after the
+             *   owner reported a pending WAVE applicant being answered "user not
+             *   found" from the row that was displaying her.
+             *
+             *   This screen prints `app.personalInfo.fullName` and searched the
+             *   USERS collection — two different records, exactly as in
+             *   _wv_admin_applications. Fixing WAVE alone would have been this
+             *   audit's most repeated finding committed while fixing an instance
+             *   of it.
+             */
+            const { searchUserIdsByQuery, searchDocIdsByNameFields } =
+                await import("@/lib/admin-search-helper");
+
+            const [matchingUserIds, matchingAppIds] = await Promise.all([
+                searchUserIdsByQuery(options.search),
+                searchDocIdsByNameFields(
+                    COLLECTIONS.ACADEMY_APPLICATIONS,
+                    //   Nested, because that is where this collection keeps them.
+                    ["personalInfo.fullName", "personalInfo.firstName", "personalInfo.lastName"],
+                    options.search,
+                ),
+            ]);
+
+            if (matchingUserIds.length === 0 && matchingAppIds.length === 0) {
                 return {
                     success: true,
                     error: null,
@@ -211,11 +235,26 @@ async function _getStandardAcademyApplicationsAction(options: {
                 };
             }
 
-            const querySnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("userId", "in", matchingUserIds)
-                .get();
+            //   Unioned by document id. An empty `in` is an illegal query, so
+            //   each read is issued only when it has ids to look for.
+            const [byUser, byName] = await Promise.all([
+                matchingUserIds.length > 0
+                    ? db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                        .where("userId", "in", matchingUserIds).get()
+                    : null,
+                matchingAppIds.length > 0
+                    ? db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                        .where(FieldPath.documentId(), "in", matchingAppIds).get()
+                    : null,
+            ]);
 
-            applications = serializeDocs(querySnap.docs);
+            const byId = new Map<string, any>();
+            for (const snap of [byUser, byName]) {
+                if (!snap) continue;
+                for (const doc of snap.docs) byId.set(doc.id, doc);
+            }
+
+            applications = serializeDocs(Array.from(byId.values()));
         } else {
             let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
 

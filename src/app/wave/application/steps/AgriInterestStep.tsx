@@ -32,10 +32,10 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
         const farmlandHectares = data?.farmlandHectares || 0;
 
         if (valueChainAreas.length === 0) {
-            newErrors.valueChainAreas = "Please select at least one value chain area";
+            newErrors.valueChainAreas = "Please select the area you want to participate in";
         }
         if (preferredCommodities.length === 0) {
-            newErrors.preferredCommodities = "Please select at least one commodity";
+            newErrors.preferredCommodities = "Please select your preferred crop or commodity";
         }
         if (preferredCommodities.includes("other") && !preferredCommodityOther.trim()) {
             newErrors.preferredCommodityOther = "Please specify the commodity";
@@ -87,13 +87,37 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
         updateData({ valueChainAreas: [area] });
     };
 
-    const toggleCommodity = (commodity: "rice" | "maize" | "sesame" | "soybeans" | "ginger" | "cassava" | "vegetables" | "other") => {
-        const current = data?.preferredCommodities || [];
-        if (current.includes(commodity)) {
-            updateData({ preferredCommodities: current.filter((c) => c !== commodity) });
-        } else {
-            updateData({ preferredCommodities: [...current, commodity] });
-        }
+    /**
+     *   #813 AND THE COMMODITY QUESTION HAD THE SAME DEFECT ONE FIELD DOWN.
+     *
+     *   The owner, after #774 made the value-chain question single-select: "on
+     *   the WAVE form, ensure you prefered crop/commodity single selection."
+     *
+     *   #774 changed the area question and left the commodity grid directly
+     *   beneath it as checkboxes captioned "(Select all that apply)" — so the
+     *   same form asked one question two ways, and an applicant could name a
+     *   single value chain and then seven crops.
+     *
+     *   This is the shape #774's own note predicted and this audit's most
+     *   repeated finding: a correct rule applied to some of the places it
+     *   names. It was in the SAME FILE, twenty lines apart.
+     *
+     *   STORED AS A ONE-ELEMENT ARRAY, for exactly the reasons #774 set out
+     *   above: `preferredCommodities` is an array in the submission schema, on
+     *   every stored application, in the admin screens, the CSV export and the
+     *   forensic sweep. Selecting one and storing one changes nothing
+     *   downstream and orphans no application already recorded.
+     *
+     *   THE OTHERS BOX CLEARS WITH IT. Picking "Others", typing a crop, then
+     *   picking Rice used to leave the typed text behind on a field the form no
+     *   longer shows — submitted, invisible to the applicant on the review
+     *   step, and #806 is the finding about exactly that.
+     */
+    const selectCommodity = (commodity: "rice" | "maize" | "sesame" | "soybeans" | "ginger" | "cassava" | "vegetables" | "other") => {
+        updateData({
+            preferredCommodities: [commodity],
+            ...(commodity === "other" ? {} : { preferredCommodityOther: "" }),
+        });
     };
 
     return (
@@ -151,7 +175,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Preferred Crop / Commodity *
-                        <span className="text-xs font-normal text-slate-500 ml-1">(Select all that apply)</span>
+                        <span className="text-xs font-normal text-slate-500 ml-1">(Select one)</span>
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {[
@@ -172,10 +196,11 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                                     }`}
                             >
                                 <input
-                                    type="checkbox"
+                                    type="radio"
+                                    name="wavePreferredCommodity"
                                     checked={(data?.preferredCommodities || []).includes(commodity.value)}
-                                    onChange={() => toggleCommodity(commodity.value)}
-                                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                                    onChange={() => selectCommodity(commodity.value)}
+                                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                 />
                                 <span className="font-medium">{commodity.label}</span>
                             </label>

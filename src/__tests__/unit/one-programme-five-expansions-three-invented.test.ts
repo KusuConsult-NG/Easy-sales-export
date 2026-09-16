@@ -173,32 +173,77 @@ describe('#774(a) — the acronym expands one way', () => {
         expect(hits.sort()).toEqual([...ALLOWED].sort());
     });
 
-    it('AND NO SCREEN INVENTS ITS OWN', () => {
+    it('AND NO SCREEN ANYWHERE INVENTS ITS OWN', () => {
         /*
-         *   The four screens that each carried a different expansion. Asserted
-         *   on the STRIPPED source, because the comments recording this finding
-         *   quote the wrong wordings in order to explain them — the #741 trap,
-         *   met once already in #777's first draft.
+         *   #811 THIS TEST WAS ITSELF THE DEFECT IT WAS WRITTEN TO PREVENT.
+         *
+         *   It used to check a HARD-CODED LIST OF FIVE SCREENS — the ones #774
+         *   happened to fix. src/app/dashboard/page.tsx was not on that list,
+         *   and it carried "Women Agro-processors Venture Empowerment" on the
+         *   WAVE module card of the dashboard every signed-in user lands on.
+         *   The owner saw it; this suite could not.
+         *
+         *   So the assertion that was supposed to stop "a correct rule applied
+         *   to some of the places it names" was enumerated rather than swept,
+         *   and reproduced exactly that shape. An enumerated list can only ever
+         *   be as complete as the day it was written.
+         *
+         *   IT IS A SWEEP NOW. Every .ts/.tsx file under src, so a sixth
+         *   invented expansion fails here by filename rather than by somebody
+         *   remembering to extend a list.
+         *
+         *   Asserted on STRIPPED source, because the comments recording this
+         *   finding quote the wrong wordings in order to explain them — the
+         *   #741 trap, met once already in #777's first draft.
          */
-        const SCREENS = [
-            'src/app/auth/get-started/page.tsx',
-            'src/app/wave/access-denied/page.tsx',
-            'src/app/admin/wave/page.tsx',
-            'src/app/api/admin/wave/reports/export/route.ts',
-            'src/app/wave/application/WaveApplicationClient.tsx',
-        ];
-        const INVENTED = [
-            /Women Agro-processors Venture Empowerment/,
-            /Women in Agri-Ventures Excellence/,
-            /Women in Agriculture Venture Excellence/,
-            /Agribusiness Venture Empowerment/,
+        const INVENTED: ReadonlyArray<[string, RegExp]> = [
+            ['Women Agro-processors Venture Empowerment', /Women Agro-processors Venture Empowerment/],
+            ['Women in Agri-Ventures Excellence', /Women in Agri-Ventures Excellence/],
+            ['Women in Agriculture Venture Excellence', /Women in Agriculture Venture Excellence/],
+            ['Agribusiness Venture Empowerment', /Agribusiness Venture Empowerment/],
+            ['Women in Agriculture', /Women in Agriculture(?![ -]Venture)/],
         ];
 
-        expect(SCREENS.length).toBe(5);
-        for (const s of SCREENS) {
-            const src = stripComments(read(s));
-            for (const bad of INVENTED) expect(src).not.toMatch(bad);
+        /*
+         *   The two files allowed to spell the wrong wordings out: the constant
+         *   module, whose header records what they were, and this suite.
+         *   Everything else is swept — including files that do not exist yet.
+         */
+        const ALLOWED = new Set([
+            //   The constant module, whose header records what the wrong
+            //   wordings were so the next reader does not have to reconstruct
+            //   them.
+            'src/lib/wave-program.ts',
+            //   This suite: the regexes above are the literals.
+            'src/__tests__/unit/one-programme-five-expansions-three-invented.test.ts',
+            //   #777's suite, which asserts the SIXTH expansion is gone from
+            //   the application form and must name it to do so. Allowed by
+            //   filename rather than by "it is a test", because a test file is
+            //   exactly where the wrong wording could hide unnoticed — and
+            //   because that suite's own header records the same recurrence:
+            //   "#774 found five expansions and corrected four ... was missed
+            //   because #774 swept for the four it had already found."
+            'src/__tests__/unit/every-application-form-has-a-way-out.test.ts',
+        ]);
+
+        const { execSync } = require('child_process');
+        const files: string[] = execSync(
+            "find src -type f \\( -name '*.ts' -o -name '*.tsx' \\)",
+            { encoding: 'utf8' },
+        ).split('\n').filter(Boolean).filter((f: string) => !ALLOWED.has(f));
+
+        //   Vacuity guard: a find that returns nothing would pass silently.
+        expect(files.length).toBeGreaterThan(500);
+
+        const offenders: string[] = [];
+        for (const f of files) {
+            const src = stripComments(read(f));
+            for (const [label, bad] of INVENTED) {
+                if (bad.test(src)) offenders.push(`${f} — "${label}"`);
+            }
         }
+
+        expect(offenders).toEqual([]);
     });
 
     it('and each of those screens reads the constant instead', () => {
@@ -250,8 +295,29 @@ describe('#774(b) — Section D takes one answer', () => {
 
         expect(section).toMatch(/\(Select one\)/);
         expect(section).not.toMatch(/Select all that apply/i);
-        //   and the commodity question is deliberately left alone
-        expect(src).toMatch(/Select all that apply/i);
+
+        /*
+         *   #813 THE VACUITY GUARD HAD TO CHANGE, because its premise did.
+         *
+         *   This line used to be `expect(src).toMatch(/Select all that apply/i)`
+         *   — proving the slice above was real by showing the phrase still
+         *   existed further down, on the commodity question, "deliberately left
+         *   alone".
+         *
+         *   The owner has since asked for that question to be single-select too
+         *   ("ensure you prefered crop/commodity single selection"), so the
+         *   phrase is gone from the file and that guard would now fail for the
+         *   RIGHT reason — which makes it the wrong guard to keep.
+         *
+         *   Replaced rather than deleted: the slice still needs proving, so it
+         *   is proved against the thing that is actually still true — there IS
+         *   a second question below the split point, and it is the commodity
+         *   one. A `split` that found nothing would return the whole file and
+         *   leave the assertions above passing over text they never read.
+         */
+        expect(src).toContain('Preferred Crop');
+        expect(section.length).toBeGreaterThan(200);
+        expect(section.length).toBeLessThan(src.length);
     });
 });
 

@@ -15,7 +15,7 @@ import { useState, useEffect } from "react";
 import { restoredStepIndex } from "@/lib/draft-step";
 import { logger } from '@/lib/logger';
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
-import { WAVE_FULL_NAME } from "@/lib/wave-program";
+import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -498,7 +498,7 @@ export default function WaveApplicationClient(
                       *   now, like the rest.
                       */}
                     <p className="text-lg text-slate-700 mb-2">
-                        {WAVE_FULL_NAME}
+                        {WAVE_PROGRAM_NAME}
                     </p>
                     <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">
                         Implemented by Easy Sales Export

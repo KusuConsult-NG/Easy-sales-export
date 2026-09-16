@@ -196,7 +196,21 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         <input
                             type="text"
                             value={data.accountNumber}
-                            onChange={(e) => updateData({ accountNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                            /*
+                             *   #818 The stored flag is kept true to the values.
+                             *
+                             *   `hasBankAccount` was initialised false and set
+                             *   by nothing, so every submitted application said
+                             *   the applicant had no bank account while
+                             *   carrying her bank name and ten digits. Nothing
+                             *   BRANCHES on it today — the review no longer
+                             *   does — but a record that contradicts itself is
+                             *   how the next reader gets it wrong.
+                             */
+                            onChange={(e) => {
+                                const accountNumber = e.target.value.replace(/\D/g, "").slice(0, 10);
+                                updateData({ accountNumber, hasBankAccount: accountNumber.length === 10 });
+                            }}
                             maxLength={10}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="10-digit account number"

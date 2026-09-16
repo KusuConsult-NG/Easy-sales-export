@@ -29,7 +29,7 @@ function ClickToPlayVideo({ videoId }: { videoId: string }) {
                 <iframe
                     className="absolute inset-0 w-full h-full"
                     src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
-                    title={`RH-WAVE 774 Program - ${WAVE_FULL_NAME}`}
+                    title={`RH-WAVE 774 - ${WAVE_PROGRAM_NAME}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                     referrerPolicy="strict-origin-when-cross-origin"

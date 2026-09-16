@@ -1,5 +1,5 @@
 import NextAuth from "next-auth";
-import { hasWaveAccess } from "@/lib/wave-access";
+import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
 import { buildCsp, generateNonce, NONCE_HEADER } from "@/lib/csp";
@@ -258,29 +258,37 @@ const authMiddleware = auth((req: any) => {
 
     // ── 1.2. Gender-based WAVE Program Restriction ─────────────────────
     if (isLoggedIn) {
-        const isMale = req.auth?.user?.gender?.toLowerCase() === "male";
-        const userCreatedAt = req.auth?.user?.createdAt;
         const userRoles = req.auth?.user?.roles || [];
         const serviceRegs = req.auth?.user?.serviceRegistrations || {};
         const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
-        const hasWaveRole = userRoles.includes("wave_participant");
-        
-        // Define the cutoff date: June 17, 2026
-        const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
-        const registeredOnOrAfterCutoff = !!userCreatedAt && new Date(userCreatedAt) >= CUTOFF_DATE;
-        const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
 
-        // Stale-safe check: also allow if serviceRegistrations.wave is approved/active/pending/reviewing.
-        //
-        // The status list moved to @/lib/wave-access so the API routes can ask
-        // the same question. /api/wave/training-sessions asked only for a
-        // session and handed every meeting link to any signed-in account.
-        const waveRegStatus = serviceRegs.wave?.status;
-        const hasWaveAccessNow = hasWaveAccess({ roles: userRoles, waveRegStatus });
-
-        // Strict enforcement: new male users (registered on/after June 17, 2026) are never allowed access.
-        // Legacy male users are allowed only if they have pre-existing WAVE access.
-        const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccessNow);
+        /*
+         *   #817 THE SEVENTH COPY, AND THE ONE THAT WAS ACTUALLY A GATE.
+         *
+         *   lib/wave-eligibility.ts exists because this rule had been written
+         *   four times and the copies had drifted. This block was a fifth, the
+         *   dashboard a sixth and /auth/get-started a seventh — each with its
+         *   own `CUTOFF_DATE` literal. All of them ask the one function now.
+         *
+         *   THIS ONE WAS THE STRICTER, AND IT WON. Its status list — through
+         *   hasWaveAccess — refuses a REJECTED wave registration, where the
+         *   shared rule accepted `status !== undefined`, i.e. any status at
+         *   all. So the rule moved toward THIS code rather than this code
+         *   toward the rule; see the note in wave-eligibility.
+         *
+         *   What changes here: a male platform admin or Academy Elite member is
+         *   no longer blocked from /wave pages, which is what every server call
+         *   site already allowed. The `!isAdmin` below stays as a second line.
+         *
+         *   Edge-safe: wave-eligibility imports only admin-permissions (already
+         *   imported here) and wave-access, neither of which does any I/O.
+         */
+        const isWaveBlocked = !checkWaveEligibility({
+            roles: userRoles,
+            gender: req.auth?.user?.gender,
+            createdAt: req.auth?.user?.createdAt,
+            serviceRegistrations: serviceRegs,
+        }).eligible;
 
         const normalizedHostname = hostname.replace(/^www\./, "");
         

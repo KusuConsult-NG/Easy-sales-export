@@ -49,6 +49,9 @@
 
 /** The date WAVE closed to new male participants. */
 import { isPlatformAdmin } from "@/lib/admin-permissions";
+//   Edge-safe: lib/wave-access has no imports and no I/O, which is what
+//   lets middleware.ts ask this same function.
+import { hasWaveAccess } from "@/lib/wave-access";
 
 export const WAVE_MALE_CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
 
@@ -110,8 +113,26 @@ export function checkWaveEligibility(userData: Record<string, any> | null | unde
         return { eligible: true };
     }
 
-    const hasWaveRole = roles.includes("wave_participant");
-    const hasWaveReg = userData.serviceRegistrations?.wave?.status !== undefined;
+    /*
+     *   #817 THE STATUS LIST IS lib/wave-access's, not "any status at all".
+     *
+     *   This read `serviceRegistrations?.wave?.status !== undefined`, which
+     *   admits a registration in ANY state — including `rejected`. middleware.ts
+     *   asked the stricter question all along, through hasWaveAccess, whose list
+     *   is approved / active / pending / under_review / revision_required.
+     *
+     *   So a male account created before the cutoff whose WAVE application had
+     *   been REJECTED was refused the pages by middleware and admitted by this
+     *   function — which four server call sites use. A gate refusing what the
+     *   action behind it allows is the arrangement this module's own header
+     *   calls the worst of the two, and it had reappeared one field along.
+     *
+     *   The STRICTER one is canonical, for the same reason the cutoff was: a
+     *   rejected application is not access, and this function is what the
+     *   server trusts.
+     */
+    const waveRegStatus = userData.serviceRegistrations?.wave?.status ?? null;
+    const inTheProgramme = hasWaveAccess({ roles, waveRegStatus });
 
     if (registeredOnOrAfterCutoff(userData.createdAt)) {
         // The cutoff wins over a pre-existing role, because an account created
@@ -123,7 +144,7 @@ export function checkWaveEligibility(userData: Record<string, any> | null | unde
         };
     }
 
-    if (!hasWaveRole && !hasWaveReg) {
+    if (!inTheProgramme) {
         return {
             eligible: false,
             reason: "WAVE program is exclusively for women entrepreneurs",

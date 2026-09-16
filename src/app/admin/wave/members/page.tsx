@@ -242,10 +242,46 @@ export default function AdminWaveMembersPage() {
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         <span className="text-xs text-slate-500">Live</span>
                     </div>
-                    {/* Stats badge */}
+                    {/*
+                      *   #815 ONE NUMBER WAS STANDING IN FOR TWO POPULATIONS.
+                      *
+                      *   The owner: "the cards are not returning the correct
+                      *   total numbers like WAVE we have over 15k application
+                      *   but i saw less than 1k application and less than 500
+                      *   approved, why?"
+                      *
+                      *   Both numbers are right and they count DIFFERENT THINGS:
+                      *
+                      *       ~15,128  accounts holding the wave_participant role
+                      *          ~474  approved WAVE applications on record
+                      *
+                      *   The role was auto-assigned by an earlier registration
+                      *   flow and by the legacy import, so most role holders
+                      *   never filled in an application.
+                      *
+                      *   #786 MEASURED ALL OF THIS AND RETURNED BOTH FIGURES —
+                      *   `roleHolderCount` and `approvedApplicationCount`, with
+                      *   `countsDifferentPopulations: true` — and said in as
+                      *   many words that they were "named so a screen can say
+                      *   '15,128 members, 474 of them from an application'".
+                      *
+                      *   No screen ever did. The server half shipped and the UI
+                      *   half did not, so the admin saw one unlabelled total and
+                      *   had no way to tell which population it counted. That is
+                      *   the whole of this finding: the answer was already in the
+                      *   payload and nothing rendered it.
+                      */}
                     <div className="bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
                         <span className="text-slate-500 block text-xs uppercase font-bold tracking-wider mb-0.5">Total Members</span>
-                        <span className="text-xl font-black text-slate-900">{(meta as any)?.totalCount ?? members.length}</span>
+                        <span className="text-xl font-black text-slate-900">
+                            {((meta as any)?.roleHolderCount ?? (meta as any)?.totalCount ?? members.length).toLocaleString()}
+                        </span>
+                        {typeof (meta as any)?.approvedApplicationCount === "number"
+                            && (meta as any).approvedApplicationCount > 0 && (
+                            <span className="block text-[11px] text-slate-500 font-medium mt-0.5">
+                                {(meta as any).approvedApplicationCount.toLocaleString()} from an approved application
+                            </span>
+                        )}
                     </div>
                     {/* Add Legacy Member */}
                     <button

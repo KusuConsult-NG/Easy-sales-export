@@ -126,6 +126,60 @@ describe('#806 — the review shows everything the form asked for', () => {
         expect(expression).toContain('Not provided');
     });
 
+    it('#818 NO FIELD IS SHOWN ONLY BEHIND A FLAG NOTHING EVER SETS', () => {
+        /*
+         *   #818 THE GAP IN THIS SUITE, FOUND BY THE OWNER RATHER THAN BY ME.
+         *
+         *   Everything above derives which fields the review REFERENCES. The
+         *   bank details were referenced and still invisible:
+         *
+         *       {data.hasBankAccount
+         *           ? `${data.bankName} - ${data.accountNumber}`
+         *           : "No bank account"}
+         *
+         *   `hasBankAccount` is initialised false in WaveApplicationClient and
+         *   written by NOTHING. So the condition was false for every applicant
+         *   and the review told a woman who had just been REQUIRED to enter ten
+         *   digits that she had no bank account.
+         *
+         *   Presence of `data.accountNumber` in the file is what the sweep
+         *   above measures, and it was present — inside a branch that never
+         *   ran. A reference is not a render. That is the #741 trap in its
+         *   original shape, and it survived a suite written specifically to
+         *   catch this class.
+         *
+         *   THE DURABLE HALF: every `data.X ? … : …` gate in the review must be
+         *   a field something actually writes. A flag no step sets can only
+         *   ever hide what it guards.
+         */
+        const src = read(REVIEW);
+        const stepSrc = STEP_FILES.map(read).join('\n');
+
+        //   Fields used as the CONDITION of a ternary or an && in the review.
+        const gates = new Set([
+            ...[...src.matchAll(/data\.(\w+)\s*\?/g)].map(m => m[1]),
+            ...[...src.matchAll(/data\.(\w+)\s*&&/g)].map(m => m[1]),
+        ]);
+
+        expect(gates.size).toBeGreaterThan(0);
+
+        //   A gate is legitimate only if some step writes that field.
+        const unwritable = [...gates].filter(field => {
+            const written = new RegExp(`\\b${field}\\s*:`).test(stepSrc);
+            return !written;
+        });
+
+        expect({ gatedOnAFieldNothingWrites: unwritable }).toEqual({ gatedOnAFieldNothingWrites: [] });
+    });
+
+    it('AND THE BANK DETAILS SPECIFICALLY, which is what was hidden', () => {
+        //   The regression case, stated plainly beside the general rule.
+        const src = read(REVIEW);
+        expect(src).not.toMatch(/data\.hasBankAccount\s*\?/);
+        expect(src).toMatch(/data\.accountNumber\s*\|\|/);
+        expect(src).toMatch(/data\.bankName\s*\|\|/);
+    });
+
     it('CONTROL: the review still shows the fields it always did', () => {
         //   Or a change here could "pass" by dropping the comparison instead of
         //   closing the gap.

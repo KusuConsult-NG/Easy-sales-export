@@ -196,6 +196,11 @@ describe('#651 — and the gate they share is one gate', () => {
             //   real PostgREST: the whole question is what `raw_data->field`
             //   returns over the wire.
             'select-narrows-the-read.test.ts',
+            //   #814 — the admin name search runs through lib/supabase-db, so
+            //   like its five neighbours it needs PostgREST rather than plain
+            //   Postgres. The whole question it asks is what a prefix range
+            //   over a nested jsonb field returns over the wire.
+            'the-name-on-the-row-was-not-the-name-searched.test.ts',
             'the-role-scan-reads-the-whole-table-without-the-index.test.ts',
         ]);
     });
@@ -215,7 +220,8 @@ describe('#651 — and the gate they share is one gate', () => {
         expect(harness).toContain('export async function assertRestReachable');
         const wired = PG_SUITES.filter((f) =>
             read(`${PG_DIR}/${f}`).includes('beforeAll(assertRestReachable)'));
-        expect(wired.length).toBe(5);
+        //   #814 raised this from five to six, on the same test as every time.
+        expect(wired.length).toBe(6);
     });
 });
 

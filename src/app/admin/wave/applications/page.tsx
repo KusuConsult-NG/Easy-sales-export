@@ -455,6 +455,50 @@ export default function AdminWaveApplicationsPage() {
                 </div>
             )}
 
+            {/*
+              *   #815 THE TWO POPULATIONS, SAID ON THE SCREEN.
+              *
+              *   The owner: "the cards are not returning the correct total
+              *   numbers like WAVE we have over 15k application but i saw less
+              *   than 1k application and less than 500 approved, why?"
+              *
+              *   Both figures are correct and they count different things —
+              *   accounts holding the wave_participant role, against WAVE
+              *   applications actually on record. The role was auto-assigned by
+              *   an earlier registration flow and by the legacy import, so most
+              *   role holders never filled one in.
+              *
+              *   #786 measured that, returned BOTH numbers and set
+              *   `countsDifferentPopulations`, explicitly so a screen could say
+              *   which was which. No screen did, so the admin was left with one
+              *   unlabelled total and a reasonable conclusion that it was wrong.
+              *
+              *   Nothing is recounted here. The numbers were always in the
+              *   payload; this renders them.
+              */}
+            {!isLoading && !error && (meta as any)?.countsDifferentPopulations
+                && typeof (meta as any)?.approvedApplicationCount === "number" && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3 mb-6">
+                    <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-900">
+                        <p>
+                            <strong>
+                                {((meta as any)?.roleHolderCount ?? 0).toLocaleString()} accounts carry
+                                WAVE membership, and{" "}
+                                {((meta as any)?.approvedApplicationCount ?? 0).toLocaleString()} of them
+                                have an approved application on record.
+                            </strong>
+                        </p>
+                        <p className="mt-1">
+                            These are two different counts, not a mismatch. WAVE membership was
+                            granted automatically at registration by an earlier sign-up flow and by
+                            the legacy member import, so most of these accounts never submitted an
+                            application. Rows without one are marked <em>role only</em>.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Loading State */}
             {isLoading && (
                 <div className="flex items-center justify-center py-12">

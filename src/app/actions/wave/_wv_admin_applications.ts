@@ -961,10 +961,49 @@ async function _getStandardWaveApplicationsAction(options: {
         }
 
         if (options.search) {
-            const { searchUserIdsByQuery, searchWasTruncated } = await import("@/lib/admin-search-helper");
-            const matchingUserIds = await searchUserIdsByQuery(options.search);
-            searchTruncated = searchWasTruncated(matchingUserIds);
-            if (matchingUserIds.length === 0) {
+            /*
+             *   #814 THE NAME ON THE ROW IS SEARCHED, not just the account's.
+             *
+             *   The owner: "AISHAT Yahaya ABUBAKAR and others are registered
+             *   with pending status and when searched they return user not
+             *   found."
+             *
+             *   This resolved the query against the USERS collection and then
+             *   fetched applications by `userId in (...)`. But the table prints
+             *   the name off the APPLICATION —
+             *
+             *       `${app.surname} ${app.firstName}`
+             *
+             *   — and those are two different records. An applicant types her
+             *   full legal name on the form; her account may carry a shorter
+             *   one, a different spelling, or none of the three fields the user
+             *   search reads. So an admin read a name off the row, typed it in
+             *   the box directly above that row, and was told no such person
+             *   existed WHILE LOOKING AT HER.
+             *
+             *   And the early return made it final: no user matched, so
+             *   WAVE_APPLICATIONS was never queried at all.
+             *
+             *   BOTH ARE SEARCHED NOW AND THE RESULTS UNIONED — by account and
+             *   by what she wrote on the form.
+             */
+            const {
+                searchUserIdsByQuery, searchWasTruncated, searchDocIdsByNameFields,
+            } = await import("@/lib/admin-search-helper");
+
+            const [matchingUserIds, matchingAppIds] = await Promise.all([
+                searchUserIdsByQuery(options.search),
+                searchDocIdsByNameFields(
+                    COLLECTIONS.WAVE_APPLICATIONS,
+                    //   The application's own identity fields, exactly the ones
+                    //   the table builds its label from.
+                    ["surname", "firstName", "otherNames", "fullName"],
+                    options.search,
+                ),
+            ]);
+            searchTruncated = searchWasTruncated(matchingUserIds) || searchWasTruncated(matchingAppIds);
+
+            if (matchingUserIds.length === 0 && matchingAppIds.length === 0) {
                 return {
                     error: null, success: true as const,
                     data: [],
@@ -978,11 +1017,30 @@ async function _getStandardWaveApplicationsAction(options: {
                 };
             }
 
-            const querySnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("userId", "in", matchingUserIds)
-                .get();
+            /*
+             *   Two reads, unioned by document id. The `in` clauses are only
+             *   issued when they have something to look for — an empty `in` is
+             *   an illegal query, and it is also the state this finding was
+             *   about.
+             */
+            const [byUser, byName] = await Promise.all([
+                matchingUserIds.length > 0
+                    ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                        .where("userId", "in", matchingUserIds).get()
+                    : null,
+                matchingAppIds.length > 0
+                    ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                        .where(FieldPath.documentId(), "in", matchingAppIds).get()
+                    : null,
+            ]);
 
-            applications = serializeDocs(querySnap.docs);
+            const byId = new Map<string, any>();
+            for (const snap of [byUser, byName]) {
+                if (!snap) continue;
+                for (const doc of snap.docs) byId.set(doc.id, doc);
+            }
+
+            applications = serializeDocs(Array.from(byId.values()));
             if (options.status && options.status !== "all") {
                 applications = applications.filter(app => app.status === options.status);
             }

@@ -9,6 +9,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { EXPORT_WINDOW_INVESTABLE_STATUSES } from "@/lib/export-window-status";
 import { checkCourseAccess } from "@/lib/academy-plan";
+import { purchasedCourseIds } from "@/lib/academy-purchased-courses";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { normalisePhone } from "@/lib/phone";
 import { genderOutcome } from "@/lib/gender";
@@ -1375,6 +1376,33 @@ export async function runForensicScanAction(): Promise<
                 snap.docs.forEach((d: any) => learnerPlan.set(d.id, d.data()?.serviceRegistrations?.academy?.plan));
             }
 
+            /*
+             *   #812 A LEARNER WHO BOUGHT THE COURSE IS NOT A FREE RIDER.
+             *
+             *   This check asked checkCourseAccess(plan, tier) — two arguments
+             *   to a three-argument rule — so every learner who bought a single
+             *   course outright (#378) instead of holding a plan that covers
+             *   its tier was listed in an admin forensics report as having
+             *   access they had not paid for.
+             *
+             *   They had paid. The report accused the customers.
+             *
+             *   Grouped by learner rather than read per enrolment: the scan is
+             *   already bounded by SCAN_CEILING, and one learner usually holds
+             *   several of these rows.
+             */
+            const coursesByLearner = new Map<string, string[]>();
+            for (const doc of enrollments.docs) {
+                const { userId, courseId } = doc.data() as any;
+                if (!userId || !courseId) continue;
+                coursesByLearner.set(userId, [...(coursesByLearner.get(userId) ?? []), courseId]);
+            }
+
+            const purchasedByLearner = new Map<string, Set<string>>();
+            await Promise.all([...coursesByLearner].map(async ([learnerId, ids]) => {
+                purchasedByLearner.set(learnerId, await purchasedCourseIds(learnerId, ids));
+            }));
+
             for (const doc of enrollments.docs) {
                 const { userId, courseId } = doc.data() as any;
                 const tier = courseTier.get(courseId);
@@ -1388,7 +1416,9 @@ export async function runForensicScanAction(): Promise<
                     continue;
                 }
 
-                if (!checkCourseAccess(plan, tier)) {
+                //   All three arguments. The third is the purchase that makes
+                //   this enrolment legitimate without a plan behind it.
+                if (!checkCourseAccess(plan, tier, purchasedByLearner.get(userId)?.has(courseId))) {
                     freeRideIds.push(`${doc.id} (plan: ${String(plan) || "none"}, course tier: ${String(tier)})`);
                 }
             }
