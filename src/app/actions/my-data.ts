@@ -651,6 +651,46 @@ const APPLICATION_QUERIES: Record<
         statusField: "status",
         fromServiceRegistrations: "farmNation",
     },
+    /*
+     *   #799 EXPORT WAS MISSING, AND #415'S OWN HEADER NAMES IT.
+     *
+     *   That header says the defect it fixes "DECIDES A REDIRECT. All FIVE
+     *   pending screens (wave, academy, export, marketplace, farm-nation)
+     *   leave the 'Application Under Review' page on
+     *   `applicationStatus === "approved"`."
+     *
+     *   Five screens named. FOUR entries in this table. /export/onboarding/pending
+     *   asks for `export_onboarding_applications:status`, which matched nothing,
+     *   so every poll fell to the `!spec` branch and returned UNKNOWN.
+     *
+     *   WHAT THAT COSTS, TRACED RATHER THAN GUESSED:
+     *
+     *     getMyApplicationStatus  → UNKNOWN (and logs "unlisted lookup")
+     *     usePendingApplicationStatus → sets checkFailed and RETURNS EARLY,
+     *                                   deliberately, so a non-answer cannot
+     *                                   overwrite the last real status
+     *     `status` therefore never leaves its initial "pending"
+     *     the effect that redirects on "approved" NEVER FIRES
+     *
+     *   So an export applicant who HAS BEEN APPROVED sits on "Application
+     *   Under Review" forever. Not intermittently — the lookup can never
+     *   succeed, so it is every approved exporter, on every visit. The warning
+     *   has been printing on every end-to-end run the whole time.
+     *
+     *   #415 built the right mechanism and wired it to four of the five doors
+     *   it names. This audit's most repeated finding, one more time.
+     *
+     *   READ FROM serviceRegistrations, like farm-nation above, because that
+     *   is the field EVERY transition writes: pending_approval on submit,
+     *   approved on admin approval, rejected, and revision_required — which
+     *   this page also redirects on. The application row is written too, but
+     *   not on every one of those paths.
+     */
+    [`${COLLECTIONS.EXPORT_APPLICATIONS}:status`]: {
+        collection: COLLECTIONS.USERS,
+        statusField: "status",
+        fromServiceRegistrations: "export",
+    },
 };
 
 export interface MyApplicationStatus {

@@ -33,6 +33,26 @@ export default function ExportOnboardingPendingPage() {
         } else if (applicationStatus === "revision_required") {
             // Redirect back to the onboarding form — it will pre-populate
             router.replace("/export/onboarding");
+        } else if (applicationStatus === "rejected") {
+            /*
+             *   #800 A REJECTED EXPORTER WAS TOLD THEY WERE STILL UNDER REVIEW.
+             *
+             *   `serviceRegistrations.export.status` is set to "rejected" by
+             *   the admin refusal path, and this screen handled approved and
+             *   revision_required and nothing else — so a refused applicant
+             *   read "Application Under Review … currently being reviewed by
+             *   our team", indefinitely.
+             *
+             *   /export/onboarding/rejected HAS EXISTED THE WHOLE TIME. Its
+             *   own header says "Shown when user's application is rejected",
+             *   and nothing in the codebase ever sent anyone to it: a page
+             *   written for this exact moment, unreachable.
+             *
+             *   Found alongside #799, and only visible because of it — while
+             *   the lookup was unlisted the status never updated at all, so
+             *   every branch here was equally dead.
+             */
+            router.replace("/export/onboarding/rejected");
         }
     }, [applicationStatus, router]);
 

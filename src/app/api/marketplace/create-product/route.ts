@@ -65,7 +65,47 @@ export async function POST(request: NextRequest) {
         const locationLga = (formData.get("lga") || formData.get("locationLga") || userData?.lga || "Unknown") as string;
         const locationNearestMarket = (formData.get("nearestMarket") || formData.get("locationNearestMarket") || "Unknown") as string;
 
-        if (!name || !category || !description || !unit || !minOrder || !stockQuantity || !retailPrice) {
+        /*
+         *   #798 "MISSING REQUIRED FIELDS" WAS THE WRONG THING TO SAY.
+         *
+         *   Found by the end-to-end spec added with this finding, which types a
+         *   retail price of 0 and expected the pricing guard's sentence. The
+         *   write IS refused — nothing reaches the database, which was the
+         *   property that mattered and it holds — but the seller is told she
+         *   left a field blank when she filled every one of them.
+         *
+         *   `!retailPrice` is the same truthiness-is-not-a-range-check mistake
+         *   the note below this block describes, caught one step earlier: it
+         *   rejects exactly 0 and NaN, so a price of 0 never reaches
+         *   checkProductPricing and never gets named. She retypes 0, gets the
+         *   same message, and has no way to learn what is actually wrong.
+         *
+         *   PRESENCE here, RANGE below. Only the two fields whose zero is
+         *   unambiguously an error are moved:
+         *
+         *     retailPrice  0 is a listing nobody can buy — checkout refuses a
+         *                  non-positive stored price (#794).
+         *     minOrder     0 is multiplied by 5 and 10 to derive the bulk and
+         *                  export thresholds, so it propagates into three tiers.
+         *
+         *   stockQuantity is DELIBERATELY LEFT ON THE TRUTHINESS CHECK. The
+         *   guard passes it `zeroMeansAbsent: true`, so moving it here would
+         *   newly ADMIT a product with zero stock — an unbuyable listing, the
+         *   exact thing #794 exists to stop. Fixing a message is not a reason to
+         *   widen what the door accepts, and its message stays imperfect rather
+         *   than trading that for a behaviour change nobody asked for.
+         *
+         *   THE ACCEPT/REJECT SET IS UNCHANGED. Every input refused before is
+         *   still refused; two of them now say why.
+         */
+        const missingNumber = (raw: FormDataEntryValue | null, parsed: number) =>
+            raw === null || String(raw).trim() === "" || Number.isNaN(parsed);
+
+        if (
+            !name || !category || !description || !unit || !stockQuantity
+            || missingNumber(formData.get("minOrder"), minOrder)
+            || missingNumber(formData.get("retailPrice"), retailPrice)
+        ) {
             return NextResponse.json(
                 { success: false, message: "Missing required fields" },
                 { status: 400 }

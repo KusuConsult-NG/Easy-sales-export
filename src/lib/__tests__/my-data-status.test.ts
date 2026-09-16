@@ -88,6 +88,45 @@ describe("getMyApplicationStatus", () => {
         expect(global.mockFirestoreCollection).toHaveBeenCalledWith(COLLECTIONS.USERS);
     });
 
+    it("#799 ANSWERS THE EXPORT LOOKUP, which returned 'unknown' to every caller", async () => {
+        /*
+         *   EXECUTED, because the sibling suite for this finding asserts the
+         *   allowlist by reading my-data.ts — and an entry that is present but
+         *   wired to the wrong field would satisfy that and still leave an
+         *   approved exporter waiting. This calls the function.
+         *
+         *   /export/onboarding/pending passes COLLECTIONS.EXPORT_APPLICATIONS
+         *   with statusField "status". That key was absent, so the action took
+         *   its `!spec` branch, returned "unknown", and the hook — correctly —
+         *   refused to let a non-answer overwrite the status. The screen then
+         *   never saw "approved" and never redirected.
+         */
+        global.mockFirestoreGet.mockResolvedValue(
+            snapWith({ serviceRegistrations: { export: { status: "approved" } } })
+        );
+
+        const result = await getMyApplicationStatus(COLLECTIONS.EXPORT_APPLICATIONS, "status");
+
+        expect(result.status).toBe("approved");
+        //   Off the USER record, like farm-nation above: that is the field every
+        //   export transition writes, including revision_required, which this
+        //   screen also redirects on.
+        expect(global.mockFirestoreCollection).toHaveBeenCalledWith(COLLECTIONS.USERS);
+    });
+
+    it("#799 and it carries revision_required through, not just approved", async () => {
+        //   The pending page redirects on BOTH. A fix that only carried
+        //   "approved" would leave a member told to correct her application
+        //   sitting on the waiting screen — #795's finding, one module over.
+        global.mockFirestoreGet.mockResolvedValue(
+            snapWith({ serviceRegistrations: { export: { status: "revision_required" } } })
+        );
+
+        const result = await getMyApplicationStatus(COLLECTIONS.EXPORT_APPLICATIONS, "status");
+
+        expect(result.status).toBe("revision_required");
+    });
+
     it("reports UNKNOWN rather than pending when the query fails", async () => {
         /**
          *   #415. This test used to assert "pending", and that was the defect:

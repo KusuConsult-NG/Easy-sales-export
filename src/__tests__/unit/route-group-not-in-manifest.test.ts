@@ -259,8 +259,23 @@ describe('member and admin pages sitting under a public prefix', () => {
     });
 
     it('and their server actions already checked the caller, so this is the navigation half', () => {
-        // Vacuity guard on "not a data leak": the data half was already right.
-        expect(source('src/app/actions/orders.ts')).toContain('orderData?.buyerId !== session.user.id');
+        /*
+         *   Vacuity guard on "not a data leak": the data half was already right.
+         *
+         *   #801 SPELLED AS A PROPERTY, NOT A LITERAL. This pinned the exact
+         *   text `orderData?.buyerId !== session.user.id`, so it failed when
+         *   that check was inverted to `=== ` with an else-branch admitting an
+         *   administrator who holds `finance:resolve_disputes` — a change that
+         *   does not weaken the guard at all. The admin dispute screen could
+         *   never read its order without it.
+         *
+         *   What this test is for is that the action NARROWS BY CALLER rather
+         *   than serving any signed-in account, and that is what it now asserts.
+         *   Deleting the guard still fails here; rewording it does not.
+         */
+        const orders = source('src/app/actions/orders.ts');
+        expect(orders).toMatch(/orderData\?\.buyerId\s*[!=]==\s*session\.user\.id/);
+        expect(orders).toContain('Unauthorized');
         expect(source('src/app/actions/land-actions.ts')).toContain('return { success: false, error: "Unauthorized", data: null };');
         expect(source('src/app/api/marketplace/create-product/route.ts'))
             .toContain('userData.sellerVerificationStatus !== "approved"');

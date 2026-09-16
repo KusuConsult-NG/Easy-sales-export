@@ -191,11 +191,26 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                 } else {
                     setContextFailed(true);
                 }
+                /*
+                 *   AND THE ESCROW LOOKUP IS **NOT** CONTEXT-CRITICAL, which
+                 *   the first version of #797 got wrong and CI caught.
+                 *
+                 *   This dispute NAMES an order. It does not name an escrow —
+                 *   the escrow is looked up BY orderId, and a dispute on an
+                 *   order that never reached escrow legitimately has none. So
+                 *   `success: false` here is an ABSENCE, not a failed read, and
+                 *   treating the two as one withheld the Resolve button from
+                 *   every dispute without an escrow row.
+                 *
+                 *   That is this audit's most repeated finding — a refusal and
+                 *   an empty result collapsed into one branch — committed by
+                 *   the fix for it. The guard's own comment always said "order
+                 *   OR escrowData must be set (but NOT NECESSARILY BOTH)";
+                 *   requiring both is what broke it.
+                 */
                 const escrowResult = await getEscrowTransactionByOrderIdAction(d.orderId);
                 if (escrowResult.success && escrowResult.data) {
                     setEscrowData(escrowResult.data);
-                } else {
-                    setContextFailed(true);
                 }
             } else if (d.escrowId) {
                 // ── Escrow-origin dispute (standalone escrow) ─────────────

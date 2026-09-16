@@ -213,6 +213,25 @@ async function main() {
         .in('user_id', personaIds);
     if (clrCoop) fail(`clearing cooperative_loans: ${clrCoop.message}`);
 
+    /*
+     *   #798 THE SAME RULE FOR DISPUTES, and it is what the dispute spec needs.
+     *
+     *   "User can file a dispute" files one, which moves its order to
+     *   "disputed" — and canDispute refuses a disputed order. So that spec
+     *   would pass once and be blocked forever after, exactly the trap the
+     *   note above describes for loans.
+     *
+     *   Both halves are needed: the dispute ROWS go here, and
+     *   e2e-delivered-order is re-upserted below at status "delivered", which
+     *   puts the order back in a state a dispute can be raised against.
+     */
+    const { error: clrDisputes } = await admin
+        .from('document_collections')
+        .delete()
+        .eq('collection_name', 'disputes')
+        .in('raw_data->>buyerId', personaIds);
+    if (clrDisputes) fail(`clearing disputes: ${clrDisputes.message}`);
+
     // Academy progress, for exactly the same reason as the loans above.
     //
     // platform-flows.spec.ts enrols a learner and completes a lesson. A lesson
@@ -487,6 +506,45 @@ async function main() {
     }, { onConflict: 'id' });
     if (ordErr) fail(`marketplace_orders: ${ordErr.message}`);
 
+    /*
+     *   #798 A DELIVERED ORDER THE BUYER CAN RAISE A DISPUTE AGAINST.
+     *
+     *   marketplace-critical-flows' dispute spec looked for an order card
+     *   reading "ORD-E2E-DELIVERED" and skipped when it found none. That
+     *   string appears NOWHERE ELSE IN THE REPOSITORY — no seed, no fixture,
+     *   no migration ever created it — so the lookup could never succeed and
+     *   the spec had skipped every run since it was written, printing
+     *   "No active ORD-E2E-DELIVERED order found on production" and passing.
+     *
+     *   A fixture that does not exist is not a tolerable absence to skip over;
+     *   it is the test not existing. This is the missing one, and the spec now
+     *   addresses it by id rather than by scraping a card for a number the
+     *   screen may not even print.
+     *
+     *   "delivered" because canDispute admits processing | shipped | delivered,
+     *   and delivered is the state a real complaint arrives in.
+     */
+    const { error: delivErr } = await admin.from('marketplace_orders').upsert({
+        id: 'e2e-delivered-order',
+        user_id: ids.buyer,
+        status: 'delivered',
+        total_amount: 3000,
+        raw_data: {
+            id: 'e2e-delivered-order',
+            buyerId: ids.buyer, sellerId: ids.seller,
+            productId: 'e2e-product-1', productName: 'E2E Test Product 1',
+            items: [{
+                productId: 'e2e-product-1', productName: 'E2E Test Product 1',
+                sellerId: ids.seller, quantity: 3, price: 1000, subtotal: 3000,
+            }],
+            quantity: 3, totalAmount: 3000, currency: 'NGN',
+            status: 'delivered', paymentStatus: 'paid',
+            reviewSubmitted: false,
+            createdAt: now, updatedAt: now,
+        },
+    }, { onConflict: 'id' });
+    if (delivErr) fail(`marketplace_orders/e2e-delivered-order: ${delivErr.message}`);
+
     await doc('disputes', 'e2e-dispute-1', {
         orderId: 'e2e-disputed-order',
         buyerId: ids.buyer, sellerId: ids.seller,
@@ -511,6 +569,38 @@ async function main() {
         buyerId: ids.buyer, sellerId: ids.seller,
         amount: 2000, currency: 'NGN',
         status: 'disputed',
+        createdAt: now, updatedAt: now,
+    });
+
+    /*
+     *   #798 AND e2e-delivered-order NEEDS ONE TOO — the note above, applied
+     *   to the order this finding added.
+     *
+     *   The dispute spec files a real dispute against e2e-delivered-order, and
+     *   the admin spec then resolves whichever dispute is at the top of the
+     *   queue — which is now that one. Without an escrow row,
+     *   updateDisputeStatusAction refuses with "Associated escrow transaction
+     *   not found for this dispute", so the resolution failed at the last step
+     *   after every earlier step had worked.
+     *
+     *   The SERVER SAID SO and I nearly missed it:
+     *
+     *       [WARN] [createDispute] Dispute … filed on order e2e-delivered-order
+     *       but no funded escrow was frozen. Verify the auto-release cron
+     *       cannot pay this out.
+     *
+     *   A fixture that does not match the real write shape makes working code
+     *   look broken — the same lesson the products fixture above records, and
+     *   the reason this one is `funded` rather than `disputed`: a real order
+     *   reaches a dispute from a FUNDED escrow, and letting createDispute
+     *   perform the freeze itself is what exercises that transition instead of
+     *   skipping past it.
+     */
+    await doc('escrow_transactions', 'e2e-escrow-delivered', {
+        orderId: 'e2e-delivered-order',
+        buyerId: ids.buyer, sellerId: ids.seller,
+        amount: 3000, currency: 'NGN',
+        status: 'funded',
         createdAt: now, updatedAt: now,
     });
 

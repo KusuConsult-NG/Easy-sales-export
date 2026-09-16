@@ -49,7 +49,6 @@
  * ── MUTATION LOG ────────────────────────────────────────────────────────────
  *
  *     the order read's else removed (the original defect)              KILLED
- *     the order-escrow read's else removed                             KILLED
  *     the standalone-escrow read's else removed                        KILLED
  *     contextFailed set but the Resolve button still offered           KILLED
  *     the warning panel loses its retry                                KILLED
@@ -65,6 +64,23 @@
  *   without the figures" left the suite green. An administrator told that
  *   something failed, but not that the ₦0 above is a default rather than the
  *   record, is barely better off than one told nothing.
+ *
+ * ── AND THEN #797 ITSELF SHIPPED THE DEFECT IT IS ABOUT ─────────────────────
+ *
+ *   The first version required BOTH the order AND an escrow row, so every
+ *   dispute WITHOUT an escrow transaction lost its Resolve button. CI found it:
+ *   `Admin can resolve dispute` timed out on main waiting for a control that
+ *   was no longer drawn.
+ *
+ *   These actions report "no row" as `success: false`, and my mocks answered
+ *   the same `fails()` for both — so neither the code nor this suite could tell
+ *   an ABSENCE from a FAILURE. That collapse is the finding this file is named
+ *   for, and I made it while fixing it.
+ *
+ *   The rule, which the guard's comment always stated: a dispute NAMES an
+ *   order, or NAMES an escrow. Only the named record failing to load is
+ *   context-critical. The escrow looked up BY orderId may legitimately not
+ *   exist, and its absence must not withhold the control that moves money.
  *
  * ── AND THE INSTRUMENT WAS WRONG TWICE BEFORE IT MEASURED ANYTHING ──────────
  *
@@ -229,14 +245,40 @@ describe('#797 — an escrow decision is not offered against a blank screen', ()
         expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
     });
 
-    it('A FAILED ESCROW READ counts too, even when the order loaded', async () => {
-        //   The escrow is the record the money hangs off. An order that loaded
-        //   does not make up for it.
+    it('CONTROL: NO ESCROW ROW for an order-origin dispute is still resolvable', async () => {
+        /*
+         *   THE CASE THE FIRST VERSION OF THIS SUITE DID NOT HAVE, AND CI DID.
+         *
+         *   #797 shipped requiring BOTH the order and an escrow row, and
+         *   `Admin can resolve dispute` in e2e/platform-flows.spec.ts timed out
+         *   on main waiting for a Resolve button that was no longer drawn. The
+         *   seeded dispute names an order and has no escrow transaction — which
+         *   is a legitimate shape, not a broken read.
+         *
+         *   My mocks answered `fails()` for "no escrow", so the suite could not
+         *   tell an ABSENCE from a FAILURE — and neither could the code. I wrote
+         *   this finding about exactly that collapse and then made it.
+         *
+         *   A dispute NAMES an order; it does not name an escrow. Absence here
+         *   must not withhold the control that moves the money.
+         */
+        escrowByOrderAnswer = { success: true, data: null };
+        renderPage();
+
+        await waitFor(() => expect(screen.getByRole('button', { name: RESOLVE })).toBeTruthy());
+        expect(screen.queryAllByText(WARNING)).toHaveLength(0);
+    });
+
+    it('CONTROL: and a REFUSED escrow lookup does not withhold it either', async () => {
+        //   The same point through the other door: these actions report "no
+        //   row" as success:false, so a refusal on a lookup the dispute did not
+        //   name is indistinguishable from an absence and must be treated as
+        //   one. The ORDER read below is the one that is allowed to block.
         escrowByOrderAnswer = fails();
         renderPage();
 
-        await waitFor(() => expect(screen.getByText(WARNING)).toBeTruthy());
-        expect(screen.queryAllByRole('button', { name: RESOLVE })).toHaveLength(0);
+        await waitFor(() => expect(screen.getByRole('button', { name: RESOLVE })).toBeTruthy());
+        expect(screen.queryAllByText(WARNING)).toHaveLength(0);
     });
 
     it('A STANDALONE ESCROW DISPUTE is guarded on its own read', async () => {

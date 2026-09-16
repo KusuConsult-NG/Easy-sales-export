@@ -292,7 +292,44 @@ async function _getOrderByIdAction(orderId: string) { let sessionResult;
 
         const orderData = orderDoc.data();
 
-        if (orderData?.buyerId !== session.user.id) { return { success: false as const, error: "Unauthorized", data: null };
+        /*
+         *   #801 THE ADMIN DISPUTE SCREEN HAS NEVER BEEN ABLE TO READ AN ORDER.
+         *
+         *   This check admitted the BUYER and nobody else, and
+         *   /admin/marketplace/disputes/[id] calls it — as an administrator.
+         *   `orderData.buyerId !== admin.id` is true every single time, so the
+         *   read returned "Unauthorized" on every visit and the Order
+         *   Information panel has always rendered EMPTY, with the dispute's
+         *   context amount falling back to ₦0.
+         *
+         *   Not a rare failed read. Every dispute, every admin, always.
+         *
+         *   FOUND BY #797, WHICH I FIRST READ AS MY OWN REGRESSION. That
+         *   finding made the screen withhold the Resolve control when its
+         *   context had not loaded; CI then failed on `Admin can resolve
+         *   dispute`, and the honest reading was not "the guard is too strict"
+         *   but "the guard is correct and this screen was ALWAYS blind". The
+         *   old behaviour was to offer a full-width Resolve Dispute button
+         *   over two empty panels.
+         *
+         *   THE PERMISSION IS THE ONE THE WRITE ALREADY REQUIRES.
+         *   updateDisputeStatusAction — the door that actually moves the
+         *   escrow — gates on `finance:resolve_disputes`, held by super_admin
+         *   and admin and nobody else. Asking for the same one here means this
+         *   read is never wider than the decision it exists to inform, and
+         *   nobody gains sight of an order who could not already refund or
+         *   release it. Deliberately NOT isAdmin(), which would also admit
+         *   moderator, support and six module admins to every buyer's order.
+         */
+        const isBuyer = orderData?.buyerId === session.user.id;
+        if (!isBuyer) {
+            const { hasAdminPermission } = await import("@/lib/admin-permissions");
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const callerRoles = userDoc.data()?.roles || [];
+
+            if (!hasAdminPermission(callerRoles, "finance:resolve_disputes")) {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
         const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)

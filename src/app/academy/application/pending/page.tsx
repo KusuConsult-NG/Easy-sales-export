@@ -30,8 +30,23 @@ export default function AcademyPendingPage() {
     useEffect(() => {
         if (applicationStatus === "approved") {
             router.replace("/academy/dashboard");
-        } else if (applicationStatus === "revision_required") {
-            // Redirect back to the application form — it will pre-populate
+        } else if (applicationStatus === "revision_required" || applicationStatus === "rejected") {
+            /*
+             *   #800 AND "rejected" BELONGS HERE TOO.
+             *
+             *   _rejectAcademyApplicationAction sets this status and emails the
+             *   applicant a list headed "What You Can Do" whose last item is
+             *   "Re-apply after making necessary improvements" — and an earlier
+             *   finding did the work to make re-applying actually possible.
+             *
+             *   This screen handled approved and revision_required only, so the
+             *   learner that email invites back was left reading "Application
+             *   Under Review" instead, with no way to act on it.
+             *
+             *   Same destination as revision_required, which is what
+             *   farm-nation's pending screen already does for both: the form is
+             *   where re-applying happens.
+             */
             router.replace("/academy/application");
         }
     }, [applicationStatus, router]);
