@@ -389,3 +389,111 @@ describe('#346 — the resolver fails closed, every way it can fail', () => {
         expect(src).toContain('encodeURIComponent(String(bankCode))');
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#834 — a mistyped account number is not a system error', () => {
+    /**
+     *   From the owner's production log, twice in one window:
+     *
+     *       [ERROR] Paystack bank resolve error {"status":422,
+     *        "message":"Could not resolve account name.
+     *         Check parameters or try again."}
+     *
+     *   Every guard in the resolver has already passed by then: the number is
+     *   exactly ten digits, the bank code three to six, the key present. So a
+     *   422 means the two are individually well-formed and DO NOT BELONG TO
+     *   EACH OTHER — she picked the wrong bank, or typed a digit wrong.
+     *
+     *   That is the feature working. Logging it at ERROR is #828's lesson
+     *   again: a red line that appears when nothing is wrong is how red lines
+     *   stop being read, and this one recurs for every mistyped account on a
+     *   platform with thousands of withdrawals. The faults that matter — a
+     *   rejected key, an outage — are what get buried.
+     *
+     *   WHAT THE MEMBER SEES IS UNCHANGED, and that is asserted below. This
+     *   moves a log line between severities; it does not soften a refusal.
+     *
+     * ── MUTATION LOG ────────────────────────────────────────────────────────
+     *
+     *     the 4xx logged at error again                              KILLED
+     *     the 5xx logged at warn                                     KILLED
+     *     a 401 treated as the caller's problem                      KILLED
+     *     the refusal softened to ok: true                           KILLED
+     *     reword this header                             SURVIVED, intended
+     */
+    const OLD = { ...process.env };
+    const realFetch = global.fetch;
+
+    beforeEach(() => { process.env.PAYSTACK_SECRET_KEY = 'sk_test_key'; });
+    afterEach(() => {
+        process.env = { ...OLD };
+        global.fetch = realFetch;
+        jest.restoreAllMocks();
+    });
+
+    async function resolveWith(status: number, message: string) {
+        const { logger } = await import('@/lib/logger');
+        const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+        global.fetch = jest.fn(async () => ({
+            ok: false, status, json: async () => ({ status: false, message }),
+        })) as any;
+
+        const resolve = (await import('@/lib/bank-account-resolve')).resolveBankAccount;
+        const result = await resolve('0123456789', '058');
+
+        return { result, error, warn };
+    }
+
+    it('THE REPORTED CASE — a 422 is a WARNING, not an error', async () => {
+        const { error, warn } = await resolveWith(
+            422, 'Could not resolve account name. Check parameters or try again.',
+        );
+
+        expect(error).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalled();
+        //   And it says whose problem it is, so a reader need not infer the
+        //   tier from a status code they happen to remember.
+        expect(warn.mock.calls[0][1]).toMatchObject({ attributable: 'account-details-supplied' });
+    });
+
+    it('AND SHE IS STILL REFUSED, with the provider’s own words', async () => {
+        /*
+         *   THE control that stops this being a softening. A quieter log must
+         *   not become a looser gate — the account is still unverified and the
+         *   caller still gets the reason to show her.
+         */
+        const { result } = await resolveWith(422, 'Could not resolve account name.');
+
+        expect(result.ok).toBe(false);
+        expect(result.status).toBe(422);
+        expect(result.reason).toContain('Could not resolve account name');
+    });
+
+    it('CONTROL: A PROVIDER OUTAGE IS STILL AN ERROR', async () => {
+        //   The line that must keep firing. If quieting the 4xx had quieted
+        //   everything, a Paystack outage would now be invisible — which is a
+        //   worse failure than the noise this removes.
+        for (const status of [500, 502, 503]) {
+            const { error, warn } = await resolveWith(status, 'Service unavailable');
+            expect({ status, errored: error.mock.calls.length > 0 }).toEqual({ status, errored: true });
+            expect({ status, warned: warn.mock.calls.length > 0 }).toEqual({ status, warned: false });
+            jest.restoreAllMocks();
+        }
+    });
+
+    it('CONTROL: A REJECTED KEY IS OURS, NOT HERS', async () => {
+        /*
+         *   401 is a 4xx and is NOT the caller's problem — it means our secret
+         *   key is wrong or revoked, and every withdrawal on the platform is
+         *   failing. Classifying by "4xx is the user" alone would have hidden
+         *   the single most urgent configuration fault this resolver can meet.
+         */
+        const { error, warn } = await resolveWith(401, 'Invalid key');
+
+        expect(error).toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+        expect(error.mock.calls[0][1]).toMatchObject({ attributable: 'provider-or-configuration' });
+    });
+});

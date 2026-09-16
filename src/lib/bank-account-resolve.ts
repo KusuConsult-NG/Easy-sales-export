@@ -119,7 +119,61 @@ export async function resolveBankAccount(
 
         if (!response.ok) {
             const reason = data?.message || "Bank account verification failed";
-            logger.error("Paystack bank resolve error", { status: response.status, message: reason });
+
+            /*
+             *   #834 A MEMBER MISTYPING HER ACCOUNT NUMBER WAS LOGGED AS AN
+             *   ERROR.
+             *
+             *   From the owner's production log, twice in one window:
+             *
+             *       [ERROR] Paystack bank resolve error {"status":422,
+             *        "message":"Could not resolve account name.
+             *         Check parameters or try again."}
+             *
+             *   Every guard above has already passed by this point: the number
+             *   is exactly ten digits, the bank code is three to six, and the
+             *   key is present. So a 422 here means the two are individually
+             *   well-formed and DO NOT BELONG TO EACH OTHER — she picked the
+             *   wrong bank from the dropdown, or typed a digit wrong. That is
+             *   the feature working, not a fault.
+             *
+             *   Logging it at ERROR is the #828 lesson again: a red line that
+             *   appears when nothing is wrong is how red lines stop being read,
+             *   and this one recurs for every mistyped account on a platform
+             *   with thousands of withdrawals. The genuine faults — a rejected
+             *   key, a provider outage — are the ones that get buried.
+             *
+             *   SPLIT BY WHOSE PROBLEM IT IS. A 4xx is the caller's input and
+             *   is recorded at WARN with no alarm; a 401 or any 5xx is ours or
+             *   Paystack's and stays an ERROR. The member sees the same message
+             *   either way — nothing about what she is told changes.
+             */
+            const theirs = response.status >= 500 || response.status === 401;
+            const detail = {
+                status: response.status,
+                message: reason,
+                //   Named so a reader does not have to infer the tier from the
+                //   status code they happen to remember.
+                attributable: theirs ? "provider-or-configuration" : "account-details-supplied",
+            };
+
+            /*
+             *   CALLED ON THE LOGGER, not through a detached reference.
+             *
+             *   My first version was `const log = theirs ? logger.error :
+             *   logger.warn; log(…)`, which drops `this` — the method throws,
+             *   the throw is caught by this function's own catch below, and the
+             *   result becomes a NETWORK-FAULT refusal with the wrong status.
+             *   Two existing assertions went red on it: "Paystack's own error
+             *   reaches the caller with its status" expected 422 and got 503.
+             *
+             *   A logging change that silently rewrote the resolver's answer.
+             *   The tests caught it; it is written down because the tidier
+             *   spelling is the one that looks right.
+             */
+            if (theirs) logger.error("Paystack bank resolve declined", detail);
+            else logger.warn("Paystack bank resolve declined", detail);
+
             return { ok: false, code: "provider_error", reason, status: response.status };
         }
 
