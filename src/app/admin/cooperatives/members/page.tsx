@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { logger } from '@/lib/logger';
-import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save, FileText, Loader2 } from "lucide-react";
+import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save, FileText, Loader2, AlertTriangle } from "lucide-react";
+import { numberOrDash } from "@/lib/numbers";
 import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
 import RejectionModal from "@/components/admin/RejectionModal";
@@ -537,6 +538,45 @@ export default function CooperativeMembersPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                {/*
+                  *   #838 THE ACTION KNEW THE COHORT WAS INCOMPLETE AND THE
+                  *   SCREEN DID NOT SAY SO.
+                  *
+                  *   getStandardCooperativeMembersAction already returns
+                  *   `truncated` and `rowCap`, and logs at ERROR level that "the
+                  *   list AND the stats beside it are INCOMPLETE" — and nothing
+                  *   on this page read either field. So the four tiles below,
+                  *   and the member list under them, were drawn identically
+                  *   whether they described the whole cooperative or the newest
+                  *   5,000 rows of it.
+                  *
+                  *   THE SIBLING SCREEN ALREADY DOES THIS. The cooperative admin
+                  *   dashboard renders exactly this banner off its own
+                  *   `stats.truncated`, and its note records that the same field
+                  *   existed there and "NOTHING READ IT" until somebody wired it
+                  *   up. This is that correction reaching the second of the two
+                  *   places it names — which is this audit's most repeated shape.
+                  *
+                  *   The figures are NOT hidden or blanked: a floor is useful to
+                  *   an administrator, and this is a members list rather than a
+                  *   compliance report. What changes is that a floor can no
+                  *   longer be mistaken for a total.
+                  */}
+                {meta?.truncated && (
+                    <div className="col-span-full bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-900">
+                            <p className="font-semibold">These figures are partial.</p>
+                            <p className="mt-1">
+                                More members matched than this screen reads in one pass
+                                {typeof meta?.rowCap === "number" ? ` (${numberOrDash(meta.rowCap)} rows)` : ""},
+                                so the counts below and the list under them are a floor rather
+                                than the whole cohort. Narrow the filters to see the rest.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {isFiltered && (
                     <div className="col-span-full bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-700 font-medium flex flex-wrap gap-x-4 gap-y-1">
                         <span>ℹ️ Showing stats matching active cohort filters:</span>

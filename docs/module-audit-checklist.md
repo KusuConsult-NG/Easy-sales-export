@@ -228,3 +228,43 @@ npx playwright test --project=chromium     # no dev server running, port 3000 fr
 - WebKit is not installed, so cross-browser coverage is unchecked — and #833 was
   a browser-compatibility crash every other test missed.
 - The yams product row points at a missing image file (data, not code).
+
+---
+
+## E. Results
+
+### E1 · Cooperative — pass 1 (#838)
+
+Surveyed before changing anything, as §B step 1 requires. **Cooperative was in
+considerably better shape than WAVE**: most items already passed, several because
+earlier findings (#520, #789, #825) had already fixed them here. Recorded with
+the evidence so the next reader does not re-derive it.
+
+| Item | Verdict | Evidence |
+|---|---|---|
+| A1.4 counts are exact | **pass** | `fetchAllDocs` paginates on a total order (`__name__`), so the metrics sweep is genuinely complete, not a capped `.get()` |
+| A1.5 aggregates unbounded + report truncation | **pass** | `getStandardCooperativeMembersAction` computes `cohortTruncated` and logs at error level |
+| A1.6 no double counting | **pass** | no cooperative count sums the `cooperative` / `cooperatives` spellings |
+| A1.8 shared status vocabulary | **pass** | reads `memberStatusOf` / `lib/cooperative-membership-status` |
+| A2.1 failed read is not zero | **pass** | admin dashboard renders through `statText` / `statMoney` |
+| A2.1 / A6.1 **on the members page** | **FAIL → fixed** | the action returned `truncated` + `rowCap`; **the page read neither**. Four tiles and the list drawn identically whether complete or the newest 5,000 rows |
+| A2.2 nothing invented | **pass** | no hardcoded figures in the member dashboard |
+| A4.2 role spellings complete | **pass** | `module-access-check` resolves *both* coop spellings by progression score |
+| A5.2 dependent dropdowns repopulate | **pass** | `PersonalInfoStep` drives state/LGA/ward from `data.address`; #789 fixed the ward blocker |
+| A6.3 caller input logged at warn | **pass** | the `logger.error` sites are cache-invalidation and internal-refusal paths, which are platform faults |
+
+**Fixed this pass:** the members screen now surfaces the partial-cohort banner
+its own action was already reporting — matching the sibling dashboard, which had
+had the same treatment since its own finding. One of two screens having the rule
+is this audit's most repeated shape.
+
+**Still open for cooperative** (carried to pass 2, not defects yet — questions):
+
+- A3.1 — three surfaces can answer "how many cooperative members": the dashboard
+  pie (register-based), the admin dashboard (register when unscoped, else
+  `COOPERATIVE_MEMBERS`), and the members page (a `COOPERATIVE_MEMBERS` window).
+  They answer legitimately different questions; what is not yet proved is that
+  they never *disagree about the same one*.
+- A1.1 / A1.2 — whether a member holding `cooperative_member` with no
+  `COOPERATIVE_MEMBERS` row exists in production, and which screens would miss
+  her.

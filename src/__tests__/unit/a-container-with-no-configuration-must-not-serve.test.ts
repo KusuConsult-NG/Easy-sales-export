@@ -160,9 +160,14 @@ const CONFIGURED = {
     QR_ENCRYPTION_KEY: 'q'.repeat(64),
     //   #779 — see lib/kyc-identity-store. A fully configured container sets it.
     KYC_ENCRYPTION_KEY: 'k'.repeat(64),
-    //   #836 — a fully configured container pins the Server Function key too,
-    //   or every deploy breaks the forms that are open at the time.
-    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: 'c2VydmVyLWFjdGlvbnMta2V5LTMyLWJ5dGVzISE=',
+    //   A REPEATED CHARACTER, not a base64-looking string. The first version of
+    //   this fixture used a real-shaped base64 value and gitleaks flagged it as a
+    //   generic-api-key on both files, turning CI red on main. It was never a
+    //   secret — it decoded to "server-actions-key-32-bytes!!" — but a fixture
+    //   shaped like a credential is indistinguishable from one to a scanner, and
+    //   teaching people to wave the scanner through is worse than the fixture is
+    //   worth. Every other key in this file has used `'x'.repeat(n)` all along.
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: 's'.repeat(44),
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'demo',
     CLOUDINARY_API_KEY: 'ck',
     CLOUDINARY_API_SECRET: 'cs',
