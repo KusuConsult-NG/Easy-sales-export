@@ -27,6 +27,7 @@ import {
 } from "@/lib/land-listing-status";
 import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visibility";
 import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkProductPricing } from "@/lib/product-pricing-guard";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -132,6 +133,25 @@ async function _createLandListingAction(data: {
                 error: "You need a Farm Nation account to list land. Complete Farm Nation onboarding first.",
                 data: null,
             };
+        }
+
+        /*
+         *   #803 AND THE DRAFT DOOR TOO — every place the rule names.
+         *
+         *   This is the fourth writer of a land listing's price and it had the
+         *   same gap as the submit door below. Guarding one and not this one is
+         *   the shape of defect this whole audit keeps finding, and it would be
+         *   a poor way to close a finding about exactly that.
+         *
+         *   A draft is not exempt: drafts are promoted, and a price nobody
+         *   checked at draft time is a price nobody checked.
+         */
+        const draftPricing = checkProductPricing([
+            { label: "price", value: data.price },
+            { label: "size", value: data.size },
+        ]);
+        if (!draftPricing.ok) {
+            return { success: false, error: draftPricing.message, data: null };
         }
 
         const ownerId = session.user.id;
@@ -876,6 +896,53 @@ async function _submitLandListingAction(data: {
                 error: "You need a Farm Nation account to list land. Complete Farm Nation onboarding first.",
                 data: null,
             };
+        }
+
+        /*
+         *   #803 THE LIVE LAND-LISTING DOOR HAD NO RANGE CHECK AT ALL.
+         *
+         *   THIS IS THE ONE THAT MATTERS. There are three writers of land
+         *   listings and only one bounded its numbers:
+         *
+         *     listPropertyAction   farmNationListingSchema —
+         *                          `price: z.number().positive()`,
+         *                          `size: z.number().positive()`
+         *     the API route        `!pricePerUnit || !totalPrice`, and RETIRED
+         *                          (410 unless LEGACY_LAND_LISTING_API=enabled)
+         *     THIS ACTION          a session check, an access check, and then
+         *                          `price: data.price` written straight through
+         *
+         *   And this is the LIVE one: /farm-nation/list-land uploads its files
+         *   and calls this. A server action is callable directly, so whatever
+         *   the form does client-side is not a guard.
+         *
+         *   WHAT IT REACHES. initiatePropertyPurchaseAction reads
+         *   `propData.price` as BOTH the purchase amount and the escrowAmount:
+         *
+         *       propertyPrice: propData.price,
+         *       escrowAmount:  propData.price,
+         *
+         *   so a plot listed at a negative price becomes a purchase request and
+         *   an escrow row carrying that figure. Infinity gets in too —
+         *   JSON.stringify writes it as null, so the amount silently becomes
+         *   absent rather than wrong.
+         *
+         *   STATED ACCURATELY: I have not traced a path from here to money
+         *   LEAVING the platform, and I am not claiming one. What is certain is
+         *   that a listing can be created that nobody can correctly buy, and
+         *   that the two sibling doors both consider these values worth
+         *   bounding.
+         *
+         *   THE GUARD IS #794'S, IMPORTED. Its reason for being a module rather
+         *   than a rule written out per door is precisely this: it has now been
+         *   missing from a door in two separate modules.
+         */
+        const pricing = checkProductPricing([
+            { label: "price", value: data.price },
+            { label: "size", value: data.size },
+        ]);
+        if (!pricing.ok) {
+            return { success: false, error: pricing.message, data: null };
         }
 
         const listing: any = {

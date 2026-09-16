@@ -12,6 +12,7 @@ import { parseCurrencyStringToFloat } from "@/lib/utils";
 // its handlers and Next's config keys. See lib/retired-endpoints.
 import { legacyLandListingApiEnabled, LAND_LISTING_API_RETIRED_MESSAGE } from "@/lib/retired-endpoints";
 import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkProductPricing } from "@/lib/product-pricing-guard";
 
 /**
  * API Route: Create Land Listing — RETIRED. It could not store a title deed.
@@ -51,6 +52,20 @@ import { hasAppAccess } from "@/lib/role-app-mapping";
  * refuses a listing whose files it cannot store, rather than recording one it
  * cannot evidence.
  */
+
+
+/**
+ * Was a number actually supplied, as opposed to supplied and out of range?
+ *
+ *   #803 PRESENCE HERE, RANGE BELOW — the split #798 made in
+ *   /api/marketplace/create-product, for the same reason. `!value` is falsy
+ *   for exactly 0, so a price of 0 would be reported as a MISSING FIELD when
+ *   every field was filled, and would never reach the guard that has the
+ *   accurate sentence.
+ */
+function missingNumber(raw: FormDataEntryValue | null, parsed: number): boolean {
+    return raw === null || String(raw).trim() === "" || Number.isNaN(parsed);
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -124,9 +139,55 @@ export async function POST(request: NextRequest) {
 
         // Validate required fields
         if (!title || !category || !description || !state || !lga || !address ||
-            !size || !unit || !pricePerUnit || !totalPrice) {
+            !unit || missingNumber(formData.get("size"), size)
+            || missingNumber(formData.get("pricePerUnit"), pricePerUnit)
+            || missingNumber(formData.get("totalPrice"), totalPrice)) {
             return NextResponse.json(
                 { success: false, data: null, meta: null, error: "Missing required fields" },
+                { status: 400 }
+            );
+        }
+
+        /*
+         *   #803 THE OTHER LAND-LISTING DOOR HAD NO RANGE CHECK. THIS IS #794,
+         *   IN FARM NATION.
+         *
+         *   Two doors create a land listing and only one bounded its numbers:
+         *
+         *     listPropertyAction      farmNationListingSchema, which says
+         *                             `price: z.number().positive()` and
+         *                             `size: z.number().positive()`
+         *     THIS ROUTE              `!pricePerUnit || !totalPrice`
+         *
+         *   Truthiness is not a range check — the identical sentence #794 had
+         *   to write for the marketplace. `!value` rejects exactly 0 and NaN.
+         *   It ACCEPTS -5000000, and it accepts Infinity, because
+         *   parseCurrencyStringToFloat is parseFloat underneath and "1e400"
+         *   parses to Infinity.
+         *
+         *   So a plot of land could be listed at a NEGATIVE price through this
+         *   door and at no price at all through the other. The values go
+         *   straight into the listing, and from there into
+         *   initiatePropertyPurchaseAction, which reads `propData.price` as
+         *   both the purchase amount and the escrowAmount.
+         *
+         *   THE GUARD IS THE ONE #794 EXTRACTED, not a fourth copy of the rule.
+         *   Its whole reason for existing as a module was that this codebase's
+         *   creators keep writing the bound on one door and not its sibling —
+         *   which is what happened here, one module over, again.
+         *
+         *   `size` is included because it is not decoration: the listing's
+         *   price per unit is quoted against it, so a negative or infinite size
+         *   describes a plot nobody can price.
+         */
+        const pricing = checkProductPricing([
+            { label: "price per unit", value: pricePerUnit },
+            { label: "total price", value: totalPrice },
+            { label: "size", value: size },
+        ]);
+        if (!pricing.ok) {
+            return NextResponse.json(
+                { success: false, data: null, meta: null, error: pricing.message },
                 { status: 400 }
             );
         }

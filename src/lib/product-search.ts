@@ -41,17 +41,44 @@ export const PRODUCT_SEARCH_SCAN_LIMIT = 300;
  * So "roots" returned different products depending on which action the page
  * happened to call.
  */
+/*
+ *   #802 THE TITLE-CASE SPELLINGS ARE HERE TO RECOVER PRODUCTS ALREADY STORED.
+ *
+ *   /marketplace/products/add submitted its DISPLAY LABELS as the category —
+ *   "Grains & Cereals", "Tubers & Roots", "Poultry Products" — so every listing
+ *   created through it holds a spelling this table did not know and
+ *   ProductCategorySchema refuses. LenientProductSchema healed each one to
+ *   "other" on read: out of its own category filter, and shown to its seller as
+ *   uncategorised.
+ *
+ *   The form is fixed to write the stored vocabulary going forward. These
+ *   entries are for the rows ALREADY IN THE DATABASE, and they are deliberately
+ *   the whole fix for them: adding the spelling here makes the enum accept it
+ *   and makes `categorySpellings("grains")` match it, so those products return
+ *   to their real category WITHOUT A SINGLE ROW BEING REWRITTEN. Nothing is
+ *   migrated, nothing is deleted, and a listing whose category was healed away
+ *   comes back on the next read.
+ *
+ *   That is what this table is for. #131 added it because "products were
+ *   written with several spellings of one category"; this is one more set of
+ *   spellings, from one more door.
+ *
+ *   CASE MATTERS AND IS PRESERVED. z.enum compares exactly, and
+ *   categorySpellings lowercases only the key it is asked for, never the
+ *   spellings it returns — so these must appear exactly as the add form wrote
+ *   them.
+ */
 export const PRODUCT_CATEGORY_ALIASES: Readonly<Record<string, readonly string[]>> = {
-    grains: ["grains", "cereal", "cereals"],
-    roots: ["roots", "roots_tubers", "roots & tubers", "tuber", "tubers", "yam", "yams", "cassava"],
-    vegetables: ["vegetables", "vegetable", "horticultural"],
-    fruits: ["fruits", "fruit"],
-    nuts: ["nuts", "nut", "seed", "seeds", "sesame", "sesame seeds", "sesame_seeds"],
-    spices: ["spices", "spices_herbs_seasonings", "spices & herbs", "spices_herbs", "hibiscus", "zobo"],
-    livestock: ["livestock"],
-    poultry: ["poultry"],
+    grains: ["grains", "cereal", "cereals", "Grains & Cereals"],
+    roots: ["roots", "roots_tubers", "roots & tubers", "tuber", "tubers", "yam", "yams", "cassava", "Tubers & Roots"],
+    vegetables: ["vegetables", "vegetable", "horticultural", "Vegetables"],
+    fruits: ["fruits", "fruit", "Fruits"],
+    nuts: ["nuts", "nut", "seed", "seeds", "sesame", "sesame seeds", "sesame_seeds", "Nuts & Seeds"],
+    spices: ["spices", "spices_herbs_seasonings", "spices & herbs", "spices_herbs", "hibiscus", "zobo", "Spices"],
+    livestock: ["livestock", "Livestock Products"],
+    poultry: ["poultry", "Poultry Products"],
     dairy: ["dairy", "dairy & eggs", "dairy_eggs"],
-    processed: ["processed", "processed foods", "processed_foods", "natural_oils", "beverages"],
+    processed: ["processed", "processed foods", "processed_foods", "natural_oils", "beverages", "Processed Foods"],
     organic: ["organic", "organics"],
     sea_foods: ["sea_foods", "fishery"],
     fishery: ["fishery", "sea_foods"],

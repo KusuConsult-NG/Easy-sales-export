@@ -26,31 +26,14 @@ import { useStorage } from "@/hooks/use-storage";
 //   button in the same box — see components/ui/ThumbnailImage.
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
+import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
 
 const initialState = { success: false as const, error: "", data: null };
 
-const productCategories = [
-    // New categories
-    { value: "poultry", label: "Poultry" },
-    { value: "sea_foods", label: "Sea Foods" },
-    { value: "horticultural", label: "Horticultural" },
-    { value: "natural_oils", label: "Natural Oils" },
-    { value: "spices_herbs_seasonings", label: "Spices, Herbs & Seasonings" },
-    { value: "beverages", label: "Beverages" },
-    { value: "dairy", label: "Dairy" },
-    { value: "organics", label: "Organics" },
-    { value: "gmos", label: "GMOs" },
-    { value: "health_wellness", label: "Health & Wellness" },
-    // Original categories
-    { value: "grains", label: "Grains & Cereals" },
-    { value: "vegetables", label: "Vegetables" },
-    { value: "fruits", label: "Fruits" },
-    { value: "livestock", label: "Livestock" },
-    { value: "fishery", label: "Fishery" },
-    { value: "processed", label: "Processed Foods" },
-    { value: "equipment", label: "Farm Equipment" },
-    { value: "other", label: "Other" },
-];
+//   #802 One list, imported. Both of these files held an identical
+//   eighteen-entry copy, and /marketplace/products/add held a third that
+//   disagreed with both — see lib/product-categories.
+const productCategories = PRODUCT_CATEGORY_OPTIONS;
 
 const CATEGORY_TITLES: Record<string, string[]> = {
     grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],

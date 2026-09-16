@@ -17,6 +17,7 @@ import { logger } from "@/lib/logger";
 //   button in the same box — see components/ui/ThumbnailImage.
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
+import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
 
 const CATEGORY_TITLES: Record<string, string[]> = {
     grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
@@ -100,18 +101,19 @@ export default function AddProductPage() {
 
     const [newCertification, setNewCertification] = useState("");
 
-    const categories = [
-        "Grains & Cereals",
-        "Tubers & Roots",
-        "Fruits",
-        "Vegetables",
-        "Spices",
-        "Nuts & Seeds",
-        "Processed Foods",
-        "Livestock Products",
-        "Poultry Products",
-        "Other"
-    ];
+    /*
+     *   #802 THIS LIST SUBMITTED ITS LABELS AS THE CATEGORY.
+     *
+     *   It was ten bare strings — "Grains & Cereals", "Poultry Products" — and
+     *   the select used each one as BOTH the option text and its value. Not one
+     *   of the ten is a spelling the database stores or ProductCategorySchema
+     *   accepts, so every product listed here was healed to "other" on read:
+     *   out of its own category filter, and uncategorised to its own seller.
+     *
+     *   The other two seller doors already shared the right eighteen pairs.
+     *   All three now import them.
+     */
+    const categories = PRODUCT_CATEGORY_OPTIONS;
 
     const commonCertifications = [
         "Organic Certified",
@@ -366,7 +368,10 @@ export default function AddProductPage() {
                                         >
                                             <option value="">Select Category</option>
                                             {categories.map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
+                                                //   #802 The VALUE is what gets stored, and it is
+                                                //   no longer the label. This read
+                                                //   `value={cat}` on a bare string.
+                                                <option key={cat.value} value={cat.value}>{cat.label}</option>
                                             ))}
                                         </select>
                                     </div>
