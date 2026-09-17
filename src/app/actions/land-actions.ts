@@ -27,6 +27,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
+import { groupFreeText } from "@/lib/free-text-grouping";
 
 /**
  * Create a new land listing
@@ -639,6 +640,8 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
             bySoilQuality: {} as Record<string, number> 
         };
 
+        const rawStates: string[] = [];
+        const rawQualities: string[] = [];
         snapshot.docs.forEach(doc => { 
             const data = doc.data();
 
@@ -664,13 +667,20 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
             //
             //   Found by the sweep rather than by eye — the six readers before
             //   it were, and this one sits in the same file as three of them.
-            const state = readLandLocation(data).state || 'Unknown';
-            stats.byState[state] = (stats.byState[state] || 0) + 1;
-
-            // By soil quality
-            const quality = data.soilQuality || 'Unknown';
-            stats.bySoilQuality[quality] = (stats.bySoilQuality[quality] || 0) + 1;
+            //   #842 COLLECTED RAW AND GROUPED ONCE, because both of these are
+            //   free text and grouping on the raw string splits a category by
+            //   case and spacing alone. On the WAVE report the same shape
+            //   reported 334 farmers as 206 — "Farmer", "Farmer " and "FARMER"
+            //   counted as three occupations.
+            rawStates.push(String(readLandLocation(data).state || 'Unknown'));
+            rawQualities.push(String(data.soilQuality || 'Unknown'));
         });
+
+        //   Mechanical differences only — case, surrounding and repeated
+        //   whitespace, a trailing full stop. Typos are NOT guessed at; see
+        //   lib/free-text-grouping.
+        stats.byState = groupFreeText(rawStates).counts;
+        stats.bySoilQuality = groupFreeText(rawQualities).counts;
 
         if (stats.total > 0) { 
             stats.averagePrice = Math.round(stats.totalValue / stats.total);

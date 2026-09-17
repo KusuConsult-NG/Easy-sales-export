@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { AggregateField } from "@/lib/firestore-compat";
 import { countModuleApplicants, registerIsUsable } from "@/lib/module-applicant-count";
+import { groupFreeText } from "@/lib/free-text-grouping";
 
 /**
  * API Route: Get WAVE Compliance Data (Admin)
@@ -260,8 +261,16 @@ export async function GET(request: NextRequest) {
             "46-55": 0,
             "56+": 0,
         };
-        const states: Record<string, number> = {};
-        const businessTypes: Record<string, number> = {};
+        /*
+         *   #842 COLLECTED RAW, GROUPED ONCE — because both of these are FREE
+         *   TEXT and grouping on the raw string split every real category.
+         *
+         *   "Farmer", "Farmer " (one trailing space), "FARMER", "farmer" and
+         *   "Farmers" were five occupations, so 334 farmers were reported as
+         *   206 — understated by 38% on the panel a funder reads.
+         */
+        const rawStates: string[] = [];
+        const rawOccupations: string[] = [];
 
         demographicsSnap.docs.forEach(doc => {
             const data = doc.data();
@@ -275,15 +284,23 @@ export async function GET(request: NextRequest) {
             // Residence first, origin as the fallback: the programme is delivered
             // where a participant lives.
             const state = data.stateOfResidence || data.stateOfOrigin || "Unknown";
-            states[state] = (states[state] || 0) + 1;
+            rawStates.push(String(state));
 
             // `currentOccupation` is what the application actually asks for. The
             // page labels this panel "Business Types", which is close enough to the
             // question on the form to be honest, and infinitely closer than the
             // all-"Other" it displayed before.
             const businessType = data.currentOccupation || "Unspecified";
-            businessTypes[businessType] = (businessTypes[businessType] || 0) + 1;
+            rawOccupations.push(String(businessType));
         });
+
+        //   Case, surrounding and repeated whitespace, and a trailing full stop
+        //   only. Typos are NOT guessed at — see lib/free-text-grouping for why
+        //   folding "Farmeo" into "Farmer" by edit distance is refused.
+        const groupedStates = groupFreeText(rawStates);
+        const groupedOccupations = groupFreeText(rawOccupations);
+        const states = groupedStates.counts;
+        const businessTypes = groupedOccupations.counts;
 
         const stats = {
             totalApplications,
@@ -365,6 +382,28 @@ export async function GET(request: NextRequest) {
                     : null,
             },
             applicantsCounted: !applicantCountFailed,
+            /**
+             * #842 How unconstrained the free-text fields actually are.
+             *
+             * `distinctRawValues` minus the grouped count is how many answers
+             * differed only by case or spacing; `longTail` is how many groups
+             * have exactly one respondent. Reported so an administrator can see
+             * that "Business Types" is an open text box — which is the argument
+             * for constraining it at the form, and the reason the tail is not
+             * quietly tidied away here.
+             */
+            freeTextQuality: {
+                occupations: {
+                    grouped: Object.keys(businessTypes).length,
+                    distinctRawValues: groupedOccupations.distinctRawValues,
+                    singleRespondentGroups: groupedOccupations.longTail,
+                },
+                states: {
+                    grouped: Object.keys(states).length,
+                    distinctRawValues: groupedStates.distinctRawValues,
+                    singleRespondentGroups: groupedStates.longTail,
+                },
+            },
         };
 
         if (totalDisbursed === 0) {
