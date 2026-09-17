@@ -343,6 +343,11 @@ export default function ListLandPage() {
                     }
                     : {}),
                 escrowAvailable: true,
+                //   #863 Where the "we have received your listing" notice sends
+                //   her. Her own listings, not the public property page — that
+                //   page refuses to show a listing an admin has not verified,
+                //   which is every listing at this moment.
+                manageLink: "/farm-nation/my-properties",
             });
 
             if (result.success) {

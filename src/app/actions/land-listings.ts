@@ -2,6 +2,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
+import { notifyListingSubmitted } from "@/lib/farm-nation-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
@@ -878,6 +879,20 @@ async function _submitLandListingAction(data: {
     durationValue?: number;
     durationUnit?: "months" | "years";
     escrowAvailable?: boolean;
+    /**
+     *   #863 WHERE THE "we have received your listing" NOTICE SENDS HER.
+     *
+     *   A caller's own screen, because the two land in different modules:
+     *   /land/submit has no per-listing page, a Farm Nation seller belongs on
+     *   /farm-nation/my-properties, and the public property page is the one
+     *   screen that refuses to show an unverified listing. Defaults to "/land",
+     *   which is what the notice used before this existed.
+     *
+     *   Not a free redirect: it is only ever put in a notification this action
+     *   itself writes to the submitting user, so the worst a bad value can do
+     *   is give her a dead link of her own.
+     */
+    manageLink?: string;
 }): Promise<ActionResponse<{ listingId: string }>> {
     try {
         // The live one — /land/submit and farm-nation/list-land both call it.
@@ -1022,14 +1037,32 @@ async function _submitLandListingAction(data: {
             details: `Land listing submitted: ${data.title}` 
         });
 
-        // Notify user — the one who actually submitted it.
-        await createNotificationAction({
-            userId: session.user.id,
-            type: "info",
-            title: "Land Listing Submitted",
-            message: `Your land listing "${data.title}" has been submitted for verification.`,
-            link: "/land",
-            linkText: "View Listings" 
+        /*
+         *   #863 AND SEND HER AN EMAIL, which this never did.
+         *
+         *   THE OWNER: "After listing notification email to be sent."
+         *
+         *   This rang the bell and stopped. A seller who submits a form and
+         *   closes the tab — which is what submitting a form usually means —
+         *   had no record that the listing arrived anywhere.
+         *
+         *   The notice also now says the part she needs and the old one left
+         *   out: the listing is NOT visible to buyers yet. #856 is why that
+         *   matters — until it, an unverified listing wore a "Verified Land"
+         *   badge, so she had every reason to believe she was live.
+         *
+         *   `manageLink` because the two callers land in different modules:
+         *   /land/submit has no per-listing page, and a Farm Nation seller
+         *   belongs on /farm-nation/my-properties. The PUBLIC property page is
+         *   the one screen that would refuse to show her the listing she has
+         *   just made.
+         */
+        await notifyListingSubmitted({
+            ownerId: session.user.id,
+            ownerEmail: session.user.email || data.ownerEmail,
+            ownerName: session.user.name || data.ownerName,
+            listingTitle: data.title,
+            manageLink: data.manageLink || "/land",
         });
 
         return { success: true, error: null, data: { listingId: docRef.id } };

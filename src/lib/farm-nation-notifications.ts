@@ -94,11 +94,13 @@ async function ringBell(data: {
 
 /** And every email goes out through here. Never throws. */
 async function send(context: string, to: unknown, subject: string, body: string): Promise<void> {
-    //   canSendEmail already logs at error level, and distinguishes the two
-    //   cases that matter: "there is no address on the record" is a data problem,
-    //   "RESEND_API_KEY is not configured" is an outage.
-    if (!canSendEmail(context, to)) return;
     try {
+        //   INSIDE the try, which it was not at first. canSendEmail already logs
+        //   at error level and distinguishes the two cases that matter — "there
+        //   is no address on the record" is a data problem, "RESEND_API_KEY is
+        //   not configured" is an outage — but a guard that sits outside the
+        //   catch is the one line in a never-throws function that can throw.
+        if (!canSendEmail(context, to)) return;
         const { error } = await sendEmailNotification({
             to,
             subject,
@@ -213,4 +215,208 @@ export async function notifyInspectorDispatched(params: {
             "View listing",
         ),
     );
+}
+
+/**
+ * Tell the seller her listing arrived, and what happens next.
+ *
+ *   #863 THE OWNER: "After listing notification email to be sent".
+ *
+ *   THE BELL WAS ALREADY RUNG AND NOTHING ELSE WAS. submitLandListingAction
+ *   wrote an in-app row — "Your land listing has been submitted for
+ *   verification" — and sent no email. A seller who submits a listing and
+ *   closes the tab, which is what submitting a form usually means, had no
+ *   record that it arrived.
+ *
+ *   AND THE NOTICE SAYS THE PART SHE ACTUALLY NEEDS, which the old one left
+ *   out: the listing is NOT visible to buyers yet. #856 is the finding that
+ *   makes this matter — before it, an unverified listing wore a "Verified
+ *   Land" badge, so a seller had every reason to think she was live. Telling
+ *   her it is under review is the other half of that repair.
+ *
+ *   `manageLink` IS THE CALLER'S, and it is a parameter rather than a constant
+ *   because the two callers land in different modules: /land/submit has no
+ *   per-listing page at all, and a Farm Nation seller belongs on
+ *   /farm-nation/my-properties. Sending her to the PUBLIC property page would
+ *   be the confident wrong answer — that page is exactly what refuses to show
+ *   an unverified listing.
+ */
+export async function notifyListingSubmitted(params: {
+    ownerId: string;
+    ownerEmail?: string | null;
+    ownerName?: string | null;
+    listingTitle?: string | null;
+    manageLink: string;
+}): Promise<void> {
+    const { ownerId, ownerEmail, ownerName, listingTitle, manageLink } = params;
+
+    if (!ownerId) {
+        logger.error("[farm-nation] a listing was submitted with no ownerId; nobody can be told");
+        return;
+    }
+
+    const property = listingTitle?.trim() || "your land listing";
+
+    await ringBell({
+        userId: ownerId,
+        title: "Land listing submitted",
+        message:
+            `${property} has been submitted for verification. It is not visible to buyers `
+            + `yet — an administrator reviews the documents first, and you will be told when `
+            + `that is done.`,
+        link: manageLink,
+        linkText: "View my listings",
+    });
+
+    const to = await resolveNoticeEmail("farm-nation", ownerId, ownerEmail);
+    await send(
+        "Farm Nation listing submitted",
+        to,
+        `We have received ${property}`,
+        shell(
+            "Your listing has been received",
+            html`
+                <p>Hello ${ownerName?.trim() || "there"},</p>
+                <p><strong>${property}</strong> has been submitted for verification.</p>
+                <p>
+                    It is <strong>not visible to buyers yet</strong>. An administrator
+                    reviews the title documents and survey plan first, and may send an
+                    inspector to the land. You will be told when that is done, and again
+                    when a decision is made.
+                </p>
+            `,
+            `${getBaseUrl()}${manageLink}`,
+            "View my listings",
+        ),
+    );
+}
+
+/**
+ * Tell BOTH parties that a property has been paid for and is held in escrow.
+ *
+ *   #863 THE OWNER: "and also after a transaction".
+ *
+ *   MEASURED: lib/property-purchase-fulfilment.ts — the one place a Farm Nation
+ *   property payment completes, deliberately extracted so the Paystack callback
+ *   and the webhook cannot answer the same payment differently (#721) — contains
+ *   no notification of any kind. Money moved, a parcel went into escrow, and
+ *   neither side was told.
+ *
+ *   THE SELLER IS THE HALF THAT WAS MISSING ENTIRELY, and is the reason this
+ *   sends two notices rather than one. The buyer at least sees the callback
+ *   page when the callback door runs. The seller has no page in this flow: her
+ *   land is sold, the money is held, and the only record is a status on a row
+ *   she would have to go looking for. When the WEBHOOK door runs — a buyer who
+ *   closed the tab, which is the case #721 exists for — nobody saw anything at
+ *   all.
+ *
+ *   ONE FAILING NOTICE MUST NOT COST THE OTHER, and the guarantee is the
+ *   EARLY RETURN below rather than the `allSettled`. That distinction was found
+ *   by mutation-testing: swapping `allSettled` for `all` failed no test, because
+ *   every leaf — ringBell, send, resolveNoticeEmail — already swallows, so
+ *   neither branch can reject in the first place. `allSettled` is defence in
+ *   depth against a future leaf that forgets, kept because it costs nothing;
+ *   the behaviour that is real, and tested, is that a listing with no owner
+ *   logs and still notifies the buyer.
+ */
+export async function notifyPropertyPaid(params: {
+    buyerId: string;
+    buyerEmail?: string | null;
+    sellerId?: string | null;
+    propertyId: string;
+    propertyTitle?: string | null;
+    amount: number;
+    reference: string;
+}): Promise<void> {
+    const { buyerId, buyerEmail, sellerId, propertyId, propertyTitle, amount, reference } = params;
+
+    const property = propertyTitle?.trim() || "a property";
+    const money = `₦${Number(amount || 0).toLocaleString()}`;
+    const link = `/farm-nation/property/${propertyId}`;
+
+    const tellBuyer = async () => {
+        if (!buyerId) return;
+        await ringBell({
+            userId: buyerId,
+            title: "Payment received — held in escrow",
+            message:
+                `Your payment of ${money} for ${property} has been confirmed and is held in `
+                + `escrow. The funds are released to the seller once the transfer of title is `
+                + `completed. Reference ${reference}.`,
+            link: "/farm-nation/my-purchases",
+            linkText: "View my purchases",
+        });
+
+        const to = await resolveNoticeEmail("farm-nation", buyerId, buyerEmail);
+        await send(
+            "Farm Nation purchase confirmed",
+            to,
+            `Payment confirmed for ${property}`,
+            shell(
+                "Your payment is held in escrow",
+                html`
+                    <p>We have confirmed your payment of <strong>${money}</strong> for
+                       <strong>${property}</strong>.</p>
+                    <div style="background: #f0fdf4; padding: 16px; border-radius: 8px;">
+                        <p><strong>Reference:</strong> ${reference}</p>
+                        <p><strong>Amount:</strong> ${money}</p>
+                    </div>
+                    <p>
+                        The money is held in escrow, not paid to the seller. It is released
+                        once the transfer of title is completed. Keep the reference above —
+                        it identifies this payment in any query.
+                    </p>
+                `,
+                `${getBaseUrl()}/farm-nation/my-purchases`,
+                "View my purchases",
+            ),
+        );
+    };
+
+    const tellSeller = async () => {
+        //   No seller id means the listing lost its owner, which is worth a log
+        //   line: a sale has completed against a parcel nobody is recorded as
+        //   owning, and somebody has to be paid.
+        if (!sellerId) {
+            logger.error(
+                "[farm-nation] a property was paid for but the listing carries no owner; "
+                + "the seller cannot be told",
+                { propertyId, reference },
+            );
+            return;
+        }
+
+        await ringBell({
+            userId: sellerId,
+            title: "Your property has been paid for",
+            message:
+                `${property} has been bought for ${money}. The money is held in escrow and is `
+                + `released to you once the transfer of title is completed.`,
+            link,
+            linkText: "View listing",
+        });
+
+        const to = await resolveNoticeEmail("farm-nation", sellerId, null);
+        await send(
+            "Farm Nation sale confirmed",
+            to,
+            `${property} has been paid for`,
+            shell(
+                "Your property has been paid for",
+                html`
+                    <p><strong>${property}</strong> has been bought for
+                       <strong>${money}</strong>.</p>
+                    <p>
+                        The money is held in escrow rather than paid out immediately. It is
+                        released to you once the transfer of title is completed, so please
+                        have the documents ready.
+                    </p>
+                `,
+                `${getBaseUrl()}${link}`,
+                "View listing",
+            ),
+        );
+    };
+
+    await Promise.allSettled([tellBuyer(), tellSeller()]);
 }

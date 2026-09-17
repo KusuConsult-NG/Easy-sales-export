@@ -64,9 +64,29 @@ function setSession(id: string) {
     }));
 }
 
-/** Every recipient passed to createNotificationAction. */
-const notifiedUsers = () =>
-    (mockNotify as any).mock.calls.map((c: any[]) => c[0]?.userId);
+/**
+ * Every recipient of a notification, read off the WRITES.
+ *
+ *   #863 This used to read `createNotificationAction.mock.calls`, so it failed
+ *   the moment the land-listing notice moved behind notifyListingSubmitted —
+ *   against correct code, while the rule it exists to protect (WHO is told)
+ *   held perfectly. A spy on one helper pins the plumbing; the notification row
+ *   is the fact.
+ *
+ *   Both writers are read because the two paths take different doors: the
+ *   action-level one still goes through createNotificationAction, and
+ *   infrastructure/notifications writes the row itself.
+ */
+const notifiedUsers = () => [
+    ...(mockNotify as any).mock.calls.map((c: any[]) => c[0]?.userId),
+    ...[
+        ...((global as any).mockFirestoreSet.mock.calls ?? []),
+        ...((global as any).mockFirestoreAdd.mock.calls ?? []),
+    ]
+        .map((c: any[]) => c[c.length - 1])
+        .filter((doc: any) => doc && 'read' in doc && 'title' in doc && 'message' in doc)
+        .map((doc: any) => doc.userId),
+];
 
 /** Every actor recorded in an audit row. */
 const auditedUsers = () =>

@@ -586,15 +586,22 @@ describe('submitLandListingAction', () => {
         // The listing was fixed to take its owner from the session and the audit
         // row and this notification were left reading the request — one copy of
         // a path fixed and its siblings missed, inside a single function.
+        //
+        //   #863 READ OFF THE NOTIFICATION ROW, not off a spy on one particular
+        //   helper. This asserted `createNotificationAction` was called, so it
+        //   failed when the notice moved to notifyListingSubmitted — against
+        //   correct code, and while the rule it exists to protect held
+        //   perfectly. The rule is WHO IS TOLD; which function does the telling
+        //   is an implementation detail it should never have pinned.
         actAs('real-caller', ['farmer']);
 
         await submit({
             ...listingInput({ ownerId: 'somebody-else' }), imageUrls: [], documentUrls: [],
         });
 
-        expect(createNotificationAction).toHaveBeenCalledTimes(1);
-        expect((createNotificationAction.mock.calls[0] as any[])[0])
-            .toMatchObject({ userId: 'real-caller' });
+        const notices = store.all(COLLECTIONS.NOTIFICATIONS).map(([, d]) => d as any);
+        expect(notices).toHaveLength(1);
+        expect(notices[0].userId).toBe('real-caller');
     });
 
     it('carries the GPS coordinates through when given, and omits them otherwise', async () => {

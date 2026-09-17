@@ -54,6 +54,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { markFulfilmentFailed } from "@/lib/wallet-ledger";
+import { notifyPropertyPaid } from "@/lib/farm-nation-notifications";
 import { logger } from "@/lib/logger";
 
 /** ₦1 of tolerance, matching confirmWalletFundingAction and the cooperative contribution path. */
@@ -190,6 +191,46 @@ export async function fulfilPropertyPurchase(args: PropertyPurchaseArgs): Promis
                 escrowStatus: "held",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        /*
+         *   #863 AND TELL BOTH PARTIES, which nothing did.
+         *
+         *   THE OWNER: "After listing notification email to be sent and also
+         *   after a transaction."
+         *
+         *   Everything above is a state change: a status, a ledger row, a
+         *   payments row, an escrow flag. Money moved and a parcel went into
+         *   escrow, and neither the buyer nor the seller was sent anything.
+         *
+         *   THE SELLER HAD NOTHING AT ALL. The buyer at least sees the callback
+         *   page when the callback door runs. The seller has no page in this
+         *   flow — her land is sold, the money is held, and the only record is a
+         *   status on a row she would have to go looking for. When the WEBHOOK
+         *   door runs, which is the case this module exists for (a buyer who
+         *   closed the tab), nobody saw anything.
+         *
+         *   AFTER EVERY WRITE, and never able to throw. A throw from here would
+         *   reach the catch below, call markFulfilmentFailed on a payment that
+         *   WAS fulfilled, and make the webhook answer 500 so Paystack retries —
+         *   turning "we could not send an email" into a payment recorded as
+         *   undelivered. The notifier swallows its own failures; the belt here
+         *   is for anything it cannot, such as an import that throws.
+         */
+        try {
+            await notifyPropertyPaid({
+                buyerId,
+                buyerEmail: buyerEmail || String(purchaseData.buyerEmail || ""),
+                sellerId,
+                propertyId,
+                propertyTitle: title,
+                amount: amountInNaira,
+                reference,
+            });
+        } catch (noticeError) {
+            logger.error("[PropertyPurchaseFulfilment] the purchase notices failed", {
+                propertyId, reference, error: noticeError,
             });
         }
 
