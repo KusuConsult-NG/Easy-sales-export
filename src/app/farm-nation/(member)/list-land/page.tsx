@@ -15,6 +15,18 @@ import { useStorage } from "@/hooks/use-storage";
 import { submitLandListingAction } from "@/app/actions/land-listings";
 import { useToast } from "@/contexts/ToastContext";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import dynamic from "next/dynamic";
+
+//   #868 Leaflet touches `window` on import, so the picker cannot be server
+//   rendered — the same reason MapView is loaded this way.
+const LocationPicker = dynamic(() => import("@/components/farm-nation/LocationPicker"), {
+    ssr: false,
+    loading: () => (
+        <div className="h-64 w-full rounded-lg border border-blue-300 bg-white/60 flex items-center justify-center">
+            <p className="text-xs text-blue-700">Loading map…</p>
+        </div>
+    ),
+});
 
 //   #791 A broken preview must not paint its alt text over the remove
 //   button in the same box — see components/ui/ThumbnailImage.
@@ -551,10 +563,44 @@ export default function ListLandPage() {
 
                                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                                     <p className="text-sm font-semibold text-blue-900 mb-3">
-                                        GPS Coordinates (Optional but recommended)
+                                        Location on the map (optional but recommended)
                                     </p>
                                     <p className="text-xs text-blue-700 mb-4">
-                                        Provide accurate GPS coordinates for better visibility on the map. Nigeria bounds: Lat 4° to 14°N, Long 3° to 15°E
+                                        Listings with a location are the only ones shown on the Farm Nation map.
+                                    </p>
+
+                                    {/*
+                                      *   #868 A PICKER, because this asked a farmer for her latitude.
+                                      *
+                                      *   THE OWNER: "Map API ... that can also be mapped to a location
+                                      *   picker." The browse map was already free — Leaflet over
+                                      *   OpenStreetMap, no key and no Google — but the only way to FEED
+                                      *   it was the two number boxes below, which expect decimal
+                                      *   coordinates to six places. Optional, so in practice left
+                                      *   empty; and a listing with no coordinates is filtered off the
+                                      *   map entirely, so it appeared nowhere.
+                                      *
+                                      *   Loaded with ssr:false because Leaflet touches `window` on
+                                      *   import, which is the same reason MapView is loaded that way.
+                                      */}
+                                    <div className="mb-4">
+                                        <LocationPicker
+                                            latitude={formData.latitude}
+                                            longitude={formData.longitude}
+                                            onChange={({ latitude, longitude }) =>
+                                                setFormData(prev => ({ ...prev, latitude, longitude }))}
+                                        />
+                                    </div>
+
+                                    {/*
+                                      *   The two fields are KEPT, and that is deliberate. A surveyor
+                                      *   with the coordinates already written down should not have to
+                                      *   hunt for the spot on a map, and the picker reads from these
+                                      *   values rather than its own state — so typing here moves the
+                                      *   pin, and moving the pin fills these in. One source of truth.
+                                      */}
+                                    <p className="text-xs text-blue-700 mb-2">
+                                        Or enter the coordinates directly. Nigeria: Lat 4° to 14°N, Long 3° to 15°E
                                     </p>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
