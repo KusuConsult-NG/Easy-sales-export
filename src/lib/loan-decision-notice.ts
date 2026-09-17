@@ -2,8 +2,9 @@ import { logger } from "@/lib/logger";
 import { html, trustedHtml } from "@/lib/utils";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { createNotification } from "@/infrastructure/notifications/service";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
+//   #862 This file and member-decision-notice each held a private `resolveEmail`,
+//   identical but for the log prefix. One copy now; see the module for the rule.
+import { resolveNoticeEmail } from "@/lib/notice-email-address";
 
 /**
  *   #688 TELLING THE MEMBER WHAT WAS DECIDED — ONCE, FOR EVERY DOOR.
@@ -65,18 +66,6 @@ export interface LoanDecisionNotice {
         monthlyPayment?: number;
         totalRepayment?: number;
     };
-}
-
-async function resolveEmail(userId: string, given?: string): Promise<string | undefined> {
-    if (typeof given === "string" && given.trim()) return given;
-    try {
-        const snap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const email = snap.exists ? (snap.data() ?? {}).email : undefined;
-        return typeof email === "string" && email.trim() ? email : undefined;
-    } catch (error) {
-        logger.error("[loan-decision] could not resolve an address for the notice", { userId, error });
-        return undefined;
-    }
 }
 
 /**
@@ -146,7 +135,7 @@ export async function notifyLoanDecision(notice: LoanDecisionNotice): Promise<vo
         logger.error("[loan-decision] in-app notice failed", { userId, decision, error });
     }
 
-    const to = await resolveEmail(userId, notice.userEmail);
+    const to = await resolveNoticeEmail("loan-decision", userId, notice.userEmail);
     if (!canSendEmail("loan decision email", to)) return;
 
     try {

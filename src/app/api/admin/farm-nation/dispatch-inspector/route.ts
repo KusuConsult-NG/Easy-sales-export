@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
+import { notifyInspectorDispatched } from "@/lib/farm-nation-notifications";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -138,6 +139,34 @@ export async function POST(request: NextRequest) {
         } catch (cacheError) {
             logger.error('[Dispatch Inspector Route Cache] Cache clear error:', cacheError);
         }
+
+        /*
+         *   #862 AND TELL THE SELLER, which nothing did.
+         *
+         *   Everything above records the appointment where only an
+         *   administrator can read it: the inspection details go onto the
+         *   listing and `inspector_dispatched` goes into the audit log.
+         *   Somebody was going to visit her land on a date she had not been
+         *   told.
+         *
+         *   AFTER the transition is claimed, so an announcement is never sent
+         *   for a dispatch that was refused — and awaited rather than
+         *   fire-and-forget, because a serverless response can be torn down
+         *   before a dangling promise runs. Every failure inside is swallowed
+         *   and logged there; see the module header for why turning "the email
+         *   bounced" into "the dispatch failed" would send a second inspector.
+         */
+        const listing = listingDoc.data() ?? {};
+        await notifyInspectorDispatched({
+            ownerId: listing.ownerId,
+            ownerEmail: listing.ownerEmail,
+            ownerName: listing.ownerName,
+            listingId: verificationId,
+            listingTitle: listing.title,
+            inspectorName,
+            scheduledDate,
+            notes,
+        });
 
         await recordAdminAction({
             action: 'inspector_dispatched',

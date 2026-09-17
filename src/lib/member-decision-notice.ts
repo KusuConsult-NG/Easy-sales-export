@@ -2,8 +2,9 @@ import { logger } from "@/lib/logger";
 import { html } from "@/lib/utils";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { createNotification } from "@/infrastructure/notifications/service";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
+//   #862 The private copy of this that lived here is gone; loan-decision-notice
+//   held a second, identical but for the log prefix. See the module for the rule.
+import { resolveNoticeEmail } from "@/lib/notice-email-address";
 
 /**
  *   #690 AN ADMIN DECIDED, AND THE MEMBER WAS NOT TOLD — ELEVEN TIMES, ACROSS
@@ -80,18 +81,6 @@ export interface MemberDecisionNotice {
     note?: string;
 }
 
-async function resolveEmail(userId: string, given?: string): Promise<string | undefined> {
-    if (typeof given === "string" && given.trim()) return given;
-    try {
-        const snap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const email = snap.exists ? (snap.data() ?? {}).email : undefined;
-        return typeof email === "string" && email.trim() ? email : undefined;
-    } catch (error) {
-        logger.error("[decision] could not resolve an address for the notice", { userId, error });
-        return undefined;
-    }
-}
-
 const VERB: Record<DecisionOutcome, string> = {
     approved: "has been approved",
     rejected: "was not approved",
@@ -140,7 +129,7 @@ export async function notifyMemberDecision(notice: MemberDecisionNotice): Promis
         logger.error("[decision] in-app notice failed", { userId, subject, outcome, error });
     }
 
-    const to = await resolveEmail(userId, notice.userEmail);
+    const to = await resolveNoticeEmail("decision", userId, notice.userEmail);
     if (!canSendEmail(`${subject} decision email`, to)) return;
 
     try {
