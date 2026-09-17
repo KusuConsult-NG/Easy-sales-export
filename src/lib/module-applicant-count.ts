@@ -110,6 +110,7 @@ const REGISTRATION_KEYS: Record<ModuleKey, readonly string[]> = {
 import {
     ACTIVE_REGISTRATION_STATUSES,
     INACTIVE_REGISTRATION_STATUSES,
+    NOT_STARTED_STATUSES,
 } from "@/lib/module-registration-status";
 
 /**
@@ -241,7 +242,20 @@ export async function countModuleApplicants(
         };
 
         const [total, approved, pending, rejected, revisionRequired] = await Promise.all([
-            bucketCount((q, path) => q.where(path, "!=", null)),
+            /*
+             *   #841 NOT MERELY "has a status". `not_started` IS a status — it
+             *   is what canonical/normalizer writes when an account has no
+             *   registration for a module, so `IS NOT NULL` counted 16,997
+             *   people who had never applied and made this card read 36,748
+             *   instead of 19,751.
+             *
+             *   Both conditions are needed and they are not redundant: `!= null`
+             *   excludes accounts with no registration object at all, and
+             *   `not-in` excludes the ones whose object says they never began.
+             */
+            bucketCount((q, path) => q
+                .where(path, "!=", null)
+                .where(path, "not-in", [...NOT_STARTED_STATUSES])),
             bucketCount((q, path) => q.where(path, "in", [...APPROVED_STATUSES])),
             bucketCount((q, path) => q.where(path, "in", [...PENDING_STATUSES])),
             bucketCount((q, path) => q.where(path, "in", [...REJECTED_STATUSES])),

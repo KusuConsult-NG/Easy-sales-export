@@ -55,6 +55,36 @@ export const ACTIVE_REGISTRATION_STATUSES = [
     "revision_required",
     "suspended",
     /*
+     *   #840 A THIRD ONE THAT IS WRITTEN AND WAS NOT ACCEPTED — and it is where
+     *   the legacy members were.
+     *
+     *   The owner, of the admin dashboard: "that will include the legacy
+     *   members". It did not, everywhere except one hardcoded query.
+     *
+     *   `legacy_pending_onboarding` is written by THREE LIVE PATHS:
+     *
+     *       infrastructure/payments/service.ts:815
+     *       api/cooperative/verify-payment/route.ts:57 and :392
+     *       actions/cooperative/_coop_membership.ts:297 and :357
+     *
+     *   — a member who has PAID and is mid-onboarding. She is in the module by
+     *   any reading: money has changed hands and the platform owes her a place.
+     *
+     *   #756's own rule is that this list is "derived from what the code
+     *   writes", and by that rule it belonged here from the start. It was
+     *   missed because the one place that needed it — analytics.service's Co-op
+     *   Onboarding tile — SPELLED IT OUT INLINE instead, which is the exact
+     *   habit #756 was written to end. A hardcoded list that works is how a
+     *   shared list stays wrong: nothing fails, so nobody looks.
+     *
+     *   WHAT THIS CHANGES. Every module's `reg()` filter now counts these
+     *   members, and lib/module-applicant-count files them under `pending`
+     *   rather than dropping them into the unnamed `other` bucket where nobody
+     *   could see them. The cooperative pair is unaffected — its two queries
+     *   name their statuses directly and remain disjoint.
+     */
+    "legacy_pending_onboarding",
+    /*
      *   Kept although nothing in src/ writes them. They are plausible values
      *   for rows written by earlier generations of this platform or by an
      *   import, and matching a status that does not occur costs nothing, while
@@ -64,6 +94,41 @@ export const ACTIVE_REGISTRATION_STATUSES = [
     "paid",
     "completed",
 ] as const;
+
+/**
+ * "This account has not begun this module."
+ *
+ *   #841 SEVENTEEN THOUSAND PEOPLE WHO HAD NOT APPLIED WERE COUNTED AS
+ *   APPLICANTS, BECAUSE THIS VALUE WAS IN NEITHER LIST.
+ *
+ *   The owner ran the breakdown against production:
+ *
+ *       approved       14,668
+ *       pending         5,083
+ *       not_started    16,997   <-- counted as applicants
+ *                      ------
+ *                      36,748   = exactly what the compliance card reported
+ *
+ *   `not_started` is what lib/canonical/normalizer writes as the DEFAULT when an
+ *   account has no status for a module — `sData?.status || "not_started"`. It is
+ *   the absence of an application expressed as a value, which is why a filter of
+ *   `status IS NOT NULL` counts it and should not.
+ *
+ *   FIVE PLACES ALREADY KNEW. broadcast-logic says it in as many words —
+ *   "Must not count 'not_started' users as enrolled" — and profile-choice,
+ *   duplicate-profile-resolution, registration-progress and broadcast-logic's
+ *   `hasStartedAny` each special-case it inline. Every one of them is right and
+ *   none of them is this list, so the knowledge existed five times and was
+ *   available nowhere. That is the exact condition #756 created this module to
+ *   end, surviving in the one file meant to have ended it.
+ *
+ *   KEPT SEPARATE FROM INACTIVE_REGISTRATION_STATUSES, which is not a tidying
+ *   detail: `rejected` and `revoked` mean somebody APPLIED and was refused or
+ *   removed — they belong in an application count. `not_started` means there was
+ *   never an application at all. Folding the two together would make a rejected
+ *   applicant disappear from the funnel, which is the opposite defect.
+ */
+export const NOT_STARTED_STATUSES = ["not_started"] as const;
 
 /**
  * Statuses that mean the person is NOT in the module.

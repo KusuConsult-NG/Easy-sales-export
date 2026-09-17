@@ -1,82 +1,87 @@
 -- WAVE population breakdown — READ ONLY. Nothing here writes, updates or deletes.
 --
--- Run this against production and paste the output back. It answers, with no
--- inference, the question this audit keeps getting wrong: WHO COUNTS AS HAVING
--- APPLIED TO WAVE.
+-- PASTE THIS WHOLE FILE INTO THE SUPABASE SQL EDITOR AND RUN IT.
+-- (Supabase dashboard → SQL Editor → New query → paste → Run.)
+-- It returns ONE table, so there is nothing to scroll between and no psql needed.
 --
--- Why it exists: the compliance screen reported 36,748 where ~15-20k was
--- expected. 14,668 approved + 5,083 pending = 19,751, leaving ~17,000 counted
--- by a signal that may or may not mean "applied". These four groups are
--- mutually exclusive, so the right total is a choice between sums of them
--- rather than a guess.
+-- Why it exists: the compliance card reported 36,748 WAVE applicants against
+-- 41,797 total accounts, of which only 21,902 have any application data at all.
+-- Something was counting people who never applied. These rows say exactly who,
+-- with no inference.
 
-\echo '=== 1. The four populations, mutually exclusive ==='
-SELECT
-    CASE
-        WHEN raw_data->'serviceRegistrations'->'wave'->>'status' IS NOT NULL
-             AND 'wave_participant' = ANY(roles)
-            THEN 'A · registration object AND role'
-        WHEN raw_data->'serviceRegistrations'->'wave'->>'status' IS NOT NULL
-            THEN 'B · registration object, NO role'
-        WHEN 'wave_participant' = ANY(roles)
-            THEN 'C · role only, NO registration object'
-        ELSE 'D · neither (not a WAVE person)'
-    END AS population,
-    count(*) AS people
-FROM users
-GROUP BY 1
-ORDER BY 1;
+SELECT * FROM (
 
-\echo ''
-\echo '=== 2. Status breakdown of everyone WITH a registration object (A + B) ==='
-SELECT
-    coalesce(raw_data->'serviceRegistrations'->'wave'->>'status', '(none)') AS wave_status,
-    count(*) AS people
-FROM users
-WHERE raw_data->'serviceRegistrations'->'wave'->>'status' IS NOT NULL
-GROUP BY 1
-ORDER BY 2 DESC;
+-- ── 1. The four populations. Mutually exclusive: they sum to every account. ──
+SELECT 1 AS sort, 'POPULATION' AS section,
+       CASE
+           WHEN u.raw_data->'serviceRegistrations'->'wave'->>'status' IS NOT NULL
+                AND 'wave_participant' = ANY(u.roles)
+               THEN 'A · has registration AND role'
+           WHEN u.raw_data->'serviceRegistrations'->'wave'->>'status' IS NOT NULL
+               THEN 'B · has registration, no role'
+           WHEN 'wave_participant' = ANY(u.roles)
+               THEN 'C · role only, NO registration  <-- the disputed group'
+           ELSE 'D · neither (not a WAVE person)'
+       END AS label,
+       count(*)::bigint AS people
+FROM users u
+GROUP BY 3
 
-\echo ''
-\echo '=== 3. Are the role-only accounts (C) legacy imports, or something else? ==='
--- The legacy importer writes BOTH a registration object and the role, so a
--- legacy member should NOT appear in C at all. If C is largely _isLegacy, that
--- assumption is wrong and these people belong in the count.
-SELECT
-    coalesce(raw_data->>'_isLegacy', 'not marked legacy') AS legacy_flag,
-    count(*) AS people,
-    min(created_at)::date AS earliest,
-    max(created_at)::date AS latest
-FROM users
-WHERE 'wave_participant' = ANY(roles)
-  AND raw_data->'serviceRegistrations'->'wave'->>'status' IS NULL
-GROUP BY 1
-ORDER BY 2 DESC;
+UNION ALL
 
-\echo ''
-\echo '=== 4. Do the role-only accounts have WAVE data anywhere else? ==='
--- If they have an application row or a member row, they applied and the
--- registration object is simply missing — which would make excluding them wrong.
-SELECT
-    'role-only WITH a wave_applications row' AS finding, count(*) AS people
+-- ── 2. Every distinct wave status, with counts. ─────────────────────────────
+-- If a status here is not one the app knows about, its holders are invisible in
+-- the funnel. `legacy_pending_onboarding` is the one to look for.
+SELECT 2, 'STATUS VALUES',
+       coalesce(u.raw_data->'serviceRegistrations'->'wave'->>'status', '(none)'),
+       count(*)::bigint
+FROM users u
+WHERE u.raw_data->'serviceRegistrations'->'wave'->>'status' IS NOT NULL
+GROUP BY 3
+
+UNION ALL
+
+-- ── 3. Are the role-only accounts (group C) legacy imports? ─────────────────
+-- The importer writes a registration object AND the role, so a legacy member
+-- should never appear in C. If these are mostly legacy-flagged, that assumption
+-- is wrong and they belong in the count.
+SELECT 3, 'GROUP C — legacy flag',
+       coalesce(u.raw_data->>'_isLegacy', 'not marked legacy'),
+       count(*)::bigint
+FROM users u
+WHERE 'wave_participant' = ANY(u.roles)
+  AND u.raw_data->'serviceRegistrations'->'wave'->>'status' IS NULL
+GROUP BY 3
+
+UNION ALL
+
+-- ── 4. Do the role-only accounts have WAVE data anywhere else? ──────────────
+-- If they have an application or member row they DID apply, and the missing
+-- piece is their registration object — a data repair, not a counting decision.
+SELECT 4, 'GROUP C — other wave data', 'has a wave_applications row',
+       count(*)::bigint
 FROM users u
 WHERE 'wave_participant' = ANY(u.roles)
   AND u.raw_data->'serviceRegistrations'->'wave'->>'status' IS NULL
   AND EXISTS (SELECT 1 FROM document_collections d
               WHERE d.collection_name = 'wave_applications'
                 AND d.raw_data->>'userId' = u.id)
+
 UNION ALL
-SELECT
-    'role-only WITH a wave_members row', count(*)
+
+SELECT 4, 'GROUP C — other wave data', 'has a wave_members row',
+       count(*)::bigint
 FROM users u
 WHERE 'wave_participant' = ANY(u.roles)
   AND u.raw_data->'serviceRegistrations'->'wave'->>'status' IS NULL
   AND EXISTS (SELECT 1 FROM document_collections d
               WHERE d.collection_name = 'wave_members'
                 AND d.id = u.id)
+
 UNION ALL
-SELECT
-    'role-only WITH NEITHER', count(*)
+
+SELECT 4, 'GROUP C — other wave data', 'has NEITHER (never applied)',
+       count(*)::bigint
 FROM users u
 WHERE 'wave_participant' = ANY(u.roles)
   AND u.raw_data->'serviceRegistrations'->'wave'->>'status' IS NULL
@@ -85,15 +90,16 @@ WHERE 'wave_participant' = ANY(u.roles)
                     AND d.raw_data->>'userId' = u.id)
   AND NOT EXISTS (SELECT 1 FROM document_collections d
                   WHERE d.collection_name = 'wave_members'
-                    AND d.id = u.id);
+                    AND d.id = u.id)
 
-\echo ''
-\echo '=== 5. The detail collections, for reference ==='
-SELECT 'wave_applications rows' AS collection, count(*) AS rows
-FROM document_collections WHERE collection_name = 'wave_applications'
 UNION ALL
-SELECT 'wave_members rows', count(*)
-FROM document_collections WHERE collection_name = 'wave_members'
-UNION ALL
-SELECT 'wave_briefing_registrations rows', count(*)
-FROM document_collections WHERE collection_name = 'wave_briefing_registrations';
+
+-- ── 5. The detail collections, for reference. ───────────────────────────────
+SELECT 5, 'COLLECTIONS', d.collection_name, count(*)::bigint
+FROM document_collections d
+WHERE d.collection_name IN
+      ('wave_applications', 'wave_members', 'wave_briefing_registrations')
+GROUP BY 3
+
+) x
+ORDER BY sort, label;

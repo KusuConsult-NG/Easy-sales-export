@@ -572,9 +572,223 @@ describe('#839 — a module role is not evidence that somebody applied', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//   LAST IN THE FILE, DELIBERATELY. `jest.doMock` registers for every later
-//   require, so a throwing supabase-db declared mid-file leaked into the suites
-//   after it — four failures that had nothing to do with what they tested, and
+describe('#840 — the legacy cohort is counted, not dropped in an unnamed bucket', () => {
+    /**
+     *   The owner, of the admin dashboard: "that will include the legacy
+     *   members". It did not.
+     *
+     *   `legacy_pending_onboarding` is written by three live paths — a member
+     *   who has PAID and is mid-onboarding — and was absent from the canonical
+     *   ACTIVE_REGISTRATION_STATUSES. One query (analytics.service's Co-op
+     *   Onboarding tile) spelled it out inline, so nothing ever failed and
+     *   nobody looked: a hardcoded list that works is how a shared list stays
+     *   wrong, which is precisely the habit #756 created that list to end.
+     */
+    it('THE CANONICAL LIST CONTAINS IT, because live code writes it', async () => {
+        const { ACTIVE_REGISTRATION_STATUSES } = await import('@/lib/module-registration-status');
+        expect([...ACTIVE_REGISTRATION_STATUSES]).toContain('legacy_pending_onboarding');
+    });
+
+    it('AND SUCH A MEMBER IS COUNTED, AND COUNTED AS PENDING', async () => {
+        /*
+         *   Executed rather than read. She must land in a NAMED bucket: `other`
+         *   is the bucket for a status nobody anticipated, and being in it means
+         *   she is invisible on the funnel even though the total includes her.
+         */
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        store = installFakeDb({
+            [COLLECTIONS.USERS]: {
+                'paid-mid-onboarding': {
+                    serviceRegistrations: { wave: { status: 'legacy_pending_onboarding' } },
+                },
+                'ordinary': { serviceRegistrations: { wave: { status: 'approved' } } },
+            },
+        });
+
+        const c = await countModuleApplicants('wave');
+
+        expect(c.total).toBe(2);
+        expect(c.pending).toBe(1);
+        expect(c.other).toBe(0);
+    });
+
+    it('AND EVERY STATUS LIVE CODE WRITES IS IN ONE OF THE TWO LISTS', async () => {
+        /*
+         *   The rule #756 set, enforced rather than restated: the lists are
+         *   "derived from what the code writes". Swept by SHAPE, so a status
+         *   invented tomorrow fails here instead of silently landing in `other`
+         *   — #824's lesson that an enumerated list cannot catch what nobody has
+         *   invented yet.
+         *
+         *   WALKED IN PROCESS, not shelled out to grep. The first version passed
+         *   a regex through two levels of shell escaping, matched nothing, and
+         *   was caught by the vacuity guard below rather than by reading it.
+         */
+        const { readFileSync, readdirSync, statSync } = require('fs') as typeof import('fs');
+        const { join } = require('path') as typeof import('path');
+        const {
+            ACTIVE_REGISTRATION_STATUSES, INACTIVE_REGISTRATION_STATUSES,
+        } = await import('@/lib/module-registration-status');
+
+        const known = new Set<string>([
+            ...ACTIVE_REGISTRATION_STATUSES, ...INACTIVE_REGISTRATION_STATUSES,
+        ]);
+
+        const walk = (dir: string, out: string[] = []): string[] => {
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) {
+                    if (entry !== 'node_modules' && entry !== '__tests__') walk(full, out);
+                } else if (/\.tsx?$/.test(full) && !/\.test\./.test(full)) {
+                    out.push(full);
+                }
+            }
+            return out;
+        };
+
+        //   Any literal assigned to a serviceRegistrations …status, in either
+        //   the dotted-string or the nested-object spelling.
+        const PATTERNS = [
+            /serviceRegistrations\.[A-Za-z_]+\.status["']?\s*[:=]\s*["']([a-z_]+)["']/g,
+            /serviceRegistrations\.[A-Za-z_]+\.status["']?\s*[:=]\s*\w+\s*\?\s*["']([a-z_]+)["']\s*:\s*["']([a-z_]+)["']/g,
+        ];
+
+        const written = new Set<string>();
+        for (const file of walk(join(process.cwd(), 'src'))) {
+            const src = readFileSync(file, 'utf-8');
+            for (const re of PATTERNS) {
+                for (const m of src.matchAll(re)) {
+                    for (const g of m.slice(1)) if (g) written.add(g);
+                }
+            }
+        }
+
+        //   Vacuity guard: the sweep must actually find the vocabulary. This is
+        //   what failed on the shell-out version.
+        expect(written.size).toBeGreaterThan(3);
+
+        const unclassified = [...written].filter((v) => !known.has(v));
+        expect(unclassified).toEqual([]);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#841 — "not_started" is the absence of an application, not an application', () => {
+    /**
+     *   THE OWNER RAN THE BREAKDOWN AGAINST PRODUCTION, and it ended three
+     *   rounds of me guessing at this population:
+     *
+     *       approved       14,668
+     *       pending         5,083
+     *       not_started    16,997
+     *                      ------
+     *                      36,748   = exactly what the compliance card showed
+     *
+     *   The true answer is 14,668 + 5,083 = 19,751 — and 19,751 + the 496
+     *   role-only accounts is 20,247, which is precisely what the dashboard pie
+     *   had been reporting all along. The pie was right; this card was wrong.
+     *
+     *   `not_started` is what lib/canonical/normalizer writes as the DEFAULT for
+     *   an account with no status for a module. It is the absence of an
+     *   application expressed as a value, so `status IS NOT NULL` counts it.
+     *
+     *   AND #839 BLAMED THE WRONG GROUP. It removed the role union to fix this
+     *   same card, reasoning that auto-assigned roles inflated the count. The
+     *   role-only group is 496 people — 1.3% of the error. The removal stands on
+     *   its own merits, but it was not the fix, and the difference only became
+     *   visible by reading the data instead of the code.
+     */
+    it('THE REPORTED CASE: 36,748 becomes 19,751', async () => {
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        const users: Record<string, Record<string, unknown>> = {};
+        const add = (n: number, status: string | null, prefix: string) => {
+            for (let i = 1; i <= n; i += 1) {
+                users[`${prefix}${i}`] = status === null
+                    ? { roles: ['wave_participant'] }
+                    : { roles: ['wave_participant'], serviceRegistrations: { wave: { status } } };
+            }
+        };
+        //   The owner's production shape, scaled down by 100 to keep the fake db
+        //   quick. The RATIO is what the assertion is about; the full-scale run
+        //   against real Postgres returned 19,753 for 19,751 + 2 seeded users.
+        add(147, 'approved', 'a');
+        add(51, 'pending', 'p');
+        add(170, 'not_started', 'n');
+        add(5, null, 'c');
+        store = installFakeDb({ [COLLECTIONS.USERS]: users });
+
+        const c = await countModuleApplicants('wave');
+
+        //   The 170 not_started and the 5 role-only are both excluded.
+        expect(c.total).toBe(198);
+        expect(c.approved).toBe(147);
+        expect(c.pending).toBe(51);
+    });
+
+    it('AND NOBODY IS LEFT UNACCOUNTED FOR', async () => {
+        /*
+         *   `other` at 16,997 was the tell, printed on the card the whole time:
+         *   a total that did not reconcile with the buckets beside it. The
+         *   invariant is what made this findable, so it is asserted directly.
+         */
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        store = installFakeDb({
+            [COLLECTIONS.USERS]: {
+                'a': { serviceRegistrations: { wave: { status: 'approved' } } },
+                'p': { serviceRegistrations: { wave: { status: 'pending' } } },
+                'r': { serviceRegistrations: { wave: { status: 'rejected' } } },
+                'n': { serviceRegistrations: { wave: { status: 'not_started' } } },
+            },
+        });
+
+        const c = await countModuleApplicants('wave');
+
+        expect(c.total).toBe(3);
+        expect(c.other).toBe(0);
+        expect(c.approved! + c.pending! + c.rejected! + c.revisionRequired! + c.other!)
+            .toBe(c.total);
+    });
+
+    it('AND A REJECTED APPLICANT IS STILL AN APPLICANT', async () => {
+        /*
+         *   The opposite defect, and the reason NOT_STARTED_STATUSES is separate
+         *   from INACTIVE_REGISTRATION_STATUSES. `rejected` and `revoked` mean
+         *   somebody APPLIED and was refused; `not_started` means there was
+         *   never an application. Folding them together would erase refused
+         *   applicants from the funnel.
+         */
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        store = installFakeDb({
+            [COLLECTIONS.USERS]: {
+                'r': { serviceRegistrations: { wave: { status: 'rejected' } } },
+                'n': { serviceRegistrations: { wave: { status: 'not_started' } } },
+            },
+        });
+
+        const c = await countModuleApplicants('wave');
+
+        expect(c.total).toBe(1);
+        expect(c.rejected).toBe(1);
+    });
+
+    it('AND THE TWO LISTS DO NOT OVERLAP', async () => {
+        const {
+            NOT_STARTED_STATUSES, INACTIVE_REGISTRATION_STATUSES, ACTIVE_REGISTRATION_STATUSES,
+        } = await import('@/lib/module-registration-status');
+
+        for (const s of NOT_STARTED_STATUSES) {
+            expect([...INACTIVE_REGISTRATION_STATUSES]).not.toContain(s);
+            expect([...ACTIVE_REGISTRATION_STATUSES]).not.toContain(s);
+        }
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//   LAST IN THE FILE, DELIBERATELY — AND THIS HAS NOW BEEN GOT WRONG THREE
+//   TIMES. `jest.doMock` registers for every later require, so a throwing
+//   supabase-db declared mid-file leaks into every suite after it, which shows
+//   up as unrelated 5-second timeouts rather than as an obvious mock problem.
+//   ANY NEW describe GOES ABOVE THIS ONE — four failures that had nothing to do with what they tested, and
 //   exactly the kind of instrument fault this audit keeps finding in its own
 //   tooling.
 describe('#835 — a failed count is null, never zero', () => {
