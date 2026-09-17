@@ -126,6 +126,11 @@ const farmNationApplication = (role: 'buyer' | 'seller' | 'both') => ({
         firstName: 'Ada', lastName: 'Obi', otherName: '', phone: '08012345678',
         businessName: 'Obi Farms', state: 'Lagos', lga: 'Ikeja',
         address: '12 Broad Street, Ikeja',
+        //   #865 A Farm Nation profile carries its identity numbers now. Both
+        //   are eleven digits and neither is a recognisable placeholder, which
+        //   is the whole of the rule — lib/kyc-validators contacts no provider.
+        nin: '20481956372',
+        bvn: '31749206853',
     },
     interests: { propertyTypes: ['farmland'] },
     terms: { termsAccepted: true, privacyAccepted: true, feeDisclosureAccepted: true },

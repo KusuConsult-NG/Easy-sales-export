@@ -4,6 +4,8 @@ import { useState } from "react";
 import { ArrowRight, ArrowLeft } from "lucide-react";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { FormInput, FormSelect } from "@/components/ui/FormField";
+import { IdInput } from "@/components/ui/IdInput";
+import { isObviouslyFakeId, fakeIdErrorMessage } from "@/lib/kyc-validators";
 
 const NIGERIAN_STATES = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
@@ -30,6 +32,21 @@ export default function ProfileStep({ onNext, onBack, onChange, initialData }: P
         state: initialData?.state || "",
         lga: initialData?.lga || "",
         address: initialData?.address || "",
+        /**
+         *   #865 THE FORM NAMED AN IDENTITY DOCUMENT IT NEVER ASKED FOR.
+         *
+         *   THE OWNER: "add field NIN/BVN but should pass without QoreID
+         *   verification."
+         *
+         *   This screen already told the applicant "Enter your name exactly as
+         *   it appears on your NIN/BVN", and hinted the same on two more
+         *   fields — three references to a document the form did not collect.
+         *   So a Farm Nation seller was asked to spell their name to match a
+         *   number nobody ever saw, and the KYC notice was advice about
+         *   nothing.
+         */
+        nin: initialData?.nin || "",
+        bvn: initialData?.bvn || "",
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -51,6 +68,27 @@ export default function ProfileStep({ onNext, onBack, onChange, initialData }: P
         if (!formData.state) e.state = "State is required";
         if (!formData.lga.trim()) e.lga = "LGA is required";
         if (!formData.address.trim()) e.address = "Address is required";
+
+        /*
+         *   #865 FORMAT AND PLAUSIBILITY, AND NOTHING ELSE.
+         *
+         *   "should pass without QoreID verification" — nothing here contacts
+         *   any provider, and #487 settled what that means platform-wide:
+         *   "PASS means do not require an external check... a well-formed
+         *   number is accepted and recorded as self_declared".
+         *
+         *   The rules come from lib/kyc-validators rather than being written
+         *   out here, because #501's finding was this exact rule reaching one
+         *   submission path out of five. The server applies the same module to
+         *   the same values; this only saves a round trip.
+         */
+        for (const [key, label] of [["nin", "NIN"], ["bvn", "BVN"]] as const) {
+            const value = formData[key].trim();
+            if (!value) e[key] = `${label} is required`;
+            else if (!/^\d{11}$/.test(value)) e[key] = `${label} must be exactly 11 digits`;
+            else if (isObviouslyFakeId(value)) e[key] = fakeIdErrorMessage(label);
+        }
+
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -87,6 +125,20 @@ export default function ProfileStep({ onNext, onBack, onChange, initialData }: P
                 <FormInput label="Last Name" required
                     value={formData.lastName} onChange={e => set('lastName', e.target.value)}
                     placeholder="e.g. Ibrahim" error={errors.lastName} hint="As on your NIN/BVN"
+                    accentColor="emerald" />
+            </div>
+
+            {/* Row 1b: NIN + BVN — #865, the numbers the notice above refers to. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <IdInput label="NIN" required digitsOnly showCount maxLength={11}
+                    value={formData.nin} onChange={v => set('nin', v)}
+                    placeholder="11 digits" error={errors.nin}
+                    hint="Your National Identification Number"
+                    accentColor="emerald" />
+                <IdInput label="BVN" required digitsOnly showCount maxLength={11}
+                    value={formData.bvn} onChange={v => set('bvn', v)}
+                    placeholder="11 digits" error={errors.bvn}
+                    hint="Your Bank Verification Number"
                     accentColor="emerald" />
             </div>
 

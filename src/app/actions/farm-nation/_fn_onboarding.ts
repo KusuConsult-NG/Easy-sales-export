@@ -13,6 +13,9 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { z } from "zod";
 import type { FarmNationOnboardingData } from "@/lib/types/farm-nation-actions";
+import { requiredNationalIdField } from "@/lib/kyc-validators";
+import { hashData } from "@/lib/security";
+import { kycReadableField } from "@/lib/kyc-identity-store";
 import { latestApplication } from "@/lib/latest-application";
 
 /**
@@ -29,6 +32,34 @@ const farmNationOnboardingSchema = z.object({
         state: z.string().min(2, "State is required"),
         lga: z.string().min(2, "LGA is required"),
         address: z.string().min(5, "Address is required"),
+        /**
+         *   #865 THE NUMBERS THE FORM'S OWN KYC NOTICE REFERS TO.
+         *
+         *   THE OWNER: "add field NIN/BVN but should pass without QoreID
+         *   verification."
+         *
+         *   The onboarding screen told the applicant "Enter your name exactly
+         *   as it appears on your NIN/BVN" and hinted the same on two more
+         *   fields, and the form collected neither number. Three references to
+         *   a document nothing asked for.
+         *
+         *   DECLARED HERE OR SILENTLY DROPPED. This action parses with a strict
+         *   object; a field the client sends and the schema does not name never
+         *   reaches the database. That is this audit's most common false
+         *   positive — a form that collects an answer nobody keeps — and it is
+         *   why the client half alone would have been worth nothing.
+         *
+         *   `requiredNationalIdField` IS THE OWNER'S OWN RULE, IMPORTED. #774:
+         *   "NIN, BVN and voter's cards are mandatory but shouldn't be checked
+         *   by QoreID." Nothing in that module contacts any provider — #487
+         *   settled that "PASS means do not require an external check" — so
+         *   these are eleven digits that are not an obvious placeholder, and
+         *   no more. Required, matching WAVE and the owner's standing
+         *   instruction, and matching this screen's own copy, which has always
+         *   presumed the applicant has both.
+         */
+        nin: requiredNationalIdField('NIN'),
+        bvn: requiredNationalIdField('BVN'),
     }),
     interests: z.object({
         propertyTypes: z.array(z.string()).optional(),
@@ -49,6 +80,34 @@ const farmNationOnboardingSchema = z.object({
     })
 });
 
+
+
+/**
+ * The profile as it may be STORED — without the raw identity numbers.
+ *
+ *   #865 THE FEATURE THAT ONLY HAD TO COLLECT TWO NUMBERS NEARLY LEFT SIX
+ *   PLAINTEXT COPIES OF THEM.
+ *
+ *   `validatedData.profile` is spread or stored at six sites across this file:
+ *   the user document and the application row on the submit path, and three
+ *   more on the resubmit path that mirror them. Adding `nin` and `bvn` to the
+ *   schema put the raw numbers into every one of those writes for free — a new
+ *   plaintext copy of the two values this platform is most careful with, in a
+ *   nested object nobody would think to look in.
+ *
+ *   kyc-identity-store is the settled answer: the field's own name holds the
+ *   HASH, and an encrypted readable copy sits beside it for a reviewer. The
+ *   callers below write that, and this makes sure the profile object itself
+ *   carries neither number.
+ *
+ *   ONE FUNCTION RATHER THAN SIX DELETIONS, because five of six is exactly the
+ *   shape this audit keeps finding — and the sixth would be the one that
+ *   mattered.
+ */
+function storableProfile<T extends { nin?: unknown; bvn?: unknown }>(profile: T) {
+    const { nin: _nin, bvn: _bvn, ...rest } = profile;
+    return rest;
+}
 
 async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData): Promise<ActionResponse<null>> { 
     try {
@@ -95,12 +154,18 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
             const fullName = [validatedData.profile.firstName, validatedData.profile.otherName, validatedData.profile.lastName]
                 .filter(Boolean).join(" ").trim();
 
+            //   #865 Trimmed once, here, so the hash and the encrypted copy are
+            //   taken from the same string. Two independent `.trim()` calls is
+            //   how a hash stops matching its own readable copy.
+            const applicantNin = validatedData.profile.nin.trim();
+            const applicantBvn = validatedData.profile.bvn.trim();
+
             // DISEASE 2 FIX: normalizeUserUpdate mirrors farmNation→farm_nation
             // and phone→phoneNumber so both canonical key variants are always in sync.
             transaction.update(userRef, normalizeUserUpdate({ 
                 "farmNation.role": validatedData.role,
                 "farmNation.profile": {
-                    ...validatedData.profile,
+                    ...storableProfile(validatedData.profile),
                     fullName
                 },
                 "farmNation.interests": validatedData.interests,
@@ -121,6 +186,43 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
                 stateOfOrigin: validatedData.profile.state,
                 lga: validatedData.profile.lga,
                 residentialAddress: validatedData.profile.address,
+                /*
+                 *   #865 THE IDENTITY NUMBERS, WHERE THE PLATFORM ALREADY KEEPS
+                 *   THEM.
+                 *
+                 *   HASHED, NOT PLAIN, and that is the whole reason this block
+                 *   is here rather than left to the `farmNation.profile` spread
+                 *   above. The spread stores whatever the form sent, so on its
+                 *   own it would have put a raw NIN and BVN at rest in a nested
+                 *   profile object — a new plaintext copy of the two numbers
+                 *   the platform is most careful with, introduced by a feature
+                 *   that was only asked to collect them.
+                 *
+                 *   The settled convention is kyc-identity-store's: the field's
+                 *   own name holds the HASH, which is what duplicate scans
+                 *   compare, and `kycReadableField` puts an ENCRYPTED copy
+                 *   beside it for a reviewer who needs to see the number. WAVE's
+                 *   application writes exactly this; copying its shape rather
+                 *   than inventing a third is the point.
+                 *
+                 *   `ninVerified` / `bvnVerified` are deliberately NOT written.
+                 *   Nothing has verified anything — that is what "pass without
+                 *   QoreID" means — and the method says so instead, so an admin
+                 *   screen renders "Self-declared" rather than a green tick an
+                 *   operator would act on (#485).
+                 */
+                bvn: applicantBvn ? hashData(applicantBvn) : null,
+                nin: applicantNin ? hashData(applicantNin) : null,
+                "kyc.bvn": applicantBvn ? hashData(applicantBvn) : null,
+                "kyc.nin": applicantNin ? hashData(applicantNin) : null,
+                ...kycReadableField('bvn', applicantBvn),
+                ...kycReadableField('nin', applicantNin),
+                "kyc.bvnStatus": "self_declared",
+                "kyc.ninStatus": "self_declared",
+                "kyc.bvnVerificationMethod": "self_declared",
+                "kyc.ninVerificationMethod": "self_declared",
+                bvnVerificationMethod: "self_declared",
+                ninVerificationMethod: "self_declared",
                 updatedAt: FieldValue.serverTimestamp() 
             }));
 
@@ -130,7 +232,7 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
                 applicationId: appRef.id,
                 userEmail: session.user.email,
                 role: validatedData.role,
-                profile: validatedData.profile,
+                profile: storableProfile(validatedData.profile),
                 interests: validatedData.interests,
                 status: "pending",
                 submittedAt: FieldValue.serverTimestamp(),
@@ -503,6 +605,11 @@ async function _resubmitFarmNationApplicationAction(
         const fullName = [validatedData.profile.firstName, validatedData.profile.otherName, validatedData.profile.lastName]
             .filter(Boolean).join(" ").trim();
 
+        //   #865 Trimmed once, as on the submit path, so the hash and the
+        //   encrypted copy are taken from the same string.
+        const resubmitNin = validatedData.profile.nin.trim();
+        const resubmitBvn = validatedData.profile.bvn.trim();
+
         await db.runTransaction(async (transaction) => {
             if (!appRef) {
                 // Legacy case: Create a new document in FARM_NATION_APPLICATIONS
@@ -514,7 +621,7 @@ async function _resubmitFarmNationApplicationAction(
                     applicationId: newAppRef.id,
                     userEmail: session.user.email || "",
                     role: validatedData.role,
-                    profile: validatedData.profile,
+                    profile: storableProfile(validatedData.profile),
                     interests: validatedData.interests,
                     status: "pending",
                     submittedAt: FieldValue.serverTimestamp(),
@@ -524,7 +631,7 @@ async function _resubmitFarmNationApplicationAction(
             } else {
                 transaction.update(appRef, {
                     role: validatedData.role,
-                    profile: validatedData.profile,
+                    profile: storableProfile(validatedData.profile),
                     interests: validatedData.interests,
                     status: "pending",
                     rejectionReason: null,
@@ -538,7 +645,7 @@ async function _resubmitFarmNationApplicationAction(
             transaction.update(userDocRef, normalizeUserUpdate({ 
                 "farmNation.role": validatedData.role,
                 "farmNation.profile": {
-                    ...validatedData.profile,
+                    ...storableProfile(validatedData.profile),
                     fullName
                 },
                 "farmNation.interests": validatedData.interests,
@@ -559,6 +666,27 @@ async function _resubmitFarmNationApplicationAction(
                 stateOfOrigin: validatedData.profile.state,
                 lga: validatedData.profile.lga,
                 residentialAddress: validatedData.profile.address,
+                /*
+                 *   #865 THE RESUBMIT PATH WRITES THEM TOO.
+                 *
+                 *   This function is a near-copy of the submit path, and a rule
+                 *   applied to one of the two is how the numbers would be
+                 *   collected from a returning applicant and stored nowhere —
+                 *   the form asking again and the record staying empty. Same
+                 *   hash-plus-encrypted-copy shape as above.
+                 */
+                bvn: resubmitBvn ? hashData(resubmitBvn) : null,
+                nin: resubmitNin ? hashData(resubmitNin) : null,
+                "kyc.bvn": resubmitBvn ? hashData(resubmitBvn) : null,
+                "kyc.nin": resubmitNin ? hashData(resubmitNin) : null,
+                ...kycReadableField('bvn', resubmitBvn),
+                ...kycReadableField('nin', resubmitNin),
+                "kyc.bvnStatus": "self_declared",
+                "kyc.ninStatus": "self_declared",
+                "kyc.bvnVerificationMethod": "self_declared",
+                "kyc.ninVerificationMethod": "self_declared",
+                bvnVerificationMethod: "self_declared",
+                ninVerificationMethod: "self_declared",
                 updatedAt: FieldValue.serverTimestamp() 
             }));
         });

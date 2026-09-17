@@ -80,6 +80,11 @@ function form(extra: Record<string, unknown> = {}): any {
             state: 'Plateau',
             lga: 'Jos North',
             address: '12 Market Road, Jos',
+        //   #865 A Farm Nation profile carries its identity numbers now. Both
+        //   are eleven digits and neither is a recognisable placeholder, which
+        //   is the whole of the rule — lib/kyc-validators contacts no provider.
+        nin: '20481956372',
+        bvn: '31749206853',
         },
         interests: { listingTypes: ['farmland'], totalAcreage: '5', readyToList: true },
         terms: { termsAccepted: true, privacyAccepted: true, feeDisclosureAccepted: true },
