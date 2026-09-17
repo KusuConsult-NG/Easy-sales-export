@@ -206,6 +206,28 @@ const EXPECTED = [
              "address, which is the exact definition of that segment, so every " +
              "erasure honoured made the figure larger.",
     },
+    {
+        n: "038",
+        why: "the expression indexes on users.raw_data->>'phone' and " +
+             "->>'phoneNumber'. Order does not matter against the others; it is " +
+             "here for the same reason 036 is, one field along, and 022's header " +
+             "predicted it in as many words — \"the expression-index habit did not " +
+             "travel with them\". registerAction's dedup guard is " +
+             "`where(\"phone\",\"in\",variants).limit(1)`, and LIMIT stops at the " +
+             "first MATCH, so a phone nobody has registered before reads every row " +
+             "before it can answer no: the guard is fast for the duplicate it " +
+             "exists to reject and slowest for the genuine registration it exists " +
+             "to admit. Measured on 50,122 rows, a Seq Scan over 1,319 buffers " +
+             "versus 8 with the index, and in production it is the " +
+             "`[57014] canceling statement due to statement timeout` under " +
+             "\"Registration error\" in the log. Seven live sites filter a phone " +
+             "spelling on users — two registration entry points, the WAVE duplicate " +
+             "scan, the bulk import, the cooperative identity check and admin " +
+             "search, the last using ranges, which one btree expression index also " +
+             "serves. Plain CREATE INDEX under a lock_timeout, per #469; " +
+             "transaction-safe, and it takes effect the moment it is applied — the " +
+             "code needs no change to benefit.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

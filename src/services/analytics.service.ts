@@ -9,7 +9,7 @@ import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
 import { countLivePeople } from "@/lib/user-population";
 //   #756 — one accepted-status list for every module tile, measured against
 //   what the code actually writes rather than spelled out per query.
-import { registrationStatusFilter } from "@/lib/module-registration-status";
+import { registrationStatusFilter, settledStatusFilter, inReviewStatusFilter } from "@/lib/module-registration-status";
 import type {
     AnalyticsServiceContract,
     PlatformHealthMetrics,
@@ -1403,6 +1403,10 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
          *   wrong in both directions. See lib/module-registration-status.ts.
          */
         const ST = registrationStatusFilter();
+        //   #846 The cooperative pair's two halves, derived so their union is
+        //   ACTIVE_REGISTRATION_STATUSES by definition.
+        const SETTLED = settledStatusFilter();
+        const IN_REVIEW = inReviewStatusFilter();
         const reg = (module: string) => `raw_data->serviceRegistrations->${module}->>status.in.${ST}`;
         const anyRole = (...roles: string[]) => roles.map((r) => `roles.cs.{"${r}"}`).join(",");
 
@@ -1436,7 +1440,12 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
             supabaseAdmin
                 .from('users')
                 .select('*', { count: 'exact', head: true })
-                .or('raw_data->serviceRegistrations->cooperatives->>status.in.(approved,active,paid,completed,suspended),raw_data->serviceRegistrations->cooperative->>status.in.(approved,active,paid,completed,suspended),roles.cs.{"cooperative_member"}'),
+                //   #846 Derived from ACTIVE_REGISTRATION_STATUSES rather than
+                //   spelled out, so this slice and the onboarding one below
+                //   partition that list by construction instead of by
+                //   coincidence. See lib/module-registration-status.
+                .or(`raw_data->serviceRegistrations->cooperatives->>status.in.${SETTLED}
+,raw_data->serviceRegistrations->cooperative->>status.in.${SETTLED},roles.cs.{"cooperative_member"}`.replace(/\n/g, '')),
 
             // Cooperative Onboarding (pending)
             supabaseAdmin
@@ -1446,7 +1455,9 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
                 //   _coop_admin_members when an admin asks for corrections, and
                 //   was in neither the active list nor this one, so a member
                 //   mid-review appeared in no tile at all.
-                .or('raw_data->serviceRegistrations->cooperatives->>status.in.(pending,pending_approval,revision_required,legacy_pending_onboarding),raw_data->serviceRegistrations->cooperative->>status.in.(pending,pending_approval,revision_required,legacy_pending_onboarding)'),
+                //   #846 The other half of the same partition.
+                .or(`raw_data->serviceRegistrations->cooperatives->>status.in.${IN_REVIEW}
+,raw_data->serviceRegistrations->cooperative->>status.in.${IN_REVIEW}`.replace(/\n/g, '')),
 
             // Farm Nation
             supabaseAdmin

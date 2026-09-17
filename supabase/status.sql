@@ -50,6 +50,30 @@ UNION ALL
 SELECT '033 auth-id lookup applied',
        coalesce((SELECT 'YES' FROM pg_proc WHERE proname='find_users_by_supabase_auth_ids' LIMIT 1), 'NO')
 UNION ALL
+-- ── #848 — THE EXPRESSION INDEXES, WHICH THIS FILE COULD NOT SEE AT ALL. ────
+--
+-- Everything above asks about FUNCTIONS and row-level security. 036 and 038
+-- create no function, so a database missing either reported a clean bill of
+-- health — and 038 is the one that decides whether registration completes or
+-- times out. The owner-side question this file exists to answer, "is it
+-- applied", had no answer for exactly the migration where it mattered most.
+--
+-- Read from pg_indexes by name, because an index that exists under a different
+-- definition would still be wrong. The names are the ones the migrations create.
+SELECT '038 phone index applied (registration)',
+       CASE WHEN count(*) = 2 THEN 'YES'
+            WHEN count(*) = 1 THEN 'PARTIAL - one of two present'
+            ELSE 'NO - registration will time out as the table grows' END
+  FROM pg_indexes
+ WHERE schemaname = 'public' AND tablename = 'users'
+   AND indexname IN ('idx_users_phone', 'idx_users_phone_number')
+UNION ALL
+SELECT '036 seller-status index applied (/marketplace)',
+       CASE WHEN count(*) = 1 THEN 'YES' ELSE 'NO - the public page scans every user' END
+  FROM pg_indexes
+ WHERE schemaname = 'public' AND tablename = 'users'
+   AND indexname = 'idx_users_seller_verification_status'
+UNION ALL
 -- ── #666 — APPLICATION FUNCTIONS ONLY. ──────────────────────────────────────
 -- The first version of this line counted every function in `public` and said
 -- "expect 45", which was the number on the machine it was written on. Supabase

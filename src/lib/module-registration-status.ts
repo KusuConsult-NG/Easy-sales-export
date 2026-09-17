@@ -85,6 +85,44 @@ export const ACTIVE_REGISTRATION_STATUSES = [
      */
     "legacy_pending_onboarding",
     /*
+     *   #847 A FOURTH ONE THAT IS WRITTEN AND WAS NOT ACCEPTED — thirty-one
+     *   cooperative members, measured in production:
+     *
+     *       not_started                 33,576
+     *       pending                      1,639
+     *       active                       1,255
+     *       approved                       169
+     *       pending_repair                  31   <-- in no list at all
+     *       legacy_pending_onboarding        8
+     *
+     *   `pending_repair` is written by cooperatives/(member)/layout.tsx:118-119,
+     *   which flags a membership record whose stored name is the literal string
+     *   "undefined" and sets BOTH spellings to this value so the member is sent
+     *   back to fix it. It is a live path, it deliberately preserves her BVN,
+     *   next-of-kin and documents rather than deleting the record, and
+     *   _coop_registration.ts:722 then lets her re-submit:
+     *
+     *       const allowedStatuses = ['pending', 'revision_required', 'pending_repair'];
+     *
+     *   So the code already treats it as a live application beside
+     *   `revision_required` — in one file. It is absent here, which meant the
+     *   dashboard pie's filter dropped those thirty-one entirely while
+     *   lib/module-applicant-count's `total` (anything that is not
+     *   `not_started`) kept them. Two surfaces, the same thirty-one people, a
+     *   difference of exactly 31 — the disagreement item A3.1 of
+     *   docs/module-audit-checklist.md was written to look for.
+     *
+     *   AND THE KNOWLEDGE EXISTED ALREADY, in lib/registration-progress:
+     *
+     *       const PROVISIONAL_STATUSES = ['pending_repair', 'legacy_pending_onboarding'];
+     *
+     *   — the same pair, in the same order, one of which #840 already had to
+     *   move here for the same reason. That is #841's finding exactly: a rule
+     *   known correctly in one file and unavailable in the file that exists to
+     *   hold it. Both halves of that pair now live here.
+     */
+    "pending_repair",
+    /*
      *   Kept although nothing in src/ writes them. They are plausible values
      *   for rows written by earlier generations of this platform or by an
      *   import, and matching a status that does not occur costs nothing, while
@@ -140,6 +178,56 @@ export const INACTIVE_REGISTRATION_STATUSES = [
     "rejected",
     "revoked",
 ] as const;
+
+/**
+ * ACTIVE_REGISTRATION_STATUSES, split into "decided" and "still in review".
+ *
+ *   #846 THE COOPERATIVE PAIR KEPT ITS OWN TWO LISTS, AND THEIR EXHAUSTIVENESS
+ *   WAS A COINCIDENCE.
+ *
+ *   analytics.service draws cooperatives as TWO slices — "Cooperatives" and
+ *   "Co-op Onboarding" — because a member mid-onboarding is worth seeing
+ *   separately from a settled one. That split is right and the single ACTIVE
+ *   list cannot express it, so the queries spelled their statuses out inline:
+ *
+ *       Cooperatives      approved, active, paid, completed, suspended
+ *       Co-op Onboarding  pending, pending_approval, revision_required,
+ *                         legacy_pending_onboarding
+ *
+ *   Their union covers everything the cooperative flow writes TODAY. It does not
+ *   cover `under_review`, which is in the canonical ACTIVE list — and nothing
+ *   writes that for cooperative, so no member is currently lost.
+ *
+ *   THAT IS EXACTLY THE PROBLEM. The lists are exhaustive by coincidence rather
+ *   than by construction, so the day a status is added to the canonical list —
+ *   as `legacy_pending_onboarding` was, in #840, four commits ago — a
+ *   cooperative member carrying it appears in NEITHER slice and vanishes from
+ *   the dashboard with nothing failing.
+ *
+ *   Derived from ACTIVE_REGISTRATION_STATUSES by subtraction, so the union is
+ *   that list BY DEFINITION. A new status lands in IN_REVIEW by default —
+ *   visible — which is the same choice lib/module-applicant-count makes for its
+ *   `pending` bucket, and for the same reason: #824's lesson that an enumerated
+ *   list cannot catch a value nobody has invented yet.
+ */
+export const SETTLED_REGISTRATION_STATUSES = ACTIVE_REGISTRATION_STATUSES.filter(
+    (s) => ["approved", "active", "completed", "paid", "suspended"].includes(s),
+);
+
+/** Everything active that is not yet decided. See the note above. */
+export const IN_REVIEW_REGISTRATION_STATUSES = ACTIVE_REGISTRATION_STATUSES.filter(
+    (s) => !(SETTLED_REGISTRATION_STATUSES as readonly string[]).includes(s),
+);
+
+/** The `in.(…)` fragment for the settled half. */
+export function settledStatusFilter(): string {
+    return `(${SETTLED_REGISTRATION_STATUSES.join(",")})`;
+}
+
+/** The `in.(…)` fragment for the in-review half. */
+export function inReviewStatusFilter(): string {
+    return `(${IN_REVIEW_REGISTRATION_STATUSES.join(",")})`;
+}
 
 /** The `in.(…)` fragment for a PostgREST filter. */
 export function registrationStatusFilter(): string {

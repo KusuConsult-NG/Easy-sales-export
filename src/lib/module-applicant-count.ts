@@ -120,8 +120,19 @@ import {
  * "pending review" means on these screens, and this application is waiting on
  * the APPLICANT, not on a reviewer. Counting it as pending inflates the review
  * backlog with work nobody at the programme can action.
+ *
+ *   #847 `pending_repair` JOINS IT, AND BY THE SAME TEST. It is set by
+ *   cooperatives/(member)/layout.tsx when a membership record's stored name is
+ *   the literal "undefined", and it sends the member back to correct it —
+ *   waiting on her, not on a reviewer. _coop_registration.ts:722 already lists
+ *   the two side by side as the statuses from which a re-submission is allowed:
+ *
+ *       const allowedStatuses = ['pending', 'revision_required', 'pending_repair'];
+ *
+ *   Thirty-one cooperative members carry it in production. Before #847 they
+ *   were in no bucket here and in neither cooperative slice on the dashboard.
  */
-export const REVISION_STATUSES = ["revision_required"] as const;
+export const REVISION_STATUSES = ["revision_required", "pending_repair"] as const;
 
 /** Accepted — the person is in, decision made. */
 export const APPROVED_STATUSES = ACTIVE_REGISTRATION_STATUSES.filter(

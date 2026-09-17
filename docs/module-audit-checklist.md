@@ -228,6 +228,22 @@ npx playwright test --project=chromium     # no dev server running, port 3000 fr
 - WebKit is not installed, so cross-browser coverage is unchecked — and #833 was
   a browser-compatibility crash every other test missed.
 - The yams product row points at a missing image file (data, not code).
+- **Migration 038 must be applied to production by hand** (Supabase SQL Editor,
+  or `supabase/deploy.sql`). Until it is, registration goes on timing out —
+  #848. `supabase/status.sql` now answers whether it landed.
+- **`countModuleApplicants`'s `total` bucket cannot be indexed, and that is a
+  deliberate trade, not an oversight.** It filters
+  `status IS NOT NULL AND status <> 'not_started'`, and `<>` is not a btree
+  strategy, so the planner sequential-scans whatever index exists — measured on
+  50,122 rows, 3,475 buffers with and without one. Its four `IN` buckets index
+  well (3,475 → 574). Cooperative issues fifteen such counts per call
+  (5 buckets × 2 spellings + 1 overlap each), so an admin page load is ~15 full
+  scans of `users`, and production rows are far fatter than those fixtures.
+  Rewriting the total as an inclusion list would make it indexable and would
+  reintroduce exactly what #824 cost this audit — a list that cannot catch a
+  status nobody has invented yet. The route that keeps both is a partial or
+  covering index, or caching the counts; neither is measured yet, so neither is
+  claimed. Not urgent: nothing in the production log points at it.
 
 ---
 
@@ -268,3 +284,96 @@ is this audit's most repeated shape.
 - A1.1 / A1.2 — whether a member holding `cooperative_member` with no
   `COOPERATIVE_MEMBERS` row exists in production, and which screens would miss
   her.
+
+### E2 · Cooperative — pass 2 (#846, #847)
+
+Measured against production via `scripts/cooperative-population-breakdown.sql`.
+
+**A3.1 is settled, and it was a real disagreement.** Every
+`serviceRegistrations.cooperative(s).status` in production:
+
+| status | people | in the canonical ACTIVE list before pass 2? |
+|---|---:|---|
+| `not_started` | 33,576 | no — #841 excludes it, correctly |
+| `pending` | 1,639 | yes |
+| `active` | 1,255 | yes |
+| `approved` | 169 | yes |
+| **`pending_repair`** | **31** | **no — in no list at all** |
+| `legacy_pending_onboarding` | 8 | yes, since #840 |
+| *(no status on the object)* | 27 | n/a |
+
+36,678 carry a status; 3,102 of those are not `not_started`. The applicant
+register reported **3,102**; the dashboard pie, filtering on
+`ACTIVE_REGISTRATION_STATUSES`, reported **3,071**. A difference of exactly 31,
+about exactly those 31 people — two surfaces disagreeing about the same
+population, which is what A3.1 asks. **#847** adds `pending_repair` to the
+canonical list and to `REVISION_STATUSES` (it waits on the member, not on a
+reviewer). Both surfaces now report 3,102, and `other` — the unnamed bucket
+those 31 fell into — goes to zero.
+
+Also settled: the dual-spelling risk is real and already handled. **36,662
+accounts carry BOTH `cooperative` and `cooperatives`**, so the inclusion-exclusion
+in `lib/module-applicant-count` is load-bearing, not defensive — a sum would have
+reported roughly double.
+
+**A1.1 / A1.2 are NOT settled, and the reason is a defect in the measurement.**
+The first version of the breakdown script read membership rows from
+`document_collections WHERE collection_name = 'cooperative_members'`. That
+collection is in `DEDICATED_TABLE_MAP` and has a table of its own, so the query
+returned 0 **by construction** and its `LEFT JOIN` filed all 36,678 registered
+accounts under "no membership row". The script is corrected; the numbers it
+produced for sections 2, 4 and 5 are discarded. Sections 1 and 3 read only
+`users` and are what the table above reports.
+
+That is this audit's own signature defect — an assertion answered by the wrong
+occurrence — committed in the instrument built to look for it. Recorded here
+rather than quietly fixed, because the earlier figures were stated to the owner.
+
+**Fixed this pass:** #846 (the two cooperative dashboard slices derive their
+status lists from the canonical one by subtraction, so their union is that list
+by definition rather than by coincidence) and #847 (above). #847 landing four
+commits after #840 is the event #846 was written against: a status added to the
+canonical list while two hand-written lists sat beside it. It reached the Co-op
+Onboarding slice with nobody editing that query.
+
+**Carried to pass 3:** A1.1 / A1.2, on the corrected script.
+
+### E3 · Marketplace — pass 1, A4 only (#844)
+
+Measured via `scripts/marketplace-population-breakdown.sql`. A4 (identity and
+access) was taken first because the owner named it: *"A marketplace user can
+signup both as buyer or seller or both, is that wired properly?"*
+
+| signed up as | people | | marketplace status | people |
+|---|---:|---|---|---:|
+| *(no accountType recorded)* | 35,758 | | `not_started` | 34,184 |
+| `both` | 91 | | `approved` | 1,006 |
+| `seller` | 48 | | `pending` | 736 |
+| `buyer` | 44 | | `active` | 14 |
+| | | | *(none)* | 1 |
+
+35,941 registrations, of which **34,184 are `not_started`** — #841's exclusion,
+the same shape as WAVE's 16,997. The real marketplace population is **1,757**.
+
+**A4.1 FAIL → fixed (#844).** Of the 91 who signed up as "both", **90 held
+neither role** and one could only sell. Not one could do both. Fixed at the
+signup path and at admin approval.
+
+**Two things the data settled that reasoning had got wrong**, both recorded so
+they are not re-raised:
+
+- `marketplace_seller` has **zero** accounts (`buyer` 3, `marketplace_buyer`
+  598, `seller` 1,022). `module-access-check` omitting that spelling had been
+  called "a separate, worse bug" here; it is harmless.
+- The 45 of 48 plain sellers with **no seller role** are not a defect. The
+  seller role is granted on admin approval by design — an unverified seller
+  listing products is the worse failure — and 736 marketplace registrations are
+  `pending`. The control row exists to tell those two apart, and it did.
+
+**Carried to marketplace pass 2** (measured, not yet a claimed defect):
+`_getMarketplaceUsersAction` derives its `buyerRole` column from `accountType`
+*before* roles, so it reports what somebody signed up as under a name that says
+role — the 45 pending sellers read as `seller_only` on a screen listing
+capability. The final `else → "buyer_only"` looked like an invented default and
+is **not**: the query admits only accounts already holding one of the four
+roles, so that branch is unreachable. A1, A3, A5 and A6 are unwalked.
