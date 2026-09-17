@@ -61,3 +61,61 @@ export function statMoney(
     }
     return failed ? "Unavailable" : "—";
 }
+
+/**
+ * The type size a stat tile should render a value at, given the value.
+ *
+ *   #843 THE LAST ZERO OF A REVENUE FIGURE DROPPED ONTO ITS OWN LINE.
+ *
+ *   The owner: "the last zero broke and drop making the UI to look
+ *   unprofessional … the cards should be fix to accomodate any number", against
+ *
+ *       Total Revenue
+ *       ₦12,996,000
+ *
+ *   The tile carried `break-words`, added by #758 so that long PROSE values —
+ *   "at least ₦1,234,567,890", "Unavailable" — could wrap instead of running
+ *   into the label beneath. But `overflow-wrap: break-word` does not know the
+ *   difference between prose and a number, and a formatted figure is ONE
+ *   unbroken token, so it broke mid-digits.
+ *
+ *   THAT IS WORSE THAN UNTIDY. A currency amount split across two lines can be
+ *   read as the wrong number — ₦12,996,00 with a stray 0 beneath it — on the
+ *   tile an administrator uses to see what the platform has taken. #758's fix
+ *   was right about prose and wrong about digits, and the two need separating
+ *   rather than trading one off against the other.
+ *
+ * ── WHY A SIZE RULE RATHER THAN A SMALLER FIXED SIZE ────────────────────────
+ *
+ *   "Make it smaller" fixes today's longest figure and breaks on the next one:
+ *   this platform's revenue grows, and ₦123,456,789,012 is two characters from
+ *   the same defect. The size follows the VALUE, so a tile accommodates any
+ *   number without anyone revisiting it — which is what was actually asked for.
+ *
+ *   Sized by character count rather than measured, because a measurement needs
+ *   layout and this runs during render. `tabular-nums` is already on these
+ *   tiles, so every digit is the same width and a count is a reliable proxy.
+ */
+export function statValueClass(value: unknown): string {
+    const text = String(value ?? "");
+
+    /*
+     *   Prose keeps its wrapping. "Unavailable" and "at least ₦1,234,567,890"
+     *   have somewhere sensible to break — a space — and #758's finding was
+     *   that without it they overflowed the card. Detected by the presence of a
+     *   space rather than by a list of known strings, so a phrase nobody has
+     *   written yet is handled too.
+     */
+    const isProse = /\s/.test(text.trim());
+
+    //   A number, a currency amount, or a single word: never broken apart.
+    const wrap = isProse ? "break-words" : "whitespace-nowrap";
+
+    const size =
+        text.length <= 10 ? "text-2xl sm:text-3xl"
+            : text.length <= 14 ? "text-xl sm:text-2xl"
+                : text.length <= 18 ? "text-lg sm:text-xl"
+                    : "text-base sm:text-lg";
+
+    return `${size} ${wrap}`;
+}

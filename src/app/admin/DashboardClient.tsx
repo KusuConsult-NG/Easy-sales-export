@@ -24,6 +24,7 @@ import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
 import UserSegmentsChart from "@/components/admin/UserSegmentsChart";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { formatDateOrDash } from "@/lib/date-utils";
+import { statValueClass } from "@/lib/admin-stat-display";
 
 // AnalyticsCharts is the only chart on this page that pulls in recharts, and it
 // was the one component still imported statically. admin/analytics/page.tsx
@@ -356,7 +357,13 @@ export default function AdminDashboardPage() {
                                         //   their figures are read DOWN the column as much as
                                         //   across — proportional digits make the same number
                                         //   render a different width on every card.
-                                        className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 tracking-tight break-words tabular-nums"
+                                        //   #843 The size follows the VALUE — see
+                                        //   statValueClass. `break-words` broke
+                                        //   ₦12,996,000 mid-digits, because a
+                                        //   formatted figure is one unbroken
+                                        //   token and overflow-wrap cannot tell
+                                        //   a number from a sentence.
+                                        className={`${statValueClass(stat.value)} font-bold text-slate-900 mb-2 tracking-tight tabular-nums`}
                                     >
                                         {stat.value}
                                     </p>

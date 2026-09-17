@@ -34,7 +34,7 @@ const DashboardLineChart = dynamic(() => import("@/components/admin/DashboardLin
     )
 });
 import Link from "next/link";
-import { statText, statMoney } from "@/lib/admin-stat-display";
+import { statText, statMoney, statValueClass } from "@/lib/admin-stat-display";
 
 export default function AdminCooperativeDashboardPage() {
     const router = useRouter();
@@ -203,7 +203,13 @@ export default function AdminCooperativeDashboardPage() {
                             </Link>
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Total Contributions</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        {/*
+                          *   #843 The size follows the VALUE. A cooperative's
+                          *   contributions total is the figure most likely to
+                          *   outgrow its tile, and a money amount that breaks or
+                          *   overflows can be read as the wrong number.
+                          */}
+                        <p className={`${statValueClass(money(stats?.totalContributions))} font-bold text-gray-900 tabular-nums`}>
                             {money(stats?.totalContributions)}
                         </p>
                         <div className="flex items-center gap-1 mt-2 text-sm">
@@ -249,7 +255,7 @@ export default function AdminCooperativeDashboardPage() {
                             <span className="text-xs text-indigo-600 font-semibold">View details →</span>
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Total Savings</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        <p className={`${statValueClass(money(stats?.totalSavings))} font-bold text-gray-900 tabular-nums`}>
                             {money(stats?.totalSavings)}
                         </p>
                         <p className="text-sm text-gray-600 mt-2">Fixed savings deposits</p>
