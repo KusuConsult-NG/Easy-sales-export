@@ -223,27 +223,50 @@ npx playwright test --project=chromium     # no dev server running, port 3000 fr
 ## D. Open items not owned by this plan
 
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` — the owner generates it (32 bytes,
-  base64) and sets it in the **build** environment. Code only reports its
-  absence.
+  base64) and sets it on the Railway service. **#851 is what makes that
+  effective:** the Dockerfile now declares it (and `RAILWAY_GIT_COMMIT_SHA`) as
+  build `ARG`s, so the value reaches `next build`. It was set correctly all
+  along and a Docker build does not inherit the service environment, so it never
+  arrived — and `deploymentId` was `undefined` in every build since #836 for the
+  same reason. **Verify on the next deploy:** the build log must NOT contain
+  "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY IS NOT SET IN THIS BUILD", and the boot log
+  must not carry the SERVER ACTIONS warning. If it does, Railway is not passing
+  the ARG and that is the thing to escalate.
+- **Railway watch paths are excluding real changes.** The deploy notice for
+  `48461268` said the push matched none of them; that commit changed `src/lib`,
+  `src/services` and `supabase/`. A watch path that can skip `src/lib` and
+  `src/services` silently skips production fixes, which is why this session has
+  been unable to confirm which of its commits are live. Set it to cover `src/**`
+  and `supabase/**`, or remove it.
 - WebKit is not installed, so cross-browser coverage is unchecked — and #833 was
   a browser-compatibility crash every other test missed.
 - The yams product row points at a missing image file (data, not code).
 - **Migration 038 must be applied to production by hand** (Supabase SQL Editor,
   or `supabase/deploy.sql`). Until it is, registration goes on timing out —
   #848. `supabase/status.sql` now answers whether it landed.
-- **`countModuleApplicants`'s `total` bucket cannot be indexed, and that is a
-  deliberate trade, not an oversight.** It filters
-  `status IS NOT NULL AND status <> 'not_started'`, and `<>` is not a btree
-  strategy, so the planner sequential-scans whatever index exists — measured on
-  50,122 rows, 3,475 buffers with and without one. Its four `IN` buckets index
-  well (3,475 → 574). Cooperative issues fifteen such counts per call
-  (5 buckets × 2 spellings + 1 overlap each), so an admin page load is ~15 full
-  scans of `users`, and production rows are far fatter than those fixtures.
-  Rewriting the total as an inclusion list would make it indexable and would
-  reintroduce exactly what #824 cost this audit — a list that cannot catch a
-  status nobody has invented yet. The route that keeps both is a partial or
-  covering index, or caching the counts; neither is measured yet, so neither is
-  claimed. Not urgent: nothing in the production log points at it.
+- ~~`countModuleApplicants` issues 5–15 sequential scans per admin page load.~~
+  **Fixed in #850** (migration 039, `module_registration_counts`). The `total`
+  bucket's `<> 'not_started'` cannot use a btree index — measured, 3,475 buffers
+  with an expression index and without it — and rewriting it as an inclusion
+  list would reintroduce what #824 cost this audit. So the queries were made
+  **fewer** rather than cheaper: one scan returns every status combination and
+  TypeScript buckets them. **Migration 039 must be applied by hand**; until it
+  is, the code falls back to the old per-bucket queries and behaves exactly as
+  before.
+- **`countModuleApplicants` counts erased and superseded accounts.** #761
+  established that platform counts must exclude them — `is_live_person(raw_data)`
+  tests `deleted: true` and `_migratedTo` — and the segment counts do. The
+  applicant register does not, so a duplicate profile resolved by #724 is still
+  counted against its module if it kept a registration object. Not yet measured
+  in production, and deliberately not folded into #850: that was a performance
+  change and this is a behaviour change.
+- **The `since` filter reads `raw_data->>'createdAt'`, not the native
+  `created_at` column.** Correct — `createdAt` is an ISO-8601 UTC string, so the
+  lexicographic comparison is chronological (verified: 117 of 126 local rows) —
+  but unindexed, and the 9 rows carrying no `createdAt` key are excluded from
+  every dated count. The native column is typed, always populated and indexed by
+  027. Changing to it would alter which rows are counted, so it needs its own
+  finding rather than a quiet swap.
 
 ---
 

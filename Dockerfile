@@ -134,6 +134,55 @@ ENV NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
 ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 
+# ── #851 TWO BUILD-TIME VARIABLES THAT WERE SET IN RAILWAY AND NEVER REACHED
+#    THE BUILD — and they are the two that decide whether Server Actions work.
+#
+#    The owner, after #836: "the encription key was set which i told you
+#    earlier." It was — as a SERVICE variable, which is exactly where a runtime
+#    variable belongs. A Docker build does not inherit the service environment.
+#    Only a declared ARG is passed in, which is what the comment above this
+#    block already says in as many words:
+#
+#        "Declare as ARG (Railway passes these from the service's environment
+#         variables during the Docker build), then export as ENV so the
+#         `next build` process can read them."
+#
+#    Twenty-six variables were declared under that rule and these two were not,
+#    so both fixes aimed at version skew have been inert since they were
+#    written. The production log at 10:22 still shows the failure they were for,
+#    with a DIFFERENT action id in the same window:
+#
+#        Failed to find Server Action "7f222333500f9fe2…"
+#        Failed to find Server Action "7f183577e1306597…"   (x5)
+#
+#    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+#      Next encrypts the values a Server Action closes over. Absent at build
+#      time, it GENERATES A RANDOM KEY PER BUILD — so a browser holding a page
+#      from the previous build sends a payload the running server cannot read,
+#      and every deploy breaks every open form until the tab is reloaded. Set at
+#      runtime only, the build still baked in a random one. Needed in BOTH
+#      places, which is why it is also on the runner stage below.
+#
+#    RAILWAY_GIT_COMMIT_SHA
+#      next.config's `deploymentId` resolves from this. Undefined at build time
+#      means #836's deploymentId is undefined, so Next stamps no `?dpl=` on
+#      assets and sends no `x-deployment-id` — the skew protection it added has
+#      never been switched on. RAILWAY_DEPLOYMENT_ID is the fallback it already
+#      names, declared here too so the chain can actually resolve.
+#
+#    NEITHER IS SECRET-BEARING IN THE IMAGE LAYER THE WAY A NEXT_PUBLIC_* IS.
+#    The key is not inlined into the browser bundle; it is used to encrypt
+#    action payloads. It does persist in the builder stage's layer metadata,
+#    which the runner stage does not inherit — the runner takes .next output
+#    only — so the published image does not carry it from here.
+ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+ARG RAILWAY_GIT_COMMIT_SHA
+ARG RAILWAY_DEPLOYMENT_ID
+
+ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+ENV RAILWAY_GIT_COMMIT_SHA=$RAILWAY_GIT_COMMIT_SHA
+ENV RAILWAY_DEPLOYMENT_ID=$RAILWAY_DEPLOYMENT_ID
+
 # ── TypeScript type-check (standalone tsc — works correctly in Docker).
 # next build uses ignoreBuildErrors:true because Next.js's internal TypeScript
 # worker cannot resolve files within the packages/ workspace in this environment.

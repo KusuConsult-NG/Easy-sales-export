@@ -192,6 +192,117 @@ const EMPTY: ApplicantCounts = {
 };
 
 /**
+ * One row of `module_registration_counts` — a set of statuses, and how many
+ * accounts carry exactly that set across the module's key spellings.
+ */
+interface StatusSetRow {
+    statuses: string[] | null;
+    people: number | string | null;
+}
+
+/**
+ * The buckets, computed from one scan's worth of rows.
+ *
+ *   EXPORTED FOR THE TEST, and that is the point rather than a concession: the
+ *   bucketing is the part that can silently disagree with the fifteen queries it
+ *   replaces, and a pure function over rows can be executed against the exact
+ *   shapes production holds without a database.
+ *
+ *   AN ACCOUNT IS COUNTED IN A BUCKET IF **ANY** OF ITS STATUSES MATCHES, which
+ *   is precisely what the per-bucket queries did — each one asked "does any key
+ *   for this account satisfy the predicate", and the pairwise subtraction
+ *   existed only to stop the same account being added twice. Here an account
+ *   appears in exactly one row, so it cannot be.
+ */
+export function bucketStatusSets(rows: readonly StatusSetRow[]): ApplicantCounts {
+    const NOT_STARTED = new Set<string>(NOT_STARTED_STATUSES);
+    const APPROVED = new Set<string>(APPROVED_STATUSES);
+    const PENDING = new Set<string>(PENDING_STATUSES);
+    const REJECTED = new Set<string>(REJECTED_STATUSES);
+    const REVISION = new Set<string>(REVISION_STATUSES);
+
+    let total = 0, approved = 0, pending = 0, rejected = 0, revisionRequired = 0;
+
+    for (const row of rows) {
+        const statuses = row.statuses ?? [];
+        if (statuses.length === 0) continue;
+
+        //   Postgres `count(*)::bigint` arrives as a STRING through PostgREST —
+        //   `Number` rather than a bare add, or the totals concatenate. That is
+        //   not hypothetical: it is why supabase-db's aggregate helpers coerce.
+        const n = Number(row.people ?? 0);
+        if (!Number.isFinite(n)) continue;
+
+        const some = (s: Set<string>) => statuses.some((v) => s.has(v));
+
+        //   #841 — an account whose every status says it never began is not an
+        //   applicant. `some(not in NOT_STARTED)` rather than `!some(NOT_STARTED)`
+        //   because an account carrying `not_started` under one spelling and
+        //   `approved` under the other HAS applied.
+        if (statuses.some((v) => !NOT_STARTED.has(v))) total += n;
+
+        if (some(APPROVED)) approved += n;
+        if (some(PENDING)) pending += n;
+        if (some(REJECTED)) rejected += n;
+        if (some(REVISION)) revisionRequired += n;
+    }
+
+    return {
+        total,
+        approved,
+        pending,
+        rejected,
+        revisionRequired,
+        //   Same clamp as the query path, for the same reason: a negative
+        //   "other" on an admin card is worse than an understated one.
+        other: Math.max(0, total - approved - pending - rejected - revisionRequired),
+        counted: true,
+    };
+}
+
+/**
+ * The one-scan path. Null when the function is not there, so the caller falls
+ * back rather than reporting nothing.
+ */
+async function countFromRegistrationRollup(
+    keys: readonly string[],
+    since?: Date | null,
+): Promise<ApplicantCounts | null> {
+    try {
+        const { supabaseAdmin } = await import("@/lib/supabase");
+        const { data, error } = await supabaseAdmin.rpc("module_registration_counts", {
+            p_keys: [...keys],
+            //   The same value the query path sends: supabase-db normalises a
+            //   Date to toISOString() before comparing it with the JSONB path,
+            //   so the function receives exactly that string and compares it the
+            //   same way. Parity is the point — see the migration's header.
+            p_since_iso: since ? since.toISOString() : null,
+        });
+
+        if (error || !Array.isArray(data)) {
+            /*
+             *   NOT AN ERROR PATH — it is the pre-migration path. A missing
+             *   function is PGRST202 / 42883, and reporting that at error level
+             *   would fill the log with a condition that is expected between a
+             *   deploy and a migration. Anything else is worth seeing once,
+             *   because the fallback below is fifteen scans.
+             */
+            if (error) logger.warn(
+                "[applicant-count] module_registration_counts unavailable; " +
+                "falling back to per-bucket counts (migration 039 not applied?)",
+                { code: (error as { code?: string }).code },
+            );
+            return null;
+        }
+
+        return bucketStatusSets(data as StatusSetRow[]);
+    } catch (e) {
+        logger.warn("[applicant-count] rollup call failed; falling back", e);
+        return null;
+    }
+}
+
+/**
  * Count the people who have applied to a module.
  *
  * @param module    which programme
@@ -216,6 +327,30 @@ export async function countModuleApplicants(
     };
 
     try {
+        /**
+         *   #850 ONE SCAN FIRST, and the fifteen queries below only if it is
+         *   unavailable.
+         *
+         *   Everything under this line is correct and expensive: one `count()`
+         *   per bucket per key spelling, plus one per overlapping pair, each
+         *   filtering a JSONB path no index serves. Five queries for a
+         *   single-key module, FIFTEEN for cooperative and farm nation — and
+         *   five admin surfaces call this, so a cooperative admin page load read
+         *   the whole users table fifteen times.
+         *
+         *   `module_registration_counts` (migration 039) answers the same
+         *   question in one pass: how many accounts carry each SET of statuses
+         *   across the requested keys. The vocabulary stays here, in TypeScript;
+         *   the function knows only what is in the column.
+         *
+         *   THE FALLBACK IS NOT DEFENSIVE DECORATION. Code reaches production
+         *   before a migration does — that is the normal order on this platform,
+         *   and #480 records the same arrangement for the email_normalised
+         *   column. Until 039 is applied this behaves exactly as it does today.
+         */
+        const viaOneScan = await countFromRegistrationRollup(keys, since);
+        if (viaOneScan) return viaOneScan;
+
         /**
          * INCLUSION-EXCLUSION, not a sum.
          *

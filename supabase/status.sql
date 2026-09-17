@@ -85,7 +85,24 @@ UNION ALL
 -- count(DISTINCT proname), not count(*): credit_wallet_once and
 -- debit_jsonb_balance are OVERLOADED, so a row count and the list below
 -- disagree by two and the expectation cannot match both.
-SELECT 'application functions present (expect 34)', count(DISTINCT p.proname)::text
+/*
+ *   #850 THIRTY-FOUR WAS TWO SHORT, AND ONE OF THE TWO WAS 037's OWN FUNCTION.
+ *
+ *   Measured against a database carrying every migration: 36 application
+ *   functions, against a list of 34. The two missing from the list below were
+ *
+ *       is_live_person             created by 037 — the function that decides
+ *                                  whether erased and superseded accounts are
+ *                                  counted in the Ghost segment, which is the
+ *                                  whole point of that migration
+ *       module_registration_counts created by 039
+ *
+ *   So a database missing 037's function reported the right number of functions
+ *   and no MISSING row, which is the failure mode this file's own header warns
+ *   about: "a status query that always says YES is worse than none". 037 was
+ *   added to the list of migrations and its function was not added here.
+ */
+SELECT 'application functions present (expect 36)', count(DISTINCT p.proname)::text
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   LEFT JOIN pg_depend d ON d.objid = p.oid AND d.deptype = 'e'
@@ -118,6 +135,7 @@ SELECT 'MISSING FUNCTION', expected.name
                ('find_users_by_normalised_emails'),
                ('find_users_by_supabase_auth_ids'),
                ('increment_within_ceiling'),
+               ('is_live_person'),
                ('jsonb_array_remove'),
                ('jsonb_array_union'),
                ('jsonb_numeric_or_null'),
@@ -126,6 +144,7 @@ SELECT 'MISSING FUNCTION', expected.name
                ('jsonb_text_array_or_null'),
                ('jsonb_truthy'),
                ('merge_raw_data'),
+               ('module_registration_counts'),
                ('native_column_map'),
                ('platform_revenue_totals'),
                ('update_updated_at_column'),

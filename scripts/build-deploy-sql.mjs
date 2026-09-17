@@ -228,6 +228,27 @@ const EXPECTED = [
              "transaction-safe, and it takes effect the moment it is applied — the " +
              "code needs no change to benefit.",
     },
+    {
+        n: "039",
+        why: "module_registration_counts — one scan of `users` returning how many " +
+             "accounts carry each SET of module-registration statuses. Order does " +
+             "not matter against the others; it creates a function and depends on " +
+             "no earlier one. It replaces the 5-15 SEQUENTIAL SCANS per admin page " +
+             "load that #835's applicant register introduced and that are already " +
+             "deployed: one count() per bucket per key spelling plus one per " +
+             "overlapping pair, each filtering a JSONB status path no index serves. " +
+             "An index does not solve it — the `total` bucket filters `<> " +
+             "'not_started'`, and `<>` is not a btree strategy, so the planner " +
+             "scans with an expression index exactly as without one (3,475 buffers " +
+             "either way, measured on 50,122 rows). Rewriting that as an inclusion " +
+             "list would make it indexable and would reintroduce what #824 cost " +
+             "this audit. So the queries are made FEWER rather than cheaper. The " +
+             "status vocabulary stays in lib/module-registration-status; this " +
+             "function groups by what is in the column and knows nothing about " +
+             "what the values mean. lib/module-applicant-count falls back to its " +
+             "existing per-bucket queries when the function is absent, so code " +
+             "deployed ahead of this migration behaves exactly as it does today.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

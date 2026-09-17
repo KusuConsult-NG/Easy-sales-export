@@ -3,6 +3,42 @@ import withBundleAnalyzer from '@next/bundle-analyzer';
 import { buildCsp } from './src/lib/csp';
 import { withSentryConfig } from '@sentry/nextjs';
 
+/**
+ *   #851 SAID DURING THE BUILD, WHERE THE VARIABLE IS ACTUALLY MISSING.
+ *
+ *   The boot-log warning in env-validator tells whoever reads a container's
+ *   output. This tells whoever reads the BUILD log, which is where the mistake
+ *   is made and the only place it can be corrected before an image ships.
+ *
+ *   IT WARNS RATHER THAN THROWS, and that is a judgement rather than caution.
+ *   Failing the build is the better failure in principle — this codebase argues
+ *   that repeatedly — but it is not testable from here against Railway's own
+ *   build environment, and a build that refuses where the previous one merely
+ *   shipped a flaw would replace a broken feature with no deploys at all. So it
+ *   is loud, and the next build log answers whether the ARG added to the
+ *   Dockerfile is being passed. If it is not, THAT is the thing to escalate.
+ */
+if (process.env.NODE_ENV === "production"
+    && !process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY) {
+  console.error(
+    [
+      "",
+      "================================================================",
+      " NEXT_SERVER_ACTIONS_ENCRYPTION_KEY IS NOT SET IN THIS BUILD.",
+      "",
+      " Next will generate a random key for this build alone, so every",
+      " deploy breaks the forms that are open at the time —",
+      ' "Failed to find Server Action" on submit.',
+      "",
+      " Setting it on the service is not enough: a Docker build does not",
+      " inherit the service environment. The Dockerfile declares it as an",
+      " ARG (#851); it must also be set on the platform.",
+      "================================================================",
+      "",
+    ].join("\n"),
+  );
+}
+
 const nextConfig: NextConfig = {
   typescript: {
     // Type checking runs as a separate `npx tsc --noEmit` step immediately
@@ -22,6 +58,22 @@ const nextConfig: NextConfig = {
   env: {
     BUILD_TIME: new Date().toISOString(),
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+    /**
+     *   #851 WHETHER THE BUILD HAD THE SERVER-ACTIONS KEY — a fact only the
+     *   build can report, stamped so the running container can say it.
+     *
+     *   Absent at build time, Next generates a random encryption key per build,
+     *   and every deploy breaks the forms open at the time. env-validator says
+     *   the key "must be set in the BUILD environment, not just on the running
+     *   service" and then checks `process.env` at RUNTIME, where the owner had
+     *   correctly set it — so the check passed on every boot while the defect
+     *   went on shipping.
+     *
+     *   NOT the key, and not NEXT_PUBLIC_. Only the words "present" or
+     *   "absent", readable by server code, which is all the boot log needs.
+     */
+    ACTIONS_KEY_AT_BUILD:
+      process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ? "present" : "absent",
   },
 
   /**

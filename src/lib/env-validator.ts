@@ -634,6 +634,53 @@ export function logEnvValidation() {
         );
     }
 
+    /**
+     *   #851 A BUILD-TIME REQUIREMENT CANNOT BE CHECKED AT RUNTIME, AND THIS
+     *   FILE HAD BEEN TRYING TO FOR FIFTEEN COMMITS.
+     *
+     *   `whatBreaks` says of NEXT_SERVER_ACTIONS_ENCRYPTION_KEY, correctly:
+     *
+     *       "Must be set in the BUILD environment, not just on the running
+     *        service"
+     *
+     *   — and everything above tests `process.env`, which is the RUNNING
+     *   service. The owner set the variable on the service, so the check passed
+     *   and the build went on baking a random key into every image. The advice
+     *   was right, the check could not enforce it, and nothing said so.
+     *
+     *   `ACTIONS_KEY_AT_BUILD` is stamped by next.config during `next build`, so
+     *   it reports the BUILD's view rather than this container's. The two
+     *   genuinely differ, and the difference is the defect.
+     *
+     *   NOT ON /api/health, deliberately. That route is unauthenticated —
+     *   Railway's own health check calls it — and lib/deployment-facts states
+     *   the rule it lives by: only facts already public in the repository. "The
+     *   action payloads on this deployment are encrypted with a throwaway key"
+     *   is not one of those. It goes in the boot log, which the owner reads and
+     *   nobody else can.
+     */
+    if (process.env.NODE_ENV === 'production'
+        && process.env.ACTIONS_KEY_AT_BUILD === 'absent') {
+        console.error(
+            [
+                '',
+                '⚠️  SERVER ACTIONS: this image was BUILT without',
+                '   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY, so Next generated a random',
+                '   one for this build alone.',
+                '',
+                '   Every deploy therefore breaks the forms that are open at the',
+                '   time: a member mid-application, mid-withdrawal or mid-listing',
+                '   gets "Failed to find Server Action" when she submits.',
+                '',
+                '   Setting it on the SERVICE is not enough — a Docker build does',
+                '   not inherit the service environment. It must be declared as an',
+                '   ARG in the Dockerfile (it is, since #851) AND set on the',
+                '   platform so the build receives it.',
+                '',
+            ].join('\n'),
+        );
+    }
+
     // Printed EVERYWHERE, production included. These only ever populate in
     // production — that is the condition the weak-secret check runs under — so
     // suppressing them outside development guaranteed nobody would ever read
