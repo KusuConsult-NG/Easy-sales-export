@@ -23,6 +23,7 @@ import Image from "next/image";
 import { getProductsAction } from "@/app/actions/marketplace";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { getActiveFlashSaleProductsAction } from "@/app/actions/village-market";
+import { isOnOffer, retailPriceOf, discountPercent } from "@/lib/price-reduction";
 import type { Product, ProductCategory } from "@/lib/types/marketplace";
 import { SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 import { firstImageSrc } from "@/lib/first-image";
@@ -148,7 +149,36 @@ export default function BuyerProductsClient({ initial = null }: {
 
             let regularProducts: Product[] = [];
             if (productsRes.success && productsRes.data?.products) {
-                regularProducts = productsRes.data.products;
+                /*
+                 *   #867 A PRICE CUT IS A HOT DEAL, and this is the half that
+                 *   makes the section mean what the owner asked it to.
+                 *
+                 *   THE OWNER: "products that get price reduction should
+                 *   automatically go to flash sales / hot deals."
+                 *
+                 *   Until now the Flash Sales tab had exactly ONE source —
+                 *   getActiveFlashSaleProductsAction, reading rows created by a
+                 *   Village Market EVENT. An ordinary seller dropping an
+                 *   ordinary price appeared nowhere.
+                 *
+                 *   `isHotDeal`, NOT `isFlashSale`, and the distinction is the
+                 *   point: the filters below use isFlashSale to mean "a Village
+                 *   Market item, which belongs ONLY in this tab", so reusing it
+                 *   would have pulled a discounted bag of tomatoes out of
+                 *   Vegetables. A reduced product belongs in both places.
+                 *
+                 *   Computed, never read off a stored flag — the window expires
+                 *   by itself with no cron to forget to run.
+                 */
+                regularProducts = (productsRes.data.products as Product[]).map((p: Product) =>
+                    isOnOffer(p, retailPriceOf(p.pricingTiers))
+                        ? {
+                            ...p,
+                            isHotDeal: true,
+                            originalPrice: (p as any).previousPrice,
+                            discountPercent: discountPercent(p, retailPriceOf(p.pricingTiers)),
+                        } as Product
+                        : p);
             } else if (productsRes.error) {
                 setError(productsRes.error);
             }
@@ -223,7 +253,13 @@ export default function BuyerProductsClient({ initial = null }: {
         acc[cat.id] = cat.id === "all"
             ? products.length
             : products.filter(p => {
-                if (cat.id === "flash_sales") return (p as any).isFlashSale === true;
+                //   #867 The tab holds Village Market flash items AND ordinary
+                //   products whose price has just been cut.
+                if (cat.id === "flash_sales") {
+                    return (p as any).isFlashSale === true || (p as any).isHotDeal === true;
+                }
+                //   Only a Village Market item is confined to that tab. A
+                //   discounted product keeps its own category too.
                 if ((p as any).isFlashSale) return false;
                 const pCat = p.category?.toLowerCase() || "";
                 const mapped = categoryMapping[cat.id] || [cat.id];
@@ -235,7 +271,10 @@ export default function BuyerProductsClient({ initial = null }: {
     // Client-side category filtering
     const displayedProducts = products.filter(p => {
         if (selectedCategory === "all") return true;
-        if (selectedCategory === "flash_sales") return (p as any).isFlashSale === true;
+        //   #867 Both sources, and a hot deal stays in its own category as well.
+        if (selectedCategory === "flash_sales") {
+            return (p as any).isFlashSale === true || (p as any).isHotDeal === true;
+        }
         if ((p as any).isFlashSale) return false;
         
         const pCat = p.category?.toLowerCase() || "";
@@ -423,12 +462,19 @@ export default function BuyerProductsClient({ initial = null }: {
                                     const minQty    = product.pricingTiers?.[0]?.minQuantity ?? 1;
                                     const productId = (product as any).id ?? (product as any).productId;
                                     const isFS      = (product as any).isFlashSale === true;
+                                    //   #867 An ordinary product whose price has just been cut.
+                                    //   Rendered like a flash sale because that is what it is to a
+                                    //   buyer, and kept separate from isFS because only a Village
+                                    //   Market item is confined to that one tab.
+                                    const isDeal    = (product as any).isHotDeal === true;
+                                    const wasPrice  = Number((product as any).originalPrice ?? 0);
+                                    const off       = Number((product as any).discountPercent ?? 0);
 
                                     return (
                                         <div
                                             key={productId}
                                             className={`bg-white rounded-xl border overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col ${
-                                                isFS ? "border-red-200 ring-1 ring-red-50" : "border-slate-200"
+                                                isFS || isDeal ? "border-red-200 ring-1 ring-red-50" : "border-slate-200"
                                             }`}
                                         >
                                             {/* Product Image */}
@@ -518,6 +564,32 @@ export default function BuyerProductsClient({ initial = null }: {
                                                                     </span>
                                                                 </div>
                                                                 <span className="text-[10px] text-red-600 font-extrabold">Village Market Flash Sale</span>
+                                                            </div>
+                                                        ) : isDeal ? (
+                                                            /*
+                                                             *   #867 The price fell, so the card says so — the
+                                                             *   old price struck through beside the new one, and
+                                                             *   how much off. A "hot deal" that looks identical
+                                                             *   to every other card is a section with nothing in
+                                                             *   it as far as a buyer can tell.
+                                                             */
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-lg font-bold text-red-600">
+                                                                        {formatCurrency(basePrice)}
+                                                                    </span>
+                                                                    {wasPrice > 0 && (
+                                                                        <span className="text-xs text-slate-400 line-through">
+                                                                            {formatCurrency(wasPrice)}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[10px] text-red-600 font-extrabold">
+                                                                    {off > 0 ? `${off}% OFF · Hot Deal` : "Hot Deal"}
+                                                                </span>
+                                                                <div className="text-xs text-slate-400">
+                                                                    per {product.unit} · Min: {minQty} {product.unit}
+                                                                </div>
                                                             </div>
                                                         ) : (
                                                             <>

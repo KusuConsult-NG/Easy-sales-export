@@ -14,6 +14,7 @@ import { ProductSchema } from "@/lib/validations/marketplace";
 //   #794 One rule for what a product may be listed at, shared with both API
 //   routes — see lib/product-pricing-guard.
 import { checkProductPricing } from "@/lib/product-pricing-guard";
+import { priceReductionPatch, retailPriceOf } from "@/lib/price-reduction";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
@@ -474,6 +475,35 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             images: formCarriedImages ? imageUrls : (productData?.images ?? []),
             videoUrl: (validatedData.videoUrl as string) || undefined,
             pricingTiers: validatedData.pricingTiers,
+            /*
+             *   #867 A PRICE CUT BECOMES A HOT DEAL, AND THE SERVER DECIDES.
+             *
+             *   THE OWNER: "products that get price reduction should
+             *   automatically go to flash sales / hot deals."
+             *
+             *   Until now the marketplace's Flash Sales tab had exactly one
+             *   source — FLASH_SALE_PRODUCTS, written by a Village Market
+             *   EVENT. A seller who simply dropped the price of an ordinary
+             *   product produced nothing: no record that it had moved, and no
+             *   way for any screen to know.
+             *
+             *   COMPARED AGAINST THE STORED PRICE, NOT A CLAIMED ONE. The
+             *   sibling route api/marketplace/update-product blocks
+             *   `originalPrice` and `flashPrice` outright, and its own comment
+             *   says why — a client could "present an invented discount against
+             *   an invented original price". That refusal is right and stands;
+             *   this reads `productData`, the row as it is, so the previous
+             *   price is a fact.
+             *
+             *   Spread, so an unchanged price writes nothing and a price that
+             *   goes back UP clears the offer rather than leaving a stale badge
+             *   over a higher number. See lib/price-reduction for all three
+             *   rules and why the verdict is computed rather than stored.
+             */
+            ...(priceReductionPatch(
+                retailPriceOf(productData?.pricingTiers),
+                retailPrice,
+            ) ?? {}),
             availableQuantity: validatedData.availableQuantity,
             minimumOrderQuantity: validatedData.minimumOrderQuantity,
             unit: validatedData.unit,

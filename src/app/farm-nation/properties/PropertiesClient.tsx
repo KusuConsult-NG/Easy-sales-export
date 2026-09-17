@@ -7,6 +7,7 @@ import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2, 
 import Image from "next/image";
 import Link from "next/link";
 import { searchLandListingsAction, type LandListing } from "@/app/actions/land-listings";
+import { isOnOffer, discountPercent } from "@/lib/price-reduction";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useSearchParams, useRouter } from "next/navigation";
 import { firstImageSrc } from "@/lib/first-image";
@@ -26,6 +27,24 @@ function PropertiesContent({ initial }: { initial: any | null }) {
         location: searchParams.get("location") || "",
         priceRange: "",
         listingType: searchParams.get("listingType") || "",
+        /**
+         *   #867 FARM NATION HAD NO HOT DEALS AT ALL.
+         *
+         *   THE OWNER: "products that get price reduction should automatically
+         *   go to flash sales / hot deals, and YOU NEED TO CREATE THAT FOR FARM
+         *   NATION."
+         *
+         *   The marketplace at least had a Flash Sales tab, fed by Village
+         *   Market events. This module had nothing — a seller could halve the
+         *   price of a parcel and no screen anywhere would say so.
+         *
+         *   A client-side filter rather than a server one, deliberately: whether
+         *   a listing is on offer is COMPUTED from the two stored facts (see
+         *   lib/price-reduction), so it expires on its own. Asking the database
+         *   for it would mean either a stored boolean nothing ever clears, or a
+         *   range query on a timestamp that changes meaning every day.
+         */
+        hotDealsOnly: searchParams.get("deals") === "1",
     });
 
     // State for data
@@ -206,6 +225,28 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                             <option value="lease">For Lease</option>
                         </select>
 
+                        {/*
+                          *   #867 THE HOT DEALS SWITCH.
+                          *
+                          *   A filter nobody can turn on is the same as no
+                          *   filter, which is how a "deals" feature usually ends
+                          *   up existing only in the data. Rendered beside the
+                          *   other filters rather than as a separate page,
+                          *   because it is one more way to narrow the same list.
+                          */}
+                        <button
+                            type="button"
+                            onClick={() => setFilters(prev => ({ ...prev, hotDealsOnly: !prev.hotDealsOnly }))}
+                            aria-pressed={filters.hotDealsOnly}
+                            className={`px-4 py-3 rounded-xl font-semibold border transition ${
+                                filters.hotDealsOnly
+                                    ? "bg-red-600 text-white border-red-600"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            }`}
+                        >
+                            🔥 Hot Deals
+                        </button>
+
                         {/* Location Filter */}
                         <select
                             value={filters.location}
@@ -271,7 +312,7 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                         </p>
                         <button
                             onClick={() => {
-                                setFilters({ propertyType: "", location: "", priceRange: "", listingType: "" });
+                                setFilters({ propertyType: "", location: "", priceRange: "", listingType: "", hotDealsOnly: false });
                                 setSearchTerm("");
                             }}
                             className="px-6 py-3 bg-teal-600 text-white rounded-xl font-semibold hover:bg-teal-700 transition"
@@ -282,7 +323,10 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                 ) : (
                     <>
                         <div data-testid="property-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {properties.map((property) => (
+                            {properties
+                                .filter((property: any) => !filters.hotDealsOnly
+                                    || isOnOffer(property, Number(property.price)))
+                                .map((property) => (
                                 <div
                                     key={property.id}
                                     data-testid="property-card"
@@ -386,11 +430,31 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                                                     {property.size}
                                                 </p>
                                             </div>
+                                            {/*
+                                              *   #867 When the price has been cut, the card says so:
+                                              *   the old figure struck through and how much off. A
+                                              *   reduction nobody can see is the same as no
+                                              *   reduction, which is the state this module was in.
+                                              */}
                                             <div className="text-right">
                                                 <p className="text-xs text-slate-500 mb-1">Price</p>
-                                                <p className="text-xl font-bold text-teal-600">
-                                                    ₦{Number(property.price || 0).toLocaleString()}
-                                                </p>
+                                                {isOnOffer(property, Number((property as any).price)) ? (
+                                                    <>
+                                                        <p className="text-xl font-bold text-red-600">
+                                                            ₦{Number(property.price || 0).toLocaleString()}
+                                                        </p>
+                                                        <p className="text-xs text-slate-400 line-through">
+                                                            ₦{Number((property as any).previousPrice || 0).toLocaleString()}
+                                                        </p>
+                                                        <p className="text-[10px] font-extrabold text-red-600">
+                                                            {discountPercent(property, Number((property as any).price))}% OFF · Hot Deal
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-xl font-bold text-teal-600">
+                                                        ₦{Number(property.price || 0).toLocaleString()}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
 

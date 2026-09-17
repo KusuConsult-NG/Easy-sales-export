@@ -128,6 +128,24 @@ export const ProductSchema = z.object({
      *        Derived now. One list, in the file named after it.
      */
     status: z.enum(PRODUCT_STATUSES).default("draft"),
+    /**
+     *   #867 WHAT THE PRICE USED TO BE, AND WHEN IT FELL.
+     *
+     *   DECLARED HERE OR SILENTLY DROPPED, which is the whole reason this is a
+     *   schema change and not just a write. `z.object` STRIPS unknown keys, and
+     *   every product reaching a buyer screen goes through serializeProduct →
+     *   ProductSchema. The update action could have written these two fields
+     *   perfectly and no screen would ever have seen them — a field the server
+     *   stores and nothing reads, which is #624's defect from the other end.
+     *
+     *   Nullable, because a price that goes back UP clears them rather than
+     *   leaving a stale discount over a higher number; optional, because every
+     *   product listed before this and every product never repriced has
+     *   neither. The VERDICT is not stored — see lib/price-reduction for why a
+     *   boolean here would be a badge nothing ever clears.
+     */
+    previousPrice: z.number().nullable().optional(),
+    priceReducedAt: z.string().nullable().optional(),
     bulkAvailable: z.boolean().default(false),
     exportReady: z.boolean().default(false),
     views: z.number().default(0),

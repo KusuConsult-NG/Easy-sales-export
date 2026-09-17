@@ -24,6 +24,7 @@ import {
     REJECTABLE_FROM_STATUSES,
 } from "@/lib/land-listing-status";
 import { inspectionRefusal } from "@/lib/land-inspection";
+import { priceReductionPatch } from "@/lib/price-reduction";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -360,6 +361,21 @@ async function _updateLandListing(
 
         await db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId).update({ 
             ...updateData,
+            /*
+             *   #867 FARM NATION GETS HOT DEALS TOO — the half the owner asked
+             *   to be CREATED rather than wired: "you need to create that for
+             *   Farm Nation".
+             *
+             *   Same rule as the marketplace product edit, same module, and the
+             *   comparison is against `listingData.price` — the row as stored,
+             *   read above for the ownership and status checks — rather than
+             *   anything the request carried.
+             *
+             *   Spread, so an edit that does not touch the price writes nothing,
+             *   and a price that goes back up clears the offer instead of
+             *   leaving a badge over a higher number.
+             */
+            ...(priceReductionPatch(listingData.price, updateData.price) ?? {}),
             updatedAt: FieldValue.serverTimestamp(),
             status: 'pending_verification' 
         });
