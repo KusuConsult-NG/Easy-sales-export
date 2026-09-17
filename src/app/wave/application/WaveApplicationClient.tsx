@@ -14,6 +14,7 @@
 import { useState, useEffect } from "react";
 import { restoredStepIndex } from "@/lib/draft-step";
 import { logger } from '@/lib/logger';
+import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
 import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
 import { useRouter } from "next/navigation";
@@ -471,7 +472,10 @@ export default function WaveApplicationClient(
             }
         } catch (error) {
             logger.error("Submission error:", error);
-            showToast("An unexpected error occurred. Please try again.", "error");
+            //   #855 — see the note on STALE_SUBMIT_ADVICE. The largest
+            //   programme on the platform: 20,247 WAVE applications.
+            showToast(staleSubmitAdvice(error)
+                ?? "An unexpected error occurred. Please try again.", "error");
         } finally {
             setSubmitting(false);
         }

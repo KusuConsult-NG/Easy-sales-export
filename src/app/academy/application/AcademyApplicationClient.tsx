@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
+import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle, CreditCard, Loader2, Shield } from "lucide-react";
 import PersonalInfoStep from "./steps/PersonalInfoStep";
@@ -597,7 +598,13 @@ export default function AcademyApplicationClient(
             }
         } catch (error) {
             logger.error("Payment initiation error:", error);
-            showToast("Failed to initiate payment. Please try again.", "error");
+            /*
+             *   #855 — and a PAYMENT is the worst place to tell somebody to
+             *   try again when trying again cannot work: she either gives up
+             *   or keeps pressing a button that will never take her money.
+             */
+            showToast(staleSubmitAdvice(error)
+                ?? "Failed to initiate payment. Please try again.", "error");
         } finally {
             setIsPaying(false);
         }
@@ -649,7 +656,9 @@ export default function AcademyApplicationClient(
             }
         } catch (error) {
             logger.error("Application submission error:", error);
-            setErrors({ submit: "Failed to submit application. Please try again." });
+            //   #855 — see the note on STALE_SUBMIT_ADVICE.
+            setErrors({ submit: staleSubmitAdvice(error)
+                ?? "Failed to submit application. Please try again." });
         } finally {
             setIsSubmitting(false);
         }

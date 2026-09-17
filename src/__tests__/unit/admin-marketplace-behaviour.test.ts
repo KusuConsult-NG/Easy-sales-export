@@ -30,6 +30,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
+import { PRODUCT_MODERATION_STATUSES } from '@/lib/product-status';
 
 jest.mock('resend', () => ({
     Resend: class { emails = { send: async () => ({ error: null }) }; },
@@ -612,9 +613,34 @@ describe('the product moderation queue', () => {
 
         expect(result.success).toBe(true);
         expect(result.data!.products).toHaveLength(1);
-        expect(result.data!.stats).toEqual({
+
+        /*
+         *   #853 THE EXPECTATION IS DERIVED, because the literal five-key object
+         *   that stood here WAS the defect.
+         *
+         *   It read `{ pending: 2, active: 1, rejected: 1, suspended: 1,
+         *   draft: 1 }` — the same five statuses the action and the screen each
+         *   typed out by hand, pinned a third time. So the one test covering
+         *   this behaviour asserted that the list stays as short as it was, and
+         *   would have failed on the fix rather than on the fault. It did
+         *   exactly that: `out_of_stock: 0` broke it.
+         *
+         *   Built from PRODUCT_MODERATION_STATUSES with the seeded counts laid
+         *   over it, so a status added to the canonical union changes this
+         *   expectation with nobody editing it — which is the property the
+         *   finding is about.
+         */
+        const seeded: Record<string, number> = {
             pending: 2, active: 1, rejected: 1, suspended: 1, draft: 1,
-        });
+        };
+        const expected = Object.fromEntries(
+            PRODUCT_MODERATION_STATUSES.map((s) => [s, seeded[s] ?? 0]),
+        );
+
+        expect(result.data!.stats).toEqual(expected);
+        //   Vacuity guard: a derivation that produced {} would satisfy the line
+        //   above against an action returning {}.
+        expect(result.data!.stats.pending).toBe(2);
     });
 
     it('filters to one status', async () => {

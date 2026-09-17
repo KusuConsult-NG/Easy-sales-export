@@ -200,3 +200,48 @@ export function clearReloadBudget(): void {
         // Nothing to do, and nothing worth failing a render over.
     }
 }
+
+/**
+ * What to tell somebody whose SUBMIT failed because the deployment moved.
+ *
+ *   #855 A REACT ERROR BOUNDARY NEVER SEES THIS ONE.
+ *
+ *   #852 put the bounded recovery on all nineteen error boundaries, and not one
+ *   of them can help here: React boundaries catch errors thrown during RENDER.
+ *   A rejected promise inside an async event handler — which is every "Submit"
+ *   button in this application — is caught by the handler's own `catch` and
+ *   never reaches a boundary at all.
+ *
+ *   So on the path where it costs the most, a stale action id produced:
+ *
+ *       showToast("An error occurred. Please try again.", "error")
+ *
+ *   — advice that CANNOT WORK. Trying again posts the same dead action id from
+ *   the same loaded page and fails identically, for as long as she keeps
+ *   trying. The owner met it on Farm Nation onboarding, as a buyer, and the
+ *   server action accepts that exact payload: executed in
+ *   farm-nation-onboarding-behaviour, it returns success, grants `investor` and
+ *   writes the application. The submission was never the problem.
+ *
+ *   IT SAYS RELOAD RATHER THAN RELOADING. The render-path hook reloads by
+ *   itself because nothing is being typed into a screen that has already
+ *   failed. A submit handler is the opposite: she has just filled in a
+ *   multi-step form, and some of these wizards keep a draft while others do
+ *   not. Reloading on her behalf would rescue the ones that do and silently
+ *   discard the rest, so the person is told what happened and left holding the
+ *   decision.
+ */
+export const STALE_SUBMIT_ADVICE =
+    "The app was updated while you were filling this in. Please refresh the page "
+    + "and submit again — refreshing is what fixes it, trying again will not.";
+
+/**
+ * The message for a failed submit: the specific one when the deployment moved,
+ * and the caller's own wording for everything else.
+ *
+ * Returns `null` when this is NOT a stale-deployment failure, so a caller keeps
+ * whatever it already said rather than having a generic sentence imposed on it.
+ */
+export function staleSubmitAdvice(error: unknown): string | null {
+    return isStaleDeploymentError(error) ? STALE_SUBMIT_ADVICE : null;
+}

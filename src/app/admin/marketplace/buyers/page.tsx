@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { logger } from "@/lib/logger";
-import { Users, Search, Eye, ShoppingCart, Download, Filter, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Users, Search, Eye, ShoppingCart, Download, Filter, Loader2, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getMarketplaceUsersAction, approveMarketplaceUserAction, rejectMarketplaceUserAction } from "@/app/actions/admin";
@@ -202,12 +202,63 @@ export default function MarketplaceBuyersPage() {
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                {/*
+                  *   #854 THE ACTION KNEW THE COHORT WAS INCOMPLETE AND THIS
+                  *   SCREEN DID NOT SAY SO — the third screen with this shape.
+                  *
+                  *   _getMarketplaceUsersAction sweeps with `.all()` because the
+                  *   totals below are an aggregate over the result, sets
+                  *   `stats.truncated` from the adapter's flag under the comment
+                  *   "So a caller can tell a complete total from a capped one",
+                  *   and logs at ERROR that "the totals below are incomplete".
+                  *   Nothing here read the field.
+                  *
+                  *   #838 made exactly this correction on the cooperative
+                  *   members screen, and its own note records the cooperative
+                  *   dashboard having had it first — "the same field existed
+                  *   there and NOTHING READ IT until somebody wired it up". This
+                  *   is the third place that sentence is true of.
+                  *
+                  *   The figures are NOT blanked: a floor is useful to an
+                  *   administrator. What changes is that a floor can no longer
+                  *   be mistaken for a total.
+                  */}
+                {stats?.truncated && (
+                    <div className="col-span-full bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-900">
+                            <p className="font-semibold">These figures are partial.</p>
+                            <p className="mt-1">
+                                More marketplace accounts matched than this screen reads in one
+                                pass, so the counts below and the list under them are a floor
+                                rather than the whole population. Narrow the filters to see the
+                                rest.
+                            </p>
+                        </div>
+                    </div>
+                )}
                 {[
                     //   #830 — each FIELD is guarded, not the object. #822
                     //   recorded the trap: `stats ? stats.total : "—"` is
                     //   truthy for a partial payload and then throws on the
                     //   field, taking the whole screen down.
-                    { label: "Total Users", value: statText(stats?.total, Boolean(fetchError)), color: "bg-slate-100 text-slate-700" },
+                    /*
+                     *   #854 "Total Users" COUNTED MARKETPLACE ROLE-HOLDERS.
+                     *
+                     *   The query behind it admits only accounts carrying one of
+                     *   `marketplace_buyer`, `buyer`, `seller` or
+                     *   `marketplace_seller`. Measured in production that is at
+                     *   most 1,623 accounts, against 41,797 on the platform — so
+                     *   a tile reading "Total Users 1,6xx" on an admin screen
+                     *   understates the platform by 96% to anyone who reads the
+                     *   label as written.
+                     *
+                     *   A2.5 of docs/module-audit-checklist: "'Total' invites the
+                     *   reading 'the whole programme'. If it counts one table's
+                     *   rows, name it for that." The number was right; the
+                     *   sentence over it was not.
+                     */
+                    { label: "Marketplace Accounts", value: statText(stats?.total, Boolean(fetchError)), color: "bg-slate-100 text-slate-700" },
                     { label: "Buyers Only", value: statText(stats?.buyerOnly, Boolean(fetchError)), color: "bg-green-100 text-green-700" },
                     { label: "Sellers Only", value: statText(stats?.sellerOnly, Boolean(fetchError)), color: "bg-blue-100 text-blue-700" },
                     { label: "Buyer & Seller", value: statText(stats?.both, Boolean(fetchError)), color: "bg-purple-100 text-purple-700" },

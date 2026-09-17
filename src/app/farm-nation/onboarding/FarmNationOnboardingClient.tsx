@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { restoredStepId } from "@/lib/draft-step";
 import { z } from "zod";
 import { logger } from '@/lib/logger';
+import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Home, TrendingUp, Shield, CheckCircle, ArrowLeft, AlertTriangle } from "lucide-react";
@@ -409,7 +410,10 @@ export default function FarmNationOnboardingClient({ initial = null }: {
             }
         } catch (error) {
             logger.error("Error submitting onboarding:", error);
-            showToast("An error occurred. Please try again.", "error");
+            //   #855 — a stale action id reaches this catch and no error
+            //   boundary, so the advice has to be correct HERE.
+            showToast(staleSubmitAdvice(error)
+                ?? "An error occurred. Please try again.", "error");
             setIsSubmitting(false);
         }
     };

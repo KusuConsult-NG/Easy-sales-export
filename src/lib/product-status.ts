@@ -177,6 +177,63 @@ export const PRODUCT_VISIBLE_STATUSES: readonly ProductStatus[] = ["active", "ou
 export const PRODUCT_SELLABLE_STATUSES: readonly ProductStatus[] = ["active"];
 
 /**
+ * Statuses a product can be RETIRED in — gone, not awaiting anybody.
+ *
+ * Named so the moderation list below can be derived by subtraction rather than
+ * by another hand-written enumeration. Both are terminal: #301 and #647 record
+ * that neither delete destroys the row, and #647 added `archived` to the union
+ * precisely because a status the code wrote was not a status the code knew.
+ */
+export const PRODUCT_RETIRED_STATUSES: readonly ProductStatus[] = ["deleted", "archived"];
+
+/**
+ * Statuses the admin moderation queue accounts for.
+ *
+ *   #853 THE MODERATION SCREEN KEPT THE SAME FIVE-STATUS LIST TWICE, AND THE
+ *   CANONICAL LIST HAS EIGHT.
+ *
+ *   Written out by hand in two places that must agree:
+ *
+ *       admin/marketplace/products/page.tsx   const TABS = [...]
+ *       actions/admin/_marketplace.ts         const countable = [...]
+ *
+ *   — the same five strings, in the same order, in a client component and a
+ *   server action. The client renders one tab per entry and reads
+ *   `stats[tab]`; the server counts one status per entry. They agree today
+ *   because somebody typed them identically, and nothing would fail if a later
+ *   edit reached one of them: a tab whose status the server does not count
+ *   simply shows no badge, and a status the server counts with no tab is a
+ *   number nobody sees.
+ *
+ *   AND BOTH ARE A SUBSET OF PRODUCT_STATUSES, exhaustive by coincidence. That
+ *   is #846's finding — two lists whose union happens to cover what the code
+ *   writes — and this module has already paid for it once: #647's header
+ *   records `archived` being "written by two doors and declared by neither
+ *   list", which made a deleted listing read as "Active" on the seller's own
+ *   page.
+ *
+ *   Derived by subtraction, so a status added to PRODUCT_STATUSES appears in
+ *   the moderation queue BY DEFAULT — visible — instead of making every product
+ *   carrying it invisible to the people whose job is to act on it. Same choice,
+ *   for the same reason, as lib/module-registration-status's IN_REVIEW split
+ *   and lib/module-applicant-count's `other` bucket.
+ *
+ *   `out_of_stock` IS INCLUDED AND THAT IS NOT AN OVERSIGHT. It is a real state
+ *   a listing can be in, #647 made it visible and unsellable, and an
+ *   administrator looking at the catalogue should be able to see how many are
+ *   in it. Nothing writes it today, so the tab reads zero — which is a true
+ *   statement about the catalogue, not noise.
+ *
+ *   THE RETIRED PAIR STAYS OUT, and that IS a judgement rather than a
+ *   subtraction for tidiness: a deleted or archived listing is not waiting for
+ *   an administrator, and PRODUCT_DECISION_LOCKED already refuses to act on
+ *   `deleted`. A queue that lists rows nobody can action is the "warning nobody
+ *   can act on" shape from #658.
+ */
+export const PRODUCT_MODERATION_STATUSES: readonly ProductStatus[] =
+    PRODUCT_STATUSES.filter((s) => !PRODUCT_RETIRED_STATUSES.includes(s));
+
+/**
  * Flash-sale rows are a DIFFERENT COLLECTION with a different vocabulary.
  *
  * village-market writes `status: "active"` on create and `status: "removed"`

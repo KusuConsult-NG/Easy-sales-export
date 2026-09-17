@@ -34,6 +34,7 @@ import { getAdminProductsAction, reviewProductAction } from "@/app/actions/admin
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import BackButton from "@/components/ui/BackButton";
+import { PRODUCT_MODERATION_STATUSES, type ProductStatus } from "@/lib/product-status";
 
 type Decision = "approve" | "reject" | "suspend";
 
@@ -51,16 +52,57 @@ interface AdminProduct {
     createdAt?: any;
 }
 
-const TABS = ["pending", "active", "rejected", "suspended", "draft"] as const;
+/**
+ *   #853 THE SAME LIST AS THE SERVER'S, BECAUSE IT IS THE SAME LIST.
+ *
+ *   This was `["pending","active","rejected","suspended","draft"]` and
+ *   _getAdminProductsAction carried the identical five strings under the name
+ *   `countable`. One renders the tabs and reads `stats[tab]`; the other decides
+ *   which counts exist. They agreed because somebody typed them the same, and
+ *   nothing failed when they did not: a tab the server does not count shows no
+ *   badge, and a count with no tab is a number nobody sees.
+ *
+ *   Both read PRODUCT_MODERATION_STATUSES now, derived from PRODUCT_STATUSES by
+ *   subtracting the retired pair — so a status added to the canonical union
+ *   reaches this screen rather than making every product carrying it invisible
+ *   to moderation. #647 is the record of that happening: `archived` was
+ *   "written by two doors and declared by neither list".
+ */
+const TABS = PRODUCT_MODERATION_STATUSES;
 
 export default function AdminProductsPage() {
-    const [tab, setTab] = useState<(typeof TABS)[number]>("pending");
+    const [tab, setTab] = useState<ProductStatus>("pending");
     const [products, setProducts] = useState<AdminProduct[]>([]);
     const [stats, setStats] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [busyId, setBusyId] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+
+    /**
+     *   #853 A FAILED LOAD LEFT THE PREVIOUS TAB'S COUNTS ON THE TABS.
+     *
+     *   The product LIST was already gated correctly — it renders under
+     *   `!loading && !error && products.length > 0`, so a failure hides it and
+     *   shows the banner instead. The BADGES beside the tab labels were not:
+     *   they read `stats[t]` unconditionally, and `stats` is only ever written
+     *   on success.
+     *
+     *   So an administrator on "pending" who switched to "rejected" and hit a
+     *   failure saw the error banner, no list — and pending's counts still sat
+     *   on every tab, unchanged and unlabelled, as though they described the
+     *   catalogue now. That is #845's class: a figure from one measurement
+     *   presented as another's. One of two treatments in a single file, which
+     *   is this audit's most repeated shape at its smallest scale.
+     *
+     *   Cleared rather than gated on `error`, so the meaning is "not measured"
+     *   at the source — the badge's own `typeof === "number"` guard then hides
+     *   it, which is #753's rule: nil and not-measured must not render alike.
+     */
+    const clearOnFailure = useCallback(() => {
+        setProducts([]);
+        setStats({});
+    }, []);
 
     const load = useCallback(async (status: string) => {
         setLoading(true);
@@ -72,14 +114,20 @@ export default function AdminProductsPage() {
                 setStats(result.data.stats || {});
             } else {
                 setError(result.error || "Failed to load products.");
+                clearOnFailure();
             }
         } catch (e) {
             logger.error("Admin products load failed:", { error: e });
             setError("An unexpected error occurred.");
+            clearOnFailure();
         } finally {
             setLoading(false);
         }
-    }, []);
+        //   `clearOnFailure` is itself a useCallback with no dependencies, so
+        //   this does not change how often `load` is rebuilt — it is declared
+        //   because a dependency omitted "because it is stable" is how a stale
+        //   closure gets in the day it stops being stable.
+    }, [clearOnFailure]);
 
     useEffect(() => {
         load(tab);

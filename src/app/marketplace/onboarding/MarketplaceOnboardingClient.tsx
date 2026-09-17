@@ -15,6 +15,7 @@ import { useState, useEffect } from "react";
 import { restoredStepIndex } from "@/lib/draft-step";
 import { z } from "zod";
 import { logger } from '@/lib/logger';
+import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AlertTriangle } from "lucide-react";
@@ -455,7 +456,11 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
 
         } catch (error: any) {
             logger.error("Marketplace registration error:", error);
-            toast.error(error.message || "An unexpected error occurred");
+            //   #855 — the stale-deployment case first: `error.message`
+            //   here would show the raw "Failed to find Server Action …"
+            //   to a member, which names the fault and not the remedy.
+            toast.error(staleSubmitAdvice(error)
+                ?? error.message ?? "An unexpected error occurred");
             setIsSubmitting(false);
         }
     };

@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
+import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
 import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2, Home } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -613,7 +614,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             }
         } catch (error) {
             logger.error("Registration error:", error);
-            showToast("An unexpected error occurred.", "error");
+            //   #855 — see the note on STALE_SUBMIT_ADVICE.
+            showToast(staleSubmitAdvice(error)
+                ?? "An unexpected error occurred.", "error");
             setIsSubmitting(false);
         }
     }

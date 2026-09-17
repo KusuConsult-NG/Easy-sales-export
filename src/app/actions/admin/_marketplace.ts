@@ -23,6 +23,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { normaliseSellerVerification } from "@/lib/seller-verification-shape";
 import {
     PRODUCT_APPROVABLE_FROM,
+    PRODUCT_MODERATION_STATUSES,
     PRODUCT_REJECTABLE_FROM,
     normaliseProductStatus,
 } from "@/lib/product-status";
@@ -811,23 +812,64 @@ async function _getMarketplaceUsersAction(options: {
 
         let users = filteredDocs.map(doc => {
             const data = doc.data() as any;
-            const marketplaceData = data.serviceRegistrations?.marketplace;
-            const dbAccountType = marketplaceData?.accountType;
+            //   #854 `marketplaceData` / `dbAccountType` were read here and are
+            //   gone with the branch below that used them. Left out rather than
+            //   kept "in case": an unused read of a field this screen
+            //   deliberately no longer classifies by is an invitation to wire it
+            //   back in without re-reading why it was removed.
             // Legacy fallback
             const roles = data.roles || [];
             const hasSellerRole = roles.includes("seller") || roles.includes("marketplace_seller");
             const hasBuyerRole = roles.includes("buyer") || roles.includes("marketplace_buyer");
             
+            /*
+             *   #854 THIS ANSWERED A DIFFERENT QUESTION FROM THE ONE ITS NAME
+             *   ASKS, AND IT ANSWERED IT FOR SOME ROWS AND NOT OTHERS.
+             *
+             *   It read `accountType` FIRST and fell through to the roles only
+             *   when that field was absent:
+             *
+             *       if (dbAccountType === "seller")      buyerRole = "seller_only";
+             *       else if (dbAccountType === "both")   buyerRole = "both";
+             *       else if (hasSellerRole && hasBuyerRole) …
+             *
+             *   `accountType` is what somebody SIGNED UP AS. The roles are what
+             *   she can DO. They are different facts, and #844 measured how far
+             *   apart: of 91 accounts with `accountType: "both"`, ninety held
+             *   NEITHER marketplace role, and 45 of 48 plain sellers held no
+             *   seller role — correctly, because the seller role waits for
+             *   verification.
+             *
+             *   So this column mixed the two: intent for the rows that declare
+             *   one, capability for the rest. Measured in production, of the
+             *   accounts this screen lists at most 183 carry an `accountType`
+             *   at all, against 35,758 marketplace registrations that do not —
+             *   so the great majority were already classified by role and a
+             *   minority by intent, in one column, under one heading.
+             *
+             *   IT IS RESOLVED TOWARDS CAPABILITY because that is what the
+             *   screen's own vocabulary claims. The parameter is `roleFilter`,
+             *   the field is `buyerRole`, the tiles read "Buyers Only" and
+             *   "Sellers Only", and the query that builds this list admits only
+             *   accounts holding one of the four marketplace ROLES. Every name
+             *   on the path says role; the value now is one.
+             *
+             *   WHAT IS LOST, STATED RATHER THAN GLOSSED: a "both" applicant
+             *   waiting on seller verification now reads "buyer_only", which is
+             *   true of what she can do and silent about what she asked for.
+             *   Showing both facts is a second column, and the owner asked for
+             *   "the true representation of the data", not new UI. The intent
+             *   is not destroyed — it is on the account and on the verification
+             *   record, which is where the seller queue reads it.
+             */
             let buyerRole = "buyer_only";
-            if (dbAccountType === "seller") {
-                buyerRole = "seller_only";
-            } else if (dbAccountType === "both") {
+            if (hasSellerRole && hasBuyerRole) {
                 buyerRole = "both";
-            } else if (hasSellerRole && hasBuyerRole) {
-                buyerRole = "both";
-            } else if (hasSellerRole && !hasBuyerRole) {
+            } else if (hasSellerRole) {
                 buyerRole = "seller_only";
             } else {
+                //   The query admits only holders of one of the four roles, so
+                //   reaching here means a buyer role and no seller role.
                 buyerRole = "buyer_only";
             }
 
@@ -1157,10 +1199,18 @@ async function _getAdminProductsAction(options: {
 
         const col = db.collection(COLLECTIONS.PRODUCTS);
 
-        // Counts per status, so the page can show the backlog it is clearing.
-        // Server-side COUNT, not a length of a capped page — the mistake #37 and
-        // the WAVE admin list both made.
-        const countable = ["pending", "active", "rejected", "suspended", "draft"] as const;
+        /*
+         *   Counts per status, so the page can show the backlog it is clearing.
+         *   Server-side COUNT, not a length of a capped page — the mistake #37
+         *   and the WAVE admin list both made.
+         *
+         *   #853 FROM lib/product-status, NOT A LIST TYPED HERE. This was
+         *   `["pending","active","rejected","suspended","draft"]`, the same five
+         *   strings the client's TABS array also carried, and a subset of
+         *   PRODUCT_STATUSES that happened to cover what the code writes. See
+         *   PRODUCT_MODERATION_STATUSES for why derived beats enumerated.
+         */
+        const countable = PRODUCT_MODERATION_STATUSES;
         const counts = await Promise.all(
             countable.map((s) => col.where("status", "==", s).count().get()),
         );

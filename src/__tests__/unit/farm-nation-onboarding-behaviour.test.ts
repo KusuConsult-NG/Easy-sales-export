@@ -185,6 +185,81 @@ describe('submitFarmNationOnboardingAction', () => {
         expect(readUser()!.roles).not.toContain('farmer');
     });
 
+    it('AND ACCEPTS WHAT THE BUYER FORM ACTUALLY SENDS — #855', async () => {
+        /*
+         *   THE OWNER: "on farm nation onboarding why do you have this error:
+         *   When onboarding a buyer 'An error occurred. Please try again'?"
+         *
+         *   Every other case in this file — the one above included — submits
+         *   `form()`, whose interests are SELLER-SHAPED:
+         *
+         *       interests: { listingTypes: ['farmland'], totalAcreage: '5',
+         *                    readyToList: true }
+         *
+         *   with `role: 'buyer'` laid over the top. So "grants investor for a
+         *   buyer" proves the role branch and nothing about the payload a buyer
+         *   can actually produce. A buyer never sends that object.
+         *
+         *   THIS IS WHAT InterestsStep SENDS FOR A BUYER, field for field, from
+         *   its initial state: the two it validates as non-empty, and every
+         *   seller field at its default — `""` for the strings, `[]` for the
+         *   arrays, `false` for readyToList. Built from the component rather
+         *   than invented, because a fixture that guesses the shape proves
+         *   nothing about the screen.
+         */
+        seedUser();
+        const { submitFarmNationOnboardingAction } = await actions();
+
+        const result = await submitFarmNationOnboardingAction(form({
+            role: 'buyer',
+            interests: {
+                propertyTypes: ['Farmland'],
+                budgetRange: '₦1m - ₦5m',
+                preferredSize: '',
+                listingTypes: [],
+                totalAcreage: '',
+                readyToList: false,
+                farmLocation: '',
+                latitude: '',
+                longitude: '',
+                farmDocuments: [],
+            },
+        }));
+
+        //   The result is asserted, not just the side effects. A returned
+        //   `{ success: false }` is what the screen turns into a message, and
+        //   the whole question is whether this payload produces one.
+        expect(result).toMatchObject({ success: true });
+        expect(readUser()!.roles).toContain('investor');
+        expect(onlyApp()).toMatchObject({ role: 'buyer', status: 'pending' });
+    });
+
+    it('AND THE BUYER\'S OWN ANSWERS SURVIVE THE ROUND TRIP', async () => {
+        /*
+         *   The half that would make a green case above meaningless: the action
+         *   could accept the payload and drop the two fields a buyer actually
+         *   filled in, leaving an administrator reading a blank application.
+         */
+        seedUser();
+        const { submitFarmNationOnboardingAction } = await actions();
+
+        await submitFarmNationOnboardingAction(form({
+            role: 'buyer',
+            interests: {
+                propertyTypes: ['Farmland', 'Orchard'],
+                budgetRange: '₦1m - ₦5m',
+                preferredSize: '', listingTypes: [], totalAcreage: '',
+                readyToList: false, farmLocation: '', latitude: '',
+                longitude: '', farmDocuments: [],
+            },
+        }));
+
+        expect(onlyApp().interests).toMatchObject({
+            propertyTypes: ['Farmland', 'Orchard'],
+            budgetRange: '₦1m - ₦5m',
+        });
+    });
+
     it('grants both for "both", and does not duplicate a role already held', async () => {
         seedUser({ roles: ['user', 'farmer'] });
         const { submitFarmNationOnboardingAction } = await actions();

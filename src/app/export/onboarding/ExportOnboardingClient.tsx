@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { restoredStepId } from "@/lib/draft-step";
 import { z } from "zod";
 import { logger } from '@/lib/logger';
+import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Package, TrendingUp, Shield, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
@@ -502,7 +503,9 @@ export default function ExportOnboardingClient(
             }
         } catch (error) {
             logger.error("Error submitting onboarding:", error);
-            showToast("An error occurred. Please try again.", "error");
+            //   #855 — see the note on STALE_SUBMIT_ADVICE.
+            showToast(staleSubmitAdvice(error)
+                ?? "An error occurred. Please try again.", "error");
             setIsSubmitting(false);
         }
     };
