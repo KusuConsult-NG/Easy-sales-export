@@ -62,6 +62,39 @@ export default function ListLandPage() {
         taxClearance: null as File | null,
     });
 
+    /**
+     *   #860 ANYTHING ELSE SHE HAS, AND THE THREE NAMED SLOTS ARE KEPT.
+     *
+     *   THE OWNER: "also add multiple document upload".
+     *
+     *   The form took exactly three files — Land Title, Survey Plan, Tax
+     *   Clearance — one each. A seller with a deed of assignment, a power of
+     *   attorney, a probate order, a second survey after a subdivision or two
+     *   pages of one C of O had nowhere to put them, and verification is
+     *   decided on what she can show.
+     *
+     *   NOT REPLACED BY ONE ANONYMOUS PILE. The named slots are what an admin
+     *   verifying the land reads: "is there a C of O" is a different question
+     *   from "are there eight files", and #856 is the record of what happens
+     *   when the presence of documents is confused with the substance of them.
+     *   So the three stay named and required as they were, and everything else
+     *   goes here.
+     */
+    const [extraDocuments, setExtraDocuments] = useState<File[]>([]);
+
+    const addExtraDocuments = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const picked = Array.from(e.target.files || []);
+        //   Capped, and the cap is the same eight the image picker uses. An
+        //   unbounded multiple-file input is an unbounded upload bill.
+        setExtraDocuments(prev => [...prev, ...picked].slice(0, 8));
+        //   Cleared so picking the same file twice in a row still fires change.
+        e.target.value = "";
+    };
+
+    const removeExtraDocument = (index: number) => {
+        setExtraDocuments(prev => prev.filter((_, i) => i !== index));
+    };
+
     const toggleCategory = (value: LandCategory) => {
         setFormData(prev => {
             const current = Array.isArray(prev.category) ? prev.category : (prev.category ? [prev.category as LandCategory] : []);
@@ -229,6 +262,12 @@ export default function ListLandPage() {
             if (documents.taxClearance) {
                 const path = `farm-nation/${session.user.id}/docs/${Date.now()}_tax_${documents.taxClearance.name}`;
                 docUploads.push(uploadFile(documents.taxClearance, path));
+            }
+
+            //   #860 Everything else she attached, uploaded in the same pass.
+            for (const extra of extraDocuments) {
+                const path = `farm-nation/${session.user.id}/docs/${Date.now()}_extra_${extra.name}`;
+                docUploads.push(uploadFile(extra, path));
             }
 
             const uploadedDocs = await Promise.all(docUploads);
@@ -674,6 +713,65 @@ export default function ListLandPage() {
                                     onChange={(file) => handleDocumentChange("taxClearance", file)}
                                     uploadState={documents.taxClearance ? uploadState[documents.taxClearance.name] : undefined}
                                 />
+
+                                {/*
+                                  *   #860 Anything else she has. See the note on
+                                  *   extraDocuments for why the three named slots above
+                                  *   are kept rather than folded into this.
+                                  */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Other Supporting Documents (Optional)
+                                    </label>
+                                    <p className="text-sm text-slate-600 mb-3">
+                                        Deed of assignment, power of attorney, probate order, extra
+                                        survey pages — anything else that supports your claim. Up to
+                                        eight files.
+                                    </p>
+
+                                    <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-green-500 hover:bg-green-50 transition">
+                                        <Plus className="w-5 h-5 text-slate-500" />
+                                        <span className="text-sm font-medium text-slate-700">
+                                            Add documents
+                                        </span>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            onChange={addExtraDocuments}
+                                            className="hidden"
+                                        />
+                                    </label>
+
+                                    {extraDocuments.length > 0 && (
+                                        <ul className="mt-3 space-y-2">
+                                            {extraDocuments.map((file, index) => (
+                                                <li
+                                                    key={`${file.name}-${index}`}
+                                                    className="flex items-center justify-between gap-3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                                >
+                                                    <span className="flex items-center gap-2 min-w-0">
+                                                        <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                                                        <span className="text-sm text-slate-700 truncate">{file.name}</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-3 shrink-0">
+                                                        <span className="text-xs text-slate-500">
+                                                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeExtraDocument(index)}
+                                                            aria-label={`Remove ${file.name}`}
+                                                            className="p-1 text-slate-400 hover:text-red-600 transition"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
                             </div>
                         </section>
 
