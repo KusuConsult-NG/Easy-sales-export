@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
-import { notifyInspectorDispatched } from "@/lib/farm-nation-notifications";
+import { notifyInspectorDispatched, notifyInspectorAssigned } from "@/lib/farm-nation-notifications";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -31,11 +31,31 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { verificationId, inspectorName, scheduledDate, notes } = await request.json();
+        const { verificationId, inspectorName, inspectorEmail, scheduledDate, notes }
+            = await request.json();
 
-        if (!verificationId || !inspectorName || !scheduledDate) {
+        /*
+         *   #864 AND AN ADDRESS, which was never collected.
+         *
+         *   THE OWNER: "admin sends an inspector with all the details submitted
+         *   from the listing and all the documents", and "the inspector doesn't
+         *   have an admin account — the details will be mailed by email from
+         *   the admin".
+         *
+         *   REQUIRED, not optional. The dispatch tab already told the admin "an
+         *   email notification will be sent to the inspector with the property
+         *   location and document links", and the form collected only a NAME —
+         *   so there was nobody to send it to even in principle, and the
+         *   promise could never be kept. Accepting a dispatch with no address
+         *   would keep it unkept for whoever leaves the field blank.
+         */
+        if (!verificationId || !inspectorName || !inspectorEmail || !scheduledDate) {
             return NextResponse.json(
-                { success: false, message: "Verification ID, inspector name, and scheduled date are required" },
+                {
+                    success: false,
+                    message: "Verification ID, inspector name, inspector email and scheduled "
+                        + "date are required",
+                },
                 { status: 400 }
             );
         }
@@ -100,11 +120,23 @@ export async function POST(request: NextRequest) {
             patch: {
                 inspectionDetails: {
                     inspectorName,
+                    //   #864 Recorded so a re-dispatch, and the report filed
+                    //   later, can be matched to the person who actually went.
+                    inspectorEmail,
                     scheduledDate,
                     notes: notes || "",
                     dispatchedBy: session.user.id,
                     dispatchedAt: FieldValue.serverTimestamp()
                 },
+                /*
+                 *   #864 A NEW DISPATCH CLEARS THE OLD FINDING.
+                 *
+                 *   Otherwise re-inspecting a listing leaves last month's
+                 *   "passed" sitting on it, and the approval gate reads a report
+                 *   about a visit that has been superseded — which is worse than
+                 *   no gate, because it reads as one.
+                 */
+                inspectionReport: null,
                 verificationNotes: `Inspector: ${inspectorName}\nScheduled Date: ${scheduledDate}\nNotes: ${notes || "None"}`,
                 updatedAt: FieldValue.serverTimestamp(),
             },
@@ -166,6 +198,39 @@ export async function POST(request: NextRequest) {
             inspectorName,
             scheduledDate,
             notes,
+        });
+
+        /*
+         *   #864 AND SEND THE INSPECTOR THE JOB.
+         *
+         *   The half the dispatch tab has been promising: "an email
+         *   notification will be sent to the inspector with the property
+         *   location and document links". Until now the route recorded a name
+         *   and a date and the inspector was told by some means outside this
+         *   platform, if at all.
+         *
+         *   They cannot sign in — the owner confirmed inspectors hold no
+         *   account — so everything they need is in the message: the location,
+         *   the GPS, the size, the price, the owner's name and a link to every
+         *   document they are being asked to authenticate.
+         */
+        await notifyInspectorAssigned({
+            inspectorEmail,
+            inspectorName,
+            scheduledDate,
+            notes,
+            listing: {
+                id: verificationId,
+                title: listing.title,
+                description: listing.description,
+                size: listing.size,
+                price: listing.price,
+                type: listing.type,
+                ownerName: listing.ownerName,
+                location: listing.location,
+                gpsCoordinates: listing.gpsCoordinates,
+                documents: listing.documents,
+            },
         });
 
         await recordAdminAction({

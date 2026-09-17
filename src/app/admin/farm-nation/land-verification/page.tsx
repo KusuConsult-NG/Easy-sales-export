@@ -36,6 +36,21 @@ type LandVerification = {
     verifiedAt?: Date;
     location?: { state: string; lga: string; address: string; };
     address?: string;
+    /**
+     *   #864 THE LIFECYCLE STATUS, AND WHAT THE INSPECTOR FOUND.
+     *
+     *   `status` was missing from this type while the rows have always carried
+     *   it — `verificationStatus` is the derived duplicate that four writers
+     *   spelled four ways (see land-listing-status.ts). The report panel keys
+     *   off `inspection_scheduled`, which only `status` can tell it.
+     */
+    status?: string;
+    inspectionReport?: {
+        outcome?: "passed" | "failed";
+        inspectorName?: string;
+        inspectedOn?: string | null;
+        findings?: string | null;
+    } | null;
 };
 
 function getNormalizedDocs(docs: any) {
@@ -117,9 +132,19 @@ export default function AdminLandVerificationPage() {
 
     // Inspector dispatch state
     const [inspectorName, setInspectorName] = useState("");
+    //   #864 The address the job is sent to. The inspector holds no account on
+    //   this platform, so email is the only way they ever see the listing —
+    //   and this tab has been promising the email since before there was a
+    //   field to address it with.
+    const [inspectorEmail, setInspectorEmail] = useState("");
     const [inspectorDate, setInspectorDate] = useState("");
     const [inspectorNotes, setInspectorNotes] = useState("");
     const [isDispatchingInspector, setIsDispatchingInspector] = useState(false);
+    //   #864 What the inspector came back with, typed in by the admin who
+    //   received their report. Approval is refused until this is filed.
+    const [inspectionOutcome, setInspectionOutcome] = useState<"passed" | "failed">("passed");
+    const [inspectionFindings, setInspectionFindings] = useState("");
+    const [isRecordingInspection, setIsRecordingInspection] = useState(false);
     const [activeTab, setActiveTab] = useState<"details" | "inspector">("details");
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [previewTitle, setPreviewTitle] = useState<string>("");
@@ -221,7 +246,11 @@ export default function AdminLandVerificationPage() {
     }
 
     async function handleApprove(verificationId: string) {
-        if (!confirm("Approve this land listing? Ensure the inspector report has been reviewed.")) return;
+        //   #864 The dialog no longer asks the admin to REMEMBER whether an
+        //   inspection happened — the server refuses an approval without a
+        //   passed report, at all six approval doors. What is left here is a
+        //   plain confirmation of an action that puts land on the market.
+        if (!confirm("Approve this land listing and make it visible to buyers?")) return;
         setIsProcessing(true);
         try {
             const response = await fetch("/api/admin/farm-nation/approve-land", {
@@ -246,6 +275,9 @@ export default function AdminLandVerificationPage() {
 
     async function handleDispatchInspector(verificationId: string) {
         if (!inspectorName.trim()) { showToast("Please enter inspector name", "error"); return; }
+        //   #864 Required, because the dispatch IS the email. The route refuses
+        //   without it too; this only saves a round trip.
+        if (!inspectorEmail.trim()) { showToast("Please enter the inspector's email", "error"); return; }
         if (!inspectorDate) { showToast("Please select inspection date", "error"); return; }
         setIsDispatchingInspector(true);
         try {
@@ -255,14 +287,15 @@ export default function AdminLandVerificationPage() {
                 body: JSON.stringify({
                     verificationId,
                     inspectorName: inspectorName.trim(),
+                    inspectorEmail: inspectorEmail.trim(),
                     scheduledDate: inspectorDate,
                     notes: inspectorNotes.trim(),
                 }),
             });
             const data = await response.json();
             if (data.success) {
-                showToast("Inspector dispatched successfully!", "success");
-                setInspectorName(""); setInspectorDate(""); setInspectorNotes("");
+                showToast("Inspector dispatched — the listing and documents have been emailed to them.", "success");
+                setInspectorName(""); setInspectorEmail(""); setInspectorDate(""); setInspectorNotes("");
                 setActiveTab("details");
                 loadVerifications();
             } else {
@@ -272,6 +305,61 @@ export default function AdminLandVerificationPage() {
             showToast("An error occurred dispatching inspector", "error");
         } finally {
             setIsDispatchingInspector(false);
+        }
+    }
+
+    /**
+     *   #864 FILE WHAT THE INSPECTOR FOUND.
+     *
+     *   The step the owner's flow needed and the platform had no place for. The
+     *   inspector cannot sign in, so they report back to the admin and the admin
+     *   records it here; approval is refused until this exists.
+     */
+    async function handleRecordInspection(verificationId: string) {
+        if (inspectionOutcome === "failed" && !inspectionFindings.trim()) {
+            showToast("Say what the inspector found before recording a failure", "error");
+            return;
+        }
+        setIsRecordingInspection(true);
+        try {
+            const response = await fetch("/api/admin/farm-nation/record-inspection", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    verificationId,
+                    outcome: inspectionOutcome,
+                    findings: inspectionFindings.trim(),
+                }),
+            });
+            /*
+             *   THE STATUS IS READ, NOT JUST THE BODY.
+             *
+             *   #512's ledger counts every fetch in this tree whose response is
+             *   never checked for `ok` or `status`, and its note says to fix a
+             *   new one rather than raise the number. A 500 answers with an HTML
+             *   error page, `json()` throws, and the catch below reports
+             *   "an error occurred" — which is what the admin sees whether the
+             *   report was refused for a good reason or the server fell over.
+             *
+             *   The body is still read first, because the refusals that matter
+             *   here are 400 and 409 and they carry the message explaining them.
+             */
+            const data = await response.json().catch(() => ({} as any));
+            if (response.ok && data.success) {
+                showToast(data.message || "Inspection recorded", "success");
+                setInspectionFindings("");
+                setInspectionOutcome("passed");
+                loadVerifications();
+            } else {
+                showToast(
+                    data.message || `Failed to record the inspection (${response.status})`,
+                    "error",
+                );
+            }
+        } catch {
+            showToast("An error occurred recording the inspection", "error");
+        } finally {
+            setIsRecordingInspection(false);
         }
     }
 
@@ -845,6 +933,20 @@ export default function AdminLandVerificationPage() {
                                                 <input type="text" value={inspectorName} onChange={e => setInspectorName(e.target.value)}
                                                     placeholder="e.g. Adeola Bello" className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                             </div>
+                                            {/*
+                                              *   #864 The address the job actually goes to. This tab has
+                                              *   promised "an email notification will be sent to the
+                                              *   inspector with the property location and document links"
+                                              *   since before there was any field to address it with.
+                                              */}
+                                            <div>
+                                                <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                                                    Inspector Email <span className="text-red-500">*</span>
+                                                </label>
+                                                <input type="email" value={inspectorEmail} onChange={e => setInspectorEmail(e.target.value)}
+                                                    placeholder="inspector@example.com" className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                <p className="text-xs text-slate-500 mt-1">The listing details and every document link are sent here. Inspectors have no account on the platform.</p>
+                                            </div>
                                             <div>
                                                 <label className="block text-sm font-semibold text-slate-900 mb-1.5">
                                                     <Calendar className="w-4 h-4 inline mr-1" />Scheduled Inspection Date <span className="text-red-500">*</span>
@@ -868,6 +970,68 @@ export default function AdminLandVerificationPage() {
                                                 {isDispatchingInspector ? "Dispatching…" : "Dispatch Inspector"}
                                             </button>
                                             <p className="text-xs text-slate-500 text-center">An email notification will be sent to the inspector with the property location and document links.</p>
+
+                                            {/*
+                                              *   #864 THE STEP BETWEEN THE DISPATCH AND THE APPROVAL.
+                                              *
+                                              *   Shown only once an inspector has been dispatched, because
+                                              *   the route refuses a report on a listing nobody has been
+                                              *   sent to — a form that can only fail is worse than no form.
+                                              */}
+                                            {selectedVerification.status === "inspection_scheduled" && (
+                                                <div className="border-t border-slate-200 pt-5 space-y-4">
+                                                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                                        <p className="text-sm font-semibold text-blue-800">📋 Record the inspector&apos;s report</p>
+                                                        <p className="text-xs text-blue-700 mt-1">
+                                                            The inspector reports back to you. File what they found here — this listing cannot be approved until you do.
+                                                        </p>
+                                                    </div>
+                                                    {selectedVerification.inspectionReport?.outcome && (
+                                                        <p className={`text-sm font-semibold ${selectedVerification.inspectionReport.outcome === "passed" ? "text-green-700" : "text-red-700"}`}>
+                                                            Recorded: {selectedVerification.inspectionReport.outcome === "passed" ? "Passed" : "Did not pass"}
+                                                            {selectedVerification.inspectionReport.findings
+                                                                ? ` — ${selectedVerification.inspectionReport.findings}`
+                                                                : ""}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex gap-3">
+                                                        {(["passed", "failed"] as const).map(value => (
+                                                            <button
+                                                                key={value}
+                                                                type="button"
+                                                                onClick={() => setInspectionOutcome(value)}
+                                                                className={`flex-1 px-4 py-3 rounded-xl font-semibold border transition ${
+                                                                    inspectionOutcome === value
+                                                                        ? (value === "passed"
+                                                                            ? "bg-green-600 text-white border-green-600"
+                                                                            : "bg-red-600 text-white border-red-600")
+                                                                        : "bg-white text-slate-700 border-slate-200"
+                                                                }`}
+                                                            >
+                                                                {value === "passed" ? "Passed" : "Did not pass"}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                                                            What the inspector found
+                                                            {inspectionOutcome === "failed" && <span className="text-red-500"> *</span>}
+                                                        </label>
+                                                        <textarea value={inspectionFindings} onChange={e => setInspectionFindings(e.target.value)}
+                                                            placeholder="Boundaries, GPS position, whether the documents match what the owner produced…" rows={3}
+                                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                                                        <p className="text-xs text-slate-500 mt-1">The seller is told the outcome either way, and a failure has to say why.</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleRecordInspection(selectedVerification.id)}
+                                                        disabled={isRecordingInspection}
+                                                        className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-xl transition"
+                                                    >
+                                                        {isRecordingInspection ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                                                        {isRecordingInspection ? "Recording…" : "Record inspection result"}
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

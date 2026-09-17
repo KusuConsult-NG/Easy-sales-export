@@ -473,11 +473,16 @@ describe('#750 — and the stale-JWT ledger recorded the progress', () => {
             .toContain('ledgerVerdict(jwtOnly.length, 77)');
     });
 
-    it('AND THE NAMED-PERMISSION CENSUS COUNTED THE TWELVE NEW GATES (69 AS OF #757)', () => {
+    it('AND THE NAMED-PERMISSION CENSUS COUNTED THE TWELVE NEW GATES (70 AS OF #864)', () => {
         //   55 → 67. That suite pins the permission each site names, so a gate
         //   added and forgotten fails it.
+        //
+        //   69 → 70: #864's record-inspection, the step between dispatching an
+        //   inspector and approving the land. It is live-checked from the start
+        //   rather than converted later, so the census grew by one and the
+        //   stale-JWT ledger above did not move.
         expect(code('src/__tests__/unit/require-admin-names-its-permission.test.ts'))
-            .toContain('expect(callSites().length).toBe(69)');
+            .toContain('expect(callSites().length).toBe(70)');
     });
 });
 

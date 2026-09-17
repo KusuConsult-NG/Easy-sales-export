@@ -218,6 +218,141 @@ export async function notifyInspectorDispatched(params: {
 }
 
 /**
+ * Send the inspector the job: every detail of the listing, and every document.
+ *
+ *   #864 THE SCREEN ALREADY PROMISED THIS AND NOTHING SENT IT.
+ *
+ *   The dispatch tab closes with, in so many words: "An email notification will
+ *   be sent to the inspector with the property location and document links."
+ *   The route sent the inspector nothing. There was no field for their address
+ *   anywhere in the form — the only thing collected was their NAME, as free
+ *   text, so there was nobody to send to even in principle.
+ *
+ *   THE INSPECTOR IS NOT A USER OF THIS PLATFORM, which is the whole reason
+ *   this is an email and not a notification. They cannot sign in to read a
+ *   bell, they cannot open the admin queue, and they cannot follow a link into
+ *   a member area. So everything they need to do the job has to be IN THE
+ *   MESSAGE: where the land is, how big it is, what it is being sold as, who
+ *   owns it, and a link to each document they are being asked to authenticate.
+ *
+ *   THE DOCUMENT LINKS GO OUT IN FULL, and that is a deliberate decision rather
+ *   than an oversight. These are the C of O, the survey plan and the tax
+ *   clearance — the exact files #148 established must not leak to admin roles
+ *   who cannot act on them. An inspector's entire job is to authenticate them
+ *   on site, so withholding them would make the dispatch pointless. What keeps
+ *   this narrow is that only an admin holding farm_nation:verify_applications
+ *   can name the address, and every dispatch is in the audit log.
+ *
+ *   NO OWNER CONTACT DETAILS. The inspector is told who owns the land, because
+ *   they have to meet somebody there, but the seller's phone and email are not
+ *   in this message: the admin arranges access, and an emailed address is a
+ *   copy nobody can withdraw.
+ */
+export async function notifyInspectorAssigned(params: {
+    inspectorEmail?: string | null;
+    inspectorName: string;
+    scheduledDate: string;
+    notes?: string | null;
+    listing: {
+        id: string;
+        title?: string | null;
+        description?: string | null;
+        size?: number | null;
+        price?: number | null;
+        type?: string | null;
+        ownerName?: string | null;
+        location?: { state?: string | null; lga?: string | null; address?: string | null } | null;
+        gpsCoordinates?: { latitude?: number | null; longitude?: number | null } | null;
+        documents?: unknown;
+    };
+}): Promise<void> {
+    const { inspectorEmail, inspectorName, scheduledDate, notes, listing } = params;
+
+    //   No address is a data problem worth naming: the admin dispatched
+    //   somebody they cannot reach, and the job has not gone anywhere.
+    if (!inspectorEmail?.trim()) {
+        logger.error(
+            "[farm-nation] an inspector was dispatched with no email address; "
+            + "the job could not be sent to them",
+            { listingId: listing.id, inspectorName },
+        );
+        return;
+    }
+
+    const property = listing.title?.trim() || "a land listing";
+    const where = [listing.location?.address, listing.location?.lga, listing.location?.state]
+        .map((part) => (typeof part === "string" ? part.trim() : ""))
+        .filter(Boolean)
+        .join(", ");
+
+    //   An array from the live form, and older rows may hold something else.
+    //   #856 is the record of what assuming this shape costs.
+    const documents = Array.isArray(listing.documents)
+        ? listing.documents.filter((d): d is string => typeof d === "string" && !!d.trim())
+        : [];
+
+    const gps = listing.gpsCoordinates;
+    const hasGps = typeof gps?.latitude === "number" && typeof gps?.longitude === "number";
+
+    const rows = [
+        listing.title?.trim() ? html`<p><strong>Listing:</strong> ${listing.title.trim()}</p>` : "",
+        where ? html`<p><strong>Location:</strong> ${where}</p>` : "",
+        hasGps
+            ? html`<p><strong>GPS:</strong> ${gps!.latitude}, ${gps!.longitude}</p>`
+            : "",
+        typeof listing.size === "number" ? html`<p><strong>Size:</strong> ${listing.size}</p>` : "",
+        typeof listing.price === "number"
+            ? html`<p><strong>Asking price:</strong> ₦${listing.price.toLocaleString()}</p>`
+            : "",
+        listing.type ? html`<p><strong>Offered as:</strong> ${listing.type}</p>` : "",
+        listing.ownerName?.trim()
+            ? html`<p><strong>Owner:</strong> ${listing.ownerName.trim()}</p>`
+            : "",
+        listing.description?.trim()
+            ? html`<p><strong>Description:</strong> ${listing.description.trim()}</p>`
+            : "",
+    ].filter(Boolean).join("");
+
+    const documentList = documents.length
+        ? documents
+            .map((url, i) => html`<li><a href="${url}">Document ${i + 1}</a></li>`)
+            .join("")
+        : html`<li>No documents were attached to this listing.</li>`;
+
+    await send(
+        "Farm Nation inspector dispatch",
+        inspectorEmail.trim(),
+        `Inspection request: ${property} on ${scheduledDate}`,
+        shell(
+            "You have been asked to inspect a property",
+            html`
+                <p>Hello ${inspectorName},</p>
+                <p>
+                    You have been assigned to inspect the property below on
+                    <strong>${scheduledDate}</strong>.
+                </p>
+                <div style="background: #f0fdf4; padding: 16px; border-radius: 8px;">
+                    ${trustedHtml(rows)}
+                </div>
+                ${notes?.trim()
+                    ? trustedHtml(html`<p><strong>Instructions:</strong> ${notes.trim()}</p>`)
+                    : ""}
+                <p><strong>Documents to authenticate:</strong></p>
+                <ul>${trustedHtml(documentList)}</ul>
+                <p>
+                    Please confirm the boundaries and the GPS position on site, check the
+                    documents above against what the owner produces, and send your report
+                    back to the administrator who contacted you. The listing is not shown
+                    to buyers until that report is filed.
+                </p>
+            `,
+            `${getBaseUrl()}/farm-nation`,
+            "Farm Nation",
+        ),
+    );
+}
+
+/**
  * Tell the seller her listing arrived, and what happens next.
  *
  *   #863 THE OWNER: "After listing notification email to be sent".
@@ -287,6 +422,97 @@ export async function notifyListingSubmitted(params: {
             `,
             `${getBaseUrl()}${manageLink}`,
             "View my listings",
+        ),
+    );
+}
+
+/**
+ * Tell the seller what the inspector found.
+ *
+ *   #864 EITHER WAY, and the failed case is the one that matters most.
+ *
+ *   A passed inspection is the news she has been waiting for. A FAILED one is
+ *   the only chance she has to do anything about it — and #690's rule applies
+ *   exactly: a refusal recorded without its reason leaves the person it is
+ *   about nothing to act on. The finding goes in the message rather than onto a
+ *   record only an admin can read, which is where every other verdict on this
+ *   platform used to stop.
+ *
+ *   IT IS NOT THE DECISION. A failed inspection does not reject the listing —
+ *   reject-land does that, with its own notice — so the wording says what was
+ *   found and what happens next, and does not tell her she has been refused.
+ */
+export async function notifyInspectionRecorded(params: {
+    ownerId: string;
+    ownerEmail?: string | null;
+    ownerName?: string | null;
+    listingId: string;
+    listingTitle?: string | null;
+    outcome: "passed" | "failed";
+    findings?: string | null;
+}): Promise<void> {
+    const { ownerId, ownerEmail, ownerName, listingId, listingTitle, outcome, findings } = params;
+
+    if (!ownerId) {
+        logger.error(
+            "[farm-nation] an inspection was recorded for a listing with no ownerId; "
+            + "the seller cannot be told",
+            { listingId },
+        );
+        return;
+    }
+
+    const property = listingTitle?.trim() || "your land listing";
+    const note = findings?.trim() ?? "";
+    const link = `/farm-nation/property/${listingId}`;
+    const passed = outcome === "passed";
+
+    await ringBell({
+        userId: ownerId,
+        title: passed ? "Your land passed inspection" : "Your land did not pass inspection",
+        message: passed
+            ? `The inspector has been to ${property} and passed it. An administrator makes `
+                + `the final decision next, and you will be told the outcome.`
+            : `The inspector has been to ${property} and did not pass it.`
+                + (note ? ` Findings: ${note}` : "")
+                + ` You can correct what was found and ask for another inspection.`,
+        link,
+        linkText: "View listing",
+    });
+
+    const to = await resolveNoticeEmail("farm-nation", ownerId, ownerEmail);
+    await send(
+        "Farm Nation inspection result",
+        to,
+        passed
+            ? `${property} passed inspection`
+            : `${property} did not pass inspection`,
+        shell(
+            passed ? "Your land passed inspection" : "Your land did not pass inspection",
+            html`
+                <p>Hello ${ownerName?.trim() || "there"},</p>
+                <p>
+                    The inspector has visited <strong>${property}</strong> and
+                    ${passed ? "passed it" : "did not pass it"}.
+                </p>
+                ${note
+                    ? trustedHtml(html`
+                        <div style="background: #f0fdf4; padding: 16px; border-radius: 8px;">
+                            <p><strong>What the inspector found:</strong></p>
+                            <p>${note}</p>
+                        </div>
+                    `)
+                    : ""}
+                <p>
+                    ${passed
+                        ? "An administrator makes the final decision next, and you will be told "
+                            + "the outcome. Your listing is shown to buyers once it is approved."
+                        : "Your listing has not been refused. You can correct what was found "
+                            + "and ask for another inspection."}
+                </p>
+            `,
+            `${getBaseUrl()}${link}`,
+            "View listing",
         ),
     );
 }

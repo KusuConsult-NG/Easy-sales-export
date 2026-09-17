@@ -15,6 +15,7 @@ import {
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
 } from "@/lib/land-listing-status";
+import { inspectionRefusal } from "@/lib/land-inspection";
 import { recordAdminAction } from "@/lib/audit-log";
 import { safeToISOString, UNKNOWN_DATE_ISO } from "@/lib/date-utils";
 
@@ -360,6 +361,16 @@ export async function approveContentAction(
                                 `from that state. A listing with a purchase in progress must be ` +
                                 `resolved first.`,
                         };
+                    }
+
+                    //   #864 An approval needs a passed inspection. Door 5 of 6 —
+                    //   see lib/land-inspection for the rule. Inside the
+                    //   transaction, on the snapshot already read, so a report
+                    //   filed a moment ago cannot be missed and one cleared by a
+                    //   re-dispatch cannot be raced.
+                    const inspectionBlock = inspectionRefusal(docSnap.data());
+                    if (inspectionBlock) {
+                        return { success: false as const, error: inspectionBlock };
                     }
 
                     //   #509 Taken from the snapshot already in hand.

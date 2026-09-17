@@ -353,6 +353,10 @@ describe('#533 — verifying a parcel is recorded without risking the verificati
         store.seed(COLLECTIONS.LAND_LISTINGS, 'p-1', {
             status: 'pending_verification', ownerId: 'owner-1',
             documents: { cOfO: 'https://res.cloudinary.com/x/cofo.pdf' },
+            //   #864 A passed inspection, because an approval is refused without
+            //   one at all six doors. The gate itself is exercised in
+            //   an-inspection-nobody-had-to-do; here it is fixture.
+            inspectionReport: { outcome: 'passed', inspectorName: 'Chidi Okafor' },
         });
     });
 

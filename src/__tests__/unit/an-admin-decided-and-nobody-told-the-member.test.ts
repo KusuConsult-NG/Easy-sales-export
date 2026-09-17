@@ -321,6 +321,10 @@ describe('#690 — the doors, run', () => {
         const { COLLECTIONS } = await harness();
         store.seed(COLLECTIONS.LAND_LISTINGS, 'l-1', {
             ownerId: 'owner-3', status: 'pending_verification', title: 'A plot',
+            //   #864 A passed inspection, because an approval is refused without
+            //   one at all six doors. The gate itself is exercised in
+            //   an-inspection-nobody-had-to-do; here it is fixture.
+            inspectionReport: { outcome: 'passed', inspectorName: 'Chidi Okafor' },
         });
 
         const { verifyLandListing } = await import('@/app/actions/land-actions');

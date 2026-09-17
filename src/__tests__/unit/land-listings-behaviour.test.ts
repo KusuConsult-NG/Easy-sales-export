@@ -276,7 +276,17 @@ describe('verifyLandListingAction and rejectLandListingAction', () => {
 
     beforeEach(() => {
         actAs(ADMIN, ['super_admin']);
-        seedListing('l1', { status: 'pending_verification' });
+        /*
+         *   #864 An approvable listing is an inspected one now — the approval
+         *   is refused without a passed report, at all six doors that write
+         *   one. Seeded rather than asserted against, because this block is
+         *   about what the VERIFY path writes and whom it refuses; the gate
+         *   itself is exercised in an-inspection-nobody-had-to-do.
+         */
+        seedListing('l1', {
+            status: 'pending_verification',
+            inspectionReport: { outcome: 'passed', inspectorName: 'Chidi Okafor' },
+        });
     });
 
     it('both refuse a caller with no session', async () => {

@@ -378,6 +378,12 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // `users:read` because what it serves is a member's own uploaded
         // identity document.
         'src/app/api/admin/documents/[docId]/route.ts': ['users:read'],
+        //   #864 Filing an inspector's report, which is what unlocks a land
+        //   approval. Live-checked rather than read off the JWT: the roles on a
+        //   token are whatever they were when it was issued, so a revoked admin
+        //   could otherwise file "passed" on land nobody inspected and let the
+        //   approval through behind it.
+        'src/app/api/admin/farm-nation/record-inspection/route.ts': ['farm_nation:verify_applications'],
         // #381's pair: the money knobs — fees, order bounds, USD→NGN and the
         // WAVE commission. Read is separate from update because seeing what
         // the platform charges is not the same right as changing it.
@@ -526,7 +532,9 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // gates in them, because converting only the role writer would leave
         // each file gated two ways, which is the half-converted shape #532's
         // ledger exists to catch.
-        expect(callSites().length).toBe(69);
+        // 69 → 70: #864 added record-inspection, the step between dispatching an
+        // inspector and approving the land.
+        expect(callSites().length).toBe(70);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

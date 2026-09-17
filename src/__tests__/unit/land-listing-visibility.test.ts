@@ -261,7 +261,18 @@ describe('getLandListing — one listing at a time, same rule', () => {
 describe('verifyLandListing — who may verify', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        setListing('pending_verification');
+        /*
+         *   #864 A listing that CAN be approved now carries a passed inspection
+         *   report — an approval is refused without one, at all six doors.
+         *
+         *   Seeded here rather than asserted against, because this block is
+         *   about WHO may verify. A fixture that cannot be approved by anybody
+         *   would make every case below pass for the wrong reason. The gate
+         *   itself is exercised in an-inspection-nobody-had-to-do.
+         */
+        setListing('pending_verification', {
+            inspectionReport: { outcome: 'passed', inspectorName: 'Chidi Okafor' },
+        });
     });
 
     async function verify(id: string, roles: string[]) {
@@ -329,7 +340,13 @@ describe('verifyLandListing — who may verify', () => {
     it('and still verifies a listing that is merely awaiting review', async () => {
         // Vacuity guard for the test above: a refusal proves nothing if the
         // action refuses everything.
-        setListing('pending_verification');
+        //
+        //   #864 Carries a passed inspection, like the block's own fixture —
+        //   an approvable listing is an inspected one now, and a vacuity guard
+        //   that cannot succeed guards nothing.
+        setListing('pending_verification', {
+            inspectionReport: { outcome: 'passed', inspectorName: 'Chidi Okafor' },
+        });
 
         const r: any = await verify(ADMIN, ['admin']);
 

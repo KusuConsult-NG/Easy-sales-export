@@ -11,6 +11,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { APPROVABLE_FROM_STATUSES } from "@/lib/land-listing-status";
+import { inspectionRefusal } from "@/lib/land-inspection";
 
 /**
  * API Route: Approve Land Listing (Admin)
@@ -52,6 +53,32 @@ export async function POST(request: NextRequest) {
         }
 
         const previous = listingDoc.data() ?? {};
+
+        /*
+         *   #864 AN APPROVAL NEEDS A PASSED INSPECTION. Door 1 of 6.
+         *
+         *   THE OWNER: "admin sends an inspector with all the details submitted
+         *   from the listing and all the documents, then after inspector
+         *   verifies then admin can approve."
+         *
+         *   The admin screen has been asking for this in prose the whole time —
+         *   its confirm dialog reads "Approve this land listing? Ensure the
+         *   inspector report has been reviewed." There was no inspector report
+         *   to review: the listing recorded who was SENT and nothing recorded
+         *   what they came back with, so the dialog asked an admin to remember.
+         *
+         *   BEFORE THE CLAIM, so a refused approval writes nothing at all.
+         */
+        const inspectionBlock = inspectionRefusal(previous);
+        if (inspectionBlock) {
+            logger.warn(
+                `[approve-land] Refused: listing ${verificationId} has no passed inspection.`
+            );
+            return NextResponse.json(
+                { success: false, message: inspectionBlock },
+                { status: 409 }
+            );
+        }
 
         /**
          * Which statuses an approval may legitimately start from.

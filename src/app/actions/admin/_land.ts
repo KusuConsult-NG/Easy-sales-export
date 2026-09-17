@@ -17,6 +17,7 @@ import { LandListingVerificationSchema } from "@/lib/schemas";
 import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
+import { inspectionRefusal } from "@/lib/land-inspection";
 import {
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
@@ -157,6 +158,13 @@ async function _verifyLandListing(
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
         const ownerId = listingDoc.exists ? listingDoc.data()?.ownerId : null;
+
+        //   #864 An approval needs a passed inspection. Door 2 of 6 — see
+        //   lib/land-inspection for the rule and why it is not written out here.
+        if (decision === "approved") {
+            const refusal = inspectionRefusal(listingDoc.data());
+            if (refusal) return { error: refusal, success: false as const };
+        }
 
         /**
          * The FIFTH blind land status write, and the most exposed of the five.

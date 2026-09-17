@@ -26,6 +26,7 @@ import {
     type LandListingStatus,
     type LandVerificationStatus,
 } from "@/lib/land-listing-status";
+import { inspectionRefusal } from "@/lib/land-inspection";
 import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visibility";
 import { hasAppAccess } from "@/lib/role-app-mapping";
 import { checkProductPricing } from "@/lib/product-pricing-guard";
@@ -373,8 +374,15 @@ async function _verifyLandListingAction(
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
-        if (!listingDoc.exists) { 
+        if (!listingDoc.exists) {
             return { success: false, error: "Listing not found", data: null };
+        }
+
+        //   #864 An approval needs a passed inspection. Door 3 of 6 — see
+        //   lib/land-inspection for the rule and why it is not written out here.
+        const inspectionBlock = inspectionRefusal(listingDoc.data());
+        if (inspectionBlock) {
+            return { success: false, error: inspectionBlock, data: null };
         }
 
         // THE THIRD blind verify path in this module, after

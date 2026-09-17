@@ -10,6 +10,7 @@ import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-inv
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { APPROVABLE_FROM_STATUSES } from "@/lib/land-listing-status";
+import { inspectionRefusal } from "@/lib/land-inspection";
 import type { Property } from "@/lib/types/farm-nation-actions";
 import { recordAdminAction } from "@/lib/audit-log";
 import { resolveProfileEmail } from "@/lib/profile-email-resolution";
@@ -331,10 +332,24 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
         const property = propertyDoc.data() as Property;
 
         // 🔒 SECURITY FIX: Require Documents for Verification
-        if (verified) { 
+        if (verified) {
             // Must have at least C of O OR Survey Plan
             if (!property.documents?.cOfO && !property.documents?.surveyPlan) {
                 return { success: false as const, error: "Cannot verify property without documents (C of O or Survey Plan required).", data: null, meta: null };
+            }
+
+            /*
+             *   #864 AND SOMEBODY HAS TO HAVE BEEN THERE. Door 4 of 6.
+             *
+             *   The check above asks whether documents EXIST. This asks whether
+             *   anybody has checked that they are real, which is the whole
+             *   difference the owner's flow is about — and #856 is the record
+             *   of what happens when the presence of documents is taken for
+             *   their substance.
+             */
+            const inspectionBlock = inspectionRefusal(property);
+            if (inspectionBlock) {
+                return { success: false as const, error: inspectionBlock, data: null, meta: null };
             }
         }
 

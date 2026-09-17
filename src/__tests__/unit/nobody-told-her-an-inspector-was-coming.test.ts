@@ -153,6 +153,10 @@ const dispatch = async (body: Record<string, unknown> = {}) => {
         body: JSON.stringify({
             verificationId: 'land-1',
             inspectorName: 'Chidi Okafor',
+            //   #864 The dispatch IS an email to the inspector now, so the
+            //   route refuses one with nobody to send it to. This suite is
+            //   about what the SELLER is told; #864's covers the inspector.
+            inspectorEmail: 'chidi@inspectors.ng',
             scheduledDate: '2026-10-02',
             notes: 'Meet the caretaker at the gate',
             ...body,
@@ -164,6 +168,16 @@ const dispatch = async (body: Record<string, unknown> = {}) => {
 
 /** Every in-app notice written during the run. */
 const notices = () => store.all(NOTIFICATIONS).map(([, d]) => d as Record<string, any>);
+
+/**
+ * The SELLER's email, selected by address.
+ *
+ *   #864 A dispatch sends two now — hers, and the job to the inspector. Reading
+ *   `sent[0]` would still pass, because the seller's goes first, and would be
+ *   pinning the order of two unrelated sends rather than the fact this suite is
+ *   about. The inspector's half is #864's own suite.
+ */
+const sellerEmail = () => sent.find((e) => e.to === 'ngozi@example.com');
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -191,8 +205,10 @@ describe('#862 — the seller is told, automatically', () => {
 
         await dispatch();
 
-        expect(sent).toHaveLength(1);
-        expect(sent[0].to).toBe('ngozi@example.com');
+        //   #864 A dispatch now sends TWO emails — the seller's, and the job to
+        //   the inspector. This suite is about the seller's, so it is selected
+        //   by address rather than by being the only one.
+        expect(sent.filter((e) => e.to === 'ngozi@example.com')).toHaveLength(1);
     });
 
     it('AND IT CARRIES ALL THREE DETAILS THE DISPATCH RECORDED', async () => {
@@ -206,7 +222,7 @@ describe('#862 — the seller is told, automatically', () => {
 
         await dispatch();
 
-        for (const channel of [notices()[0].message as string, sent[0].message]) {
+        for (const channel of [notices()[0].message as string, sellerEmail()!.message]) {
             expect(channel).toContain('Chidi Okafor');
             expect(channel).toContain('2026-10-02');
             expect(channel).toContain('Meet the caretaker at the gate');
@@ -219,7 +235,7 @@ describe('#862 — the seller is told, automatically', () => {
         await dispatch();
 
         expect(notices()[0].link).toBe('/farm-nation/property/land-1');
-        expect(sent[0].message).toContain('https://easysalesexport.com/farm-nation/property/land-1');
+        expect(sellerEmail()!.message).toContain('https://easysalesexport.com/farm-nation/property/land-1');
     });
 
     it('AND SAYS WHY HER LISTING HAS LEFT THE SITE', async () => {
@@ -233,7 +249,7 @@ describe('#862 — the seller is told, automatically', () => {
         await dispatch();
 
         expect(notices()[0].message).toContain('verified');
-        expect(sent[0].message).toContain('accessible');
+        expect(sellerEmail()!.message).toContain('accessible');
     });
 
     it('AND IS FILED UNDER A TYPE THE INBOX ACTUALLY HAS A TAB FOR', async () => {
@@ -321,7 +337,7 @@ describe('#862 — and telling her can never undo the dispatch', () => {
         expect(status).toBe(200);
         expect(notices()).toHaveLength(1);
         // Read off the user record, which is where nine callers' addresses live.
-        expect(sent[0]?.to).toBe('ngozi@example.com');
+        expect(sellerEmail()?.to).toBe('ngozi@example.com');
     });
 
     it('AND A LISTING WITH NO OWNER AT ALL DOES NOT THROW', async () => {

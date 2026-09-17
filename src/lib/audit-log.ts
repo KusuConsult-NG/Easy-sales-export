@@ -238,6 +238,10 @@ export type AuditAction =
     | 'farm_nation_approve'
     | 'guarantor_verified'
     | 'inspector_dispatched'
+    //   #864 What the inspector found, filed by the admin who received it.
+    //   Separate from the dispatch: one records that somebody was sent, this
+    //   records what came back, and only the second gates an approval.
+    | 'inspection_recorded'
     /**
      *   #485 KEPT, BECAUSE ROWS ALREADY CARRY IT. The route that wrote this
      *        never called the provider its name claims; it is now

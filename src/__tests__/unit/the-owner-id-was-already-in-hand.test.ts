@@ -108,6 +108,10 @@ describe('#509 — the owner id comes from the snapshot already read', () => {
         //   set, and rejected. lib/land-listing-status.ts is the authority.
         store.seed(LAND, 'plot-1', {
             status: 'pending_verification', ownerId: 'farmer-9', title: 'Two hectares',
+            //   #864 A passed inspection, because an approval is refused without
+            //   one at all six doors. The gate itself is exercised in
+            //   an-inspection-nobody-had-to-do; here it is fixture.
+            inspectionReport: { outcome: 'passed', inspectorName: 'Chidi Okafor' },
         });
 
         expect(await approve('plot-1', 'land')).toMatchObject({ success: true });
@@ -117,7 +121,10 @@ describe('#509 — the owner id comes from the snapshot already read', () => {
     it('AND THE LISTING IS VERIFIED', async () => {
         //   The control: a change that stopped approving would satisfy nothing
         //   above but is worth pinning beside it.
-        store.seed(LAND, 'plot-1', { status: 'pending_verification', ownerId: 'farmer-9' });
+        store.seed(LAND, 'plot-1', {
+            status: 'pending_verification', ownerId: 'farmer-9',
+            inspectionReport: { outcome: 'passed' },   //   #864, as above
+        });
 
         await approve('plot-1', 'land');
 
@@ -130,7 +137,10 @@ describe('#509 — the owner id comes from the snapshot already read', () => {
         //   The guard beneath it is `if (result.success && type === "land" &&
         //   ownerId)`, so a missing owner means no call — unchanged, and pinned
         //   so the new path cannot start passing undefined into a cache key.
-        store.seed(LAND, 'plot-1', { status: 'pending_verification' });
+        store.seed(LAND, 'plot-1', {
+            status: 'pending_verification',
+            inspectionReport: { outcome: 'passed' },   //   #864, as above
+        });
 
         expect((await approve('plot-1', 'land')).success).toBe(true);
         expect(mockInvalidateServiceCache).not.toHaveBeenCalled();

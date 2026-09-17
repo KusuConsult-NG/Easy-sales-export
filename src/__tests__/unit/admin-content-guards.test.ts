@@ -91,6 +91,10 @@ function setCaller(opts: { sessionRoles: string[]; dbRoles: string[]; id?: strin
         ownerId: OWNER,
         title: 'A listing',
         status: 'pending_verification',
+        //   #864 A passed inspection, because an approval is refused without one
+        //   at all six doors. The gate itself is exercised in
+        //   an-inspection-nobody-had-to-do; here it is fixture.
+        inspectionReport: { outcome: 'passed', inspectorName: 'Chidi Okafor' },
     });
 
     (global as any).mockFirestoreGet.mockImplementation((docId: string) => Promise.resolve(

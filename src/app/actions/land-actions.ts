@@ -23,6 +23,7 @@ import {
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
 } from "@/lib/land-listing-status";
+import { inspectionRefusal } from "@/lib/land-inspection";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -414,6 +415,27 @@ async function _verifyLandListing(
 
     try {
         const validated = landVerificationSchema.parse(data);
+
+        /*
+         *   #864 An approval needs a passed inspection. Door 6 of 6, and the one
+         *   with the screen — /land/verify imports THIS function, which is the
+         *   same reason #397 singled it out.
+         *
+         *   A read this path did not otherwise do: it went straight to the
+         *   claim. The claim is still what decides the race; this only decides
+         *   whether an approval is allowed to be attempted, and a stale read
+         *   here can only refuse an approval a moment early, never admit one it
+         *   should have refused — the report is cleared by a re-dispatch, and a
+         *   cleared report reads as "not inspected".
+         */
+        if (validated.verified) {
+            const snap = await db.collection(COLLECTIONS.LAND_LISTINGS)
+                .doc(validated.listingId).get();
+            const inspectionBlock = snap.exists ? inspectionRefusal(snap.data()) : null;
+            if (inspectionBlock) {
+                return { success: false, error: inspectionBlock, data: null };
+            }
+        }
 
         /**
          *   #397 THE SIXTH BLIND LAND STATUS WRITE — AND THE ONE WITH THE SCREEN.
