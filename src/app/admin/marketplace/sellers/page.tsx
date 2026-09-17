@@ -24,6 +24,7 @@ import AdminReadFailed from "@/components/admin/AdminReadFailed";
 //   #783 The shared list — five fields here, and a seller's bank details
 //   (where their payouts land) were not correctable at all.
 import { MARKETPLACE_EDITABLE_FIELDS, seedEditDraft } from "@/lib/admin-editable-fields";
+import { statText, statValueClass } from "@/lib/admin-stat-display";
 
 type SellerVerification = {
     id: string;
@@ -108,10 +109,35 @@ export default function AdminSellersPage() {
     // Server-side stats
     const [serverStats, setServerStats] = useState<{ total: number; pending: number; approved: number; rejected: number } | null>(null);
     const [statsLoading, setStatsLoading] = useState(true);
+    /**
+     *   #845 A FAILED READ FELL BACK TO THE PAGE LENGTH, AND CALLED IT A TOTAL.
+     *
+     *   This was `if (res.success && res.data) setServerStats(res.data)` with no
+     *   else, and the tiles below read
+     *
+     *       total: serverStats?.total ?? verifications.length
+     *
+     *   so when the stats query failed, "Total Requests" quietly showed the
+     *   number of rows THIS PAGE HAD FETCHED — fifty, say — presented as the
+     *   count of every seller application on the platform. The export button
+     *   beside it printed the same figure.
+     *
+     *   That is the defect `a-page-count-was-the-fallback-for-a-total` is named
+     *   after, recurring in a screen that sweep did not reach, and it is #753's
+     *   rule as well: a figure that could not be read must not be rendered as a
+     *   number, because a plausible number is never questioned.
+     */
+    const [statsFailed, setStatsFailed] = useState(false);
     useEffect(() => {
         getAdminSellerStatsAction().then((res) => {
-            if (res.success && res.data) setServerStats(res.data);
-        }).finally(() => setStatsLoading(false));
+            if (res.success && res.data) {
+                setServerStats(res.data);
+                setStatsFailed(false);
+            } else {
+                setStatsFailed(true);
+            }
+        }).catch(() => setStatsFailed(true))
+          .finally(() => setStatsLoading(false));
     }, []);
 
     // Note: useAdminData already applies local search text filters
@@ -320,12 +346,47 @@ export default function AdminSellersPage() {
         }
     };
 
+    /**
+     *   #845 The page-length fallback is kept ONLY while the read is still in
+     *   flight, where it is a reasonable first approximation of what is on
+     *   screen. Once the read has FAILED it is not used at all — statText
+     *   renders "Unavailable", which is what #822 established these three states
+     *   should look like.
+     */
+    /**
+     *   #845 statText, not the raw value, at both render sites below.
+     *
+     *   A failed read is null here and must show "Unavailable" — never blank,
+     *   and never the page count it used to fall back to. The export button
+     *   carried the same figure: "Export CSV (50+)" told an administrator the
+     *   platform held fifty seller applications.
+     *
+     *   The note lives here rather than inline in the JSX. An inline `//`
+     *   comment containing a quote inside a JSX expression desyncs
+     *   lib/testing/strip-comments — the known JSX hazard — and silently
+     *   dropped six kilobytes of this file from every source-reading test,
+     *   which is how the first version of this fix passed typecheck and failed
+     *   its own assertion.
+     */
+    /**
+     *   Built here rather than inline in the JSX, for the same reason as the
+     *   note below: a template literal carrying quotes inside `${}` desyncs
+     *   lib/testing/strip-comments, so an inline version is invisible to every
+     *   source-reading test even though it typechecks and runs correctly.
+     *
+     *   The "+" is dropped on a failed read: "Unavailable+" is nonsense.
+     */
     const stats = {
-        total: serverStats?.total ?? verifications.length,
-        pending: serverStats?.pending ?? verifications.filter(v => v.status === "pending").length,
-        approved: serverStats?.approved ?? verifications.filter(v => v.status === "approved").length,
-        rejected: serverStats?.rejected ?? verifications.filter(v => v.status === "rejected").length,
+        total: statsFailed ? null : serverStats?.total ?? verifications.length,
+        pending: statsFailed ? null : serverStats?.pending ?? verifications.filter(v => v.status === "pending").length,
+        approved: statsFailed ? null : serverStats?.approved ?? verifications.filter(v => v.status === "approved").length,
+        rejected: statsFailed ? null : serverStats?.rejected ?? verifications.filter(v => v.status === "rejected").length,
     };
+
+    const exportCount = statText(stats.total, statsFailed);
+    const exportLabel = statsFailed
+        ? `Export CSV (${exportCount})`
+        : `Export CSV (${exportCount}+)`;
 
     return (
         <div className="p-8">
@@ -351,7 +412,7 @@ export default function AdminSellersPage() {
                     className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                 >
                     {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    {isExporting ? "Preparing Export..." : `Export CSV (${stats.total}+)`}
+                    {isExporting ? "Preparing Export..." : exportLabel}
                 </button> */}
             </div>
 
@@ -372,7 +433,7 @@ export default function AdminSellersPage() {
                         </div>
                         {statsLoading
                             ? <Loader2 className="w-5 h-5 animate-spin text-slate-400 mt-1" />
-                            : <p className="text-3xl font-bold text-slate-900">{value}</p>
+                            : <p className={`${statValueClass(statText(value, statsFailed))} font-bold text-slate-900 tabular-nums`}>{statText(value, statsFailed)}</p>
                         }
                     </div>
                 ))}
