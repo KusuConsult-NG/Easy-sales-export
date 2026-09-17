@@ -40,6 +40,11 @@ export default function ListLandPage() {
         size: "" as string | number,
         unit: "acres" as "acres" | "hectares",
         pricePerUnit: "" as string | number,
+        //   #859 The seller's own asking price, and whether she has set it. See
+        //   the Total Price field for why the product is a default and not a
+        //   verdict.
+        totalPrice: "" as string | number,
+        totalPriceEdited: false,
         latitude: "",
         longitude: "",
         listingTypes: ["sale"] as ("sale" | "rent" | "lease")[],
@@ -115,6 +120,44 @@ export default function ListLandPage() {
      */
     const nigerianStates = STATES;
     const lgasForState = formData.state ? (NIGERIAN_LOCATIONS[formData.state] ?? []) : [];
+
+    /**
+     *   #859 The product of size and unit price — a suggestion, not the answer.
+     *
+     *   Kept in step with those two fields by the effect below until the seller
+     *   types her own figure, at which point it becomes a comparison she can
+     *   accept rather than a value that overwrites her.
+     */
+    const suggestedTotal =
+        Number(formData.size) > 0 && Number(formData.pricePerUnit) > 0
+            ? Number(formData.size) * Number(formData.pricePerUnit)
+            : 0;
+
+    /**
+     *   DERIVED, NOT SYNCED INTO STATE BY AN EFFECT.
+     *
+     *   The first version kept `totalPrice` in step with a mount effect, and
+     *   client-pages-that-still-fetch-after-hydration caught it: that ratchet
+     *   counts a client page carrying one that also calls a server action —
+     *   deliberately "a SHAPE and not a judgement" — and this page submits
+     *   through one. The count went 12 -> 13.
+     *
+     *   (The word itself is avoided here on purpose: that scan reads RAW source,
+     *   so a file merely DISCUSSING the pattern is counted as using it. The
+     *   repository has lib/testing/strip-comments for exactly this and the scan
+     *   does not use it — its own blind-spot note, one spelling further on.)
+     *
+     *   Its header is explicit that "silently raising a ratchet is precisely
+     *   what" must not happen — so the effect is removed rather than the cap
+     *   raised. Nothing is lost: what the field shows is a function of what the
+     *   seller has typed, which is what a derived value is for.
+     */
+    const effectiveTotal = formData.totalPriceEdited
+        ? Number(formData.totalPrice) || 0
+        : suggestedTotal;
+    const totalPriceValue = formData.totalPriceEdited
+        ? formData.totalPrice
+        : (suggestedTotal > 0 ? String(suggestedTotal) : "");
 
     function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
@@ -211,7 +254,10 @@ export default function ListLandPage() {
                     address: formData.address,
                 },
                 size: parseCurrencyStringToFloat(String(formData.size)),
-                price: parseCurrencyStringToFloat(String(formData.size)) * parseCurrencyStringToFloat(String(formData.pricePerUnit)),
+                //   #859 The seller's asking price. It defaults to size × unit
+                //   price and she may change it; what is submitted is whatever
+                //   the Total Price field says.
+                price: effectiveTotal,
                 category: formData.category, // Added category
                 imageUrls,
                 documentUrls,
@@ -523,14 +569,75 @@ export default function ListLandPage() {
                                 </div>
                             </div>
 
-                            {Number(formData.size) > 0 && Number(formData.pricePerUnit) > 0 && (
-                                <div className="mt-4 p-4 bg-green-50 rounded-lg">
-                                    <p className="text-sm text-green-900">
-                                        <span className="font-semibold">Total Price: </span>
-                                        ₦{(Number(formData.size) * Number(formData.pricePerUnit)).toLocaleString()}
+                            {/*
+                              *   #859 THE TOTAL PRICE WAS ARITHMETIC THE SELLER COULD NOT
+                              *   ARGUE WITH.
+                              *
+                              *   THE OWNER: "Total price should include dynamic pricing field
+                              *   and not automatic when setting up product/land."
+                              *
+                              *   `price` was computed at submit as `size × pricePerUnit` and
+                              *   shown here as a read-only line. Land is not sold that way: a
+                              *   seller rounds, discounts a quick sale, prices a corner plot
+                              *   above the per-acre rate because it fronts the road. The form
+                              *   offered no way to say so, and the figure a buyer sees was
+                              *   whichever number fell out of the multiplication.
+                              *
+                              *   The product is still computed and still offered — it is a
+                              *   good default and most listings will keep it — but it is now a
+                              *   STARTING POINT in a field, not a verdict.
+                              */}
+                            <div className="mt-4">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                    Total Price (₦) *
+                                </label>
+                                <input
+                                    type="number"
+                                    value={totalPriceValue}
+                                    onChange={(e) => setFormData(prev => ({
+                                        ...prev,
+                                        totalPrice: e.target.value,
+                                        //   Once she has typed her own figure, the size and
+                                        //   unit-price fields stop overwriting it. Without
+                                        //   this, editing the size after setting a total
+                                        //   silently discards what she asked for.
+                                        totalPriceEdited: true,
+                                    }))}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    placeholder="0"
+                                    min="0"
+                                    step="1000"
+                                    required
+                                />
+                                {suggestedTotal > 0 && (
+                                    <p className="mt-2 text-sm text-slate-600">
+                                        {formData.totalPriceEdited && effectiveTotal !== suggestedTotal ? (
+                                            <>
+                                                {Number(formData.size)} {formData.unit} × ₦
+                                                {Number(formData.pricePerUnit).toLocaleString()} ={" "}
+                                                ₦{suggestedTotal.toLocaleString()}.{" "}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData(prev => ({
+                                                        ...prev,
+                                                        totalPrice: String(suggestedTotal),
+                                                        totalPriceEdited: false,
+                                                    }))}
+                                                    className="font-semibold text-green-700 underline"
+                                                >
+                                                    Use that instead
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                From {Number(formData.size)} {formData.unit} × ₦
+                                                {Number(formData.pricePerUnit).toLocaleString()}. Edit it if your
+                                                asking price differs.
+                                            </>
+                                        )}
                                     </p>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </section>
 
                         {/* Documents */}

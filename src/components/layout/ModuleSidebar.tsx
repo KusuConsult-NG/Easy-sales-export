@@ -55,6 +55,23 @@ interface NavItem {
     icon: React.ElementType;
     exact?: boolean;
     sellerOnly?: boolean;
+    /**
+     *   Show this item only to somebody holding one of these roles.
+     *
+     *   #858 `sellerOnly` COULD NOT EXPRESS FARM NATION, so Farm Nation
+     *   expressed nothing. It tests `roles.includes("seller")`, and Farm
+     *   Nation's two roles are `farmer` and `investor` — granted at submit by
+     *   actions/farm-nation/_fn_onboarding, buyer → investor, seller → farmer.
+     *   A flag named for one module's vocabulary cannot gate another's, so the
+     *   Farm Nation nav gated nothing and showed every seller tool to every
+     *   buyer.
+     *
+     *   Generic, rather than a second boolean: `farmerOnly` beside `sellerOnly`
+     *   is how a third module arrives with `investorOnly` and a fourth with
+     *   nothing. `sellerOnly` is kept as it is — it is correct for marketplace
+     *   and rewriting four entries to prove a point is not a fix.
+     */
+    rolesAny?: readonly string[];
     moduleAccess?: string; // AppIdentifier string
     sectionLabel?: string; // renders a section header before this item
 }
@@ -105,12 +122,47 @@ const COOPERATIVES_NAV: NavItem[] = [
     { name: "History",        href: "/cooperatives/history",    icon: ClipboardList },
 ];
 
+/**
+ *   #858 A FARM NATION BUYER WAS GIVEN THE SELLER'S TOOLS AND NO WAY TO HER OWN
+ *   PURCHASES.
+ *
+ *   THE OWNER: "Ensure the buyer dashboard is properly wired."
+ *
+ *   This list was five entries with no gating at all, while the MARKETPLACE_NAV
+ *   immediately below it marks four of its entries `sellerOnly`. So the rule
+ *   existed, one array away, and could not have been applied here even if
+ *   somebody had tried: `sellerOnly` tests `roles.includes("seller")`, and Farm
+ *   Nation grants `farmer` and `investor`.
+ *
+ *   WHAT A BUYER SAW. "My Properties" (her own land listings — she has none)
+ *   and "List Land" (the seller's create form), and NO "My Purchases" — the one
+ *   screen that is hers. That page exists, is server-rendered, reads
+ *   getMyPurchaseRequestsAction, and NOTHING IN THE LIVE NAV LINKED TO IT.
+ *
+ *   It was linked from FarmNationSidebar, which the member layout's own comment
+ *   records as removed: "Navigation is handled by the global ModuleSidebar.
+ *   FarmNationSidebar removed". The entry went with it — the same shape as
+ *   #384, where Analytics was lost in exactly this migration and the note above
+ *   MARKETPLACE_NAV says so.
+ */
 const FARM_NATION_NAV: NavItem[] = [
     { name: "Properties",     href: "/farm-nation/properties",    icon: Map },
-    { name: "My Properties",  href: "/farm-nation/my-properties", icon: Tractor },
+    { name: "My Purchases",   href: "/farm-nation/my-purchases",  icon: ShoppingCart },
     { name: "My Inquiries",   href: "/farm-nation/inquiries",     icon: MessageSquare },
     { name: "Map View",       href: "/farm-nation/map",           icon: Map },
-    { name: "List Land",      href: "/farm-nation/list-land",     icon: Leaf },
+    /*
+     *   The seller's half. Ungated these sent a buyer to a form she cannot
+     *   complete and a list that is empty by definition.
+     *
+     *   "My Purchases" and "My Inquiries" are NOT gated to `investor`, and that
+     *   is deliberate rather than an omission: a farmer may also buy land, and
+     *   hiding a screen from somebody who has used it is a worse failure than
+     *   showing one that is empty. The asymmetry is the point — a seller tool
+     *   in a buyer's hands is a dead end, a buyer tool in a seller's hands is
+     *   just unused.
+     */
+    { name: "My Properties",  href: "/farm-nation/my-properties", icon: Tractor, rolesAny: ["farmer"] },
+    { name: "List Land",      href: "/farm-nation/list-land",     icon: Leaf,    rolesAny: ["farmer"] },
 ];
 
 const MARKETPLACE_NAV: NavItem[] = [
@@ -370,6 +422,13 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     const navItems = rawNav.filter(item => {
         // Role check for marketplace seller items
         if (item.sellerOnly && !isSeller) return false;
+        //   #858 The general form. Same direction as sellerOnly above — an item
+        //   naming roles is hidden from somebody holding none of them.
+        //   Compared as plain strings: `roles` is typed UserRole[], and the
+        //   module vocabularies this gates on are the roles the onboarding
+        //   actions actually grant, not a union maintained beside them.
+        if (item.rolesAny
+            && !item.rolesAny.some((r) => (roles as readonly string[]).includes(r))) return false;
 
         // Access check for cross-module items (like in Escrow)
         if (item.moduleAccess && !hasAppAccess(roles, item.moduleAccess as any)) return false;
