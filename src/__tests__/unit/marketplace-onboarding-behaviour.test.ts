@@ -639,14 +639,59 @@ describe('submitMarketplaceOnboardingAction — what a BUYER gets', () => {
         expect(readUser().verificationProfile.status).toBe('approved');
     });
 
-    it('"both" is a seller, not a buyer', async () => {
+    it('"both" is a seller AND a buyer — the seller half waits, the buyer half does not', async () => {
+        /**
+         *   #844 THIS CASE'S LAST ASSERTION PINNED A DEFECT.
+         *
+         *   It required `roles` to be exactly `['general_user']` after a "both"
+         *   signup — no marketplace_buyer — and recorded that as
+         *   `"both" is a seller, not a buyer` with no reason given. Measured in
+         *   production, of 91 accounts with `accountType: "both"`:
+         *
+         *       90   NEITHER role — no marketplace capability at all
+         *        1   can only SELL — buyer role missing
+         *        0   can actually do both
+         *
+         *   The form offers "both" and the platform delivered neither. The admin
+         *   members screen still displayed "both", because it reads accountType
+         *   before roles — so the screen showed the intent and the account had
+         *   the capability of nobody.
+         *
+         *   BUYING WAS NEVER GATED ON VERIFICATION. The buyer-only path grants
+         *   marketplace_buyer and marks the registration active immediately,
+         *   because there is nothing to check before somebody may buy. A "both"
+         *   applicant is a buyer on exactly those terms.
+         *
+         *   THE SELLER GUARANTEES ARE UNCHANGED and are still asserted below: a
+         *   verification record exists and the registration stays `pending`,
+         *   which is what marketplace/seller/layout.tsx reads before admitting
+         *   anyone to the seller area. An unverified seller listing products
+         *   would be a far worse defect than the one this fixes.
+         */
         seedUser();
         const { submitMarketplaceOnboardingAction } = await actions();
         await submitMarketplaceOnboardingAction(submission({ accountType: 'both' }));
 
+        //   Unchanged: the seller half is still under review.
         expect(store.size(VERIFICATIONS)).toBe(1);
         expect(reg().status).toBe('pending');
-        expect(readUser().roles).toEqual(['general_user']);
+
+        //   Corrected: she can buy now.
+        expect(readUser().roles).toContain('marketplace_buyer');
+        //   And still cannot sell until an admin approves.
+        expect(readUser().roles).not.toContain('seller');
+    });
+
+    it('AND A SELLER-ONLY APPLICANT IS NOT QUIETLY MADE A BUYER', async () => {
+        //   #844 The guard, from the other side. The grant is conditional on
+        //   accountType === "both"; without that it would hand the buyer role to
+        //   every plain seller too, which is a different defect nobody asked for.
+        seedUser();
+        const { submitMarketplaceOnboardingAction } = await actions();
+        await submitMarketplaceOnboardingAction(submission({ accountType: 'seller' }));
+
+        expect(readUser().roles).not.toContain('marketplace_buyer');
+        expect(reg().status).toBe('pending');
     });
 });
 

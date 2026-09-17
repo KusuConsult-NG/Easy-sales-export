@@ -492,6 +492,47 @@ async function _submitMarketplaceOnboardingAction(
                     sellerCategory: formData.get("sellerCategory") as string || "retail",
                     submittedAt: FieldValue.serverTimestamp() 
                 };
+
+                /**
+                 *   #844 SOMEBODY WHO SIGNED UP AS "BOTH" COULD DO NEITHER.
+                 *
+                 *   MEASURED IN PRODUCTION, of 91 accounts with
+                 *   `accountType: "both"`:
+                 *
+                 *       90   NEITHER role — no marketplace capability at all
+                 *        1   can only SELL — buyer role missing
+                 *        0   can actually do both
+                 *
+                 *   The form offers "buyer", "seller" or "both", and the branch
+                 *   above is `isBuyerOnly = accountType === "buyer"`. So "both"
+                 *   lands here, in the SELLER path, which grants no role at all
+                 *   until an admin approves the verification — and the approval
+                 *   (_marketplace.ts) grants exactly `arrayUnion("seller")`.
+                 *   `marketplace_buyer` was never granted to a "both" account on
+                 *   any path.
+                 *
+                 *   BUYING NEEDS NO VERIFICATION, WHICH IS THE WHOLE POINT. The
+                 *   buyer-only branch above grants `marketplace_buyer` and sets
+                 *   the registration `active` immediately, because there is
+                 *   nothing to check before somebody is allowed to buy. A "both"
+                 *   applicant is a buyer on exactly the same terms; only her
+                 *   SELLER half needs review. Making her wait for seller
+                 *   verification before she can buy withholds a capability that
+                 *   was never gated on it.
+                 *
+                 *   So the buyer role is granted here, now, and the seller role
+                 *   still waits for the admin. `status` stays "pending" because
+                 *   it describes the seller application under review — that is
+                 *   what marketplace/seller/layout.tsx reads to decide whether
+                 *   to admit her to the seller area, and widening it would let
+                 *   an unverified seller list products.
+                 */
+                if (accountType === "both") {
+                    const existingRoles = userDoc.data()?.roles || ["general_user"];
+                    if (!existingRoles.includes("marketplace_buyer")) {
+                        userUpdate.roles = [...existingRoles, "marketplace_buyer"];
+                    }
+                }
             }
 
             transaction.update(userRef, userUpdate);

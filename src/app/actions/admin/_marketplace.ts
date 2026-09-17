@@ -93,7 +93,27 @@ async function _approveSellerVerificationAction(
                 sellerVerificationId: verificationId,
                 verifiedBy: session.user.id,
                 verifiedAt: FieldValue.serverTimestamp(),
-                roles: FieldValue.arrayUnion("seller"),
+                /**
+                 *   #844 A "BOTH" APPLICANT GETS BOTH ROLES ON APPROVAL.
+                 *
+                 *   This granted `seller` and only `seller`. Measured in
+                 *   production, the one approved account with
+                 *   `accountType: "both"` came out able to SELL AND NOT BUY —
+                 *   the other 90 were still unapproved and could do neither.
+                 *
+                 *   `arrayUnion` with both values is idempotent and safe on a
+                 *   re-approval: it adds what is missing and leaves the rest,
+                 *   which matters because #684's re-import lesson applies here
+                 *   too — an approval that can run twice must not undo itself.
+                 *
+                 *   accountType is read from the VERIFICATION record, which is
+                 *   what _mp_onboarding wrote at submission, so this reflects
+                 *   what the applicant actually asked for rather than anything
+                 *   inferred at approval time.
+                 */
+                roles: verificationData.accountType === "both"
+                    ? FieldValue.arrayUnion("seller", "marketplace_buyer")
+                    : FieldValue.arrayUnion("seller"),
                 // "approved", not "active".
                 //
                 // Two approval implementations write this field:
