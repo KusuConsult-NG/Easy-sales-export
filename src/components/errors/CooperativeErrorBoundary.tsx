@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { isStaleDeploymentError, consumeReloadBudget } from '@/lib/stale-deployment-recovery';
 
 interface ErrorBoundaryProps {
     children: React.ReactNode;
@@ -31,6 +32,36 @@ export class CooperativeErrorBoundary extends React.Component<
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        /*
+         *   #852 THE SAME BOUNDED RECOVERY THE ROUTE BOUNDARIES USE.
+         *
+         *   Next's own docs say a Server Action id is part of the build
+         *   artifacts and that Next rotates them "at most every 14 days, even
+         *   when the source is unchanged", so a long-open tab meets
+         *   "Failed to find Server Action" whatever else is configured. Their
+         *   prescription is to "surface the error as a retry path in the UI
+         *   rather than a hard failure, so a refresh recovers the user".
+         *
+         *   A class component cannot use the hook, so it calls the same budget
+         *   directly — the arrangement ErrorBoundary already uses. The RULE is
+         *   shared; only the plumbing differs. BOUNDED, per #717: an unguarded
+         *   reload that does not fetch a newer page hits the same boundary and
+         *   reloads forever.
+         */
+        if (isStaleDeploymentError(error)) {
+            if (consumeReloadBudget()) {
+                console.warn('[CooperativeErrorBoundary] Stale deployment — reloading once.');
+                window.location.reload();
+                return;
+            }
+            console.error(
+                '[CooperativeErrorBoundary] Stale deployment error after this page already used its '
+                + 'automatic reloads. Showing the error instead of reloading again.',
+                error,
+            );
+            return;
+        }
+
         // Log error to console (in production, send to error tracking service)
         console.error('Cooperative Module Error:', error, errorInfo);
     }
