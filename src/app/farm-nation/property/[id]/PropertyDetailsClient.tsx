@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { isPurchasable } from "@/lib/land-listing-status";
 import { landLocationText } from "@/lib/land-location";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -219,12 +220,57 @@ export default function PropertyDetailsClient({ initial = null }: {
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <div className="flex items-center gap-2 mb-2">
+                                        {/*
+                                          *   #856 THE SELLER'S OWN UPLOAD MARKED THE LAND
+                                          *   VERIFIED.
+                                          *
+                                          *   THE OWNER: "when a user upload a product, the
+                                          *   user has a 'This land is verified' badge even
+                                          *   before land is approved by admin."
+                                          *
+                                          *   This read `documents.length > 0`, and that one
+                                          *   expression gave three different wrong answers
+                                          *   depending on who was looking:
+                                          *
+                                          *     array-shaped rows   the LIVE form path stores
+                                          *                         `documents: data.documentUrls`
+                                          *                         (land-listings.ts:958, typed
+                                          *                         `string[]`), so ANY upload
+                                          *                         makes this true — verified
+                                          *                         before an admin has seen it
+                                          *     object-shaped rows  _fn_listings writes
+                                          *                         `documents: {}`, where
+                                          *                         `.length` is undefined, so
+                                          *                         APPROVED land read
+                                          *                         "Unverified" forever
+                                          *     a buyer             land-visibility strips
+                                          *                         `documents` from public
+                                          *                         payloads, so it is undefined
+                                          *                         and every listing read
+                                          *                         "Unverified"
+                                          *
+                                          *   Which is why the owner saw it and a buyer did not:
+                                          *   land-actions.ts:249 hands the UNSTRIPPED listing to
+                                          *   a `privileged` caller, and the seller viewing her
+                                          *   own land is one.
+                                          *
+                                          *   #340 FIXED THIS BADGE ON THE LANDING PAGE and gave
+                                          *   the reason that settles it: "uploading a survey
+                                          *   plan is not the same as an admin approving it. The
+                                          *   status IS the verification decision." It reached
+                                          *   one of the three screens that carry this badge.
+                                          *
+                                          *   isPurchasable() is that decision — the three
+                                          *   spellings of approved-and-for-sale, from
+                                          *   lib/land-listing-status, which #340 calls "the
+                                          *   single place that has to change".
+                                          */}
                                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-sm uppercase tracking-wider ${
-                                            (property.documents && property.documents.length > 0)
+                                            isPurchasable(property.status)
                                                 ? "bg-emerald-100 text-emerald-800"
                                                 : "bg-red-100 text-red-800"
                                         }`}>
-                                            {(property.documents && property.documents.length > 0) ? "Verified Land" : "Unverified Land"}
+                                            {isPurchasable(property.status) ? "Verified Land" : "Unverified Land"}
                                         </span>
                                     </div>
                                     <h1 className="text-3xl font-bold text-slate-900 mb-2">

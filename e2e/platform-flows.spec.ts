@@ -50,9 +50,25 @@ test.describe('Farm Nation Property Listings', () => {
         await expect(farmlandCategory).toHaveClass(/border-green-600/, { timeout: 10000 });
         await page.locator('textarea[placeholder*="Describe the land"]').fill('Fertile land perfect for rice farming');
         
-        // Select state and fill LGA
+        /*
+         *   Select the state, then the LGA.
+         *
+         *   #857 THE LGA WAS `input[placeholder="Enter LGA"]` AND IS A DEPENDENT
+         *   DROPDOWN NOW. It is disabled until a state is chosen and its options
+         *   come from lib/locations, so the order below is load-bearing rather
+         *   than stylistic: selecting the LGA first would find a disabled
+         *   control with one placeholder option.
+         *
+         *   Asserted enabled in between, because that is the behaviour the
+         *   finding added — a silent failure here would otherwise look like a
+         *   selector problem six steps later, which is the trap the comment
+         *   above this test already records for the category buttons.
+         */
         await page.locator('select').first().selectOption('Kano');
-        await page.locator('input[placeholder="Enter LGA"]').fill('Kano Municipal');
+
+        const lgaSelect = page.locator('label:has-text("LGA") >> xpath=.. >> select');
+        await expect(lgaSelect).toBeEnabled({ timeout: 10000 });
+        await lgaSelect.selectOption('Kano Municipal');
         await page.locator('textarea[placeholder*="Full address with landmarks"]').fill('123 Farm Road, Kano');
 
         // Size and price per unit

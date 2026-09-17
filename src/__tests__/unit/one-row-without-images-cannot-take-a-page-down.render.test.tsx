@@ -195,9 +195,23 @@ describe('#439 — the public catalogue survives the row that took it down', () 
         }, { timeout: 15000 });
 
         expect(screen.getAllByTestId('property-card')).toHaveLength(3);
-        // And the row with no images is one of the three, not a card that was
-        // quietly dropped to dodge the crash.
-        expect(screen.getByText('Verified Land')).toBeInTheDocument();
+        /*
+         *   And the row with no images is one of the three, not a card that was
+         *   quietly dropped to dodge the crash.
+         *
+         *   #856 THIS WAS `getByText('Verified Land')` AND BECAME AMBIGUOUS, for
+         *   a reason worth recording rather than just working around: this
+         *   fixture's third row is TITLED "Verified Land", and until #856 the
+         *   badge beside it could not say those words. It read
+         *   `documents.length > 0` on a payload with no `documents` key, so
+         *   every card said "Unverified Land" and the title was the only match.
+         *
+         *   The badge states the admin's decision now, so an approved row shows
+         *   "Verified Land" twice — once as its title, once as its badge — and
+         *   the query has to say which it means. Matched on the heading, which
+         *   is the thing this case is actually about: the row is on the page.
+         */
+        expect(screen.getByRole('heading', { name: 'Verified Land' })).toBeInTheDocument();
     });
 
     it('and the empty state is still reachable, so the fix did not paper over it', async () => {

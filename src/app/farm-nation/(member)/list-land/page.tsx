@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { STATES, NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -88,13 +89,32 @@ export default function ListLandPage() {
         { value: "aquaculture", label: "Aquaculture/Fish Farm", icon: "🐟" }
     ];
 
-    const nigerianStates = [
-        "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
-        "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Gombe", "Imo",
-        "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos",
-        "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers",
-        "Sokoto", "Taraba", "Yobe", "Zamfara", "FCT"
-    ];
+    /**
+     *   #857 THE STATES CAME FROM A LIST TYPED INTO THIS FILE, AND THE LGA CAME
+     *   FROM NOWHERE AT ALL.
+     *
+     *   THE OWNER: "LGA drop-down not included — when users select a state there
+     *   should be an LGA dropdown."
+     *
+     *   State was a `<select>` over thirty-seven strings declared here; LGA was
+     *   a free-text `<input placeholder="Enter LGA">`. So the half of the
+     *   address that the platform can validate was constrained and the half it
+     *   uses to find land for a buyer was whatever somebody typed — "Jos
+     *   North", "jos-north", "Jos N." and a misspelling are four different LGAs
+     *   to a search.
+     *
+     *   lib/locations.ts already holds NIGERIAN_LOCATIONS — every state with its
+     *   LGAs — plus isValidLGA and getWards, and the cooperative onboarding has
+     *   driven dependent state → LGA → ward dropdowns from it since #789. The
+     *   data was there; this form did not ask.
+     *
+     *   NINE FILES DECLARE THEIR OWN COPY of the state list. This is one of
+     *   them and it is one fewer now. The other eight are a sweep of their own
+     *   rather than a passenger on a Farm Nation fix — recorded in
+     *   docs/module-audit-checklist.md §D.
+     */
+    const nigerianStates = STATES;
+    const lgasForState = formData.state ? (NIGERIAN_LOCATIONS[formData.state] ?? []) : [];
 
     function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
@@ -350,7 +370,14 @@ export default function ListLandPage() {
                                         </label>
                                         <select
                                             value={formData.state}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
+                                            //   #857 The LGA is cleared with the state. #789's
+                                            //   rule on the cooperative form: a dependent
+                                            //   dropdown that keeps its old value is worse than
+                                            //   an empty one, because "Plateau / Ikeja" looks
+                                            //   like an address and is not.
+                                            onChange={(e) => setFormData(prev => ({
+                                                ...prev, state: e.target.value, lga: "",
+                                            }))}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             required
                                         >
@@ -364,14 +391,23 @@ export default function ListLandPage() {
                                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             LGA *
                                         </label>
-                                        <input
-                                            type="text"
+                                        <select
                                             value={formData.lga}
                                             onChange={(e) => setFormData(prev => ({ ...prev, lga: e.target.value }))}
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
-                                            placeholder="Enter LGA"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-slate-100 disabled:text-slate-400"
+                                            //   Disabled until a state is chosen, because the
+                                            //   list depends on it. An enabled empty dropdown
+                                            //   reads as "no LGAs exist here".
+                                            disabled={!formData.state}
                                             required
-                                        />
+                                        >
+                                            <option value="">
+                                                {formData.state ? "Select LGA" : "Select a state first"}
+                                            </option>
+                                            {lgasForState.map(lga => (
+                                                <option key={lga} value={lga}>{lga}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
 

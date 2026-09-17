@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Map, MapPin, ArrowLeft, Loader2, Save, Check } from "lucide-react";
@@ -53,6 +54,10 @@ export default function EditPropertyClient(props: {
         "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers",
         "Sokoto", "Taraba", "Yobe", "Zamfara", "FCT"
     ];
+
+    //   #857 See the listing form for why this comes from lib/locations.
+
+    const lgasForState = formData.state ? (NIGERIAN_LOCATIONS[formData.state] ?? []) : [];
 
     const propertyTypes = [
         { value: "farmland", label: "Farmland", icon: "🌾" },
@@ -279,7 +284,7 @@ export default function EditPropertyClient(props: {
                                         </label>
                                         <select
                                             value={formData.state}
-                                            onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                            onChange={(e) => setFormData({ ...formData, state: e.target.value, lga: "" })}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             required
                                         >
@@ -293,13 +298,26 @@ export default function EditPropertyClient(props: {
                                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             LGA / City *
                                         </label>
-                                        <input
-                                            type="text"
+                                        {/*
+                                          *   #857 The same dependent dropdown as the listing
+                                          *   form. An edit screen that still took free text
+                                          *   would let the second save undo what the first
+                                          *   constrained — the "one of two screens" shape.
+                                          */}
+                                        <select
                                             value={formData.lga}
                                             onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-slate-100 disabled:text-slate-400"
+                                            disabled={!formData.state}
                                             required
-                                        />
+                                        >
+                                            <option value="">
+                                                {formData.state ? "Select LGA" : "Select a state first"}
+                                            </option>
+                                            {lgasForState.map(lga => (
+                                                <option key={lga} value={lga}>{lga}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
 

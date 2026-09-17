@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { isPurchasable } from "@/lib/land-listing-status";
 import { logger } from '@/lib/logger';
 import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import Image from "next/image";
@@ -337,11 +338,17 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                                     <div className="p-6">
                                         <div className="flex items-center gap-2 mb-2">
                                             <span className={`px-2 py-0.5 text-[10px] font-bold rounded-sm uppercase tracking-wider ${
-                                                (property.documents && property.documents.length > 0)
+                                                //   #856 — the third of the three screens
+                                                //   carrying this badge. See the note on the
+                                                //   property details page for why one
+                                                //   expression gave three different wrong
+                                                //   answers, and #340 for why the STATUS is
+                                                //   the verification decision.
+                                                isPurchasable(property.status)
                                                     ? "bg-emerald-100 text-emerald-800"
                                                     : "bg-red-100 text-red-800"
                                             }`}>
-                                                {(property.documents && property.documents.length > 0) ? "Verified Land" : "Unverified Land"}
+                                                {isPurchasable(property.status) ? "Verified Land" : "Unverified Land"}
                                             </span>
                                         </div>
                                         <h3 className="text-xl font-bold text-slate-900 mb-2 line-clamp-1">
