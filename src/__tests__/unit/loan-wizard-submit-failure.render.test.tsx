@@ -64,8 +64,18 @@ jest.mock('framer-motion', () => {
 
 const mockUpload = jest.fn() as jest.Mock<any>;
 
-jest.mock('@/app/actions/upload', () => ({
-    uploadDocumentAction: (...a: any[]) => mockUpload(...a),
+/*
+ *   #866 The wizard posts to /api/upload now, not to a Server Action. A Server
+ *   Action carries its arguments in the request body, so Next's default 1 MB
+ *   `bodySizeLimit` applied to the file and production logged a 413 on every
+ *   document over a megabyte — behind a control advertising 5 MB.
+ *
+ *   The mock moved with it. This suite is about what the wizard does with a
+ *   REFUSED SUBMISSION, so the upload only has to succeed; postUploadWithRetry
+ *   resolves with the response body rather than an { success } envelope.
+ */
+jest.mock('@/lib/upload-request', () => ({
+    postUploadWithRetry: (...a: any[]) => mockUpload(...a),
 }));
 
 /**
@@ -119,7 +129,7 @@ async function walkToReview(user: ReturnType<typeof userEvent.setup>) {
 describe('#287 — LoanWizard, mounted', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockUpload.mockResolvedValue({ success: true, url: 'https://example.com/id.pdf' });
+        mockUpload.mockResolvedValue({ url: 'https://example.com/id.pdf' });
     });
 
     it('THE APPLICANT IS TOLD WHY THE APPLICATION WAS REFUSED', async () => {

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { loanApplicationSchema, type LoanApplicationData } from "@/lib/validations/loan";
 import DocumentUpload from "@/components/shared/DocumentUpload";
-import { uploadDocumentAction } from "@/app/actions/upload";
+import { postUploadWithRetry } from "@/lib/upload-request";
 import { BUSINESS_LOAN_MONTHLY_RATE, MIN_TERM_MONTHS, MAX_TERM_MONTHS } from "@/lib/loan-terms";
 import { LoanPurpose } from "@/types/strict";
 
@@ -143,8 +143,9 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
     /**
      * Uploads a file and records the returned URL on the form.
      *
-     * The file goes through uploadDocumentAction, which validates it and stores
-     * it in Cloudinary. It previously went nowhere: step 4 was never built, and
+     * The file goes to /api/upload, which validates it and stores it in
+     * Cloudinary — #866 moved it off a Server Action, whose 1 MB body limit
+     * refused any real document before the platform's own 5 MB check ran. It previously went nowhere: step 4 was never built, and
      * the form defaulted to a hardcoded dummy_id.pdf that satisfied the
      * schema's "at least one document" rule.
      */
@@ -160,18 +161,42 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
         setUploading((prev) => [...prev, docType]);
 
         try {
+            /*
+             *   #866 THE BYTES GO TO /api/upload, NOT THROUGH A SERVER ACTION.
+             *
+             *   MEASURED FROM A PRODUCTION LOG: "Body exceeded 1 MB limit",
+             *   status 413, twice in one window. uploadDocumentAction is a
+             *   Server Action, so Next.js applies its DEFAULT 1 MB body limit
+             *   to the file — and no `serverActions.bodySizeLimit` is
+             *   configured anywhere in next.config.
+             *
+             *   THREE PLACES SAID 5 MB AND THE REQUEST NEVER ARRIVED. The
+             *   DocumentUpload control renders "Max file size: 5MB" and accepts
+             *   up to 5 MB; uploadDocumentAction's own MAX_SIZE_MB is 5. All
+             *   three agreed with each other and none of them ran, because the
+             *   framework refused the request first. Anything between 1 MB and
+             *   5 MB — which is an ordinary phone photograph of a certificate —
+             *   failed with an error the uploader could do nothing about.
+             *
+             *   /api/upload IS WHERE EVERY OTHER UPLOAD ON THIS PLATFORM ALREADY
+             *   GOES. hooks/use-storage posts there, it accepts 50 MB, and
+             *   postUploadWithRetry is the shared client with #297's retry rules
+             *   in it. Routing these two callers through it fixes the 413
+             *   without raising the body limit on EVERY server action, which
+             *   would have widened the accepted payload of every other door on
+             *   the platform to fix two.
+             */
             const formData = new FormData();
             formData.append("file", file);
-            formData.append("fileName", file.name);
-            formData.append("mimeType", file.type);
+            formData.append("folder", "loans/documents");
             formData.append("documentType", `loan_${docType}`);
 
-            const result = await uploadDocumentAction(formData);
+            const result = await postUploadWithRetry(formData);
 
-            if (!result.success || !result.url) {
+            if (!result.url) {
                 setUploadErrors((prev) => ({
                     ...prev,
-                    [docType]: result.success ? "Upload returned no file location." : result.error,
+                    [docType]: "Upload returned no file location.",
                 }));
                 return;
             }

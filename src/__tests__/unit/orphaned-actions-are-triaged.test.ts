@@ -48,7 +48,7 @@
  *   reachable by any authenticated owner the whole time. "No button" is not a
  *   guard, and an orphan is not automatically harmless.
  *
- *   THE QUEUE IS CLOSED: 69 TRIAGED, 0 PENDING — #404
+ *   THE QUEUE IS CLOSED: 70 TRIAGED, 0 PENDING — #404, #866
  *   ---------------------------------------------------
  *   It ran at 45 (wrong), then 69 with 28 pending, then 25. #404 read the last
  *   25 one at a time and every one carries a verdict now.
@@ -203,6 +203,24 @@ const TRIAGED: Record<string, string> = {
     canPerformAction: 'lib/role-utils helper, not an action',
     getSeverityForAction: 'lib/audit-log helper, not an action',
     logFinancialAction: 'lib/audit-log helper, not an action',
+
+    /*
+     *   #866 UNREACHED ON PURPOSE, AND KEPT ON PURPOSE.
+     *
+     *   Its two callers — marketplace BusinessVerificationStep and LoanWizard —
+     *   were moved to /api/upload because a Server Action carries its arguments
+     *   in the request body, so Next's DEFAULT 1 MB `bodySizeLimit` applied to
+     *   the file and production logged a 413 on every document over a megabyte.
+     *   Three places said 5 MB and none of them ever ran.
+     *
+     *   The export stays because a browser holding a bundle from before that
+     *   deploy still calls this action by id, and a missing action is the
+     *   unexplained failure #852 exists to prevent. Its implementation is
+     *   untouched — several security suites (path traversal, asset
+     *   preservation, auth-per-function) pin real behaviour in it, and gutting
+     *   it to leave a stub would delete those properties to fix a body limit.
+     */
+    uploadDocumentAction: '#866 unreached — callers moved to /api/upload over the 1MB action body limit',
 
     // Retired behind flags by this queue and its predecessors.
     createImpersonationTokenAction: '#396 retired — token nothing can redeem',
@@ -368,7 +386,11 @@ describe('#399 — the queue is closed and pinned', () => {
          *   not have caught it: both sides of it moved together.
          */
         expect(unreached().length).toBe(Object.keys(TRIAGED).length + PENDING.length);
-        expect(unreached().length).toBe(69);
+        //   69 → 70: #866 moved uploadDocumentAction's two callers to
+        //   /api/upload, so the action is unreached by design. Triaged above
+        //   rather than deleted — see the entry for why the implementation
+        //   stays.
+        expect(unreached().length).toBe(70);
     });
 
     it('and the queue is CLOSED — every unreached action carries a verdict', () => {
