@@ -114,10 +114,24 @@ describe('endpoints with no account still use the IP', () => {
         expect(src).toMatch(/\.check\((?:clientIp|getClientIp\(request\))\)/);
     });
 
-    it('login keys on the IP, because there is no user yet', () => {
-        // The clearest case: the whole point of the login limiter is to throttle
-        // attempts by someone who has not proved who they are.
-        expect(source('src/app/actions/auth.ts')).toContain('loginLimiter.check(ip)');
+    it('registration keys on the IP, because there is no user yet', () => {
+        /*
+         *   The clearest case: the whole point of this limiter is to throttle
+         *   attempts by someone who has not proved who they are.
+         *
+         *   #849 CORRECTS THIS CASE'S SUBJECT, NOT ITS ASSERTION. It read "login
+         *   keys on the IP" and cited "the login limiter", and the limiter in
+         *   auth.ts has never metered a login — `loginAction` is a deprecated
+         *   stub that returns "Please use client-side login", and the password
+         *   guard lives in lib/rate-limit's consumeLoginAttempt, keyed by EMAIL.
+         *   The only caller was registerAction, which was reading the LOGIN
+         *   config; that is the defect #849 fixes, and this test named the
+         *   limiter after the thing it was wrongly borrowing from.
+         *
+         *   The property under test is unchanged and still holds: an endpoint
+         *   with no account keys on the address.
+         */
+        expect(source('src/app/actions/auth.ts')).toContain('registrationLimiter.check(ip)');
     });
 });
 

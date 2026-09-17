@@ -202,7 +202,31 @@ export function withRateLimit(
  * here that did not reach the others would stop the reset matching anything.
  * `${n} ms` is a format the library's own parser accepts.
  */
-export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+export const LOGIN_WINDOW_MS = rateLimitConfig.login.interval;
+
+/**
+ * How many password attempts a window allows.
+ *
+ *   #849 `rateLimitConfig.login` HAD NO CONSUMER LEFT, AND THAT IS #644 AGAIN.
+ *
+ *   Its only reader was registerAction — the REGISTER form metering itself on
+ *   the LOGIN limit — and #849 gave registration its own bucket. The entry then
+ *   declared "5 attempts per 15 minutes" in the table where every limit is
+ *   written down, while the login limit actually in force came from this file's
+ *   own constants.
+ *
+ *   That is precisely what #644 found for `api`: a declaration of 100 a minute
+ *   and 200 in force, with nothing connecting them. Its fix was to make the
+ *   table entry the live value, and the same fix applies here — three lines
+ *   further down the same module, which already imports the table.
+ *
+ *   MAX_LOGIN_ATTEMPTS is kept as the override, because tuning a brute-force
+ *   guard without a deploy is a real capability, and it now defaults to the
+ *   number the table states rather than to a second copy of it.
+ */
+const MAX_LOGIN_ATTEMPTS = parseInt(
+    process.env.MAX_LOGIN_ATTEMPTS || String(rateLimitConfig.login.maxRequests), 10,
+);
 const LOGIN_LIMIT_PREFIX = "@upstash/login_limit";
 
 /**
@@ -211,7 +235,7 @@ const LOGIN_LIMIT_PREFIX = "@upstash/login_limit";
 const loginLimiter = new Ratelimit({
     redis: redis,
     limiter: Ratelimit.slidingWindow(
-        parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10),
+        MAX_LOGIN_ATTEMPTS,
         `${LOGIN_WINDOW_MS} ms`
     ),
     prefix: LOGIN_LIMIT_PREFIX,
@@ -315,8 +339,7 @@ export async function consumeLoginAttempt(
 function loginFallbackDecision(
     key: string
 ): { allowed: boolean; remainingAttempts?: number; error?: string } {
-    const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10);
-    const fallback = checkFallbackLimit(key, maxAttempts, LOGIN_WINDOW_MS);
+    const fallback = checkFallbackLimit(key, MAX_LOGIN_ATTEMPTS, LOGIN_WINDOW_MS);
 
     if (fallback.success) {
         return {

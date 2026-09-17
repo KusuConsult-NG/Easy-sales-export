@@ -322,6 +322,22 @@ describe('it agrees with the naive version everywhere the naive version is right
         'src/__tests__/unit/mfa-enforcement-decided.test.ts',
         'src/__tests__/unit/paystack-host-cannot-be-redirected.test.ts',
         'src/__tests__/unit/repair-and-public-catalog.test.ts',
+        /*
+         *   #849 — joined when a paragraph was added to it, in the SECOND form:
+         *   an apostrophe in prose. That file's new note reads "auth.ts's
+         *   `loginAction` is a deprecated stub", and the naive regex has no
+         *   notion of comments, so it takes the apostrophe as the start of a
+         *   string literal and loses its place until the next one.
+         *
+         *   Registered rather than avoided. Rewording the sentence to dodge an
+         *   apostrophe would leave the list saying this file is safe for the
+         *   naive stripper, which is not a fact about the file — it is a fact
+         *   about how carefully somebody phrased a comment, and the next
+         *   paragraph would not know the rule. That file strips with
+         *   lib/testing/strip-comments — the good one — and never reads its own
+         *   text, which is the condition every entry here is admitted under.
+         */
+        'src/__tests__/unit/security-settings-claims.test.ts',
         'src/__tests__/unit/sms-sandbox-reporting.test.ts',
         //   #705 — joined when a block comment was added to it, and the
         //   mechanism is the one this module exists for, in its THIRD form.

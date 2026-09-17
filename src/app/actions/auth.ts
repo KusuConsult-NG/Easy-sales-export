@@ -23,7 +23,13 @@ import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
 import { splitFullName } from '@/lib/person-name';
 import { isSafeInternalPath } from '@/lib/safe-redirect';
 
-const loginLimiter = rateLimit(rateLimitConfig.login);
+/**
+ *   #849 ITS OWN BUCKET, not `login`'s. See the note in lib/rate-limits.config.
+ *   Registration is an unauthenticated form real people fill in from shared
+ *   carrier addresses, and five per fifteen minutes locked out the second
+ *   person enrolled in an office.
+ */
+const registrationLimiter = rateLimit(rateLimitConfig.registration);
 
 /**
  * Server Actions for Authentication
@@ -615,19 +621,95 @@ export async function registerAction(prevState: any, formData: FormData) { const
     const gender = formData.get("gender") as string;
 
     try {
-        const ip = await getActionClientIp();
-        const rateLimitResult = await loginLimiter.check(ip);
-        if (!rateLimitResult.success) {
-            return { success: false as const, error: "Too many registration attempts. Please try again later.", redirectUrl: ""};
-        }
-
-        // Validate with Zod
+        /*
+         *   #849 VALIDATED FIRST, THEN METERED — the order used to be reversed,
+         *   and it is half of why the limit bit so early.
+         *
+         *   `check()` CONSUMES a token whether or not the attempt was any good,
+         *   and it ran before Zod. So a password refused for want of a capital
+         *   letter spent one of the five, and the owner's own production log
+         *   shows three such refusals inside ninety seconds:
+         *
+         *       [WARN] [register] the submission failed validation and was refused
+         *         {"reasons":["Password must contain at least one uppercase letter", …]}
+         *       [WARN] … ["Password must contain at least one special character"]
+         *       [WARN] … ["Password must be at least 8 characters", …]
+         *
+         *   Three of five gone, to one person who had not yet registered at all,
+         *   and the next two attempts by ANYONE behind that address were refused
+         *   with a message about too many attempts.
+         *
+         *   A submission that fails `registerSchema` creates nothing, calls
+         *   nothing and costs one local CPU parse — there is no account, no
+         *   email, no database write and no external call to protect. Metering
+         *   WELL-FORMED attempts is what this limiter is actually for, and it is
+         *   what the limit's size is now reasoned against.
+         *
+         *   The flood case is not left open: a stream of garbage still meets the
+         *   platform's generic request limit, and it is refused here for free
+         *   rather than being allowed to exhaust a bucket shared with real
+         *   people behind the same carrier NAT.
+         */
         const validatedData = registerSchema.parse({ fullName,
             email,
             password,
             confirmPassword,
             phone: formData.get("phone") as string,
             gender });
+
+        const ip = await getActionClientIp();
+        /*
+         *   #849 A KEY OF "unknown" IS ONE BUCKET FOR THE WHOLE PLATFORM.
+         *
+         *   getActionClientIp returns 'unknown' when the address cannot be
+         *   established, and lib/client-ip calls grouping them together "the
+         *   safe direction for a limiter". For LOGIN it is: the alternative is a
+         *   bucket the caller names. For REGISTRATION it means that if header
+         *   resolution ever breaks — a change of hosting topology, a CDN put in
+         *   front, TRUSTED_PROXY_HOPS left at 1 when it should be 2 — the entire
+         *   platform shares one allowance and nobody can sign up.
+         *
+         *   That is not a hypothetical worth ignoring: it presents EXACTLY as
+         *   the defect reported here, and nothing in the log would say so. It is
+         *   logged at error rather than silently accepted, because a platform
+         *   that cannot identify any caller is broken infrastructure, not a busy
+         *   afternoon. The limit still applies — this reports, it does not
+         *   bypass.
+         */
+        if (ip === 'unknown') {
+            logger.error(
+                "[register] the caller's address could not be established, so every " +
+                "unidentified registration shares ONE allowance. Check x-forwarded-for " +
+                "and TRUSTED_PROXY_HOPS against the number of proxies in front of the app.",
+            );
+        }
+
+        const rateLimitResult = await registrationLimiter.check(ip);
+        if (!rateLimitResult.success) {
+            /*
+             *   The wait is STATED. "Please try again later" gave somebody
+             *   locked out of signing up no way to know whether later meant a
+             *   minute or a morning, and consumeLoginAttempt — the other
+             *   limiter in this codebase — already tells people the number.
+             */
+            /*
+             *   Math.max(1, NaN) IS NaN, and "try again in NaN minutes" is a
+             *   worse message than the vague one this replaces. `reset` is
+             *   always present from Upstash and from the in-memory fallback, so
+             *   this is defensive — but a limiter is exactly where a defensive
+             *   read earns its place: the refusal path is the one nobody
+             *   exercises until a real person is sitting in front of it.
+             */
+            const untilReset = Number(rateLimitResult.reset) - Date.now();
+            const minutes = Number.isFinite(untilReset)
+                ? Math.max(1, Math.ceil(untilReset / 60000))
+                : Math.ceil(rateLimitConfig.registration.interval / 60000);
+            return {
+                success: false as const,
+                error: `Too many registration attempts from this network. Please try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+                redirectUrl: "",
+            };
+        }
 
         // 🔒 DEDUP GUARD: Check phone uniqueness before touching Firebase Auth
         // Prevents multi-account fraud (same phone, different email addresses)

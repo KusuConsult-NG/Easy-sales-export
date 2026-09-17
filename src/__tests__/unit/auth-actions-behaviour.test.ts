@@ -70,7 +70,11 @@ const check = jest.fn(async (_key: string) => ({ success: true, remaining: 4 }))
 // code under test.
 jest.mock('@/lib/rate-limiter', () => ({
     rateLimit: () => ({ check: (key: string) => check(key) }),
-    loginLimiter: { check: (key: string) => check(key) },
+    //   `loginLimiter` was here too and lib/rate-limiter has never exported it —
+    //   it named the CONST inside actions/auth.ts, which a module mock cannot
+    //   reach. Harmless, and removed because a mock key that intercepts nothing
+    //   reads as coverage. #849 renamed that const to `registrationLimiter`
+    //   anyway; the live path is `rateLimit()`, which is mocked above.
     getActionClientIp: async () => '127.0.0.1',
     checkRateLimit: async () => ({ success: true }),
 }));

@@ -6063,19 +6063,31 @@ GRANT EXECUTE ON FUNCTION count_user_segments() TO PUBLIC;
 -- audit's most repeated finding is a correct rule applied to some of the places
 -- it names, and here it is applied to an index habit rather than to code.
 --
--- SO THE SWEEP WAS DONE BY FIELD, not by the one site in the log. Every live
+-- SO THE SWEEP WAS DONE BY FIELD, not by the one site in the log. Every
 -- `users` filter on a phone spelling:
 --
 --     actions/auth.ts:645                  registration dedup  (the log entry)
---     api/auth/register/route.ts:166       the same guard, API route
 --     actions/wave/_wv_applications.ts:203 WAVE duplicate scan
 --     actions/admin/_legacy.ts:558         bulk member import, per row
 --     lib/cooperative-identity-conflict.ts:88
 --     lib/admin-search-helper.ts:60,61     equality, and
 --                             :65,66,70,71 RANGE (>= / <) for prefix search
 --
--- One btree expression index serves equality, IN and range, so all seven sites
--- are covered by the pair below. `phoneNumber` is the second spelling —
+--     api/auth/register/route.ts:166       NOT LIVE — this file first called it
+--                                          "the same guard, API route" and a
+--                                          second registration entry point. It
+--                                          is neither: the handler returns 404
+--                                          when NODE_ENV, VERCEL_ENV or
+--                                          RAILWAY_ENVIRONMENT is "production",
+--                                          and 410 otherwise unless legacy dev
+--                                          seeding is enabled. It is a dev
+--                                          seeder. Corrected here rather than
+--                                          deleted, because the claim was made
+--                                          in a commit message and the index
+--                                          still covers it in development.
+--
+-- One btree expression index serves equality, IN and range, so all six live
+-- sites are covered by the pair below. `phoneNumber` is the second spelling —
 -- _legacy.ts:1124 writes it and admin-search-helper filters it — and it is
 -- mostly absent, which makes its index small rather than useless.
 --

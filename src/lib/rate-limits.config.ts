@@ -59,6 +59,52 @@ const LIMITS = {
     },
 
     /**
+     * Creating an account — and it is NOT `login`, which is what it used to be.
+     *
+     *   #849 THE SECOND PERSON REGISTERED IN AN OFFICE WAS TOLD THERE HAD BEEN
+     *   TOO MANY ATTEMPTS.
+     *
+     *   The owner: "after a user registers and submits application, and tries to
+     *   register another user again there is an error saying too many attempts".
+     *
+     *   registerAction metered itself on `login` above — five per fifteen
+     *   minutes, keyed by IP. That entry is the ONLY one in this table whose
+     *   sole consumer is something other than its name: nothing else reads it,
+     *   and the thing that does is the REGISTER form.
+     *
+     *   AND THE ARGUMENT AGAINST IT IS ALREADY WRITTEN IN THIS FILE, twenty
+     *   lines above, about the contact form:
+     *
+     *       "Nigerian mobile networks share IPs heavily, so a limit tuned as
+     *        though an IP were a person locks out real users. The login config's
+     *        5-per-15-minutes would be actively harmful applied here: one shared
+     *        carrier IP could exhaust it for everyone behind it."
+     *
+     *   Registration is that form exactly — unauthenticated, filled in by real
+     *   people, on carrier NAT, and often several in a row by a field agent
+     *   enrolling members from one office. The reasoning was correct, was
+     *   written down, and was not applied to the place it names. That is this
+     *   audit's most repeated shape and this is its clearest instance: the
+     *   counter-example is in the same file as the defect.
+     *
+     *   WHY 30 AN HOUR, the same as contactForm. Sized against abuse rather than
+     *   against a person: a script wanting accounts wants hundreds, and thirty
+     *   an hour from one address stops it cold while leaving room for an office,
+     *   a NAT pool, and the retries a person makes when something fails. Five in
+     *   fifteen minutes gave a field agent four members and then an hour off.
+     *
+     *   IT IS A HEAVIER ACTION THAN A CONTACT FORM — it creates an auth account
+     *   — so the number is not chosen for symmetry. It is chosen because the
+     *   ceiling that matters is the abusive one, and thirty is far below it in
+     *   both cases. The real guard against bulk account creation is the phone
+     *   dedup and admin approval, neither of which a rate limit substitutes for.
+     */
+    registration: {
+        interval: 60 * 60 * 1000, // 1 hour
+        maxRequests: 30,
+    },
+
+    /**
      *   The generic tier every `withRateLimit` route runs on — #644.
      *
      *   This declared 100 a minute and was consumed by NOTHING. The number

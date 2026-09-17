@@ -164,7 +164,26 @@ describe('the rest of the panel, recorded', () => {
     it('the login limit comes from config and the environment, not the setting', () => {
         // So "Max login attempts: 3" in the UI changes nothing.
         expect(source('src/lib/security.ts')).toContain("process.env.MAX_LOGIN_ATTEMPTS");
-        expect(source('src/app/actions/auth.ts')).toContain('loginLimiter.check(ip)');
+
+        /*
+         *   #849 THE SECOND LINE OF THIS CASE WAS ABOUT THE WRONG LIMITER, and
+         *   that is worth recording rather than just repointing.
+         *
+         *   It cited `loginLimiter.check(ip)` in auth.ts as evidence about the
+         *   LOGIN limit. That limiter metered REGISTRATION — auth.ts's
+         *   `loginAction` is a deprecated stub — so this case asserted the
+         *   admin setting is inert by pointing at a code path logins never take.
+         *   The conclusion was right for a reason the evidence did not support.
+         *
+         *   The login limit in force is lib/rate-limit's consumeLoginAttempt,
+         *   which is what this now reads: its window and attempt count come from
+         *   the config table and MAX_LOGIN_ATTEMPTS, and from no platform
+         *   setting.
+         */
+        const rl = source('src/lib/rate-limit.ts');
+        expect(rl).toContain('rateLimitConfig.login.maxRequests');
+        expect(rl).toContain('process.env.MAX_LOGIN_ATTEMPTS');
+        expect(rl).not.toContain('platform_settings');
     });
 });
 

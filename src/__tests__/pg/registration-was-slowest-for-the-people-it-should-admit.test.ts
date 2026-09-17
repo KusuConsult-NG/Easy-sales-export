@@ -235,19 +235,38 @@ dbDescribe('#848 — the registration dedup guard does not scan the users table'
          *   to match a partial number. A btree expression index serves equality,
          *   IN and range alike, so that site needs no second index.
          *
-         *   THE FIRST VERSION OF THIS CASE FAILED, AND IT WAS THE ASSERTION THAT
-         *   WAS WRONG. It searched the prefix `+2340000000`, which matches a
-         *   fifth of the seeded table, and under `limit 30` the planner chose a
-         *   Seq Scan — correctly: when nearly every row qualifies, reading pages
-         *   in order until thirty turn up beats walking an index and jumping to
-         *   the heap. An index is not obliged to be used for a filter that
-         *   excludes almost nothing.
+         *   I OVER-REACHED ON THIS CASE TWICE, IN OPPOSITE DIRECTIONS, AND THE
+         *   SECOND TIME COST A RED CI RUN.
          *
-         *   So the case now asks what an administrator actually types: most of a
-         *   number, narrowing to a handful of people. That is the search worth
-         *   indexing, and the over-broad prefix is kept below as the control so
-         *   this file states the limit of its own claim instead of implying the
-         *   index serves every range.
+         *   Version 1 searched the prefix `+2340000000` — a fifth of the seeded
+         *   table — and asserted an Index Scan. It failed locally: under
+         *   `limit 30`, when nearly every row qualifies, reading pages in order
+         *   until thirty turn up beats walking an index and jumping to the heap.
+         *   The planner was right.
+         *
+         *   Version 2 then added a second case asserting that the same broad
+         *   prefix DOES Seq Scan. That passed here and FAILED IN CI, where the
+         *   planner chose `Index Scan using idx_users_phone` at a cost of
+         *   0.28..2.38 against the 0.00..16.48 it estimated locally. Same query,
+         *   same index, same row count — different `relpages` and correlation,
+         *   because the two tables had had different histories.
+         *
+         *   WHICH PLAN A MARGINAL FILTER GETS IS A PROPERTY OF THE STATISTICS,
+         *   NOT OF THE FIX. Asserting either answer pins the planner's mood on
+         *   one machine, and the second version did it while claiming to be the
+         *   control that kept this file honest. That case is removed rather than
+         *   loosened, because an assertion that accepts both outcomes asserts
+         *   nothing and would have read as coverage.
+         *
+         *   WHAT IS TRUE AND STABLE, and is what the case below asserts: the
+         *   SELECTIVE lookup — what an administrator actually types, most of a
+         *   number narrowing to a handful of people, and the shape registration
+         *   itself uses — takes the index everywhere. What this file therefore
+         *   does NOT claim is that no phone query can ever scan; a two-digit
+         *   prefix is a browse, not a search, and `limit 30` makes a scan a
+         *   reasonable plan for it. That is harmless in the way registration's
+         *   miss was not: it stops at the thirtieth match rather than at the end
+         *   of the table.
          */
         const p = await plan(
             `select id from public.users
@@ -257,26 +276,6 @@ dbDescribe('#848 — the registration dedup guard does not scan the users table'
 
         expect(p).toContain('idx_users_phone');
         expect(p).not.toContain('Seq Scan on users');
-    });
-
-    it('BUT A PREFIX MATCHING A FIFTH OF THE TABLE STILL SCANS, and should', async () => {
-        /*
-         *   The control for the case above, and the honest limit of this fix. A
-         *   two-digit prefix is not a search, it is a browse, and `limit 30`
-         *   makes a scan the cheaper plan. Recorded so that nobody reads "the
-         *   phone lookup is indexed" as "no phone query can ever scan" — the
-         *   generalisation this audit has had to withdraw more than once.
-         *
-         *   It is also harmless in the way registration's miss was not: this one
-         *   stops at the thirtieth match rather than at the end of the table.
-         */
-        const p = await plan(
-            `select id from public.users
-              where raw_data->>'phone' >= $1 and raw_data->>'phone' < $2 limit 30`,
-            ['+2340000000', '+2340000001'],
-        );
-
-        expect(p).toContain('Seq Scan on users');
     });
 
     it('AND THE SECOND SPELLING IS INDEXED TOO', async () => {
@@ -305,7 +304,14 @@ describe('#848 — and every site that filters a phone is named, not just the lo
      */
     const SITES: Array<[string, string]> = [
         ['src/app/actions/auth.ts', 'phone'],
-        ['src/app/api/auth/register/route.ts', 'phone'],
+        /*
+         *   api/auth/register/route.ts IS DELIBERATELY ABSENT, and its first
+         *   version of this list had it. That handler returns 404 whenever
+         *   NODE_ENV, VERCEL_ENV or RAILWAY_ENVIRONMENT is "production" — it is
+         *   a dev seeder, not the second registration entry point #848's first
+         *   header called it. The index still covers it in development; the
+         *   claim that production had two doors was wrong.
+         */
         ['src/app/actions/wave/_wv_applications.ts', 'phone'],
         ['src/app/actions/admin/_legacy.ts', 'phone'],
         ['src/lib/cooperative-identity-conflict.ts', 'phone'],
