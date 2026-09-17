@@ -381,6 +381,22 @@ export default function PropertyDetailsClient({ initial = null }: {
                                  <p className="text-sm text-slate-500">
                                      {property.availableForRent ? "Lease/Rental price" : "Purchase price"}
                                  </p>
+                                 {/*
+                                   *   #861 THE TERM, shown where the price is.
+                                   *
+                                   *   A rental price with no duration is not a price — "₦2m"
+                                   *   for a season and "₦2m" for ten years are different
+                                   *   offers, and a buyer had to message the seller to find
+                                   *   out which. The form collects it now; a stored field
+                                   *   nothing displays is the other half of the same defect.
+                                   */}
+                                 {property.availableForRent && typeof property.durationValue === "number"
+                                     && property.durationValue > 0 && (
+                                     <p className="text-sm font-semibold text-slate-700">
+                                         Term: {property.durationValue}{" "}
+                                         {property.durationUnit ?? "years"}
+                                     </p>
+                                 )}
                              </div>
 
                             {property.status === "verified" ? (

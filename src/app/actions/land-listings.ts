@@ -61,6 +61,9 @@ export interface LandListing {
     availableForSale?: boolean;
     availableForRent?: boolean;
     availableForLease?: boolean;
+    //   #861 Present only on a rent or lease — see the submit action.
+    durationValue?: number;
+    durationUnit?: "months" | "years";
     escrowAvailable?: boolean;
     /**
      * A string, matching types/index.ts and the database query in
@@ -860,6 +863,20 @@ async function _submitLandListingAction(data: {
     availableForRent?: boolean;
     availableForLease?: boolean;
     type?: "sale" | "rent" | "lease";
+    /**
+     *   #861 HOW LONG A RENT OR LEASE RUNS.
+     *
+     *   THE OWNER: "There should be duration for leasing or renting." A listing
+     *   offered for rent with no term tells a buyer nothing about what she is
+     *   being offered — a season, a year, ten years — and she has to message the
+     *   seller to learn what the listing should have said.
+     *
+     *   OPTIONAL AND ONLY WRITTEN WHEN PRESENT. A sale has no term, and a
+     *   `durationValue: 0` on a permanent purchase would be a field readers
+     *   have to learn to ignore.
+     */
+    durationValue?: number;
+    durationUnit?: "months" | "years";
     escrowAvailable?: boolean;
 }): Promise<ActionResponse<{ listingId: string }>> {
     try {
@@ -961,6 +978,11 @@ async function _submitLandListingAction(data: {
             availableForRent: data.availableForRent ?? false,
             availableForLease: data.availableForLease ?? false,
             type: data.type || ((data.availableForRent && !data.availableForSale) ? "lease" : "sale"),
+            //   #861 Spread rather than defaulted, so a sale carries no term at
+            //   all rather than a zero somebody has to interpret.
+            ...(typeof data.durationValue === "number" && data.durationValue > 0
+                ? { durationValue: data.durationValue, durationUnit: data.durationUnit ?? "years" }
+                : {}),
             escrowAvailable: data.escrowAvailable ?? true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 

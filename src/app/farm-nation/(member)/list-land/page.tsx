@@ -47,7 +47,33 @@ export default function ListLandPage() {
         totalPriceEdited: false,
         latitude: "",
         longitude: "",
-        listingTypes: ["sale"] as ("sale" | "rent" | "lease")[],
+        /**
+         *   #861 ONE LISTING TYPE, NOT A SET.
+         *
+         *   THE OWNER: "listing should not be multiple selection under land
+         *   category".
+         *
+         *   This was `listingTypes: string[]` with a togglable multi-select, and
+         *   the submit then had to collapse it back into one value anyway:
+         *
+         *       type: listingTypes.includes("sale") ? "sale"
+         *           : (listingTypes.includes("rent") ? "rent" : "lease")
+         *
+         *   — a hidden precedence nobody chose. A seller who ticked Rent AND
+         *   Lease got a listing typed "rent", and the buyer-facing filter
+         *   (`searchLandListingsAction`'s `type`) is single-valued, so the lease
+         *   half was simply unfindable. The form offered a combination the rest
+         *   of the platform cannot express.
+         *
+         *   The three availableFor* booleans are still written — the property
+         *   page and the checkout read them — they are just derived from one
+         *   answer now instead of from a set with a tiebreak.
+         */
+        listingType: "sale" as "sale" | "rent" | "lease",
+        //   #861 How long the rent or lease runs. Asked for only when it
+        //   applies; a duration on a sale is meaningless.
+        durationValue: "" as string | number,
+        durationUnit: "years" as "months" | "years",
         escrowAvailable: true,
     });
 
@@ -105,17 +131,15 @@ export default function ListLandPage() {
         });
     };
 
-    const toggleListingType = (value: "sale" | "rent" | "lease") => {
-        setFormData(prev => {
-            const current = prev.listingTypes || [];
-            const exists = current.includes(value);
-            if (exists) {
-                if (current.length <= 1) return prev;
-                return { ...prev, listingTypes: current.filter(t => t !== value) };
-            } else {
-                return { ...prev, listingTypes: [...current, value] };
-            }
-        });
+    const selectListingType = (value: "sale" | "rent" | "lease") => {
+        //   #861 A choice, not a toggle. Clearing the duration when moving to a
+        //   sale stops a stale "3 years" riding along on a listing that has no
+        //   term — the same rule as the LGA clearing with its state.
+        setFormData(prev => ({
+            ...prev,
+            listingType: value,
+            ...(value === "sale" ? { durationValue: "" } : {}),
+        }));
     };
 
     const landCategories = [
@@ -304,10 +328,20 @@ export default function ListLandPage() {
                     latitude: parseFloat(formData.latitude),
                     longitude: parseFloat(formData.longitude)
                 } : undefined,
-                availableForSale: formData.listingTypes.includes("sale"),
-                availableForRent: formData.listingTypes.includes("rent") || formData.listingTypes.includes("lease"),
-                availableForLease: formData.listingTypes.includes("lease"),
-                type: formData.listingTypes.includes("sale") ? "sale" : (formData.listingTypes.includes("rent") ? "rent" : "lease"),
+                //   #861 Derived from ONE answer. `availableForRent` stays true
+                //   for a lease because the property page and the checkout use
+                //   it to mean "not a sale" — see PropertyDetailsClient's
+                //   "Lease/Rental price" label.
+                availableForSale: formData.listingType === "sale",
+                availableForRent: formData.listingType === "rent" || formData.listingType === "lease",
+                availableForLease: formData.listingType === "lease",
+                type: formData.listingType,
+                ...(formData.listingType !== "sale" && Number(formData.durationValue) > 0
+                    ? {
+                        durationValue: Number(formData.durationValue),
+                        durationUnit: formData.durationUnit,
+                    }
+                    : {}),
                 escrowAvailable: true,
             });
 
@@ -854,7 +888,7 @@ export default function ListLandPage() {
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-900 mb-3">
-                                        Listing Type * (Select one or more)
+                                        Listing Type *
                                     </label>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {[
@@ -862,12 +896,12 @@ export default function ListLandPage() {
                                             { value: "rent", label: "For Rent", description: "List this land for short-term rental/lease", icon: "🔑" },
                                             { value: "lease", label: "For Lease", description: "List this land for long-term agricultural lease", icon: "📄" }
                                         ].map((option) => {
-                                            const isSelected = formData.listingTypes.includes(option.value as any);
+                                            const isSelected = formData.listingType === option.value;
                                             return (
                                                 <button
                                                     key={option.value}
                                                     type="button"
-                                                    onClick={() => toggleListingType(option.value as any)}
+                                                    onClick={() => selectListingType(option.value as any)}
                                                     className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col relative ${isSelected
                                                         ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
                                                         : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
@@ -886,6 +920,54 @@ export default function ListLandPage() {
                                         })}
                                     </div>
                                 </div>
+
+                                {/*
+                                  *   #861 THE TERM, asked for only when there is one.
+                                  *
+                                  *   THE OWNER: "There should be duration for leasing or
+                                  *   renting." A listing offered for rent with no term tells
+                                  *   a buyer nothing about what she is being offered — a
+                                  *   season, a year, ten years — and she has to message the
+                                  *   seller to find out what the listing should have said.
+                                  *
+                                  *   Not rendered for a sale, and cleared when the type
+                                  *   changes to one: a duration on a permanent purchase is
+                                  *   meaningless, and a stale one left behind would be worse
+                                  *   than absent.
+                                  */}
+                                {formData.listingType !== "sale" && (
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            {formData.listingType === "rent" ? "Rental" : "Lease"} Duration *
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input
+                                                type="number"
+                                                value={formData.durationValue}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, durationValue: e.target.value }))}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                placeholder="e.g., 3"
+                                                min="1"
+                                                step="1"
+                                                required
+                                            />
+                                            <select
+                                                value={formData.durationUnit}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    durationUnit: e.target.value as "months" | "years",
+                                                }))}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            >
+                                                <option value="months">Months</option>
+                                                <option value="years">Years</option>
+                                            </select>
+                                        </div>
+                                        <p className="mt-2 text-sm text-slate-600">
+                                            How long the {formData.listingType === "rent" ? "rental" : "lease"} runs.
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div className="border-t border-slate-100 pt-6">
                                     <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200/60 rounded-xl cursor-not-allowed">
