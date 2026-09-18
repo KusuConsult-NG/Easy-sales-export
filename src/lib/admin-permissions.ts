@@ -138,7 +138,46 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "config:read", "config:update", "config:feature_toggles",
         "marketplace:approve_sellers", "marketplace:suspend_sellers",
         "marketplace:moderate_reviews", "marketplace:manage_village_market",
+        // "cooperatives:manage_products" is here at the owner's instruction, and
+        // it resolves a deadlock two earlier findings each recorded half of.
+        //
+        // WHAT IT WAS. `admin` held every other module's manage permission —
+        // marketplace:manage_village_market, wave:manage_training,
+        // academy:manage_courses — and not this one. Nothing said why, and two
+        // separate places were bent around the gap:
+        //
+        //   PRIVILEGED_ROLES is DERIVED as "admin, super_admin, and any role
+        //   holding a permission `admin` does not". This single omission put
+        //   `cooperative_admin` in that set, so a plain admin could appoint
+        //   five module admins and was told "Only a super admin can grant admin
+        //   roles" for the sixth — a message that does not describe what
+        //   happened. The note on PRIVILEGED_ROLES recorded the omission and
+        //   called the resulting escalation "latent rather than live", because
+        //   "nothing in the codebase checks cooperatives:manage_products today".
+        //
+        //   loan-products.ts gates the loan catalogue — the interest rate and
+        //   amount band every borrower is offered — on "cooperatives:approve_loans"
+        //   while its own comment says manage_products "is the semantically
+        //   exact permission", and explains the refusal to use it: "the matrix
+        //   deliberately withholds manage_products from the plain `admin` role,
+        //   so adopting it here would take away something an admin can do
+        //   today". It called that a "deliberate half-step" and left the
+        //   decision to the owner.
+        //
+        // Both notes describe the same obstacle from opposite sides, and this
+        // line removes it. The holder set for manage_products becomes
+        // ["super_admin", "admin", "cooperative_admin"] — identical to
+        // approve_loans — so the seven loan-product gates now ask for the
+        // permission they actually mean, and NOBODY'S ACCESS CHANGES. The
+        // permission stops being a name that gates nothing.
+        //
+        // The consequence worth stating plainly: with the surplus gone,
+        // `cooperative_admin` leaves PRIVILEGED_ROLES, so it is granted,
+        // bulk-edited, suspended and impersonated on the same terms as the
+        // other five module admins rather than on super_admin's terms. That is
+        // a widening, and it is the point — the asymmetry was never a policy.
         "cooperatives:approve_loans", "cooperatives:approve_members",
+        "cooperatives:manage_products",
         "wave:approve_applications", "wave:manage_training",
         "academy:approve_applications", "academy:manage_courses", "academy:manage_quizzes", "academy:issue_certificates",
         "export:approve_applications",
@@ -324,21 +363,37 @@ export function isSuperAdmin(userRoles: string[] | undefined): boolean {
  * This was `["admin", "super_admin"]`, written when those were the only roles
  * that could do anything a plain admin could not. Six module-admin roles were
  * added to PERMISSION_MATRIX afterwards and the list was not revisited, so
- * `cooperative_admin` — which holds "cooperatives:manage_products", a
- * permission the matrix deliberately withholds from `admin` — became grantable
- * by any admin. An admin could assign it to themselves and hold a permission
- * the matrix gives only to super_admin and cooperative_admin.
- *
- * That particular escalation is latent rather than live: nothing in the
- * codebase checks "cooperatives:manage_products" today, so the permission
- * currently gates nothing. It stops being latent the moment somebody writes the
- * check, and a guard that is correct only because the thing it protects is
- * unused is not a guard.
+ * `cooperative_admin` — which held "cooperatives:manage_products", a permission
+ * `admin` did not have — became grantable by any admin. An admin could assign
+ * it to themselves and hold a permission the matrix gave only to super_admin
+ * and cooperative_admin.
  *
  * So the rule is computed instead of listed: a role is privileged if it can do
  * anything a plain `admin` cannot. Add a permission to any module-admin role
  * and that role becomes super_admin-only to grant, without anyone remembering
  * to come back here.
+ *
+ * WHAT CHANGED SINCE, AND WHY THIS SET IS NOW JUST THE TWO
+ * -------------------------------------------------------
+ * This comment used to end by calling that escalation "latent rather than
+ * live", on the grounds that "nothing in the codebase checks
+ * cooperatives:manage_products today, so the permission currently gates
+ * nothing" — and it noted that a guard which is correct only because the thing
+ * it protects is unused is not a guard.
+ *
+ * Both halves of that are now false, deliberately. The owner granted
+ * cooperatives:manage_products to `admin`, which was the decision this note and
+ * loan-products.ts had each left open from opposite sides; the seven
+ * loan-CATALOGUE gates were moved onto it, so it gates something real; and with
+ * the surplus gone, `cooperative_admin` is no longer privileged. Nothing in the
+ * matrix exceeds `admin` at present, so this set is exactly
+ * ["admin", "super_admin"].
+ *
+ * THAT IS NOT A REASON TO GO BACK TO A LITERAL. The derivation is what makes
+ * the next surplus permission privileged automatically — which is precisely the
+ * failure that produced this function. admin-route-authority.test.ts asserts
+ * the property in both directions rather than naming an example, so it keeps
+ * its teeth with no example left to point at.
  *
  * "admin" and "super_admin" are unioned in explicitly. They are privileged by
  * definition rather than by holding a surplus permission, and `admin` compared
@@ -372,6 +427,21 @@ export const PRIVILEGED_ROLES: readonly string[] = (() => {
  * added, and a misspelling cannot survive: a name not in the matrix is not in
  * this list.
  */
+/**
+ * Every permission the matrix mentions, as a value.
+ *
+ * Derived for the same reason ALL_ADMIN_ROLES is: a caller that needs to reason
+ * about "all permissions" — a test asserting that no role quietly exceeds
+ * `admin`, for instance — would otherwise type the list out again, and a second
+ * copy of a list is how PRIVILEGED_ROLES went stale in the first place.
+ */
+export const ALL_ADMIN_PERMISSIONS: readonly AdminPermission[] = Array.from(
+    new Set<AdminPermission>(
+        (Object.keys(PERMISSION_MATRIX) as AdminRole[])
+            .flatMap((role) => PERMISSION_MATRIX[role] ?? [])
+    )
+);
+
 export const ALL_ADMIN_ROLES: readonly AdminRole[] =
     Object.keys(PERMISSION_MATRIX) as AdminRole[];
 

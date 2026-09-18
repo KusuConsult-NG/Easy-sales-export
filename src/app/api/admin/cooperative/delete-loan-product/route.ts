@@ -23,7 +23,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+        // The loan CATALOGUE, not an individual application: the exact
+        // permission is manage_products. See actions/loan-products.ts —
+        // the other half of this pair — for why it could not say so until
+        // `admin` was granted it. Both permissions are held by the same
+        // three roles, so no caller gains or loses access.
+        if (!hasAdminPermission(session.user.roles, "cooperatives:manage_products")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

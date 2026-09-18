@@ -138,14 +138,39 @@ describe('an admin suspending accounts above them', () => {
         expect(res.data).toEqual({ suspended: 0, failed: ['the-owner'] });
     });
 
-    it('cannot suspend a cooperative_admin either', async () => {
-        // In PRIVILEGED_ROLES because it holds a permission `admin` does not.
-        // A typed-out ["admin", "super_admin"] would still have missed it.
+    it('but CAN suspend a cooperative_admin, exactly as it can the other five', async () => {
+        // THIS USED TO ASSERT THE OPPOSITE, and the reason it changed is worth
+        // stating rather than burying.
+        //
+        // PRIVILEGED_ROLES is DERIVED as "admin, super_admin, and any role
+        // holding a permission `admin` does not". cooperative_admin was in it
+        // for one reason: it held cooperatives:manage_products and `admin` did
+        // not — the single module manage-permission `admin` was missing. Its
+        // five siblings were never in the set, so a plain admin has always been
+        // able to suspend an academy_admin or a wave_admin.
+        //
+        // The owner granted that permission to `admin`, which removes the
+        // surplus and with it the accidental protection. The widening is real
+        // and deliberate: cooperative_admin is now handled on the same terms as
+        // every other module admin, which is what the asymmetry was hiding.
         seedTarget('coop-boss', ['cooperative_admin']);
 
         await suspend(['admin'], 'coop-boss');
 
-        expect(isSuspended('coop-boss')).toBe(false);
+        expect(isSuspended('coop-boss')).toBe(true);
+    });
+
+    it('and it always could, for each of the other five — the set was never symmetric', async () => {
+        // The comparison that makes the change above legible: these five were
+        // suspendable by a plain admin before this change and after it.
+        for (const role of [
+            'academy_admin', 'wave_admin', 'marketplace_admin',
+            'export_admin', 'farm_nation_admin',
+        ]) {
+            seedTarget(role, [role]);
+            await suspend(['admin'], role);
+            expect({ role, suspended: isSuspended(role) }).toEqual({ role, suspended: true });
+        }
     });
 
     it('still cannot suspend a plain admin, which is what the guard always meant', async () => {
@@ -231,12 +256,26 @@ describe('bulk role assignment guards both directions with the same set', () => 
 
     beforeEach(() => { seedTarget('member', ['general_user', 'cooperative_admin']); });
 
-    it('refuses to strip cooperative_admin, which the typed-out pair allowed', async () => {
+    it('allows stripping cooperative_admin now that it is an ordinary module admin', async () => {
+        // Inverted for the reason given in the suspend block above: the owner
+        // granted cooperatives:manage_products to `admin`, so cooperative_admin
+        // no longer holds a surplus and no longer sits in the derived
+        // PRIVILEGED_ROLES. Stripping academy_admin or wave_admin in bulk was
+        // always allowed; this brings the sixth into line with them.
         const res = await assign(['admin'], [], ['cooperative_admin']);
+
+        expect(res.success).toBe(true);
+        expect(store.get(COLLECTIONS.USERS, 'member')?.roles).not.toContain('cooperative_admin');
+    });
+
+    it('and the guard still has teeth where it was always meant to', async () => {
+        // What the rule is FOR: authority over the platform itself. Unchanged.
+        seedTarget('member', ['general_user', 'admin']);
+        const res = await assign(['admin'], [], ['admin']);
 
         expect(res.success).toBe(false);
         expect(res.error).toBe('Cannot remove admin roles via bulk operation');
-        expect(store.get(COLLECTIONS.USERS, 'member')?.roles).toContain('cooperative_admin');
+        expect(store.get(COLLECTIONS.USERS, 'member')?.roles).toContain('admin');
     });
 
     it('still refuses to strip admin and super_admin', async () => {
@@ -270,13 +309,37 @@ describe('impersonation refuses every admin role, not two of them', () => {
         )) as any;
     }
 
-    it('will not mint a token for a cooperative_admin', async () => {
+    it('WILL now mint one for a cooperative_admin — the sharpest edge of the same change', async () => {
+        // Called out plainly because impersonation is the widest of these
+        // powers: a token minted here acts AS that account.
+        //
+        // The block is `includesPrivilegedRole(targetRoles)`, with no
+        // super_admin escape — so before this change nobody could impersonate a
+        // cooperative_admin, while anybody with the button could already
+        // impersonate an academy_admin, a wave_admin or any of the other four.
+        // That protection came from one missing entry in PERMISSION_MATRIX, not
+        // from a decision about impersonation, and it vanished when the owner
+        // granted `admin` the permission it was missing.
+        //
+        // Pinned rather than assumed: if the platform wants module admins
+        // un-impersonable, the fix is to say so in this guard — for all six —
+        // rather than to rely on a permission asymmetry to imply it.
         seedTarget('coop-boss', ['cooperative_admin']);
 
         const res = await impersonate('coop-boss');
 
-        expect(res.success).toBe(false);
-        expect(res.error).toBe('Cannot impersonate admin users');
+        expect(res.success).toBe(true);
+    });
+
+    it('and the other five were always impersonable, which is the comparison', async () => {
+        for (const role of [
+            'academy_admin', 'wave_admin', 'marketplace_admin',
+            'export_admin', 'farm_nation_admin',
+        ]) {
+            seedTarget(`t-${role}`, [role]);
+            const res = await impersonate(`t-${role}`);
+            expect({ role, minted: res.success }).toEqual({ role, minted: true });
+        }
     });
 
     it('still refuses admin and super_admin', async () => {

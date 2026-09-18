@@ -47,18 +47,38 @@
  * same action writes THROUGH, so the write guard accepted the role the schema
  * in front of it refused.
  *
- * WHAT IS RECORDED HERE AND NOT CHANGED
- * -------------------------------------
- * A plain `admin` can now appoint five of the six module admins and is refused
- * the sixth: cooperative_admin holds `cooperatives:manage_products`, which
- * `admin` does not, so PRIVILEGED_ROLES — which is derived as "admin,
- * super_admin, and anything with a permission beyond admin's" — contains it.
- * `admin` holds every other module admin's manage permission
- * (marketplace:manage_village_market, wave:manage_training,
- * academy:manage_courses), so the omission looks like an oversight rather than
- * a policy. Granting a permission is the owner's call, not a correction to make
- * in passing, so the current behaviour is pinned below with its reason instead
- * of being quietly changed.
+ * AND THE SIXTH MODULE ADMIN, WHICH #383 PINNED AND THE OWNER THEN DECIDED
+ * ------------------------------------------------------------------------
+ * #383 left one asymmetry standing: a plain `admin` could appoint five of the
+ * six module admins and was refused cooperative_admin with "Only a super admin
+ * can grant admin roles" — a message that does not describe what happened.
+ * PRIVILEGED_ROLES is DERIVED as "admin, super_admin, and any role holding a
+ * permission `admin` does not", and `admin` held every module's manage
+ * permission EXCEPT cooperatives:manage_products. One omission, and the derived
+ * rule turned it into a policy nobody had written.
+ *
+ * Two earlier findings had each recorded half of the same deadlock. The note on
+ * PRIVILEGED_ROLES called the escalation "latent rather than live" because
+ * "nothing in the codebase checks cooperatives:manage_products today".
+ * loan-products.ts gated the loan CATALOGUE on cooperatives:approve_loans while
+ * saying manage_products "is the semantically exact permission", and explained
+ * that it could not use it because "the matrix deliberately withholds
+ * manage_products from the plain `admin` role, so adopting it here would take
+ * away something an admin can do today" — "the owner's call".
+ *
+ * The owner made it. `admin` now holds cooperatives:manage_products, so:
+ *   - cooperative_admin leaves PRIVILEGED_ROLES and is granted, bulk-edited,
+ *     suspended and impersonated on the same terms as its five siblings;
+ *   - PRIVILEGED_ROLES is back to ["admin", "super_admin"], which is what its
+ *     name says;
+ *   - the seven loan-catalogue gates now ask for the permission they mean, and
+ *     because both permissions are held by exactly the same three roles, NO
+ *     CALLER GAINS OR LOSES ACCESS. The gates for deciding an individual loan
+ *     APPLICATION are deliberately left on approve_loans.
+ *
+ * The widening is real and is stated rather than buried: a plain admin can now
+ * act on a cooperative_admin's account. That is exactly how the other five have
+ * always been treated, which is the argument for it.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -66,6 +86,7 @@ import { ALL_USER_ROLES } from '@/lib/types/roles';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { isAdmin, hasAdminPermission, ALL_ADMIN_ROLES, PRIVILEGED_ROLES } from '@/lib/admin-permissions';
+import { stripComments } from '@/lib/testing/strip-comments';
 
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null, setCache: async () => undefined,
@@ -211,9 +232,10 @@ describe('the schema is still a gate', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('the privilege guard is untouched', () => {
+describe('the privilege guard is untouched, and the sixth module admin joins the other five', () => {
     it('a plain admin still cannot grant admin or super_admin', async () => {
         // Widening the role list must not widen who may hand out authority.
+        // This is the guard that matters, and it is unchanged.
         actAs(['admin']);
 
         for (const role of ['admin', 'super_admin']) {
@@ -224,37 +246,104 @@ describe('the privilege guard is untouched', () => {
         expect(store.get(COLLECTIONS.USERS, TARGET)?.roles).toEqual(['general_user']);
     });
 
-    it('a plain admin MAY appoint five of the six module admins', async () => {
+    it('a plain admin may appoint ALL SIX module admins — cooperative_admin was the odd one out', async () => {
+        // It used to be five. `admin` held every other module's manage
+        // permission and not cooperatives:manage_products, and PRIVILEGED_ROLES
+        // is DERIVED as "admin, super_admin, and any role holding a permission
+        // `admin` does not" — so that single omission made cooperative_admin
+        // super_admin-only to grant, and the refusal said "Only a super admin
+        // can grant admin roles", which does not describe what happened.
         actAs(['admin']);
 
-        for (const role of MODULE_ADMIN_ROLES.filter(r => r !== 'cooperative_admin')) {
+        for (const role of MODULE_ADMIN_ROLES) {
             const res = await assign([role]);
-            expect({ role, ok: res.success }).toEqual({ role, ok: true });
+            expect({ role, ok: res.success, err: res.error }).toEqual({ role, ok: true, err: null });
         }
     });
 
-    it('and is refused cooperative_admin, for a reason worth stating', async () => {
-        // RECORDED, NOT CHANGED. PRIVILEGED_ROLES is derived: admin, super_admin,
-        // and any role holding a permission `admin` does not. cooperative_admin
-        // holds `cooperatives:manage_products` and `admin` does not — while
-        // `admin` DOES hold every other module admin's manage permission. So the
-        // asymmetry comes from one missing entry in the matrix, and widening a
-        // permission is the owner's decision rather than a correction to make in
-        // passing. If that entry is ever added, this test is the thing that will
-        // notice and it should be updated with the reason.
+    it('because the surplus permission that made it privileged is gone', () => {
+        // The mechanism, asserted rather than assumed: cooperative_admin is no
+        // longer in PRIVILEGED_ROLES, and the reason is that `admin` now holds
+        // the one permission it was missing.
+        expect(hasAdminPermission(['admin'], 'cooperatives:manage_products')).toBe(true);
+        expect(PRIVILEGED_ROLES).not.toContain('cooperative_admin');
+
+        // `admin` holds every module's manage permission now, with no exception.
+        for (const p of [
+            'cooperatives:manage_products', 'marketplace:manage_village_market',
+            'wave:manage_training', 'academy:manage_courses',
+        ] as const) {
+            expect({ p, held: hasAdminPermission(['admin'], p) }).toEqual({ p, held: true });
+        }
+
+        // And PRIVILEGED_ROLES is back to meaning what its name says.
+        expect([...PRIVILEGED_ROLES].sort()).toEqual(['admin', 'super_admin']);
+    });
+
+    it('and no module admin can reach beyond its own silo to get there', () => {
+        // The widening must not have made the module admins interchangeable.
+        // Each still holds only its own module's manage permission.
         expect(hasAdminPermission(['cooperative_admin'], 'cooperatives:manage_products')).toBe(true);
-        expect(hasAdminPermission(['admin'], 'cooperatives:manage_products')).toBe(false);
-        // While `admin` DOES hold every other module admin's manage permission.
-        expect(hasAdminPermission(['admin'], 'marketplace:manage_village_market')).toBe(true);
-        expect(hasAdminPermission(['admin'], 'wave:manage_training')).toBe(true);
-        expect(hasAdminPermission(['admin'], 'academy:manage_courses')).toBe(true);
-        expect(PRIVILEGED_ROLES).toContain('cooperative_admin');
+        expect(hasAdminPermission(['cooperative_admin'], 'academy:manage_courses')).toBe(false);
+        expect(hasAdminPermission(['academy_admin'], 'cooperatives:manage_products')).toBe(false);
+        expect(hasAdminPermission(['marketplace_admin'], 'cooperatives:manage_products')).toBe(false);
+    });
+});
 
-        actAs(['admin']);
-        const res = await assign(['cooperative_admin']);
+// ─────────────────────────────────────────────────────────────────────────────
+describe('the permission that gated nothing now gates the thing it names', () => {
+    // loan-products.ts guards the loan CATALOGUE — the interest rate and amount
+    // band every borrower is offered. It was gated on
+    // "cooperatives:approve_loans", which is about deciding an individual
+    // application, and its own comment said manage_products "is the
+    // semantically exact permission" and explained why it could not be used:
+    // "the matrix deliberately withholds manage_products from the plain `admin`
+    // role, so adopting it here would take away something an admin can do
+    // today". With `admin` granted it, that objection is gone.
 
-        expect(res.success).toBe(false);
-        expect(res.error).toBe('Only a super admin can grant admin roles');
+    const CATALOGUE_GATES = [
+        'src/app/actions/loan-products.ts',
+        'src/app/api/admin/cooperative/create-loan-product/route.ts',
+        'src/app/api/admin/cooperative/update-loan-product/route.ts',
+        'src/app/api/admin/cooperative/delete-loan-product/route.ts',
+    ];
+
+    it('NOBODY gains or loses access — the two permissions have the same holders', () => {
+        // This is what makes the move safe, and it is the first thing to check.
+        const holders = (p: string) =>
+            ALL_ADMIN_ROLES.filter(r => hasAdminPermission([r], p as any)).sort();
+
+        expect(holders('cooperatives:manage_products'))
+            .toEqual(holders('cooperatives:approve_loans'));
+        expect(holders('cooperatives:manage_products'))
+            .toEqual(['admin', 'cooperative_admin', 'super_admin']);
+    });
+
+    it('every catalogue gate asks for manage_products', () => {
+        const fs = require('fs');
+        for (const file of CATALOGUE_GATES) {
+            const code = stripComments(fs.readFileSync(file, 'utf-8'));
+            expect({ file, wrong: code.includes('cooperatives:approve_loans') })
+                .toEqual({ file, wrong: false });
+            expect({ file, right: code.includes('cooperatives:manage_products') })
+                .toEqual({ file, right: true });
+        }
+    });
+
+    it('and the application gates are left alone — a different act, a different screen', () => {
+        // approve-loan, reject-loan and verify-guarantor decide one member's
+        // application. Moving those too would be renaming a permission rather
+        // than correcting a gate.
+        const fs = require('fs');
+        for (const file of [
+            'src/app/api/admin/cooperative/approve-loan/route.ts',
+            'src/app/api/admin/cooperative/reject-loan/route.ts',
+            'src/app/api/admin/cooperative/verify-guarantor/route.ts',
+        ]) {
+            const code = stripComments(fs.readFileSync(file, 'utf-8'));
+            expect({ file, keeps: code.includes('cooperatives:approve_loans') })
+                .toEqual({ file, keeps: true });
+        }
     });
 });
 

@@ -85,7 +85,7 @@ import { readFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { join } from 'path';
 import { csvCell, csvRow, csvDocument } from '@/lib/csv-safe';
-import { PRIVILEGED_ROLES, includesPrivilegedRole, isAdmin, hasAdminPermission } from '@/lib/admin-permissions';
+import { PRIVILEGED_ROLES, ALL_ADMIN_ROLES, ALL_ADMIN_PERMISSIONS, includesPrivilegedRole, isAdmin, hasAdminPermission } from '@/lib/admin-permissions';
 import { ALL_USER_ROLES, isUserRole } from '@/lib/types/roles';
 
 function source(rel: string): string {
@@ -183,12 +183,56 @@ describe('a name cannot become a formula in an admin spreadsheet', () => {
 });
 
 describe('a role that can do more than admin is super_admin-only to grant', () => {
-    it('cooperative_admin is privileged, which the hand-written list missed', () => {
-        // THE regression. It holds cooperatives:manage_products; admin does not.
-        expect(hasAdminPermission(['cooperative_admin'], 'cooperatives:manage_products' as any)).toBe(true);
-        expect(hasAdminPermission(['admin'], 'cooperatives:manage_products' as any)).toBe(false);
+    it('the rule holds in BOTH directions, for every role in the matrix', () => {
+        // THIS TEST USED TO NAME ITS EXAMPLE. It asserted that
+        // `cooperative_admin` is privileged because it holds
+        // cooperatives:manage_products and `admin` did not — the regression the
+        // hand-written list had missed.
+        //
+        // The owner has since granted that permission to `admin`, which was the
+        // decision two earlier findings explicitly left open (the note on
+        // PRIVILEGED_ROLES, and loan-products.ts's "the owner's call"). So the
+        // example is gone, and the rule is not: nothing in the matrix currently
+        // exceeds `admin`, which means PRIVILEGED_ROLES is exactly
+        // ["admin", "super_admin"] — what its name says.
+        //
+        // A test that only checked the old example would now be vacuous. This
+        // asserts the PROPERTY instead, in both directions, so it keeps its
+        // teeth with no example to point at: any role that gains a permission
+        // `admin` lacks becomes super_admin-only to grant, and any role in the
+        // set has a reason to be there.
+        // Vacuity guard. `surplus` is computed by sweeping every permission, so
+        // an empty ALL_ADMIN_PERMISSIONS would make the whole property below
+        // pass without testing anything — which a mutation proved it did.
+        expect(ALL_ADMIN_PERMISSIONS.length).toBeGreaterThan(20);
+        for (const p of [
+            'users:read', 'users:delete', 'cooperatives:manage_products',
+            'academy:manage_courses', 'config:rollback',
+        ] as const) {
+            expect({ p, listed: (ALL_ADMIN_PERMISSIONS as readonly string[]).includes(p) })
+                .toEqual({ p, listed: true });
+        }
 
-        expect(includesPrivilegedRole(['cooperative_admin'])).toBe(true);
+        const surplus = ALL_ADMIN_ROLES.filter(role =>
+            role !== 'admin' && role !== 'super_admin' &&
+            ALL_ADMIN_PERMISSIONS.some(p => hasAdminPermission([role], p) && !hasAdminPermission(['admin'], p))
+        );
+
+        // Every role with a surplus is privileged...
+        for (const role of surplus) {
+            expect({ role, privileged: includesPrivilegedRole([role]) })
+                .toEqual({ role, privileged: true });
+        }
+        // ...and every privileged role beyond the two definitional ones has a surplus.
+        for (const role of PRIVILEGED_ROLES) {
+            if (role === 'admin' || role === 'super_admin') continue;
+            expect({ role, hasSurplus: (surplus as readonly string[]).includes(role) })
+                .toEqual({ role, hasSurplus: true });
+        }
+
+        expect([...PRIVILEGED_ROLES].sort()).toEqual(['admin', 'super_admin']);
+        expect(includesPrivilegedRole(['admin'])).toBe(true);
+        expect(includesPrivilegedRole(['cooperative_admin'])).toBe(false);
     });
 
     it('is derived from the matrix rather than listed', () => {
@@ -325,15 +369,43 @@ describe('isAdmin() is ten roles and the matrix means two', () => {
     it('the cooperative money routes among them', () => {
         // These were THE concrete consequence: an academy_admin could price and
         // delete cooperative loan products and reject applications.
-        for (const r of [
-            'cooperative/create-loan-product',
-            'cooperative/update-loan-product',
-            'cooperative/delete-loan-product',
-            'cooperative/reject-loan',
-            'cooperative/approve-loan',
-        ]) {
-            expect(source(`src/app/api/admin/${r}/route.ts`))
+        //
+        // This used to pin the permission STRING, and all five named
+        // "cooperatives:approve_loans". The three CATALOGUE routes now name
+        // "cooperatives:manage_products" instead — the permission they always
+        // meant, which they could not use while the matrix withheld it from the
+        // plain `admin` role. Pinning the string again would just re-freeze the
+        // split; what this test is actually about is that each route asks the
+        // MATRIX, and that a foreign module's admin is refused. Both are
+        // asserted directly now, so the next such move does not read as a
+        // regression.
+        const CATALOGUE = ['create-loan-product', 'update-loan-product', 'delete-loan-product'];
+        const APPLICATIONS = ['reject-loan', 'approve-loan'];
+
+        for (const r of [...CATALOGUE, ...APPLICATIONS]) {
+            expect(source(`src/app/api/admin/cooperative/${r}/route.ts`))
+                .toMatch(/hasAdminPermission\(session\.user\.roles, "cooperatives:\w+"\)/);
+        }
+
+        // The catalogue and the applications are different acts, and say so.
+        for (const r of CATALOGUE) {
+            expect(source(`src/app/api/admin/cooperative/${r}/route.ts`))
+                .toContain('hasAdminPermission(session.user.roles, "cooperatives:manage_products")');
+        }
+        for (const r of APPLICATIONS) {
+            expect(source(`src/app/api/admin/cooperative/${r}/route.ts`))
                 .toContain('hasAdminPermission(session.user.roles, "cooperatives:approve_loans")');
+        }
+
+        // And the consequence this test exists for is unchanged: neither
+        // permission reaches outside the cooperative silo.
+        for (const p of ['cooperatives:manage_products', 'cooperatives:approve_loans'] as const) {
+            expect({ p, academy: hasAdminPermission(['academy_admin'], p) })
+                .toEqual({ p, academy: false });
+            expect({ p, wave: hasAdminPermission(['wave_admin'], p) })
+                .toEqual({ p, wave: false });
+            expect({ p, coop: hasAdminPermission(['cooperative_admin'], p) })
+                .toEqual({ p, coop: true });
         }
     });
 
@@ -356,28 +428,40 @@ describe('isAdmin() is ten roles and the matrix means two', () => {
         expect(hasAdminPermission(['admin'], 'audit:export' as any)).toBe(false);
     });
 
-    it('the permission that would express the boundary is checked nowhere', () => {
-        // cooperatives:manage_products exists in the union and is granted to
-        // super_admin and cooperative_admin. Nothing asks for it.
+    it('the permission that would express the boundary is now the one that does', () => {
+        // THE EXACT INVERSE OF WHAT THIS ASSERTED, and it is the same fact.
         //
-        // CHECKED, not merely mentioned. This grepped for the string and
-        // expected admin-permissions.ts alone, which made it fail the moment
-        // loan-products.ts explained in a comment why it deliberately does NOT
-        // use this permission — the matrix withholds it from the plain `admin`
-        // role, so adopting it would remove something an admin can do today.
-        // Recording that reasoning is the opposite of consuming the permission,
-        // and the assertion's own words are "nothing asks for it".
+        // It used to read "the permission that would express the boundary is
+        // checked nowhere": cooperatives:manage_products existed in the union,
+        // was granted to super_admin and cooperative_admin, and NOTHING asked
+        // for it. loan-products.ts even explained in a comment why it
+        // deliberately did not — the matrix withheld manage_products from the
+        // plain `admin` role, so gating on it "would take away something an
+        // admin can do today" — and left the decision to the owner.
+        //
+        // The owner granted it to `admin`. The seven loan-CATALOGUE gates then
+        // moved onto it, because the objection was the only thing holding them
+        // on a permission about approving individual applications. So the
+        // permission gates something now, and this asserts that rather than the
+        // gap it replaced.
         const askers = execSync(
             `grep -rln 'hasAdminPermission([^)]*cooperatives:manage_products' src --include='*.ts' --include='*.tsx' || true`,
             { encoding: 'utf-8', cwd: process.cwd() }
-        ).split('\n').filter(Boolean).filter((f) => !f.includes('__tests__'));
+        ).split('\n').filter(Boolean).filter((f) => !f.includes('__tests__')).sort();
 
-        expect(askers).toEqual([]);
+        expect(askers).toEqual([
+            'src/app/actions/loan-products.ts',
+            'src/app/api/admin/cooperative/create-loan-product/route.ts',
+            'src/app/api/admin/cooperative/delete-loan-product/route.ts',
+            'src/app/api/admin/cooperative/update-loan-product/route.ts',
+        ]);
 
-        // And it is still a real permission in the matrix, so the gap is a gap
-        // rather than a dead string.
-        expect(hasAdminPermission(['cooperative_admin'], 'cooperatives:manage_products' as any)).toBe(true);
-        expect(hasAdminPermission(['admin'], 'cooperatives:manage_products' as any)).toBe(false);
+        // And the move cost nobody their access: the permission it replaced is
+        // held by exactly the same three roles.
+        const holders = (p: string) =>
+            ALL_ADMIN_ROLES.filter((r) => hasAdminPermission([r], p as any)).sort();
+        expect(holders('cooperatives:manage_products')).toEqual(holders('cooperatives:approve_loans'));
+        expect(holders('cooperatives:manage_products')).toEqual(['admin', 'cooperative_admin', 'super_admin']);
     });
 
     it('the other side of the same tension is already recorded in the codebase', () => {

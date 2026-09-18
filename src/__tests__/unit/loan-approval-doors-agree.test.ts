@@ -242,13 +242,25 @@ describe('the loan product catalogue is managed by one rule, not two', () => {
         expect(products).not.toContain('roles?.includes("admin")');
         expect(products).not.toContain('roles?.includes("super_admin")');
 
-        const gates = products.match(/hasAdminPermission\([^,]+, "cooperatives:approve_loans"\)/g) ?? [];
+        // The permission these four name is now "cooperatives:manage_products"
+        // rather than "cooperatives:approve_loans". What this test is about —
+        // that the four actions and the three routes over one collection ask
+        // ONE rule — is unchanged, and is asserted below against whatever that
+        // rule currently is, so a future rename cannot read as a regression.
+        const gates = products.match(/hasAdminPermission\([^,]+, "cooperatives:manage_products"\)/g) ?? [];
         expect(gates.length).toBe(4);
     });
 
     it('the same permission the routes onto that collection use', () => {
+        // Derived from the actions rather than typed out, which is the property:
+        // the two halves agree, whatever they agree ON.
+        const used = code(PRODUCTS).match(/hasAdminPermission\([^,]+, "(cooperatives:\w+)"\)/);
+        expect(used).not.toBeNull();
+        const permission = used![1];
+
         for (const rel of ROUTES) {
-            expect(code(rel)).toContain('"cooperatives:approve_loans"');
+            expect({ rel, uses: code(rel).includes(`"${permission}"`) })
+                .toEqual({ rel, uses: true });
         }
     });
 
@@ -260,11 +272,24 @@ describe('the loan product catalogue is managed by one rule, not two', () => {
         }
     });
 
-    it('deliberately not "cooperatives:manage_products", which admin lacks', () => {
-        // The semantically exact permission is withheld from the plain `admin`
-        // role by the matrix, so adopting it would remove something an admin
-        // can do today. Same trade as the routes; recorded, not silently taken.
-        expect(source(PRODUCTS)).toContain('deliberately withholds');
+    it('and it IS "cooperatives:manage_products" now — the half-step is finished', () => {
+        // THIS TEST USED TO ASSERT THE REFUSAL. Its name was 'deliberately not
+        // "cooperatives:manage_products", which admin lacks', and it pinned the
+        // comment explaining the trade: the matrix withheld manage_products
+        // from the plain `admin` role, so gating on it "would take away
+        // something an admin can do today". The comment called that a
+        // deliberate half-step and said the decision was the owner's.
+        //
+        // The owner granted `admin` the permission, so the trade no longer
+        // exists and the gates say what they mean. The thing that made it safe
+        // is asserted, not assumed: the two permissions have identical holders,
+        // so not one caller gained or lost access in the move.
+        const { ALL_ADMIN_ROLES, hasAdminPermission } = require('@/lib/admin-permissions');
+        const holders = (p: string) =>
+            ALL_ADMIN_ROLES.filter((r: string) => hasAdminPermission([r], p)).sort();
+
+        expect(holders('cooperatives:manage_products')).toEqual(holders('cooperatives:approve_loans'));
+        expect(holders('cooperatives:manage_products')).toEqual(['admin', 'cooperative_admin', 'super_admin']);
         expect(source(PRODUCTS)).toContain('cooperatives:manage_products');
     });
 });

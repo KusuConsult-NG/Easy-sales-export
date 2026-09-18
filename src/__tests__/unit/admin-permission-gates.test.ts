@@ -589,7 +589,13 @@ describe('no gate locks out the role that does the work', () => {
             'content:delete',
             'finance:refund',
             'config:rollback',
-            'cooperatives:manage_products',
+            // 'cooperatives:manage_products' WAS in this list and is not any
+            // more: the owner granted it to `admin`, which resolved the
+            // asymmetry that made `cooperative_admin` super_admin-only to grant
+            // (see module-admins-can-be-appointed.test.ts). The five entries
+            // above are all super_admin-only by explicit policy — delete,
+            // impersonate, refund, rollback — so the vacuity guard still has
+            // real examples to stand on, which was the whole point of it.
         ] as const) {
             expect(hasAdminPermission(['admin'], withheld)).toBe(false);
             expect(hasAdminPermission(['super_admin'], withheld)).toBe(true);
