@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PASSWORD_RULES } from "@/lib/password-policy";
+import { ALL_USER_ROLES } from "@/lib/types/roles";
 
 // ============================================
 // STRICT UNIFIED PII VALIDATORS (Anti-Abuse)
@@ -261,22 +262,55 @@ export const LoanApplicationReviewSchema = z.object({
 // ROLE MANAGEMENT SCHEMAS
 // ============================================
 
-const UserRoleSchema = z.enum([
-    "general_user",
-    "buyer",
-    "marketplace_buyer",
-    "seller",
-    "land_owner",
-    "farmer",
-    "investor",
-    "export_participant",
-    "cooperative_member",
-    "wave_participant",
-    "academy_participant",
-    "field_officer",
-    "admin",
-    "super_admin"
-]);
+/**
+ * THE ONLY SCREEN THAT ASSIGNS ROLES COULD NOT ASSIGN A MODULE ADMIN ONE.
+ *
+ * Reported as "other module admins can't login why?". They could not log in
+ * because they could not be MADE. This enum was a hand-written list of 14
+ * roles — and none of the six module admin roles was in it:
+ *
+ *   academy_admin  wave_admin  marketplace_admin
+ *   cooperative_admin  export_admin  farm_nation_admin
+ *
+ * It gates UpdateUserRolesSchema, which admin/_users.ts parses before writing,
+ * so executing updateUserRolesAction as a super_admin gave, for every one of
+ * the six:
+ *
+ *   Invalid option: expected one of "general_user"|"buyer"|"marketplace_buyer"|
+ *   "seller"|"land_owner"|"farmer"|"investor"|"export_participant"|
+ *   "cooperative_member"|"wave_participant"|"academy_participant"|
+ *   "field_officer"|"admin"|"super_admin"
+ *
+ * Every other layer was ready for them. isAdmin() honours all six — it is
+ * derived from PERMISSION_MATRIX — so admin/layout.tsx lets them in;
+ * getPostLoginRedirect routes each one to its own /admin/<module>;
+ * canAccessAdminRoute has a silo branch per role. Only the assignment was
+ * impossible, which is why nothing else looked wrong.
+ *
+ * AND IT LOCKED THE ONES WHO ALREADY EXIST. The action writes the array
+ * wholesale, so editing anything about an existing module admin means sending
+ * their current role back through this enum. ["general_user","academy_admin"]
+ * was refused as surely as ["academy_admin"], meaning a module admin's roles
+ * could not be touched without stripping the role first.
+ *
+ * `marketplace_seller` was missing too — the role #381 found the product gates
+ * refusing, and the reason an approved seller could not simply be granted it.
+ *
+ * THE SHARED LIST ALREADY EXISTED, AND THIS WAS THE COPY THAT MISSED IT.
+ * lib/types/roles.ts::ALL_USER_ROLES is the value form of the UserRole union,
+ * kept exhaustive by a compile-time check in that file, and its header names
+ * the six lists that disagreed — THIS ONE INCLUDED, described exactly as it
+ * still was: "schemas.ts UserRoleSchema — 14 — has marketplace_buyer, not
+ * marketplace_seller". api/admin/add-roles was migrated to it
+ * (`const VALID_ROLES: readonly UserRole[] = ALL_USER_ROLES`), and so was
+ * write-guard.ts (`const VALID_ROLES = ALL_USER_ROLES`) — which is the guard
+ * this very action writes THROUGH. So the write guard accepted the role that
+ * the schema in front of it refused.
+ *
+ * This is a widening to the canonical list and nothing else: all 14 roles that
+ * passed before still pass.
+ */
+const UserRoleSchema = z.enum(ALL_USER_ROLES);
 
 export const UpdateUserRolesSchema = z.object({
     userId: z.string().min(1),

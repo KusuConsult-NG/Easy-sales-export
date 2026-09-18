@@ -2,6 +2,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS, type User } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/user-cache";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
+import { holdsSellerRole, isSellerApproved } from "@/lib/seller-approval";
 
 /**
  * ── DATA CONSISTENCY LAYER ──────────────────────────────────────────────────
@@ -59,9 +60,37 @@ function validateUserState(user: any, previous?: any) {
      * that is a data-repair problem, not something to make unfixable by refusing
      * every write to the record.
      */
-    const isBecomingSeller = roles.includes("seller") && !previousRoles.includes("seller");
+    /**
+     * BOTH SPELLINGS OF THE ROLE, BOTH SPELLINGS OF THE APPROVAL.
+     *
+     * This read the literal "seller" and the literal `sellerVerificationStatus`,
+     * and each half was wrong in a different direction — the pair #381 found the
+     * product gates getting wrong, in the guard that is supposed to be the
+     * platform's integrity rule about exactly this.
+     *
+     * TOO NARROW ON THE ROLE. `marketplace_seller` is a first-class role that
+     * roles.ts calls "the new standardized role", that admin/_marketplace.ts and
+     * cms.ts accept as equivalent, and that the product gates now honour. It
+     * walked straight past this check, so the rule guarded one of the two names
+     * for the same thing. That became reachable the moment UserRoleSchema
+     * started accepting it (#383): the admin roles screen could hand out
+     * marketplace_seller to an unapproved account and the integrity rule that
+     * exists for `seller` would never fire.
+     *
+     * TOO NARROW ON THE APPROVAL. marketplace/_mp_onboarding.ts heals an
+     * approved seller by writing `serviceRegistrations.marketplace.status:
+     * "approved"` and no `sellerVerificationStatus` at all. So an account the
+     * platform's own record calls an approved seller was REFUSED the seller
+     * role — the admin could not grant the role to somebody who already had the
+     * approval, and had no way to see why.
+     *
+     * lib/seller-approval.ts answers both questions, and is the same module the
+     * product gates read, so the screen that grants the role and the screen that
+     * uses it cannot disagree about who is a seller.
+     */
+    const isBecomingSeller = holdsSellerRole(roles) && !holdsSellerRole(previousRoles);
 
-    if (isBecomingSeller && user.sellerVerificationStatus !== "approved") {
+    if (isBecomingSeller && !isSellerApproved(user)) {
         throw new Error("Data Integrity Error: Cannot assign 'seller' role without 'approved' verification status.");
     }
     
