@@ -106,6 +106,12 @@ export default function PropertyDetailsClient({ initial = null }: {
     const gallery = renderableImages(property?.images);
 
     /*
+     *   #881 IS THIS MY OWN LAND? Compared against the LISTING's ownerId, which
+     *   is the value both server doors compare against.
+     */
+    const isMine = !!session?.user?.id && session.user.id === property?.ownerId;
+
+    /*
      *   #874 THE OFFER FORM. Held here rather than in a modal because the
      *   figure only means anything beside the price it is an offer against.
      */
@@ -582,7 +588,42 @@ export default function PropertyDetailsClient({ initial = null }: {
                                  )}
                              </div>
 
-                            {property.status === "verified" ? (
+                            {/*
+                              *   #881 AN OWNER WAS OFFERED THEIR OWN LAND.
+                              *
+                              *   THE OWNER: "why is there an option for seller to
+                              *   make an offer on when the listed product belongs
+                              *   to the seller."
+                              *
+                              *   Both doors already refuse it server-side —
+                              *   farm-nation-payment returns "You cannot purchase
+                              *   your own property" and makeLandOfferAction returns
+                              *   "You cannot make an offer on your own property" —
+                              *   so this was a reservation button and an offer form
+                              *   that could only ever fail.
+                              *
+                              *   Replaced by what the owner of a listing actually
+                              *   wants at this point: a way to edit it.
+                              */}
+                            {isMine ? (
+                                <div className="space-y-3">
+                                    <p className="text-sm text-slate-600">
+                                        This is your listing.
+                                    </p>
+                                    <button
+                                        onClick={() => router.push(`/farm-nation/edit-property/${propertyId}`)}
+                                        className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
+                                    >
+                                        Edit this listing
+                                    </button>
+                                    <button
+                                        onClick={() => router.push("/farm-nation/my-properties")}
+                                        className="w-full px-6 py-3 border border-green-600 text-green-700 font-semibold rounded-xl transition hover:bg-green-50"
+                                    >
+                                        My properties
+                                    </button>
+                                </div>
+                            ) : property.status === "verified" ? (
                                 <div className="space-y-3">
                                     <button
                                         onClick={() => {

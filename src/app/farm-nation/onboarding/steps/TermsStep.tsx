@@ -141,10 +141,27 @@ export default function TermsStep({ onNext, onBack, onChange, initialData, isSub
                             <div className="space-y-2 text-sm text-teal-800">
                                 <p className="font-semibold">Transparent Pricing:</p>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
+                                    {/*
+                                      *   #882 THESE WERE THE ONLY PLACE ON THE PLATFORM
+                                      *   THAT ITEMISED THE FEE, AND BOTH FIGURES WERE
+                                      *   WRONG.
+                                      *
+                                      *   A seller ticks a box directly below this list to
+                                      *   accept it. It said 2.5% commission and a 1%
+                                      *   escrow service; the code withheld a flat 5% and
+                                      *   had no escrow fee at all. So the contract and
+                                      *   the ledger disagreed, in the platform's favour,
+                                      *   on every transaction.
+                                      *
+                                      *   THE OWNER: "The commission is 3% and the escrow
+                                      *   fee is 2%." That is what is charged and what is
+                                      *   now written here.
+                                      */}
                                     <li><strong>Buyers:</strong> Free to browse and inquire. No commission fees.</li>
-                                    <li><strong>Sellers:</strong> 2.5% commission on successful transactions</li>
+                                    <li><strong>Sellers:</strong> 3% commission on successful transactions</li>
+                                    <li><strong>Escrow Service:</strong> 2% of transaction value</li>
+                                    <li><strong>Total withheld:</strong> 5% of the sale, deducted when escrow is released</li>
                                     <li><strong>Premium Listings:</strong> Optional paid promotion starting at ₦5,000/month</li>
-                                    <li><strong>Escrow Service:</strong> 1% of transaction value (recommended)</li>
                                 </ul>
                             </div>
                         </div>

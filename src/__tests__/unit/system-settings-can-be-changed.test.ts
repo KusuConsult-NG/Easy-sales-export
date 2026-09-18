@@ -301,11 +301,33 @@ describe('#381 — the rule now honours the fees it is handed', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#381 — the bounds refuse rather than clamp', () => {
     it('a rate above its ceiling is refused, naming the field', () => {
-        const field = SYSTEM_SETTINGS_FIELDS.find((f) => f.key === 'platformFeePercentage')!;
+        /*
+         *   #882 WAS `platformFeePercentage`, WHICH IS NO LONGER SETTABLE.
+         *
+         *   The owner set commission at 3% and the escrow fee at 2%, so the
+         *   total is their SUM and is computed on read. A third editable number
+         *   that ought to equal the other two added together is a drift waiting
+         *   to happen, so the key was removed from the spec — and this lookup
+         *   returned undefined and threw inside checkSystemSetting.
+         *
+         *   The claim is unchanged: a rate above its ceiling is refused by name.
+         *   It is made against a rate that still exists.
+         */
+        const field = SYSTEM_SETTINGS_FIELDS.find((f) => f.key === 'commissionPercentage')!;
         const res = checkSystemSetting(field, 0.9);
 
         expect(res.ok).toBe(false);
-        expect((res as any).error).toContain('Platform fee');
+        expect((res as any).error).toContain('Commission');
+    });
+
+    it('AND BOTH HALVES OF THE FEE ARE BOUNDED, not just the one', () => {
+        //   #882 — two rates now, and a ceiling that reached only one of them
+        //   would be this codebase's most repeated shape.
+        for (const key of ['commissionPercentage', 'escrowFeePercentage']) {
+            const field = SYSTEM_SETTINGS_FIELDS.find((f) => f.key === key)!;
+            expect({ key, found: !!field }).toEqual({ key, found: true });
+            expect({ key, ok: checkSystemSetting(field, 0.9).ok }).toEqual({ key, ok: false });
+        }
     });
 
     it('AN EXCHANGE RATE OF ZERO IS REFUSED — it would make every export order free', () => {
@@ -400,9 +422,15 @@ describe('#381 — THERE IS A WRITER NOW', () => {
         const res = await save('platform_fees', feeValues({ baseDeliveryFee: 3500 }));
 
         expect(res.success).toBe(true);
+        /*
+         *   #882 The written row carries the two COMPONENTS. The total is not a
+         *   stored field any more — it is commission + escrow, computed when the
+         *   settings are read.
+         */
         expect(store.get(SETTINGS, 'platform_fees')).toMatchObject({
             baseDeliveryFee: 3500,
-            platformFeePercentage: DEFAULT_FEES.platformFeePercentage,
+            commissionPercentage: DEFAULT_FEES.commissionPercentage,
+            escrowFeePercentage: DEFAULT_FEES.escrowFeePercentage,
             updatedBy: ADMIN,
         });
     });
@@ -538,13 +566,14 @@ describe('#381 — the matching read', () => {
     it('falling back per field, so one bad key does not blank the form', async () => {
         // #130's shape: one malformed row emptied the whole catalogue.
         store.seed(SETTINGS, 'platform_fees', {
-            baseDeliveryFee: 'free', platformFeePercentage: 0.08,
+            baseDeliveryFee: 'free', commissionPercentage: 0.08,
         });
 
         const res = await load();
 
         expect(res.data.platform_fees.baseDeliveryFee).toBe(DEFAULT_FEES.baseDeliveryFee);
-        expect(res.data.platform_fees.platformFeePercentage).toBe(0.08);
+        //   #882 A settable rate, read back beside a malformed sibling.
+        expect(res.data.platform_fees.commissionPercentage).toBe(0.08);
     });
 
     it('A READ FAILURE IS A FAILURE, not a set of defaults presented as live', () => {

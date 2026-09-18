@@ -168,6 +168,15 @@ export default function ProductDetailClient({ initial = null }: {
      *   coming back later, which is true of a sold-out listing and false of a
      *   withdrawn one.
      */
+    /*
+     *   #881 IS THIS MY OWN LISTING?
+     *
+     *   Compared against the PRODUCT's sellerId, which is the same value the
+     *   server compares — _submitQuoteRequestAction reads it from the product
+     *   rather than from the request, for the reason its own comment gives.
+     */
+    const isMine = !!session?.user?.id && session.user.id === (product as any).sellerId;
+
     const notForSale = !isSellableProductStatus(product.status);
     const soldOut = !notForSale && (product.availableQuantity === 0 || product.status === "out_of_stock");
     const cannotBuy = notForSale || soldOut;
@@ -398,6 +407,39 @@ export default function ProductDetailClient({ initial = null }: {
                             </div>
                         ) : null}
 
+                        {/*
+                          *   #881 A SELLER WAS OFFERED THEIR OWN PRODUCT.
+                          *
+                          *   THE OWNER: "why is there an option for seller to make
+                          *   an offer on when the listed product belongs to the
+                          *   seller."
+                          *
+                          *   The SERVER already refuses both doors —
+                          *   _submitQuoteRequestAction returns "You cannot request
+                          *   a quote on your own listing" and the cart path refuses
+                          *   an order to yourself — so nothing was ever bought. What
+                          *   shipped was a pair of buttons that always fail, which
+                          *   is the class this audit keeps removing: a control that
+                          *   looks like it does something and does not.
+                          *
+                          *   The owner gets the door they actually want instead.
+                          */}
+                        {isMine ? (
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <Link
+                                    href={`/marketplace/seller/products/${product.id}/edit`}
+                                    className="flex-1 flex items-center justify-center gap-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl transition-all shadow-lg"
+                                >
+                                    Edit this listing
+                                </Link>
+                                <Link
+                                    href="/marketplace/seller/products"
+                                    className="px-8 py-4 bg-white text-green-600 font-bold text-lg rounded-xl border-2 border-green-600 hover:bg-green-50 transition-all text-center"
+                                >
+                                    My products
+                                </Link>
+                            </div>
+                        ) : (
                         <div className="flex flex-col sm:flex-row gap-4">
                             <button 
                                 onClick={handleAddToCart}
@@ -422,6 +464,7 @@ export default function ProductDetailClient({ initial = null }: {
                                 Request for Quote
                             </button>
                         </div>
+                        )}
 
                         <QuoteRequestModal 
                             isOpen={showQuoteModal}

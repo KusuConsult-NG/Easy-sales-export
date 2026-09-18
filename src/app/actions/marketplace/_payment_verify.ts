@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimPaymentOnce, decrementManyOrFail, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
-import { platformFeeFor, sellerNetFor } from "@/lib/platform-fee";
+import { platformFeeFor, sellerNetFor, feeSplitFor } from "@/lib/platform-fee";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { rateLimit } from "@/lib/rate-limiter";
@@ -479,6 +479,17 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                     amount: grossAmount,
                     grossAmount: grossAmount,
                     platformFee: platformFee,
+                    /*
+                     *   #882 WHAT THE WITHHOLDING IS MADE OF.
+                     *
+                     *   The row recorded one number and the platform could not
+                     *   say which part was commission and which was the escrow
+                     *   charge — on the record a dispute or a reconciliation
+                     *   reads. Derived so the two always sum to platformFee
+                     *   exactly; see feeSplitFor.
+                     */
+                    commissionFee: feeSplitFor(grossAmount, fees).commission,
+                    escrowFee: feeSplitFor(grossAmount, fees).escrow,
                     netAmount: netAmount,
                     productName: pNames.join(", ") || "Unnamed Item",
                     productDescription: pDescriptions.join("; ") || "",

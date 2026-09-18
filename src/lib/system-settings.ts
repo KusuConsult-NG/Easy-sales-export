@@ -101,12 +101,56 @@ import {
 // The readers
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Make the total agree with its parts, without moving anybody's money.
+ *
+ *   #882 `platformFeePercentage` is now commission + escrow. Seven modules read
+ *   it to split an order, so it has to keep answering, and a STORED doc may
+ *   predate the split entirely.
+ *
+ *   THE CASE THAT MATTERS IS AN ADMIN WHO ALREADY CHANGED THE TOTAL. If the
+ *   stored document carries `platformFeePercentage` and no components — which is
+ *   every document written before today — then that number is the rate this
+ *   platform has been charging, and quietly replacing it with 3+2 would change
+ *   what sellers are paid. It is kept, and SPLIT in the configured ratio
+ *   instead, so the parts become nameable without the total moving.
+ *
+ *   Once an admin sets either component, the components are the truth and the
+ *   total follows them.
+ */
+export function reconcileFeeSplit(fees: PlatformFees, stored?: Record<string, any> | null): PlatformFees {
+    const setComponents = stored
+        && (stored.commissionPercentage !== undefined || stored.escrowFeePercentage !== undefined);
+
+    if (setComponents) {
+        const commission = Number(fees.commissionPercentage) || 0;
+        const escrow = Number(fees.escrowFeePercentage) || 0;
+        return { ...fees, platformFeePercentage: commission + escrow };
+    }
+
+    const storedTotal = Number(stored?.platformFeePercentage);
+    if (!Number.isFinite(storedTotal) || storedTotal < 0) return fees;
+
+    //   Split in the DEFAULT ratio — 3:2 — so a platform that had been charging
+    //   some other total keeps charging it.
+    const ratio = DEFAULT_FEES.commissionPercentage
+        / (DEFAULT_FEES.commissionPercentage + DEFAULT_FEES.escrowFeePercentage);
+    const commission = storedTotal * ratio;
+
+    return {
+        ...fees,
+        commissionPercentage: commission,
+        escrowFeePercentage: storedTotal - commission,
+        platformFeePercentage: storedTotal,
+    };
+}
+
 export const getPlatformFees = unstable_cache(
     async (): Promise<PlatformFees> => {
         try {
             const doc = await db.collection(COLLECTIONS.SYSTEM_SETTINGS).doc("platform_fees").get();
             if (doc.exists) {
-                return { ...DEFAULT_FEES, ...doc.data() } as PlatformFees;
+                return reconcileFeeSplit({ ...DEFAULT_FEES, ...doc.data() } as PlatformFees, doc.data());
             }
             return DEFAULT_FEES;
         } catch (error) {

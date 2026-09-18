@@ -89,7 +89,26 @@ export const ACADEMY_CONFIG = {
 
 // Marketplace Configuration
 export const MARKETPLACE_CONFIG = {
-    platformFee: 5, // 5%
+    /**
+     *   #882 THE TOTAL, ITEMISED.
+     *
+     *   THE OWNER: "The commission is 3% and the escrow fee is 2%."
+     *
+     *   `platformFee: 5` was right about the total and silent about what made it
+     *   up, and two seller-facing screens render it — the bank-account step and
+     *   the terms a seller accepts. A seller was told "5%" with no way to know
+     *   what they were paying for.
+     *
+     *   PERCENTAGES, not fractions: these are rendered directly with a "%" after
+     *   them, which is why they are not the 0.03/0.02 the settings hold. The
+     *   settings remain the source for anything that MOVES money —
+     *   DEFAULT_FEES in system-settings-schema — and these three exist to be
+     *   displayed. A test pins them to each other so the display cannot drift
+     *   from the charge.
+     */
+    commission: 3,
+    escrowFee: 2,
+    platformFee: 5, // commission + escrowFee
     processingTimeDays: "2-3", // "2-3 business days"
 } as const;
 

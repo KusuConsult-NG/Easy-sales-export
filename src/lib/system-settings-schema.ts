@@ -55,7 +55,29 @@ export interface PlatformFees {
     weightSurchargeStepKg: number;
     /** Naira per started step beyond freeWeightKg. */
     weightSurchargeAmount: number;
-    /** The platform's cut of a marketplace order, as a fraction. */
+    /**
+     *   The platform's commission, as a fraction.
+     *
+     *   #882 THE OWNER: "The commission is 3% and the escrow fee is 2%" —
+     *   "commission should be changed to 3%".
+     *
+     *   Before this there was ONE number, `platformFeePercentage: 0.05`, and no
+     *   escrow fee at all. The platform withheld five per cent and could not say
+     *   what part of it was what — while the Farm Nation terms a seller ticks to
+     *   accept said "2.5% commission" and "Escrow Service: 1%". Three different
+     *   answers to one question, one of them in a contract.
+     */
+    commissionPercentage: number;
+    /** The escrow service's cut, as a fraction. Charged on escrowed money. */
+    escrowFeePercentage: number;
+    /**
+     *   What is actually withheld from the seller: commission + escrow.
+     *
+     *   DERIVED, NOT SETTABLE. Seven modules read this to split an order, and a
+     *   third independently-editable number whose value ought to equal the sum
+     *   of the other two is a drift waiting to happen — #271's family, where one
+     *   figure had two expressions and a comment asserting they matched.
+     */
     platformFeePercentage: number;
     minOrderAmount: number;
     maxOrderAmount: number;
@@ -74,6 +96,10 @@ export const DEFAULT_FEES: PlatformFees = {
     // therefore owns its fallbacks. Stating them again here is how two copies
     // of one number start to disagree.
     ...DEFAULT_DELIVERY_FEES,
+    //   3% + 2%. The TOTAL is unchanged at 5%, so no money moves — what changes
+    //   is that the platform can now say which part is which.
+    commissionPercentage: 0.03,
+    escrowFeePercentage: 0.02,
     platformFeePercentage: 0.05,
     minOrderAmount: 500,
     maxOrderAmount: 10000000,
@@ -170,10 +196,23 @@ export const SYSTEM_SETTINGS_FIELDS: readonly SystemSettingField[] = [
     },
 
     // ── the platform's cut and the order bounds ───────────────────────────
+    /*
+     *   #882 TWO SETTABLE RATES WHERE THERE WAS ONE.
+     *
+     *   `platformFeePercentage` is deliberately NOT here any more: it is their
+     *   sum, computed on read, so an admin cannot set a total that disagrees
+     *   with its own parts.
+     */
     {
-        doc: "platform_fees", key: "platformFeePercentage", kind: "rate",
-        label: "Platform fee",
-        help: "The platform's share of a marketplace order, withheld from the seller's escrow release. 0.05 is 5%.",
+        doc: "platform_fees", key: "commissionPercentage", kind: "rate",
+        label: "Commission",
+        help: "The platform's commission, withheld from the seller's escrow release. 0.03 is 3%.",
+        min: 0, max: 0.5,
+    },
+    {
+        doc: "platform_fees", key: "escrowFeePercentage", kind: "rate",
+        label: "Escrow fee",
+        help: "The escrow service's charge on the same amount. 0.02 is 2%.",
         min: 0, max: 0.5,
     },
     {

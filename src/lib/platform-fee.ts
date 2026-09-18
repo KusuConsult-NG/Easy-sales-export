@@ -76,3 +76,49 @@ export function sellerNetFor(grossAmount: unknown, feePercentage: unknown): numb
 
     return gross - platformFeeFor(gross, feePercentage);
 }
+
+/**
+ * The same total, split into the two charges that make it up.
+ *
+ *   #882 THE OWNER: "The commission is 3% and the escrow fee is 2%."
+ *
+ *   The platform withheld one five-per-cent figure and called it a platform
+ *   fee. It is two charges, and the Farm Nation terms a seller ticks to accept
+ *   already itemised them — at different numbers, which is its own defect and
+ *   is corrected alongside this.
+ *
+ * ── THE ESCROW SHARE IS THE REMAINDER, AND THAT IS THE WHOLE POINT ──────────
+ *
+ *   Rounding two shares independently does NOT reliably reproduce the rounded
+ *   total. At a gross of 1,050 with 3% and 2%: round(31.5) = 32, round(21) = 21,
+ *   sum 53 — while the total is round(52.5) = 53. It agrees there and it does
+ *   not always, and the case where it disagrees is #271 exactly: one figure, two
+ *   expressions, and a note claiming they match.
+ *
+ *   So the TOTAL is computed by the existing function that every payout already
+ *   uses, the commission is rounded, and the escrow fee is whatever is left.
+ *   commission + escrow === platformFeeFor(gross, total) by construction, which
+ *   is the property the ledger needs — the seller's net is unchanged and the
+ *   breakdown can never fail to add up.
+ *
+ *   NOTHING HERE CHANGES WHAT ANYBODY IS PAID. It names the parts of a number
+ *   that was already being withheld.
+ */
+export interface FeeSplit {
+    /** The whole withholding — identical to platformFeeFor(gross, total). */
+    total: number;
+    commission: number;
+    escrow: number;
+}
+
+export function feeSplitFor(
+    grossAmount: unknown,
+    fees: { platformFeePercentage?: unknown; commissionPercentage?: unknown } | null | undefined,
+): FeeSplit {
+    const total = platformFeeFor(grossAmount, fees?.platformFeePercentage);
+    if (total <= 0) return { total: 0, commission: 0, escrow: 0 };
+
+    const commission = Math.min(total, platformFeeFor(grossAmount, fees?.commissionPercentage));
+
+    return { total, commission, escrow: total - commission };
+}

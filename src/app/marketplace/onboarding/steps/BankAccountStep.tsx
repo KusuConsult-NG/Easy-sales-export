@@ -96,8 +96,17 @@ export default function BankAccountStep({ data, onChange, onNext, onBack, isSubm
                             <span>Processing time</span>
                             <span className="font-semibold">{MARKETPLACE_CONFIG.processingTimeDays} business days</span>
                         </div>
+                        {/*   #882 Itemised — see lib/constants. */}
                         <div className="flex justify-between items-center">
-                            <span>Platform fee</span>
+                            <span>Commission</span>
+                            <span className="font-semibold">{MARKETPLACE_CONFIG.commission}% per transaction</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Escrow fee</span>
+                            <span className="font-semibold">{MARKETPLACE_CONFIG.escrowFee}% per transaction</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Total withheld</span>
                             <span className="font-semibold">{MARKETPLACE_CONFIG.platformFee}% per transaction</span>
                         </div>
                         <div className="flex justify-between items-center">

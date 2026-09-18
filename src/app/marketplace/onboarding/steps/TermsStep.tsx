@@ -35,7 +35,11 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
             points: [
                 "All transactions protected by escrow",
                 "Payments released after delivery confirmation",
-                `Platform fee: ${MARKETPLACE_CONFIG.platformFee}% per transaction`,
+                //   #882 Itemised: a seller accepting these terms is told what
+                //   the withholding is made of, not just its size.
+                `Commission: ${MARKETPLACE_CONFIG.commission}% per transaction`,
+                `Escrow fee: ${MARKETPLACE_CONFIG.escrowFee}% per transaction`,
+                `Total withheld: ${MARKETPLACE_CONFIG.platformFee}% of each sale`,
                 "Refund policy for disputed orders"
             ]
         },

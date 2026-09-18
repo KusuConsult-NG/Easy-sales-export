@@ -188,3 +188,28 @@ body {
   max-width: 180px;
   width: 100%;
 }
+
+/* ── Leaflet must not paint over the page's own menus ───────────────────────
+ *
+ *   #883 THE NOTIFICATION DROPDOWN OPENED BEHIND THE MAP.
+ *
+ *   THE OWNER: "the dropdown for notification should overlay on the map."
+ *
+ *   Leaflet positions its panes and controls with z-index values of its own —
+ *   400 to 700 for the panes, up to 1000 for the controls — and they are large
+ *   on purpose, because a map is normally the only thing on its layer. The
+ *   notification menu is `z-50`, which is Tailwind's fiftieth step and not a
+ *   competitor at all, so on every screen carrying a map the menu opened
+ *   underneath it.
+ *
+ *   FIXED BY CAPPING THE MAP, not by out-bidding it. Giving the container its
+ *   own stacking context confines every Leaflet z-index INSIDE it, so the
+ *   controls still sit above the tiles and the whole map sits below the page
+ *   chrome. Raising the menu instead would work until the next component
+ *   picked a number, which is how a z-index arms race starts — and this
+ *   codebase has three maps that would each need to be remembered.
+ */
+.leaflet-container {
+  position: relative;
+  z-index: 0;
+}
