@@ -28,7 +28,7 @@ import {
     Waves, Building2, ClipboardCheck, ToggleLeft, BadgeCheck,
     UserX, MessageCircle, ShieldAlert, ChevronLeft, ChevronRight,
     LogOut, X, Settings, Sprout, Zap, IdCard, ShoppingCart,
-    BarChart,
+    BarChart, Handshake,
 } from "lucide-react";
 
 
@@ -149,6 +149,14 @@ const FARM_NATION_NAV: NavItem[] = [
     { name: "Properties",     href: "/farm-nation/properties",    icon: Map },
     { name: "My Purchases",   href: "/farm-nation/my-purchases",  icon: ShoppingCart },
     { name: "My Inquiries",   href: "/farm-nation/inquiries",     icon: MessageSquare },
+    /*
+     *   #874 Ungated for the same reason "My Purchases" and "My Inquiries" are:
+     *   one page carries BOTH sides of a negotiation, so a farmer who has been
+     *   offered a price for her land and a buyer who has offered one both need
+     *   it, and hiding a screen from somebody who has used it is a worse failure
+     *   than showing one that is empty.
+     */
+    { name: "My Offers",      href: "/farm-nation/offers",        icon: Handshake },
     { name: "Map View",       href: "/farm-nation/map",           icon: Map },
     /*
      *   The seller's half. Ungated these sent a buyer to a form she cannot

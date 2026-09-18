@@ -16,7 +16,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import type { CartItem } from "@/lib/types/marketplace";
 import type { ActionResponse } from "@/lib/safe-action";
 import { createNotification } from "@/infrastructure/notifications/service";
-import { validateCartItems, calculateDeliveryFee, estimateCartWeight, nairaToKobo } from "@/lib/marketplace-cart";
+import { validateCartItems, calculateDeliveryFee, estimateCartWeight, nairaToKobo, markQuotesSpent } from "@/lib/marketplace-cart";
 import { checkOrderAmountBounds } from "@/lib/order-payment-amount";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { isOfflineCheckoutEnabled, offlineCheckoutRefusal } from "@/lib/offline-checkout";
@@ -67,7 +67,9 @@ async function _initializeOrderPaymentAction(
             return { error: "Invalid delivery fee", success: false as const, data: null };
         }
 
-        const { subtotal, validatedItems } = await validateCartItems(cartItems);
+        //   #873 `userId` so a line naming an accepted quote can be checked
+        //   against the account that negotiated it.
+        const { subtotal, validatedItems } = await validateCartItems(cartItems, userId);
 
         const fees = await getPlatformFees();
         const calculatedDeliveryFee = calculateDeliveryFee(cartItems, location || {}, fees);
@@ -379,7 +381,7 @@ async function _createBankTransferOrderAction(
             return { error: "Invalid delivery fee", success: false as const, data: null };
         }
 
-        const { subtotal, validatedItems } = await validateCartItems(cartItems);
+        const { subtotal, validatedItems } = await validateCartItems(cartItems, session.user.id);
         const fees = await getPlatformFees();
         const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees);
         const totalAmount = subtotal + calculatedDeliveryFee;
@@ -490,6 +492,27 @@ async function _createBankTransferOrderAction(
         });
 
         // Send low-stock warnings to sellers
+        /*
+         *   #873 The order is written and committed; the agreed prices it used
+         *   are spent. These two doors have no abandonable step after this
+         *   point, unlike the Paystack one — see _payment_verify.ts.
+         *
+         *   ITS OWN try/catch, and #755's ratchet is why. This function's outer
+         *   catch calls restoreReservedStock, so ANYTHING that throws after the
+         *   order has been written puts the units back on the shelf for an order
+         *   that exists — the exact double-count that compensation was added to
+         *   prevent going the other way. Stamping a bookkeeping field is not
+         *   worth a reversed order.
+         */
+        try {
+            await markQuotesSpent(validatedItems, orderId);
+        } catch (markError) {
+            logger.error("[markQuotesSpent] failed after the order was written", {
+                orderId,
+                error: markError instanceof Error ? markError.message : String(markError),
+            });
+        }
+
         for (const p of lowStockProducts) {
             try {
                 const message = p.qty === 0 
@@ -598,7 +621,7 @@ async function _createPaymentOnDeliveryOrderAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
 
-        const { subtotal, validatedItems } = await validateCartItems(cartItems);
+        const { subtotal, validatedItems } = await validateCartItems(cartItems, session.user.id);
         const fees = await getPlatformFees();
         const deliveryFee = calculateDeliveryFee(cartItems, deliveryAddress, fees);
         const totalAmount = subtotal + deliveryFee;
@@ -743,6 +766,27 @@ async function _createPaymentOnDeliveryOrderAction(
         });
 
         // Send low-stock warnings to sellers
+        /*
+         *   #873 The order is written and committed; the agreed prices it used
+         *   are spent. These two doors have no abandonable step after this
+         *   point, unlike the Paystack one — see _payment_verify.ts.
+         *
+         *   ITS OWN try/catch, and #755's ratchet is why. This function's outer
+         *   catch calls restoreReservedStock, so ANYTHING that throws after the
+         *   order has been written puts the units back on the shelf for an order
+         *   that exists — the exact double-count that compensation was added to
+         *   prevent going the other way. Stamping a bookkeeping field is not
+         *   worth a reversed order.
+         */
+        try {
+            await markQuotesSpent(validatedItems, orderId);
+        } catch (markError) {
+            logger.error("[markQuotesSpent] failed after the order was written", {
+                orderId,
+                error: markError instanceof Error ? markError.message : String(markError),
+            });
+        }
+
         for (const p of lowStockProducts) {
             try {
                 const message = p.qty === 0 

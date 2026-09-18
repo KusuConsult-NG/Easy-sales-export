@@ -36,6 +36,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CartItem } from "@/lib/types/marketplace";
 import { deliveryFeeFor, type DeliveryFees } from "@/lib/delivery-fee";
 import { isSellableProductStatus, isSellableFlashSaleStatus } from "@/lib/product-status";
+import { chargeablePrice, quoteRefusal, type QuoteRecord } from "@/lib/quote-negotiation";
+import { FieldValue } from "@/lib/firestore-compat";
 
 /**
  * How many units this listing records, or null when nobody is counting.
@@ -62,24 +64,43 @@ export function nairaToKobo(naira: number): number {
 }
 
 
-export interface ValidatedItem { 
+export interface ValidatedItem {
     productId: string;
     productTitle: string;
     sellerId: string;
     quantity: number;
     unit: string;
     pricePerUnit: number;
-    totalPrice: number; 
+    totalPrice: number;
     isFlashSale?: boolean;
     eventId?: string;
+    /**
+     *   #873 The accepted quote this line was priced from, if any.
+     *
+     *   Carried out so the order can record WHY it was charged less than the
+     *   listing, and so the quote can be marked spent once the order exists.
+     *   A line with no quote does not have the field at all.
+     */
+    quoteId?: string;
+    /** The listed price this line would otherwise have been charged. */
+    listedPricePerUnit?: number;
 }
 
 
 /**
  * Validate Cart Items against Database Prices
  * Returns the calculated subtotal and validated items list
+ *
+ *   `buyerId` is required for any line that names a quote and is otherwise
+ *   unused. It is a PARAMETER rather than a session read because this module is
+ *   deliberately not a "use server" one — see the header — and because the
+ *   caller already has the session; re-deriving it here would be a second
+ *   source of truth for who is buying.
  */
-export async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: number; validatedItems: ValidatedItem[] }> {
+export async function validateCartItems(
+    clientItems: CartItem[],
+    buyerId?: string,
+): Promise<{ subtotal: number; validatedItems: ValidatedItem[] }> {
     let subtotal = 0;
     const validatedItems = [];
 
@@ -266,8 +287,58 @@ export async function validateCartItems(clientItems: CartItem[]): Promise<{ subt
                 || 0;
         }
 
-        // Force DB price for security
-        const effectivePrice = dbPrice;
+        /**
+         *   #873 THE ONE PLACE A BUYER MAY PAY LESS THAN THE LISTING SAYS.
+         *
+         *   Everything above this line exists so that the price comes from the
+         *   database and not from the client, and that does not change here:
+         *   the CLIENT NAMES A QUOTE ID, and the server reads the quote. The
+         *   figure is the seller's own, written by _quote_offers.ts when they
+         *   accepted or countered; nothing in the request contributes to it.
+         *
+         *   REFUSED, NOT SILENTLY REPRICED. A line that names a quote it cannot
+         *   use throws, exactly as an unsellable product or a short stock does.
+         *   Falling back to the list price would charge a total the buyer was
+         *   never shown, which is the defect this whole function is about.
+         *
+         *   Flash-sale lines are excluded: a flash price is already a discount
+         *   the seller set, and stacking a negotiated one on top of it is two
+         *   reductions nobody agreed to together.
+         */
+        let quoteId: string | undefined;
+        let quotedPrice: number | null = null;
+        const namedQuote = typeof item.quoteId === "string" ? item.quoteId.trim() : "";
+
+        if (namedQuote) {
+            if (isFlashSale) {
+                throw new Error(`${productName} is already on a flash-sale price; an agreed price cannot be applied to it`);
+            }
+            if (!buyerId) {
+                //   Reached only if a caller forgets the argument. Refusing is
+                //   the safe direction: without a buyer there is nothing to
+                //   check the quote's ownership against.
+                throw new Error(`An agreed price cannot be applied to ${productName} here`);
+            }
+
+            const quoteSnap = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES).doc(namedQuote).get();
+            const quote = quoteSnap.exists ? (quoteSnap.data() as QuoteRecord) : null;
+            const refusal = quoteRefusal(quote, {
+                buyerId,
+                productId: item.id,
+                quantity,
+                productName,
+                //   The seller the order will actually pay, read from the
+                //   product a few lines above — not the one the cart names.
+                sellerId: String(productData?.sellerId ?? item.sellerId ?? ""),
+            });
+            if (refusal) throw new Error(refusal);
+
+            quoteId = namedQuote;
+            quotedPrice = chargeablePrice(Number(quote!.agreedPrice), dbPrice);
+        }
+
+        // Force DB price for security — unless an accepted quote says less.
+        const effectivePrice = quotedPrice ?? dbPrice;
 
         // Taking the price from the database is not enough on its own — the
         // stored price also has to be a real one.
@@ -300,11 +371,57 @@ export async function validateCartItems(clientItems: CartItem[]): Promise<{ subt
             pricePerUnit: effectivePrice,
             totalPrice: itemTotal,
             isFlashSale: isFlashSale,
-            eventId: productData?.eventId || undefined
+            eventId: productData?.eventId || undefined,
+            ...(quoteId ? { quoteId, listedPricePerUnit: dbPrice } : {}),
         });
     }
 
     return { subtotal, validatedItems };
+}
+
+
+/**
+ * Mark every accepted quote this order spent, so it cannot be spent again.
+ *
+ *   #873 A NEGOTIATED PRICE IS ONE PURCHASE, NOT A STANDING DISCOUNT. Without
+ *   this the buyer could re-use the same agreed figure for a fortnight, which is
+ *   not what a seller agreeing to a price for 500 bags has agreed to.
+ *
+ *   A CHECK, NOT A LOCK, and said plainly because the codebase already says it
+ *   about the duplicate-RFQ guard in _quotes.ts: two orders racing on one quote
+ *   can both read it unspent. That bounds the exposure to one extra order at the
+ *   agreed price, on goods that are paid for and stock that is decremented
+ *   atomically — nobody gets anything free. Making it a real lock would mean a
+ *   transaction across the quote and the order, and the order write is already
+ *   the thing #43-#58 made atomic; adding a second document to it for a discount
+ *   window is a worse trade than this comment.
+ *
+ *   NEVER THROWS. The order exists and is paid for by the time this runs, so a
+ *   failure here must not surface as a failed checkout. It is logged.
+ */
+export async function markQuotesSpent(
+    validatedItems: ValidatedItem[],
+    orderId: string,
+): Promise<void> {
+    const ids = Array.from(new Set(
+        validatedItems.map((i) => i.quoteId).filter((id): id is string => !!id),
+    ));
+
+    for (const id of ids) {
+        try {
+            await db.collection(COLLECTIONS.MARKETPLACE_QUOTES).doc(id).update({
+                consumedByOrderId: orderId,
+                consumedAt: new Date().toISOString(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        } catch (error) {
+            const { logger } = await import("@/lib/logger");
+            logger.error("[markQuotesSpent] Could not mark quote as used", {
+                quoteId: id, orderId,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
 }
 
 

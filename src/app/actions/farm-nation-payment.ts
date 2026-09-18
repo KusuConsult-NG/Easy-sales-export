@@ -16,6 +16,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { PURCHASABLE_STATUSES, isPurchasable, statusAfterCancellation } from "@/lib/land-listing-status";
 import { isAmountAtLeast } from "@/lib/amount";
+import { chargeablePrice, quoteRefusal, type QuoteRecord } from "@/lib/quote-negotiation";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -54,6 +55,16 @@ async function _initializePropertyPaymentAction(
      *   before this is.
      */
     mode?: "buy" | "rent",
+    /**
+     *   #874 AN ACCEPTED OFFER TO BE CHARGED AT INSTEAD OF THE LISTED PRICE.
+     *
+     *   AN ID, NEVER A FIGURE — the same shape as #873's cart lines. The row is
+     *   read below and the amount comes off it, so this parameter cannot lower
+     *   a price by itself: it can only name an agreement the OWNER already
+     *   recorded. Everything else about it is checked by the shared rules in
+     *   lib/quote-negotiation.ts.
+     */
+    offerId?: string,
 ): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> { 
     try {
         const sessionResult = await requireSession();
@@ -171,6 +182,60 @@ async function _initializePropertyPaymentAction(
             return { success: false, error: "You cannot purchase your own property", data: null };
         }
 
+        /*
+         *   #874 AND THE ONE CASE WHERE THE CHARGE IS NOT THE LISTED FIGURE.
+         *
+         *   The buyer names an OFFER; the server reads it. quoteRefusal is the
+         *   same function #873's checkout uses, so the conditions are the same
+         *   ones and there is no second copy of them to drift: it has to be this
+         *   buyer's, on this listing, accepted, unspent and unexpired. A parcel
+         *   is one parcel, so quantity is 1 on both sides.
+         *
+         *   REFUSED, NOT SILENTLY REPRICED. Falling back to the listed price
+         *   would charge somebody the full amount on the screen where they just
+         *   clicked "pay the agreed price" — which is the shape of defect this
+         *   audit spends most of its time removing.
+         *
+         *   AND NEVER ABOVE THE LISTING: chargeablePrice takes the lower of the
+         *   two, so a parcel whose price has fallen since the agreement is sold
+         *   at the lower figure. Nobody is punished for having negotiated.
+         *
+         *   AFTER THE LISTING'''S OWN GATES, deliberately. Being told an agreed
+         *   price has expired on a parcel that is already sold answers the wrong
+         *   question — the buyer would go and renegotiate something that is no
+         *   longer for sale.
+         */
+        let acceptedOfferId: string | undefined;
+        let chargedPrice = listedPrice;
+
+        if (typeof offerId === "string" && offerId.trim() !== "") {
+            const offerSnap = await db.collection(COLLECTIONS.LAND_OFFERS)
+                .doc(offerId.trim()).get();
+            const offer = offerSnap.exists
+                ? (offerSnap.data() as QuoteRecord & Record<string, any>)
+                : null;
+
+            const refusal = quoteRefusal(
+                offer ? { ...offer, productId: String(offer.listingId ?? "") } : null,
+                {
+                    buyerId: session.user.id,
+                    productId: propertyId,
+                    quantity: 1,
+                    productName: listingTitle,
+                    //   The owner the escrow will be credited to, read from the
+                    //   listing. A parcel that has changed hands since the
+                    //   agreement is not the same bargain.
+                    sellerId: listingSellerId,
+                },
+            );
+            if (refusal) return { success: false, error: refusal, data: null };
+
+            acceptedOfferId = offerId.trim();
+            chargedPrice = chargeablePrice(Number(offer!.agreedPrice), listedPrice);
+        }
+
+
+
         /**
          * RESERVE THE PROPERTY BEFORE CHARGING ANYBODY.
          *
@@ -243,7 +308,7 @@ async function _initializePropertyPaymentAction(
         try {
             ({ authorizationUrl, reference } = await initializePaystackPayment(
                 session.user.email || "",
-                nairaToKobo(listedPrice),
+                nairaToKobo(chargedPrice),
                 {
                     userId: session.user.id,
                     propertyId,
@@ -266,7 +331,7 @@ async function _initializePropertyPaymentAction(
             id: purchaseId,
             propertyId,
             propertyName: listingTitle,
-            propertyPrice: listedPrice,
+            propertyPrice: chargedPrice,
             propertyType: propertyData.category || "land",
             /*
              *   #869 WHICH OFFER WAS BOUGHT, on the record.
@@ -277,6 +342,16 @@ async function _initializePropertyPaymentAction(
              *   queue, the seller's notice and any dispute all read this row.
              */
             offerMode: resolvedMode,
+            /*
+             *   #874 AND WHY IT WAS CHARGED LESS, when it was.
+             *
+             *   Same reasoning as offerMode above, and the same reasoning
+             *   #873's order lines carry a quoteId: without it the row says only
+             *   what was paid, and nobody can tell afterwards whether a figure
+             *   below the listing was an agreement or a mistake. It is also what
+             *   the verification step reads to mark the offer spent.
+             */
+            ...(acceptedOfferId ? { acceptedOfferId, listedPrice } : {}),
             buyerId: session.user.id,
             buyerName: buyerInfo.fullName,
             buyerEmail: buyerInfo.email,
@@ -285,7 +360,7 @@ async function _initializePropertyPaymentAction(
             sellerId: listingSellerId,
             sellerName: propertyData.ownerName,
             status: "pending_payment",
-            escrowAmount: listedPrice,
+            escrowAmount: chargedPrice,
             escrowStatus: "pending",
             paymentReference: reference,
             zoningComplianceDeclarationAccepted: true,
@@ -435,6 +510,43 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             buyerEmail: session.user.email || "",
             sellerIdFromMetadata: metadata.sellerId,
         });
+
+        /*
+         *   #874 SPEND THE AGREED PRICE — here, where the money has moved.
+         *
+         *   Not at initialisation: the buyer can walk away from the Paystack
+         *   screen, and burning an agreed price on a purchase that never
+         *   happened would leave them with nothing to show for a negotiation
+         *   they had completed. Same placement, same reason, as the marketplace
+         *   half in _payment_verify.ts.
+         *
+         *   NEVER THROWS. The property is paid for and fulfilled by this line;
+         *   a failure to stamp a bookkeeping field must not surface as a failed
+         *   payment on money that has already moved.
+         */
+        try {
+            //   The purchase row carries the offer it was priced from. Found by
+            //   the payment reference, which is how fulfilPropertyPurchase finds
+            //   the same row — one way in, not a second convention.
+            const purchases = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .where("paymentReference", "==", reference)
+                .limit(1)
+                .get();
+            const purchaseDoc = purchases.docs[0];
+            const offerId = String(purchaseDoc?.data()?.acceptedOfferId || "");
+            if (offerId) {
+                await db.collection(COLLECTIONS.LAND_OFFERS).doc(offerId).update({
+                    consumedByOrderId: purchaseDoc.id,
+                    consumedAt: new Date().toISOString(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+        } catch (markError) {
+            logger.error('[Payment Verification] Could not mark the land offer as used', {
+                reference,
+                error: markError instanceof Error ? markError.message : String(markError),
+            });
+        }
 
         return {
             success: true,

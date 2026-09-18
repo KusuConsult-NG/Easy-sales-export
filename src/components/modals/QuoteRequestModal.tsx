@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Send, Loader2, Package, Calendar, MessageSquare } from "lucide-react";
+import { X, Send, Loader2, Package, Calendar, MessageSquare, Tag } from "lucide-react";
 import { submitQuoteRequestAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -13,6 +13,13 @@ interface QuoteRequestModalProps {
         sellerId: string;
         unit: string;
         sellerName?: string;
+        /**
+         *   #873 The listed price, so the offer field can show what is being
+         *   negotiated against. Display only — the server reads the product's
+         *   own price and refuses an offer above it regardless of what is
+         *   passed here.
+         */
+        listedPrice?: number;
     };
     onClose: () => void;
     theme?: "marketplace" | "export";
@@ -24,6 +31,9 @@ export default function QuoteRequestModal({ isOpen, item, onClose, theme = "mark
     const [quantity, setQuantity] = useState(1);
     const [notes, setNotes] = useState("");
     const [deliveryDate, setDeliveryDate] = useState("");
+    //   #873 Blank means "what would you charge?" — a request with no figure.
+    //   A number means "would you take this?" — an offer the seller can accept.
+    const [offeredPrice, setOfferedPrice] = useState("");
 
     if (!isOpen) return null;
 
@@ -49,7 +59,10 @@ export default function QuoteRequestModal({ isOpen, item, onClose, theme = "mark
                 quantity: quantity,
                 unit: item.unit,
                 notes: notes,
-                preferredDeliveryDate: deliveryDate
+                preferredDeliveryDate: deliveryDate,
+                //   Sent only when the buyer typed one. `undefined` and 0 are
+                //   different things here and the action treats them as such.
+                offeredPrice: offeredPrice.trim() === "" ? undefined : Number(offeredPrice),
             });
 
             if (result.success) {
@@ -111,6 +124,32 @@ export default function QuoteRequestModal({ isOpen, item, onClose, theme = "mark
                             className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${focusRing} transition`}
                             placeholder="Enter quantity"
                         />
+                    </div>
+
+                    {/* Offer Price — #873 */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <Tag className={`w-4 h-4 ${textColor}`} />
+                            Your offer per {item.unit} (Optional)
+                        </label>
+                        <input
+                            type="number"
+                            min="1"
+                            step="any"
+                            value={offeredPrice}
+                            onChange={(e) => setOfferedPrice(e.target.value)}
+                            className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${focusRing} transition`}
+                            placeholder={
+                                typeof item.listedPrice === "number" && item.listedPrice > 0
+                                    ? `Listed at ₦${Number(item.listedPrice).toLocaleString()}`
+                                    : "Name a price, or leave blank to ask for one"
+                            }
+                        />
+                        <p className="text-xs text-slate-500">
+                            Leave this blank to ask the seller for a price. Name a figure and
+                            the seller can accept it outright — you then check out at that
+                            price.
+                        </p>
                     </div>
 
                     {/* Delivery Date */}

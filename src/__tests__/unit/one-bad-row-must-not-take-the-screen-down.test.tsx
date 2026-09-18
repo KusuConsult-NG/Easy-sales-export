@@ -251,6 +251,8 @@ const PROVEN = [
     'wave/live-training',
     'wave/training',
     'wave/application',
+    //   #874's negotiation screen.
+    'farm-nation/offers',
 ];
 
 beforeEach(() => {
@@ -376,8 +378,8 @@ describe('#589 — the ledger of screens proven against a bare document', () => 
     it('EVERY SUBJECT IS NAMED, AND THE FLOOR ONLY GOES UP', () => {
         //   Named rather than counted, so that "N screens are proven" cannot
         //   become true by deleting a test.
-        expect(PROVEN).toHaveLength(83);
-        expect(new Set(PROVEN).size).toBe(83);
+        expect(PROVEN).toHaveLength(84);
+        expect(new Set(PROVEN).size).toBe(84);
         expect(PROVEN.slice(0, 4)).toEqual([
             'cooperatives/directory',
             'export/windows/[id]',

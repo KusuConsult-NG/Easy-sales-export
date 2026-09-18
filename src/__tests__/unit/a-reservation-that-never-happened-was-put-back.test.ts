@@ -112,6 +112,8 @@ jest.mock('@/lib/marketplace-cart', () => ({
     calculateDeliveryFee: () => 500,
     estimateCartWeight: () => 10,
     nairaToKobo: (n: number) => n * 100,
+    //   #873 — the order paths call this once the order is written.
+    markQuotesSpent: async () => undefined,
 }));
 jest.mock('@/lib/system-settings', () => ({
     getPlatformFees: async () => ({ minOrderAmount: 0, maxOrderAmount: 10_000_000, commissionRate: 5 }),

@@ -88,6 +88,51 @@ export default function PropertyDetailsClient({ initial = null }: {
         : property?.price;
     const { showToast } = useToast();
 
+    /*
+     *   #874 THE OFFER FORM. Held here rather than in a modal because the
+     *   figure only means anything beside the price it is an offer against.
+     */
+    const [showOffer, setShowOffer] = useState(false);
+    const [offerAmount, setOfferAmount] = useState("");
+    const [offerNote, setOfferNote] = useState("");
+    const [offerSending, setOfferSending] = useState(false);
+
+    /**
+     *   Send it.
+     *
+     *   try/catch/finally around the await: without the finally a thrown action
+     *   leaves the button reading "Sending…" for ever, which is the defect
+     *   #872's reply box shipped with and the reason this repo ratchets on it.
+     */
+    async function sendOffer() {
+        setOfferSending(true);
+        try {
+            const { makeLandOfferAction } = await import("@/app/actions/land-offers");
+            const result = await makeLandOfferAction({
+                listingId: propertyId,
+                offeredPrice: Number(offerAmount),
+                //   A hint. The action resolves it against the listing's own
+                //   flags, so naming "rent" on a sale-only parcel cannot pick
+                //   the cheaper of two figures.
+                mode: effectiveMode,
+                message: offerNote,
+            });
+
+            if (!result.success) {
+                showToast(result.error || "Could not send your offer.", "error");
+                return;
+            }
+            showToast("Offer sent. You will see the owner's answer under My Offers.", "success");
+            setShowOffer(false);
+            setOfferAmount("");
+            setOfferNote("");
+        } catch (e) {
+            showToast("An unexpected error occurred.", "error");
+        } finally {
+            setOfferSending(false);
+        }
+    }
+
     async function loadProperty() {
         try {
             const result = await getPropertyByIdAction(propertyId);
@@ -540,6 +585,78 @@ export default function PropertyDetailsClient({ initial = null }: {
                                         <Lock className="w-5 h-5" />
                                         {effectiveMode === "rent" ? "Lock Lease/Rental Reservation" : "Lock Land Reservation"}
                                     </button>
+
+                                    {/*
+                                      *   #874 THE OFFER, beside the price it is an offer
+                                      *   against.
+                                      *
+                                      *   THE OWNER: "a buyer wants to ask for discount on
+                                      *   certain product/property". Before this there was
+                                      *   nothing on Farm Nation to ask WITH: the only
+                                      *   buyer-to-owner channel is a land inquiry, which is a
+                                      *   public intake with no account behind it and so
+                                      *   cannot carry money.
+                                      *
+                                      *   Nothing here sets a price. The figure is a proposal
+                                      *   until the OWNER accepts it, and the checkout then
+                                      *   re-reads the row.
+                                      */}
+                                    {!showOffer ? (
+                                        <button
+                                            onClick={() => {
+                                                if (status === "unauthenticated") {
+                                                    router.push(`/auth/register?callbackUrl=/farm-nation/property/${propertyId}`);
+                                                    return;
+                                                }
+                                                setShowOffer(true);
+                                            }}
+                                            className="w-full px-6 py-3 border border-green-600 text-green-700 font-semibold rounded-xl transition hover:bg-green-50"
+                                        >
+                                            Make an offer
+                                        </button>
+                                    ) : (
+                                        <div className="p-4 border border-green-200 bg-green-50/60 rounded-xl space-y-3">
+                                            <label className="block text-sm font-semibold text-slate-800">
+                                                Your offer{effectiveMode === "rent" ? " per term" : ""}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="any"
+                                                value={offerAmount}
+                                                onChange={(e) => setOfferAmount(e.target.value)}
+                                                placeholder={`Listed at ₦${Number(offerPrice || 0).toLocaleString()}`}
+                                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            />
+                                            <textarea
+                                                value={offerNote}
+                                                onChange={(e) => setOfferNote(e.target.value)}
+                                                rows={3}
+                                                placeholder="Anything the owner should know (optional)"
+                                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                                            />
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={sendOffer}
+                                                    disabled={offerSending || offerAmount.trim() === ""}
+                                                    className="grow px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition disabled:bg-slate-300"
+                                                >
+                                                    {offerSending ? "Sending…" : "Send offer"}
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowOffer(false)}
+                                                    disabled={offerSending}
+                                                    className="px-4 py-3 border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-white transition"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-slate-500">
+                                                The owner can accept your figure, send one back, or
+                                                decline. You will see their answer under My Offers.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className={`p-4 border rounded-xl text-center font-bold ${

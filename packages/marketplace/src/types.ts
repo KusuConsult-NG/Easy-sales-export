@@ -185,6 +185,15 @@ export interface CartItem {
     addedAt: FieldValue | Timestamp | Date;
     isFlashSale?: boolean;
     eventId?: string;
+    /**
+     *   #873 An accepted quote this line should be priced from.
+     *
+     *   An ID ONLY. The figure is never carried here — validateCartItems reads
+     *   the quote server-side, checks it belongs to the buyer, is for this
+     *   product and this quantity, is unspent and unexpired, and takes the
+     *   seller's own agreed price off the row. See lib/quote-negotiation.ts.
+     */
+    quoteId?: string;
 }
 
 export interface ShoppingCart {

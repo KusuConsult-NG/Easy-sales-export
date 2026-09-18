@@ -129,6 +129,17 @@ const BARE_ROW_SUBJECTS: [string, string, any][] = [
     ['wave/live-training', '@/app/wave/(member)/live-training/LiveTrainingClient', { initial: [ROW] }],
     ['wave/training', '@/app/wave/(member)/training/WaveTrainingClient', { initial: { membership: ok({ enrolled: true }), events: ok([ROW]), registrations: ok({ registrations: [] }) } }],
     ['wave/application', '@/app/wave/application/WaveApplicationClient', { initial: { status: ok(ROW), application: ok(ROW), access: ok(ROW) } }],
+    /*
+     *   #874's negotiation screen, which is a seeded screen and therefore a
+     *   subject the moment it exists — the ratchet below failed on it before
+     *   this line was written, which is exactly what it is for.
+     *
+     *   Its shape is two lists, so a bare row has to survive on BOTH sides: an
+     *   offer with no price, no title and no status renders as the owner's
+     *   inbox and as the buyer's outbox, and the status pill has to settle on
+     *   something rather than reading `undefined`.
+     */
+    ['farm-nation/offers', '@/app/farm-nation/(member)/offers/OffersClient', { initial: { asBuyer: [ROW], asSeller: [ROW] } }],
 ];
 
 beforeEach(() => {
@@ -136,7 +147,7 @@ beforeEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#599 — the last twenty seeded screens', () => {
+describe('#599 — the last seeded screens', () => {
     for (const [name, mod, props] of BARE_ROW_SUBJECTS) {
         it(`${name} RENDERS A ROW THAT CARRIES ONLY AN ID`, async () => {
             const { default: Screen } = await import(mod);
@@ -146,8 +157,8 @@ describe('#599 — the last twenty seeded screens', () => {
     }
 
     it('AND THIS BATCH IS TWENTY SUBJECTS, NAMED', () => {
-        expect(BARE_ROW_SUBJECTS).toHaveLength(20);
-        expect(new Set(BARE_ROW_SUBJECTS.map(s => s[0])).size).toBe(20);
+        expect(BARE_ROW_SUBJECTS).toHaveLength(21);
+        expect(new Set(BARE_ROW_SUBJECTS.map(s => s[0])).size).toBe(21);
     });
 });
 

@@ -16,6 +16,7 @@ export * from "./_buyer";
 export * from "./_payment_orders";
 export * from "./_payment_verify";
 export * from "./_quotes";
+export * from "./_quote_offers";
 export * from "./_reviews";
 // Escrow types moved to a plain module when _escrow.ts was split; re-exported
 // here because `export * from "./_escrow"` used to carry them.

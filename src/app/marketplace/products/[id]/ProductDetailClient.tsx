@@ -413,7 +413,11 @@ export default function ProductDetailClient({ initial = null }: {
                                 title: product.title,
                                 sellerId: product.sellerId,
                                 unit: product.unit,
-                                sellerName: product.sellerName
+                                sellerName: product.sellerName,
+                                //   #873 The same figure the page displays, so
+                                //   the offer field says what it is a discount
+                                //   from. The server re-reads it.
+                                listedPrice: product.pricingTiers?.[0]?.price,
                             }}
                             theme="marketplace"
                         />

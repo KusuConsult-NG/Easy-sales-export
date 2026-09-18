@@ -18,6 +18,7 @@ import { notifyPaymentReceived } from "@/lib/marketplace-notifications";
 import { withSafeAction } from "@/lib/safe-action";
 import type { ActionResponse } from "@/lib/safe-action";
 import { createNotification } from "@/infrastructure/notifications/service";
+import { markQuotesSpent } from "@/lib/marketplace-cart";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -575,6 +576,31 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 description: `Order #${orderData.orderId} - ${items.length} items`
             });
         });
+
+        /*
+         *   #873 SPEND THE NEGOTIATED PRICES — HERE, NOT AT ORDER CREATION.
+         *
+         *   The Paystack door writes its order at `pending_payment` and the
+         *   buyer may walk away from the card screen. Marking the quote used at
+         *   that point would burn an agreed price on a purchase that never
+         *   happened, and the buyer would come back to find their discount gone
+         *   with nothing to show for it. This is the line where the money is
+         *   actually taken.
+         *
+         *   (The bank-transfer and pay-on-delivery doors mark at creation,
+         *   because those orders exist as commitments the moment they are
+         *   written — there is no abandonable step after them.)
+         */
+        try {
+            await markQuotesSpent(orderData.items || [], orderData.orderId || orderDoc.id);
+        } catch (markError) {
+            //   #755's rule: the money has moved by this line. A failure to
+            //   stamp a bookkeeping field must not surface as a failed payment.
+            logger.error("[markQuotesSpent] failed after payment was verified", {
+                reference,
+                error: markError instanceof Error ? markError.message : String(markError),
+            });
+        }
 
         // Send low-stock warnings to sellers
         for (const p of lowStockProducts) {

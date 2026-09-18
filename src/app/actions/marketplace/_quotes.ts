@@ -9,15 +9,25 @@ import { revalidatePath } from "next/cache";
 import { withSafeAction } from "@/lib/safe-action";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
+import { offerRefusal, positiveNumber } from "@/lib/quote-negotiation";
 
-export interface QuoteRequestData { 
+export interface QuoteRequestData {
     productId: string;
     productName: string;
     sellerId: string;
     quantity: number;
     unit?: string;
     notes?: string;
-    preferredDeliveryDate?: string; 
+    preferredDeliveryDate?: string;
+    /**
+     *   #873 What the buyer is willing to pay per unit.
+     *
+     *   Optional, because the two things a buyer does here are different
+     *   questions and the form asks both: "what would you charge?" is an RFQ
+     *   with no figure, and "would you take ₦900?" is an offer. A seller can
+     *   only ACCEPT the second one; see _quote_offers.ts.
+     */
+    offeredPrice?: number;
 }
 
 /**
@@ -76,6 +86,18 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
         let sellerId: string;
         let productName: string;
         let subjectType: "product" | "export_window";
+        /**
+         *   #873 WHAT THE THING COSTS TODAY, read from the record for exactly
+         *   the reasons sellerId and productName are.
+         *
+         *   It is the ceiling on the whole negotiation: an offer above it is
+         *   refused, a counter above it is refused, and the checkout charges the
+         *   lower of the agreed figure and the CURRENT listing. Stored on the
+         *   quote as well so both screens can show what the discount is against,
+         *   and so an accepted figure can be read months later beside the price
+         *   it was a discount from.
+         */
+        let listedPrice = 0;
 
         const productSnap = await db.collection(COLLECTIONS.PRODUCTS).doc(data.productId).get();
         if (productSnap.exists) {
@@ -86,6 +108,11 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
             }
             productName = String(product.title ?? product.name ?? "this product");
             subjectType = "product";
+            //   The same precedence validateCartItems uses for a retail line:
+            //   the first pricing tier, then the bare price.
+            listedPrice = Number(
+                product.pricingTiers?.[0]?.price ?? product.price ?? 0,
+            );
         } else {
             const windowSnap = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.productId).get();
             if (!windowSnap.exists) {
@@ -113,6 +140,42 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
         const quantity = Number(data.quantity);
         if (!Number.isFinite(quantity) || quantity <= 0) {
             return { success: false as const, error: "Quantity must be a positive number", data: null };
+        }
+
+        /**
+         *   #873 The buyer's figure, checked before anything is written.
+         *
+         *   `offeredPrice` is the one caller-supplied NUMBER this action keeps,
+         *   and it is kept as a PROPOSAL rather than as a price — nothing is
+         *   charged from it until the seller accepts it and the checkout has
+         *   re-read the row. offerRefusal rejects zero, negatives and anything
+         *   above the listing.
+         */
+        const offeredPrice = positiveNumber(data.offeredPrice);
+        const offerProblem = offerRefusal(offeredPrice, listedPrice, data.offeredPrice);
+        if (offerProblem) {
+            return { success: false as const, error: offerProblem, data: null };
+        }
+
+        /*
+         *   AND AN EXPORT WINDOW TAKES NO OFFER.
+         *
+         *   An accepted quote is spendable in the MARKETPLACE CART, and
+         *   validateCartItems refuses an export-window one by design — a
+         *   container booking is not a cart line and has its own flow. So an
+         *   offer accepted here could never be used.
+         *
+         *   Refusing the FIGURE rather than the request: an RFQ against an
+         *   export window is the legitimate case and still works. What would not
+         *   work is a price nobody can act on, which is the defect this whole
+         *   audit keeps finding — a record written that nothing reads.
+         */
+        if (subjectType === "export_window" && offeredPrice !== null) {
+            return {
+                success: false as const,
+                error: "Export windows are quoted by the coordinator. Send your requirements and they will price it.",
+                data: null,
+            };
         }
 
         /**
@@ -176,6 +239,9 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
             // cannot tell a marketplace quote from an export-window one, and
             // the two link to different places.
             subjectType,
+            //   #873 Both from the record above, never from `data`.
+            ...(offeredPrice !== null ? { offeredPrice } : {}),
+            listedPrice,
             quantity,
             buyerId: userId,
             buyerName: session.user.name || "Unknown Buyer",
@@ -190,8 +256,13 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
             // The record's counterparty, not the caller's nominee.
             userId: sellerId,
             type: "marketplace",
-            title: "New Quote Request",
-            message: `You have received a new quote request for "${productName}" from ${session.user.name || "a buyer"}.`,
+            title: offeredPrice !== null ? "A buyer made you an offer" : "New Quote Request",
+            //   #873 The figure belongs in the bell. A seller who has to open a
+            //   screen to find out whether there is a number in it will open it
+            //   once and stop.
+            message: offeredPrice !== null
+                ? `${session.user.name || "A buyer"} offered ₦${offeredPrice.toLocaleString()} for "${productName}".`
+                : `You have received a new quote request for "${productName}" from ${session.user.name || "a buyer"}.`,
             // The LIST, not a per-quote detail page.
             //
             // This linked to `/marketplace/seller/quotes/${quoteRef.id}`, and

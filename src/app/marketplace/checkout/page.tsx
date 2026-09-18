@@ -20,6 +20,24 @@ export const dynamic = 'force-dynamic';
 
 interface LocalCartItem extends Product {
     quantity: number;
+    /**
+     *   #873 An accepted quote this line was added from.
+     *
+     *   `agreedPrice` is DISPLAY ONLY and is never sent anywhere: the checkout
+     *   shows the buyer what they negotiated so the total on the screen matches
+     *   the total they are charged, and the charge itself is derived on the
+     *   server from the quote row. If the two ever disagree, the server's figure
+     *   is the one that is right and the screen is the thing to fix.
+     */
+    quoteId?: string;
+    agreedPrice?: number;
+}
+
+/** What this line actually costs per unit: the negotiated price, or the list. */
+function unitPriceOf(item: LocalCartItem): number {
+    const agreed = Number(item.agreedPrice);
+    if (item.quoteId && Number.isFinite(agreed) && agreed > 0) return agreed;
+    return item.pricingTiers?.[0]?.price || 0;
 }
 
 function estimateCartWeight(items: any[]): number {
@@ -699,6 +717,8 @@ export default function CheckoutPage() {
                     unit: item.unit,
                     selectedTier: item.pricingTiers?.[0]?.type || "retail",
                     addedAt: new Date(),
+                    //   #873 The id only. The server reads the quote.
+                    ...(item.quoteId ? { quoteId: item.quoteId } : {}),
                 }));
                 const res = await calculateDeliveryAction(cartItems, {
                     distance,
@@ -721,7 +741,7 @@ export default function CheckoutPage() {
         fetchFee();
     }, [cart, distance, weight, isWithinCityCenter, showToast]);
 
-    const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers?.[0]?.price || 0) * item.quantity, 0);
+    const subtotal = cart.reduce((sum, item) => sum + unitPriceOf(item) * item.quantity, 0);
 
     async function handlePaystackCheckout() {
         if (!session) {
@@ -779,6 +799,10 @@ export default function CheckoutPage() {
                 unit: item.unit,
                 selectedTier: item.pricingTiers?.[0]?.type || "retail",
                 addedAt: new Date(),
+                //   #873 The id only. The server reads the quote, checks it is
+                //   this buyer's, unspent and unexpired, and takes the seller's
+                //   own agreed figure off the row — nothing here sets a price.
+                ...(item.quoteId ? { quoteId: item.quoteId } : {}),
             }));
 
             // Initialize payment
@@ -858,7 +882,10 @@ export default function CheckoutPage() {
                                 </h2>
                                 <div className="space-y-4">
                                     {cart.map((item) => {
-                                        const price = item.pricingTiers?.[0]?.price || 0;
+                                        const price = unitPriceOf(item);
+                                        //   #873 What it would have cost without the negotiation.
+                                        const listPrice = item.pricingTiers?.[0]?.price || 0;
+                                        const negotiated = !!item.quoteId && price < listPrice;
                                         return (
                                             <div
                                                 key={item.id}
@@ -882,8 +909,37 @@ export default function CheckoutPage() {
                                                     </h3>
                                                     <p className="text-sm text-slate-600 mb-2">
                                                         {formatCurrency(price)} per {item.unit}
+                                                        {negotiated && (
+                                                            <>
+                                                                {" "}
+                                                                <span className="line-through text-slate-400">
+                                                                    {formatCurrency(listPrice)}
+                                                                </span>
+                                                                <span className="ml-2 inline-block px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                                                                    Agreed price
+                                                                </span>
+                                                            </>
+                                                        )}
                                                     </p>
                                                     <div className="flex items-center gap-4">
+                                                        {/*
+                                                          *   #873 A NEGOTIATED LINE'S QUANTITY IS FIXED.
+                                                          *
+                                                          *   The agreed price was agreed for this many —
+                                                          *   a volume price is cheap because of the
+                                                          *   volume — so the server refuses any other
+                                                          *   number. Showing a stepper that produces a
+                                                          *   refusal at the last step is worse than
+                                                          *   showing no stepper and saying why.
+                                                          */}
+                                                        {item.quoteId ? (
+                                                            <span className="text-sm text-slate-600">
+                                                                <span className="font-semibold text-slate-900">
+                                                                    {item.quantity} {item.unit}
+                                                                </span>{" "}
+                                                                — the quantity you agreed
+                                                            </span>
+                                                        ) : (
                                                         <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
                                                             <button
                                                                 type="button"
@@ -903,6 +959,7 @@ export default function CheckoutPage() {
                                                                 <Plus className="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
+                                                        )}
                                                         <button
                                                             type="button"
                                                             onClick={() => handleRemoveProduct(item.id)}

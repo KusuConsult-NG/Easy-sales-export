@@ -570,6 +570,15 @@ export const COLLECTIONS = {
 
     // Additional collections
     LAND_INQUIRIES: "land_inquiries",
+    /**
+     *   #874 A buyer's offer on a parcel, and the owner's answer to it.
+     *
+     *   NOT land_inquiries. An inquiry is a PUBLIC intake — it carries a name,
+     *   an email and a phone number and deliberately no buyerId, which is why
+     *   #872's reply had to go out by email. An offer moves money into escrow,
+     *   so it needs an account on both sides and cannot share that record.
+     */
+    LAND_OFFERS: "land_offers",
     USER_ACTIVITY_LOGS: "user_activity_logs",
     COOPERATIVE_FIXED_SAVINGS: "cooperative_fixed_savings",
     COOPERATIVE_LOAN_PRODUCTS: "cooperative_loan_products",

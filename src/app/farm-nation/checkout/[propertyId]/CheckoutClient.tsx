@@ -52,6 +52,16 @@ export default function CheckoutClient({ initial = null }: {
      */
     const searchParams = useSearchParams();
     const requestedMode = searchParams.get("mode") === "rent" ? "rent" : "buy";
+    /*
+     *   #874 AN ACCEPTED OFFER TO BE CHARGED AT.
+     *
+     *   AN ID OFF THE URL, and that is deliberately all it is. The server reads
+     *   the row and checks it is this buyer's, on this listing, accepted,
+     *   unspent and unexpired — so a pasted id cannot lower anybody's price, it
+     *   can only name an agreement the OWNER already recorded. The same
+     *   treatment `amount` and `mode` already get on this path.
+     */
+    const offerId = searchParams.get("offer") || undefined;
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -182,6 +192,8 @@ export default function CheckoutClient({ initial = null }: {
                 //   listing's own flags — a mode the seller never offered is
                 //   ignored there, not honoured because the URL said so.
                 mode,
+                //   #874 The agreed price, by reference. Never the figure.
+                offerId,
             );
 
             if (result.success ) {
