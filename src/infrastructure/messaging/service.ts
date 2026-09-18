@@ -154,7 +154,83 @@ export async function sendMessage(conversationId: string, userId: string, userNa
         lastMessageAt: FieldValue.serverTimestamp()
     });
 
+    /*
+     *   #870 AND THE PERSON IT WAS SENT TO IS TOLD.
+     *
+     *   THE OWNER: "in-app messages are not delivered, meaning they are not
+     *   properly wired."
+     *
+     *   Measured, and the report is exact. Everything above writes: the message
+     *   row, and `lastMessage` / `lastMessageAt` on the conversation. NOTHING
+     *   notified the recipient — no bell, no email — so a message arrived only
+     *   if the other party happened to open the Messages screen and look. A
+     *   member writing to support, and an admin answering them, were both
+     *   shouting into a room nobody was in.
+     *
+     *   The same defect this audit found in Farm Nation (#862, #863, #864): a
+     *   thing happens and the person it happened to is not told.
+     *
+     *   EVERY OTHER PARTICIPANT, not "the other one". A conversation is an array
+     *   of participants; assuming two would work today and silently notify one
+     *   of three the moment a thread has more.
+     *
+     *   NEVER THROWS. The message is already written by the time this runs, so a
+     *   failed notice must not turn a delivered message into an error the sender
+     *   retries — which would post it twice.
+     */
+    await notifyOtherParticipants(conversation, conversationId, userId, userName, trimmedText);
+
     return { success: true };
+}
+
+/**
+ * Ring the bell for everyone in the thread except the sender. Never throws.
+ */
+async function notifyOtherParticipants(
+    conversation: Conversation,
+    conversationId: string,
+    senderId: string,
+    senderName: string,
+    text: string,
+): Promise<void> {
+    const others = Array.isArray(conversation.participants)
+        ? conversation.participants.filter((id) => id && id !== senderId)
+        : [];
+
+    if (others.length === 0) return;
+
+    //   A preview, not the message. The bell renders in a narrow row and the
+    //   whole point is to get the person to open the thread.
+    const preview = text.length > 90 ? `${text.slice(0, 90)}…` : text;
+
+    await Promise.allSettled(others.map(async (recipientId) => {
+        try {
+            const { createNotification } = await import("@/infrastructure/notifications/service");
+            const result = await createNotification({
+                userId: recipientId,
+                //   In Notification["type"], and what FILTER_TAB_TYPES files
+                //   under "All" — there is no messages tab, and inventing a type
+                //   no tab names would hide the row rather than surface it.
+                type: "info",
+                title: `New message from ${senderName || "a member"}`,
+                message: preview,
+                link: `/messages?c=${conversationId}`,
+                linkText: "Open conversation",
+            } as never);
+
+            //   #394's rule: this RETURNS its failures rather than throwing, so
+            //   an unread result is an invisible one.
+            if (!result?.success) {
+                logger.error("[messaging] could not notify a participant", {
+                    conversationId, recipientId, error: result?.error,
+                });
+            }
+        } catch (error) {
+            logger.error("[messaging] notifying a participant threw", {
+                conversationId, recipientId, error,
+            });
+        }
+    }));
 }
 
 /**

@@ -4,6 +4,18 @@ import { useState, useEffect, useRef } from "react";
 import { startVisibilityAwareInterval } from "@/hooks/usePolling";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useSession } from "next-auth/react";
+//   #870 The same rule the server scopes admins with — see the picker below.
+import { memberModules } from "@/lib/conversation-scope";
+
+/** What a member calls each module, for the support picker. */
+const MODULE_LABEL: Record<string, string> = {
+    wave: "WAVE",
+    cooperative: "Cooperative",
+    academy: "Academy",
+    marketplace: "Marketplace",
+    export: "Export",
+    farmnation: "Farm Nation",
+};
 import { useSearchParams } from "next/navigation";
 import { isSessionExpired } from '@/lib/session-expiry-code';
 import { MessageSquare, Search, Plus, Send, Loader2 } from "lucide-react";
@@ -37,6 +49,25 @@ export default function MessagesClient({ initial = null }: { initial?: Conversat
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
     const [searching, setSearching] = useState(false);
+
+    /**
+     *   #870 THE MODULE THE MEMBER WANTS HELP WITH.
+     *
+     *   Derived from the session's roles with the SAME function the server uses
+     *   to decide which admins are reachable, so the picker can never offer a
+     *   module the action would then refuse. One rule, asked on both sides.
+     */
+    const myModules = memberModules((session?.user?.roles ?? []) as string[]);
+    const [supportModule, setSupportModule] = useState("");
+
+    /*
+     *   Settles on the member's first module once the session arrives, and only
+     *   while nothing has been chosen — so a member who picks Cooperative does
+     *   not have it reset under them on the next render.
+     */
+    useEffect(() => {
+        if (!supportModule && myModules.length > 0) setSupportModule(myModules[0]);
+    }, [supportModule, myModules]);
     /**
      * Why the conversation list needs an error of its own — #310.
      *
@@ -281,7 +312,8 @@ export default function MessagesClient({ initial = null }: { initial?: Conversat
     // Start Support conversation
     async function handleStartSupportConversation() {
         setSearching(true);
-        const result = await startSupportConversationAction();
+        //   #870 WHICH MODULE. See the picker below for why this is asked.
+        const result = await startSupportConversationAction(supportModule || undefined);
         setSearching(false);
         if (isSessionExpired(result)) return;
         if (!result.conversationId) {
@@ -347,11 +379,52 @@ export default function MessagesClient({ initial = null }: { initial?: Conversat
                                 />
                             </div>
 
+                            {/*
+                              *   #870 WHICH ADMIN THE MEMBER ACTUALLY WANTS.
+                              *
+                              *   THE OWNER: "a user tries to message an admin and
+                              *   other admin pops up not the module admin."
+                              *
+                              *   This button called startSupportConversationAction
+                              *   with NO argument. The action then falls back to
+                              *   `memberModules(roles)[0]` — the first module in the
+                              *   member's ROLE ARRAY, whose order is whatever
+                              *   arrayUnion happened to produce. So a member of two
+                              *   modules reached whichever admin their roles were
+                              *   written in, and the screen gave them no way to say
+                              *   otherwise.
+                              *
+                              *   The action's own scoping is sound and untouched: it
+                              *   still refuses a module the member does not belong
+                              *   to (#752), so this only lets them CHOOSE among
+                              *   their own.
+                              *
+                              *   Shown only when there is a choice to make. One
+                              *   module needs no question, and a picker with a
+                              *   single option is furniture.
+                              */}
+                            {myModules.length > 1 && (
+                                <select
+                                    value={supportModule}
+                                    onChange={(e) => setSupportModule(e.target.value)}
+                                    aria-label="Which module do you need help with?"
+                                    className="w-full mt-3 p-3 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {myModules.map((m) => (
+                                        <option key={m} value={m}>
+                                            {MODULE_LABEL[m] ?? m}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
                             <button
                                 onClick={handleStartSupportConversation}
                                 className="w-full mt-3 p-3 bg-blue-50 text-blue-700 font-semibold rounded-lg hover:bg-blue-100 transition-colors text-sm text-center"
                             >
-                                Contact Admin Support
+                                {myModules.length > 1
+                                    ? `Contact ${MODULE_LABEL[supportModule] ?? "Admin"} Support`
+                                    : "Contact Admin Support"}
                             </button>
 
                             {searching && <div className="mt-2 text-sm text-slate-500">Searching...</div>}
