@@ -39,6 +39,7 @@ import NotificationCenter from "./NotificationCenter";
 import { hasAppAccess } from "@/lib/role-app-mapping";
 import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
+import { LAND_SELLER_ROLES } from "@/lib/role-app-mapping";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getMyUnreadMessageCount } from "@/app/actions/my-data";
 import { usePolling } from "@/hooks/usePolling";
@@ -169,8 +170,37 @@ const FARM_NATION_NAV: NavItem[] = [
      *   in a buyer's hands is a dead end, a buyer tool in a seller's hands is
      *   just unused.
      */
-    { name: "My Properties",  href: "/farm-nation/my-properties", icon: Tractor, rolesAny: ["farmer"] },
-    { name: "List Land",      href: "/farm-nation/list-land",     icon: Leaf,    rolesAny: ["farmer"] },
+    /**
+     *   #878 A LIST OF YOUR OWN THINGS IS NOT A SELLER TOOL.
+     *
+     *   This carried `rolesAny: ["farmer"]`, and the note above explains why the
+     *   gate exists — it keeps a buyer out of a form she cannot complete. That
+     *   reasoning covers "List Land". It does not cover this: the screen shows
+     *   what YOU listed, scoped server-side by `ownerId == session.user.id`, so
+     *   to a buyer it is an empty page and to a seller it is their inventory.
+     *
+     *   The rule is already written twice in this file, and this entry is the
+     *   one that does not follow it: "hiding a screen from somebody who has used
+     *   it is a worse failure than showing one that is empty."
+     *
+     *   AND THE GATE READ A TOKEN, NOT THE DATABASE. `roles` here comes from
+     *   useSession(), which is the JWT — #532's subject. A seller who has just
+     *   onboarded holds `farmer` in the users table and not yet in their token,
+     *   so the two screens that let them manage their land stayed hidden until
+     *   they signed out and back in. That is precisely "couldn't see the
+     *   properties they listed".
+     */
+    { name: "My Properties",  href: "/farm-nation/my-properties", icon: Tractor },
+    /*
+     *   THE FORM KEEPS ITS GATE — a buyer cannot complete it — but not the
+     *   narrow spelling of it. `land_owner` is a Farm Nation role everywhere
+     *   else that decides this question: module-access-check, permissions,
+     *   schema-normalizer, role-app-mapping and DashboardNav all say
+     *   `farmer | land_owner`. #858 named "Farm Nation's two roles" as farmer
+     *   and investor and missed the third, so somebody the whole platform
+     *   treats as a landowner could enter the module and not list land.
+     */
+    { name: "List Land",      href: "/farm-nation/list-land",     icon: Leaf,    rolesAny: LAND_SELLER_ROLES },
 ];
 
 const MARKETPLACE_NAV: NavItem[] = [
@@ -198,7 +228,33 @@ const MARKETPLACE_NAV: NavItem[] = [
      */
     { name: "Analytics",         href: "/marketplace/seller/analytics", icon: BarChart, sellerOnly: true },
 
-    { name: "My Products",       href: "/marketplace/products",       icon: Package,  sellerOnly: true },
+    /**
+     *   #877 THIS POINTED AT THE PUBLIC CATALOGUE.
+     *
+     *   THE OWNER: "The seller couldn't see the properties they listed incase
+     *   they want to make adjustments and this is applicable to other features
+     *   that users list products."
+     *
+     *   `/marketplace/products` is MarketplaceProductsPage — everybody's
+     *   products, fed by getMarketplaceProductsAction. The seller's own list is
+     *   `/marketplace/seller/products`, fed by getSellerProductsAction, and it
+     *   is where the edit and delete doors are.
+     *
+     *   So the one entry in a seller's sidebar called "My Products" took them
+     *   to the shop floor. Their own list was reachable from three places, none
+     *   of them navigation: the EMPTY STATE of the quotes page, a redirect
+     *   after editing a product they had already opened, and
+     *   marketplace/seller/MarketplaceSidebar.tsx — the component #384 already
+     *   recorded as unrendered.
+     *
+     *   WHICH MAKES THIS #384 AGAIN. That finding is about entries lost when the
+     *   seller nav moved from MarketplaceSidebar into this file; it found
+     *   Analytics missing and restored it. "My Products" came across with its
+     *   LABEL and the wrong href, so a grep for the route still found it and the
+     *   entry still read as present. A half-migrated line is harder to see than
+     *   a missing one.
+     */
+    { name: "My Products",       href: "/marketplace/seller/products", icon: Package,  sellerOnly: true },
 ];
 
 const EXPORT_NAV: NavItem[] = [

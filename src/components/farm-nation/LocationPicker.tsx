@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 //   #868 The bounding box and the centre live in lib, not here: importing this
 //   component to check four numbers drags Leaflet and a DOM in behind them.
 import { NIGERIA_CENTRE, isWithinNigeria } from "@/lib/nigeria-bounds";
+import { NIGERIAN_STATE_COORDINATES } from "@/lib/locations";
 
 /**
  * Pick a point on a map instead of typing two numbers.
@@ -58,6 +59,23 @@ export interface LocationPickerProps {
     /** Both together, because a half-set coordinate places nothing. */
     onChange: (next: { latitude: string; longitude: string }) => void;
     /**
+     *   #880 THE STATE THE SELLER ALREADY CHOSE.
+     *
+     *   THE OWNER: "The location picker is hardcoding a location."
+     *
+     *   It was not writing a hardcoded VALUE — the marker follows the two
+     *   number fields and there is no marker at all until there is a
+     *   coordinate. What it did was OPEN IN THE SAME PLACE EVERY TIME: the
+     *   build effect centres on NIGERIA_CENTRE at zoom 6, and nothing ever
+     *   moved it. A seller who had just picked Kano, then Kano's LGA, was
+     *   shown the middle of the country and had to find their own land by
+     *   dragging — and a map that always shows one spot is a map that looks
+     *   hardcoded, because from the seller's side it is.
+     *
+     *   Optional: the browse map mounts this component with no form behind it.
+     */
+    state?: string;
+    /**
      *   #871 THE SAME MAP, SHOWING rather than asking.
      *
      *   THE OWNER: "where users have coordinates of latitude and longitude, the
@@ -79,7 +97,7 @@ export interface LocationPickerProps {
 const fmt = (n: number) => n.toFixed(6);
 
 export default function LocationPicker({
-    latitude, longitude, onChange, readOnly = false,
+    latitude, longitude, onChange, readOnly = false, state,
 }: LocationPickerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
@@ -142,6 +160,31 @@ export default function LocationPicker({
             markerRef.current = null;
         };
     }, []);
+
+    /**
+     *   #880 OPEN WHERE THE SELLER SAID THE LAND IS.
+     *
+     *   Centres on the chosen state, and DEFERS TO A REAL COORDINATE: once
+     *   there is a pin, the pin is the answer and re-centring would drag the
+     *   seller away from the point they just placed. So this runs only while
+     *   `hasPoint` is false — picking a state moves the view, dropping a pin
+     *   ends the moving.
+     *
+     *   NIGERIAN_STATE_COORDINATES already exists in lib/locations.ts and the
+     *   marketplace checkout already geocodes against it; a second table of
+     *   state centroids would be a second thing to keep correct.
+     */
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || hasPoint) return;
+
+        const key = Object.keys(NIGERIAN_STATE_COORDINATES)
+            .find((s) => s.toLowerCase() === String(state ?? "").trim().toLowerCase());
+        if (!key) return;
+
+        const { lat: sLat, lng: sLng } = NIGERIAN_STATE_COORDINATES[key];
+        map.setView([sLat, sLng], 9);
+    }, [state, hasPoint]);
 
     //   The marker follows the VALUES, not the clicks, so typing into the two
     //   number fields moves the pin exactly as clicking does. One source of

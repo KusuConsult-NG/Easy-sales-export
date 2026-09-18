@@ -701,6 +701,10 @@ export default function ListLandPage() {
                                         <LocationPicker
                                             latitude={formData.latitude}
                                             longitude={formData.longitude}
+                                            //   #880 The map opens on the state the seller
+                                            //   already chose, instead of the middle of the
+                                            //   country every time.
+                                            state={formData.state}
                                             onChange={({ latitude, longitude }) =>
                                                 setFormData(prev => ({ ...prev, latitude, longitude }))}
                                         />

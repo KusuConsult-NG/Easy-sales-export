@@ -94,11 +94,41 @@ describe('#858 — the buyer gets her own screen', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#858 — and the seller tools are gated on a Farm Nation role', () => {
-    it('BOTH SELLER ENTRIES NAME `farmer`', () => {
-        for (const name of ['List Land', 'My Properties']) {
-            expect({ name, gated: navEntry(name).includes('rolesAny: ["farmer"]') })
-                .toEqual({ name, gated: true });
-        }
+    it('THE FORM IS GATED — and the LIST is not, which #878 corrected', () => {
+        /*
+         *   THIS ASSERTED BOTH, AND ONE OF THEM WAS WRONG.
+         *
+         *   #858's reasoning covers "List Land": it is the seller's create form
+         *   and a buyer cannot complete it. For "My Properties" the whole
+         *   argument above is "her own listings, of which she has none by
+         *   definition" — tidiness, not safety, and it contradicts the rule this
+         *   same suite pins four tests up: "hiding a screen from somebody who
+         *   has used it is the worse failure".
+         *
+         *   THE OWNER, on #878: "The seller couldn't see the properties they
+         *   listed incase they want to make adjustments." That is the cost of
+         *   the over-application, and this suite had already named the hazard —
+         *   "gating on a role nobody is granted would hide the seller's tools
+         *   from the seller" — one test below. The role IS granted; the token
+         *   is what lags, because `roles` there is the JWT (#532), so a seller
+         *   who had just onboarded was locked out until re-login.
+         *
+         *   The list is scoped by `ownerId == session.user.id` on the server, so
+         *   ungating it shows a buyer an empty page and shows a seller their
+         *   inventory.
+         */
+        expect(navEntry('My Properties')).not.toContain('rolesAny');
+
+        /*
+         *   And the form keeps its gate, in the spelling the rest of the
+         *   platform uses — `land_owner` is a Farm Nation role in APP_TO_ROLES,
+         *   permissions, schema-normalizer, role-app-mapping and DashboardNav,
+         *   and this file's header names only farmer and investor.
+         */
+        expect(navEntry('List Land')).toContain('rolesAny: LAND_SELLER_ROLES');
+
+        const { LAND_SELLER_ROLES } = require('@/lib/role-app-mapping');
+        expect([...LAND_SELLER_ROLES].sort()).toEqual(['farmer', 'land_owner']);
     });
 
     it('AND THE FILTER ACTUALLY ENFORCES rolesAny', () => {

@@ -12,6 +12,7 @@ import { csvDocument } from "@/lib/csv-safe";
 import { formatShortDateOrDash } from "@/lib/date-utils";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import { statText } from "@/lib/admin-stat-display";
+import { readLandLocation, landLocationText } from "@/lib/land-location";
 
 type LandVerification = {
     id: string;
@@ -559,9 +560,29 @@ export default function AdminLandVerificationPage() {
                                                                 : String(verification.category || "—").replace(/_/g, " ")))}
                                                 </p>
                                             </td>
+                                            {/*
+                                              *   #879 READ THROUGH THE SHARED READER.
+                                              *
+                                              *   THE OWNER: "on the form Admin can't see state and LGA,
+                                              *   they are blank pages."
+                                              *
+                                              *   These read `verification.state` and `verification.lga`
+                                              *   at the TOP LEVEL. The listing form writes them NESTED —
+                                              *   `location: { state, lga, address }` — and this file's own
+                                              *   interface declares `location?: { state; lga; address }`.
+                                              *   So the column rendered two empty strings on every row.
+                                              *
+                                              *   readLandLocation is #689's answer to exactly this: one
+                                              *   reader for the four shapes this collection holds, nested
+                                              *   and flat among them.
+                                              */}
                                             <td className="px-6 py-4">
-                                                <p className="text-sm text-slate-900">{verification.state}</p>
-                                                <p className="text-xs text-slate-500">{verification.lga}</p>
+                                                <p className="text-sm text-slate-900">
+                                                    {readLandLocation(verification).state || "—"}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {readLandLocation(verification).lga || "—"}
+                                                </p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <p className="text-sm font-semibold text-slate-900">{verification.size} {verification.unit}</p>
@@ -700,7 +721,13 @@ export default function AdminLandVerificationPage() {
                                                                         ? (selectedVerification.category.label || JSON.stringify(selectedVerification.category))
                                                                         : String(selectedVerification.category || "—").replace(/_/g, " ")))}
                                                         </p></div>
-                                                        <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold text-slate-900">{selectedVerification.state}, {selectedVerification.lga}</p></div>
+                                                        {/*
+                                                          *   #879 The same defect on the panel an admin
+                                                          *   APPROVES from, where it rendered a bare ", ".
+                                                          *   Joined by the shared helper so a missing LGA
+                                                          *   does not leave a dangling comma either.
+                                                          */}
+                                                        <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold text-slate-900">{landLocationText(selectedVerification) || "—"}</p></div>
                                                         <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold text-slate-900">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>
                                                         {selectedVerification.gpsCoordinates && (
                                                             <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold text-slate-900">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>

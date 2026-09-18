@@ -814,3 +814,16 @@ export async function checkModuleAccess(
         return false;
     }
 }
+
+
+//   #880 LAND_SELLER_ROLES moved to role-app-mapping.
+//
+//   It was declared here first, and `the-app-can-still-be-built` refused it:
+//   this module imports cache-invalidation, which imports next/cache, so a
+//   CLIENT component importing a constant from here drags a server-only module
+//   into the browser bundle. #382's ratchet, doing exactly its job.
+//
+//   The constant is DATA, not behaviour, and role-app-mapping is where the
+//   platform's role tables already live — pure, and already a client-safe
+//   dependency of ModuleSidebar, which imports hasAppAccess from it.
+export { LAND_SELLER_ROLES } from "@/lib/role-app-mapping";

@@ -315,3 +315,26 @@ export function getPrimaryApp(rawUserRoles: UserRole[]): string {
     // Absolute fallback — no apps at all
     return "/";
 }
+
+
+/**
+ * The Farm Nation roles that mean "this person LISTS land", not "buys it".
+ *
+ *   #878 NAMED ONCE, because naming it by hand is what went wrong.
+ *
+ *   module-access-check's APP_TO_ROLES says Farm Nation is
+ *   `["farmer", "land_owner", "investor"]`, and permissions.ts,
+ *   schema-normalizer.ts, DashboardNav.tsx and this file's own canAccessEscrow
+ *   and modulePriorityOrder all repeat the same three. ModuleSidebar's seller
+ *   entries said `["farmer"]` alone — #858 described "Farm Nation's two roles"
+ *   as farmer and investor, and the third was simply not in view.
+ *
+ *   This is the SELLER subset: `investor` is deliberately absent, because the
+ *   entry it gates is a form a buyer cannot complete.
+ *
+ *   HERE rather than beside APP_TO_ROLES: that module imports cache-invalidation
+ *   and therefore next/cache, so a client component importing from it pulls a
+ *   server-only module into the browser. This file is pure and ModuleSidebar
+ *   already depends on it.
+ */
+export const LAND_SELLER_ROLES: readonly UserRole[] = ["farmer", "land_owner"];
