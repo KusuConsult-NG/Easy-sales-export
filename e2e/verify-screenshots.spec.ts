@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { loginAs, USERS } from './helpers/auth';
 import { mkdirSync } from 'fs';
+import { execFileSync } from 'child_process';
 
 /**
  * Screenshots of every screen this audit changed, for the owner to verify.
@@ -22,6 +23,106 @@ const OUT = 'screenshots';
 
 test.beforeAll(() => {
     mkdirSync(OUT, { recursive: true });
+
+    /*
+     *   A LISTING THAT ACTUALLY HAS THE DATA THESE SHOTS ARE ABOUT.
+     *
+     *   Two of the screens only appear when a listing carries something: #871's
+     *   map needs `gpsCoordinates`, and #867's Hot Deal badge needs a recent
+     *   price cut. The seeded plots have neither, so photographing them proved
+     *   the GUARDS — no coordinates, no map — and not the features.
+     *
+     *   Seeded HERE rather than by hand, because the Playwright global setup
+     *   reseeds the database before every run and wiped anything prepared
+     *   outside it. Local stack only; it reaches nothing but 127.0.0.1.
+     *
+     *   Best-effort: if psql is unavailable the shots still run and simply show
+     *   the guards, which is the honest fallback rather than a failed suite.
+     */
+    try {
+        execFileSync('psql', [
+            '-h', '127.0.0.1', '-p', '54322', '-U', 'postgres', '-d', 'postgres', '-tAc',
+            `update document_collections
+               set raw_data = raw_data
+                 || jsonb_build_object('previousPrice', 6250000)
+                 || jsonb_build_object('priceReducedAt',
+                      to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+                 || jsonb_build_object('gpsCoordinates',
+                      jsonb_build_object('latitude', 6.212, 'longitude', 7.153))
+             where collection_name = 'land_listings'
+               and raw_data->>'title' = 'E2E Farmland Plot 2';`,
+        ], { env: { ...process.env, PGPASSWORD: 'postgres' }, stdio: 'pipe' });
+    } catch {
+        //   Nothing to do: the shots below degrade to showing the guards.
+    }
+
+    /*
+     *   #870's support picker only appears for a member of MORE THAN ONE module
+     *   — one module needs no question. Every seeded persona belongs to exactly
+     *   one, so the seller is given the farmer role here to make the choice real.
+     *   Local stack only.
+     */
+    try {
+        execFileSync('psql', [
+            '-h', '127.0.0.1', '-p', '54322', '-U', 'postgres', '-d', 'postgres', '-tAc',
+            /*
+             *   BOTH COPIES, and this is not belt-and-braces.
+             *
+             *   `users` is a dedicated table: `roles` is a native column AND it
+             *   lives in raw_data. Queries filter on the COLUMN; doc.data()
+             *   returns raw_data and falls back to the column only when the key
+             *   is absent — deliberate, documented in supabase-db, and the same
+             *   on both read paths.
+             *
+             *   Every application write goes through buildDedicatedRow, which
+             *   writes the two from one object, so they cannot disagree. RAW SQL
+             *   CAN. Updating the column alone produced a user who matched
+             *   `array-contains 'farmer'` and came back without the role — which
+             *   failed #472's DB test against correct code.
+             */
+            `update users
+                set roles = array(select distinct unnest(roles || array['farmer'])),
+                    raw_data = jsonb_set(raw_data, '{roles}',
+                                 to_jsonb(array(select distinct unnest(
+                                     roles || array['farmer']))))
+              where email = 'e2e.seller@easysalesexport.com';`,
+        ], { env: { ...process.env, PGPASSWORD: 'postgres' }, stdio: 'pipe' });
+    } catch {
+        //   The picker then simply will not render, which the shot will show.
+    }
+
+    /*
+     *   #872's reply box is on an inquiry, and the seed has never written one —
+     *   an enquiry is something a member of the public sends, so nothing in the
+     *   fixtures creates it. Without a row the screen shows "No Inquiries Yet",
+     *   which photographs the empty state and not the finding.
+     *
+     *   Written as an ISO string because that is what every other row in this
+     *   table holds: the Postgres adapter serialises serverTimestamp() that way,
+     *   and the list orders by it.
+     */
+    try {
+        execFileSync('psql', [
+            '-h', '127.0.0.1', '-p', '54322', '-U', 'postgres', '-d', 'postgres', '-tAc',
+            `insert into document_collections (id, collection_name, raw_data)
+             values ('e2e-inquiry-1', 'land_inquiries', jsonb_build_object(
+                 'listingId', 'e2e-listing-1',
+                 'listingTitle', 'E2E Farmland Plot 1',
+                 'listingOwnerId', (select id from users
+                                     where email = 'e2e.seller@easysalesexport.com'),
+                 'buyerName', 'Emeka Nwosu',
+                 'buyerEmail', 'emeka@example.com',
+                 'buyerPhone', '08040000000',
+                 'message', 'Is the borehole working, and can I inspect it this weekend?',
+                 'status', 'pending',
+                 'read', false,
+                 'createdAt', to_char(now() at time zone 'UTC',
+                                      'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+             on conflict (id, collection_name) do nothing;`,
+        ], { env: { ...process.env, PGPASSWORD: 'postgres' }, stdio: 'pipe' });
+    } catch {
+        //   The list then shows its empty state, which the shot will show.
+    }
 });
 
 /** Settle the page: fonts, images and any client fetch the screen makes. */
@@ -106,15 +207,14 @@ test.describe('what the owner sees', () => {
         await page.goto('/admin/farm-nation/land-verification');
         await shot(page, '08-admin-land-verification');
 
-        //   Open the first row so the dispatch tab and its new fields show.
-        //   Best-effort: the queue may be empty on a fresh local database, and a
-        //   missing row is not a failure of the thing being photographed.
-        const row = page.locator('tbody tr, [data-testid="verification-row"]').first();
-        if (await row.isVisible({ timeout: 5000 }).catch(() => false)) {
-            await row.click().catch(() => undefined);
-            await page.getByText(/Inspector Dispatch/i).first().click().catch(() => undefined);
+        //   Open the first submission so the property details the inspector is
+        //   sent are visible. The row itself is not clickable — Review is the
+        //   door, which is why clicking the row photographed the queue twice.
+        const review = page.getByRole('button', { name: /Review/i }).first();
+        if (await review.isVisible({ timeout: 8000 }).catch(() => false)) {
+            await review.click().catch(() => undefined);
             await settle(page);
-            await page.screenshot({ path: `${OUT}/09-admin-inspector-dispatch.png`, fullPage: true })
+            await page.screenshot({ path: `${OUT}/09-admin-verification-details.png`, fullPage: true })
                 .catch(() => undefined);
         }
     });
@@ -128,5 +228,61 @@ test.describe('what the owner sees', () => {
     test('#869 — the Farm Nation map', async ({ page }) => {
         await page.goto('/farm-nation/map');
         await shot(page, '11-farm-nation-map');
+    });
+
+    test('#870 — the messages screen and its support picker', async ({ page }) => {
+        await loginAs(page, USERS.seller.email, USERS.seller.password);
+        await page.goto('/messages');
+        await settle(page);
+        //   The picker and the Contact Support button live behind New Chat.
+        await page.getByRole('button', { name: 'New conversation' })
+            .click().catch(() => undefined);
+        await shot(page, '12-messages-support-picker');
+    });
+
+    test('#872 — an inquiry can be answered', async ({ page }) => {
+        await loginAs(page, USERS.seller.email, USERS.seller.password);
+        await page.goto('/farm-nation/inquiries');
+        await shot(page, '13-inquiries-list');
+
+        //   Open the first one if the local database has any; the reply box is
+        //   on the detail screen.
+        const first = page.locator('a[href*="/farm-nation/inquiries/"]').first();
+        if (await first.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await first.click().catch(() => undefined);
+            await settle(page);
+            //   The page scrolls inside its own pane, so a full-page shot stops
+            //   at the viewport and cuts the reply box in half. Bring it up.
+            await page.getByPlaceholder(/Answer their question/i).first()
+                .scrollIntoViewIfNeeded().catch(() => undefined);
+            await shot(page, '14-inquiry-reply-box');
+        }
+    });
+
+    test('#871 — coordinates on the property details page', async ({ page }) => {
+        await page.goto('/farm-nation/properties');
+        await settle(page);
+        const view = page.getByRole('link', { name: /View Details/i }).first();
+        if (await view.isVisible({ timeout: 8000 }).catch(() => false)) {
+            await view.click().catch(() => undefined);
+            await shot(page, '15-property-details-map');
+        }
+    });
+
+    test('#864 — the admin dispatch and report panel', async ({ page }) => {
+        await loginAs(page, USERS.admin.email, USERS.admin.password);
+        await page.goto('/admin/farm-nation/land-verification');
+        await settle(page);
+
+        //   Review opens the submission; the dispatch form is behind its second
+        //   tab, which is where #862's inspector email and #864's gate live.
+        const review = page.getByRole('button', { name: /Review/i }).first();
+        if (await review.isVisible({ timeout: 8000 }).catch(() => false)) {
+            await review.click().catch(() => undefined);
+            await settle(page);
+            await page.getByRole('button', { name: /Inspector Dispatch/i })
+                .first().click().catch(() => undefined);
+            await shot(page, '16-admin-inspector-dispatch');
+        }
     });
 });

@@ -358,8 +358,17 @@ export default function MessagesClient({ initial = null }: { initial?: Conversat
                 <div className="p-4 border-b border-slate-200">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-slate-900">Messages</h2>
+                        {/*
+                          *   #870 An icon-only button with no accessible name is
+                          *   announced as "button" and nothing else, so a screen
+                          *   reader user cannot tell what it opens. It is also
+                          *   unfindable by role, which is how a screenshot run
+                          *   ended up clicking something else entirely.
+                          */}
                         <button
                             onClick={toggleNewChat}
+                            aria-label="New conversation"
+                            aria-expanded={showNewChat}
                             className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
                         >
                             <Plus className="w-5 h-5 text-slate-600" />
