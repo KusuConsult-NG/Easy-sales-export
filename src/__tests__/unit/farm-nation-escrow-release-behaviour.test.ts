@@ -248,13 +248,37 @@ describe('releaseFarmNationEscrowAction', () => {
         expect(property().soldAt).toBeTruthy();
     });
 
-    it('marks a lease as leased rather than sold', async () => {
+    it('marks a lease as leased rather than sold, AND LEAVES THE TITLE ALONE', async () => {
+        /*
+         *   #876 THIS ASSERTED `ownerId: BUYER`, AND THAT WAS THE DEFECT
+         *   WRITTEN DOWN.
+         *
+         *   Not a decision anybody made — this suite's header is about #141 (the
+         *   seller was never paid) and #142 (bank details), and nothing anywhere
+         *   reasoned about ownership on a lease. The assertion recorded what the
+         *   code did, which is what a characterisation test does when the code
+         *   is wrong.
+         *
+         *   A lease here is a TENANCY FOR A TERM, not a transfer: the money path
+         *   has only two outcomes, `offersRental = availableForRent ||
+         *   availableForLease`, it is priced from `rentPrice`, and #861 added
+         *   `durationValue`/`durationUnit` because "'₦2m' for a season and '₦2m'
+         *   for ten years are different offers". A landowner does not stop
+         *   owning land they let.
+         *
+         *   And `ownerId` is what this platform means by whose land it is:
+         *   /farm-nation/my-properties queries it and _fn_listings gates EDITING
+         *   on it, so transferring it took the parcel out of the owner's
+         *   dashboard and gave the tenant the right to edit the listing.
+         */
         seedProperty({ type: 'lease' });
 
         await release();
 
-        expect(property()).toMatchObject({ status: 'leased', ownerId: BUYER });
+        expect(property()).toMatchObject({ status: 'leased', ownerId: SELLER });
         expect(property().leasedAt).toBeTruthy();
+        //   The tenancy is recorded, which is what makes not transferring safe.
+        expect(property().leasedToId).toBe(BUYER);
     });
 
     it('closes the transaction and its escrow', async () => {

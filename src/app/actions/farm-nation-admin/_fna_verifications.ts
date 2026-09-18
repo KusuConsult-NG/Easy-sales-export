@@ -443,6 +443,17 @@ async function _updateAdminLandListingAction(data: {
             "payment_confirmed",
             "pending_transfer",
             "sold",
+            /*
+             *   #876 `leased` belongs here and was missing from both copies.
+             *
+             *   The list is "terms nobody may move now", and a LEASED parcel is
+             *   exactly that: a tenant is paying against a size, a price and a
+             *   category that were agreed. Only "sold" was named, so a rented
+             *   parcel's terms were editable underneath the tenancy — and, until
+             *   the fix above, a rental was reaching `sold` anyway, which is
+             *   what hid this.
+             */
+            "leased",
             "completed",
         ];
 

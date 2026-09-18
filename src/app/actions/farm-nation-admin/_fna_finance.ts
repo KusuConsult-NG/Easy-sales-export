@@ -387,15 +387,82 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
             const propertyDoc = await propertyRef.get();
             if (!propertyDoc.exists) throw new Error("Property not found");
 
-            const isLease = propertyDoc.data()?.type === "lease";
+            /**
+             *   #876 WHICH OFFER WAS ACTUALLY PAID FOR — off the TRANSACTION,
+             *   not off the listing's label.
+             *
+             *   THE OWNER: "when a property is either for rent or for sell and
+             *   its listed separately, when a buyer pays for either, the
+             *   property is supposed to be off."
+             *
+             *   It does come off — the status moves out of PURCHASABLE_STATUSES
+             *   and the browse query filters on that. What was wrong is WHICH
+             *   WAY it came off, and it decided that by reading
+             *   `listing.type === "lease"`.
+             *
+             *   `type` is a single legacy label, and #869 wrote the rule that
+             *   produces it:
+             *
+             *       type: data.type || ((availableForRent && !availableForSale)
+             *                            ? "lease" : "sale")
+             *
+             *   So a parcel offered BOTH ways is labelled "sale", always. A
+             *   buyer who took the RENTAL offer had the parcel marked `sold` —
+             *   and the title transferred to them below.
+             *
+             *   Worse, and older than #869: the label the form writes for a
+             *   rental is "rent", and this compared against "lease" alone. A
+             *   pure rental listing was finalised as a sale too.
+             *
+             *   `offerMode` is the record of what the buyer actually bought,
+             *   written onto the transaction by farm-nation-payment.ts and
+             *   resolved there against the listing's own flags — so it cannot be
+             *   named by a caller. It is read FIRST; the label is the fallback
+             *   for transactions written before #869, and it now accepts both
+             *   spellings.
+             */
+            const listingType = String(propertyDoc.data()?.type ?? "");
+            const isLease = txData.offerMode === "rent"
+                || (txData.offerMode === undefined
+                    && (listingType === "lease" || listingType === "rent"));
+
+            /**
+             *   AND A LEASE DOES NOT TRANSFER THE LAND.
+             *
+             *   `ownerId: txData.buyerId` ran for BOTH branches, so renting a
+             *   parcel made the tenant its owner. That is not a bookkeeping
+             *   nicety — `ownerId` is what the platform means by "whose land
+             *   this is":
+             *
+             *     - /farm-nation/my-properties queries `ownerId == me`, so the
+             *       real owner's parcel vanished from their own dashboard and
+             *       appeared in the tenant's,
+             *     - _fn_listings.ts gates editing on `ownerId`, so the owner
+             *       could no longer edit their listing and the TENANT could,
+             *     - every offer, inquiry and escrow door reads it to decide who
+             *       the counterparty is.
+             *
+             *   The tenant loses nothing by this: their own screen,
+             *   /farm-nation/my-purchases, reads FARM_NATION_TRANSACTIONS by
+             *   buyerId and never looked at ownerId at all.
+             *
+             *   The tenancy is recorded on its own fields instead, so who holds
+             *   the lease is still answerable from the listing.
+             */
             await propertyRef.update({
                 status: isLease ? "leased" : "sold",
-                ownerId: txData.buyerId,
-                ownerEmail: txData.buyerEmail,
-                previousOwnerId: txData.sellerId,
-                ...(isLease 
-                    ? { leasedAt: FieldValue.serverTimestamp() }
-                    : { soldAt: FieldValue.serverTimestamp() }),
+                ...(isLease
+                    ? {
+                        leasedAt: FieldValue.serverTimestamp(),
+                        leasedToId: txData.buyerId,
+                        leasedToEmail: txData.buyerEmail,
+                    }
+                    : {
+                        soldAt: FieldValue.serverTimestamp(),
+                        ownerId: txData.buyerId,
+                        ownerEmail: txData.buyerEmail,
+                        previousOwnerId: txData.sellerId,
+                    }),
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1)
             });

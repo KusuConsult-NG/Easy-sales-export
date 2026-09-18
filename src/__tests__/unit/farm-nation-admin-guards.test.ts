@@ -234,13 +234,29 @@ describe('releaseFarmNationEscrowAction — nothing is claimed until it can be f
         expect(payout?.amount).toBe(AMOUNT);
     });
 
-    it('marks a lease as leased rather than sold', async () => {
+    it('marks a lease as leased rather than sold, without moving the title', async () => {
+        /*
+         *   #876 THE WRITE IS FOUND BY ITS STATUS NOW, NOT BY `ownerId`.
+         *
+         *   This looked the property write up by "the patch that carries an
+         *   ownerId", which stopped finding it the moment a lease stopped
+         *   transferring one — and a lease must not transfer one: `ownerId` is
+         *   what /farm-nation/my-properties queries and what _fn_listings gates
+         *   editing on, so it took the parcel out of the owner's dashboard and
+         *   handed the tenant the right to edit the listing.
+         *
+         *   Identifying a write by a field it happens to contain is what made
+         *   this brittle; the status is what the write is FOR.
+         */
         setDocs({ property: { type: 'lease', ownerId: SELLER } });
 
         await release();
 
-        const ownership = allWrites().find((p) => p && 'ownerId' in p);
+        const ownership = allWrites().find((p) => p && p.status === 'leased');
         expect(ownership?.status).toBe('leased');
+        //   And the tenancy is recorded in place of the transfer.
+        expect(ownership?.leasedToId).toBe(BUYER);
+        expect(ownership?.ownerId).toBeUndefined();
     });
 
     it('claims from payment_confirmed only', async () => {
