@@ -169,3 +169,51 @@ export function imageSrcOr(value: unknown, fallback: string): string {
 export function imageSrcOrNull(value: unknown): string | null {
     return isRenderableSrc(value) ? value.trim() : null;
 }
+
+/**
+ * EVERY renderable image of a record, in order — for a gallery.
+ *
+ *   #875 THE RULE EXISTED AND THE GALLERIES DID NOT ASK IT.
+ *
+ *   From the owner's production log, still, after #831 built the manifest
+ *   check that was supposed to end it:
+ *
+ *       ⨯ The requested resource isn't a valid image for
+ *         /images/products/yams.jpg received null          ×4
+ *
+ *   #831's diagnosis was right and its repair reached `firstImageSrc` and
+ *   `imageSrcOrNull`. What it did not reach is the screens that render the
+ *   WHOLE array — a product's thumbnail strip, a property's gallery, the
+ *   admin land-verification grid, a review's photos. Those map over
+ *   `record.images` and hand each entry to `next/image` directly, so the
+ *   guard sat one import away and was never called.
+ *
+ *   That is this codebase's dominant defect class, and #439's own header in
+ *   this file names it: "a rule stated by hand in every reader, and a fix that
+ *   reaches most of them". The count there was eleven guarded and four not.
+ *
+ * ── WHY THE ARRAY AND NOT A LOOP OF imageSrcOrNull ──────────────────────────
+ *
+ *   Because a gallery INDEXES what it renders — a selected thumbnail, a
+ *   "1 of 4", a next/previous. Filtering at the render site would leave the
+ *   index pointing into the unfiltered array, so the strip would show one
+ *   picture and the main panel another. The screens take this list and use it
+ *   for both.
+ *
+ *   Unrenderable entries are DROPPED rather than replaced: a placeholder in the
+ *   middle of a gallery is a photograph of nothing that a buyer can click.
+ */
+export function renderableImages(images: unknown): string[] {
+    if (!Array.isArray(images)) return [];
+    //   Indexed, for the same reason firstImageSrc is: an array-like that
+    //   satisfies Array.isArray without being iterable makes `for…of` throw
+    //   during render, and its own test caught exactly that.
+    const length = Number((images as { length?: unknown }).length);
+    if (!Number.isFinite(length)) return [];
+
+    const out: string[] = [];
+    for (let i = 0; i < length; i += 1) {
+        if (isRenderableSrc(images[i])) out.push((images[i] as string).trim());
+    }
+    return out;
+}

@@ -1,4 +1,5 @@
 "use client";
+import { imageSrcOrNull } from "@/lib/first-image";
 
 export const dynamic = "force-dynamic";
 
@@ -101,9 +102,10 @@ export default function SavedPropertiesClient({ initial = null }: {
                             className="bg-white rounded-xl p-5 border border-slate-200 flex items-center gap-4"
                         >
                             <div className="w-20 h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0 relative">
-                                {row.listing?.image && (
+                                {/*   #875 Renderable, not merely truthy. */}
+                                {imageSrcOrNull(row.listing?.image) && (
                                     <Image
-                                        src={row.listing.image}
+                                        src={imageSrcOrNull(row.listing?.image)!}
                                         alt=""
                                         fill
                                         className="object-cover"

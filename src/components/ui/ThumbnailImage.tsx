@@ -46,6 +46,7 @@
 
 import Image from "next/image";
 import { useState, type ReactNode } from "react";
+import { imageSrcOrNull } from "@/lib/first-image";
 
 export interface ThumbnailImageProps {
     /** May be null, undefined or empty — that is the ordinary "no image" case. */
@@ -75,11 +76,30 @@ export function ThumbnailImage({
     const [failed, setFailed] = useState(false);
 
     /*
-     *   A whitespace-only URL is not a URL. It passes a truthy check, reaches
-     *   next/image, and becomes a request that cannot succeed — which is one of
-     *   the ways a card ends up showing its own title.
+     *   #875 THE SAME QUESTION EVERY OTHER RENDER SITE ASKS, ASKED HERE ONCE.
+     *
+     *   This used to be `typeof src === "string" && src.trim().length > 0` —
+     *   a whitespace check, which is right as far as it goes and stops well
+     *   short. A stored "/images/products/yams.jpg" is a non-empty string, and
+     *   it reached the optimiser from every caller of this component:
+     *
+     *       ⨯ The requested resource isn't a valid image for
+     *         /images/products/yams.jpg received null
+     *
+     *   `imageSrcOrNull` is the rule — an absolute URL, a runtime upload, or a
+     *   local path this application actually ships, and nothing else. Asked in
+     *   the SHARED component rather than at each of its callers, because the
+     *   finding this comes from is precisely that a rule asked at each caller
+     *   gets asked at most of them.
+     *
+     *   Nothing regresses for a caller that already guards: imageSrcOrNull is
+     *   idempotent, so a value that passed once passes again.
+     *
+     *   And the onError below stays. This stops a request that CANNOT succeed;
+     *   that catches the one that could have and did not — an expired
+     *   Cloudinary URL, a deleted asset — which no static rule can know.
      */
-    const usable = typeof src === "string" && src.trim().length > 0;
+    const usable = imageSrcOrNull(src);
 
     if (!usable || failed) {
         return <div className={fallbackClassName} aria-hidden="true">{fallback}</div>;
@@ -87,7 +107,7 @@ export function ThumbnailImage({
 
     return (
         <Image
-            src={src!}
+            src={usable}
             alt={alt}
             fill
             className={className}

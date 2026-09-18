@@ -1,4 +1,5 @@
 "use client";
+import { imageSrcOrNull } from "@/lib/first-image";
 
 import { useState, useEffect, useRef } from "react";
 import { useServerSeed } from "@/hooks/useServerSeed";
@@ -638,9 +639,9 @@ export default function ProfileClient({ initialProfile = null }: {
                                     <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-4 border-white shadow-lg flex items-center justify-center">
                                         {isUploadingImage ? (
                                             <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                                        ) : user.image ? (
+                                        ) : imageSrcOrNull(user.image) ? (   /*   #875 */
                                             <Image
-                                                src={user.image}
+                                                src={imageSrcOrNull(user.image)!}
                                                 alt={user.name || "User"}
                                                 width={96}
                                                 height={96}

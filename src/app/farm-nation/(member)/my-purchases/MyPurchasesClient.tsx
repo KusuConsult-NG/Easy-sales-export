@@ -1,4 +1,5 @@
 "use client";
+import { firstImageSrc } from "@/lib/first-image";
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
@@ -285,10 +286,11 @@ This document serves as a record of the purchase agreement initiated through Eas
                                 <div className="p-6">
                                     <div className="flex items-start gap-6">
                                         {/* Property Image */}
-                                        {purchase.propertyImages && purchase.propertyImages.length > 0 ? (
+                                        {/*   #875 Renderable, not merely present. */}
+                                        {firstImageSrc(purchase.propertyImages) ? (
                                             <div className="relative w-32 h-32 rounded-xl overflow-hidden shrink-0 bg-slate-200">
                                                 <Image
-                                                    src={purchase.propertyImages[0]}
+                                                    src={firstImageSrc(purchase.propertyImages)!}
                                                     alt={purchase.propertyName}
                                                     fill
                                                     className="object-cover"

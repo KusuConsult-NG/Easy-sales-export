@@ -5,6 +5,7 @@
  */
 
 "use client";
+import { imageSrcOrNull } from "@/lib/first-image";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
@@ -201,8 +202,9 @@ export default function CooperativeDirectoryClient({ initial = null }: {
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 bg-linear-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden relative">
-                                    {member.image ? (
-                                        <Image src={member.image} alt={member.name} fill className="object-cover" />
+                                    {/*   #875 Renderable, not merely truthy. */}
+                                    {imageSrcOrNull(member.image) ? (
+                                        <Image src={imageSrcOrNull(member.image)!} alt={member.name} fill className="object-cover" />
                                     ) : (
                                         String(member.name ?? "?").charAt(0)
                                     )}

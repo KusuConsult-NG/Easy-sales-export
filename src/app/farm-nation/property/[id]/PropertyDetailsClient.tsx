@@ -29,7 +29,7 @@ import { SaveItemButton } from "@/components/saved/SaveItemButton";
 import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
-import { imageSrcOrNull } from "@/lib/first-image";
+import { imageSrcOrNull, renderableImages } from "@/lib/first-image";
 
 //   #791 A broken thumbnail must not paint its alt text over the
 //   badges in the same box — see components/ui/ThumbnailImage.
@@ -87,6 +87,23 @@ export default function PropertyDetailsClient({ initial = null }: {
         ? (Number(property?.rentPrice) > 0 ? property?.rentPrice : property?.price)
         : property?.price;
     const { showToast } = useToast();
+
+    /*
+     *   #875 ONE FILTERED LIST FOR THE WHOLE GALLERY.
+     *
+     *   This screen was a half-fix in miniature, and it is worth naming: the
+     *   MAIN image already went through imageSrcOrNull, and the thumbnail strip
+     *   forty lines below handed `property.images` straight to <Image>. So the
+     *   rule was imported, called once, and skipped at the second site in the
+     *   same component — the defect class this audit meets most often.
+     *
+     *   Filtering into ONE list also closes a bug the half-fix created:
+     *   `currentImageIndex` indexed the RAW array while the main panel rendered
+     *   a guarded value, so a listing whose first entry was unrenderable showed
+     *   an empty main panel beside a strip of working thumbnails, and the
+     *   arrows counted positions that could not be displayed.
+     */
+    const gallery = renderableImages(property?.images);
 
     /*
      *   #874 THE OFFER FORM. Held here rather than in a modal because the
@@ -239,14 +256,14 @@ export default function PropertyDetailsClient({ initial = null }: {
                     <div className="lg:col-span-2 space-y-6">
                         {/* Image Gallery */}
                         <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-                            {property.images && property.images.length > 0 ? (
+                            {gallery.length > 0 ? (
                                 <div className="relative">
                                     <div className="aspect-video relative bg-slate-200">
                                         {/*   #791 See components/ui/ThumbnailImage. */}
                                         <ThumbnailImage
                                             //   #829 — see PropertiesClient. The file named here has
                                             //   never existed; null lets ThumbnailImage's fallback run.
-                                            src={imageSrcOrNull(property.images?.[currentImageIndex])}
+                                            src={gallery[currentImageIndex] ?? null}
                                             alt={property.title}
                                             className="object-cover"
                                             priority
@@ -254,11 +271,11 @@ export default function PropertyDetailsClient({ initial = null }: {
                                             fallback={<MapPin className="w-16 h-16 text-slate-400" />}
                                         />
                                     </div>
-                                    {property.images.length > 1 && (
+                                    {gallery.length > 1 && (
                                         <>
                                             <button
                                                 onClick={() =>
-                                                    setCurrentImageIndex((currentImageIndex - 1 + property.images.length) % property.images.length)
+                                                    setCurrentImageIndex((currentImageIndex - 1 + gallery.length) % gallery.length)
                                                 }
                                                 className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 text-slate-900 rounded-full hover:bg-white transition"
                                             >
@@ -266,14 +283,14 @@ export default function PropertyDetailsClient({ initial = null }: {
                                             </button>
                                             <button
                                                 onClick={() =>
-                                                    setCurrentImageIndex((currentImageIndex + 1) % property.images.length)
+                                                    setCurrentImageIndex((currentImageIndex + 1) % gallery.length)
                                                 }
                                                 className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 text-slate-900 rounded-full hover:bg-white transition"
                                             >
                                                 →
                                             </button>
                                             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                                                {property.images.map((_, index) => (
+                                                {gallery.map((_, index) => (
                                                     <button
                                                         key={index}
                                                         onClick={() => setCurrentImageIndex(index)}
@@ -294,9 +311,9 @@ export default function PropertyDetailsClient({ initial = null }: {
                             )}
 
                             {/* Thumbnail Grid */}
-                            {property.images && property.images.length > 1 && (
+                            {gallery.length > 1 && (
                                 <div className="grid grid-cols-6 gap-2 p-4">
-                                    {property.images.slice(0, 6).map((img, index) => (
+                                    {gallery.slice(0, 6).map((img, index) => (
                                         <button
                                             key={index}
                                             onClick={() => setCurrentImageIndex(index)}

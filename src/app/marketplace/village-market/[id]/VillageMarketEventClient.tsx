@@ -6,6 +6,7 @@
  */
 
 "use client";
+import { imageSrcOrNull } from "@/lib/first-image";
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -354,8 +355,9 @@ export default function VillageMarketEventClient({ initial = null }: { initial?:
                                 {products.map((p) => (
                                     <div key={p.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition">
                                         <Link href={`/marketplace/products/${p.id}`} className="block h-36 bg-slate-100 relative overflow-hidden">
-                                            {p.imageUrl ? (
-                                                <Image src={p.imageUrl} alt={p.title} fill sizes="300px" className="object-cover hover:scale-105 transition duration-300" />
+                                            {/*   #875 Renderable, not merely truthy. */}
+                                            {imageSrcOrNull(p.imageUrl) ? (
+                                                <Image src={imageSrcOrNull(p.imageUrl)!} alt={p.title} fill sizes="300px" className="object-cover hover:scale-105 transition duration-300" />
                                             ) : (
                                                 <div className="w-full h-full bg-linear-to-br from-slate-100 to-slate-200/60 flex flex-col items-center justify-center gap-2 select-none">
                                                     <div className="w-12 h-12 bg-white/80 rounded-full flex items-center justify-center shadow-xs">

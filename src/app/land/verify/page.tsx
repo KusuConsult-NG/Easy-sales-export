@@ -1,4 +1,5 @@
 "use client";
+import { renderableImages } from "@/lib/first-image";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
@@ -286,11 +287,18 @@ export default function LandVerificationPage() {
                                 </div>
 
                                 {/* Images Preview */}
-                                {listing.images.length > 0 && (
+                                {/*
+                                  *   #875 Filtered: a stored path to a file the
+                                  *   app never shipped was handed to the
+                                  *   optimiser on the screen an admin uses to
+                                  *   DECIDE, and a broken tile there reads as a
+                                  *   missing document.
+                                  */}
+                                {renderableImages(listing.images).length > 0 && (
                                     <div className="mb-4">
-                                        <p className="text-xs text-slate-500 mb-2">Images ({listing.images.length})</p>
+                                        <p className="text-xs text-slate-500 mb-2">Images ({renderableImages(listing.images).length})</p>
                                         <div className="grid grid-cols-4 gap-2">
-                                            {listing.images.slice(0, 4).map((img, i) => (
+                                            {renderableImages(listing.images).slice(0, 4).map((img, i) => (
                                                 <div key={i} className="aspect-square bg-slate-200 rounded overflow-hidden relative">
                                                     <Image src={img} alt="" fill className="object-cover" sizes="(max-width: 768px) 25vw, (max-width: 1024px) 20vw, 300px" />
                                                 </div>

@@ -1,4 +1,5 @@
 "use client";
+import { imageSrcOrNull } from "@/lib/first-image";
 
 export const dynamic = "force-dynamic";
 
@@ -106,9 +107,10 @@ export default function SavedSellersClient({ initial = null }: {
                             className="bg-white rounded-xl p-5 border border-slate-200 flex items-center gap-4"
                         >
                             <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden shrink-0">
-                                {row.seller?.logoUrl ? (
+                                {/*   #875 Renderable, not merely truthy. */}
+                                {imageSrcOrNull(row.seller?.logoUrl) ? (
                                     <Image
-                                        src={row.seller.logoUrl}
+                                        src={imageSrcOrNull(row.seller?.logoUrl)!}
                                         alt=""
                                         width={56}
                                         height={56}

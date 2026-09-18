@@ -101,9 +101,24 @@ describe('#791 — a failed image shows a placeholder, not its alt text', () => 
          *   these cards used, reaches next/image, and becomes a request that
          *   cannot succeed — one of the ways a card ends up showing its own
          *   title.
+         *
+         *   ASSERTED ON THE BEHAVIOUR, NOT ON THE LINE. This used to pin the
+         *   literal source `typeof src === "string" && src.trim().length > 0`,
+         *   and #875 replaced that check with `imageSrcOrNull` — a strictly
+         *   stronger rule that also refuses a local path this app never shipped.
+         *   The test failed against an improvement, which is a test measuring
+         *   the wrong thing: what matters is that whitespace yields no image,
+         *   not which expression decides it.
          */
+        const { imageSrcOrNull } = require('@/lib/first-image');
+
+        for (const blank of ['  ', '\t', '\n', '', null, undefined]) {
+            expect({ blank, out: imageSrcOrNull(blank) }).toEqual({ blank, out: null });
+        }
+
+        //   And the component asks THAT question rather than a weaker one.
         const src = stripComments(read(COMPONENT));
-        expect(src).toMatch(/typeof src === "string" && src\.trim\(\)\.length > 0/);
+        expect(src).toMatch(/const usable = imageSrcOrNull\(src\)/);
     });
 
     it('AND alt IS KEPT, because the fix is not to break the screen reader', () => {

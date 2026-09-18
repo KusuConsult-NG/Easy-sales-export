@@ -13,7 +13,7 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
-import { firstImageSrc } from "@/lib/first-image";
+import { firstImageSrc, renderableImages } from "@/lib/first-image";
 import { isSellableProductStatus } from "@/lib/product-status";
 
 //   #791 A broken thumbnail must not paint its alt text over the
@@ -180,7 +180,25 @@ export default function ProductDetailClient({ initial = null }: {
      *   length 1 for a product with NO images, which is a different statement
      *   from the truth.
      */
-    const allImages = product.images && product.images.length > 0 ? product.images : [];
+    /*
+     *   #875 FILTERED, not raw.
+     *
+     *   This is the line in the owner's production log:
+     *
+     *       ⨯ The requested resource isn't a valid image for
+     *         /images/products/yams.jpg received null
+     *
+     *   The thumbnail strip below maps this array straight into <Image>, so a
+     *   stored path to a file this app never shipped was handed to the
+     *   optimiser on every render. #831 built the manifest check that answers
+     *   exactly that question and this screen never asked it.
+     *
+     *   Filtered HERE rather than at the two render sites because the gallery
+     *   INDEXES it — `selectedImageIndex` addresses both the strip and the main
+     *   panel, so filtering downstream would have the two disagree about which
+     *   picture is which.
+     */
+    const allImages = renderableImages(product.images);
     const mainImage = allImages[selectedImageIndex] || allImages[0] || null;
     // #442. The ternary above already proves the array is non-empty, so this
     // was never at risk. It is spelled `?.[0]?.` anyway so that ONE shape means

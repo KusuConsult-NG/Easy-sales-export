@@ -1,4 +1,5 @@
 "use client";
+import { renderableImages } from "@/lib/first-image";
 
 import { useState, useEffect, useCallback } from "react";
 import { Star, Check, User } from "lucide-react";
@@ -204,9 +205,10 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                         </p>
 
                         {/* Review Images */}
-                        {review.images && review.images.length > 0 && (
+                        {renderableImages(review.images).length > 0 && (
                             <div className="flex gap-2 mt-3">
-                                {review.images.map((url, idx) => (
+                                {/*   #875 Filtered — see lib/first-image. */}
+                                {renderableImages(review.images).map((url, idx) => (
                                     <div
                                         key={idx}
                                         className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200"

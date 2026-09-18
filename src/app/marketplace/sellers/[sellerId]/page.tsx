@@ -4,7 +4,7 @@ import Link from "next/link";
 import { BadgeCheck, Store, MapPin, Star, Package, ArrowLeft, ShoppingCart } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SaveItemButton } from "@/components/saved/SaveItemButton";
-import { firstImageSrc } from "@/lib/first-image";
+import { firstImageSrc, imageSrcOrNull } from "@/lib/first-image";
 
 interface SellerPageProps {
     params: Promise<{ sellerId: string }>;
@@ -121,9 +121,10 @@ export default async function SellerStorefrontPage({ params }: SellerPageProps) 
                     <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
                         {/* Logo */}
                         <div className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center overflow-hidden shrink-0 border-2 border-white/30">
-                            {seller.logoUrl ? (
+                            {/*   #875 Renderable, not merely truthy. */}
+                            {imageSrcOrNull(seller.logoUrl) ? (
                                 <Image
-                                    src={seller.logoUrl}
+                                    src={imageSrcOrNull(seller.logoUrl)!}
                                     alt={`${seller.businessName} logo`}
                                     width={96}
                                     height={96}
