@@ -262,8 +262,15 @@ describe('member and admin pages sitting under a public prefix', () => {
         // Vacuity guard on "not a data leak": the data half was already right.
         expect(source('src/app/actions/orders.ts')).toContain('orderData?.buyerId !== session.user.id');
         expect(source('src/app/actions/land-actions.ts')).toContain('return { success: false, error: "Unauthorized", data: null };');
+        // Checked as the PROPERTY — this route still refuses a caller whose
+        // seller application was not approved. The expression moved into
+        // lib/seller-approval.ts, which reads both the legacy
+        // `sellerVerificationStatus` and the canonical
+        // `serviceRegistrations.marketplace.status` that _mp_onboarding.ts
+        // backfills; asserting the old literal made that fix look like the
+        // check had been removed.
         expect(source('src/app/api/marketplace/create-product/route.ts'))
-            .toContain('userData.sellerVerificationStatus !== "approved"');
+            .toMatch(/!isSellerApproved\(userData\)/);
     });
 });
 

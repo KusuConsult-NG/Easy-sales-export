@@ -10,6 +10,7 @@
 "use server";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { isSellerApproved } from "@/lib/seller-approval";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
@@ -193,7 +194,8 @@ export async function joinVillageMarketEventAction(
 
         // Must be an approved seller
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        if (userDoc.data()?.sellerVerificationStatus !== "approved") {
+        // Both vocabularies — see lib/seller-approval.ts.
+        if (!isSellerApproved(userDoc.data())) {
             return { success: false as const, error: "Your seller account must be approved to join Village Market events" , data: null };
         }
 

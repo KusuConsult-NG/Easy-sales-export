@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
+import { isSellerApproved } from "@/lib/seller-approval";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -31,7 +32,10 @@ export async function POST(request: NextRequest) {
         // Admin approval sets sellerVerificationStatus: "approved" on the user doc
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!userData || userData.sellerVerificationStatus !== "approved") {
+        // Both vocabularies — see lib/seller-approval.ts. This read the legacy
+        // field alone and refused every seller whose approval was healed onto
+        // serviceRegistrations.marketplace by _mp_onboarding.ts.
+        if (!userData || !isSellerApproved(userData)) {
             return NextResponse.json(
                 { success: false, message: "You must be an approved seller to list products" },
                 { status: 403 }

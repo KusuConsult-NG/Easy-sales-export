@@ -9,6 +9,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
+import { sellerRefusalReason } from "@/lib/seller-approval";
 import { hasRole } from "@/lib/role-utils";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -63,13 +64,23 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
         const userDoc = await userRef.get();
         const userData = userDoc.data();
 
-        if (!hasRole(userData?.roles || [], "seller")) { 
-            return { success: false as const, error: "You must have seller role to create products", data: null };
+        /**
+         * One predicate, both vocabularies — see lib/seller-approval.ts.
+         *
+         * This read `hasRole(roles, "seller")` and then
+         * `sellerVerificationStatus !== "approved"`. It missed the
+         * `marketplace_seller` role, which roles.ts calls the new standardized
+         * one and which admin/_marketplace.ts already accepts, AND it missed
+         * `serviceRegistrations.marketplace.status`, which is what
+         * _mp_onboarding.ts backfills when it heals an approved seller. A
+         * seller healed that way was told they were approved by the marketplace
+         * screens and refused here, from the same user document.
+         */
+        const refusal = sellerRefusalReason(userData, "create");
+        if (refusal) {
+            return { success: false as const, error: refusal, data: null };
         }
 
-        if (userData?.sellerVerificationStatus !== "approved") { 
-            return { success: false as const, error: "Your seller account must be approved first", data: null };
-        }
 
         // Extract and Prepare Data for Validation
         let certifications = [];
@@ -287,13 +298,23 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
         const userDoc = await userRef.get();
         const userData = userDoc.data();
 
-        if (!hasRole(userData?.roles || [], "seller")) { 
-            return { success: false as const, error: "You must have seller role to update products", data: null };
+        /**
+         * One predicate, both vocabularies — see lib/seller-approval.ts.
+         *
+         * This read `hasRole(roles, "seller")` and then
+         * `sellerVerificationStatus !== "approved"`. It missed the
+         * `marketplace_seller` role, which roles.ts calls the new standardized
+         * one and which admin/_marketplace.ts already accepts, AND it missed
+         * `serviceRegistrations.marketplace.status`, which is what
+         * _mp_onboarding.ts backfills when it heals an approved seller. A
+         * seller healed that way was told they were approved by the marketplace
+         * screens and refused here, from the same user document.
+         */
+        const refusal = sellerRefusalReason(userData, "update");
+        if (refusal) {
+            return { success: false as const, error: refusal, data: null };
         }
 
-        if (userData?.sellerVerificationStatus !== "approved") { 
-            return { success: false as const, error: "Your seller account must be approved first", data: null };
-        }
 
         // Fetch product and verify ownership
         const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
