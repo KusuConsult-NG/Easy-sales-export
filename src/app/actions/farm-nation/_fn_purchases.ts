@@ -53,6 +53,39 @@ async function _initiatePropertyPurchaseAction(
             return { success: false as const, error: "Property is no longer available", data: null, meta: null };
         }
 
+        /**
+         * A SELLER COULD RESERVE THEIR OWN LAND.
+         *
+         * Reported as "why is there an option for seller to make an offer when
+         * the listed product belongs to the seller?" — and it was not only an
+         * option on the screen. farm-nation-payment.ts, the OTHER path to a
+         * purchase over this same collection, refuses it:
+         *
+         *     if (propertyData.ownerId === session.user.id) {
+         *         return { ... error: "You cannot purchase your own property" };
+         *     }
+         *
+         * marketplace/_quotes.ts refuses the equivalent — "You cannot request a
+         * quote on your own listing". This path, which the property page's
+         * request flow calls, had no such test, so an owner reached the claim
+         * below and TOOK THEIR OWN LISTING OFF THE MARKET: the transition moves
+         * it to "pending" with `pendingBuyerId` set to themselves, and it leaves
+         * the public view until somebody cancels it. Nothing else in the module
+         * distinguishes that from a real buyer's reservation.
+         *
+         * Before the claim, deliberately. Refusing after it would reserve the
+         * listing and then decline — the exact stranding the comment below this
+         * one was written about.
+         */
+        if (property.ownerId === session.user.id) {
+            return {
+                success: false as const,
+                error: "You cannot purchase your own property",
+                data: null,
+                meta: null,
+            };
+        }
+
         // Check user tier
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await userRef.get();

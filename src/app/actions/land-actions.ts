@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { GeoPoint, FieldValue, Timestamp } from "@/lib/firestore-compat";
+import { GeoPoint, FieldValue } from "@/lib/firestore-compat";
 import { 
     landListingSchema,
     landListingUpdateSchema,
@@ -17,6 +17,7 @@ import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { APPROVABLE_FROM_STATUSES, REJECTABLE_FROM_STATUSES, isOwnerMutable } from "@/lib/land-listing-status";
+import { normaliseLandListingRow } from "@/lib/land-listing-shape";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
@@ -172,21 +173,13 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
         const snapshot = await listingsQuery.get();
 
         let listings = snapshot.docs
-            .map(doc => { 
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    location: {
-                        ...data.location,
-                        lat: data.location.geopoint?.latitude || data.location.lat,
-                        lng: data.location.geopoint?.longitude || data.location.lng 
-                    },
-                    createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
-                } as unknown as LandListing;
-            })
+            // One normaliser for all three readers. The expression that stood
+            // here dereferenced `data.location.geopoint` on a collection where
+            // one of the four writers stores no `location` at all, and the
+            // throw was inside the map and inside the try — so a single such
+            // row returned "Failed to fetch…" for the whole list. See
+            // lib/land-listing-shape.ts.
+            .map(doc => normaliseLandListingRow<LandListing>(doc.id, doc.data()))
             // Backstop. `deleted` is not in PUBLIC_LAND_STATUSES and is not a
             // value landSearchSchema accepts, so the query above cannot select
             // one — this stays for a row whose status the query matched by some
@@ -278,18 +271,8 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
             }
         }
 
-        const listing: LandListing = { 
-            id: listingDoc.id,
-            ...data,
-            location: {
-                ...data.location,
-                lat: data.location.geopoint?.latitude || data.location.lat,
-                lng: data.location.geopoint?.longitude || data.location.lng 
-            },
-            createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-            updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-            verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
-        } as unknown as LandListing;
+        // Same normaliser as the two list readers — see lib/land-listing-shape.ts.
+        const listing: LandListing = normaliseLandListingRow<LandListing>(listingDoc.id, data);
 
         // Internal review fields are stripped for a public viewer. The owner and
         // an admin keep them — the owner needs to read why they were rejected.
@@ -327,21 +310,13 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
         const snapshot = await listingsQuery.get();
 
         const listings = snapshot.docs
-            .map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    location: {
-                        ...data.location,
-                        lat: data.location.geopoint?.latitude || data.location.lat,
-                        lng: data.location.geopoint?.longitude || data.location.lng 
-                    },
-                    createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
-                } as unknown as LandListing;
-            })
+            // One normaliser for all three readers. The expression that stood
+            // here dereferenced `data.location.geopoint` on a collection where
+            // one of the four writers stores no `location` at all, and the
+            // throw was inside the map and inside the try — so a single such
+            // row returned "Failed to fetch…" for the whole list. See
+            // lib/land-listing-shape.ts.
+            .map(doc => normaliseLandListingRow<LandListing>(doc.id, doc.data()))
             .filter(listing => (listing as any).status !== 'deleted');
 
         return { success: true, error: null, data: listings };

@@ -179,6 +179,34 @@ export async function POST(request: NextRequest) {
             state,
             lga,
             address,
+            // AND THE SHAPE EVERY READER ACTUALLY QUERIES AND RENDERS.
+            //
+            // The note above fixed `ownerId` and `status`, which is what made
+            // the row visible to the queries. It did not fix its SHAPE: every
+            // other writer of this collection stores the place in a `location`
+            // object, and land-actions.ts's three readers normalised each row
+            // through `data.location.geopoint?...` — an unguarded dereference.
+            // A row from here has no `location`, so it threw, and because the
+            // throw is inside the map and inside the try it took the WHOLE list
+            // down with it: My Properties, the public browse catalogue and the
+            // /land/verify queue all returned "Failed to fetch…" for their
+            // owner, for every visitor, and for the admin — because of one row.
+            //
+            // The readers no longer assume the shape (lib/land-listing-shape.ts
+            // recovers it from these flat fields). This writes it as well,
+            // because the flat fields are not only a rendering problem: the
+            // catalogue filters are `.where('location.state', '==', ...)` and
+            // `.where('location.city', '==', ...)`, which a top-level `state`
+            // cannot match. A listing created here was unfindable by state.
+            //
+            // The flat fields stay beside it, exactly as `userId` was kept
+            // beside `ownerId` above, in case something already reads them.
+            location: {
+                state,
+                lga,
+                address,
+                ...(gpsCoordinates ? { lat: gpsCoordinates.latitude, lng: gpsCoordinates.longitude } : {}),
+            },
             size,
             unit,
             pricePerUnit,

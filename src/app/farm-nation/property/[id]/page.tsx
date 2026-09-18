@@ -44,6 +44,14 @@ export default function PropertyDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [propertyId]);
 
+    // The owner of the listing, looking at their own public page. `ownerId` is
+    // not one of INTERNAL_LAND_FIELDS, so it survives the strip and is present
+    // for every viewer — but it is only ever compared against the viewer's own
+    // session id here, so nothing is disclosed by the comparison.
+    const isOwnViewer = Boolean(
+        session?.user?.id && property && session.user.id === (property as any).ownerId
+    );
+
     async function handleShare() {
         const url = window.location.href;
         if (navigator.share) {
@@ -320,7 +328,41 @@ export default function PropertyDetailsPage() {
                                  </p>
                              </div>
 
-                            {property.status === "verified" ? (
+                            {/*
+                              * THE OWNER WAS SHOWN A BUY BUTTON FOR THEIR OWN LAND.
+                              *
+                              * This page has no auth guard and rendered the
+                              * reservation button on `status === "verified"`
+                              * alone — for everybody, the owner included. Both
+                              * server paths now refuse an owner
+                              * ("You cannot purchase your own property"), so
+                              * following it could only ever end in an error;
+                              * before that it reserved their own listing under
+                              * them. The owner gets the two things they would
+                              * actually want here instead.
+                              */}
+                            {isOwnViewer ? (
+                                <div className="space-y-3">
+                                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                                        <p className="font-semibold text-slate-900">This is your listing</p>
+                                        <p className="text-sm text-slate-500 mt-1">
+                                            This is how buyers see it.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => router.push(`/farm-nation/edit-property/${propertyId}`)}
+                                        className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition"
+                                    >
+                                        Edit listing
+                                    </button>
+                                    <button
+                                        onClick={() => router.push("/farm-nation/my-properties")}
+                                        className="w-full px-6 py-3 border border-slate-300 text-slate-700 font-semibold rounded-xl transition hover:bg-slate-50"
+                                    >
+                                        My properties
+                                    </button>
+                                </div>
+                            ) : property.status === "verified" ? (
                                 <div className="space-y-3">
                                     <button
                                         onClick={() => {

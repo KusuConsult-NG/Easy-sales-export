@@ -12,7 +12,8 @@ import {
     Route,
     TrendingUp,
     Loader2,
-    Eye
+    Eye,
+    AlertCircle
 } from "lucide-react";
 import { getLandListings, verifyLandListing } from "@/app/actions/land-actions";
 import { type LandListing, SoilQuality } from "@/types/strict";
@@ -22,12 +23,26 @@ export default function LandVerificationPage() {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     async function loadListings() {
         setLoading(true);
+        // A FAILED READ LOOKED LIKE AN EMPTY QUEUE.
+        //
+        // This page had no error state at all: on
+        // { success: false, error: "Failed to fetch land listings" } it set
+        // nothing and rendered "All caught up". getLandListings asks for
+        // `pending_verification`, which is exactly where a listing created
+        // through /api/farm-nation/create-listing sits — and until
+        // lib/land-listing-shape.ts, one such row made this read throw. So the
+        // admin who could have resolved it was shown an empty queue instead,
+        // and the listings waiting in it were invisible to everyone at once.
+        setError(null);
         const result = await getLandListings({ status: 'pending_verification' });
         if (result.success && result.data) {
             setListings(result.data);
+        } else {
+            setError(result.error || "We could not load the verification queue. Please try again.");
         }
         setLoading(false);
     }
@@ -86,6 +101,21 @@ export default function LandVerificationPage() {
                         Review and verify pending land listings
                     </p>
                 </motion.div>
+
+                {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="text-red-800">{error}</p>
+                            <button
+                                onClick={loadListings}
+                                className="mt-2 text-sm font-semibold text-red-700 underline"
+                            >
+                                Try again
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

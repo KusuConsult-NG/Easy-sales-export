@@ -25,13 +25,31 @@ export default function MyPropertiesPage() {
     async function loadProperties() {
         if (!session?.user?.id) return;
 
+        // THE BANNER BELOW WAS NEVER FED.
+        //
+        // `error` state, `setError`, an AlertCircle import and a rendered red
+        // banner all existed on this page, and `setError` was called from
+        // nowhere. So when getMyLandListings returned
+        // { success: false, error: "Failed to fetch your listings" } — which it
+        // did for any owner holding one listing created through
+        // /api/farm-nation/create-listing — this ran neither branch, `loading`
+        // went false, and the page rendered its "no properties yet" empty
+        // state. The owner was told they had listed nothing.
+        //
+        // The read is fixed in lib/land-listing-shape.ts. This is the other
+        // half: a failure must not be able to look like an empty catalogue
+        // again, whatever causes the next one.
+        setError(null);
         try {
             const result = await getMyLandListings();
             if (result.success && result.data) {
                 setProperties(result.data);
+            } else {
+                setError(result.error || "We could not load your properties. Please try again.");
             }
         } catch (error) {
             logger.error("Failed to load properties:", error);
+            setError("We could not load your properties. Please try again.");
         }
         setLoading(false);
     }
