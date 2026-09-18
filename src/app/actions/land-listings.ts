@@ -1402,6 +1402,165 @@ async function _getLandInquiryByIdAction(inquiryId: string): Promise<ActionRespo
         return { success: false, error: error.message || "Failed to fetch inquiry", data: null };
     }
 }
+/**
+ * Answer an enquirer.
+ *
+ *   #872 MY INQUIRIES WAS A LIST SHE COULD READ AND NOTHING ELSE.
+ *
+ *   THE OWNER: "how does my inquiries work because i believe its not well
+ *   wired."
+ *
+ *   MEASURED, and the report is right. A buyer asks about a parcel;
+ *   submitLandInquiryAction writes the row and rings the owner's bell; the owner
+ *   opens My Inquiries and reads it. There the feature ends. Nothing anywhere in
+ *   this codebase writes a reply, a status change, or any record that the owner
+ *   responded — so every inquiry sits at "pending" for ever, and the seller's
+ *   only way to answer is to copy an email address out of the screen and leave
+ *   the platform.
+ *
+ *   That is the same shape as the marketplace quotes, which BuyerQuotesClient
+ *   already documents: "There is no seller-response flow in this codebase."
+ *
+ * ── THE REPLY IS AN EMAIL, AND THAT IS FORCED BY THE DATA ───────────────────
+ *
+ *   An in-app thread would be the obvious answer and it cannot work here. The
+ *   intake is PUBLIC — an enquirer should not need an account, which is right —
+ *   so an inquiry carries buyerName, buyerEmail and buyerPhone and never a
+ *   buyerId. getLandInquiryByIdAction says so in its own guard, and refuses to
+ *   pretend otherwise: "A buyerId comparison here would be dead code that reads
+ *   as though it grants the enquirer access."
+ *
+ *   There is no account to open a conversation with. Email is the channel the
+ *   enquirer actually gave, so email is the reply.
+ *
+ * ── AND THE REPLY IS RECORDED, not just sent ────────────────────────────────
+ *
+ *   An owner who answers and then cannot see that she answered will answer
+ *   again. The text, the time and the status go onto the inquiry, so the list
+ *   she reads is the record of what she has dealt with.
+ */
+async function _replyToLandInquiryAction(
+    inquiryId: string,
+    message: string,
+): Promise<ActionResponse<null>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+
+        const body = String(message ?? "").trim();
+        if (!body) {
+            return { success: false, error: "Write a reply before sending it.", data: null };
+        }
+
+        const ref = db.collection(COLLECTIONS.LAND_INQUIRIES).doc(inquiryId);
+        const snap = await ref.get();
+        if (!snap.exists) {
+            return { success: false, error: "Inquiry not found", data: null };
+        }
+
+        const inquiry = snap.data() ?? {};
+
+        /*
+         *   THE SAME PARTIES getLandInquiryByIdAction admits, and no wider.
+         *   Reading an enquirer's contact details and writing to them are the
+         *   same privilege; a reply door that was looser than the read door
+         *   would hand the enquirer's inbox to whoever could guess an id.
+         */
+        const isOwner = inquiry.listingOwnerId === session.user.id;
+        if (!isOwner && !isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized", data: null };
+        }
+
+        const to = typeof inquiry.buyerEmail === "string" ? inquiry.buyerEmail.trim() : "";
+        if (!to) {
+            return {
+                success: false,
+                error: "This enquirer left no email address, so there is nowhere to send a reply. "
+                    + "Their phone number is on the inquiry.",
+                data: null,
+            };
+        }
+
+        /*
+         *   SENT FIRST, RECORDED SECOND, deliberately. Recording a reply that
+         *   never went out tells the owner she has answered when she has not —
+         *   and this is the one screen she uses to decide whom she still owes a
+         *   response. A send that fails leaves the inquiry pending, which is
+         *   true.
+         */
+        const { canSendEmail, sendEmailNotification, getBaseUrl } = await import("@/lib/email-notifications");
+        const { html } = await import("@/lib/utils");
+
+        const property = String(inquiry.listingTitle ?? "the listing").trim() || "the listing";
+        const sellerName = session.user.name || "The owner";
+
+        if (!canSendEmail("Land inquiry reply", to)) {
+            return {
+                success: false,
+                error: "The email service is not available, so the reply was not sent. Nothing was recorded.",
+                data: null,
+            };
+        }
+
+        const { error: sendError } = await sendEmailNotification({
+            to,
+            subject: `Re: your enquiry about ${property}`,
+            message: html`
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #15803d;">A reply to your enquiry</h2>
+                    <p>Hello ${String(inquiry.buyerName ?? "there").trim() || "there"},</p>
+                    <p>${sellerName} has replied to your enquiry about
+                       <strong>${property}</strong>:</p>
+                    <div style="background: #f0fdf4; padding: 16px; border-radius: 8px;">
+                        <p>${body}</p>
+                    </div>
+                    <p>You can reply to this email to continue the conversation.</p>
+                    <p>${getBaseUrl()}/farm-nation</p>
+                </div>
+            `,
+            metadata: { type: "land_inquiry_reply" },
+            //   #394 Resend RETURNS its errors rather than throwing them, and the
+            //   enquirer's own address is the natural Reply-To: the whole point
+            //   is that they can answer.
+            replyTo: session.user.email || undefined,
+        });
+
+        if (sendError) {
+            logger.error("[replyToLandInquiry] the reply was not sent", { inquiryId, error: sendError });
+            return {
+                success: false,
+                error: "The reply could not be sent. Nothing was recorded — try again.",
+                data: null,
+            };
+        }
+
+        await ref.update({
+            status: "replied",
+            read: true,
+            //   The whole exchange, not just the last line: an owner who replies
+            //   twice should be able to see both.
+            replies: FieldValue.arrayUnion({
+                message: body,
+                repliedBy: session.user.id,
+                repliedByName: sellerName,
+                repliedAt: new Date().toISOString(),
+            }),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return { success: true, error: null, data: null };
+    } catch (error: any) {
+        logger.error("replyToLandInquiry error:", error);
+        return { success: false, error: "Failed to send the reply", data: null };
+    }
+}
+export async function replyToLandInquiryAction(...args: Parameters<typeof _replyToLandInquiryAction>) {
+    return withFlexibleSafeAction("replyToLandInquiryAction", _replyToLandInquiryAction)(...args);
+}
+
 export async function getLandInquiryByIdAction(...args: Parameters<typeof _getLandInquiryByIdAction>) {
     return withFlexibleSafeAction("getLandInquiryByIdAction", _getLandInquiryByIdAction)(...args);
 }

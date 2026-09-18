@@ -6,7 +6,9 @@ import { useSession } from "next-auth/react";
 import {
     ArrowLeft, Loader2, User, Phone, Mail, MessageSquare, ExternalLink, Calendar
 } from "lucide-react";
-import { getLandInquiryByIdAction } from "@/app/actions/land-listings";
+import { getLandInquiryByIdAction, replyToLandInquiryAction } from "@/app/actions/land-listings";
+import { useToast } from "@/contexts/ToastContext";
+import { logger } from "@/lib/logger";
 import Link from "next/link";
 import { formatDateTimeOrDash } from "@/lib/date-utils";
 
@@ -22,6 +24,70 @@ export default function InquiryDetailsClient({ initial = null }: {
     const [inquiry, setInquiry] = useState<any>(initial);
     const [loading, setLoading] = useState(initial === null);
     const [error, setError] = useState<string | null>(null);
+
+    /**
+     *   #872 THE REPLY THIS SCREEN NEVER HAD.
+     *
+     *   THE OWNER: "how does my inquiries work because i believe its not well
+     *   wired." It was a list she could read and nothing else — no reply, no
+     *   status change, no record that she had answered. Every inquiry sat at
+     *   "pending" for ever and the only way to respond was to copy an address
+     *   out of the page and leave the platform.
+     */
+    const { showToast } = useToast();
+    const [reply, setReply] = useState("");
+    const [sending, setSending] = useState(false);
+
+    async function handleReply() {
+        if (!reply.trim()) return;
+        setSending(true);
+
+        /*
+         *   THE try/finally IS NOT DECORATION, and two ratchets caught its
+         *   absence in the first version of this handler.
+         *
+         *   #407 counts an `await` with no try at all: a server action that
+         *   THROWS rather than returning a refusal — a dropped connection is
+         *   enough — would skip `setSending(false)` and leave the button
+         *   disabled on "Sending…" for ever, with nothing on screen to say why.
+         *
+         *   #512's D1 counts a result whose `error` is never read. The refresh
+         *   below had `if (fresh?.success && fresh.data)` and discarded the
+         *   reason when it did not, which is how "the reply sent but the page
+         *   did not update" becomes unexplainable.
+         */
+        try {
+            const result = await replyToLandInquiryAction(inquiryId, reply.trim());
+
+            if (!result?.success) {
+                //   The action's own message, not a generic one: it
+                //   distinguishes "no email address on this inquiry" from "the
+                //   send failed", and only the first is something she can act
+                //   on.
+                showToast(result?.error || "The reply could not be sent", "error");
+                return;
+            }
+
+            showToast("Reply sent", "success");
+            setReply("");
+
+            //   Re-read rather than patch locally, so the recorded reply and
+            //   the status come from the server that wrote them. A failure here
+            //   is NOT a failed reply — the reply is sent and recorded — so it
+            //   says exactly that rather than implying the send went wrong.
+            const fresh = await getLandInquiryByIdAction(inquiryId);
+            if (fresh?.success && fresh.data) {
+                setInquiry(fresh.data);
+            } else if (fresh?.error) {
+                showToast(`Reply sent. The page could not refresh: ${fresh.error}`, "error");
+            }
+        } catch (err) {
+            logger.error("[InquiryDetails] reply failed", err);
+            showToast("The reply could not be sent. Please try again.", "error");
+        } finally {
+            setSending(false);
+        }
+    }
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -187,6 +253,66 @@ export default function InquiryDetailsClient({ initial = null }: {
                             <p className="text-slate-600 whitespace-pre-line leading-relaxed">
                                 {inquiry.message}
                             </p>
+                        </div>
+
+                        {/*
+                          *   #872 WHAT SHE HAS ALREADY SAID.
+                          *
+                          *   An owner who answers and cannot see that she answered
+                          *   will answer again. The whole exchange, not just the
+                          *   last line.
+                          */}
+                        {Array.isArray(inquiry.replies) && inquiry.replies.length > 0 && (
+                            <div className="bg-green-50 rounded-xl p-6 mt-6">
+                                <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
+                                    <MessageSquare className="w-5 h-5 text-green-600" />
+                                    Your replies
+                                </div>
+                                <div className="space-y-4">
+                                    {inquiry.replies.map((r: any, i: number) => (
+                                        <div key={i}>
+                                            <p className="text-slate-700 whitespace-pre-line leading-relaxed">
+                                                {r.message}
+                                            </p>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                {formatDateTimeOrDash(r.repliedAt)}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/*
+                          *   The reply itself. It goes by EMAIL, and the screen says
+                          *   so — the intake is public, so an enquirer may have no
+                          *   account here at all and there is no in-app thread to
+                          *   open with them.
+                          */}
+                        <div className="bg-white border border-slate-200 rounded-xl p-6 mt-6">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                Reply to {inquiry.buyerName || "this enquirer"}
+                            </label>
+                            <textarea
+                                value={reply}
+                                onChange={(e) => setReply(e.target.value)}
+                                rows={4}
+                                placeholder="Answer their question, or tell them when you can show the land…"
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                            />
+                            <p className="text-xs text-slate-500 mt-2">
+                                Sent to {inquiry.buyerEmail || "their email address"}. They can reply
+                                to you directly.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleReply}
+                                disabled={sending || !reply.trim()}
+                                className="mt-3 w-full px-6 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold rounded-xl transition flex items-center justify-center gap-2"
+                            >
+                                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mail className="w-5 h-5" />}
+                                {sending ? "Sending…" : "Send reply"}
+                            </button>
                         </div>
                     </div>
                 </div>
