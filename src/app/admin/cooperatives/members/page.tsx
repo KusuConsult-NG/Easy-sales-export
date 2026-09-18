@@ -623,6 +623,42 @@ export default function CooperativeMembersPage() {
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                         <p className="text-slate-600">Loading applications...</p>
                     </div>
+                ) : fetchError ? (
+                    /**
+                     * A FAILED READ IS NOT AN EMPTY COOPERATIVE.
+                     *
+                     * `fetchError` was destructured from useAdminData on line 62
+                     * and appeared nowhere else in this file. useAdminData sets
+                     * it on `success: false` and leaves `data` at its previous
+                     * value — [] on a first load — so every refusal from
+                     * getStandardCooperativeMembersAction ('Not authenticated',
+                     * 'Unauthorized', 'Failed to load cooperative members')
+                     * arrived here as the empty state below, reading "No
+                     * applications found".
+                     *
+                     * That is what made the roster bug in
+                     * _coop_admin_members.ts undiagnosable from the screen: the
+                     * action refused an admin whose user document had not caught
+                     * up, and the page reported it as a cooperative with no
+                     * members.
+                     *
+                     * NOT UNIQUE TO THIS PAGE. Twenty-nine admin screens are
+                     * built on useAdminData and not one of them renders its
+                     * error — seven destructure it and never use it, twenty-two
+                     * do not bind it at all. This is the one that was reported;
+                     * the rest are the same shape.
+                     */
+                    <div className="p-12 text-center">
+                        <XCircle className="w-16 h-16 text-red-300 mx-auto mb-4" />
+                        <p className="text-slate-900 font-semibold mb-1">Could not load members</p>
+                        <p className="text-slate-600 text-sm mb-4">{fetchError}</p>
+                        <button
+                            onClick={() => loadApplications()}
+                            className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium"
+                        >
+                            Try again
+                        </button>
+                    </div>
                 ) : filteredApplications.length === 0 ? (
                     <div className="p-12 text-center">
                         <Users className="w-16 h-16 text-slate-300 mx-auto mb-4" />

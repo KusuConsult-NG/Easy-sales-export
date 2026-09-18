@@ -656,15 +656,69 @@ export async function getStandardCooperativeMembersAction(
         const { session } = sessionResult;
         if (!session?.user?.id) return paginatedErr('Not authenticated');
 
+        /**
+         * THE ADMIN ROSTER REFUSED EVERY ADMIN WHOSE USER DOCUMENT HAD NOT
+         * CAUGHT UP.
+         *
+         * This read the live roles and ONLY the live roles:
+         *
+         *     const liveRoles = userDoc.data()?.roles;
+         *     if (!isAdmin(liveRoles)) return paginatedErr('Unauthorized');
+         *
+         * THREE other actions in this same file — _getAllMembersAction,
+         * _updateMemberStatusAction and the member detail read — take the
+         * SESSION roles first and consult the document only as a fallback. One
+         * file, four admin gates on one collection, and the only one that
+         * consults the document alone is the one the members page calls.
+         *
+         * That matters because the two disagree routinely, by design.
+         * module-access-check.ts's own header: "The JWT is minted at login and
+         * refreshed only every 1 hour. When an admin approves a user's
+         * application (writing the role to Firestore), the user's JWT is still
+         * stale" — and the platform's settled answer is the UNION of the two,
+         * never the document alone. `userDoc.data()?.roles` is also `undefined`
+         * when the document does not exist, which refuses the caller outright.
+         *
+         * Executed, side by side on one store: with the session carrying
+         * super_admin and the user document carrying no roles, this action
+         * returned { success: false, error: 'Unauthorized', data: [] } while
+         * getAllMembersAction returned the member. The members page calls this
+         * one — and renders a failed read as "No applications found", so the
+         * admin saw an empty cooperative and no reason for it.
+         *
+         * THE DOCUMENT STILL WINS WHEN IT HAS AN ANSWER.
+         *
+         * An existing test pins "refuses on the LIVE roles, not the session's"
+         * with a demoted admin: the document says ["user"], the session still
+         * says super_admin. That concern is real and is NOT given up here — a
+         * session-first union would have admitted them. The document remains
+         * authoritative whenever it actually carries a roles array.
+         *
+         * What changes is the case where the document has NO answer: no roles
+         * field, or no document at all. `isAdmin(undefined)` is false, so
+         * "nothing recorded" was being read as "recorded as not an admin", and
+         * the caller was refused on the strength of a value that was never
+         * written. That is the reported bug, and it is not a security property
+         * — nothing was asserted about this caller either way, so the session,
+         * which the platform signed and re-syncs from the profile every two
+         * minutes (lib/auth.ts SYNC_INTERVAL), is the better available answer.
+         *
+         * Resolved once and used for every decision below — the roster gate,
+         * the PII gate and the cooperative scope — so those three cannot answer
+         * from different role sets.
+         */
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const liveRoles = userDoc.data()?.roles;
-        if (!isAdmin(liveRoles)) {
+        const roles = Array.isArray(liveRoles) && liveRoles.length > 0
+            ? liveRoles
+            : session.user.roles;
+        if (!isAdmin(roles)) {
             return paginatedErr('Unauthorized');
         }
 
         // #338. Who may read a member's identity and bank details, as opposed
         // to who may see the roster at all.
-        const maySeeMemberPii = hasAdminPermission(liveRoles, "cooperatives:approve_members");
+        const maySeeMemberPii = hasAdminPermission(roles, "cooperatives:approve_members");
 
         let cursorSnap = null;
         if (cursorId && !/^\d+$/.test(cursorId)) {
@@ -674,7 +728,7 @@ export async function getStandardCooperativeMembersAction(
         const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all") || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
-        const adminScope = await getAdminScope(session.user.id, liveRoles);
+        const adminScope = await getAdminScope(session.user.id, roles);
 
         let applications: any[] = [];
         let hasMoreRaw = false;
@@ -899,7 +953,12 @@ export async function getStandardCooperativeMembersAction(
                         lga: mergedData.lga || "",
                         ward: mergedData.ward || "",
                         gender: mergedData.gender || "",
-                        bankDetails
+                        // Gated here too. The `data` key beside it was gated and
+                        // this was not, so the account number left through the
+                        // hydrated block regardless — the same "one key gated,
+                        // the value carried in another" shape as the five
+                        // sibling lists.
+                        ...(maySeeMemberPii ? { bankDetails } : {}),
                     },
                     status: app.membershipStatus || "pending",
                     /**
@@ -1006,13 +1065,40 @@ export async function getStandardCooperativeMembersAction(
                         lga: mergedData.lga || "",
                         ward: mergedData.ward || "",
                         gender: mergedData.gender || "",
-                        bankDetails
+                        // Gated here too. The `data` key beside it was gated and
+                        // this was not, so the account number left through the
+                        // hydrated block regardless — the same "one key gated,
+                        // the value carried in another" shape as the five
+                        // sibling lists.
+                        ...(maySeeMemberPii ? { bankDetails } : {}),
                     },
                     status: app.membershipStatus || "pending",
-                    data: {
-                        ...mergedData,
-                        bankDetails
-                    }
+                    /**
+                     * #338's STRIP REACHED ONE OF THIS FUNCTION'S TWO ROW
+                     * BUILDERS.
+                     *
+                     * The branch above — taken for a search, a date range, a
+                     * state, an LGA, a registry or a gender sort — gates this
+                     * exact object on maySeeMemberPii, under the #338 note
+                     * explaining why. THIS branch is the one taken for the
+                     * DEFAULT view, with no filters applied: the screen an
+                     * admin sees on load. It spread the merged member-and-user
+                     * document and re-attached bankDetails in the clear.
+                     *
+                     * Executed on the code as it stood, before the roster-gate
+                     * fix above and independent of it: a `support` admin — a
+                     * role that reaches this list and deliberately holds no
+                     * cooperatives:approve_members — received a row carrying
+                     * accountNumber "0123456789" and bvn "22222222222".
+                     *
+                     * Same two branches as #341, and as the five sibling lists
+                     * closed alongside this file: a caller who may act on the
+                     * record sees it minus any credential; a caller who may not
+                     * loses the identity and bank keys with it.
+                     */
+                    data: maySeeMemberPii
+                        ? stripSecrets({ ...mergedData, bankDetails })
+                        : stripPii({ ...mergedData, bankDetails })
                 };
             });
         }

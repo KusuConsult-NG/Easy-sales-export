@@ -102,8 +102,19 @@ describe('#338 — the two spreads that were not gated, now are', () => {
     });
 
     it('gated on the permission the screen exists to exercise', () => {
+        /**
+         * Matched on the permission, not on the variable that carries the roles.
+         *
+         * That variable was `liveRoles` when this was written. The roster gate
+         * above it now resolves the roles once — the document when it carries an
+         * answer, the session when it carries none — and hands the same set to
+         * this gate, the roster gate and getAdminScope, so the three cannot
+         * answer from different role sets. The permission is what this test is
+         * about, and asserting the variable name made that fix look like a
+         * regression.
+         */
         expect(source(COOP)).toMatch(
-            /const maySeeMemberPii = hasAdminPermission\(liveRoles, "cooperatives:approve_members"\)/);
+            /const maySeeMemberPii = hasAdminPermission\(\w+, "cooperatives:approve_members"\)/);
     });
 
     it('THE EXPORT APPLICATION LIST DOES THE SAME, AT BOTH OF ITS SPREADS', () => {
