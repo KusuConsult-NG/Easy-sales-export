@@ -1,5 +1,6 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isWithinAdminScope, DEFAULT_COOPERATIVE_ID } from "@/lib/cooperative-admin-scope";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetrics } from "@easy-sales/services";
 
@@ -49,12 +50,30 @@ export class UserMetricsService implements UserMetricsServiceContract {
     static async getCooperativeMemberMetrics(adminScope?: string): Promise<CooperativeMemberMetrics> {
         const db = getAdminDb();
 
+        /**
+         * The same divergence the members list had — see the note in
+         * _coop_admin_members.ts. An equality filter cannot express "belongs to
+         * the default cooperative": admin/_legacy.ts writes COOPERATIVE_MEMBERS
+         * rows with NO cooperativeId, and isWithinAdminScope reads that as the
+         * default. Here it produced UNDERCOUNTED metrics rather than a short
+         * list — the totals a scoped admin reads off the dashboard.
+         *
+         * `cooperativeId` is added to the select because the filter now needs
+         * it; this function already fetches every matching document, so the
+         * in-memory pass costs nothing.
+         */
+        const scopeNeedsMemoryFilter = adminScope === DEFAULT_COOPERATIVE_ID;
+
         let baseQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        if (adminScope) {
+        if (adminScope && !scopeNeedsMemoryFilter) {
             baseQuery = baseQuery.where("cooperativeId", "==", adminScope);
         }
 
-        const allMembers = await fetchAllDocs(baseQuery.select("status", "membershipStatus", "userId", "paymentStatus"));
+        const fetchedMembers = await fetchAllDocs(
+            baseQuery.select("status", "membershipStatus", "userId", "paymentStatus", "cooperativeId"));
+        const allMembers = adminScope
+            ? fetchedMembers.filter((d: any) => isWithinAdminScope(adminScope, d.data()?.cooperativeId))
+            : fetchedMembers;
 
         let totalApplications = 0;
         let approvedCount = 0;

@@ -79,6 +79,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
+import { isWithinAdminScope, DEFAULT_COOPERATIVE_ID } from '@/lib/cooperative-admin-scope';
 
 jest.mock('@/lib/redis', () => ({
     redis: null,
@@ -307,33 +308,130 @@ describe('and the roster does not hand a support admin an account number', () =>
     });
 });
 
-describe('the gap this does NOT close', () => {
-    it('a scoped admin still cannot see members with no cooperativeId', async () => {
+describe('a scoped admin sees the members the guard says are theirs', () => {
+    /**
+     * THE SCOPE FILTER HID THE MEMBERS IT WAS WRITTEN TO SHOW.
+     *
+     * A scoped admin got `.where("cooperativeId", "==", adminScope)`.
+     * isWithinAdminScope — the predicate the write guards use for the same
+     * question — reads a MISSING cooperativeId as the default cooperative:
+     *
+     *     const recordId = raw || DEFAULT_COOPERATIVE_ID;
+     *     return recordId === adminScope;
+     *
+     * A PostgREST equality filter cannot do that: an absent key matches
+     * nothing. The two therefore disagreed about exactly the rows the legacy
+     * import produces — admin/_legacy.ts writes COOPERATIVE_MEMBERS with NO
+     * cooperativeId, /api/cooperatives/register writes "default" — so a
+     * cooperative whose members came in through the Import Legacy button on
+     * this very screen showed its scoped admin a short list or none.
+     *
+     * Executed before the fix: scope "default", one legacy row and one
+     * registered row, roster came back ["registered"].
+     */
+    beforeEach(() => {
+        store.seed(COLLECTIONS.USERS, ADMIN, {
+            email: 'a@example.com', roles: ['cooperative_admin'],
+            cooperativeId: DEFAULT_COOPERATIVE_ID,
+        });
+        signedInAs(['cooperative_admin']);
+        // What admin/_legacy.ts writes: no cooperativeId at all.
+        seedMember('legacy', { cooperativeId: undefined });
+        // What /api/cooperatives/register writes.
+        seedMember('registered', { cooperativeId: 'default' });
+    });
+
+    it('INCLUDES THE LEGACY-IMPORTED MEMBERS — these were invisible', async () => {
+        const res = await roster();
+
+        expect(res.success).toBe(true);
+        // cm1 comes from the outer seed and also carries "default".
+        expect((res.data as any[]).map((r) => r.id).sort())
+            .toEqual(['cm1', 'legacy', 'registered']);
+    });
+
+    it('and getAllMembersAction, the twin with the same filter, agrees', async () => {
+        const { getAllMembersAction } =
+            await import('@/app/actions/cooperative/_coop_admin_members');
+        const res: any = await getAllMembersAction({});
+
+        expect(res.success).toBe(true);
+        expect((res.data.members as any[]).map((m) => m.id).sort())
+            .toEqual(['cm1', 'legacy', 'registered']);
+    });
+
+    it('and the member metrics count them too — they were undercounted', async () => {
+        // The same filter feeds the dashboard totals, where the failure is a
+        // wrong number rather than a short list.
+        const { UserMetricsService } = await import('@/services/userMetrics.service');
+        const metrics = await UserMetricsService.getCooperativeMemberMetrics(DEFAULT_COOPERATIVE_ID);
+
+        // cm1 (seeded by the outer beforeEach), legacy and registered.
+        expect(metrics.totalApplications).toBe(3);
+    });
+
+    it('and a NAMED cooperative still excludes rows that carry no id', async () => {
         /**
-         * Recorded, not fixed. getAdminScope reads `cooperativeId` off the
-         * ADMIN's user document; when it is set, this query adds
-         * `.where("cooperativeId", "==", scope)`. The bulk legacy member import
-         * writes COOPERATIVE_MEMBERS rows WITHOUT that field, and a PostgREST
-         * filter cannot match an absent key — while isWithinAdminScope, the
-         * in-memory guard written for the same question, treats a missing
-         * cooperativeId as "default" and lets it through.
-         *
-         * So the guard and the query disagree, and for a scoped admin on a
-         * legacy-imported cooperative the roster is empty for that reason
-         * instead. Pinned so the next person meets it as a known gap.
+         * The other direction, and why every other scope keeps its exact query
+         * filter: a row with no cooperativeId belongs to the DEFAULT
+         * cooperative, not to a named one. isWithinAdminScope says so, and the
+         * list must agree with it rather than widen.
          */
         store.seed(COLLECTIONS.USERS, ADMIN, {
             email: 'a@example.com', roles: ['cooperative_admin'], cooperativeId: 'coop-lagos',
         });
         signedInAs(['cooperative_admin']);
-        seedMember('legacy', { cooperativeId: undefined });
-        seedMember('scoped', { cooperativeId: 'coop-lagos' });
+        seedMember('theirs', { cooperativeId: 'coop-lagos' });
+
+        const res = await roster();
+        const ids = (res.data as any[]).map((r) => r.id);
+
+        expect(ids).toContain('theirs');
+        expect(ids).not.toContain('legacy');
+        expect(ids).not.toContain('registered');
+    });
+
+    it('and a platform admin is still unscoped', async () => {
+        store.seed(COLLECTIONS.USERS, ADMIN, { email: 'a@example.com', roles: ['super_admin'] });
+        signedInAs(['super_admin']);
 
         const res = await roster();
 
-        expect(res.success).toBe(true);
-        const ids = (res.data as any[]).map((r) => r.id);
-        expect(ids).toContain('scoped');
-        expect(ids).not.toContain('legacy');   // ← the gap
+        expect((res.data as any[]).map((r) => r.id).sort())
+            .toEqual(['cm1', 'legacy', 'registered']);
+    });
+
+    it('and the list answers the same question as the write guard, row by row', () => {
+        // The property, stated once: whatever the list returns for a scope must
+        // be exactly what isWithinAdminScope would admit.
+        for (const scope of [DEFAULT_COOPERATIVE_ID, 'coop-lagos']) {
+            expect(isWithinAdminScope(scope, undefined)).toBe(scope === DEFAULT_COOPERATIVE_ID);
+            expect(isWithinAdminScope(scope, 'default')).toBe(scope === DEFAULT_COOPERATIVE_ID);
+            expect(isWithinAdminScope(scope, 'coop-lagos')).toBe(scope === 'coop-lagos');
+        }
+    });
+
+    it('and the sites still carrying the raw filter are named, not forgotten', () => {
+        /**
+         * FIVE MORE QUERIES apply `.where("cooperativeId", "==", adminScope)`
+         * and have the same divergence. They are NOT fixed in this pass and
+         * that is a decision, not an oversight: they aggregate
+         * COOPERATIVE_TRANSACTIONS and COOPERATIVE_LOANS rather than paginate
+         * members, so each needs its own read of how much it pulls into memory.
+         * The three fixed here are the ones that query COOPERATIVE_MEMBERS,
+         * which is the collection with a writer that provably omits the field.
+         *
+         * Listed so the next pass finds them without re-deriving the sweep.
+         */
+        const remaining = [
+            'src/app/actions/cooperative/_coop_admin_money.ts',
+            'src/app/actions/cooperative/_coop_admin_reports.ts',
+        ];
+        const hits = remaining.flatMap((rel) => {
+            const code = readFileSync(join(process.cwd(), rel), 'utf-8');
+            return code.match(/where\("cooperativeId", "==", adminScope\)/g) ?? [];
+        });
+
+        expect(hits.length).toBe(5);
     });
 });

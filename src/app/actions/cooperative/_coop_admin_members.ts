@@ -13,7 +13,11 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { paginatedOk, paginatedErr, PaginatedAdminResponse } from "@/lib/admin-action-response";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { getAdminScope, isWithinAdminScope } from "@/lib/cooperative-admin-scope";
+import {
+    getAdminScope,
+    isWithinAdminScope,
+    DEFAULT_COOPERATIVE_ID,
+} from "@/lib/cooperative-admin-scope";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { Resend } from "resend";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -66,9 +70,16 @@ async function _getAllMembersAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, roles);
 
+        // The same divergence as the standard members list below, and the same
+        // remedy — see the long note there. An equality filter cannot express
+        // "belongs to the default cooperative", because the legacy import writes
+        // these rows with no cooperativeId at all and isWithinAdminScope reads
+        // that as the default. Every other scope keeps its exact query filter.
+        const scopeNeedsMemoryFilter = adminScope === DEFAULT_COOPERATIVE_ID;
+
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-        if (adminScope) {
+        if (adminScope && !scopeNeedsMemoryFilter) {
             q = q.where("cooperativeId", "==", adminScope);
         }
 
@@ -103,7 +114,11 @@ async function _getAllMembersAction(options?: {
         // Show ALL members who have a cooperative_members document (including pending/submitted).
         // Previously this filter hid users whose membershipStatus was still "pending" after
         // submitting the form — making them invisible to admins who tried to approve them.
-        const membersRaw = allMembersRaw;
+        // The cooperative scope, through the predicate the write guards use.
+        // A no-op for any scope the query already filtered exactly.
+        const membersRaw = adminScope
+            ? allMembersRaw.filter((m) => isWithinAdminScope(adminScope, m?.cooperativeId))
+            : allMembersRaw;
 
         // --- HYDRATION START ---
         const memberUserIds = [...new Set(membersRaw.map(m => m.userId || m.id).filter(Boolean))];
@@ -725,10 +740,51 @@ export async function getStandardCooperativeMembersAction(
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
-        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all") || options.sortBy === "gender";
-        const fetchLimit = useMemoryPagination ? 5000 : limitCount;
-
         const adminScope = await getAdminScope(session.user.id, roles);
+
+        /**
+         * THE SCOPE FILTER HID THE MEMBERS IT WAS WRITTEN TO SHOW.
+         *
+         * A scoped admin got `.where("cooperativeId", "==", adminScope)` on this
+         * query. isWithinAdminScope — the predicate the write guards in
+         * _coop_admin_money.ts and _updateMemberStatusAction use for the same
+         * question — reads a MISSING cooperativeId as the default cooperative:
+         *
+         *     const recordId = raw || DEFAULT_COOPERATIVE_ID;
+         *     return recordId === adminScope;
+         *
+         * A PostgREST equality filter cannot do that. An absent key matches
+         * nothing, so for an admin scoped to "default" the two disagree about
+         * exactly the rows the legacy import produced: admin/_legacy.ts writes
+         * COOPERATIVE_MEMBERS rows with NO cooperativeId, while
+         * /api/cooperatives/register writes "default". The guard says both are
+         * theirs; the query returned only the second.
+         *
+         * Executed: an admin scoped to "default", one legacy row and one
+         * registered row, and the roster came back ["registered"].
+         *
+         * A cooperative whose members were bulk-imported — which is what the
+         * Import Legacy button on this very screen produces — therefore showed
+         * its scoped admin an empty or badly short list.
+         *
+         * THE FIX, AND WHY IT IS SHAPED THIS WAY. The default scope is the only
+         * one that cannot be expressed as an equality filter, so it is the only
+         * one that drops to in-memory filtering — through isWithinAdminScope
+         * itself, so the list and the write guards cannot answer differently
+         * again. Every other scope keeps its exact query filter, which is both
+         * correct and cheap: a row with no cooperativeId genuinely does not
+         * belong to a named cooperative.
+         *
+         * Memory filtering is the mechanism this action already uses for a
+         * search or a date range, including its 5,000-row cap and the
+         * `truncated` flag it reports when that cap is hit — so a scoped admin
+         * on a very large default cooperative is told the list is incomplete
+         * rather than silently shown part of it.
+         */
+        const scopeNeedsMemoryFilter = adminScope === DEFAULT_COOPERATIVE_ID;
+
+        const useMemoryPagination = scopeNeedsMemoryFilter || !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all") || options.sortBy === "gender";
+        const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
         let applications: any[] = [];
         let hasMoreRaw = false;
@@ -736,7 +792,7 @@ export async function getStandardCooperativeMembersAction(
 
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-        if (adminScope) {
+        if (adminScope && !scopeNeedsMemoryFilter) {
             q = q.where("cooperativeId", "==", adminScope);
         }
 
@@ -798,6 +854,14 @@ export async function getStandardCooperativeMembersAction(
         // Perform in-memory filtering for cohort if useMemoryPagination is true
         let stats: any = null;
         if (useMemoryPagination) {
+            // The cooperative scope, applied through the same predicate the
+            // write guards use. A no-op for any scope the query already
+            // filtered exactly; for the default cooperative it is the filter.
+            if (adminScope) {
+                applications = applications.filter(
+                    (app) => isWithinAdminScope(adminScope, app?.cooperativeId));
+            }
+
             // Apply search filter if active
             if (search) {
                 const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
