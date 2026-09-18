@@ -44,7 +44,26 @@ export default function ListLandPage() {
 
     const [formData, setFormData] = useState({
         title: "",
-        category: [] as LandCategory[],
+        /**
+         *   #869 ONE CATEGORY PER LISTING, BECAUSE TWO CATEGORIES ARE TWO
+         *   LISTINGS.
+         *
+         *   THE OWNER, asked directly whether selecting two property types means
+         *   two listings or one listing with parts: "it means 2 listings except
+         *   if the land can be for either sell or rent etc."
+         *
+         *   So the category is a property OF the parcel, and a seller with
+         *   farmland and an orchard has two parcels to list. That also matches
+         *   what the platform can express: a listing carries one price, one
+         *   size, one location and one status, and the purchase, the escrow and
+         *   the map all operate on the whole of it.
+         *
+         *   It was a multi-select, and the array leaked all the way through —
+         *   `category?: string | string[]` on the action, `Array.isArray` in the
+         *   search filter, and again on the results page. Those readers are kept
+         *   for rows already written that way; the FORM stops making new ones.
+         */
+        category: "" as LandCategory | "",
         description: "",
         state: "",
         lga: "",
@@ -81,11 +100,42 @@ export default function ListLandPage() {
          *   page and the checkout read them — they are just derived from one
          *   answer now instead of from a set with a tiebreak.
          */
-        listingType: "sale" as "sale" | "rent" | "lease",
+        /**
+         *   #869 AND THE EXCEPTION THE OWNER NAMED: one parcel, more than one
+         *   offer.
+         *
+         *   "…except if the land can be for either sell or rent etc."
+         *
+         *   #861 made this a single value, and that was right about the DEFECT
+         *   and wrong about the rule. The defect was real: the form collected a
+         *   set and the submit collapsed it with a hidden precedence
+         *   (`includes("sale") ? "sale" : …`), so a seller who offered Rent AND
+         *   Lease got a listing typed "rent" and the lease half was unfindable.
+         *   Removing the set removed the symptom and also removed something the
+         *   owner wants.
+         *
+         *   It is a set again, and the collapse is gone rather than hidden: the
+         *   three `availableFor*` booleans ARE the answer now — they are what
+         *   the property page, the checkout and the search filter read — and
+         *   `type` is derived from them only as the primary label for rows and
+         *   readers that predate this.
+         */
+        listingTypes: ["sale"] as Array<"sale" | "rent" | "lease">,
         //   #861 How long the rent or lease runs. Asked for only when it
         //   applies; a duration on a sale is meaningless.
         durationValue: "" as string | number,
         durationUnit: "years" as "months" | "years",
+        /**
+         *   #869 THE RENT IS NOT THE SALE PRICE.
+         *
+         *   The half that makes "either sell or rent" real rather than a label.
+         *   A parcel worth ₦5,000,000 to buy might be ₦200,000 a year to rent,
+         *   and until now a listing carried ONE `price` which the checkout
+         *   charged whichever mode the buyer chose. Offering both without a
+         *   second figure would have meant charging one of the two buyers the
+         *   wrong number — which is worse than not offering it.
+         */
+        rentPrice: "" as string | number,
         escrowAvailable: true,
     });
 
@@ -133,25 +183,39 @@ export default function ListLandPage() {
         setExtraDocuments(prev => prev.filter((_, i) => i !== index));
     };
 
-    const toggleCategory = (value: LandCategory) => {
-        setFormData(prev => {
-            const current = Array.isArray(prev.category) ? prev.category : (prev.category ? [prev.category as LandCategory] : []);
-            const updated = current.includes(value)
-                ? current.filter(c => c !== value)
-                : [...current, value];
-            return { ...prev, category: updated };
-        });
+    //   #869 A choice, not a toggle. Two categories are two listings.
+    const selectCategory = (value: LandCategory) => {
+        setFormData(prev => ({ ...prev, category: value }));
     };
 
-    const selectListingType = (value: "sale" | "rent" | "lease") => {
-        //   #861 A choice, not a toggle. Clearing the duration when moving to a
-        //   sale stops a stale "3 years" riding along on a listing that has no
-        //   term — the same rule as the LGA clearing with its state.
-        setFormData(prev => ({
-            ...prev,
-            listingType: value,
-            ...(value === "sale" ? { durationValue: "" } : {}),
-        }));
+    /**
+     *   #869 A SET AGAIN, because one parcel may be offered more than one way.
+     *
+     *   #861's clearing rule is kept and generalised: the term and the rent
+     *   price belong to a rent or a lease, so when neither is offered any more
+     *   they are cleared rather than left to ride along on a pure sale. A stale
+     *   "3 years" on a listing with no rental is the shape #861 was right about.
+     *
+     *   AT LEAST ONE, always. Unticking the last option would leave a listing
+     *   that is for nothing — findable by no filter, and refused by the
+     *   checkout, with no way for the seller to tell why.
+     */
+    const toggleListingType = (value: "sale" | "rent" | "lease") => {
+        setFormData(prev => {
+            const has = prev.listingTypes.includes(value);
+            const next = has
+                ? prev.listingTypes.filter(t => t !== value)
+                : [...prev.listingTypes, value];
+
+            if (next.length === 0) return prev;
+
+            const rents = next.includes("rent") || next.includes("lease");
+            return {
+                ...prev,
+                listingTypes: next,
+                ...(rents ? {} : { durationValue: "", rentPrice: "" }),
+            };
+        });
     };
 
     const landCategories = [
@@ -227,6 +291,18 @@ export default function ListLandPage() {
     const totalPriceValue = formData.totalPriceEdited
         ? formData.totalPrice
         : (suggestedTotal > 0 ? String(suggestedTotal) : "");
+
+    /**
+     *   #869 Is this parcel offered on any rental terms?
+     *
+     *   Derived rather than stored, so it cannot fall out of step with the set
+     *   itself — the same reason the total price above is derived. Rent and
+     *   lease are one question here because the term and the periodic price
+     *   apply to both; where they DIFFER is the contract, which is the seller's
+     *   business and not the form's.
+     */
+    const offersRental = formData.listingTypes.includes("rent")
+        || formData.listingTypes.includes("lease");
 
     function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
@@ -317,7 +393,28 @@ export default function ListLandPage() {
             });
 
             // 3. Submit Data
-            const result = await submitLandListingAction({
+            /*
+             *   #869 THE BOOLEANS ARE THE ANSWER, AND THERE IS NO COLLAPSE.
+             *
+             *   #861 removed a multi-select because the submit folded it into
+             *   one value with a hidden precedence — a seller who offered Rent
+             *   AND Lease got "rent", and the lease half was unfindable. The
+             *   owner has since said one parcel may be "for either sell or
+             *   rent", so the set is back and the FOLD is what stays gone: each
+             *   flag below is set from the set directly, and every reader that
+             *   matters already reads the flags.
+             *
+             *   `type` is still written, as the PRIMARY offer, because rows and
+             *   readers that predate this expect a single string. Sale first
+             *   when it is offered, since that is the one that transfers title.
+             *   It is a label now, not the decision.
+             *
+             *   KEPT ABOVE THE CALL, not inside it: #512's ledger counts an
+             *   action result that sits more than forty lines from the check on
+             *   it, and an essay in the middle of an argument list is how a
+             *   `result` stops being inspected near where it is made.
+             */
+            const payload = {
                 ownerId: session.user.id,
                 ownerName: session.user.name || "Land Owner",
                 ownerEmail: session.user.email || "",
@@ -329,9 +426,7 @@ export default function ListLandPage() {
                     address: formData.address,
                 },
                 size: parseCurrencyStringToFloat(String(formData.size)),
-                //   #859 The seller's asking price. It defaults to size × unit
-                //   price and she may change it; what is submitted is whatever
-                //   the Total Price field says.
+                //   #859 The seller's asking price — see effectiveTotal.
                 price: effectiveTotal,
                 category: formData.category, // Added category
                 imageUrls,
@@ -340,27 +435,37 @@ export default function ListLandPage() {
                     latitude: parseFloat(formData.latitude),
                     longitude: parseFloat(formData.longitude)
                 } : undefined,
-                //   #861 Derived from ONE answer. `availableForRent` stays true
-                //   for a lease because the property page and the checkout use
-                //   it to mean "not a sale" — see PropertyDetailsClient's
-                //   "Lease/Rental price" label.
-                availableForSale: formData.listingType === "sale",
-                availableForRent: formData.listingType === "rent" || formData.listingType === "lease",
-                availableForLease: formData.listingType === "lease",
-                type: formData.listingType,
-                ...(formData.listingType !== "sale" && Number(formData.durationValue) > 0
+                availableForSale: formData.listingTypes.includes("sale"),
+                availableForRent: formData.listingTypes.includes("rent"),
+                availableForLease: formData.listingTypes.includes("lease"),
+                type: (formData.listingTypes.includes("sale") ? "sale"
+                    : formData.listingTypes.includes("rent") ? "rent" : "lease") as
+                        "sale" | "rent" | "lease",
+                //   #869 The rent is its own figure — see the form state.
+                ...(offersRental && parseCurrencyStringToFloat(String(formData.rentPrice)) > 0
+                    ? { rentPrice: parseCurrencyStringToFloat(String(formData.rentPrice)) }
+                    : {}),
+                ...(offersRental && Number(formData.durationValue) > 0
                     ? {
                         durationValue: Number(formData.durationValue),
                         durationUnit: formData.durationUnit,
                     }
                     : {}),
                 escrowAvailable: true,
-                //   #863 Where the "we have received your listing" notice sends
-                //   her. Her own listings, not the public property page — that
-                //   page refuses to show a listing an admin has not verified,
-                //   which is every listing at this moment.
+                //   #863 Her own listings, not the public property page, which
+                //   refuses to show a listing no admin has verified yet.
                 manageLink: "/farm-nation/my-properties",
-            });
+            };
+
+            /*
+             *   BUILT ABOVE, CALLED HERE, and that is #512's ledger rather than
+             *   taste: it counts an action result whose `success` or `error` is
+             *   never read within forty lines of the call, and this payload runs
+             *   to fifty. With the object inline, the check on the result drifted
+             *   out of that window as fields were added — which is precisely how
+             *   a result stops being inspected at all.
+             */
+            const result = await submitLandListingAction(payload);
 
             if (result.success) {
                 showToast("Land Listing Submitted! Your listing has been submitted for verification.", "success");
@@ -455,13 +560,22 @@ export default function ListLandPage() {
                                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Land Category *
                                     </label>
+                                    {/*
+                                      *   #869 ONE category. The owner, asked whether two
+                                      *   property types mean two listings or one listing with
+                                      *   parts: "it means 2 listings."
+                                      */}
+                                    <p className="text-xs text-slate-600 mb-3">
+                                        One category per listing. If you have land of another kind,
+                                        list it separately.
+                                    </p>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                         {landCategories.map((cat) => (
                                             <button
                                                 key={cat.value}
                                                 type="button"
-                                                onClick={() => toggleCategory(cat.value as LandCategory)}
-                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category.includes(cat.value as LandCategory)
+                                                onClick={() => selectCategory(cat.value as LandCategory)}
+                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category === (cat.value as LandCategory)
                                                     ? "border-green-600 bg-green-50"
                                                     : "border-slate-200 hover:border-green-400"
                                                     }`}
@@ -941,18 +1055,29 @@ export default function ListLandPage() {
                                     <label className="block text-sm font-semibold text-slate-900 mb-3">
                                         Listing Type *
                                     </label>
+                                    {/*
+                                      *   #869 …"except if the land can be for either sell or
+                                      *   rent etc." The same parcel may be offered more than
+                                      *   one way, so this one IS a multi-select — and unlike
+                                      *   the version #861 removed, nothing collapses the set
+                                      *   afterwards.
+                                      */}
+                                    <p className="text-xs text-slate-600 mb-3">
+                                        Choose every way this land is offered. The same parcel can be
+                                        for sale and for rent.
+                                    </p>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {[
                                             { value: "sale", label: "For Sale", description: "List this land for permanent purchase", icon: "🏷️" },
                                             { value: "rent", label: "For Rent", description: "List this land for short-term rental/lease", icon: "🔑" },
                                             { value: "lease", label: "For Lease", description: "List this land for long-term agricultural lease", icon: "📄" }
                                         ].map((option) => {
-                                            const isSelected = formData.listingType === option.value;
+                                            const isSelected = formData.listingTypes.includes(option.value as any);
                                             return (
                                                 <button
                                                     key={option.value}
                                                     type="button"
-                                                    onClick={() => selectListingType(option.value as any)}
+                                                    onClick={() => toggleListingType(option.value as any)}
                                                     className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col relative ${isSelected
                                                         ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
                                                         : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
@@ -986,10 +1111,10 @@ export default function ListLandPage() {
                                   *   meaningless, and a stale one left behind would be worse
                                   *   than absent.
                                   */}
-                                {formData.listingType !== "sale" && (
+                                {offersRental && (
                                     <div>
                                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                            {formData.listingType === "rent" ? "Rental" : "Lease"} Duration *
+                                            {formData.listingTypes.includes("rent") ? "Rental" : "Lease"} Duration *
                                         </label>
                                         <div className="grid grid-cols-2 gap-4">
                                             <input
@@ -1015,7 +1140,41 @@ export default function ListLandPage() {
                                             </select>
                                         </div>
                                         <p className="mt-2 text-sm text-slate-600">
-                                            How long the {formData.listingType === "rent" ? "rental" : "lease"} runs.
+                                            How long the {formData.listingTypes.includes("rent") ? "rental" : "lease"} runs.
+                                        </p>
+
+                                        {/*
+                                          *   #869 THE RENT IS ITS OWN FIGURE.
+                                          *
+                                          *   Until now a listing carried ONE price and the
+                                          *   checkout charged it whichever way the buyer was
+                                          *   buying. A parcel worth ₦5,000,000 to buy might be
+                                          *   ₦200,000 a year to rent — offering both without a
+                                          *   second number means charging one of the two the
+                                          *   wrong amount, which is worse than not offering it.
+                                          *
+                                          *   Required only when a SALE is also offered: a
+                                          *   rent-only listing already has the Total Price
+                                          *   field to itself.
+                                          */}
+                                        <label className="block text-sm font-semibold text-slate-900 mt-5 mb-2">
+                                            {formData.listingTypes.includes("rent") ? "Rental" : "Lease"} Price
+                                            {formData.listingTypes.includes("sale") && " *"}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formData.rentPrice}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, rentPrice: e.target.value }))}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            placeholder="e.g., 200000"
+                                            min="0"
+                                            step="1000"
+                                            required={formData.listingTypes.includes("sale")}
+                                        />
+                                        <p className="mt-2 text-sm text-slate-600">
+                                            What the land costs for the whole term above.
+                                            {formData.listingTypes.includes("sale")
+                                                && " The Total Price below is what it costs to BUY."}
                                         </p>
                                     </div>
                                 )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { landLocationText } from "@/lib/land-location";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -33,6 +34,24 @@ export default function CheckoutClient({ initial = null }: {
 
     const takeSeed = useServerSeed(initial);
     const [property, setProperty] = useState<LandListing | null>(null);
+
+    /**
+     *   #869 WHICH OFFER IS BEING PAID FOR.
+     *
+     *   THE OWNER: "…except if the land can be for either sell or rent etc."
+     *
+     *   This page charged `property.price` and labelled it off
+     *   `availableForRent`. While a listing was one thing OR the other that was
+     *   right; the moment a parcel is offered BOTH ways it charges one of the
+     *   two buyers the wrong amount. The property page now sends the offer the
+     *   buyer chose.
+     *
+     *   ABSENT MEANS BUY, and that is the safe default rather than a guess: a
+     *   listing offered only for rent is resolved below from its own flags, and
+     *   every listing written before this is offered exactly one way.
+     */
+    const searchParams = useSearchParams();
+    const requestedMode = searchParams.get("mode") === "rent" ? "rent" : "buy";
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -89,6 +108,34 @@ export default function CheckoutClient({ initial = null }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [propertyId, status, session, params.propertyId, router]);
 
+    /*
+     *   #869 THE OFFER, RESOLVED AGAINST THE LISTING'S OWN FLAGS.
+     *
+     *   The query string says what the buyer chose; the LISTING says what is
+     *   actually on offer. A `?mode=rent` on a parcel that is only for sale must
+     *   not become a rental — the URL is the buyer's, and a price must never be
+     *   decided by one.
+     *
+     *   Derived, not stored in state: there is no render where the label, the
+     *   figure and what is sent to Paystack can disagree.
+     */
+    const offersRental = property?.availableForRent === true
+        || property?.availableForLease === true;
+    const offersSale = property?.availableForSale === true;
+    const mode: "buy" | "rent" =
+        requestedMode === "rent" && offersRental ? "rent"
+        : (offersRental && !offersSale ? "rent" : "buy");
+
+    /*
+     *   `price` is the SALE price; `rentPrice` is what the term costs. A rental
+     *   listing written before #869 carries no rentPrice, so it falls back to
+     *   `price` — which is what that field has always meant on those rows, and
+     *   is the behaviour this page had before today.
+     */
+    const chargedPrice = mode === "rent" && Number(property?.rentPrice) > 0
+        ? Number(property?.rentPrice)
+        : Number(property?.price ?? 0);
+
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
@@ -120,7 +167,9 @@ export default function CheckoutClient({ initial = null }: {
             const result = await initializePropertyPaymentAction(
                 propertyId,
                 property.title,
-                property.price,
+                //   #869 The price of the offer being taken, not whichever
+                //   number the row happens to carry.
+                chargedPrice,
                 property.ownerId,
                 {
                     fullName: buyerInfo.name,
@@ -128,7 +177,11 @@ export default function CheckoutClient({ initial = null }: {
                     phone: buyerInfo.phone,
                     purpose: buyerInfo.purpose,
                     zoningComplianceDeclarationAccepted: true
-                }
+                },
+                //   #869 Which offer. The server re-checks it against the
+                //   listing's own flags — a mode the seller never offered is
+                //   ignored there, not honoured because the URL said so.
+                mode,
             );
 
             if (result.success ) {
@@ -375,9 +428,9 @@ export default function CheckoutClient({ initial = null }: {
                                 </div>
                                 <div className="flex items-center gap-2 text-sm">
                                     <span className={`px-3 py-1 rounded-lg font-semibold ${
-                                        property.availableForRent ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                                        mode === "rent" ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
                                     }`}>
-                                        {property.availableForRent ? 'Lease / Rental' : 'Purchase'}
+                                        {mode === "rent" ? 'Lease / Rental' : 'Purchase'}
                                     </span>
                                 </div>
                             </div>
@@ -385,10 +438,10 @@ export default function CheckoutClient({ initial = null }: {
                             <div className="border-t border-slate-200 pt-4 space-y-3">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-600">
-                                        {property.availableForRent ? 'Lease Price' : 'Property Price'}
+                                        {mode === "rent" ? 'Lease Price' : 'Property Price'}
                                     </span>
                                     <span className="font-semibold text-slate-900">
-                                        ₦{Number(property.price || 0).toLocaleString()}
+                                        ₦{Number(chargedPrice || 0).toLocaleString()}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
@@ -402,7 +455,7 @@ export default function CheckoutClient({ initial = null }: {
                                 <div className="border-t border-slate-200 pt-3 flex justify-between">
                                     <span className="font-bold text-slate-900">Total Amount</span>
                                     <span className="text-2xl font-bold text-green-600">
-                                        ₦{Number(property.price || 0).toLocaleString()}
+                                        ₦{Number(chargedPrice || 0).toLocaleString()}
                                     </span>
                                 </div>
                             </div>

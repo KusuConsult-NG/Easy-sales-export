@@ -9,7 +9,25 @@
  *   THE OWNER: "listing should not be multiple selection under land category"
  *   and "There should be duration for leasing or renting."
  *
- * ── 1. ONE LISTING TYPE ─────────────────────────────────────────────────────
+ * ── SUPERSEDED IN PART BY #869, AND THE CORRECTION IS RECORDED HERE ─────────
+ *
+ *   The owner was later asked directly whether selecting two property types
+ *   means two listings or one listing with parts, and answered: "it means 2
+ *   listings EXCEPT IF THE LAND CAN BE FOR EITHER SELL OR RENT etc."
+ *
+ *   So this finding was right about the DEFECT and wrong about the remedy. The
+ *   defect — a set folded into one value by a hidden precedence, leaving the
+ *   second offer unfindable — was real, and everything below that pins the fold
+ *   being gone still holds. What did not hold is the conclusion that the set had
+ *   to go with it: the platform could not express two offers, so this removed
+ *   the offer rather than teaching the platform.
+ *
+ *   #869 restores the set and makes the rest of the platform able to carry it —
+ *   the search filter matches the flags instead of the single label, and the
+ *   rent has its own price. The assertions here are rewritten to the corrected
+ *   rule rather than deleted, so the reasoning survives with it.
+ *
+ * ── 1. ONE ANSWER PER OFFER, AND NO HIDDEN PRECEDENCE ───────────────────────
  *
  *   Both land forms carried `listingTypes: ("sale"|"rent"|"lease")[]` behind a
  *   togglable multi-select, and the submit then collapsed the set back into one
@@ -58,25 +76,38 @@ const DETAILS = 'src/app/farm-nation/property/[id]/PropertyDetailsClient.tsx';
 const FORMS = [CREATE, EDIT];
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#861 — the listing type is one answer', () => {
-    it('NEITHER FORM KEEPS A SET OF TYPES', () => {
-        const offenders = FORMS.filter((f) => code(f).includes('listingTypes'));
-        expect(offenders).toEqual([]);
-    });
-
-    it('AND BOTH HOLD A SINGLE VALUE', () => {
-        const missing = FORMS.filter((f) => !code(f).includes('listingType:'));
+describe('#861 — the listing type carries every offer, with no hidden precedence', () => {
+    it('BOTH FORMS KEEP THE SET — #869 corrected this', () => {
+        //   Was: "NEITHER FORM KEEPS A SET OF TYPES". See the header.
+        const missing = FORMS.filter((f) => !code(f).includes('listingTypes'));
         expect(missing).toEqual([]);
     });
 
-    it('AND THE HIDDEN PRECEDENCE IS GONE FROM BOTH SUBMITS', () => {
+    it('AND NEITHER FOLDS IT INTO ONE FLAG-SETTING DECISION', () => {
         /*
-         *   The expression that decided, without anybody choosing it, that Rent
-         *   beats Lease.
+         *   THE HALF THIS FINDING WAS RIGHT ABOUT, and it still holds. The
+         *   expression that decided, without anybody choosing it, that Rent
+         *   beats Lease:
+         *
+         *       type: listingTypes.includes("sale") ? "sale"
+         *           : (listingTypes.includes("rent") ? "rent" : "lease")
+         *
+         *   `type` is still DERIVED that way as a label for legacy readers, so
+         *   the string is present — what must not come back is the three
+         *   availableFor* FLAGS being set from a collapsed single value. Each is
+         *   set from the set directly.
          */
         for (const f of FORMS) {
-            expect({ f, collapses: /includes\("sale"\) \? "sale"/.test(code(f)) })
-                .toEqual({ f, collapses: false });
+            const src = code(f);
+            for (const [flag, member] of [
+                ['availableForSale', 'includes("sale")'],
+                ['availableForRent', 'includes("rent")'],
+                ['availableForLease', 'includes("lease")'],
+            ] as const) {
+                const at = src.indexOf(`${flag}: formData.listingTypes`);
+                expect({ f, flag, direct: at > -1 && src.slice(at, at + 90).includes(member) })
+                    .toEqual({ f, flag, direct: true });
+            }
         }
     });
 
@@ -96,21 +127,25 @@ describe('#861 — the listing type is one answer', () => {
         }
     });
 
-    it('AND AN EXISTING MULTI-TYPE ROW READS BACK DETERMINISTICALLY', () => {
+    it('AND AN EXISTING MULTI-TYPE ROW READS BACK WHOLE', () => {
         /*
-         *   Rows already in the database were written by the multi-select and
-         *   may carry more than one flag. The edit form has to pick one, and
-         *   WHICH it picks is the decision: `type` is what the buyer-facing
-         *   filter uses, so it wins, with the flags as the fallback for rows
-         *   written before it was set.
+         *   #869 CORRECTED THIS TOO, and this is the sharper half. Under the old
+         *   rule the edit form read ONE type back and then wrote it — so a
+         *   seller who opened a listing offered two ways and saved anything at
+         *   all silently lost the second offer.
+         *
+         *   Every flag is read now, with `type` as the fallback for rows written
+         *   before the flags existed.
          */
         const src = code(EDIT);
-        const at = src.indexOf('const listingType');
+        const at = src.indexOf('const listingTypes');
 
         expect(at).toBeGreaterThan(-1);
-        const block = src.slice(at, at + 300);
+        const block = src.slice(at, at + 420);
+        expect(block).toContain('prop.availableForSale');
+        expect(block).toContain('prop.availableForRent');
+        expect(block).toContain('prop.availableForLease');
         expect(block).toContain('prop.type');
-        expect(block.indexOf('prop.type')).toBeLessThan(block.indexOf('availableForLease'));
     });
 });
 
@@ -123,24 +158,27 @@ describe('#861 — and a rent or lease carries its term, end to end', () => {
         expect(src).toContain('durationUnit');
     });
 
-    it('AND ONLY FOR A RENT OR A LEASE', () => {
+    it('AND ONLY WHEN A RENTAL IS ACTUALLY OFFERED', () => {
         //   A duration on a permanent purchase is meaningless, and a field that
-        //   appears where it cannot apply teaches people to ignore it.
+        //   appears where it cannot apply teaches people to ignore it. #869: the
+        //   condition is now "offers a rental", not "is not a sale", because a
+        //   parcel can be both.
         const src = code(CREATE);
-        expect(src).toContain('formData.listingType !== "sale" && (');
+        expect(src).toContain('{offersRental && (');
     });
 
-    it('AND IT IS CLEARED WHEN THE TYPE BECOMES A SALE', () => {
+    it('AND IT IS CLEARED WHEN NO RENTAL IS OFFERED ANY MORE', () => {
         /*
-         *   Otherwise a seller who fills in "3 years", then changes her mind and
-         *   picks For Sale, submits a permanent purchase carrying a term. Same
-         *   rule as #857's LGA clearing with its state.
+         *   Otherwise a seller who fills in "3 years", then unticks Rent,
+         *   submits a pure sale carrying a term. Same rule as #857's LGA
+         *   clearing with its state — #869 widened it to the rent price too,
+         *   which has exactly the same problem.
          */
         const src = code(CREATE);
-        const at = src.indexOf('const selectListingType');
+        const at = src.indexOf('const toggleListingType');
 
         expect(at).toBeGreaterThan(-1);
-        expect(src.slice(at, at + 300)).toContain('durationValue: ""');
+        expect(src.slice(at, at + 700)).toContain('durationValue: "", rentPrice: ""');
     });
 
     it('AND THE ACTION ACCEPTS AND STORES IT', () => {

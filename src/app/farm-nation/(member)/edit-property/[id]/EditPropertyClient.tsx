@@ -47,7 +47,9 @@ export default function EditPropertyClient(props: {
         //   #861 One listing type, matching the create form. An edit
         //   screen still offering a multi-select would let the second save
         //   reintroduce exactly what the create form stopped producing.
-        listingType: "sale" as "sale" | "rent" | "lease",
+        //   #869 A set, matching the create form. One parcel may be offered
+        //   for sale AND on rental terms — see the create form's note.
+        listingTypes: ["sale"] as Array<"sale" | "rent" | "lease">,
     });
 
     const nigerianStates = [
@@ -79,17 +81,22 @@ export default function EditPropertyClient(props: {
                     const prop = result.data;
                     const location = prop.location || { state: "", lga: "", address: "" };
                     /*
-                     *   #861 ONE value read back. Existing rows may carry more
-                     *   than one availableFor* flag — the multi-select wrote
-                     *   them — so the ORDER here is the decision: `type` is what
-                     *   the buyer-facing filter uses, so it wins, and the flags
-                     *   are the fallback for rows written before it was set.
+                     *   #869 EVERY offer read back, not one.
+                     *
+                     *   #861 collapsed this to a single value and the edit form
+                     *   then WROTE that back — so a seller who opened a listing
+                     *   offered two ways and saved anything at all silently lost
+                     *   the second offer. The flags are the record; `type` is
+                     *   the fallback for rows written before they existed.
                      */
-                    const listingType: "sale" | "rent" | "lease" =
-                        (prop.type as any)
-                        ?? (prop.availableForLease ? "lease"
-                            : prop.availableForRent ? "rent"
-                            : "sale");
+                    const listingTypes: Array<"sale" | "rent" | "lease"> = [
+                        ...(prop.availableForSale ? ["sale" as const] : []),
+                        ...(prop.availableForRent ? ["rent" as const] : []),
+                        ...(prop.availableForLease ? ["lease" as const] : []),
+                    ];
+                    if (listingTypes.length === 0) {
+                        listingTypes.push(((prop.type as any) ?? "sale"));
+                    }
                     setFormData({
                         title: prop.title || "",
                         description: prop.description || "",
@@ -102,7 +109,7 @@ export default function EditPropertyClient(props: {
                             ? prop.category
                             : (prop.category ? [prop.category] : ["farmland"]),
                         features: (prop as any).features || [],
-                        listingType,
+                        listingTypes,
                     });
                 } else {
                     showToast(result.error || "Property not found", "error");
@@ -128,9 +135,14 @@ export default function EditPropertyClient(props: {
         });
     };
 
-    const selectListingType = (value: "sale" | "rent" | "lease") => {
-        //   #861 A choice, not a toggle — see the create form.
-        setFormData(prev => ({ ...prev, listingType: value }));
+    //   #869 A set, and never empty — see the create form for why.
+    const toggleListingType = (value: "sale" | "rent" | "lease") => {
+        setFormData(prev => {
+            const next = prev.listingTypes.includes(value)
+                ? prev.listingTypes.filter(t => t !== value)
+                : [...prev.listingTypes, value];
+            return next.length === 0 ? prev : { ...prev, listingTypes: next };
+        });
     };
 
     async function handleSubmit(e: React.FormEvent) {
@@ -161,10 +173,13 @@ export default function EditPropertyClient(props: {
                 category: formData.category,
                 features: formData.features,
                 //   #861 Derived from one answer, exactly as the create form does.
-                availableForSale: formData.listingType === "sale",
-                availableForRent: formData.listingType === "rent" || formData.listingType === "lease",
-                availableForLease: formData.listingType === "lease",
-                type: formData.listingType,
+                //   #869 Each flag from the set directly. No fold, so an edit
+                //   cannot quietly drop an offer the seller made.
+                availableForSale: formData.listingTypes.includes("sale"),
+                availableForRent: formData.listingTypes.includes("rent"),
+                availableForLease: formData.listingTypes.includes("lease"),
+                type: formData.listingTypes.includes("sale") ? "sale"
+                    : formData.listingTypes.includes("rent") ? "rent" : "lease",
                 escrowAvailable: true,
             });
 
@@ -389,12 +404,12 @@ export default function EditPropertyClient(props: {
                                             { value: "rent", label: "For Rent", description: "List this land for short-term rental/lease", icon: "🔑" },
                                             { value: "lease", label: "For Lease", description: "List this land for long-term agricultural lease", icon: "📄" }
                                         ].map((option) => {
-                                            const isSelected = formData.listingType === option.value;
+                                            const isSelected = formData.listingTypes.includes(option.value as any);
                                             return (
                                                 <button
                                                     key={option.value}
                                                     type="button"
-                                                    onClick={() => selectListingType(option.value as any)}
+                                                    onClick={() => toggleListingType(option.value as any)}
                                                     className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col relative ${isSelected
                                                         ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
                                                         : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"

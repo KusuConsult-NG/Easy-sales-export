@@ -66,6 +66,9 @@ export interface LandListing {
     //   #861 Present only on a rent or lease — see the submit action.
     durationValue?: number;
     durationUnit?: "months" | "years";
+    //   #869 The rental figure, when the parcel is offered on rental terms as
+    //   well as (or instead of) for sale. `price` remains the SALE price.
+    rentPrice?: number;
     escrowAvailable?: boolean;
     /**
      * A string, matching types/index.ts and the database query in
@@ -758,7 +761,44 @@ async function _searchLandListingsAction(filters: {
         }
         if (filters.soilType) { results = results.filter((l) => l.soilType === filters.soilType); }
         if (filters.waterSource) { results = results.filter((l) => l.waterSource === filters.waterSource); }
-        if (filters.type) { results = results.filter((l) => l.type === filters.type); }
+        /*
+         *   #869 A PARCEL OFFERED TWO WAYS IS FOUND UNDER BOTH.
+         *
+         *   THE OWNER: "…except if the land can be for either sell or rent etc."
+         *
+         *   This asked `l.type === filters.type`, and `type` holds ONE string —
+         *   so a listing offered for sale AND for rent appeared under whichever
+         *   of the two that string happened to be, and was invisible under the
+         *   other. #861 identified exactly this and drew the opposite
+         *   conclusion, removing the multi-select because the filter could not
+         *   express it. The filter can express it now.
+         *
+         *   The BOOLEANS are what is matched, because they are what the form
+         *   writes per offer and what the property page and the checkout read.
+         *   `type` is the fallback for rows written before the flags existed —
+         *   dropping to it only when the row carries no flags at all, so a row
+         *   that HAS them is never judged by the label.
+         */
+        if (filters.type) {
+            const wanted = filters.type;
+            results = results.filter((l) => {
+                const flags = l as unknown as {
+                    availableForSale?: boolean;
+                    availableForRent?: boolean;
+                    availableForLease?: boolean;
+                };
+                const hasFlags = flags.availableForSale !== undefined
+                    || flags.availableForRent !== undefined
+                    || flags.availableForLease !== undefined;
+
+                if (!hasFlags) return l.type === wanted;
+
+                if (wanted === "sale") return flags.availableForSale === true;
+                if (wanted === "rent") return flags.availableForRent === true;
+                if (wanted === "lease") return flags.availableForLease === true;
+                return l.type === wanted;
+            });
+        }
 
         // Client-side filtering for category (supports legacy string and new string array)
         if (filters.category) {
@@ -886,6 +926,23 @@ async function _submitLandListingAction(data: {
      */
     durationValue?: number;
     durationUnit?: "months" | "years";
+    /**
+     *   #869 WHAT THE LAND COSTS TO RENT, as distinct from what it costs to buy.
+     *
+     *   THE OWNER, on whether two property types mean two listings: "it means 2
+     *   listings except if the land can be for either sell or rent etc."
+     *
+     *   That exception needs a second figure. A listing has always carried ONE
+     *   `price`, and the checkout charged it whichever way the buyer was buying
+     *   — fine while a listing was one thing or the other, and wrong the moment
+     *   a parcel is offered both ways: a parcel worth ₦5,000,000 to buy might be
+     *   ₦200,000 a year to rent.
+     *
+     *   `price` stays the SALE price, because that is what every existing row
+     *   means by it and what the escrow and the ledger already record. Optional,
+     *   so every listing written before this is unchanged.
+     */
+    rentPrice?: number;
     escrowAvailable?: boolean;
     /**
      *   #863 WHERE THE "we have received your listing" NOTICE SENDS HER.
@@ -1005,6 +1062,19 @@ async function _submitLandListingAction(data: {
             //   all rather than a zero somebody has to interpret.
             ...(typeof data.durationValue === "number" && data.durationValue > 0
                 ? { durationValue: data.durationValue, durationUnit: data.durationUnit ?? "years" }
+                : {}),
+            /*
+             *   #869 The rental figure, spread for the same reason the term is:
+             *   a pure sale carries no rentPrice at all rather than a zero every
+             *   reader has to learn to disregard.
+             *
+             *   NOT VALIDATED AGAINST `price`. A rent higher than the sale price
+             *   is unusual and not impossible — a short lease of prime land can
+             *   exceed a distressed sale — and a form that refuses it would be
+             *   guessing at the seller's market.
+             */
+            ...(typeof data.rentPrice === "number" && data.rentPrice > 0
+                ? { rentPrice: data.rentPrice }
                 : {}),
             escrowAvailable: data.escrowAvailable ?? true,
             createdAt: FieldValue.serverTimestamp(),

@@ -34,6 +34,43 @@ export default function PropertyDetailsClient({ initial = null }: {
     const [loading, setLoading] = useState(initial === null);
     const [error, setError] = useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+    /**
+     *   #869 WHICH OFFER THE BUYER IS TAKING.
+     *
+     *   THE OWNER: "…except if the land can be for either sell or rent etc."
+     *
+     *   Only meaningful when a parcel is offered BOTH ways, which is the case
+     *   this exists for. For every single-offer listing — all of them until a
+     *   seller ticks two — it settles to that one offer below, so nothing about
+     *   the existing flow changes.
+     */
+    const [mode, setMode] = useState<"buy" | "rent">("buy");
+
+    const offersSale = property?.availableForSale === true;
+    const offersRental = property?.availableForRent === true
+        || property?.availableForLease === true;
+    const bothOffered = offersSale && offersRental;
+
+    /*
+     *   A listing offered ONLY for rent must not be read as a purchase just
+     *   because `mode` starts at "buy" — the toggle is not shown for it, so
+     *   nothing would ever move it. Derived rather than set in an effect, so
+     *   there is no render where the label and the price disagree.
+     */
+    const effectiveMode: "buy" | "rent" = bothOffered
+        ? mode
+        : (offersRental && !offersSale ? "rent" : "buy");
+
+    /*
+     *   #869 THE PRICE FOLLOWS THE OFFER. `price` is the SALE price; `rentPrice`
+     *   is what the land costs for the term. A rental listing written before
+     *   this has no rentPrice, so it falls back to `price` — which is exactly
+     *   what it has always meant on those rows.
+     */
+    const offerPrice = effectiveMode === "rent"
+        ? (Number(property?.rentPrice) > 0 ? property?.rentPrice : property?.price)
+        : property?.price;
     const { showToast } = useToast();
 
     async function loadProperty() {
@@ -374,13 +411,49 @@ export default function PropertyDetailsClient({ initial = null }: {
                     <div className="lg:col-span-1 space-y-6">
                         {/* CTA Card */}
                         <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
+                             {/*
+                               *   #869 ONE PARCEL, POSSIBLY TWO OFFERS.
+                               *
+                               *   THE OWNER: "…except if the land can be for either sell or
+                               *   rent etc."
+                               *
+                               *   This showed ONE price and labelled it off a single boolean:
+                               *   `availableForRent ? "Lease/Rental price" : "Purchase price"`.
+                               *   For a parcel offered BOTH ways that is not a label problem —
+                               *   the buyer is shown one number and the checkout charges it
+                               *   whichever way she is buying, so one of the two is charged the
+                               *   wrong amount. Both offers are shown, and she picks one.
+                               */}
                              <div className="mb-6">
                                   <p className="text-3xl font-bold text-slate-900 mb-1">
-                                      ₦{Number(property.price || 0).toLocaleString()}
+                                      ₦{Number(offerPrice || 0).toLocaleString()}
                                   </p>
                                  <p className="text-sm text-slate-500">
-                                     {property.availableForRent ? "Lease/Rental price" : "Purchase price"}
+                                     {effectiveMode === "buy" ? "Purchase price" : "Lease/Rental price"}
                                  </p>
+
+                                 {bothOffered && (
+                                     <div className="mt-3 grid grid-cols-2 gap-2">
+                                         {([
+                                             { key: "buy", label: "Buy" },
+                                             { key: "rent", label: property.availableForLease ? "Lease" : "Rent" },
+                                         ] as const).map((o) => (
+                                             <button
+                                                 key={o.key}
+                                                 type="button"
+                                                 onClick={() => setMode(o.key)}
+                                                 aria-pressed={effectiveMode === o.key}
+                                                 className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${
+                                                     effectiveMode === o.key
+                                                         ? "bg-green-600 text-white border-green-600"
+                                                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                                 }`}
+                                             >
+                                                 {o.label}
+                                             </button>
+                                         ))}
+                                     </div>
+                                 )}
                                  {/*
                                    *   #861 THE TERM, shown where the price is.
                                    *
@@ -390,7 +463,7 @@ export default function PropertyDetailsClient({ initial = null }: {
                                    *   out which. The form collects it now; a stored field
                                    *   nothing displays is the other half of the same defect.
                                    */}
-                                 {property.availableForRent && typeof property.durationValue === "number"
+                                 {effectiveMode === "rent" && typeof property.durationValue === "number"
                                      && property.durationValue > 0 && (
                                      <p className="text-sm font-semibold text-slate-700">
                                          Term: {property.durationValue}{" "}
@@ -407,12 +480,17 @@ export default function PropertyDetailsClient({ initial = null }: {
                                                 router.push(`/auth/register?callbackUrl=/farm-nation/checkout/${propertyId}`);
                                                 return;
                                             }
-                                            router.push(`/farm-nation/checkout/${propertyId}`);
+                                            //   #869 The chosen offer travels with the buyer.
+                                            //   The checkout charges what it is told, and a
+                                            //   missing mode still means "buy" for every
+                                            //   single-offer listing, which is all of them
+                                            //   until a seller ticks two.
+                                            router.push(`/farm-nation/checkout/${propertyId}?mode=${effectiveMode}`);
                                         }}
                                         className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
                                     >
                                         <Lock className="w-5 h-5" />
-                                        {property.availableForRent ? "Lock Lease/Rental Reservation" : "Lock Land Reservation"}
+                                        {effectiveMode === "rent" ? "Lock Lease/Rental Reservation" : "Lock Land Reservation"}
                                     </button>
                                 </div>
                             ) : (

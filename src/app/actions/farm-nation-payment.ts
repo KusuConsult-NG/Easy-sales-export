@@ -38,7 +38,22 @@ async function _initializePropertyPaymentAction(
         phone: string; 
         purpose: string; 
         zoningComplianceDeclarationAccepted?: boolean;
-    }
+    },
+    /**
+     *   #869 WHICH OFFER IS BEING PAID FOR.
+     *
+     *   THE OWNER: "…except if the land can be for either sell or rent etc." A
+     *   parcel may now be offered for sale AND on rental terms, at two different
+     *   figures, so the charge depends on which one the buyer took.
+     *
+     *   A HINT, NOT AN INSTRUCTION. It is validated against the LISTING's own
+     *   flags below and falls back to a purchase — the same rule this file
+     *   already applies to `amount`, `sellerId` and `propertyTitle`, every one
+     *   of which was a caller-supplied value that had to stop deciding
+     *   anything. Absent means "buy", which is what every listing written
+     *   before this is.
+     */
+    mode?: "buy" | "rent",
 ): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> { 
     try {
         const sessionResult = await requireSession();
@@ -82,8 +97,31 @@ async function _initializePropertyPaymentAction(
 
         const propertyData = propertyDoc.data()!;
 
-        // The price the seller listed, not the price the buyer proposed.
-        const listedPrice = Number(propertyData.price || 0);
+        /*
+         *   #869 THE PRICE OF THE OFFER THE BUYER TOOK — still the seller's
+         *   figure, never the buyer's.
+         *
+         *   The mode is resolved against the listing rather than believed: a
+         *   `mode: "rent"` on a parcel that is only for sale is ignored, so a
+         *   buyer cannot pick the cheaper of two figures by asking for an offer
+         *   the seller never made.
+         *
+         *   `price` remains the SALE price. `rentPrice` is what the term costs,
+         *   and a rental listing written before #869 carries none — so it falls
+         *   back to `price`, which is exactly what that field meant on those
+         *   rows, and this path charged before today.
+         */
+        const offersRental = propertyData.availableForRent === true
+            || propertyData.availableForLease === true;
+        const offersSale = propertyData.availableForSale === true;
+        const resolvedMode: "buy" | "rent" =
+            mode === "rent" && offersRental ? "rent"
+            : (offersRental && !offersSale ? "rent" : "buy");
+
+        const rentPrice = Number(propertyData.rentPrice || 0);
+        const listedPrice = resolvedMode === "rent" && rentPrice > 0
+            ? rentPrice
+            : Number(propertyData.price || 0);
 
         // The seller and the title come from the LISTING, not the request.
         //
@@ -230,6 +268,15 @@ async function _initializePropertyPaymentAction(
             propertyName: listingTitle,
             propertyPrice: listedPrice,
             propertyType: propertyData.category || "land",
+            /*
+             *   #869 WHICH OFFER WAS BOUGHT, on the record.
+             *
+             *   Without it the purchase row says only what was paid, and for a
+             *   parcel offered both ways nobody can tell afterwards whether
+             *   ₦200,000 was a cheap sale or a year's rent. The admin finance
+             *   queue, the seller's notice and any dispute all read this row.
+             */
+            offerMode: resolvedMode,
             buyerId: session.user.id,
             buyerName: buyerInfo.fullName,
             buyerEmail: buyerInfo.email,
