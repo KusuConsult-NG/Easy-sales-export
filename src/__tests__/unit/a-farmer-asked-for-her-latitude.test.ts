@@ -131,7 +131,10 @@ describe('#868 — and the seller can point at the land instead of typing it', (
         //   worse than one that cannot be dragged at all.
         const src = code(PICKER);
 
-        expect(src).toContain('draggable: true');
+        //   #871 made this conditional: the SAME component renders read-only on
+        //   the property detail page, where a buyer must not move the seller's
+        //   pin. A dragging map is still a dragging map for the seller.
+        expect(src).toContain('draggable: !readOnlyRef.current');
         expect(src).toContain("marker.on(\"dragend\"");
     });
 
@@ -188,7 +191,9 @@ describe('#868 — and a stray tap is flagged rather than refused', () => {
         expect(src).toContain('outside Nigeria');
         //   The map, the fields and the selected-point line are all rendered
         //   regardless; only the warning is conditional on it.
-        expect(src).toContain('{outsideNigeria && (');
+        //   #871 guarded it with !readOnly too: the warning is advice to whoever
+        //   is placing the pin, and there is nobody placing one on a detail page.
+        expect(src).toContain('outsideNigeria && (');
         expect(src).not.toContain('if (outsideNigeria) return');
     });
 });

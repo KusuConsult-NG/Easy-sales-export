@@ -69,6 +69,16 @@ export interface LandListing {
     //   #869 The rental figure, when the parcel is offered on rental terms as
     //   well as (or instead of) for sale. `price` remains the SALE price.
     rentPrice?: number;
+    /**
+     *   #871 WHERE THE LAND IS, DECLARED so a reader can see it.
+     *
+     *   The submit action has written this since long before today and the
+     *   interface never named it — so every consumer typed as `LandListing` was
+     *   told the field does not exist, and the property page could not render a
+     *   map without a cast. A stored field nothing can read is #624's defect,
+     *   and here the type system was the thing enforcing it.
+     */
+    gpsCoordinates?: { latitude: number; longitude: number };
     escrowAvailable?: boolean;
     /**
      * A string, matching types/index.ts and the database query in

@@ -57,12 +57,30 @@ export interface LocationPickerProps {
     longitude: string;
     /** Both together, because a half-set coordinate places nothing. */
     onChange: (next: { latitude: string; longitude: string }) => void;
+    /**
+     *   #871 THE SAME MAP, SHOWING rather than asking.
+     *
+     *   THE OWNER: "where users have coordinates of latitude and longitude, the
+     *   map picks the location and display it on the details (can this be
+     *   done)." It can, and it was not there — the property page never read
+     *   `gpsCoordinates` at all, so a seller who placed her land on the map
+     *   showed a buyer nothing.
+     *
+     *   A FLAG ON THIS COMPONENT RATHER THAN A SECOND ONE. A read-only view is
+     *   this component without the click, the drag and the buttons; the tiles,
+     *   the marker, the centring and the teardown are identical. A separate
+     *   PropertyMap would be a second copy of all of that, and the tile URL is
+     *   exactly the line that should exist once (#868).
+     */
+    readOnly?: boolean;
 }
 
 /** Six decimal places is about 10cm — past that is noise in a land listing. */
 const fmt = (n: number) => n.toFixed(6);
 
-export default function LocationPicker({ latitude, longitude, onChange }: LocationPickerProps) {
+export default function LocationPicker({
+    latitude, longitude, onChange, readOnly = false,
+}: LocationPickerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
     const markerRef = useRef<L.Marker | null>(null);
@@ -82,6 +100,13 @@ export default function LocationPicker({ latitude, longitude, onChange }: Locati
         onChangeRef.current = onChange;
     }, [onChange]);
 
+    //   Read in the build effect, which runs once — so it is held the same way
+    //   and for the same reason as onChange.
+    const readOnlyRef = useRef(readOnly);
+    useEffect(() => {
+        readOnlyRef.current = readOnly;
+    }, [readOnly]);
+
     const lat = Number(latitude);
     const lng = Number(longitude);
     const hasPoint = Number.isFinite(lat) && Number.isFinite(lng)
@@ -98,12 +123,16 @@ export default function LocationPicker({ latitude, longitude, onChange }: Locati
             maxZoom: 18,
         }).addTo(map);
 
-        map.on("click", (e: L.LeafletMouseEvent) => {
-            onChangeRef.current({
-                latitude: fmt(e.latlng.lat),
-                longitude: fmt(e.latlng.lng),
+        //   #871 A read-only map is not a broken picker: clicking it must do
+        //   nothing at all rather than silently move a pin a buyer cannot save.
+        if (!readOnlyRef.current) {
+            map.on("click", (e: L.LeafletMouseEvent) => {
+                onChangeRef.current({
+                    latitude: fmt(e.latlng.lat),
+                    longitude: fmt(e.latlng.lng),
+                });
             });
-        });
+        }
 
         mapRef.current = map;
 
@@ -132,7 +161,7 @@ export default function LocationPicker({ latitude, longitude, onChange }: Locati
         const point: [number, number] = [lat, lng];
 
         if (!markerRef.current) {
-            const marker = L.marker(point, { draggable: true }).addTo(map);
+            const marker = L.marker(point, { draggable: !readOnlyRef.current }).addTo(map);
             marker.on("dragend", () => {
                 const p = marker.getLatLng();
                 onChangeRef.current({ latitude: fmt(p.lat), longitude: fmt(p.lng) });
@@ -162,18 +191,20 @@ export default function LocationPicker({ latitude, longitude, onChange }: Locati
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-blue-700">
-                    Tap the map where the land is, or drag the pin to adjust it.
-                </p>
-                <button
-                    type="button"
-                    onClick={useMyLocation}
-                    className="shrink-0 px-3 py-1.5 text-xs font-semibold bg-white border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 transition"
-                >
-                    Use my location
-                </button>
-            </div>
+            {!readOnly && (
+                <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-blue-700">
+                        Tap the map where the land is, or drag the pin to adjust it.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={useMyLocation}
+                        className="shrink-0 px-3 py-1.5 text-xs font-semibold bg-white border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 transition"
+                    >
+                        Use my location
+                    </button>
+                </div>
+            )}
 
             <div
                 ref={containerRef}
@@ -183,7 +214,7 @@ export default function LocationPicker({ latitude, longitude, onChange }: Locati
 
             {hasPoint && (
                 <p className="text-xs text-blue-900">
-                    Selected: {fmt(lat)}, {fmt(lng)}
+                    {readOnly ? "Coordinates" : "Selected"}: {fmt(lat)}, {fmt(lng)}
                 </p>
             )}
 
@@ -193,7 +224,7 @@ export default function LocationPicker({ latitude, longitude, onChange }: Locati
               *   blocked by a bounding box — but a pin dropped in the wrong
               *   hemisphere by a stray tap should say so while she can see it.
               */}
-            {outsideNigeria && (
+            {!readOnly && outsideNigeria && (
                 <p className="text-xs font-semibold text-amber-700">
                     That point is outside Nigeria. Check the pin before submitting.
                 </p>

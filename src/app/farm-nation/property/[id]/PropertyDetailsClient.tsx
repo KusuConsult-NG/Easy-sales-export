@@ -1,6 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+//   #871 Leaflet touches `window` on import, so this cannot be server rendered —
+//   the same reason the listing form loads the picker this way.
+const PropertyLocationMap = dynamic(
+    () => import("@/components/farm-nation/LocationPicker"),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-64 w-full rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center">
+                <p className="text-xs text-slate-500">Loading map…</p>
+            </div>
+        ),
+    },
+);
 import { isPurchasable } from "@/lib/land-listing-status";
 import { landLocationText } from "@/lib/land-location";
 import { useParams, useRouter } from "next/navigation";
@@ -388,6 +403,39 @@ export default function PropertyDetailsClient({ initial = null }: {
                                     {property.description}
                                 </p>
                             </div>
+
+                            {/*
+                              *   #871 WHERE THE LAND ACTUALLY IS.
+                              *
+                              *   THE OWNER: "where users have coordinates of latitude
+                              *   and longitude, the map picks the location and display
+                              *   it on the details (can this be done)."
+                              *
+                              *   It can, and it was not there: this page never read
+                              *   `gpsCoordinates` at all. A seller who took the trouble
+                              *   to place her land on the map — which #868 made possible
+                              *   — showed a buyer nothing, and the buyer had a state, an
+                              *   LGA and an address to go on.
+                              *
+                              *   The SAME component the seller placed the pin with, in
+                              *   read-only mode. One map, one tile source, one teardown.
+                              *
+                              *   Shown only when there is a coordinate. An empty map
+                              *   centred on the middle of Nigeria says "this land is
+                              *   somewhere in Nigeria", which is worse than no map.
+                              */}
+                            {typeof property.gpsCoordinates?.latitude === "number"
+                                && typeof property.gpsCoordinates?.longitude === "number" && (
+                                <div className="mb-6">
+                                    <h2 className="text-xl font-bold text-slate-900 mb-3">Location</h2>
+                                    <PropertyLocationMap
+                                        latitude={String(property.gpsCoordinates.latitude)}
+                                        longitude={String(property.gpsCoordinates.longitude)}
+                                        onChange={() => undefined}
+                                        readOnly
+                                    />
+                                </div>
+                            )}
 
                             {/* Features */}
                             <div className="grid grid-cols-2 gap-4">
