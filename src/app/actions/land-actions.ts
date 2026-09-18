@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { readLandLocation } from "@/lib/land-location";
+import { safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -152,9 +153,9 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
                     //   `location` at all) threw here and took the whole page
                     //   with it.
                     location: readLandLocation(data),
-                    createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
+                    createdAt: safeToISOString(data.createdAt, new Date().toISOString()),
+                    updatedAt: safeToISOString(data.updatedAt, new Date().toISOString()),
+                    verifiedAt: safeToISOStringOptional(data.verifiedAt) ?? null 
                 } as unknown as LandListing;
             })
             .filter(listing => (listing as any).status !== 'deleted');
@@ -234,9 +235,9 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
             ...data,
             //   #689 One reader for four shapes — see lib/land-location.ts.
             location: readLandLocation(data),
-            createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-            updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-            verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
+            createdAt: safeToISOString(data.createdAt, new Date().toISOString()),
+            updatedAt: safeToISOString(data.updatedAt, new Date().toISOString()),
+            verifiedAt: safeToISOStringOptional(data.verifiedAt) ?? null 
         } as unknown as LandListing;
 
         // Internal review fields are stripped for a public viewer. The owner and
@@ -287,9 +288,38 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
                     //   `location` at all) threw here and took the whole page
                     //   with it.
                     location: readLandLocation(data),
-                    createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                    verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
+                    /*
+                     *   #884 AND THE SAME LESSON, THREE LINES LOWER.
+                     *
+                     *   From the owner's production log, three times in one
+                     *   session:
+                     *
+                     *       getMyLandListings error:
+                     *       TypeError: b.verifiedAt.toDate is not a function
+                     *
+                     *   These read `(data.x as Timestamp).toDate()`. A stored
+                     *   timestamp comes back in four shapes — a Timestamp, an
+                     *   ISO string, a Date, a number — and the adapter's
+                     *   string-to-Timestamp conversion only matches a FULL ISO
+                     *   string, so a row whose `verifiedAt` is anything else
+                     *   stays a string. A string has no `.toDate()`.
+                     *
+                     *   The throw happens INSIDE the .map(), so ONE such row
+                     *   emptied the whole list — and both "My Properties" and
+                     *   the List Land page read this action. That is why a
+                     *   seller could not see, or edit, anything they had
+                     *   listed: #878 revealed the screen and this is what the
+                     *   screen then did.
+                     *
+                     *   #439's shape, and the comment directly above cites
+                     *   #689's "one reader for four shapes" for the LOCATION
+                     *   while the next three lines did dates by hand.
+                     *   safeToISOString is that reader for dates, and #605
+                     *   already recorded sixty-five display sites not using it.
+                     */
+                    createdAt: safeToISOString(data.createdAt, new Date().toISOString()),
+                    updatedAt: safeToISOString(data.updatedAt, new Date().toISOString()),
+                    verifiedAt: safeToISOStringOptional(data.verifiedAt) ?? null 
                 } as unknown as LandListing;
             })
             .filter(listing => (listing as any).status !== 'deleted');
