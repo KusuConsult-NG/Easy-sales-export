@@ -270,7 +270,10 @@ describe('a scoped administrator', () => {
     it('CAN touch a member of their own, so the refusal is not vacuous', async () => {
         getAdminScope.mockImplementation(async () => 'coop-A');
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER,
-            { userId: TARGET, cooperativeId: 'coop-A', membershipStatus: 'pending' });
+            //   Named and contactable, so the approval-readiness rule is
+            //   satisfied and this test still measures only the SCOPE guard.
+            { userId: TARGET, cooperativeId: 'coop-A', membershipStatus: 'pending',
+              firstName: 'Ada', lastName: 'Obi', email: 'ada@example.com' });
 
         const result = await updateStatus(MEMBER, 'active');
 
@@ -281,7 +284,8 @@ describe('a scoped administrator', () => {
     it('and an UNSCOPED administrator reaches every cooperative', async () => {
         getAdminScope.mockImplementation(async () => null);
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER,
-            { userId: TARGET, cooperativeId: 'coop-B', membershipStatus: 'pending' });
+            { userId: TARGET, cooperativeId: 'coop-B', membershipStatus: 'pending',
+              firstName: 'Ada', lastName: 'Obi', email: 'ada@example.com' });
 
         expect((await updateStatus(MEMBER, 'active')).success).toBe(true);
     });
@@ -328,7 +332,8 @@ describe('a scoped administrator', () => {
         // "unactionable". A platform admin is unscoped and takes the row.
         getAdminScope.mockImplementation(async () => null);
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER,
-            { userId: TARGET, membershipStatus: 'pending' });
+            { userId: TARGET, membershipStatus: 'pending',
+              firstName: 'Ada', lastName: 'Obi', email: 'ada@example.com' });
 
         expect((await updateStatus(MEMBER, 'active')).success).toBe(true);
     });
@@ -424,6 +429,11 @@ describe('a membership with no userId', () => {
         // under.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-alone', {
             email: 'nobody@example.com',
+            //   Named for the readiness rule. The point of this test is the
+            //   userId FALLBACK, which is unchanged: there is still no user
+            //   document and the membership id is still what it creates one
+            //   under.
+            firstName: 'Nobody',
             membershipStatus: 'pending',
         });
 

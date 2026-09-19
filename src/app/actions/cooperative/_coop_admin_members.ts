@@ -19,6 +19,7 @@ import { paginatedOk, paginatedErr, PaginatedAdminResponse } from "@/lib/admin-a
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAdminScope } from "@/lib/cooperative-admin-scope";
 import { mergeMemberIdentity, pickDetailRow } from "@/lib/cooperative-member-identity";
+import { approvalReadiness, isAdmittingStatus } from "@/lib/cooperative-approval-readiness";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
@@ -333,6 +334,38 @@ async function _updateMemberStatusAction(
                 error: "Unauthorized: Cannot change membership status for another cooperative",
                 data: null,
             };
+        }
+
+        //   THE SAME RULE AS THE ROUTE, ON THE DOOR BESIDE IT.
+        //
+        //   The comment further down this function reads "No status guard
+        //   here, so there is no check-then-write to claim: this writes
+        //   membershipStatus unconditionally." That was true of the ADMISSION
+        //   as well, and this is the server action the members screen calls —
+        //   api/admin/cooperative/approve-member is the other door onto the
+        //   same write. Fixing one of two doors is the defect class this
+        //   codebase has recorded more than a dozen times, so the rule is
+        //   stated once in lib/cooperative-approval-readiness.ts and asked
+        //   here too.
+        //
+        //   BELOW THE SCOPE GUARD, NOT ABOVE IT. Authorisation first: an
+        //   admin who may not touch this member at all is told that, and is
+        //   not handed "this member has no name" about somebody else's
+        //   cooperative. Written above it first, which is how the IDOR
+        //   suite's own refusal message changed underneath it.
+        //
+        //   SUSPENSION PASSES. isAdmittingStatus is false for it, and an
+        //   incomplete record is exactly one an admin may need to act
+        //   against.
+        if (isAdmittingStatus(status)) {
+            const readiness = approvalReadiness(memberData);
+            if (!readiness.ready) {
+                logger.warn(
+                    `[updateMemberStatus] refused: ${memberId} has no ${readiness.missing.join(" and ")}`,
+                    { memberId, adminId: session.user.id, missing: readiness.missing },
+                );
+                return { success: false as const, error: readiness.reason, data: null };
+            }
         }
 
         let targetUserId = memberData.userId;
