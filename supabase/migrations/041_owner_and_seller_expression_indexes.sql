@@ -1,0 +1,96 @@
+-- ============================================================================
+-- 041 — Index the two keys a seller's own screens filter on
+-- ============================================================================
+--
+-- WHAT HAPPENED
+-- -------------
+-- 022 added expression indexes to document_collections for the two fields it
+-- called "the two that cover most of the application":
+--
+--     idx_dc_collection_status   (collection_name, (raw_data->>'status'))
+--     idx_dc_collection_user     (collection_name, (raw_data->>'userId'))
+--
+-- The two screens a seller opens to see their own things filter on NEITHER:
+--
+--     land-actions.ts    .where('ownerId',  '==', session.user.id)
+--                        — My Properties
+--     _mp_products.ts    .where('sellerId', '==', userId)
+--                        — the seller's product list
+--
+-- `land_listings` and `products` are both generic collections, so both of those
+-- are `raw_data->>'<key>'` filters on document_collections with no index to
+-- serve them. Every load of either screen is a sequential scan of the whole
+-- table — every collection, every row — to find one seller's handful.
+--
+-- MEASURED, on a local cluster at 20,000 rows:
+--
+--     with idx_dc_collection_owner     Index Scan    cost 12.73
+--     without it                       Seq Scan      cost 695.52
+--
+-- WHY THAT IS THE SAME FINDING AS 039, NOT A NEW ONE
+-- --------------------------------------------------
+-- 039 exists because unindexed `raw_data->...` filters timed logins out. The
+-- cost of a seq scan is not wrongness — these queries return exactly the right
+-- rows — it is that the time grows with the whole table rather than with the
+-- seller's own listings. Fine on a small database, and on a growing one it ends
+-- as a timeout, which reaches the seller as an empty screen indistinguishable
+-- from owning nothing.
+--
+-- `ownerId` is indexed here REGARDLESS of what 040's preflight reports. The
+-- index earns its place from the query, not from the backfill: My Properties
+-- filters on `ownerId` for every seller, on every load.
+--
+-- NOT `CONCURRENTLY`, AND THAT IS #469's LESSON RATHER THAN A PREFERENCE
+-- ---------------------------------------------------------------------
+-- This file's first draft used CREATE INDEX CONCURRENTLY, copying 022. That is
+-- the textbook form and it is the wrong one HERE, for a reason this repository
+-- has already paid for once: CONCURRENTLY cannot run inside a transaction, the
+-- Supabase SQL Editor is the only route available for applying these files, and
+-- 027's own header records what happened the last time — "it could not be
+-- applied by the SQL Editor this header says is the only route available here,
+-- AND IT SAT UNAPPLIED". scripts/build-deploy-sql.mjs rejects CONCURRENTLY
+-- outright for the same reason, so a CONCURRENTLY migration is not merely
+-- awkward here, it never reaches the database at all.
+--
+-- An index that is never applied optimises nothing. The plain form under a
+-- lock_timeout is the settled answer in this directory and this file uses it.
+--
+-- WHAT THE PLAIN FORM COSTS, from 027's measurements on this same schema:
+-- a build takes a ShareLock. SELECTs take ACCESS SHARE and do not conflict, so
+-- READS KEEP WORKING THROUGHOUT; writes to document_collections block for the
+-- duration of the build.
+--
+-- AND THE ONE REAL RISK IS HANDLED, NOT ACCEPTED. The danger is not the build's
+-- own duration — it is that a ShareLock request QUEUES behind any open
+-- transaction already holding the table, and every writer arriving afterwards
+-- queues behind the request. `SET lock_timeout` below removes that: if the lock
+-- is not granted within 5 seconds the statement ABORTS instead of queueing.
+--
+-- A timed-out run leaves nothing half-built — every statement is IF NOT EXISTS,
+-- so re-running picks up where it stopped. If it times out twice, something is
+-- holding a long transaction on that table and THAT is worth finding before
+-- forcing an index in beside it.
+--
+-- HOW TO APPLY
+-- ------------
+-- Paste this whole file into the Supabase SQL Editor and run it. Safe to
+-- re-run: every statement is IF NOT EXISTS.
+--
+-- SAFETY
+--   Adds indexes only. No table, column or row is altered and no application
+--   behaviour changes — the same rows come back, without the scan.
+-- ============================================================================
+
+-- Do not queue behind an open transaction and take every writer down with us.
+-- See #469 above: this converts the one real risk into a clean, re-runnable
+-- failure.
+SET lock_timeout = '5s';
+
+-- Every load of "My Properties", for every seller.
+CREATE INDEX IF NOT EXISTS idx_dc_collection_owner
+    ON public.document_collections (collection_name, (raw_data->>'ownerId'));
+
+-- Every load of the seller's product list, and the ownership check that decides
+-- whether a viewer is shown "Make an offer" on their own product.
+CREATE INDEX IF NOT EXISTS idx_dc_collection_seller
+    ON public.document_collections (collection_name, (raw_data->>'sellerId'));

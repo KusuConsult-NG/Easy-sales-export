@@ -249,6 +249,31 @@ const EXPECTED = [
              "existing per-bucket queries when the function is absent, so code " +
              "deployed ahead of this migration behaves exactly as it does today.",
     },
+    {
+        n: "040",
+        why: "land_listing ownerId backfill — repairs the rows /api/farm-nation/" +
+             "create-listing wrote before it was fixed, which carry the seller as " +
+             "`userId` while every reader asks for `ownerId`, so a listing was " +
+             "invisible to the person who created it. Order does not matter " +
+             "against the others: it touches rows, not functions, and depends on " +
+             "no earlier migration. It only ADDS `ownerId` to land_listings rows " +
+             "that lack it — unlike 023 it removes nothing, because `userId` is a " +
+             "legitimate key written across the database and idx_dc_collection_user " +
+             "is an index on it. Idempotent; a second run matches no rows.",
+    },
+    {
+        n: "041",
+        why: "expression indexes for `ownerId` and `sellerId` on " +
+             "document_collections. 022 indexed `status` and `userId`; the two " +
+             "screens a seller opens to see their own things filter on neither, so " +
+             "both were sequential scans of the whole table (measured: cost 695.52 " +
+             "seq vs 12.73 indexed, at 20k rows). Order does not matter — they are " +
+             "indexes, not functions. Unlike 022 this is IN the consolidated file " +
+             "because it uses the PLAIN form under a lock_timeout rather than " +
+             "CONCURRENTLY: #469 records that a CONCURRENTLY migration cannot be " +
+             "applied by the Supabase SQL Editor, which is the only route available " +
+             "here, and therefore sat unapplied.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
