@@ -71,8 +71,11 @@ describe('#881 — the server refuses it, which is why the button was a lie', ()
     it('AND EACH READS THE OWNER FROM THE RECORD, not from the request', () => {
         //   Which is why comparing against the same field on the client is the
         //   right comparison rather than a guess at one.
-        expect(code('src/app/actions/land-offers.ts')).toContain('ownerId === userId');
-        expect(code('src/app/actions/marketplace/_quotes.ts')).toContain('sellerId === userId');
+        //   #904 — still read from the RECORD, which is what this asserts, and
+        //   now resolved: two profiles of one person are two ids, so `===` let
+        //   exactly the seller this refuses make an offer on their own land.
+        expect(code('src/app/actions/land-offers.ts')).toContain('isSamePerson(ownerId, userId)');
+        expect(code('src/app/actions/marketplace/_quotes.ts')).toContain('isSamePerson(sellerId, userId)');
     });
 });
 

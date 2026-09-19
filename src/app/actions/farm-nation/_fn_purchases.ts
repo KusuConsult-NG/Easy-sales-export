@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { filterByOwner, isOwnedBySession, ownedProfileIds } from "@/lib/owned-profile-ids";
 import { releasedReservationFields } from "@/lib/land-reservation-expiry";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -187,18 +188,38 @@ async function _getMyPurchaseRequestsAction(): Promise<ActionResponse<{ requests
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
+        /*
+         *   #904 (BUYER SIDE) THE PURCHASE IS FILED UNDER A PROFILE THIS
+         *   PERSON NO LONGER SIGNS IN AS.
+         *
+         *   The seller side of this shipped first and deferred this one
+         *   deliberately — _fn_dashboard's note named the surface: "orders,
+         *   escrow, disputes, receipts", and said widening one read of many
+         *   would be worse than widening none. This is that surface, widened
+         *   whole.
+         *
+         *   Same rule, same direction: lib/owned-profile-ids.ts resolves
+         *   `_migratedTo` BACKWARD to every id this person's rows can be filed
+         *   under, and the gates below resolve it forward.
+         */
+        const buyerIds = await ownedProfileIds(session.user.id);
+
         let snapshot;
         try { 
-            snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-                .where("buyerId", "==", session.user.id)
+            snapshot = await filterByOwner(
+                db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS), "buyerId", buyerIds,
+            )
                 .orderBy("createdAt", "desc")
                 .get();
         } catch (e: any) { 
             if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                 logger.warn("Missing index for getMyPurchaseRequestsAction, falling back to memory sort");
-                snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-                    .where("buyerId", "==", session.user.id)
-                    .get();
+                //   The fallback widens too: one that answered a narrower
+                //   question than the query it replaces loses rows exactly
+                //   when the screen is already degraded.
+                snapshot = await filterByOwner(
+                    db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS), "buyerId", buyerIds,
+                ).get();
                 const requests = serializeDocs<any>(snapshot.docs);
                 requests.sort((a, b) => {
                     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -247,7 +268,11 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
         const requestData = requestDoc.data();
 
         // Verify user owns this request
-        if (requestData?.buyerId !== session.user.id) { 
+        //   #904 (BUYER SIDE) — My Purchases now lists requests filed under a
+        //   profile this person no longer signs in as, so this has to admit
+        //   them. A row that appears and refuses every action is the seller
+        //   side's #884 complaint, arriving on the buyer's screen.
+        if (!await isOwnedBySession(requestData?.buyerId, session.user.id)) { 
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 

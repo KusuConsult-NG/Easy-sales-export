@@ -18,6 +18,7 @@ import { requireSession } from "@/lib/session-guard";
 import { recordAdminAction } from "@/lib/audit-log";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
@@ -469,7 +470,11 @@ async function _walletCheckoutAction(
 
     const order = orderSnap.data() as { buyerId?: string; totalAmount?: number };
 
-    if (order.buyerId !== userId) {
+    //   #904 (BUYER SIDE) — paying for an order placed on a profile this
+    //   person no longer signs in as. This is a money path, and it resolves
+    //   the ROW's buyer forward rather than widening who the caller is: the
+    //   wallet debited is still the caller's own.
+    if (!await isOwnedBySession(order.buyerId, userId)) {
         return { success: false as const, error: "Unauthorized", data: null };
     }
 

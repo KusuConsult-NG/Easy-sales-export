@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAnyOwnedBySession, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import type { EscrowTransaction, Message } from "@/lib/types/marketplace-escrow";
@@ -64,7 +65,10 @@ async function _sendEscrowMessageAction(data: { escrowId: string;
         const escrow = escrowDoc.data() as EscrowTransaction;
 
         const isAdminUser = canOverseeEscrow(session.user.roles);
-        if (escrow.buyerId !== data.senderId && escrow.sellerId !== data.senderId && !isAdminUser) {
+        //   #904 (BUYER SIDE) — a participant whose escrow names a profile
+        //   they no longer sign in as. `data.senderId` is already pinned to the
+        //   session above, so this resolves the ROW's two parties forward.
+        if (!isAdminUser && !await isAnyOwnedBySession([escrow.buyerId, escrow.sellerId], data.senderId)) {
             return { success: false as const, error: "Not a participant of this escrow"};
         }
 
@@ -127,7 +131,8 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<
         const escrow = escrowDoc.data() as EscrowTransaction;
         const userId = session.user.id;
         const isAdminUser = canOverseeEscrow(session.user.roles);
-        if (escrow.buyerId !== userId && escrow.sellerId !== userId && !isAdminUser) {
+        //   #904 (BUYER SIDE) — same participant rule as the writer above.
+        if (!isAdminUser && !await isAnyOwnedBySession([escrow.buyerId, escrow.sellerId], userId)) {
             logger.warn(`[getEscrowMessages] Non-participant access attempt by ${userId} on escrow ${escrowId}`);
             return { success: false as const, data: null, error: "Access denied" };
         }
@@ -168,7 +173,8 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
         const userId = session.user.id;
         const isAdminUser = canOverseeEscrow(session.user.roles);
 
-        if (!isAdminUser && data.buyerId !== userId && data.sellerId !== userId) { return { success: false as const, error: "Not authorized to view this escrow", data: null };
+        //   #904 (BUYER SIDE) — same participant rule again.
+        if (!isAdminUser && !await isAnyOwnedBySession([data.buyerId, data.sellerId], userId)) { return { success: false as const, error: "Not authorized to view this escrow", data: null };
         }
 
         return { error: null, success: true as const, data: serializeDoc(escrowDoc.id, data) };
@@ -218,7 +224,8 @@ export async function getEscrowTransactionByOrderIdAction(orderId: string): Prom
         const userId = session.user.id;
         const isAdminUser = canOverseeEscrow(session.user.roles);
 
-        if (!isAdminUser && data.buyerId !== userId && data.sellerId !== userId) {
+        //   #904 (BUYER SIDE) — and the by-order-id door onto the same read.
+        if (!isAdminUser && !await isAnyOwnedBySession([data.buyerId, data.sellerId], userId)) {
             return { success: false as const, error: "Not authorized to view this escrow", data: null };
         }
 

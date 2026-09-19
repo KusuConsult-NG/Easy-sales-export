@@ -2,6 +2,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isSamePerson, ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -197,12 +198,28 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
          * pass. That bounds a flood to a handful rather than to nothing, which
          * is the point; the row it writes is inert, and no money moves here.
          */
-        if (sellerId === userId) {
+        /*
+         *   #904 (BUYER SIDE) TIGHTENED, NOT WIDENED — the one place in this
+         *   change that refuses MORE than it did.
+         *
+         *   This compared raw ids, so a person with two profiles is two ids and
+         *   the check passed: they could trade with themselves. See
+         *   `isSamePerson` in lib/owned-profile-ids.ts for why that is worth
+         *   closing and why nothing legitimate is lost.
+         */
+        if (await isSamePerson(sellerId, userId)) {
             return { success: false as const, error: "You cannot request a quote on your own listing", data: null };
         }
 
-        const openRequests = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES)
-            .where("buyerId", "==", userId)
+        //   #904 (BUYER SIDE) — AND THE DUPLICATE CHECK COUNTS EVERY PROFILE.
+        //   An open request raised from a superseded profile is still open, so
+        //   comparing one id let the same person queue a second request the
+        //   seller has to work through.
+        const buyerIds = await ownedProfileIds(userId);
+
+        const openRequests = await filterByOwner(
+            db.collection(COLLECTIONS.MARKETPLACE_QUOTES), "buyerId", buyerIds,
+        )
             .where("productId", "==", data.productId)
             .where("status", "==", "pending")
             .limit(1)

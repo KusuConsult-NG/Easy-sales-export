@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 // Use Admin DB
@@ -37,13 +38,20 @@ async function _getBuyerOrdersAction(options: { limit?: number;
 
         const { limit = 20, lastId, status } = options;
 
-        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", session.user.id)
-            .orderBy("createdAt", "desc");
+        //   #904 (BUYER SIDE) — an order placed on a profile this person no
+        //   longer signs in as is still their order. Both branches widen: a
+        //   status filter that answered a narrower question than the unfiltered
+        //   list would make "All" and "Delivered" disagree about what exists.
+        const buyerIds = await ownedProfileIds(session.user.id);
+
+        let query: import("@/lib/supabase-db").SupabaseQuery = filterByOwner(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "buyerId", buyerIds,
+        ).orderBy("createdAt", "desc");
 
         if (status && status !== "all") { 
-            query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-                .where("buyerId", "==", session.user.id)
+            query = filterByOwner(
+                db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "buyerId", buyerIds,
+            )
                 .where("status", "==", status)
                 .orderBy("createdAt", "desc");
         }
@@ -101,8 +109,14 @@ async function _getBuyerStatsAction(): Promise<ActionResponse<{ stats: { activeO
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
 
-        const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", session.user.id)
+        //   #904 (BUYER SIDE) — the four numbers above the list have to count
+        //   the same orders the list shows, or the dashboard contradicts the
+        //   screen it heads.
+        const buyerIds = await ownedProfileIds(session.user.id);
+
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "buyerId", buyerIds,
+        )
             // Capped. This fetched every order the buyer has ever placed in order
             // to produce four numbers, and grew without limit.
             .limit(BUYER_STATS_ORDER_CAP)

@@ -86,7 +86,11 @@ describe('#801 — who may read an order', () => {
         //   The narrow case must survive. A fix that admitted admins by
         //   dropping the buyer comparison would open every order to every
         //   signed-in account.
-        expect(authBlock()).toMatch(/orderData\?\.buyerId === session\.user\.id/);
+        //   #904 — the buyer comparison is still here and still first; it now
+        //   resolves the ORDER's buyer forward, so a buyer whose order names a
+        //   superseded profile is not pushed down the admin arm and then
+        //   refused their own order. The narrow case this guards is intact.
+        expect(authBlock()).toMatch(/isOwnedBySession\(orderData\?\.buyerId, session\.user\.id\)/);
     });
 
     it('AND AN ADMIN WHO MAY RESOLVE THE DISPUTE MAY READ THE ORDER', () => {

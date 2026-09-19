@@ -154,6 +154,11 @@ describe('escrow creation does not spread the caller\'s object', () => {
         const src = code(LIFECYCLE);
 
         expect(src).toContain('if (!Number.isFinite(data.amount) || data.amount <= 0) {');
-        expect(src).toContain('if (!data.sellerId || data.sellerId === data.buyerId) {');
+        //   #904 TIGHTENED THIS ONE. `===` compares ids, and a person with two
+        //   profiles is two ids, so the self-dealing guard passed for exactly
+        //   the case it exists to refuse. isSamePerson resolves both sides
+        //   first. Still the same guard, still in the same place, now catching
+        //   what it always meant to.
+        expect(src).toContain('if (!data.sellerId || await isSamePerson(data.sellerId, data.buyerId)) {');
     });
 });

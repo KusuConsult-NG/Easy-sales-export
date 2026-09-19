@@ -16,6 +16,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -196,7 +197,8 @@ async function _settleQuoteCounterAction(
         const quote = (snap.data() ?? {}) as QuoteRecord;
 
         //   The buyer who raised it. Same reasoning as the seller door above.
-        if (!quote.buyerId || quote.buyerId !== userId) {
+        //   #904 (BUYER SIDE) — a quote raised from a superseded profile.
+        if (!await isOwnedBySession(quote.buyerId, userId)) {
             return { success: false as const, error: "This quote is not yours", data: null };
         }
 

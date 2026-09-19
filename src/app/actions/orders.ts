@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import { decrementManyOrFail, restoreReservedStock } from "@/lib/wallet-ledger";
 import type { Order, Product } from "@/lib/types/marketplace";
 
@@ -321,7 +322,10 @@ async function _getOrderByIdAction(orderId: string) { let sessionResult;
          *   release it. Deliberately NOT isAdmin(), which would also admit
          *   moderator, support and six module admins to every buyer's order.
          */
-        const isBuyer = orderData?.buyerId === session.user.id;
+        //   #904 (BUYER SIDE) — an order placed from a profile this person no
+        //   longer signs in as. Failing this sends them down the admin arm,
+        //   which then refuses them their own order.
+        const isBuyer = await isOwnedBySession(orderData?.buyerId, session.user.id);
         if (!isBuyer) {
             const { hasAdminPermission } = await import("@/lib/admin-permissions");
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();

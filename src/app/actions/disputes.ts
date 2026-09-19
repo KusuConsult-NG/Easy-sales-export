@@ -5,6 +5,7 @@
 "use server";
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
+import { filterByOwner, isOwnedBySession, ownedProfileIds } from "@/lib/owned-profile-ids";
 import { logger } from '@/lib/logger';
 import { disputeStatusesForFilter, isDisputeSettled, DISPUTE_TERMINAL_STATUSES } from "@/lib/dispute-status";
 
@@ -99,7 +100,10 @@ async function _createDisputeAction(params: { orderId: string;
         }
 
         const order = orderDoc.data() as Order;
-        if (order.buyerId !== userId) { return { success: false as const, error: "Not authorized", data: null };
+        //   #904 (BUYER SIDE) — raising a dispute on an order placed from a
+        //   profile this person no longer signs in as. Refusing here is the
+        //   worst of the set: it is the door to getting money back.
+        if (!await isOwnedBySession(order.buyerId, userId)) { return { success: false as const, error: "Not authorized", data: null };
         }
 
         if (order.status === "completed" || order.status === "cancelled") { return { success: false as const, error: "Cannot dispute completed or cancelled orders", data: null };
@@ -311,8 +315,14 @@ async function _getBuyerDisputesAction() { let sessionResult;
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        const snapshot = await db.collection(COLLECTIONS.DISPUTES)
-            .where("buyerId", "==", userId)
+        //   #904 (BUYER SIDE) — a dispute raised from a profile this person
+        //   no longer signs in as is still theirs, and it is the screen where
+        //   losing a row costs the most: an unanswered dispute is money.
+        const buyerIds = await ownedProfileIds(userId);
+
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.DISPUTES), "buyerId", buyerIds,
+        )
             .orderBy("createdAt", "desc")
             .limit(100)
             .get();
@@ -519,8 +529,10 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
         // two ways depending on which endpoint is asked.
         const isResolver = hasAdminPermission(callerRoles, "finance:resolve_disputes");
         const isAdminUser = isAdmin(callerRoles);
-        const isBuyer = dispute.buyerId === userId;
-        const isSeller = dispute.sellerId === userId;
+        //   #904 (BUYER SIDE) — which side of the dispute the caller is on
+        //   decides what they may read, so it is resolved rather than compared.
+        const isBuyer = await isOwnedBySession(dispute.buyerId, userId);
+        const isSeller = await isOwnedBySession(dispute.sellerId, userId);
 
         if (!isAdminUser && !isBuyer && !isSeller) { return { success: false as const, error: "Not authorized to view this dispute", data: null };
         }

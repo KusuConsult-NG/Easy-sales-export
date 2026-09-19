@@ -152,6 +152,32 @@ const OWNER_AWARE_PRIMITIVES = new Set([
     "claimSingleOpenLoanApplication",
 ]);
 
+/**
+ * Comparing the caller against a record's owner, through the identity rule.
+ *
+ *   #904 REPLACED AN IDIOM THIS SCAN WAS READING FOR. Ownership gates used to
+ *   say `record.buyerId !== userId`, which the comparison rule below sees. A
+ *   raw `!==` refuses the owner of a record filed under a profile they no
+ *   longer sign in as, so those gates now ask lib/owned-profile-ids.ts — and
+ *   three correctly-guarded actions appeared as leads overnight
+ *   (_createEscrowDispute, _settleLandOfferCounterAction,
+ *   _settleQuoteCounterAction).
+ *
+ *   That is #638's lesson repeated, and its note says why it matters: "A scan
+ *   whose false positives are correct code asking the right question trains
+ *   people to stop reading it."
+ *
+ *   These three are the whole vocabulary, and each one IS the comparison —
+ *   they take a record's owner and the caller and answer whether they are the
+ *   same person. `filterByOwner` is deliberately NOT here: it scopes a QUERY,
+ *   and the rule below only credits scoping when the value is session-derived.
+ *   Crediting it unconditionally would do exactly what this file's header
+ *   warns against.
+ */
+const IDENTITY_RESOLUTION = new Set([
+    "isOwnedBySession", "isAnyOwnedBySession", "isSamePerson",
+]);
+
 export interface OwnershipLead {
     file: string;
     name: string;
@@ -290,6 +316,7 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
                 if (WRITE_CALLS.has(name)) facts.writes = true;
                 if (READ_CALLS.has(name)) facts.reads = true;
                 if (OWNER_AWARE_PRIMITIVES.has(name)) facts.decides = true;
+                if (IDENTITY_RESOLUTION.has(name)) facts.decides = true;
 
                 // .where("userId", "==", x) — but only a decision if x is the
                 // SESSION's id. Scoping by a caller-supplied argument is how a

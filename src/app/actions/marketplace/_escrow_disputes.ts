@@ -8,6 +8,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAnyOwnedBySession, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { smsDisputeResolved } from "@/lib/africastalking";
 import { pushDisputeResolved } from "@/lib/fcm";
@@ -75,8 +76,13 @@ async function _createDisputeAction(data: { escrowId: string;
         const escrow = escrowSnap.data() as EscrowTransaction;
         const callerId = session.user.id;
 
-        const isBuyer = escrow.buyerId === callerId;
-        const isSeller = escrow.sellerId === callerId;
+        //   #904 (BUYER SIDE) — either party, under any profile they hold.
+        //   `isBuyer` decides which side the dispute is raised FROM further
+        //   down, so it has to be resolved rather than compared: a buyer whose
+        //   escrow names a superseded profile would otherwise be filed as the
+        //   seller.
+        const isBuyer = await isOwnedBySession(escrow.buyerId, callerId);
+        const isSeller = await isOwnedBySession(escrow.sellerId, callerId);
 
         if (!isBuyer && !isSeller) {
             return { success: false as const, error: "Unauthorized" };

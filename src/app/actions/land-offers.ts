@@ -43,6 +43,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { filterByOwner, isOwnedBySession, isSamePerson, ownedProfileIds } from "@/lib/owned-profile-ids";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
@@ -146,7 +147,16 @@ async function _makeLandOfferAction(data: LandOfferData): Promise<ActionResponse
         if (!ownerId) {
             return { success: false as const, error: "This property has no owner on record", data: null };
         }
-        if (ownerId === userId) {
+        /*
+         *   #904 (BUYER SIDE) TIGHTENED, NOT WIDENED — the one place in this
+         *   change that refuses MORE than it did.
+         *
+         *   This compared raw ids, so a person with two profiles is two ids and
+         *   the check passed: they could trade with themselves. See
+         *   `isSamePerson` in lib/owned-profile-ids.ts for why that is worth
+         *   closing and why nothing legitimate is lost.
+         */
+        if (await isSamePerson(ownerId, userId)) {
             return { success: false as const, error: "You cannot make an offer on your own property", data: null };
         }
 
@@ -171,8 +181,13 @@ async function _makeLandOfferAction(data: LandOfferData): Promise<ActionResponse
          *   A check, not a lock. Two racing calls can both pass; that bounds a
          *   flood to a handful rather than to nothing, and the rows are inert.
          */
-        const open = await db.collection(COLLECTIONS.LAND_OFFERS)
-            .where("buyerId", "==", userId)
+        //   #904 (BUYER SIDE) — every profile, for the reason _quotes.ts
+        //   gives: an offer left open on a superseded profile is still open.
+        const openBuyerIds = await ownedProfileIds(userId);
+
+        const open = await filterByOwner(
+            db.collection(COLLECTIONS.LAND_OFFERS), "buyerId", openBuyerIds,
+        )
             .where("listingId", "==", String(data.listingId))
             .where("status", "==", "pending")
             .limit(1)
@@ -338,7 +353,9 @@ async function _settleLandOfferCounterAction(
         if (!snap.exists) return { success: false as const, error: "Offer not found", data: null };
         const offer = (snap.data() ?? {}) as QuoteRecord & Record<string, any>;
 
-        if (!offer.buyerId || offer.buyerId !== userId) {
+        //   #904 (BUYER SIDE) — an offer made from a superseded profile, now
+        //   listed on the screen above and so actionable from it.
+        if (!await isOwnedBySession(offer.buyerId, userId)) {
             return { success: false as const, error: "This offer is not yours", data: null };
         }
         if (offer.status !== "countered") {
@@ -412,11 +429,22 @@ async function _getMyLandOffersAction(): Promise<ActionResponse<{
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const userId = sessionResult.session.user.id;
 
+        /*
+         *   #904 (BUYER SIDE) — BOTH HALVES, because this is one screen.
+         *
+         *   An offer made from a profile this person no longer signs in as is
+         *   still their offer, and so is one made ON a parcel they listed from
+         *   that profile. Widening only `buyerId` here would leave the same
+         *   person's two lists disagreeing about which of their profiles
+         *   counts, on a screen that shows them side by side.
+         */
+        const profileIds = await ownedProfileIds(userId);
+
         const [mine, onMine] = await Promise.all([
-            db.collection(COLLECTIONS.LAND_OFFERS)
-                .where("buyerId", "==", userId).orderBy("createdAt", "desc").get(),
-            db.collection(COLLECTIONS.LAND_OFFERS)
-                .where("sellerId", "==", userId).orderBy("createdAt", "desc").get(),
+            filterByOwner(db.collection(COLLECTIONS.LAND_OFFERS), "buyerId", profileIds)
+                .orderBy("createdAt", "desc").get(),
+            filterByOwner(db.collection(COLLECTIONS.LAND_OFFERS), "sellerId", profileIds)
+                .orderBy("createdAt", "desc").get(),
         ]);
 
         return {

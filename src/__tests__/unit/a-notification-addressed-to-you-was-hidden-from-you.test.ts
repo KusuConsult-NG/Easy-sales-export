@@ -184,7 +184,11 @@ describe('#634 — the sweep, checked against answers known independently', () =
         //   Three known by opening the files. The line numbers matter: they are
         //   what makes this a measurement of THIS repository rather than of a
         //   regex's opinion.
-        expect(at('src/app/actions/marketplace/_escrow_lifecycle.ts', 107))
+        //   107 -> 117: #904 added an import and a nine-line note above the
+        //   self-dealing guard in that file. The line number is still the
+        //   point — it is what makes this a measurement of THIS repository
+        //   rather than of a regex's opinion — so it is re-read, not relaxed.
+        expect(at('src/app/actions/marketplace/_escrow_lifecycle.ts', 117))
             .toMatchObject({ type: 'escrow', to: 'data.buyerId' });
         expect(at('src/lib/marketplace-notifications.ts', 373))
             .toMatchObject({ type: 'escrow', to: 'buyerId' });
