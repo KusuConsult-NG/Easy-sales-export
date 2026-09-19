@@ -312,13 +312,74 @@ describe('getCooperativeMemberIdCardAction — the two gates', () => {
     });
 
     it('auto-activates a member the CENTRAL record already calls active, and heals both', async () => {
+        //   `onboardingCompleted` ADDED to the fixture, assertions untouched.
+        //
+        //   This test was written when the central-active branch required
+        //   nothing else, and it is where 387 members came from: active and
+        //   paid with no name, phone, date of birth, occupation, LGA, ward or
+        //   address on the record. #496 named that branch — "the FIRST
+        //   requires only that the user document already says 'active'" — and
+        //   closed the gate it fed rather than the branch.
+        //
+        //   The branch is NOT deleted and this test still exercises it: a
+        //   central-active member is still auto-activated and both records are
+        //   still healed. What it now also needs is the onboarding the other
+        //   three heal sites have always demanded. The refusal that this
+        //   fixture used to demonstrate is the test directly below.
         seedUser({ serviceRegistrations: { cooperatives: { status: 'active' } } });
-        seedMembership({ membershipStatus: 'pending', paymentStatus: 'completed' });
+        seedMembership({
+            membershipStatus: 'pending', paymentStatus: 'completed', onboardingCompleted: true,
+        });
 
         expect((await card()).success).toBe(true);
         expect(store.get(MEMBERS, 'coop-1')!.membershipStatus).toBe('active');
         expect(store.get(COLLECTIONS.USERS, MEMBER)!.serviceRegistrations.cooperatives.status)
             .toBe('active');
+    });
+
+    it('but does NOT auto-activate a central-active member who never onboarded', async () => {
+        //   THE 387. A member whose USER document says active — written, on
+        //   every later call, by this very heal — and whose membership record
+        //   describes nobody. It was activated on that alone, and the write
+        //   made `isCentralActive` true for ever after, so one firing was
+        //   permanent.
+        seedUser({ serviceRegistrations: { cooperatives: { status: 'active' } } });
+        seedMembership({ membershipStatus: 'pending', paymentStatus: 'completed' });
+
+        expect(await card()).toMatchObject({ success: false, reason: 'pending_approval' });
+        expect(store.get(MEMBERS, 'coop-1')!.membershipStatus).toBe('pending');
+    });
+
+    it('and writes nothing to the USER record either — the heal was two writes', async () => {
+        //   The second write is the one that could not stop: it sets
+        //   serviceRegistrations.cooperatives.status, which IS isCentralActive
+        //   on the next call. A refusal that left it behind would re-arm the
+        //   branch it just declined.
+        //
+        //   Seeded on the SINGULAR key, which isCentralActive also reads and
+        //   the heal does not write. That makes the second write observable:
+        //   the plural key exists afterwards only if the heal ran. Seeding the
+        //   plural one would have made this test vacuous — the value it
+        //   asserts would already have been there.
+        seedUser({ serviceRegistrations: { cooperative: { status: 'active' } } });
+        seedMembership({ membershipStatus: 'pending', paymentStatus: 'completed' });
+
+        await card();
+
+        expect(store.get(COLLECTIONS.USERS, MEMBER)!.serviceRegistrations.cooperatives)
+            .toBeUndefined();
+    });
+
+    it('LEAVES AN ALREADY-ACTIVE MEMBER ALONE, onboarded or not', async () => {
+        //   The 387 keep their cards. Not by a carve-out: their row already
+        //   says "active", so isApprovedOrActive is true before the heal is
+        //   reached and the block cannot run for them at all. What stops is
+        //   the making of new ones.
+        seedUser({ serviceRegistrations: { cooperatives: { status: 'active' } } });
+        seedMembership({ membershipStatus: 'active', paymentStatus: 'completed' });
+
+        expect((await card()).success).toBe(true);
+        expect(store.get(MEMBERS, 'coop-1')!.membershipStatus).toBe('active');
     });
 
     it('auto-activates a member who paid and completed onboarding', async () => {

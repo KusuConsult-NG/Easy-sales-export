@@ -302,8 +302,73 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 userData?.serviceRegistrations?.cooperative?.status === "approved" ||
                 userData?.serviceRegistrations?.cooperatives?.status === "approved";
 
-            // If the user is active/approved centrally, or has paid and completed onboarding, auto-activate them and heal their database record
-            if (!isApprovedOrActive && (isCentralActive || (d.paymentStatus === "completed" && d.onboardingCompleted === true))) {
+            /**
+             *   #496 NAMED THIS ARM AND CLOSED THE GATE IT FED, NOT THE ARM.
+             *
+             *   Its note directly below reads: "Read the `||`. The second
+             *   branch requires payment; the FIRST requires only that the user
+             *   document already says 'active'." It then fixed Gate 1 so that
+             *   a manufactured approval could no longer stand in for a
+             *   payment, and left the manufacturing where it was.
+             *
+             *   WHAT THAT COST, COUNTED. Of 1,840 membership rows, 800 have no
+             *   completed onboarding, 723 of those are paid, and 715 of THOSE
+             *   read "active". 328 carry the `approvedBy` an admin stamps —
+             *   that door is guarded now
+             *   (lib/cooperative-approval-readiness.ts). The other 387 carry
+             *   no approvedBy at all: nobody admitted them. This is the arm
+             *   that did.
+             *
+             *   THE OWNER, on one of them: "missing details for this user and
+             *   others" — a member reading active, paid and Member, with no
+             *   name, phone, date of birth, occupation, LGA, ward or address
+             *   anywhere on the record.
+             *
+             *   AND IT COULD NOT STOP, as #496 also says: the heal writes
+             *   `serviceRegistrations.cooperatives.status: "active"` onto the
+             *   user document, which IS `isCentralActive` on every later call.
+             *   One firing made it permanent.
+             *
+             *   ONBOARDING IS NOW REQUIRED EITHER WAY. The second branch is
+             *   unchanged — it always demanded it. The first no longer
+             *   activates somebody the record does not describe. That makes
+             *   this the fourth heal site to say the same sentence:
+             *   module-access-check's Layer 2.6 `isHealable`,
+             *   _coop_membership's pending-with-payment heal, and this
+             *   function's own payment branch all require
+             *   `onboardingCompleted === true`. This one was the outlier.
+             *
+             *   THE 387 ARE NOT TOUCHED, and not by a carve-out. Their rows
+             *   already say "active", so `isApprovedOrActive` is true on the
+             *   line above and this block cannot run for them at all. They
+             *   keep their cards and their access; what stops is the making of
+             *   new ones. Whether those rows should be corrected is a
+             *   question about people's savings, and belongs to a decision
+             *   taken deliberately rather than to a read path.
+             *
+             *   THE FLAG, NOT approvalReadiness. The admin rule asks whether a
+             *   PERSON may admit this member, with the record in front of
+             *   them; this asks whether the SYSTEM may admit one silently,
+             *   with nobody looking. The three sibling heals all read the
+             *   flag, and four sites saying one thing is the property that was
+             *   missing here.
+             */
+            const onboardingComplete = d.onboardingCompleted === true;
+
+            if (!isApprovedOrActive && !onboardingComplete && (isCentralActive || d.paymentStatus === "completed")) {
+                //   Logged rather than passed over: this is the population the
+                //   arm was silently activating, and it is the only way to see
+                //   whether it has stopped.
+                logger.warn(
+                    `[getCooperativeMemberIdCardAction] NOT auto-activating ${userId} — onboarding `
+                    + `was never completed. Previously this member would have been written active.`,
+                    { userId, isCentralActive, paymentStatus: d.paymentStatus },
+                );
+            }
+
+            // Active/approved centrally, or paid — and in either case onboarded.
+            // Auto-activate and heal the database record.
+            if (!isApprovedOrActive && onboardingComplete && (isCentralActive || d.paymentStatus === "completed")) {
                 isApprovedOrActive = true;
                 try {
                     const docId = sortedDocs[0]?.id || userId;
