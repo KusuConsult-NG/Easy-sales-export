@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import { retirementPatch } from "@/lib/record-retirement";
 
 /**
@@ -40,7 +41,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (productDoc.data()?.sellerId !== userId) {
+        //   #904 (SELLER SIDE, THE REST) — the API door onto the same
+        //   ownership question as _mp_products.
+        if (!await isOwnedBySession(productDoc.data()?.sellerId, userId)) {
             return NextResponse.json(
                 { success: false, message: "You can only delete your own products" },
                 { status: 403 }

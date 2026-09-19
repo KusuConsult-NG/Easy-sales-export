@@ -265,7 +265,9 @@ async function _respondToLandOfferAction(
          *   is not moderation, it is trading as them, and here the escrow is for
          *   a piece of land.
          */
-        if (!offer.sellerId || offer.sellerId !== userId) {
+        //   #904 (SELLER SIDE, THE REST) — the seller half of the offer
+        //   screen, matching the buyer half widened a commit ago.
+        if (!await isOwnedBySession(offer.sellerId, userId)) {
             return { success: false as const, error: "This offer is not on your property", data: null };
         }
 

@@ -450,7 +450,10 @@ async function _requestEscrowReleaseAction(
 
             const data = escrowDoc.data() as EscrowTransaction;
 
-            if (data.sellerId !== sellerId) throw new Error("Unauthorized");
+            //   #904 (SELLER SIDE, THE REST) — releasing an escrow funded to a
+            //   profile this seller no longer signs in as. Refusing here
+            //   strands the money: only the named seller can take this step.
+            if (!await isOwnedBySession(data.sellerId, sellerId)) throw new Error("Unauthorized");
             if (data.status !== "funded") {
                 throw new Error(
                     `Invalid state transition: expected 'funded', got '${data.status}'`

@@ -349,8 +349,20 @@ async function _getSellerDisputesAction() { let sessionResult;
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        const snapshot = await db.collection(COLLECTIONS.DISPUTES)
-            .where("sellerId", "==", userId)
+        /*
+         *   #904 (SELLER SIDE, THE REST) AND THE HALF LEFT BEHIND IN THIS FILE.
+         *
+         *   The buyer's disputes were widened a commit ago and the seller's
+         *   were not, so one person's two lists disagreed about which of their
+         *   profiles counted — on the same screen, in the same file. That is
+         *   the count-versus-list contradiction the buyer commit cited as the
+         *   reason to widen a surface whole, left sitting twenty lines away.
+         */
+        const sellerIdsOwned = await ownedProfileIds(userId);
+
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.DISPUTES), "sellerId", sellerIdsOwned,
+        )
             .orderBy("createdAt", "desc")
             .limit(100)
             .get();

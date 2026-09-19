@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { ownedProfileIds, filterByOwner, filterByOwnerInArray } from "@/lib/owned-profile-ids";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 // Use Admin DB
@@ -51,7 +52,24 @@ async function _getSellerProductsAction(options: {
             sortDir = "desc"
         } = options;
 
-        let query = db.collection(COLLECTIONS.PRODUCTS).where("sellerId", "==", userId);
+        /*
+         *   #904 (SELLER SIDE, THE REST) THE PRODUCT IS FILED UNDER A PROFILE
+         *   THIS PERSON NO LONGER SIGNS IN AS.
+         *
+         *   The land half of this shipped first and the buyer half after it;
+         *   this list was named in both as deferred — "its cursor paging and
+         *   inequality filters make it a separate piece of work rather than a
+         *   line". It is that piece of work.
+         *
+         *   Same rule, same direction: lib/owned-profile-ids.ts resolves
+         *   `_migratedTo` backward to every id this person's rows can be filed
+         *   under. Paging is unaffected — the cursor is a document, not an
+         *   owner — and the status and stock filters compose with the widened
+         *   owner clause exactly as they did with the narrow one.
+         */
+        const sellerIdsOwned = await ownedProfileIds(userId);
+
+        let query = filterByOwner(db.collection(COLLECTIONS.PRODUCTS), "sellerId", sellerIdsOwned);
 
         if (status && status !== "all" && status !== "low_stock") { 
             query = query.where("status", "==", status);
@@ -83,7 +101,11 @@ async function _getSellerProductsAction(options: {
                 indexError = true;
                 
                 // Rebuild query without orderBy
-                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("sellerId", "==", userId);
+                //   The fallback widens too: one that answered a narrower
+                //   question than the query it replaces loses rows exactly
+                //   when the screen is already degraded.
+                let fallbackQuery = filterByOwner(
+                    db.collection(COLLECTIONS.PRODUCTS), "sellerId", sellerIdsOwned);
                 if (status && status !== "all" && status !== "low_stock") { 
                     fallbackQuery = fallbackQuery.where("status", "==", status);
                 }
@@ -190,13 +212,26 @@ async function _getSellerOrdersAction(options: { limit?: number;
 
         const fetchLimit = search ? 5000 : limit;
 
-        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("sellerIds", "array-contains", userId)
-            .orderBy("createdAt", "desc");
+        /*
+         *   #904 — AND THE ORDERS, WHICH ARE STORED THE OTHER WAY. One order
+         *   can span several sellers, so it names them in `sellerIds` and this
+         *   asks `array-contains`. Same question, different shape; see
+         *   filterByOwnerInArray.
+         *
+         *   Both branches widen: a status filter answering a narrower question
+         *   than the unfiltered list makes "All" and "Delivered" disagree about
+         *   what exists.
+         */
+        const orderSellerIds = await ownedProfileIds(userId);
+
+        let query: import("@/lib/supabase-db").SupabaseQuery = filterByOwnerInArray(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "sellerIds", orderSellerIds,
+        ).orderBy("createdAt", "desc");
 
         if (status && status !== "all") { 
-            query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-                .where("sellerIds", "array-contains", userId)
+            query = filterByOwnerInArray(
+                db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "sellerIds", orderSellerIds,
+            )
                 .where("status", "==", status)
                 .orderBy("createdAt", "desc");
         }
@@ -219,8 +254,10 @@ async function _getSellerOrdersAction(options: { limit?: number;
                 logger.warn("Get orders failed due to missing index. Falling back to unordered query.", { userId, error: e.message });
                 indexError = true;
                 
-                let fallbackQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-                    .where("sellerIds", "array-contains", userId);
+                //   The fallback widens too, or a degraded screen silently
+                //   answers a narrower question than the one it replaces.
+                let fallbackQuery = filterByOwnerInArray(
+                    db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "sellerIds", orderSellerIds);
                 if (status && status !== "all") {
                     fallbackQuery = fallbackQuery.where("status", "==", status);
                 }
@@ -366,12 +403,16 @@ async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: 
 
         // Capped. Both queries fetched every order and every product the seller
         // has ever had, unbounded, to produce a handful of summary numbers.
-        const ordersRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("sellerIds", "array-contains", userId)
-            .limit(SELLER_ANALYTICS_CAP);
-        const productsRef = db.collection(COLLECTIONS.PRODUCTS)
-            .where("sellerId", "==", userId)
-            .limit(SELLER_ANALYTICS_CAP);
+        //   #904 — BOTH, or the analytics count this person's products across
+        //   every profile they hold and their orders on one.
+        const analyticsIds = await ownedProfileIds(userId);
+
+        const ordersRef = filterByOwnerInArray(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "sellerIds", analyticsIds,
+        ).limit(SELLER_ANALYTICS_CAP);
+        const productsRef = filterByOwner(
+            db.collection(COLLECTIONS.PRODUCTS), "sellerId", analyticsIds,
+        ).limit(SELLER_ANALYTICS_CAP);
 
         // Fetch all matching orders and products in parallel to avoid index errors on status inequalities
         const [ordersSnapshot, productsSnapshot] = await Promise.all([

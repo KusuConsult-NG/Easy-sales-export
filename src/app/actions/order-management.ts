@@ -2,6 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { filterByOwner, isOwnedBySession, ownedProfileIds } from "@/lib/owned-profile-ids";
+import { isAnyOwnedBySession } from "@/lib/owned-profile-ids";
+import { filterByOwnerInArray } from "@/lib/owned-profile-ids";
 import { requireSession } from "@/lib/session-guard";
 import { sellerNetFor } from "@/lib/platform-fee";
 import { logger } from '@/lib/logger';
@@ -47,12 +49,18 @@ async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let
         if (!hasSellerRole(userData?.roles || [])) { return { success: false as const, error: "Not authorized as seller", data: null };
         }
 
-        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("sellerIds", "array-contains", userId)
-            .orderBy("createdAt", "desc");
+        //   #904 (SELLER SIDE, THE REST) — the second door onto the seller's
+        //   orders, widened with _mp_seller_dashboard's. Both branches, so a
+        //   status filter cannot answer a narrower question than "All".
+        const sellerIdsOwned = await ownedProfileIds(userId);
 
-        if (filters?.status) { query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-                .where("sellerIds", "array-contains", userId)
+        let query: import("@/lib/supabase-db").SupabaseQuery = filterByOwnerInArray(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "sellerIds", sellerIdsOwned,
+        ).orderBy("createdAt", "desc");
+
+        if (filters?.status) { query = filterByOwnerInArray(
+                db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "sellerIds", sellerIdsOwned,
+            )
                 .where("status", "==", filters.status)
                 .orderBy("createdAt", "desc");
         }
@@ -139,7 +147,19 @@ async function _updateOrderStatusAction(
             notifyOrder = currentOrder;
 
             const isUserAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
-            const isAuthorized = isUserAdmin || currentOrder.sellerId === userId || (Array.isArray(currentOrder.sellerIds) && currentOrder.sellerIds.includes(userId));
+            /*
+             *   #904 (SELLER SIDE, THE REST) — an order can name ONE seller or
+             *   SEVERAL, so this asks both fields, and each was a raw compare.
+             *   isAnyOwnedBySession takes the whole set and tries every exact
+             *   match before resolving anything, so a seller on either field
+             *   still pays for no read.
+             *
+             *   The admin arm is untouched and still first.
+             */
+            const isAuthorized = isUserAdmin || await isAnyOwnedBySession(
+                [currentOrder.sellerId, ...(Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds : [])],
+                userId,
+            );
             if (!isAuthorized) {
                 throw new Error("Not authorized to update this order");
             }
@@ -719,7 +739,12 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
         const data = orderDoc.data()!;
         const isAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
 
-        const isAuthorized = data.sellerId === session.user.id || (Array.isArray(data.sellerIds) && data.sellerIds.includes(session.user.id));
+        //   #904 (SELLER SIDE, THE REST) — the same two-field question as the
+        //   status path above, on the escrow door.
+        const isAuthorized = await isAnyOwnedBySession(
+            [data.sellerId, ...(Array.isArray(data.sellerIds) ? data.sellerIds : [])],
+            session.user.id,
+        );
         if (!isAuthorized && !isAdmin) { return { success: false as const, error: "Unauthorized", data: null };
         }
 

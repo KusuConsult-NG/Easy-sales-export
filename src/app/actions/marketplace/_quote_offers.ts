@@ -81,7 +81,9 @@ async function _respondToQuoteAction(
          *   Admins are deliberately NOT admitted. Agreeing a price on a seller's
          *   behalf is not moderation; it is trading as them.
          */
-        if (!quote.sellerId || quote.sellerId !== userId) {
+        //   #904 (SELLER SIDE, THE REST) — a quote raised against a listing
+        //   this seller published from a superseded profile.
+        if (!await isOwnedBySession(quote.sellerId, userId)) {
             return { success: false as const, error: "This quote is not addressed to you", data: null };
         }
 

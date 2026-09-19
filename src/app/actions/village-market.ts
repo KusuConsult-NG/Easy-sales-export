@@ -17,6 +17,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import type {
     VillageMarketEvent,
     FlashSaleProduct,
@@ -467,7 +468,9 @@ export async function removeFlashSaleProductAction(
         const docRef = db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS).doc(flashProductId);
         const doc = await docRef.get();
         if (!doc.exists) return { success: false as const, error: "Product not found" , data: null };
-        if (doc.data()?.sellerId !== userId) return { success: false as const, error: "Unauthorized" , data: null };
+        //   #904 (SELLER SIDE, THE REST) — the village market's own copy of
+        //   the product ownership gate.
+        if (!await isOwnedBySession(doc.data()?.sellerId, userId)) return { success: false as const, error: "Unauthorized" , data: null };
 
         await docRef.update({ status: "removed", updatedAt: FieldValue.serverTimestamp() });
         return { error: null, success: true as const , data: null };
