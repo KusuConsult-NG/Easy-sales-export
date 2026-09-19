@@ -168,12 +168,38 @@ const offered = (r: any) => (r.users as any[]).map((u) => u.uid).sort();
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#752 — the rule itself, asked of the role', () => {
-    it('AN UNSCOPED ADMIN IS REACHABLE BY EVERYBODY', () => {
-        //   admin, super_admin, moderator, support — #633's set, derived from
-        //   the matrix rather than written out.
-        for (const role of ['admin', 'super_admin', 'moderator', 'support']) {
+    it('NARROWED BY #900: THE SUPER ADMIN IS REACHABLE BY EVERYBODY, AND ONLY THEM', () => {
+        /*
+         *   #900 CHANGED THIS ASSERTION, AND THE CHANGE IS THE OWNER'S RULE.
+         *
+         *   This test used to read "AN UNSCOPED ADMIN IS REACHABLE BY
+         *   EVERYBODY" and walked #633's four-role set — admin, super_admin,
+         *   moderator, support. That was the right answer to #752's question
+         *   and it is no longer the answer to the owner's:
+         *
+         *     "user should only see the super admin and the admin that carries
+         *      the name of that module and all other admin should be hidden."
+         *
+         *   Two names, not four. `admin`, `moderator` and `support` are now
+         *   hidden from the picker, so an academy-only member's list is the
+         *   super admin and the academy admin.
+         *
+         *   WHAT THAT COSTS, AND WHY IT IS AFFORDABLE. `support` is the role
+         *   whose job is answering members, and it has just been removed from
+         *   the list of people a member can pick. It is not removed from the
+         *   platform: startSupportConversationAction is a separate door that
+         *   routes a support request by module, falls back to an unscoped
+         *   admin — still asked through isUnscopedAdmin, deliberately left
+         *   alone — and then to any admin at all. A member raising a support
+         *   request still reaches support. What changed is that support is no
+         *   longer offered as a PERSON to start a chat with, which is the
+         *   distinction the owner's sentence draws.
+         */
+        expect(adminIsReachableBy(['super_admin'], ['cooperative_member'])).toBe(true);
+
+        for (const role of ['admin', 'moderator', 'support']) {
             expect({ role, reachable: adminIsReachableBy([role], ['cooperative_member']) })
-                .toEqual({ role, reachable: true });
+                .toEqual({ role, reachable: false });
         }
     });
 
@@ -200,10 +226,18 @@ describe('#752 — the rule itself, asked of the role', () => {
         expect(adminIsReachableBy(['wave_admin'], roles)).toBe(false);
     });
 
-    it('and a member of none reaches only the unscoped admins', () => {
+    it('and a member of none still reaches the super admin — NOT NOBODY', () => {
+        /*
+         *   #900's lockout check, and the reason the super admin is answered
+         *   unconditionally rather than by module. Every new registration holds
+         *   `general_user` alone and belongs to no module, so if narrowing left
+         *   this member with an empty picker it would have shipped a platform
+         *   where a new user can write to nobody.
+         */
         expect(memberModules(['general_user'])).toEqual([]);
         expect(adminIsReachableBy(['cooperative_admin'], ['general_user'])).toBe(false);
-        expect(adminIsReachableBy(['support'], ['general_user'])).toBe(true);
+        expect(adminIsReachableBy(['support'], ['general_user'])).toBe(false);
+        expect(adminIsReachableBy(['super_admin'], ['general_user'])).toBe(true);
     });
 
     it('the module map covers every module admin role, so none is unreachable', () => {
@@ -238,10 +272,14 @@ describe('#752 — the picker a member actually sees', () => {
         /*
          *   THE reported defect. An empty query is what Messages opens with,
          *   and it returned all five of these rows to a cooperative member.
-         *   Their own admin, the platform admin and support — not wave, not
-         *   academy.
+         *   Their own admin and the platform admin — not wave, not academy.
+         *
+         *   #900 NARROWED THIS BY ONE MORE ROW: a-support held `support`, which
+         *   was reachable by everybody. The owner asked for "the super admin
+         *   and the admin that carries the name of that module" and nobody
+         *   else. See the rule test above for where support still is.
          */
-        expect(offered(await search(''))).toEqual(['a-coop', 'a-super', 'a-support']);
+        expect(offered(await search(''))).toEqual(['a-coop', 'a-super']);
     });
 
     it('AND THE SEARCH BRANCH AGREES WITH IT', async () => {
@@ -251,7 +289,7 @@ describe('#752 — the picker a member actually sees', () => {
          *   directory, so this asks the same question of the same five people.
          */
         expect(offered(await search('easysalesexport')))
-            .toEqual(['a-coop', 'a-super', 'a-support']);
+            .toEqual(['a-coop', 'a-super']);
     });
 
     it('AND THE ADMIN WITH NO MODULE WORD IN HER ADDRESS IS FOUND AT LAST', async () => {
@@ -277,7 +315,7 @@ describe('#752 — the picker a member actually sees', () => {
     it('a wave member gets the wave admin and not the cooperative one', async () => {
         setCaller(['wave_participant']);
 
-        expect(offered(await search(''))).toEqual(['a-super', 'a-support', 'a-wave']);
+        expect(offered(await search(''))).toEqual(['a-super', 'a-wave']);
     });
 
     it('AND AN ADMIN CALLER STILL SEES EVERY ADMIN', async () => {

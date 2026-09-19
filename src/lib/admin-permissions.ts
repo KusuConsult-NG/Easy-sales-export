@@ -866,12 +866,43 @@ export function canAccessAdminRoute(
     // UNLESS they are also granted super_admin or admin rights (global admin roles).
     const isGlobalAdmin = userRoles?.includes("admin") || userRoles?.includes("super_admin");
     if (isModuleAdmin && !isGlobalAdmin) {
-        // Module admins have access to their own silos, user management, support, and settings
-        // NOTE: They are explicitly BLOCKED from the base /admin and /admin/dashboard to remove them from sidebar
-        if (route.startsWith("/admin/users")) return true;
+        /*
+         *   #901 A MODULE ADMIN REACHES THEIR MODULE, AND THE INBOX THAT SERVES
+         *   IT. NOTHING ELSE.
+         *
+         *   THE OWNER: "The admin login credentials should allow the admin
+         *   access to only their module admin features and other and nothing
+         *   else."
+         *
+         *   REMOVED: `/admin/users` and `/admin/settings`.
+         *
+         *   `/admin/users` is the whole platform's user list, with the roles
+         *   editor on it — so an academy_admin could read and re-role every
+         *   account on the platform, including other admins. That is the
+         *   plainest case of "not their module" in the tree, and it is the one
+         *   this rule's own name promised to stop: the comment above it read
+         *   "Strict Silo Isolation".
+         *
+         *   `/admin/settings` is the platform's configuration, including the
+         *   fee split #882 put there. Not a module's business.
+         *
+         *   KEPT: `/admin/messages` and its legacy `/admin/support` alias.
+         *
+         *   Stated as a judgement rather than buried: the owner said "nothing
+         *   else", and this is one exception. It is kept because the SAME
+         *   message asks for module admins to be the people their members
+         *   write to — "user should only see the super admin and the admin that
+         *   carries the name of that module" (#900) — and an admin who cannot
+         *   open the inbox cannot answer. The inbox is not a hole in the silo
+         *   either: mayAccessConversation admits a module admin only to threads
+         *   in their own module's scope, so what they can open is already
+         *   bounded by the same module boundary this rule enforces.
+         *
+         *   If user management or settings were meant to stay, they are one
+         *   line each — and the suite beside this says so.
+         */
         if (route.startsWith("/admin/messages")) return true; // Support Inbox
         if (route.startsWith("/admin/support")) return true;  // Legacy support path
-        if (route.startsWith("/admin/settings")) return true;
         
         // Silo isolation
         if (isWaveAdmin && route.startsWith("/admin/wave")) return true;

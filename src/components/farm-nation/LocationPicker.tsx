@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 //   #868 The bounding box and the centre live in lib, not here: importing this
 //   component to check four numbers drags Leaflet and a DOM in behind them.
 import { NIGERIA_CENTRE, isWithinNigeria } from "@/lib/nigeria-bounds";
 import { NIGERIAN_STATE_COORDINATES } from "@/lib/locations";
+//   #899 "Is this coordinate anywhere near the state the listing names?"
+import { stateCentre, isFarFromState } from "@/lib/state-proximity";
 
 /**
  * Pick a point on a map instead of typing two numbers.
@@ -120,6 +122,14 @@ export default function LocationPicker({
 
     //   Read in the build effect, which runs once — so it is held the same way
     //   and for the same reason as onChange.
+    //   #899 Same reason as onChangeRef: the geolocation callback is created
+    //   when the button is pressed and must read the CURRENT state, not the one
+    //   captured when the component last rendered.
+    const stateRef = useRef(state);
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
+
     const readOnlyRef = useRef(readOnly);
     useEffect(() => {
         readOnlyRef.current = readOnly;
@@ -216,13 +226,48 @@ export default function LocationPicker({
         }
     }, [lat, lng, hasPoint]);
 
+    /*
+     *   #899 THE LAND'S LOCATION WINS OVER THE SELLER'S.
+     *
+     *   THE OWNER: "when a user use the option of 'Use my location' and the
+     *   product is in a different location, over-ride the 'use my location'
+     *   with the location of the product so that the inspector doesn't get
+     *   confused with the cordinates."
+     *
+     *   This dropped the pin on the device's GPS, full stop. A seller in Lagos
+     *   listing family land in Benue stamped the listing with Lagos — while its
+     *   own `state` field said Benue — and #866 then dispatches an inspector to
+     *   the pin.
+     *
+     *   The coordinate is the one field on a listing nobody can sanity-check by
+     *   reading it: state and LGA are dropdowns, the address is prose, and a
+     *   pair of decimals looks equally plausible wherever it points.
+     *
+     *   So when the device is obviously not in the state the seller chose, the
+     *   STATE wins and she is told. See lib/state-proximity for why the test is
+     *   deliberately loose, and why "I cannot tell" never moves her pin.
+     */
+    const [overrodeLocation, setOverrodeLocation] = useState<string | null>(null);
+
     const useMyLocation = () => {
         if (typeof navigator === "undefined" || !navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition(
-            (pos) => onChangeRef.current({
-                latitude: fmt(pos.coords.latitude),
-                longitude: fmt(pos.coords.longitude),
-            }),
+            (pos) => {
+                const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                const centre = stateCentre(stateRef.current);
+
+                if (centre && isFarFromState(here, stateRef.current)) {
+                    onChangeRef.current({ latitude: fmt(centre.lat), longitude: fmt(centre.lng) });
+                    setOverrodeLocation(String(stateRef.current));
+                    return;
+                }
+
+                setOverrodeLocation(null);
+                onChangeRef.current({
+                    latitude: fmt(here.lat),
+                    longitude: fmt(here.lng),
+                });
+            },
             //   Swallowed: a refused permission is the seller's choice, and the
             //   map and the two fields both still work without it.
             () => undefined,
@@ -247,6 +292,19 @@ export default function LocationPicker({
                         Use my location
                     </button>
                 </div>
+            )}
+
+            {/*
+              *   #899 SAID OUT LOUD, because the pin moved somewhere she did not
+              *   put it. A silent override is the same class of defect as the
+              *   wrong coordinate: she cannot tell what the listing will carry.
+              */}
+            {!readOnly && overrodeLocation && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Your device is not in {overrodeLocation}, so the pin was placed on{" "}
+                    {overrodeLocation} instead — the state this listing names. Tap the
+                    map to put it exactly on the land.
+                </p>
             )}
 
             <div

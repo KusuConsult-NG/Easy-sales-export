@@ -61,7 +61,7 @@
  *   for marketplace's real order prefixes now, like everybody else.
  */
 
-import { MODULE_ADMIN_ROLE, isUnscopedAdmin } from "@/lib/admin-permissions";
+import { MODULE_ADMIN_ROLE, isSuperAdmin, isUnscopedAdmin } from "@/lib/admin-permissions";
 import type { Conversation } from "@/lib/types/messages";
 
 interface ModuleScope {
@@ -264,8 +264,43 @@ export function adminIsReachableBy(
 ): boolean {
     if (!adminRoles || adminRoles.length === 0) return false;
 
-    //   Serves everybody, by definition — see UNSCOPED_ADMIN_ROLES.
-    if (isUnscopedAdmin(adminRoles)) return true;
+    /*
+     *   #900 THE PICKER SHOWS THE SUPER ADMIN AND THE MODULE'S OWN ADMIN. THAT
+     *   IS ALL.
+     *
+     *   THE OWNER: "when a user is only onboarded on a certain module like
+     *   academy and wants to send an in-app message through the message
+     *   feature, user should only see the super admin and the admin that
+     *   carries the name of that module and all other admin should be hidden."
+     *
+     *   This asked isUnscopedAdmin, which is ALL_ADMIN_ROLES minus the six
+     *   module admins — so `admin`, `moderator` and `support` were reachable by
+     *   everybody, and an academy-only member's picker listed four staff
+     *   accounts that have nothing to do with the academy alongside the one
+     *   that does.
+     *
+     *   NARROWED HERE AND NOWHERE ELSE, deliberately. isUnscopedAdmin answers
+     *   two OTHER questions in this same subsystem and both must keep their
+     *   wider answer:
+     *
+     *     validateConversationAccess   whether an admin may OPEN a thread.
+     *                                  #635's note records what narrowing that
+     *                                  cost last time: "a support agent was
+     *                                  handed every conversation on the
+     *                                  platform, clicked one, and was refused."
+     *     messages.ts's routing        which admin an unrouted support request
+     *                                  lands on. Sending every one of those to
+     *                                  the super admin is not what the owner
+     *                                  asked for and would bury them.
+     *
+     *   So this is about VISIBILITY in the picker, which is what was reported.
+     *
+     *   AND #752'S GUARANTEE IS UNTOUCHED: the caller still falls back to every
+     *   admin when this rule would leave a member with nobody. A member who can
+     *   see the wrong admin can still get help; a member who can see nobody
+     *   cannot.
+     */
+    if (isSuperAdmin(adminRoles)) return true;
 
     const modules = memberModules(memberRoles);
 
