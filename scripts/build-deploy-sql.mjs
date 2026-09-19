@@ -274,6 +274,24 @@ const EXPECTED = [
              "applied by the Supabase SQL Editor, which is the only route available " +
              "here, and therefore sat unapplied.",
     },
+    {
+        n: "042",
+        why: "expression index on `users.raw_data->>'_migratedTo'`. #904's second " +
+             "cause made the supersession pointer READ BACKWARD — which ids point " +
+             "at me — on a seller's own screens, where every existing reader walks " +
+             "it forward by primary key. 033 added the same index on the other " +
+             "pointer field, `supabaseAuthId`, and quoted #465 on what its absence " +
+             "cost: `canceling statement due to statement timeout`. The backward " +
+             "search queries BOTH fields, so after 033 one half was an index scan " +
+             "and this half was not (measured: 9.550 ms Seq Scan vs 0.107 ms Index " +
+             "Scan, 50,000 users with 5,000 carrying the pointer; 432 kB, and a " +
+             "btree indexes no NULLs so it covers only those 5,000). Order does " +
+             "not matter — it is an index, not a function, and depends on no " +
+             "earlier migration. NOT REQUIRED FOR CORRECTNESS, unlike 040: the " +
+             "code is right without it and merely slower, so code deployed ahead " +
+             "of this migration behaves correctly. Plain CREATE INDEX under a " +
+             "lock_timeout rather than CONCURRENTLY, for the reason #469 records.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

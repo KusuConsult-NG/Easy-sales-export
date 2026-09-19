@@ -16,6 +16,7 @@ import {
 import { type LandListing } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { ownedProfileIds, filterByOwner, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { hasAdminPermission, isPlatformAdmin } from "@/lib/admin-permissions";
 import { isAdmin } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
@@ -234,7 +235,15 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
             const sessionResult = await requireSession();
             const viewerId = sessionResult.session?.user?.id;
             const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
-            if (!viewerId || (viewerId !== data.ownerId && !viewerIsAdmin)) {
+            //   #904 `!==` REFUSED THE OWNER OF A LISTING FILED UNDER THEIR
+            //   SUPERSEDED PROFILE — the one person this gate exists to admit.
+            //   isOwnedBySession resolves the row's owner FORWARD, which costs
+            //   nothing when it already matches and one keyed read on a miss.
+            //
+            //   THE FREE CHECKS COME FIRST. This is the public detail page, so
+            //   an anonymous viewer and an admin both reach a decision without
+            //   the read; only a signed-in non-admin pays for one.
+            if (!viewerId || (!viewerIsAdmin && !await isOwnedBySession(data.ownerId, viewerId))) {
                 // Indistinguishable from "no such listing", so the endpoint does
                 // not confirm that an id exists to someone who may not see it.
                 return { success: true, error: null, data: null };
@@ -255,7 +264,11 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
         // an admin keep them — the owner needs to read why they were rejected.
         const sessionForFields = await requireSession();
         const viewer = sessionForFields.session?.user;
-        const privileged = Boolean(viewer) && (viewer!.id === data.ownerId || isAdmin(viewer!.roles));
+        //   #904 — the same widening. An owner reading a listing filed under a
+        //   superseded profile still needs the review notes saying why it was
+        //   rejected, which is the whole reason this branch exists.
+        const privileged = Boolean(viewer)
+            && (isAdmin(viewer!.roles) || await isOwnedBySession(data.ownerId, viewer!.id));
 
         return {
             success: true,
@@ -280,9 +293,30 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
     const { session } = sessionResult;
 
     try { 
-        const listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where('ownerId', '==', session.user.id)
-            .orderBy('createdAt', 'desc');
+        /*
+         *   #904 (SECOND CAUSE) THE LISTING IS FILED UNDER A PROFILE THIS
+         *   PERSON NO LONGER SIGNS IN AS.
+         *
+         *   040 repaired the listings whose owner was written under the wrong
+         *   KEY NAME. These have the right key holding a SUPERSEDED VALUE: the
+         *   seller listed a parcel on one of their profiles, an admin later
+         *   settled the duplicate (#724), and the row still names the id that
+         *   lost while the seller signs in as the one that won.
+         *
+         *   Both faults reach the owner as the same sentence — "My properties
+         *   are not listed under my property tab" — and an empty screen is
+         *   indistinguishable from owning nothing.
+         *
+         *   NOT BACKFILLED, and lib/owned-profile-ids.ts records why: settling
+         *   a duplicate moves no data, which is the only reason it can be
+         *   undone by clearing one field. Rewriting owner keys would take that
+         *   away. The pointer is followed on the read instead.
+         */
+        const ownerIds = await ownedProfileIds(session.user.id);
+
+        const listingsQuery = filterByOwner(
+            db.collection(COLLECTIONS.LAND_LISTINGS), 'ownerId', ownerIds,
+        ).orderBy('createdAt', 'desc');
 
         const snapshot = await listingsQuery.get();
 
@@ -365,7 +399,11 @@ async function _updateLandListing(
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !isPlatformAdmin(session.user.roles)) {
+        //   #904 — My Properties now lists rows filed under a superseded
+        //   profile, so this has to admit them too. A screen that shows a
+        //   seller their listing and then refuses to edit it is #884's
+        //   complaint in a politer form. Same rule, walked forwards.
+        if (!await isOwnedBySession(listingData.ownerId, session.user.id) && !isPlatformAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized to edit this listing", data: null };
         }
 
@@ -669,7 +707,11 @@ async function _deleteLandListing(listingId: string): Promise<ActionResponse<nul
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !isPlatformAdmin(session.user.roles)) {
+        //   #904 — My Properties now lists rows filed under a superseded
+        //   profile, so this has to admit them too. A screen that shows a
+        //   seller their listing and then refuses to delete it is #884's
+        //   complaint in a politer form. Same rule, walked forwards.
+        if (!await isOwnedBySession(listingData.ownerId, session.user.id) && !isPlatformAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized to delete this listing", data: null };
         }
 

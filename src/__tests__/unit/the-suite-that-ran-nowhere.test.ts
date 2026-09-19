@@ -201,6 +201,12 @@ describe('#651 — and the gate they share is one gate', () => {
             //   Postgres. The whole question it asks is what a prefix range
             //   over a nested jsonb field returns over the wire.
             'the-name-on-the-row-was-not-the-name-searched.test.ts',
+            //   #904 — `filterByOwner` emits `.where(field, "in", [...])` on a
+            //   JSONB path so a seller sees the listings filed under a profile
+            //   they no longer sign in as. What that becomes over the wire is a
+            //   question only a real PostgREST answers; the SQL half of the
+            //   same file needs plain Postgres and stays under dbDescribe.
+            'the-pointer-nobody-had-read-backwards.test.ts',
             'the-role-scan-reads-the-whole-table-without-the-index.test.ts',
         ]);
     });
@@ -220,8 +226,9 @@ describe('#651 — and the gate they share is one gate', () => {
         expect(harness).toContain('export async function assertRestReachable');
         const wired = PG_SUITES.filter((f) =>
             read(`${PG_DIR}/${f}`).includes('beforeAll(assertRestReachable)'));
-        //   #814 raised this from five to six, on the same test as every time.
-        expect(wired.length).toBe(6);
+        //   #814 raised this from five to six, and #904 to seven, on the same
+        //   test as every time.
+        expect(wired.length).toBe(7);
     });
 });
 
