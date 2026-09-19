@@ -78,6 +78,33 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 
+/*
+ *   THIS SUITE TESTS THE PER-BUCKET FALLBACK, AND NOW SAYS SO.
+ *
+ *   It predates #850, which put `module_registration_counts` in front of the
+ *   per-bucket counts. It kept passing because the rollup call failed in the
+ *   test environment and EVERY failure fell through to the fallback — so the
+ *   path under test was reached by accident rather than by choice.
+ *
+ *   That blanket fall-through is the defect fixed in
+ *   the-fallback-was-the-thing-that-timed-out: a rollup that TIMED OUT sent
+ *   five to fifteen more sequential scans at the table that was already too
+ *   slow. The fallback now fires only for PGRST202 / 42883 — the function not
+ *   being there — which is the condition #850 wrote it for and the one this
+ *   suite means.
+ *
+ *   Declared rather than inferred. Nothing else here changes.
+ */
+jest.mock('@/lib/supabase', () => ({
+    supabaseAdmin: {
+        rpc: async () => ({
+            data: null,
+            error: { code: 'PGRST202', message: 'Could not find the function in the schema cache' },
+        }),
+    },
+}));
+
+
 const code = (rel: string) =>
     stripComments(readFileSync(join(process.cwd(), rel), 'utf-8'), { label: rel });
 
