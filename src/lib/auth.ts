@@ -112,6 +112,68 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             const directData = directDocSnap.data()!;
                             uid = directData._migratedTo || sbData.user.id;
                             logger.info(`${authCtx} Authenticated via Supabase Auth. Direct Profile ID Match: ${uid}`);
+
+                            /*
+                             *   #888 THE FAST PATH NEVER ASKED WHETHER THERE WERE
+                             *   OTHER ROWS, SO A SPLIT ACCOUNT WAS SILENT.
+                             *
+                             *   MEASURED IN PRODUCTION, from the owner's own
+                             *   query over admin accounts:
+                             *
+                             *     c9fe1d32…  easysalescooperative@gmail.com
+                             *                ["cooperative_admin"]          auth row: yes
+                             *     fiIid9Vl…  easysalescooperative@gmail.com
+                             *                ["cooperative_admin","admin",
+                             *                 "general_user"]               auth row: no
+                             *
+                             *   Two profiles, one person. Supabase authenticates
+                             *   them as c9fe1d32, this branch finds that row
+                             *   directly, and the session is built from it — so
+                             *   they sign in holding `cooperative_admin` and NOT
+                             *   `admin`. A global administrator is silently
+                             *   reduced to one module's silo, every login.
+                             *
+                             *   PRIORITY 2 ALREADY KNOWS TO SAY SO. Ten lines
+                             *   below, chooseProfileForAuthAccount reports
+                             *   `candidates` and logs "these rows need
+                             *   reconciling" (#477). That reporting is reached
+                             *   ONLY when the direct lookup misses — which is
+                             *   exactly when the account is NOT the split kind
+                             *   this finds. The louder case was the unreported
+                             *   one.
+                             *
+                             *   THIS DOES NOT CHANGE WHO IS SIGNED IN, and that
+                             *   is deliberate. Unioning roles across rows would
+                             *   grant whatever the most privileged duplicate
+                             *   holds — a privilege decision about real accounts,
+                             *   made unattended, which is precisely what
+                             *   _duplicate_profiles.ts refuses to do and says
+                             *   why. The rows are reconciled by a person at
+                             *   /admin/forensics/duplicates; this makes the
+                             *   condition visible so they know to.
+                             *
+                             *   COST: one index scan on `idx_users_email`
+                             *   (migration 036 names this same query as the
+                             *   login's own), on a path that already does
+                             *   several reads.
+                             */
+                            try {
+                                const { rows } = await findProfilesByEmail(email);
+                                if (rows.length > 1) {
+                                    logger.error(
+                                        `${authCtx} SPLIT ACCOUNT (#888): ${rows.length} profile rows share `
+                                        + `${email.toLowerCase()}. Signed in as ${uid} by direct id match; the other `
+                                        + `row(s) — ${rows.filter((r) => r.id !== uid).map((r) => r.id).join(', ')} `
+                                        + `— are not consulted, so any roles or registrations held only there are `
+                                        + `absent from this session. Reconcile at /admin/forensics/duplicates.`,
+                                    );
+                                }
+                            } catch (dupErr) {
+                                //   Never fatal. This is a diagnostic; a login
+                                //   must not fail because the warning could not
+                                //   be produced.
+                                logger.warn(`${authCtx} duplicate-profile check failed (non-fatal):`, dupErr as Error);
+                            }
                         } else {
                             // Priority 2: Query users collection by email to find their database profile (holding legacy ID).
                             /**

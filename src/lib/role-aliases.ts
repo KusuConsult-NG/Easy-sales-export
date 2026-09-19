@@ -79,6 +79,54 @@ export const ROLE_ALIASES: Readonly<Record<string, string>> = {
      * canonical role grants, so a guessed spelling is a guessed grant.
      */
     superadmin: 'super_admin',
+
+    /**
+     *   #889 AND THE SPELLING admin-permissions SAYS NOTHING WRITES.
+     *
+     *   That file's note on ADMIN_ROLES states it plainly: "every copy contained
+     *   'farmnation_admin' — a role that does not exist. The role is
+     *   `farm_nation_admin`, and NOTHING ANYWHERE WRITES THE OTHER SPELLING."
+     *
+     *   The first half is right and the last clause is now false. From the
+     *   owner's own production query over admin accounts:
+     *
+     *       easysalesfarmnation@gmail.com
+     *         ["farm_nation_admin", "farmnation_admin", "admin",
+     *          "farm_admin", "general_user"]
+     *
+     *   It is on a live account. #96 fixed the code that READ the misspelling;
+     *   the data was never looked at, so the conclusion "nothing writes it"
+     *   described the repository and not the platform.
+     *
+     *   TODAY IT COSTS THAT ACCOUNT NOTHING, because they also hold
+     *   `farm_nation_admin` and `admin`. It is aliased anyway for the case that
+     *   is one hand-edit away and would be invisible: an account granted ONLY
+     *   `farmnation_admin` is not an administrator to isAdmin, not to
+     *   canAccessAdminRoute, not to adminLandingPath and not to the MFA policy —
+     *   a Farm Nation admin who cannot administer Farm Nation, and no screen
+     *   anywhere would say why.
+     *
+     *   Same shape as `superadmin` above, and the same argument #458 made for
+     *   it: one spelling of one role, resolved in one place, so a legacy string
+     *   cannot mean "admin" to one reader and "nobody" to the next.
+     */
+    farmnation_admin: 'farm_nation_admin',
+
+    /*
+     *   `farm_admin` IS DELIBERATELY NOT HERE, and it sits on the same live
+     *   account.
+     *
+     *   This table's own rule, four lines above the `superadmin` entry: "every
+     *   alias here grants whatever the canonical role grants, so a guessed
+     *   spelling is a guessed grant." `farmnation_admin` is unambiguous — the
+     *   same two words with one underscore missing. `farm_admin` is not: it is a
+     *   different word, and reading it as `farm_nation_admin` would hand module-
+     *   admin authority to a string on the strength of a guess.
+     *
+     *   It is reported rather than resolved. If it was meant to be a Farm Nation
+     *   administrator, the fix is to grant the real role on the admin screen,
+     *   where the change is audited and reversible.
+     */
 };
 
 /** Resolve one role to its canonical spelling. Unknown roles pass through. */

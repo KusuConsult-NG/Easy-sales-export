@@ -760,9 +760,30 @@ export function adminSiloRedirect(
  * Check if user can access admin route based on role
  */
 export function canAccessAdminRoute(
-    userRoles: string[] | undefined,
+    rawUserRoles: string[] | undefined,
     route: string
 ): boolean {
+    /*
+     *   #889 THE ONE PREDICATE IN THIS FILE THAT DID NOT RESOLVE A SPELLING.
+     *
+     *   isAdmin, isSuperAdmin, isPlatformAdmin, getHighestAdminRole,
+     *   includesPrivilegedRole and adminLandingPath all begin with
+     *   canonicalRoles. This one did not, and the module-admin block below
+     *   compares with a RAW `.includes()` — so a legacy or misspelled role
+     *   resolved everywhere except at the door that decides what may be opened.
+     *
+     *   MEASURED with `farmnation_admin`, which production holds on a live
+     *   account: isAdmin said yes, adminLandingPath sent them to
+     *   /admin/farm-nation, and this said no — and #618 made a refusal here a
+     *   REDIRECT, so the login landed them on a page the silo rule then bounced.
+     *   Aliasing the spelling without this would have produced exactly the
+     *   round trip #458 documents: "login promises the admin portal and the
+     *   admin portal refuses."
+     *
+     *   Resolved once, here, and every comparison below reads the resolved list.
+     */
+    const userRoles = canonicalRoles(rawUserRoles);
+
     // Super admins have universal access to all admin routes
     if (isSuperAdmin(userRoles)) {
         return true;
