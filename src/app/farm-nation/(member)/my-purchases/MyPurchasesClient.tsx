@@ -44,17 +44,50 @@ export default function MyPurchasesClient({ initial = null }: {
     const [error, setError] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("all");
 
+    /*
+     *   #892 THE BUYER'S HALF OF #886, AND IT COSTS MORE HERE.
+     *
+     *   #886 found My Properties telling a seller "No Listings Found" when the
+     *   read had FAILED — `error` and `setError` declared, a red banner written
+     *   and wired, and nothing anywhere calling setError. This screen is the
+     *   same three defects on the other side of the same module, and nothing
+     *   found it because the sweep that found #886 was a bug report about one
+     *   page rather than a sweep.
+     *
+     *   WHAT A BUYER IS TOLD. The empty state below reads "No Purchase Requests
+     *   — Browse available properties and make your first purchase request",
+     *   above a button that goes and does it. A buyer who has already reserved
+     *   or paid for a parcel, and whose read simply failed, is invited to buy
+     *   it again. That is the one direction an error must never be wrong in.
+     *
+     *   THREE FIXES, the same three:
+     *     - a refusal is reported instead of collapsing into "you have none"
+     *     - the early return clears `loading`, which it did not, so a session
+     *       without a user left the spinner up for ever
+     *     - the value written depends only on the OUTCOME, so a repeated run
+     *       cannot alternate and loop (#620 caught that on the sibling screen)
+     */
     async function loadPurchases() {
-        if (!session?.user) return;
+        if (!session?.user) {
+            setLoading(false);
+            return;
+        }
 
         try {
             const result = await getMyPurchaseRequestsAction();
             if (result.success && result.data?.requests) {
                 // Cast to PurchaseRequest[] as the action returns generic objects
                 setPurchases(result.data.requests as unknown as PurchaseRequest[]);
+                setError(null);
+            } else {
+                //   The existing list is left alone: a failed refresh must not
+                //   erase what is already on screen.
+                logger.error("Failed to load purchases:", result.error);
+                setError(result.error || "We could not load your purchases. Please try again.");
             }
         } catch (error) {
             logger.error("Failed to load purchases:", error);
+            setError("We could not load your purchases. Please try again.");
         }
         setLoading(false);
     }
@@ -247,12 +280,24 @@ This document serves as a record of the purchase agreement initiated through Eas
                 {error && (
                     <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
                         <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                        <p className="text-red-800">{error}</p>
+                        <div className="flex-1">
+                            <p className="text-red-800">{error}</p>
+                            {/*   #892 A way out. A banner with no action is still
+                              *   nothing the buyer can do. */}
+                            <button
+                                onClick={() => { setLoading(true); loadPurchases(); }}
+                                className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition"
+                            >
+                                Try again
+                            </button>
+                        </div>
                     </div>
                 )}
 
-                {/* Purchases List */}
-                {filteredPurchases.length === 0 ? (
+                {/*   #892 The banner and the empty state are alternatives, not
+                  *   neighbours — otherwise "we could not load your purchases"
+                  *   sits directly above "make your first purchase request". */}
+                {error && filteredPurchases.length === 0 ? null : filteredPurchases.length === 0 ? (
                     <div className="bg-white rounded-2xl p-12 text-center elevation-2">
                         <div className="max-w-md mx-auto">
                             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">

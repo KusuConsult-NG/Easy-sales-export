@@ -66,6 +66,7 @@ import { execFileSync } from 'child_process';
 import { readFileSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
+import { runNodeScript } from '@/lib/testing/run-node-script';
 
 const ROOT = process.cwd();
 const MIGRATIONS = join(ROOT, 'supabase/migrations');
@@ -76,8 +77,10 @@ let deploySql = '';
 beforeAll(() => {
     // Building it IS the first assertion: the script exits non-zero rather than
     // emitting a file that omits a migration nobody accounted for.
-    deploySql = execFileSync('node', ['scripts/build-deploy-sql.mjs'], {
-        cwd: ROOT, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024,
+    //   #894 Retried only if the process fails to START. A non-zero exit is
+    //   this suite's first assertion and is still thrown straight through.
+    deploySql = runNodeScript('scripts/build-deploy-sql.mjs', [], {
+        cwd: ROOT, maxBuffer: 64 * 1024 * 1024,
     });
 });
 

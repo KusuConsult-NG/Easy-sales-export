@@ -161,7 +161,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     if (!result.success) {
                         //   #793 The read FAILED. Entering edit mode now
                         //   would present a blank form as her application.
-                        setLoadFailed(true); return;
+                        setLoadFailed(true); setIsCheckingStatus(false); return;
                     }
                     if (result.success && result.data?.application) {
                         const d = result.data.application;
@@ -230,7 +230,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                  *   blank form, resubmits blank over the record she was
                  *   fixing.
                  */
-                if (!result.success) { setLoadFailed(true); return; }
+                if (!result.success) { setLoadFailed(true); setIsCheckingStatus(false); return; }
                 if (result.success && result.data?.application) {
                     const d = result.data.application;
                     if (d.firstName || d.fullName) {
@@ -289,7 +289,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             if (coopStatus === "revision_required" || coopStatus === "rejected") {
                 // Pre-populate form with existing data
                 const result = await getCooperativeApplicationAction();
-                if (!result.success) { setLoadFailed(true); return; }
+                if (!result.success) { setLoadFailed(true); setIsCheckingStatus(false); return; }
                 if (result.success && result.data?.application) {
                     const d = result.data.application;
                     if (d.firstName || d.fullName) {
@@ -620,9 +620,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             setIsSubmitting(false);
         }
     }
-    // Show spinner while checking status to avoid flash of incorrect step
-    if (isCheckingStatus) {
-        /*
+    /*
      *   #793 A FAILED READ IS NOT AN EMPTY APPLICATION.
      *
      *   #588 established this exact rule for LISTS and swept thirty-six screens
@@ -635,6 +633,30 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
      *   She then re-types it, or submits it missing the fields she cannot see —
      *   which is the owner's report, "details added to the form and some are
      *   missing in the process of submission".
+     *
+     * ── #893 AND THIS GATE WAS INSIDE THE SPINNER'S BLOCK ───────────────────
+     *
+     *   #793 added it one brace too deep:
+     *
+     *       if (isCheckingStatus) {
+     *           if (loadFailed) { return <ListLoadFailed …/>; }
+     *           return <spinner/>;
+     *       }
+     *
+     *   So the failure screen could only ever render while the status check was
+     *   still considered to be running. It worked — by accident — because all
+     *   three `setLoadFailed(true)` sites return WITHOUT clearing
+     *   `isCheckingStatus`, so the flag that gates the failure screen happens to
+     *   be the flag nobody cleared. Two coincidences holding each other up: set
+     *   `isCheckingStatus` false anywhere near a failure and the member gets a
+     *   spinner for ever instead of the screen written for her.
+     *
+     *   ITS OWN SIBLING SHOWS THE SHAPE. FarmNationOnboardingClient, the same
+     *   form for the other module, checks `loadFailed` at the top level and the
+     *   spinner after it — and its failure sites write
+     *   `setLoadFailed(true); setIsLoading(false); return;`. This now matches
+     *   that, in both halves: the gate is hoisted and the sites clear the flag,
+     *   so neither depends on the other being forgotten.
      */
     if (loadFailed) {
         return (
@@ -652,7 +674,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         );
     }
 
-    return (
+    // Show spinner while checking status to avoid flash of incorrect step
+    if (isCheckingStatus) {
+        return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" />
             </div>

@@ -55,6 +55,7 @@ import { describe, it, expect } from '@jest/globals';
 import { execFileSync } from 'child_process';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { runNodeScript } from '@/lib/testing/run-node-script';
 
 const ROOT = process.cwd();
 const DEPLOY = 'supabase/deploy.sql';
@@ -62,9 +63,10 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 
 /** The generator's output, right now, from the migrations on disk. */
 const regenerate = (): string =>
-    execFileSync('node', ['scripts/build-deploy-sql.mjs'], {
+    //   #894 See lib/testing/run-node-script: a spawn that never starts is
+    //   retried, a script that runs and exits non-zero is not.
+    runNodeScript('scripts/build-deploy-sql.mjs', [], {
         cwd: ROOT,
-        encoding: 'utf8',
         maxBuffer: 32 * 1024 * 1024,
     });
 
