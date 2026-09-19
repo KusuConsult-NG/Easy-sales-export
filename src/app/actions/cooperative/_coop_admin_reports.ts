@@ -102,17 +102,58 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
          *   shape running in reverse: the danger here is applying it to a place
          *   it does NOT name.
          */
-        let totalApplicantsCount: number | null = null;
-        let applicantsCounted = false;
-        if (!adminScope) {
-            const { countModuleApplicants, registerIsUsable } = await import("@/lib/module-applicant-count");
-            const applicants = await countModuleApplicants("cooperative");
-            if (registerIsUsable(applicants, totalMembersCount)) {
-                totalApplicantsCount = applicants.total;
-                applicantsCounted = true;
-            }
-        }
-        const reportedTotalMembers = totalApplicantsCount ?? totalMembersCount;
+        /*
+         *   #905 THE TOTAL WAS SWAPPED FOR THE REGISTER'S AND THE BREAKDOWN WAS
+         *   NOT, SO THE SCREEN ASKED FOR ARITHMETIC THAT CANNOT WORK.
+         *
+         *   THE OWNER, reading the members page:
+         *
+         *       Pending 98   Approved 1742
+         *       Total Paid Members 1731   Out of 3110 applications
+         *       Unpaid Members 109
+         *
+         *   98 + 1742 = 1840. 1731 + 109 = 1840. Neither is 3110, and 1,270
+         *   applicants sat in no bucket at all.
+         *
+         *   #835 substituted the applicant register's total here — rightly, for
+         *   the reason stated below — and left `pendingCount`, `approvedCount`
+         *   and the subtraction behind `unpaidMembers` reading the
+         *   COOPERATIVE_MEMBERS table. Three numbers on one card, drawn from two
+         *   populations, presented as a breakdown of each other.
+         *
+         *   EVERY OTHER MODULE ALREADY DOES THIS WHOLE. wave/compliance,
+         *   admin/_exports and academy/_ac_admin_applications each switch total,
+         *   pending, approved AND rejected together on one `useRegister`, so
+         *   their figures come from one population and add up. Farm Nation
+         *   reports only a total and has nothing to contradict. Cooperative was
+         *   the one module where the rule reached the headline and not the
+         *   breakdown — #835's own note calls that shape out, in this very
+         *   comment block, and then it happened here.
+         */
+        const { countModuleApplicants, registerIsUsable } = await import("@/lib/module-applicant-count");
+        const applicants = !adminScope
+            ? await countModuleApplicants("cooperative")
+            : null;
+        const applicantsCounted = Boolean(applicants && registerIsUsable(applicants, totalMembersCount));
+
+        const reportedTotalMembers = applicantsCounted ? applicants!.total! : totalMembersCount;
+        //   Switched WITH the total, never apart from it.
+        const reportedPending = applicantsCounted ? applicants!.pending! : pendingMembers;
+        const reportedApproved = applicantsCounted ? applicants!.approved! : activeMembers;
+        /*
+         *   AND THE SUBTRACTION FOLLOWS THE TOTAL IT SUBTRACTS FROM.
+         *
+         *   userMetrics derives `unpaidMembers` as `totalApplications −
+         *   paidMembersCount` over the membership table, which is the right
+         *   answer to a question this screen stopped asking the moment the
+         *   headline became the register's. Recomputed here against the total
+         *   actually reported, so "paid + unpaid" is the total above it.
+         *
+         *   A SCOPED ADMIN IS UNAFFECTED: `reportedTotalMembers` is
+         *   `totalMembersCount` for them, so this reproduces the metrics
+         *   service's own figure exactly.
+         */
+        const reportedUnpaid = Math.max(0, reportedTotalMembers - paidMembersCount);
 
 
         let txnQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
@@ -230,9 +271,14 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
                     applicantsCounted,
                     scopedToCooperative: Boolean(adminScope),
                     paidMembers: paidMembersCount,
-                    unpaidMembers,
-                    activeMembers,
-                    pendingMembers,
+                    unpaidMembers: reportedUnpaid,
+                    activeMembers: reportedApproved,
+                    pendingMembers: reportedPending,
+                    //   The membership-table figures, kept and named for what
+                    //   they count — the pattern _exports and academy use.
+                    detailedUnpaidMembers: unpaidMembers,
+                    detailedApprovedMembers: activeMembers,
+                    detailedPendingMembers: pendingMembers,
                     suspendedMembers,
                     orphanedPaymentsCount,
                     totalContributions,

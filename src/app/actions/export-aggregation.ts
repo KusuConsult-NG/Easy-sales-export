@@ -2,6 +2,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner, isOwnedBySession, liveProfileId } from "@/lib/owned-profile-ids";
 import { exportWindowAcceptsInvestment, exportWindowHasExpired } from "@/lib/export-window-status";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -305,11 +306,23 @@ export async function getUserExportSlotsAction(userId: string) { try {
         const viewerIsAdmin = viewerRoles.some(
             (r: string) => r === "admin" || r === "super_admin" || r === "export_admin"
         );
-        if (viewerId !== userId && !viewerIsAdmin) {
+        //   #904 (EXPORT) — somebody reading their own slots under the id
+        //   they sign in as, where the slots were booked on the other one.
+        if (!await isOwnedBySession(userId, viewerId) && !viewerIsAdmin) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
+        /*
+         *   #904 (EXPORT) — AND `userId` HERE IS A PARAMETER, not the session.
+         *
+         *   `ownedProfileIds` searches BACKWARD and takes the LIVE id: handed a
+         *   superseded one it would find what points AT it and miss the live
+         *   row entirely. An admin reading a member's slots by an old id is
+         *   exactly that case, so it is resolved forward first.
+         */
+        const ownerIds = await ownedProfileIds(await liveProfileId(userId));
+
+        const q = filterByOwner(db.collection(COLLECTIONS.EXPORT_SLOTS), "userId", ownerIds);
 
         const snapshot = await q.get();
 

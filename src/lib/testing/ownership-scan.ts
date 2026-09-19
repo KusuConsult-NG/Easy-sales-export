@@ -169,10 +169,13 @@ const OWNER_AWARE_PRIMITIVES = new Set([
  *
  *   These three are the whole vocabulary, and each one IS the comparison —
  *   they take a record's owner and the caller and answer whether they are the
- *   same person. `filterByOwner` is deliberately NOT here: it scopes a QUERY,
- *   and the rule below only credits scoping when the value is session-derived.
- *   Crediting it unconditionally would do exactly what this file's header
- *   warns against.
+ *   same person, so they are credited unconditionally.
+ *
+ *   `filterByOwner` and `filterByOwnerInArray` are NOT in this set, and that
+ *   is a distinction rather than an omission: they scope a QUERY, so they are
+ *   handled beside `.where` below and credited only when their ids are
+ *   session-derived. Crediting a scoping helper unconditionally would do
+ *   exactly what this file's header warns against.
  */
 const IDENTITY_RESOLUTION = new Set([
     "isOwnedBySession", "isAnyOwnedBySession", "isSamePerson",
@@ -317,6 +320,34 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
                 if (READ_CALLS.has(name)) facts.reads = true;
                 if (OWNER_AWARE_PRIMITIVES.has(name)) facts.decides = true;
                 if (IDENTITY_RESOLUTION.has(name)) facts.decides = true;
+
+                /*
+                 *   filterByOwner(query, "userId", ids) — the same scoping, in
+                 *   the form #904 introduced, and credited under the SAME rule
+                 *   as `.where` below rather than unconditionally.
+                 *
+                 *   An earlier pass deliberately left this out, on the grounds
+                 *   that crediting a query-scoping helper without checking its
+                 *   value is session-derived would do what this file's header
+                 *   warns against. That was right, and incomplete: the check is
+                 *   cheap, and without it every read converted to the helper
+                 *   became a lead. getExportWindowsAction did exactly that.
+                 *
+                 *   `ids` is a LIST here rather than a single id, so what is
+                 *   traced is the variable it came from — `ownedProfileIds(...)`
+                 *   assigned from a session id is session-derived by the same
+                 *   `sessionDerived` walk that answers for `.where`.
+                 */
+                if (name === "filterByOwner" || name === "filterByOwnerInArray") {
+                    const ids = n.arguments[2];
+                    const text = ids ? ids.getText() : "";
+                    const root = text.split(/[^\w$]/)[0];
+                    if (/\bsession\b/i.test(text) || fromSession.has(root)) {
+                        facts.decides = true;
+                    } else {
+                        facts.scopedByCallerValue = true;
+                    }
+                }
 
                 // .where("userId", "==", x) — but only a decision if x is the
                 // SESSION's id. Scoping by a caller-supplied argument is how a

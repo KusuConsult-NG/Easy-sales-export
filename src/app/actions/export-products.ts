@@ -6,6 +6,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { recordAdminAction } from "@/lib/audit-log";
 import { retirementPatch, isRetired } from "@/lib/record-retirement";
@@ -123,12 +124,14 @@ export async function getUserExportProductsAction() { try {
         }
 
         const userId = session.user.id;
+        //   #904 (EXPORT) — a catalogue entry listed on a superseded profile.
+        const ownerIds = await ownedProfileIds(userId);
 
         let snapshot;
         let indexError = false;
         try {
-            snapshot = await db.collection(COLLECTIONS.EXPORT_CATALOG)
-                .where("userId", "==", userId)
+            snapshot = await filterByOwner(
+                db.collection(COLLECTIONS.EXPORT_CATALOG), "userId", ownerIds)
                 .orderBy("createdAt", "desc")
                 .get();
         } catch (e: any) {
@@ -136,9 +139,10 @@ export async function getUserExportProductsAction() { try {
             if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
                 logger.warn("Get user export products failed due to missing index. Falling back.", { userId, error: e.message });
                 indexError = true;
-                snapshot = await db.collection(COLLECTIONS.EXPORT_CATALOG)
-                    .where("userId", "==", userId)
-                    .get();
+                //   The fallback widens too, or a degraded screen answers a
+                //   narrower question than the query it replaces.
+                snapshot = await filterByOwner(
+                    db.collection(COLLECTIONS.EXPORT_CATALOG), "userId", ownerIds).get();
             } else {
                 throw e;
             }
@@ -190,7 +194,8 @@ export async function deleteExportProductAction(productId: string) {
         }
 
         const productData = productDoc.data();
-        if (productData?.userId !== userId) {
+        //   #904 (EXPORT) — and the gate onto what that list now shows.
+        if (!await isOwnedBySession(productData?.userId, userId)) {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const roles = userDoc.data()?.roles || [];
             if (!hasAdminPermission(roles, "export:approve_applications")) {
