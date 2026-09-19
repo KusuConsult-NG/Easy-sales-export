@@ -215,3 +215,95 @@ describe('every other failure is treated the same way', () => {
         expect(res.counted).toBe(false);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   AND THE SAME SCAN RAN ON EVERY ADMIN PAGE LOAD, UNCACHED.
+ *
+ *   Five surfaces call countModuleApplicants — the WAVE compliance route, the
+ *   academy, export and farm-nation admin actions, and the cooperative
+ *   reports action — and nothing cached the answer. Each call is a full
+ *   sequential scan of a 106 MB table, by construction.
+ *
+ *   MEASURED ON PRODUCTION, the same query, same plan, same 8,963 buffers,
+ *   twice within minutes: 2,076 ms and 8,334 ms. Identical work, 4x the
+ *   wall-clock — and the second is ABOVE the 8s statement_timeout, so at that
+ *   moment it failed. No further tuning answers a swing like that. Not
+ *   running the query does.
+ *
+ *   BOTH CALLS IN ONE `it()` ON PURPOSE. jest.setup.js clears the fallback
+ *   cache in a beforeEach (clearFallbackCache), so each test starts cold —
+ *   which is what keeps every other suite in this file honest, and means a
+ *   cache assertion split across two tests would measure nothing.
+ */
+describe('the count is cached, and a failure never is', () => {
+    it('a second call inside the TTL does not ask the database again', async () => {
+        mockRpc.mockResolvedValue({ data: ROWS, error: null });
+
+        const first = await count();
+        const second = await count();
+
+        expect(mockRpc).toHaveBeenCalledTimes(1);
+        expect(second).toEqual(first);
+        expect(second.approved).toBe(14668);
+    });
+
+    it('THE RULE THAT MATTERS: a timed-out count is NOT cached', async () => {
+        //   Storing `counted: false` would make one transient timeout the
+        //   answer every admin gets for the next two minutes — turning a
+        //   momentary failure into a sustained one, which is the opposite of
+        //   what the cache is for.
+        mockRpc.mockResolvedValueOnce({
+            data: null,
+            error: { code: '57014', message: 'canceling statement due to statement timeout' },
+        });
+        mockRpc.mockResolvedValue({ data: ROWS, error: null });
+
+        const failed = await count();
+        const retried = await count();
+
+        expect(failed.counted).toBe(false);
+        //   The retry really went to the database rather than being served
+        //   the failure back.
+        expect(mockRpc).toHaveBeenCalledTimes(2);
+        expect(retried.counted).toBe(true);
+        expect(retried.approved).toBe(14668);
+    });
+
+    it('and neither is a count that fell back and then failed', async () => {
+        mockRpc.mockResolvedValue({
+            data: null, error: { code: 'PGRST202', message: 'Could not find the function' },
+        });
+
+        const first = await count();
+        const second = await count();
+
+        expect(first.counted).toBe(false);
+        //   Two attempts, because nothing usable was stored the first time.
+        expect(mockRpc).toHaveBeenCalledTimes(2);
+    });
+
+    it('a timeframe is part of the question, not a detail of it', async () => {
+        //   The WAVE compliance route passes a `since`; the other four
+        //   surfaces do not. Serving one the other's answer would report every
+        //   applicant ever against a single month — the inconsistency the
+        //   `since` parameter exists to prevent.
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        mockRpc.mockResolvedValue({ data: ROWS, error: null });
+
+        await countModuleApplicants('cooperative' as any, null);
+        await countModuleApplicants('cooperative' as any, new Date('2026-09-01T00:00:00.000Z'));
+
+        expect(mockRpc).toHaveBeenCalledTimes(2);
+    });
+
+    it('and two modules do not share one answer', async () => {
+        const { countModuleApplicants } = await import('@/lib/module-applicant-count');
+        mockRpc.mockResolvedValue({ data: ROWS, error: null });
+
+        await countModuleApplicants('cooperative' as any);
+        await countModuleApplicants('academy' as any);
+
+        expect(mockRpc).toHaveBeenCalledTimes(2);
+    });
+});
