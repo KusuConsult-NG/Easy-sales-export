@@ -15,6 +15,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { votersCardField, VOTERS_CARD_ERROR_MESSAGE } from "@/lib/kyc-validators";
 import { runQueryWithRetry } from '@/lib/firestore-utils';
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from '@/lib/owned-profile-ids';
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
@@ -387,10 +388,26 @@ async function _saveKYCProfileAction(payload: { firstName: string;
         //        batch in this adapter cannot.
         try { const batch = db.batch();
 
+            /*
+             *   #904 (userId) — THE SYNC HAS TO REACH EVERY PROFILE, or it
+             *   re-creates the inconsistency the block above exists to
+             *   prevent.
+             *
+             *   This propagates a member's corrected name, phone, state and
+             *   address into the applications they have filed. An application
+             *   filed on a profile they no longer sign in as keeps the OLD
+             *   details for ever — and the note above is explicit that what is
+             *   dangerous here is believing the sync cannot half-apply. A
+             *   profile it never looks at is exactly that, permanently.
+             *
+             *   These are writes to rows that are already theirs; nothing is
+             *   moved between people.
+             */
+            const kycProfileIds = await ownedProfileIds(userId);
+
             // 1. academy_applications — find by userId
-            const academySnap = await runQueryWithRetry(() => db
-                .collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where('userId', '==', userId)
+            const academySnap = await runQueryWithRetry(() => filterByOwner(
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), 'userId', kycProfileIds)
                 .get());
             for (const doc of academySnap.docs) {
                 batch.update(doc.ref, {
@@ -401,9 +418,8 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 2. cooperative_members — find by userId
-            const coopSnap = await runQueryWithRetry(() => db
-                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where('userId', '==', userId)
+            const coopSnap = await runQueryWithRetry(() => filterByOwner(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), 'userId', kycProfileIds)
                 .get());
             for (const doc of coopSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
@@ -414,9 +430,8 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 3. wave_applications — find by userId
-            const waveSnap = await runQueryWithRetry(() => db
-                .collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where('userId', '==', userId)
+            const waveSnap = await runQueryWithRetry(() => filterByOwner(
+                db.collection(COLLECTIONS.WAVE_APPLICATIONS), 'userId', kycProfileIds)
                 .get());
             for (const doc of waveSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
@@ -426,9 +441,8 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 4. seller_verifications — find by userId
-            const sellerSnap = await runQueryWithRetry(() => db
-                .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where('userId', '==', userId)
+            const sellerSnap = await runQueryWithRetry(() => filterByOwner(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), 'userId', kycProfileIds)
                 .get());
             for (const doc of sellerSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
@@ -438,9 +452,8 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 5. export_onboarding_applications — find by userId
-            const exportSnap = await runQueryWithRetry(() => db
-                .collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                .where('userId', '==', userId)
+            const exportSnap = await runQueryWithRetry(() => filterByOwner(
+                db.collection(COLLECTIONS.EXPORT_APPLICATIONS), 'userId', kycProfileIds)
                 .get());
             for (const doc of exportSnap.docs) { batch.update(doc.ref, {
                     'profile.phone': payload.phoneNumber,

@@ -663,7 +663,12 @@ describe('#105 — the shape holds', () => {
     it('there is exactly ONE query against the saved-items collection', () => {
         // Two would be two definitions of "which rows count", which is the
         // shape this codebase keeps producing.
-        const queries = source(STORE).match(/collection\(COLLECTIONS\.SAVED_ITEMS\)\s*\n?\s*\.where/g) ?? [];
+        //   #904 (userId) — the owner clause moved into filterByOwner, so the
+        //   query now reads `filterByOwner(db.collection(SAVED_ITEMS), ...)`
+        //   followed by the itemType `.where`. Counting the COLLECTION
+        //   reference is the durable form of "exactly one query" and does not
+        //   depend on which helper writes the owner clause.
+        const queries = source(STORE).match(/collection\(COLLECTIONS\.SAVED_ITEMS\)/g) ?? [];
         expect(queries.length).toBe(1);
         // The actions file addresses documents BY ID only; it never queries.
         expect(source(ACTIONS)).not.toMatch(/COLLECTIONS\.SAVED_ITEMS\)\s*\n?\s*\.where/);

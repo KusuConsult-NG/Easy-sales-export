@@ -345,8 +345,12 @@ describe("the member's own withdrawal history", () => {
         // THE test.
         const myData = fn(MY_DATA, 'getMyWithdrawals');
 
+        //   #904 (userId) — still that collection, still scoped to the member,
+        //   now across every profile they hold. This file's own note says a
+        //   member's withdrawal record "should not omit a whole class of them";
+        //   a profile is another such class.
         expect(myData).toContain('db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS)');
-        expect(myData).toContain('.where("userId", "==", userId)');
+        expect(myData).toContain('"userId", withdrawalIds');
     });
 
     it('without dropping the platform wallet ones it already returned', () => {

@@ -283,8 +283,11 @@ describe('the unified certificates endpoint reads the fields the writer writes',
         // returned nothing at all.
         const src = code(CERTS_ROUTE);
 
-        expect(src).toContain('.where("userId", "==", userId)');
-        expect(src).toContain('.where("memberId", "==", userId)');
+        //   #904 (userId) — BOTH fields still queried, which is the whole
+        //   claim here, and both now across every profile: widening one and
+        //   not the other would restore half the list.
+        expect(src).toContain('WAVE_CERTIFICATES), "userId"');
+        expect(src).toContain('WAVE_CERTIFICATES), "memberId"');
         expect(src).toContain('const seenWaveIds = new Set<string>()');
     });
 

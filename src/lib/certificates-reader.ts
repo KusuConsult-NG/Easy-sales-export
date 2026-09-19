@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isRetired } from "@/lib/record-retirement";
 import { UNKNOWN_DATE_ISO } from "@/lib/date-utils";
 
@@ -40,8 +41,9 @@ export type AcademyCertificate = {
  *   what makes "removed" mean removed to the person who asked.
  */
 export async function readUploadedCertificates(userId: string): Promise<Record<string, any>[]> {
-    const snapshot = await db.collection(COLLECTIONS.USER_CERTIFICATES)
-        .where("userId", "==", userId)
+    const snapshot = await filterByOwner(
+        db.collection(COLLECTIONS.USER_CERTIFICATES), "userId",
+        await ownedProfileIdsFor(userId))
         .get();
 
     return snapshot.docs.filter(doc => !isRetired(doc.data())).map(doc => {
@@ -99,9 +101,8 @@ export async function readAcademyCertificates(
      *   imported, or written by something added later — so nothing a learner
      *   already has is dropped.
      */
-    const progressSnap = await db
-        .collection(COLLECTIONS.COURSE_PROGRESS)
-        .where("userId", "==", userId)
+    const progressSnap = await filterByOwner(
+        db.collection(COLLECTIONS.COURSE_PROGRESS), "userId", await ownedProfileIdsFor(userId))
         .where("completed", "==", true)
         .get();
 
@@ -145,9 +146,8 @@ export async function readAcademyCertificates(
 
     // And any enrolment row that really does carry the completed shape.
     // Nothing writes it today; a row that has it is not discarded.
-    const enrollSnap = await db
-        .collection(COLLECTIONS.COURSE_ENROLLMENTS)
-        .where("userId", "==", userId)
+    const enrollSnap = await filterByOwner(
+        db.collection(COLLECTIONS.COURSE_ENROLLMENTS), "userId", await ownedProfileIdsFor(userId))
         .where("status", "==", "completed")
         .get();
 
@@ -192,8 +192,14 @@ export async function readAcademyCertificates(
      * predate the fix.
      */
     const [waveByUserId, waveByMemberId] = await Promise.all([
-        db.collection(COLLECTIONS.WAVE_CERTIFICATES).where("userId", "==", userId).get(),
-        db.collection(COLLECTIONS.WAVE_CERTIFICATES).where("memberId", "==", userId).get(),
+        filterByOwner(db.collection(COLLECTIONS.WAVE_CERTIFICATES), "userId",
+            await ownedProfileIdsFor(userId)).get(),
+        //   #904 (userId) — and `memberId`, which is the same person under a
+        //   third field name. The note above already records that this writer
+        //   used names no reader matched; widening one and not the other would
+        //   restore half the list.
+        filterByOwner(db.collection(COLLECTIONS.WAVE_CERTIFICATES), "memberId",
+            await ownedProfileIdsFor(userId)).get(),
     ]);
 
     const seenWaveIds = new Set<string>();
