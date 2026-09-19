@@ -150,13 +150,21 @@ describe('#893 — the failure screen is reachable', () => {
          *   correct and the flag still stuck — and the next person to read
          *   `isCheckingStatus` would meet a value that never becomes false.
          */
+        /*
+         *   READ AS A BLOCK, NOT AS A LINE. The first version matched
+         *   `setLoadFailed(true)` to the end of its own line, which worked while
+         *   every site was a one-liner and broke the moment #896 added a
+         *   multi-line catch that does the same two things across two lines. The
+         *   property is "this site clears the flag", not "it fits on one line".
+         */
         const src = code(COOP_ONBOARDING);
-        const sites = src.match(/setLoadFailed\(true\)[^\n]*/g) ?? [];
+        const sites = [...src.matchAll(/setLoadFailed\(true\)/g)];
 
         expect(sites.length).toBeGreaterThanOrEqual(3);
-        for (const site of sites) {
-            expect({ site, clears: site.includes('setIsCheckingStatus(false)') })
-                .toEqual({ site, clears: true });
+        for (const m of sites) {
+            const after = src.slice(m.index ?? 0, (m.index ?? 0) + 160);
+            expect({ after: after.slice(0, 60), clears: after.includes('setIsCheckingStatus(false)') })
+                .toMatchObject({ clears: true });
         }
     });
 

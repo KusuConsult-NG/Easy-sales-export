@@ -137,7 +137,21 @@ describe('#793 — a failed read is not an empty application', () => {
         const stops = (src.match(/setLoadFailed\(true\);[\s\S]{0,40}return;/g) ?? []).length;
 
         expect({ name, reads: reads > 0 }).toEqual({ name, reads: true });
-        expect({ name, guards }).toEqual({ name, guards: reads });
+        /*
+         *   AT LEAST ONE GUARD PER READ, rather than exactly one.
+         *
+         *   This was `guards === reads`, which is the right rule for the defect
+         *   — fewer guards than reads is #795 exactly — and the wrong rule for a
+         *   form that guards something else as well. #896 added an OUTER catch
+         *   to the cooperative form: the status check's own `.catch` cleared the
+         *   spinner and nothing else, so a failure there landed the member on
+         *   step 1 of a blank form, which is this suite's whole subject one
+         *   level up. That is a fourth guard against three reads.
+         *
+         *   Loosened deliberately and no further: `>=` still fails the moment a
+         *   read loses its guard, which is the only thing this ever caught.
+         */
+        expect({ name, enough: guards >= reads }).toEqual({ name, enough: true });
         expect({ name, stops }).toEqual({ name, stops: reads });
     });
 

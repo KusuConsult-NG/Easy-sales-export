@@ -120,18 +120,61 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             if (token) {
-                 import("@/app/actions/cooperative").then(({ validateCooperativeInviteAction }) => {
-                     validateCooperativeInviteAction(token).then((validateRes) => {
-                          if (validateRes.success) {
-                               setIsLegacyImport(true);
-                               setValidInviteToken(token);
-                               setIsCheckingStatus(false);
-                          } else {
-                               showToast(validateRes.error || "Invalid invite link", "error");
-                               checkStatusFromBackend();
-                          }
+                 /*
+                  *   #896 THE INVITE PATH HAD NO FAILURE BRANCH AT ALL, AND IT
+                  *   IS THE PATH THE INVITE EMAIL SENDS PEOPLE DOWN.
+                  *
+                  *   THE OWNER: "Cooperative membership application is not
+                  *   loading on production."
+                  *
+                  *   `isCheckingStatus` starts TRUE and the screen renders a
+                  *   spinner until something clears it. Every OTHER route out of
+                  *   this effect clears it, including checkStatusFromBackend's
+                  *   own `.catch`. This branch had neither a `.catch` on the
+                  *   dynamic import nor one on the action, and then `return`s —
+                  *   so if either rejects, nothing clears the flag and the
+                  *   member watches a spinner for ever. No error, no empty
+                  *   state, no way out. "Not loading", exactly.
+                  *
+                  *   AND THE REJECTION IS NOT HYPOTHETICAL. `import()` fetches a
+                  *   chunk over the network after a deploy has replaced it —
+                  *   which is the whole reason this codebase carries
+                  *   useStaleDeploymentRecovery and staleSubmitAdvice, both
+                  *   imported by this very file. A member who leaves the invite
+                  *   email until after the next deploy is the case.
+                  *
+                  *   admin/_legacy.ts mails
+                  *   `…/cooperatives/onboarding?token=…`, so this is not a
+                  *   corner of the screen: it is how an invited member arrives.
+                  *
+                  *   Both promises are caught, and the fallback is the ordinary
+                  *   status check rather than a dead end — an invite that cannot
+                  *   be validated should still let her see where she stands.
+                  */
+                 import("@/app/actions/cooperative")
+                     .then(({ validateCooperativeInviteAction }) =>
+                         validateCooperativeInviteAction(token).then((validateRes) => {
+                             if (validateRes.success) {
+                                 setIsLegacyImport(true);
+                                 setValidInviteToken(token);
+                                 setIsCheckingStatus(false);
+                             } else {
+                                 showToast(validateRes.error || "Invalid invite link", "error");
+                                 checkStatusFromBackend();
+                             }
+                         }))
+                     .catch((err) => {
+                         logger.error("[cooperative onboarding] invite validation failed", err);
+                         showToast(
+                             staleSubmitAdvice(err)
+                             ?? "We could not check that invite link. Showing your membership status instead.",
+                             "error",
+                         );
+                         //   Never leave the spinner up: fall through to the
+                         //   ordinary path, which clears the flag on every
+                         //   branch including its own failure.
+                         checkStatusFromBackend();
                      });
-                 });
                  return; // Pause execution here until token is validated
             }
         }
@@ -339,7 +382,24 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             }
             // null = no application yet — show the form
             setIsCheckingStatus(false);
-        }).catch(() => {
+        }).catch((err) => {
+            /*
+             *   #896 A FAILED STATUS READ WAS SHOWN AS "YOU HAVE NO
+             *   APPLICATION".
+             *
+             *   This cleared the spinner and nothing else, so the member landed
+             *   on step 1 of a BLANK form — which is the screen for somebody who
+             *   has never applied. #793 established the rule for this very file
+             *   ("a failed read is not an empty application") and wired it to
+             *   the three read branches; the outer catch, which covers all of
+             *   them, was not one of them.
+             *
+             *   What it costs is the same thing #793 was about: she fills the
+             *   form again, and a resubmission overwrites the application she
+             *   already had. `loadFailed` offers her a retry instead.
+             */
+            logger.error("[cooperative onboarding] status check failed", err);
+            setLoadFailed(true);
             setIsCheckingStatus(false);
         });
         }
