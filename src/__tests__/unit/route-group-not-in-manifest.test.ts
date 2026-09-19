@@ -273,8 +273,13 @@ describe('member and admin pages sitting under a public prefix', () => {
          *   than serving any signed-in account, and that is what it now asserts.
          *   Deleting the guard still fails here; rewording it does not.
          */
+        //   #904 — still narrowed by caller, which is all this asserts. The
+        //   comparison resolves the ORDER's buyer forward now, because a raw
+        //   `===` sent a buyer whose order names a superseded profile down the
+        //   admin arm, which then refused them their own order. Deleting the
+        //   guard still fails here; rewording it still does not.
         const orders = source('src/app/actions/orders.ts');
-        expect(orders).toMatch(/orderData\?\.buyerId\s*[!=]==\s*session\.user\.id/);
+        expect(orders).toMatch(/isOwnedBySession\(orderData\?\.buyerId, session\.user\.id\)/);
         expect(orders).toContain('Unauthorized');
         expect(source('src/app/actions/land-actions.ts')).toContain('return { success: false, error: "Unauthorized", data: null };');
         /*

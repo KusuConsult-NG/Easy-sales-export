@@ -46,6 +46,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { hasAdminPermission, isSuperAdmin, includesPrivilegedRole } from "@/lib/admin-permissions";
 import { logAuditAction } from "@/lib/audit-log";
 import { isUserRole } from "@/lib/types/roles";
@@ -678,47 +679,62 @@ export async function exportUserDataAction(
             reviews: [],
             loans: [] };
 
+        /*
+         *   #904 (BUYER SIDE) — AND THE ADMIN'S COPY OF THE SAME ANSWER.
+         *
+         *   my-data.ts is what a member downloads when they ask what the
+         *   platform holds about them, and it now follows `_migratedTo` to
+         *   every profile they hold. This is the same export served by an
+         *   ADMIN, usually because the member asked them for it. Widening one
+         *   and not the other would hand somebody LESS when they ask a person
+         *   than when they click the button themselves.
+         *
+         *   Every collection here, not only the orders: an export that covered
+         *   a person's whole history for one field and one profile's worth for
+         *   the rest would be harder to reason about than either.
+         */
+        const profileIds = await ownedProfileIds(userId);
+
         // Get cooperative memberships
-        const cooperativeSnapshot = await db
-            .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("userId", "==", userId)
-            .get();
+        const cooperativeSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), "userId", profileIds,
+        ).get();
         userDataExport.cooperativeMemberships = cooperativeSnapshot.docs.map(doc => doc.data());
 
         // Get WAVE enrollments
-        const waveSnapshot = await db
-            .collection(COLLECTIONS.WAVE_APPLICATIONS)
-            .where("userId", "==", userId)
+        const waveSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_APPLICATIONS), "userId", profileIds,
+        )
             .get();
         userDataExport.waveEnrollments = waveSnapshot.docs.map(doc => doc.data());
 
         // Get transactions
-        const transactionsSnapshot = await db
-            .collection(COLLECTIONS.TRANSACTIONS)
-            .where("userId", "==", userId)
+        const transactionsSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.TRANSACTIONS), "userId", profileIds,
+        )
             .limit(100)
             .get();
         userDataExport.transactions = transactionsSnapshot.docs.map(doc => doc.data());
 
         // Get orders
-        const ordersSnapshot = await db
-            .collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", userId)
+        const ordersSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "buyerId", profileIds,
+        )
             .limit(50)
             .get();
         userDataExport.orders = ordersSnapshot.docs.map(doc => doc.data());
 
         // Get reviews
-        const reviewsSnapshot = await db
-            .collection(COLLECTIONS.REVIEWS)
-            .where("userId", "==", userId)
+        const reviewsSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.REVIEWS), "userId", profileIds,
+        )
             .get();
         userDataExport.reviews = reviewsSnapshot.docs.map(doc => doc.data());
 
         // Get loans
-        const loansSnapshot = await db
-            .collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("userId", "==", userId)
+        const loansSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", profileIds,
+        )
             .get();
         userDataExport.loans = loansSnapshot.docs.map(doc => doc.data());
 

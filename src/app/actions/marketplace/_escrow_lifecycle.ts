@@ -10,6 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession, isSamePerson } from "@/lib/owned-profile-ids";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { verifyPaystackPayment } from "@/lib/paystack-server";
 import { smsEscrowReleased } from "@/lib/africastalking";
@@ -56,7 +57,16 @@ async function _createEscrowAction(data: { buyerId: string;
         if (!Number.isFinite(data.amount) || data.amount <= 0) {
             return { success: false as const, error: "Invalid escrow amount", data: null };
         }
-        if (!data.sellerId || data.sellerId === data.buyerId) {
+        /*
+         *   #904 (BUYER SIDE) TIGHTENED, NOT WIDENED — the one place in this
+         *   change that refuses MORE than it did.
+         *
+         *   This compared raw ids, so a person with two profiles is two ids and
+         *   the check passed: they could trade with themselves. See
+         *   `isSamePerson` in lib/owned-profile-ids.ts for why that is worth
+         *   closing and why nothing legitimate is lost.
+         */
+        if (!data.sellerId || await isSamePerson(data.sellerId, data.buyerId)) {
             return { success: false as const, error: "Invalid seller", data: null };
         }
 
@@ -220,7 +230,14 @@ async function _confirmEscrowPaymentAction(
         // escrowId came from the caller and was never checked against them.
         // _createEscrowAction in this same file has always compared
         // `session.user.id !== data.buyerId`; this function did not.
-        if (escrowDoc.buyerId !== callerId) {
+        //   #904 (BUYER SIDE) — an escrow created on a profile this person no
+        //   longer signs in as. Only the buyer may confirm it, so refusing
+        //   here leaves a funded escrow nobody can advance.
+        //
+        //   THE CREATE PATH ABOVE IS DELIBERATELY NOT WIDENED: there the
+        //   caller SUPPLIES `data.buyerId`, and a new row should carry the
+        //   live id rather than be allowed to name a superseded one.
+        if (!await isOwnedBySession(escrowDoc.buyerId, callerId)) {
             logger.warn(`[confirmEscrowPayment] ${callerId} attempted to confirm escrow ${escrowId} owned by ${escrowDoc.buyerId}`);
             return { success: false as const, error: "Unauthorized" };
         }

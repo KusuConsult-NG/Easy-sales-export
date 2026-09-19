@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAnyOwnedBySession, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { z } from "zod";
@@ -287,7 +288,8 @@ async function _updateEscrowStatus(
             return { success: false as const, error: "Transaction not found", data: null };
         }
         const preData = preRead.data()!;
-        if (preData.buyerId !== userId && preData.sellerId !== userId) {
+        //   #904 (BUYER SIDE) — either party, under any profile they hold.
+        if (!await isAnyOwnedBySession([preData.buyerId, preData.sellerId], userId)) {
             return { success: false as const, error: "Not authorized to update this transaction", data: null };
         }
 
@@ -340,7 +342,12 @@ async function _updateEscrowStatus(
         // Notifications
         const txDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId).get();
         if (txDoc.exists) { const txData = txDoc.data()!;
-            const otherPartyId = txData.buyerId === userId ? txData.sellerId : txData.buyerId;
+            //   #904 (BUYER SIDE) — WHO THE OTHER PARTY IS, not who it looks
+            //   like. A raw `===` against a superseded buyer id is false, so
+            //   this picked `txData.buyerId` and notified the caller about
+            //   their own action while the seller heard nothing.
+            const callerIsBuyer = await isOwnedBySession(txData.buyerId, userId);
+            const otherPartyId = callerIsBuyer ? txData.sellerId : txData.buyerId;
             const statusLabels: Record<string, string> = {
                 funded: "Funded",
                 in_transit: "In Transit",
@@ -405,7 +412,8 @@ async function _createEscrowDispute(
             return { success: false as const, error: "Transaction not found" };
         }
         const txData = preRead.data()!;
-        if (txData.buyerId !== userId && txData.sellerId !== userId) {
+        //   #904 (BUYER SIDE) — same participant rule as the status path.
+        if (!await isAnyOwnedBySession([txData.buyerId, txData.sellerId], userId)) {
             return { success: false as const, error: "Not authorized to dispute this transaction" };
         }
 

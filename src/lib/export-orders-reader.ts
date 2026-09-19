@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
@@ -85,9 +86,14 @@ export interface BuyerExportOrder {
 }
 
 export async function readMyExportOrders(userId: string): Promise<BuyerExportOrder[]> {
-    const snapshot = await db.collection(COLLECTIONS.EXPORT_ORDERS)
-        .where("buyerId", "==", userId)
-        .get();
+    //   #904 (BUYER SIDE) — an export order placed on a superseded profile.
+    //   This reader feeds both the buyer's own list and the my-data export, so
+    //   one widening here covers the screen and the download.
+    const buyerIds = await ownedProfileIds(userId);
+
+    const snapshot = await filterByOwner(
+        db.collection(COLLECTIONS.EXPORT_ORDERS), "buyerId", buyerIds,
+    ).get();
 
     const orders = snapshot.docs.map((doc: any) => {
         const data = doc.data() ?? {};

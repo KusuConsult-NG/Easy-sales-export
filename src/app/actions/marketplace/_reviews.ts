@@ -10,6 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession, ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { withSafeAction } from "@/lib/safe-action";
 import type { ActionResponse } from "@/lib/safe-action";
@@ -53,7 +54,9 @@ async function _submitProductReviewAction(data: {
         if (!orderDoc.exists) return { success: false as const, error: "Order not found", data: null };
 
         const orderData = orderDoc.data()!;
-        if (orderData.buyerId !== buyerId) { 
+        //   #904 (BUYER SIDE) — the order may be filed under a profile this
+        //   buyer no longer signs in as.
+        if (!await isOwnedBySession(orderData.buyerId, buyerId)) { 
             return { success: false as const, error: "Unauthorized: not your order", data: null };
         }
         // The same rule createReviewAction now uses. That one required
@@ -189,7 +192,9 @@ async function _submitSellerReviewAction(data: {
         if (!orderDoc.exists) return { success: false as const, error: "Order not found", data: null };
 
         const orderData = orderDoc.data()!;
-        if (orderData.buyerId !== buyerId) { 
+        //   #904 (BUYER SIDE) — the order may be filed under a profile this
+        //   buyer no longer signs in as.
+        if (!await isOwnedBySession(orderData.buyerId, buyerId)) { 
             return { success: false as const, error: "Unauthorized: not your order", data: null };
         }
         // The shared rule, same as the product path above.
@@ -202,8 +207,13 @@ async function _submitSellerReviewAction(data: {
             return { success: false as const, error: "Seller does not match this order", data: null };
         }
 
-        const existingSnap = await db.collection(COLLECTIONS.SELLER_REVIEWS)
-            .where("buyerId", "==", buyerId)
+        //   #904 (BUYER SIDE) — the already-reviewed check counts every
+        //   profile, or the same person reviews one seller twice for one order.
+        const reviewerIds = await ownedProfileIds(buyerId);
+
+        const existingSnap = await filterByOwner(
+            db.collection(COLLECTIONS.SELLER_REVIEWS), "buyerId", reviewerIds,
+        )
             .where("orderId", "==", data.orderId)
             .where("sellerId", "==", data.sellerId)
             .limit(1)

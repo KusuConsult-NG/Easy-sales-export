@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { filterByOwner, isOwnedBySession, ownedProfileIds } from "@/lib/owned-profile-ids";
 import { requireSession } from "@/lib/session-guard";
 import { sellerNetFor } from "@/lib/platform-fee";
 import { logger } from '@/lib/logger';
@@ -342,10 +343,15 @@ async function _getBuyerOrdersAction(filters?: { status?: OrderStatus; }) { let 
 
         const userId = session.user.id;
 
+        //   #904 (BUYER SIDE) — the other door onto the buyer's orders. It
+        //   had to widen with _mp_buyer_dashboard or the same list would
+        //   answer two ways depending on the route in.
+        const buyerIds = await ownedProfileIds(userId);
+
         // Build query
-        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", userId)
-            .orderBy("createdAt", "desc");
+        let query = filterByOwner(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "buyerId", buyerIds,
+        ).orderBy("createdAt", "desc");
 
         if (filters?.status) { query = query.where("status", "==", filters.status);
         }
@@ -423,7 +429,10 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
 
         // Authorisation before the claim: a caller who may not confirm this
         // order must not be able to consume the transition.
-        if (currentOrder.buyerId !== userId) throw new Error("Unauthorized");
+        //   #904 (BUYER SIDE) — confirming delivery of an order placed on a
+        //   superseded profile. Refusing here strands the order in `delivered`
+        //   for ever, because only the buyer can make this transition.
+        if (!await isOwnedBySession(currentOrder.buyerId, userId)) throw new Error("Unauthorized");
 
         const nowIso = new Date().toISOString();
         const confirmClaim = await claimStatusTransition({

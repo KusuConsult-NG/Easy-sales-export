@@ -66,6 +66,7 @@
  *   change. It strips comments now, with the shared helper.
  */
 
+import { COLLECTIONS } from '@/lib/types/firestore';
 import React from 'react';
 import { render } from '@testing-library/react';
 
@@ -284,16 +285,32 @@ describe('#585 — and can open the order', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#585 — and the dashboard counts it', () => {
     function setOrdersByCollection(marketplace: any[], exportOrders: any[]) {
-        (global as any).mockFirestoreGet.mockImplementation(function (this: any) {
-            //   The adapter mock is shared, so the two queries are told apart by
-            //   what they asked for rather than by call order.
-            return Promise.resolve({ empty: false, docs: [] });
-        });
-        //   One query per collection: resolve them in the order my-data issues.
-        let call = 0;
+        /*
+         *   TOLD APART BY WHAT THEY ASKED FOR, which is what this helper's own
+         *   comment always claimed and what it did not do.
+         *
+         *   It resolved by CALL INDEX — "call 1 is marketplace, the rest are
+         *   export orders" — and #904's buyer-side widening broke it, because
+         *   `ownedProfileIds` legitimately issues two `users` lookups before
+         *   either order query. The counts then came back doubled and the
+         *   failure looked like a defect in the tile.
+         *
+         *   A harness that breaks when the code under test adds an unrelated
+         *   read is measuring call order rather than behaviour. The mock db
+         *   records every `collection(name)` (firestore-mock-db.js), so the
+         *   name is available and no index is needed.
+         */
+        const byCollection: Record<string, any[]> = {
+            [COLLECTIONS.MARKETPLACE_ORDERS]: marketplace,
+            [COLLECTIONS.EXPORT_ORDERS]: exportOrders,
+        };
+
         (global as any).mockFirestoreGet.mockImplementation(() => {
-            call += 1;
-            const docs = (call === 1 ? marketplace : exportOrders)
+            const calls = (global as any).mockFirestoreCollection.mock.calls;
+            const asked = calls.length > 0 ? calls[calls.length - 1][0] : '';
+            //   Anything else — the `users` reads behind ownedProfileIds — is
+            //   empty, which is a person with no superseded profile.
+            const docs = (byCollection[asked] ?? [])
                 .map((d, i) => ({ id: `d${i}`, data: () => d }));
             return Promise.resolve({ empty: docs.length === 0, docs });
         });

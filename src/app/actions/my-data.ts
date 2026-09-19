@@ -26,6 +26,7 @@
  */
 
 import { requireSession } from "@/lib/session-guard";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
@@ -419,9 +420,19 @@ export async function getMyActiveOrderCount(): Promise<number> {
     // (#582) and refunded. isActiveOrderStatus is a whitelist, so neither is
     // counted, which is right — an order awaiting a refund is not in flight.
     try {
+        /*
+         *   #904 (BUYER SIDE) — AND THIS FILE IS WHERE IT MATTERS MOST.
+         *
+         *   my-data is what the platform hands somebody who asks what it holds
+         *   about them. An order placed on a profile they no longer sign in as
+         *   is still theirs, and leaving it out does not merely under-count a
+         *   tile — it answers "everything we have" with less than everything.
+         */
+        const buyerIds = await ownedProfileIds(userId);
+
         const [marketplaceSnap, exportSnap] = await Promise.all([
-            db.collection(COLLECTIONS.MARKETPLACE_ORDERS).where("buyerId", "==", userId).get(),
-            db.collection(COLLECTIONS.EXPORT_ORDERS).where("buyerId", "==", userId).get(),
+            filterByOwner(db.collection(COLLECTIONS.MARKETPLACE_ORDERS), "buyerId", buyerIds).get(),
+            filterByOwner(db.collection(COLLECTIONS.EXPORT_ORDERS), "buyerId", buyerIds).get(),
         ]);
 
         return [...marketplaceSnap.docs, ...exportSnap.docs]
@@ -527,10 +538,13 @@ export async function getMyDisputes(): Promise<any[]> {
     if (!userId) return [];
 
     try {
-        const snap = await db
-            .collection(COLLECTIONS.DISPUTES)
-            .where("buyerId", "==", userId)
-            .get();
+        //   #904 (BUYER SIDE) — same reason as the order counts above: this
+        //   is the answer to "what do you hold about me".
+        const buyerIds = await ownedProfileIds(userId);
+
+        const snap = await filterByOwner(
+            db.collection(COLLECTIONS.DISPUTES), "buyerId", buyerIds,
+        ).get();
 
         return serializeDocs<any>(snap.docs).sort(
             (a: any, b: any) => toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime()

@@ -164,3 +164,107 @@ export async function isOwnedBySession(rowOwnerId: unknown, liveId: string): Pro
         return false;
     }
 }
+
+/**
+ * The live id for a stored one — the forward walk, as a value.
+ *
+ * For a caller that must COMPARE two stored ids inside a rule it does not own.
+ * lib/quote-negotiation.ts is the case: it is a pure, synchronous law that
+ * compares a quote's parties against a cart line's, and it is shared by the
+ * money paths precisely because it does no I/O. Making it `async` to resolve
+ * ids would spread this module across a rule whose whole value is that it has
+ * no dependencies.
+ *
+ * So the CALLER normalises and the law stays a law. The id given back is
+ * unchanged when it is already live, when it is unknown, and when the lookup
+ * fails — never null for a non-empty input, so a comparison can never start
+ * passing because a resolution quietly returned nothing.
+ */
+export async function liveProfileId(storedId: unknown): Promise<string> {
+    if (typeof storedId !== "string" || storedId.trim() === "") return "";
+
+    try {
+        const resolved = await resolveActiveUserId(
+            storedId, db.collection(COLLECTIONS.USERS) as unknown as UserCollection,
+        );
+        return resolved.id;
+    } catch (error) {
+        logger.error("[owned-profile-ids] could not resolve an id; using the one given", {
+            storedId, error: error instanceof Error ? error.message : String(error),
+        });
+        return storedId;
+    }
+}
+
+/**
+ * Is the caller either party to this row?
+ *
+ * The escrow and dispute gates are two-sided — "buyer or seller, and nobody
+ * else" — and asking `isOwnedBySession` twice would resolve the first id even
+ * when the second is an exact match. EVERY EXACT MATCH IS TRIED FIRST, so the
+ * ordinary caller on either side of a transaction still pays for no read at
+ * all, and only a genuine miss walks.
+ *
+ * Refuses on an empty list, which is the shape a row missing both parties
+ * has — a gate that admitted everybody to a malformed row would be worse than
+ * one that admits nobody.
+ */
+export async function isAnyOwnedBySession(rowOwnerIds: unknown[], liveId: string): Promise<boolean> {
+    if (rowOwnerIds.some((id) => typeof id === "string" && id === liveId)) return true;
+
+    for (const id of rowOwnerIds) {
+        if (await isOwnedBySession(id, liveId)) return true;
+    }
+    return false;
+}
+
+/**
+ * Are two stored ids the same PERSON?
+ *
+ *   #904's widening found a hole rather than only a defect, and this is it.
+ *
+ *   Two places refuse to let somebody trade with themselves:
+ *
+ *       _escrow_lifecycle   `data.sellerId === data.buyerId` → "Invalid seller"
+ *       _quotes             `sellerId === userId` → "on your own listing"
+ *
+ *   Both compare RAW IDS. A person with two profiles — which this platform has
+ *   in quantity (#477 lists six on one address) — is two different ids, so
+ *   both checks pass and the platform lets them sell to themselves. On an
+ *   escrow that is a funded transaction between one person and themselves;
+ *   what it is good for is washing money through the platform's own books and
+ *   farming whatever a completed sale confers.
+ *
+ *   THIS ONE REFUSES MORE THAN IT DID, which is the opposite direction to
+ *   every other use of this module, and it is deliberate. Nothing legitimate
+ *   is lost: there is no honest reason to buy from yourself, and a person who
+ *   somehow meant to would have been refused already had they been signed in
+ *   to the other profile.
+ *
+ *   BOTH SIDES ARE RESOLVED, not just one. `isOwnedBySession` may assume its
+ *   second argument is live because it comes from the session; here both ids
+ *   come off rows or off the wire, and two SUPERSEDED profiles pointing at one
+ *   live row are the same person without either being live.
+ *
+ *   A failure answers "not the same person", which is today's behaviour for
+ *   every pair — so a lookup that breaks cannot start refusing honest trades.
+ */
+export async function isSamePerson(a: unknown, b: unknown): Promise<boolean> {
+    if (typeof a !== "string" || a.trim() === "") return false;
+    if (typeof b !== "string" || b.trim() === "") return false;
+    if (a === b) return true;
+
+    try {
+        const users = db.collection(COLLECTIONS.USERS) as unknown as UserCollection;
+        const [left, right] = await Promise.all([
+            resolveActiveUserId(a, users),
+            resolveActiveUserId(b, users),
+        ]);
+        return left.id === right.id;
+    } catch (error) {
+        logger.error("[owned-profile-ids] could not compare two identities; treating as different", {
+            a, b, error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+    }
+}

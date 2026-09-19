@@ -17,6 +17,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { PURCHASABLE_STATUSES, isPurchasable, statusAfterCancellation } from "@/lib/land-listing-status";
 import { isAmountAtLeast } from "@/lib/amount";
 import { chargeablePrice, quoteRefusal, type QuoteRecord } from "@/lib/quote-negotiation";
+import { liveProfileId } from "@/lib/owned-profile-ids";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -215,9 +216,35 @@ async function _initializePropertyPaymentAction(
                 ? (offerSnap.data() as QuoteRecord & Record<string, any>)
                 : null;
 
+            /*
+             *   #904 (BUYER SIDE) — THE LAW COMPARES IDS, SO IT IS HANDED LIVE
+             *   ONES.
+             *
+             *   quoteRefusal is pure and synchronous, and shared by the money
+             *   paths for that reason. It refuses a quote whose `buyerId` is
+             *   not the line's — correctly — but an offer agreed before a
+             *   duplicate was settled carries the superseded id, and the buyer
+             *   is told "That agreed price does not belong to this account"
+             *   about a price they themselves agreed.
+             *
+             *   Resolving HERE rather than in the rule: the caller does the
+             *   I/O, the law keeps having none. `sellerId` too — a parcel
+             *   whose owner was merged is the same bargain with the same
+             *   person.
+             */
+            const offerForRule = offer
+                ? {
+                    ...offer,
+                    productId: String(offer.listingId ?? ""),
+                    buyerId: await liveProfileId(offer.buyerId),
+                    sellerId: await liveProfileId(offer.sellerId),
+                }
+                : null;
+
             const refusal = quoteRefusal(
-                offer ? { ...offer, productId: String(offer.listingId ?? "") } : null,
+                offerForRule,
                 {
+                    //   Already live: it is the session's own id.
                     buyerId: session.user.id,
                     productId: propertyId,
                     quantity: 1,
@@ -225,7 +252,7 @@ async function _initializePropertyPaymentAction(
                     //   The owner the escrow will be credited to, read from the
                     //   listing. A parcel that has changed hands since the
                     //   agreement is not the same bargain.
-                    sellerId: listingSellerId,
+                    sellerId: await liveProfileId(listingSellerId),
                 },
             );
             if (refusal) return { success: false, error: refusal, data: null };

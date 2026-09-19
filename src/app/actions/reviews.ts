@@ -11,6 +11,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import type { ProductReview, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -89,7 +90,10 @@ export async function createReviewAction(params: {
         const order = orderDoc.data() as Order;
 
         // Verify user is the buyer
-        if (order.buyerId !== userId) { return { success: false as const, error: "Not authorized", data: null };
+        //   #904 (BUYER SIDE) — including under a profile they no longer sign
+        //   in as. An order they cannot review is one they bought and cannot
+        //   speak about.
+        if (!await isOwnedBySession(order.buyerId, userId)) { return { success: false as const, error: "Not authorized", data: null };
         }
 
         // Reviewable statuses, shared with the other review module.

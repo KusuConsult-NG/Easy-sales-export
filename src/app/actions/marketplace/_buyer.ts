@@ -1,5 +1,6 @@
 "use server";
 import { requireSession } from "@/lib/session-guard";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
@@ -309,7 +310,10 @@ async function _confirmOrderReceiptAction(orderId: string): Promise<ActionRespon
         }
 
         const orderData = orderDoc.data();
-        if (orderData?.buyerId !== userId) { 
+        //   #904 (BUYER SIDE) — an order placed on a superseded profile is
+        //   still this person's to act on. Resolved FORWARD, which costs
+        //   nothing when the ids already match.
+        if (!orderData || !await isOwnedBySession(orderData.buyerId, userId)) { 
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -425,7 +429,8 @@ async function _cancelOrderAction(orderId: string): Promise<ActionResponse<{ suc
         }
 
         const orderData = orderDoc.data();
-        if (orderData?.buyerId !== userId) {
+        //   #904 (BUYER SIDE) — same gate, same rule as its sibling above.
+        if (!orderData || !await isOwnedBySession(orderData.buyerId, userId)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

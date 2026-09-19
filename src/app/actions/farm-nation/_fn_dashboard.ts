@@ -26,36 +26,31 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
          *   a contradictory one — "3 properties" over a list of one — which is
          *   harder for the owner to report than either half being wrong alone.
          *
-         *   `buyerId` below is deliberately NOT widened: see the note there.
+         *   `buyerId` below is widened too now — see the note there.
          */
-        const ownerIds = await ownedProfileIds(userId);
+        const profileIds = await ownedProfileIds(userId);
 
         // Fetch in parallel: user's listings + purchase transactions as buyer
         let listingsSnap, transactionsSnap, userDoc;
         try { 
             [listingsSnap, transactionsSnap, userDoc] = await Promise.all([
-                filterByOwner(db.collection(COLLECTIONS.LAND_LISTINGS), 'ownerId', ownerIds)
+                filterByOwner(db.collection(COLLECTIONS.LAND_LISTINGS), 'ownerId', profileIds)
                     .orderBy('createdAt', 'desc')
                     .get(),
                 /*
-                 *   AND `buyerId` IS LEFT ALONE, WHICH IS A BOUNDARY RATHER
-                 *   THAN AN OVERSIGHT.
+                 *   AND `buyerId` NOW TOO — the boundary this note used to
+                 *   draw has been crossed on purpose.
                  *
-                 *   The same fault exists on the buyer side: a purchase made
-                 *   before the duplicate was settled carries the superseded id
-                 *   too. It is not what was reported, and the buyer surface is
-                 *   much wider than this one tile — orders, escrow, disputes,
-                 *   receipts. Widening THIS read alone would put a purchase on
-                 *   the dashboard that every other buyer screen still denies,
-                 *   which is the contradiction the note above refuses to create
-                 *   on the seller side.
-                 *
-                 *   So the owner surface is widened completely and the buyer
-                 *   surface not at all, and the two are honest about each
-                 *   other. Doing the buyer side is a piece of work, not a line.
+                 *   It said the buyer surface was "orders, escrow, disputes,
+                 *   receipts" and that widening THIS read alone would put a
+                 *   purchase on the dashboard every other buyer screen still
+                 *   denied. That was the reason to wait, not a reason never to
+                 *   do it. The whole surface is widened now, so the tile and
+                 *   the screens it links to agree again.
                  */
-                db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-                    .where('buyerId', '==', userId)
+                filterByOwner(
+                    db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS), 'buyerId', profileIds,
+                )
                     .orderBy('createdAt', 'desc')
                     .limit(10)
                     .get(),
@@ -66,8 +61,10 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
                 logger.warn("Missing index for Dashboard Stats, falling back to sequential memory sort");
                 // Fetch sequentially without sort
                 const [lSnap, tSnap, uDoc] = await Promise.all([
-                    filterByOwner(db.collection(COLLECTIONS.LAND_LISTINGS), 'ownerId', ownerIds).get(),
-                    db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).where('buyerId', '==', userId).limit(10).get(),
+                    filterByOwner(db.collection(COLLECTIONS.LAND_LISTINGS), 'ownerId', profileIds).get(),
+                    filterByOwner(
+                        db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS), 'buyerId', profileIds,
+                    ).limit(10).get(),
                     db.collection(COLLECTIONS.USERS).doc(userId).get(),
                 ]);
                 listingsSnap = lSnap;

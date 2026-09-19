@@ -176,7 +176,13 @@ describe('the action claims rather than checking then writing', () => {
         const fn = src.slice(src.indexOf('async function _updateEscrowStatus'));
         const body = fn.slice(0, fn.indexOf('export const updateEscrowStatus'));
 
-        expect(body).toContain('preData.buyerId !== userId && preData.sellerId !== userId');
+        //   #904 WIDENED THE COMPARISON AND NOT THE RULE. A participant whose
+        //   escrow names a profile they no longer sign in as was refused their
+        //   own transaction, so the two raw `!==` became one resolved question
+        //   over the same two parties. What this test guards — that BOTH sides
+        //   are still checked and a non-participant is still refused — is
+        //   unchanged, and the behavioural half below still proves it.
+        expect(body).toContain('isAnyOwnedBySession([preData.buyerId, preData.sellerId], userId)');
         // The admin half is now the PERMISSION rather than the role: leaving a
         // disputed escrow is dispute resolution, and PERMISSION_MATRIX gives
         // "finance:resolve_disputes" to super_admin and admin only. isAdmin()

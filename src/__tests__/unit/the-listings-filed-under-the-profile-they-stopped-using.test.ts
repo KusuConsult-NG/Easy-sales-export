@@ -370,9 +370,14 @@ describe('#904 — the screens that were empty now ask the widened question', ()
     it('AND THE COUNT AND THE LIST CANNOT DISAGREE', () => {
         //   Widening one and not the other trades an empty screen for a
         //   contradictory one — "3 properties" over a list of one.
+        //
+        //   FOUR, not two, since the buyer side landed: this action reads the
+        //   seller's listings AND the buyer's transactions, and each has a
+        //   fallback. The `buyerId` half was the deferral this file's original
+        //   note described, and it is no longer deferred.
         const dash = code(DASHBOARD);
 
-        expect(dash.match(/filterByOwner\(/g) ?? []).toHaveLength(2);   // query + fallback
+        expect(dash.match(/filterByOwner\(/g) ?? []).toHaveLength(4);
     });
 
     it('AND THE FALLBACK PATHS WIDENED TOO', () => {
