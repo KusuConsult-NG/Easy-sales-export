@@ -24,6 +24,7 @@ import { installmentDueDate } from "@/lib/loan-schedule-dates";
 import type { LoanApplication, RepaymentInstallment } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication, normaliseLoanApplication } from "@/lib/loan-application-location";
 import { isPositiveAmount } from "@/lib/amount";
+import { toDateOrNull } from "@/lib/date-utils";
 
 /**
  * Get loan repayment schedule
@@ -485,7 +486,37 @@ export async function submitRepaymentAction(data: {
                 throw new Error("That instalment does not belong to this borrower");
             }
 
-            const dueDate = (installmentData.dueDate as Timestamp).toDate();
+            /*
+             *   #890 THE CAST WAS THE ONLY CHECK, AND THIS DATE DECIDES A
+             *   PENALTY.
+             *
+             *   `(installmentData.dueDate as Timestamp).toDate()` had no guard
+             *   at all — not even the presence test its siblings had. And this
+             *   instalment is written in TWO shapes by this very file: line 133
+             *   stores `Timestamp.fromDate(dueDate)` and line 146 stores
+             *   `dueDate.toISOString()`. A row from the second writer is a
+             *   string, a string has no `.toDate()`, and the borrower's
+             *   repayment throws.
+             *
+             *   REFUSED RATHER THAN GUESSED, because the next two uses are
+             *   `calculatePenalty(dueDate, …)` and `new Date() > dueDate`.
+             *   Defaulting to the epoch makes every instalment maximally
+             *   overdue and charges a penalty nobody owes; defaulting to now
+             *   silently waives one that is owed. Neither is a rounding error —
+             *   both move money — so an unreadable due date stops the
+             *   transaction and names itself.
+             */
+            const dueDate = toDateOrNull(installmentData.dueDate);
+            if (!dueDate) {
+                logger.error("[submitRepaymentAction] instalment has an unreadable dueDate", {
+                    installmentId: line.installmentId,
+                    stored: String(installmentData.dueDate),
+                });
+                throw new Error(
+                    "That instalment's due date could not be read, so the penalty cannot be "
+                    + "calculated. Please contact support rather than paying twice.",
+                );
+            }
 
             /**
              *   #286 THE AMOUNT WAS NEVER COMPARED TO WHAT THE INSTALMENT OWED.

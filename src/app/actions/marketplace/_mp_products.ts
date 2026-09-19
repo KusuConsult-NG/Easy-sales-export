@@ -22,6 +22,7 @@ import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 import { sellerRefusal } from "@/lib/seller-approval";
 import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
 import { retirementPatch } from "@/lib/record-retirement";
+import { toDateOrNull } from "@/lib/date-utils";
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -406,7 +407,24 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             });
         }
 
-        const createdAtDate = productData?.createdAt ? (productData.createdAt as Timestamp).toDate() : new Date();
+        /*
+         *   #890 AND THE SECOND REASON A SELLER COULD NOT SAVE AN EDIT.
+         *
+         *   #885 opened the gate. This is the line just past it, and it threw
+         *   for a different reason: `productData?.createdAt ?` tests PRESENCE
+         *   and the cast asserts a type nobody checked. A stored timestamp comes
+         *   back in four shapes and the adapter only converts a FULL ISO string,
+         *   so a product whose createdAt is a date-only string, a number, or
+         *   written by another door is a truthy value with no `.toDate()` —
+         *   `TypeError: ... .toDate is not a function`, which is verbatim the
+         *   production log behind #884.
+         *
+         *   So the two halves of "sellers can't edit products" were a refusal
+         *   she could read and a crash she could not. Both had to go.
+         *
+         *   toDateOrNull reads all four shapes; the fallback is unchanged.
+         */
+        const createdAtDate = toDateOrNull(productData?.createdAt) ?? new Date();
 
         const rawData = { 
             id: productId,

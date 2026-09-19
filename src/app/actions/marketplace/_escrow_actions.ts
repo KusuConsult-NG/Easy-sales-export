@@ -29,6 +29,9 @@ import {
     PAYMENT_INSTRUCTION_SETTLED,
     PAYMENT_INSTRUCTION_SETTLED_VIA,
 } from "@/lib/payment-instruction";
+//   #890 One reader for the four shapes a stored timestamp takes — the escrow
+//   list read them with a presence test and a cast. See lib/date-utils.
+import { safeToISOStringOptional } from "@/lib/date-utils";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
@@ -62,12 +65,12 @@ async function _getUserEscrowTransactions() { let sessionResult;
             return {
                 id: doc.id,
                 ...serializeValue(data),
-                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
-                updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
-                paidAt: data.paidAt ? (data.paidAt as Timestamp).toDate().toISOString() : null,
-                releasedAt: data.releasedAt ? (data.releasedAt as Timestamp).toDate().toISOString() : null,
-                refundedAt: data.refundedAt ? (data.refundedAt as Timestamp).toDate().toISOString() : null,
-                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null };
+                createdAt: safeToISOStringOptional(data.createdAt) ?? null,
+                updatedAt: safeToISOStringOptional(data.updatedAt) ?? null,
+                paidAt: safeToISOStringOptional(data.paidAt) ?? null,
+                releasedAt: safeToISOStringOptional(data.releasedAt) ?? null,
+                refundedAt: safeToISOStringOptional(data.refundedAt) ?? null,
+                releaseRequestedAt: safeToISOStringOptional(data.releaseRequestedAt) ?? null };
         });
 
         return { success: true as const, error: null, data: { transactions: transactions as any as EscrowTransaction[] } };
@@ -146,12 +149,12 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
                 // DISEASE 5 FIX: serializeValue catches ALL Timestamp fields (including any
                 // future ones like disputedAt, completedAt) — not just the named ones below
                 ...serializeValue(data),
-                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
-                updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
-                paidAt: data.paidAt ? (data.paidAt as Timestamp).toDate().toISOString() : null,
-                releasedAt: data.releasedAt ? (data.releasedAt as Timestamp).toDate().toISOString() : null,
-                refundedAt: data.refundedAt ? (data.refundedAt as Timestamp).toDate().toISOString() : null,
-                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null 
+                createdAt: safeToISOStringOptional(data.createdAt) ?? null,
+                updatedAt: safeToISOStringOptional(data.updatedAt) ?? null,
+                paidAt: safeToISOStringOptional(data.paidAt) ?? null,
+                releasedAt: safeToISOStringOptional(data.releasedAt) ?? null,
+                refundedAt: safeToISOStringOptional(data.refundedAt) ?? null,
+                releaseRequestedAt: safeToISOStringOptional(data.releaseRequestedAt) ?? null 
             } as any;
         });
 
