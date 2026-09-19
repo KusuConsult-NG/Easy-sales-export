@@ -310,6 +310,69 @@ dbDescribe('#850 — one scan answers what fifteen did, identically', () => {
         expect(scans).toBe(1);
     });
 
+    it('AND IT EXTRACTS EACH ROW\u2019S STATUSES ONCE, not twice \u2014 migration 044', async () => {
+        /*
+         *   #850 shipped this function with the scalar subquery written once
+         *   and EVALUATED TWICE. Postgres pulls the inner subquery up, and the
+         *   expression then appears both in the outer `WHERE statuses IS NOT
+         *   NULL` and in `GROUP BY statuses`; it does not eliminate a common
+         *   subexpression across a filter and a grouping key.
+         *
+         *   On production that was 42,846 + 36,687 = 79,533 evaluations to
+         *   read 42,846 rows, and EACH ONE DETOASTED raw_data. Execution Time
+         *   9,948 ms against a statement_timeout of 8s — so it never returned,
+         *   and lib/module-applicant-count fell back to the fifteen scans this
+         *   function exists to replace.
+         *
+         *   044 fences the pull-up with `OFFSET 0`, which reads as a no-op and
+         *   is not one. THIS TEST IS WHY IT CANNOT BE TIDIED AWAY: the fence
+         *   leaves the rows identical and only the plan changes, so nothing
+         *   else in this suite would notice its removal.
+         *
+         *   Counted in the plan rather than timed, for the reason the scan
+         *   count above records: a duration is a property of the machine.
+         */
+        const { rows } = await client!.query(
+            `explain (format json) select * from module_registration_counts($1::text[], null)`,
+            [KEYS],
+        );
+        const plan = JSON.stringify(rows[0]['QUERY PLAN']);
+        const subplans = (plan.match(/"Subplan Name":"SubPlan [0-9]+"/g) ?? []).length;
+
+        expect(subplans).toBe(1);
+    });
+
+    it('AND IT READS THE NARROW COLUMN, never detoasting raw_data \u2014 migration 045', async () => {
+        /*
+         *   `users` is 106 MB over 42,845 rows, so raw_data averages ~2.5 kB
+         *   and lives in TOAST. Extracting one nested key from it detoasts the
+         *   whole column; 045 reads `service_regs` instead, a generated column
+         *   holding exactly raw_data->'serviceRegistrations' and small enough
+         *   to sit inline on the page the scan already has.
+         *
+         *   Measured at 40,000 production-sized rows: 960,642 buffers (039),
+         *   480,560 (044), 1,216 (045).
+         *
+         *   PINNED AS THE EXPRESSION IN THE PLAN, because the rows are
+         *   identical either way — `service_regs` is by definition what that
+         *   path returns — so no other assertion in this suite would notice a
+         *   revert to raw_data, and the whole gain would be lost silently.
+         *
+         *   The `createdAt` bound still reads raw_data, deliberately: it is a
+         *   different key, 039's header explains why it is the JSONB path
+         *   rather than the native column, and the `since` filter is not what
+         *   this costs. So the assertion is about the STATUS extraction only.
+         */
+        const { rows } = await client!.query(
+            `explain (format json) select * from module_registration_counts($1::text[], null)`,
+            [KEYS],
+        );
+        const plan = JSON.stringify(rows[0]['QUERY PLAN']);
+
+        expect(plan).toContain('service_regs');
+        expect(plan).not.toContain("serviceRegistrations");
+    });
+
     it('AND THE since FILTER NARROWS THE SAME WAY THE QUERY PATH DOES', async () => {
         /*
          *   Parity on the filter too, because the function receives an ISO
