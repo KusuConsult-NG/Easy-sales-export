@@ -998,7 +998,39 @@ export async function getStandardCooperativeMembersAction(
                 }
             }
             const userSnapsArray = await Promise.all(userPromises);
-            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+            /*
+             *   #903 THE RAW USER DOCUMENT WENT STRAIGHT TO THE BROWSER, AND
+             *   THE SCREEN REPORTED A REACT ERROR INSTEAD OF A LIST.
+             *
+             *   THE OWNER: "Membership applications could not be loaded.
+             *   Minified React error #441."
+             *
+             *   #441 is the RSC client's "an error occurred in the Server
+             *   Components render", whose text production strips. It is NOT
+             *   this action failing: every read here is inside a try/catch that
+             *   returns the sentence "Failed to load cooperative members", and
+             *   that sentence is not what the owner saw. The throw happens
+             *   AFTER the return, while React serialises the payload — which is
+             *   why the handler below cannot catch it and why the message
+             *   arrives with no detail.
+             *
+             *   firestore-serialize's own header says what does that: "Server
+             *   Actions CANNOT pass class instances (like Firestore Timestamps)
+             *   to Client Components." The member rows were already serialised —
+             *   `serializeDocs(snapshot.docs)` above — but the USER documents
+             *   fetched to fill in the blanks were not, and `mergedData` reads
+             *   `uData.dateOfBirth || uData.dob` and `uData.bankDetails`
+             *   straight out of them into what is returned. A member whose user
+             *   record carries a Timestamp date of birth put a Timestamp in the
+             *   response, and the whole page failed rather than that one field.
+             *
+             *   THE SAME RULE, APPLIED TO ONE OF THE THREE PLACES IT NAMES. The
+             *   sibling action at the top of this very file already writes
+             *   `serializeValue(d.data())` into its user map. Two hydration
+             *   loops in this action — the gender sort and the default page —
+             *   did not, and the default page is the one that opens on arrival.
+             */
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
 
             const mapped = applications.map((app: any) => {
                 const uData = (userMap.get(app.userId as string) || {}) as any;
@@ -1105,7 +1137,9 @@ export async function getStandardCooperativeMembersAction(
                 }
             }
             const userSnapsArray = await Promise.all(userPromises);
-            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+            //   #903 — see the note on the sibling loop above. This is the
+            //   loop the DEFAULT page load runs.
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
 
             standardForms = paged.map((app: any) => {
                 const uData = (userMap.get(app.userId as string) || {}) as any;
