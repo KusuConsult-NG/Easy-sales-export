@@ -55,7 +55,7 @@ import { describe, it, expect } from '@jest/globals';
 import { execFileSync } from 'child_process';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { runNodeScript } from '@/lib/testing/run-node-script';
+import { runNodeScript, runCommand } from '@/lib/testing/run-node-script';
 
 const ROOT = process.cwd();
 const DEPLOY = 'supabase/deploy.sql';
@@ -98,8 +98,11 @@ describe('#660 — the file exists and matches the migrations', () => {
          *   So the rule was reversed, with the reason written into .gitignore,
          *   and this asks git rather than the filesystem.
          */
-        const tracked = execFileSync('git', ['ls-files', '--error-unmatch', DEPLOY], {
-            cwd: ROOT, encoding: 'utf8',
+        //   #898 Through the retrying helper too. #894 wrapped this file's
+        //   `node` spawn and left this one bare, and a spawn storm does not
+        //   care which binary it is failing to start.
+        const tracked = runCommand('git', ['ls-files', '--error-unmatch', DEPLOY], {
+            cwd: ROOT,
         }).trim();
 
         expect(tracked).toBe(DEPLOY);

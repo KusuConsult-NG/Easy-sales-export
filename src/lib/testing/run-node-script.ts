@@ -88,13 +88,36 @@ export interface RunNodeScriptOptions {
 export function runNodeScript(
     script: string,
     args: readonly string[],
+    options: RunNodeScriptOptions,
+): string {
+    return runCommand("node", [script, ...args], options);
+}
+
+/**
+ * The same, for a command that is not `node`.
+ *
+ *   #898 THE FIRST VERSION WRAPPED ONLY THE `node` SPAWNS, AND THE SUITE WENT
+ *   RED AGAIN.
+ *
+ *   #894 fixed both deploy suites where they build the SQL. One of them also
+ *   shells out to `git ls-files` — to ask whether deploy.sql is tracked, which
+ *   is that test's whole point — and that spawn was left bare. A spawn storm
+ *   does not care which binary it is failing to start, so the file kept
+ *   failing under a full run and passing alone.
+ *
+ *   Fixing the instance and not the class is the defect this audit names most
+ *   often, and here I did it to my own fix a few commits earlier.
+ */
+export function runCommand(
+    command: string,
+    args: readonly string[],
     { cwd, maxBuffer = 64 * 1024 * 1024 }: RunNodeScriptOptions,
 ): string {
     let lastError: unknown;
 
     for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
         try {
-            return execFileSync("node", [script, ...args], {
+            return execFileSync(command, [...args], {
                 cwd,
                 encoding: "utf-8",
                 maxBuffer,

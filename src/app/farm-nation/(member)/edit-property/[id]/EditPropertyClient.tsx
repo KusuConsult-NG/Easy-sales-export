@@ -11,6 +11,7 @@ import { getPropertyByIdAction } from "@/app/actions/land-listings";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useToast } from "@/contexts/ToastContext";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { leaseTermRefusal, readLeaseTerm } from "@/lib/lease-term";
 
 interface EditPropertyPageProps {
     params: Promise<{ id: string }>;
@@ -50,6 +51,22 @@ export default function EditPropertyClient(props: {
         //   #869 A set, matching the create form. One parcel may be offered
         //   for sale AND on rental terms — see the create form's note.
         listingTypes: ["sale"] as Array<"sale" | "rent" | "lease">,
+        /*
+         *   #898 THE TERM AND THE RENT, WHICH THIS FORM NEVER HAD.
+         *
+         *   The create form has collected both since #861 and #869, and this
+         *   one lets the seller change `listingTypes` — so a SALE could be
+         *   edited into a LEASE here and come out with no term and no rent
+         *   price. The buyer then sees the SALE price labelled "Lease/Rental
+         *   price" and no term at all.
+         *
+         *   Prefilled from the stored row below through readLeaseTerm, so a
+         *   listing written by either creator opens with its real term rather
+         *   than blank — which would silently clear it on the next save.
+         */
+        durationValue: "" as string | number,
+        durationUnit: "years" as "months" | "years",
+        rentPrice: "" as string | number,
     });
 
     const nigerianStates = [
@@ -97,6 +114,9 @@ export default function EditPropertyClient(props: {
                     if (listingTypes.length === 0) {
                         listingTypes.push(((prop.type as any) ?? "sale"));
                     }
+
+                    //   #898 Either vocabulary — see lib/lease-term.
+                    const storedTerm = readLeaseTerm(prop as Record<string, any>);
                     setFormData({
                         title: prop.title || "",
                         description: prop.description || "",
@@ -110,6 +130,17 @@ export default function EditPropertyClient(props: {
                             : (prop.category ? [prop.category] : ["farmland"]),
                         features: (prop as any).features || [],
                         listingTypes,
+                        /*
+                         *   #898 Prefilled through readLeaseTerm, so a listing
+                         *   written by EITHER creator opens with its real term.
+                         *   Opening blank would look like "no term" and the
+                         *   next save would silently clear one that exists —
+                         *   the same shape as #869's lost second offer, which
+                         *   is recorded a few lines above.
+                         */
+                        durationValue: storedTerm?.value ?? "",
+                        durationUnit: storedTerm?.unit ?? "years",
+                        rentPrice: (prop as any).rentPrice ?? "",
                     });
                 } else {
                     showToast(result.error || "Property not found", "error");
@@ -145,11 +176,33 @@ export default function EditPropertyClient(props: {
         });
     };
 
+    //   #898 Rent and lease ask the same two questions — see the create form,
+    //   which derives this the same way.
+    const offersRental = formData.listingTypes.includes("rent")
+        || formData.listingTypes.includes("lease");
+
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
         if (!session?.user) {
             showToast("Please login to continue", "error");
+            return;
+        }
+
+        /*
+         *   #898 THE SAME MINIMUM TERM THE CREATE FORM APPLIES — #895.
+         *
+         *   Without it a seller could list a year-long lease and then edit it
+         *   down to one month. The server refuses it too; this is so she is
+         *   told before the save rather than after.
+         */
+        const leaseRefusal = leaseTermRefusal({
+            offersLease: formData.listingTypes.includes("lease"),
+            durationValue: formData.durationValue,
+            durationUnit: formData.durationUnit,
+        });
+        if (leaseRefusal) {
+            showToast(leaseRefusal, "error");
             return;
         }
 
@@ -180,6 +233,18 @@ export default function EditPropertyClient(props: {
                 availableForLease: formData.listingTypes.includes("lease"),
                 type: formData.listingTypes.includes("sale") ? "sale"
                     : formData.listingTypes.includes("rent") ? "rent" : "lease",
+                //   #898 Spread rather than defaulted, matching the create
+                //   form: a pure sale carries no term and no rent figure at
+                //   all rather than zeroes every reader has to disregard.
+                ...(offersRental && Number(formData.durationValue) > 0
+                    ? {
+                        durationValue: Number(formData.durationValue),
+                        durationUnit: formData.durationUnit,
+                    }
+                    : {}),
+                ...(offersRental && parseCurrencyStringToFloat(String(formData.rentPrice)) > 0
+                    ? { rentPrice: parseCurrencyStringToFloat(String(formData.rentPrice)) }
+                    : {}),
                 escrowAvailable: true,
             });
 
@@ -428,6 +493,74 @@ export default function EditPropertyClient(props: {
                                         })}
                                     </div>
                                 </div>
+
+                                {/*
+                                  *   #898 THE TERM AND THE RENT, which this form
+                                  *   never collected. The picker above lets a
+                                  *   seller switch a SALE into a LEASE, and the
+                                  *   result had no term and no rent price — so the
+                                  *   buyer saw the sale price labelled
+                                  *   "Lease/Rental price" and no term at all.
+                                  *
+                                  *   Same two questions, same shape and the same
+                                  *   shared rule as the create form.
+                                  */}
+                                {offersRental && (
+                                    <div className="border-t border-slate-100 pt-6 space-y-6">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                                {formData.listingTypes.includes("rent") ? "Rental" : "Lease"} Duration *
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input
+                                                    type="number"
+                                                    value={formData.durationValue}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, durationValue: e.target.value }))}
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                    placeholder={formData.listingTypes.includes("lease") ? "e.g., 2" : "e.g., 3"}
+                                                    min="1"
+                                                    step="1"
+                                                />
+                                                <select
+                                                    value={formData.durationUnit}
+                                                    onChange={(e) => setFormData(prev => ({
+                                                        ...prev,
+                                                        durationUnit: e.target.value as "months" | "years",
+                                                    }))}
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                >
+                                                    <option value="months">Months</option>
+                                                    <option value="years">Years</option>
+                                                </select>
+                                            </div>
+                                            <p className="mt-2 text-sm text-slate-600">
+                                                How long the {formData.listingTypes.includes("rent") ? "rental" : "lease"} runs.
+                                                {formData.listingTypes.includes("lease")
+                                                    && " A lease must run for at least 1 year."}
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                                {formData.listingTypes.includes("rent") ? "Rental" : "Lease"} Price (₦)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={formData.rentPrice}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, rentPrice: e.target.value }))}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                placeholder="e.g., 200,000"
+                                            />
+                                            <p className="mt-2 text-sm text-slate-600">
+                                                {/*   #869's reason, restated where it is asked. */}
+                                                What the land costs for the term, as distinct from the
+                                                purchase price above. Left blank, the purchase price is
+                                                charged for both.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="border-t border-slate-100 pt-6">
                                     <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200/60 rounded-xl cursor-not-allowed">

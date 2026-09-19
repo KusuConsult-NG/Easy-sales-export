@@ -28,6 +28,29 @@ export const landListingSchema = z.object({
     availableForRent: z.boolean().optional(),
     availableForLease: z.boolean().optional(),
     type: z.enum(["sale", "rent", "lease"]).optional(),
+    /*
+     *   #898 THE TERM AND THE RENT WERE NOT IN THIS SCHEMA AT ALL.
+     *
+     *   #861 added a term and #869 added a separate rent figure, both on the
+     *   CREATE form and its own action (land-listings.ts). This schema is what
+     *   the EDIT door parses — and `landListingUpdateSchema` is
+     *   `landListingSchema.partial()` — so neither field could survive an edit
+     *   even if the form sent one.
+     *
+     *   What that made possible: the edit form lets a seller change
+     *   `listingTypes`, so a SALE could be switched to a LEASE, and the result
+     *   had no term and no rent price. The buyer then sees the SALE price
+     *   labelled "Lease/Rental price" (offerPrice falls back to `price`) and no
+     *   term at all — which is both #861's defect and the one #869's own note
+     *   warns about: "Offering both without a second figure would have meant
+     *   charging one of the two buyers the wrong number — which is worse than
+     *   not offering it."
+     *
+     *   Optional, so every existing caller and every stored row is unchanged.
+     */
+    durationValue: z.number().positive().optional(),
+    durationUnit: z.enum(["months", "years"]).optional(),
+    rentPrice: z.number().positive().optional(),
     escrowAvailable: z.boolean().optional(),
 
     features: z.array(z.string()),

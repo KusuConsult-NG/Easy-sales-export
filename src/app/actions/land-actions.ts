@@ -31,6 +31,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
 import { groupFreeText } from "@/lib/free-text-grouping";
+import { leaseTermRefusal } from "@/lib/lease-term";
 
 /**
  * Create a new land listing
@@ -44,6 +45,16 @@ async function _createLandListing(
 
     try { 
         const validated = landListingSchema.parse(data);
+
+        //   #898 The same minimum as the other two creators — #895, #897.
+        const createRefusal = leaseTermRefusal({
+            offersLease: validated.type === "lease",
+            durationValue: validated.durationValue,
+            durationUnit: validated.durationUnit,
+        });
+        if (createRefusal) {
+            return { success: false, error: createRefusal, data: null };
+        }
 
         // Create GeoPoint for Firestore geolocation
         const geoPoint = new GeoPoint(validated.location.lat, validated.location.lng);
@@ -376,6 +387,30 @@ async function _updateLandListing(
                     + `A purchase is in progress or completed.`,
                 data: null,
             };
+        }
+
+        /*
+         *   #898 THE MINIMUM TERM, ON THE EDIT DOOR — #895.
+         *
+         *   #895 put the rule on the CREATE door the form uses and stopped
+         *   there; #897 found the second creator; this is the third door and
+         *   the only other LIVE one. Without it a seller could list a
+         *   year-long lease and then edit it down to one month.
+         *
+         *   MERGED WITH THE STORED ROW, not read from the patch alone. This is
+         *   a PARTIAL update: an edit that only changes the title sends no term
+         *   and no type, and judging it on the patch would ask the rule about
+         *   an empty object. The question is what the listing will BE after the
+         *   write.
+         */
+        const merged = { ...listingData, ...validated };
+        const editRefusal = leaseTermRefusal({
+            offersLease: merged.availableForLease === true || merged.type === "lease",
+            durationValue: merged.durationValue,
+            durationUnit: merged.durationUnit,
+        });
+        if (editRefusal) {
+            return { success: false, error: editRefusal, data: null };
         }
 
         const { listingId, ...updateData } = validated;
