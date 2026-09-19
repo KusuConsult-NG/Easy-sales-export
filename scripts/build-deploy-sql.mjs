@@ -292,6 +292,27 @@ const EXPECTED = [
              "of this migration behaves correctly. Plain CREATE INDEX under a " +
              "lock_timeout rather than CONCURRENTLY, for the reason #469 records.",
     },
+    {
+        n: "043",
+        why: "expression indexes for `buyerId` — the third field 022's \"status " +
+             "and userId\" and 041's \"ownerId and sellerId\" both missed, and the " +
+             "one every screen #904's buyer side widened filters on. PART 1 covers " +
+             "document_collections, where six of the seven buyer collections live " +
+             "(disputes, export_orders, land_offers, marketplace_quotes, " +
+             "seller_reviews, farm_nation_transactions) and nothing indexed the " +
+             "column at all: measured 2.303 ms / cost 406.30 before vs 0.164 ms / " +
+             "cost 73.26 after, at 20k rows. The before is NOT a seq scan — the " +
+             "planner uses idx_dc_collection_seller's leading `collection_name` and " +
+             "then reads every row in the collection, 4,000 to return 20. PART 2 is " +
+             "idx_mo_buyer_id on the DEDICATED marketplace_orders table, which 022 " +
+             "already declares with CONCURRENTLY and therefore by hand — whether " +
+             "that ever ran is unknowable from here, and without it that query IS a " +
+             "seq scan (4.972 ms / cost 546.00 vs 0.152 ms / cost 71.92). Same name " +
+             "and IF NOT EXISTS, so it is a no-op where 022 landed and the repair " +
+             "where it did not; the same relationship 041 has to 022. Order does " +
+             "not matter — they are indexes, not functions. NOT REQUIRED FOR " +
+             "CORRECTNESS: the code is right without it and merely slower.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
