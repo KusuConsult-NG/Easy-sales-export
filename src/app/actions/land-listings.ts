@@ -30,6 +30,7 @@ import { inspectionRefusal } from "@/lib/land-inspection";
 import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visibility";
 import { hasAppAccess } from "@/lib/role-app-mapping";
 import { checkProductPricing } from "@/lib/product-pricing-guard";
+import { leaseTermRefusal } from "@/lib/lease-term";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -1050,6 +1051,27 @@ async function _submitLandListingAction(data: {
         ]);
         if (!pricing.ok) {
             return { success: false, error: pricing.message, data: null };
+        }
+
+        /*
+         *   #895 A LEASE RUNS FOR A YEAR OR MORE — see lib/lease-term.
+         *
+         *   THE OWNER: "lease can be within a range from 1year and above."
+         *   There was no minimum anywhere, and the form's own worked example
+         *   was three MONTHS.
+         *
+         *   Asked of what the listing OFFERS rather than of its `type` label,
+         *   because #869 made one listing able to be sale AND rent AND lease at
+         *   once while the term stayed a single shared field — so `type` names
+         *   only the first option that matched.
+         */
+        const leaseRefusal = leaseTermRefusal({
+            offersLease: data.availableForLease === true || data.type === "lease",
+            durationValue: data.durationValue,
+            durationUnit: data.durationUnit,
+        });
+        if (leaseRefusal) {
+            return { success: false, error: leaseRefusal, data: null };
         }
 
         const listing: any = {

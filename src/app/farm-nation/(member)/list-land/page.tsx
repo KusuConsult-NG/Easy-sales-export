@@ -32,6 +32,7 @@ const LocationPicker = dynamic(() => import("@/components/farm-nation/LocationPi
 //   button in the same box — see components/ui/ThumbnailImage.
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
+import { leaseTermRefusal } from "@/lib/lease-term";
 
 type LandCategory = "farmland" | "ranch" | "forest" | "mixed" | "orchard" | "aquaculture";
 
@@ -336,6 +337,27 @@ export default function ListLandPage() {
 
         if (!formData.category || formData.category.length === 0) {
             showToast("Validation Error: Please select at least one land category.", "error");
+            return;
+        }
+
+        /*
+         *   #895 A LEASE RUNS FOR A YEAR OR MORE — see lib/lease-term.
+         *
+         *   CHECKED BEFORE THE UPLOADS, which is the whole reason it is here as
+         *   well as on the server. Everything below this point uploads images
+         *   and documents first and calls the action last, so a refusal that
+         *   only happened server-side would come after she had waited through
+         *   every upload — and #855's ledger is about exactly that: a submit
+         *   that fails late looks like the platform breaking rather than a form
+         *   telling her something.
+         */
+        const leaseRefusal = leaseTermRefusal({
+            offersLease: formData.listingTypes.includes("lease"),
+            durationValue: formData.durationValue,
+            durationUnit: formData.durationUnit,
+        });
+        if (leaseRefusal) {
+            showToast(leaseRefusal, "error");
             return;
         }
 
@@ -1120,13 +1142,17 @@ export default function ListLandPage() {
                                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             {formData.listingTypes.includes("rent") ? "Rental" : "Lease"} Duration *
                                         </label>
+                                        {/*   #895 The worked example was "3", beside a Months
+                                          *   option — so the field's own suggestion was a term
+                                          *   a lease may not have. It suggests a year now, and
+                                          *   the note below states the rule. */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <input
                                                 type="number"
                                                 value={formData.durationValue}
                                                 onChange={(e) => setFormData(prev => ({ ...prev, durationValue: e.target.value }))}
                                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
-                                                placeholder="e.g., 3"
+                                                placeholder={formData.listingTypes.includes("lease") ? "e.g., 2" : "e.g., 3"}
                                                 min="1"
                                                 step="1"
                                                 required
@@ -1145,6 +1171,10 @@ export default function ListLandPage() {
                                         </div>
                                         <p className="mt-2 text-sm text-slate-600">
                                             How long the {formData.listingTypes.includes("rent") ? "rental" : "lease"} runs.
+                                            {/*   #895 The rule, where she is typing, rather
+                                              *   than only in the refusal afterwards. */}
+                                            {formData.listingTypes.includes("lease")
+                                                && " A lease must run for at least 1 year."}
                                         </p>
 
                                         {/*
