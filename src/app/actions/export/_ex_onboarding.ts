@@ -13,6 +13,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { recordAdminAction } from "@/lib/audit-log";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 // ============================================
 // Submit Export Onboarding Action
@@ -234,9 +235,14 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
         // If status is not approved, check the source of truth for Export applications.
         if (status !== "approved") {
             let appDoc: any = null;
-            const appSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                .where("userId", "==", session.user.id)
-                .get();
+            //   #904 (EXPORT) — an application filed on a profile this person
+            //   no longer signs in as. Missing it tells somebody who HAS
+            //   applied that they have not, which is #849's complaint: "the
+            //   second person registered in an office was told to come back
+            //   later".
+            const applicantIds = await ownedProfileIds(session.user.id);
+            const appSnap = await filterByOwner(
+                db.collection(COLLECTIONS.EXPORT_APPLICATIONS), "userId", applicantIds).get();
 
             if (!appSnap.empty) {
                 /**

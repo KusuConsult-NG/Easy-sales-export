@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { refuseExportStatusChange, hasExportAdminAccess, EXPORT_WINDOW_ALL_STATUSES } from "@/lib/export-window-status";
 import { claimIdempotencyKey } from "@/lib/wallet-ledger";
@@ -457,8 +458,23 @@ export async function getExportWindowsAction(
         const userId = session.user.id;
 
         // Build query
-        let exportsQuery = db.collection(COLLECTIONS.EXPORT_WINDOWS)
-            .where("userId", "==", userId);
+        /*
+         *   #904 (EXPORT) THE FIELD NAME WAS THE ONLY DIFFERENCE.
+         *
+         *   The land, buyer and seller passes keyed off `ownerId`, `buyerId`
+         *   and `sellerId` and put `userId` aside as "the broad platform
+         *   surface". That was the wrong line HERE: this is a person's own
+         *   export windows, the same "show me my things" question, spelled
+         *   with a different field.
+         *
+         *   And it left the export module split against itself — the buyer
+         *   pass widened EXPORT_ORDERS by `buyerId`, so a person's export
+         *   ORDERS followed the pointer while their WINDOWS did not.
+         */
+        const ownerIds = await ownedProfileIds(userId);
+
+        let exportsQuery = filterByOwner(
+            db.collection(COLLECTIONS.EXPORT_WINDOWS), "userId", ownerIds);
 
         // Apply status filter if provided
         if (statusFilter && statusFilter !== "all") { exportsQuery = exportsQuery.where("status", "==", statusFilter);
@@ -574,7 +590,10 @@ export async function getExportWindowDetailsAction(
         const viewerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const viewerRoles: string[] = viewerDoc.data()?.roles ?? [];
 
-        if (data.userId !== session.user.id && !hasExportAdminAccess(viewerRoles)) {
+        //   #904 (EXPORT) — the list now shows windows created on a profile
+        //   this person no longer signs in as, so this has to open them.
+        //   Resolved FORWARD, which costs nothing when the ids already match.
+        if (!await isOwnedBySession(data.userId, session.user.id) && !hasExportAdminAccess(viewerRoles)) {
             return { error: "Unauthorized to view this export", success: false as const, data: null };
         }
 
