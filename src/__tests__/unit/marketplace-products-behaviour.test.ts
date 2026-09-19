@@ -269,6 +269,95 @@ describe('updateProductAction', () => {
         expect(await update(editForm())).toMatchObject({ success: false });
     });
 
+    /*
+     *   THE OWNER'S REPORT, END TO END: "sellers still can't edit products".
+     *
+     *   It had TWO independent causes, and each of them refused this action on
+     *   its own, so fixing either alone would have left her still unable to
+     *   save. Both are driven here through the REAL action rather than through
+     *   the predicate, because "the gate lets her through" and "the save
+     *   succeeds" are different claims and only the second is the report.
+     */
+    it('#885 A SELLER APPROVED IN THE V2 RECORD ALONE CAN SAVE AN EDIT', async () => {
+        /*
+         *   The state the onboarding self-heal produced: approved in
+         *   serviceRegistrations.marketplace, untouched in the legacy field
+         *   every selling door used to read. Every screen called her approved
+         *   and this action answered "Your seller account must be approved
+         *   first".
+         */
+        seedSeller({
+            sellerVerificationStatus: 'pending',
+            serviceRegistrations: { marketplace: { status: 'approved' } },
+        });
+
+        const res = await update(editForm({ title: 'Premium Cocoa' }));
+
+        expect(res).toMatchObject({ success: true });
+    });
+
+    it('#885 AND SO CAN ONE HOLDING marketplace_seller', async () => {
+        //   The other spelling of the selling role, which canonicalRoles does
+        //   not fold onto `seller`.
+        actAs(SELLER, ['marketplace_seller']);
+        seedSeller({ roles: ['marketplace_seller'], sellerVerificationStatus: 'approved' });
+
+        expect(await update(editForm())).toMatchObject({ success: true });
+    });
+
+    it('#890 AND A PRODUCT WHOSE createdAt IS A DATE-ONLY STRING NO LONGER CRASHES', async () => {
+        /*
+         *   The second cause, one line past the gate. This action reads the
+         *   product's own createdAt to preserve it across the edit, and did so
+         *   with a PRESENCE test and a cast — so a value the adapter left as a
+         *   string threw `TypeError: … .toDate is not a function`, which is
+         *   verbatim the production log behind #884.
+         */
+        seedProduct({ createdAt: '2026-01-01' });
+
+        const res = await update(editForm());
+
+        expect(res).toMatchObject({ success: true });
+    });
+
+    it('#890 AND THE OTHER SHAPES A STORED createdAt TAKES ARE SURVIVED', async () => {
+        for (const createdAt of ['2026-01-01T00:00:00.000Z', '2026-01-01', 1_767_225_600_000, undefined, 'rubbish']) {
+            store.seed(PRODUCTS, EXISTING, {
+                id: EXISTING, sellerId: SELLER, title: 'Premium Cocoa',
+                status: 'active', images: [], certifications: [], createdAt,
+            });
+
+            expect({ createdAt, res: (await update(editForm())).success })
+                .toEqual({ createdAt, res: true });
+        }
+    });
+
+    it('AND A SELLER WHO IS GENUINELY NOT APPROVED IS STILL REFUSED — the control', async () => {
+        /*
+         *   The half that would make #885 a security defect rather than a fix.
+         *   Neither record says approved, so neither door may open.
+         */
+        seedSeller({
+            sellerVerificationStatus: 'pending',
+            serviceRegistrations: { marketplace: { status: 'pending' } },
+        });
+
+        expect(await update(editForm())).toMatchObject({
+            success: false, error: 'Your seller account must be approved first',
+        });
+    });
+
+    it('AND A SUSPENDED SELLER IS STILL REFUSED', async () => {
+        //   suspend-seller writes BOTH fields, and its own note records why.
+        //   Widening the gate must not re-open the door that finding closed.
+        seedSeller({
+            sellerVerificationStatus: 'suspended',
+            serviceRegistrations: { marketplace: { status: 'suspended' } },
+        });
+
+        expect(await update(editForm())).toMatchObject({ success: false });
+    });
+
     it('refuses without a product id', async () => {
         const fd = productForm();
         expect(await update(fd)).toMatchObject({ success: false, error: 'Product ID is required' });
