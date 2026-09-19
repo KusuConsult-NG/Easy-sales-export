@@ -15,6 +15,7 @@ import { toMillis } from "@/lib/firestore-serialize";
 import { getBaseUrl } from "@/lib/server-utils";
 import { isAmountAtLeast } from "@/lib/amount";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
+import { safeToISOStringOptional, toDateOrNull } from "@/lib/date-utils";
 
 // ============================================
 // Get User Export Investments Action
@@ -80,10 +81,22 @@ export async function getUserExportInvestmentsAction(
                      windowRow = wData;
                      commodity = wData.title || wData.commodity || commodity;
                      status = wData.status || status; // Reflect parent window status
-                     startDate = wData.startDate?.toDate()?.toISOString() || startDate;
-                     endDate = wData.endDate?.toDate()?.toISOString() || endDate;
-                     if (wData.endDate) {
-                         const delivery = wData.endDate.toDate();
+                     /*
+                      *   #891 `x?.toDate()` GUARDS AGAINST ABSENT, NOT AGAINST
+                      *   A STRING — and it is the idiom that looks safest.
+                      *
+                      *   `a?.b()` is `a == null ? undefined : a.b()`. For a
+                      *   stored ISO string `a` is not null, so `a.toDate` is
+                      *   undefined and calling it throws. The `?.` reads as a
+                      *   guard and defends only the one case that was never the
+                      *   problem.
+                      *
+                      *   Line three had no guard at all.
+                      */
+                     startDate = safeToISOStringOptional(wData.startDate) || startDate;
+                     endDate = safeToISOStringOptional(wData.endDate) || endDate;
+                     const delivery = toDateOrNull(wData.endDate);
+                     if (delivery) {
                          const diffTime = delivery.getTime() - new Date().getTime();
                          daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
                      }
@@ -685,7 +698,8 @@ export async function getMyExportInvestmentsAction() { try {
             return { id: doc.id,
                 ...data,
                 windowTitle,
-                createdAt: data.createdAt?.toDate() || data.bookedAt?.toDate() || new Date() };
+                //   #891 Inside a .map(), so one odd date emptied every investment.
+                createdAt: toDateOrNull(data.createdAt) ?? toDateOrNull(data.bookedAt) ?? new Date() };
         }));
 
         return { error: null, success: true as const, data: investments };
@@ -745,7 +759,8 @@ export async function extendEscrowAction(
         if (!exportDoc.exists) { return { success: false as const, error: "Export window not found"};
         }
 
-        const currentReleaseDate = exportDoc.data()?.escrowReleaseDate?.toDate() || new Date();
+        //   #891 The `?.` never protected this; a stored string threw.
+        const currentReleaseDate = toDateOrNull(exportDoc.data()?.escrowReleaseDate) ?? new Date();
         const newReleaseDate = new Date(currentReleaseDate);
         newReleaseDate.setDate(newReleaseDate.getDate() + days);
 

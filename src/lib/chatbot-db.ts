@@ -13,6 +13,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ChatbotModule } from "@/lib/chatbot-knowledge";
 import { logger } from "@/lib/logger";
+import { toDateOrNull } from "@/lib/date-utils";
 
 // ─── Escalation Detection ─────────────────────────────────────────────────
 const ESCALATION_PHRASES = [
@@ -349,8 +350,10 @@ export async function getAdminChatSessions(
                 userId: d.userId,
                 userEmail: d.userEmail,
                 module: d.module,
-                startedAt: d.startedAt?.toDate() ?? new Date(),
-                lastMessageAt: d.lastMessageAt?.toDate() ?? new Date(),
+                //   #891 `?.toDate()` defends against absent and not against a
+                //   stored string, and the list build below is a .map().
+                startedAt: toDateOrNull(d.startedAt) ?? new Date(),
+                lastMessageAt: toDateOrNull(d.lastMessageAt) ?? new Date(),
                 messageCount: d.messageCount ?? 0,
                 escalated: d.escalated ?? false,
                 resolved: d.resolved ?? false,
@@ -449,8 +452,10 @@ export async function getChatThread(
                 userId: d.userId,
                 userEmail: d.userEmail,
                 module: d.module,
-                startedAt: d.startedAt?.toDate() ?? new Date(),
-                lastMessageAt: d.lastMessageAt?.toDate() ?? new Date(),
+                //   #891 `?.toDate()` defends against absent and not against a
+                //   stored string, and the list build below is a .map().
+                startedAt: toDateOrNull(d.startedAt) ?? new Date(),
+                lastMessageAt: toDateOrNull(d.lastMessageAt) ?? new Date(),
                 messageCount: d.messageCount ?? 0,
                 escalated: d.escalated ?? false,
                 resolved: d.resolved ?? false,

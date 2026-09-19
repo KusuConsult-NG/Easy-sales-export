@@ -311,7 +311,15 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   the closing `*/`. Written that way on purpose — it is a sweep that
         //   must not read an explanation of `x * 100` as an instance of it —
         //   and recorded here rather than contorted to dodge this list.
+        //   #891 — the same mechanism as #706 above, and deliberate for the same
+        //   reason. That file sweeps source for `x?.toDate()` and must not read
+        //   an EXPLANATION of the idiom as an instance of it, so it skips lines
+        //   beginning `//`, `*` and `/*` — which means it holds those three
+        //   literals inside strings, and its own block comments supply the
+        //   closing `*/` the naive regex needs. Recorded here rather than
+        //   contorted to dodge this list.
         'src/__tests__/unit/a-guard-on-the-door-money-leaves-by-only.test.ts',
+        'src/__tests__/unit/a-guard-that-guarded-the-wrong-thing.test.ts',
         'src/__tests__/unit/admin-approval-audit.test.ts',
         'src/__tests__/unit/admin-route-authority.test.ts',
         'src/__tests__/unit/broadcast-access.test.ts',
