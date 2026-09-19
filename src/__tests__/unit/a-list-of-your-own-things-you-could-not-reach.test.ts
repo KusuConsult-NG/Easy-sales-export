@@ -172,13 +172,23 @@ function filtersBySession(actionNames: string[]): boolean {
             if (!knowsTheCaller) continue;
 
             /*
-             *   AND REACHES THE DATABASE WITH IT. Two shapes, both real and both
-             *   correct — a `.where("ownerId", "==", …)` and a collection PATH
-             *   that contains the id, which is how the academy stores per-member
-             *   progress (`user_progress/${userId}/courses`). Checking only for
-             *   `.where(` reported that screen as unscoped, which it is not.
+             *   AND REACHES THE DATABASE WITH IT. THREE shapes, all real and all
+             *   correct — a `.where("ownerId", "==", …)`, a collection PATH that
+             *   contains the id, which is how the academy stores per-member
+             *   progress (`user_progress/${userId}/courses`), and
+             *   `filterByOwner(...)`. Checking only for `.where(` reported the
+             *   academy screen as unscoped, which it is not.
+             *
+             *   #904 ADDED THE THIRD, and it is a widening of the FILTER rather
+             *   than a loss of one. A listing filed under a profile its owner no
+             *   longer signs in as was invisible to them, so these screens now
+             *   filter on every id that resolves to the caller instead of on the
+             *   session id alone — lib/owned-profile-ids.ts. Still scoped to the
+             *   caller, and this sweep must keep saying so: without this line it
+             *   reported My Properties, the very screen #878 is about, as
+             *   showing everybody's land.
              */
-            const filtered = /\.where\(/.test(body);
+            const filtered = /\.where\(|\bfilterByOwner\(/.test(body);
             const scopedPath = /collection\(\s*`[^`]*\$\{\s*userId\s*\}/.test(body);
             if (filtered || scopedPath) return true;
         }

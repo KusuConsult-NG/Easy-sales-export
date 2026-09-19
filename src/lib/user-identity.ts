@@ -172,3 +172,199 @@ export async function resolveActiveUserId(
 export function activeIdFromRow(userId: string, row: UserRow | null | undefined): string {
     return pointerOf(row ?? null) ?? userId;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ *
+ *   AND THE SAME QUESTION ASKED BACKWARDS, WHICH NOTHING ABOVE ANSWERS.
+ *
+ *   Everything up to here walks FORWARD: given an id, which row is the live
+ *   one. That is the right question for a notice, a payment or a login,
+ *   because each of those arrives holding an id and needs the person.
+ *
+ *   A SCREEN LISTING SOMEBODY'S OWN THINGS ASKS THE OPPOSITE. My Properties
+ *   holds the person — the live id, already resolved by session-guard — and
+ *   needs every id their rows could be filed under:
+ *
+ *       land-actions.ts   .where('ownerId', '==', session.user.id)
+ *
+ *   A listing created before the duplicate was settled carries the SUPERSEDED
+ *   id. The seller signs in as the live row (profile-choice ranks a superseded
+ *   row last, #490), the query asks for the live id, and the listing is
+ *   invisible to the person who created it.
+ *
+ *   THAT IS #904's SYMPTOM WITH A DIFFERENT CAUSE, and the owner's words fit
+ *   both exactly: "My properties are not listed under my property tab".
+ *   Migration 040 repaired the rows whose owner was written under the wrong
+ *   KEY NAME. These rows have the right key with a superseded VALUE, and no
+ *   backfill can touch them — see below.
+ *
+ * ── WHY THIS IS RESOLVED AT READ TIME AND NOT BACKFILLED ────────────────────
+ *
+ *   The obvious repair is 040 again: rewrite `ownerId` from the superseded id
+ *   to the live one. It would work, and it would quietly destroy the one
+ *   promise the duplicate-profile tool makes (#724):
+ *
+ *       "IT IS REVERSIBLE ... If the owner picks wrong, clearing one field
+ *        puts the group back exactly as it was."
+ *
+ *   It is reversible because resolving a duplicate MOVES NO DATA — it writes
+ *   one pointer. A backfill that rewrites owner keys is the data moving, and
+ *   after it clearing `_migratedTo` no longer restores anything: the listings
+ *   stay on the row the operator has just decided was the wrong one. So the
+ *   pointer is followed on every read instead, and an operator who picks wrong
+ *   still un-picks it with one field.
+ *
+ * ── THE CONTROL, WHICH IS THE WHOLE DIFFICULTY ──────────────────────────────
+ *
+ *   040 refused to hand back a listing whose two owner keys DISAGREED, because
+ *   that is what a sale looks like afterwards and handing it back would be a
+ *   theft rather than a repair. The same trap is here in a subtler form.
+ *
+ *   `pointerOf` reads `_migratedTo` FIRST and `supabaseAuthId` only when the
+ *   first is absent. A backward search has to find candidates by querying
+ *   either field — so it will also turn up a row carrying `supabaseAuthId:
+ *   <us>` AND `_migratedTo: <somebody else>`. That row does not resolve to us:
+ *   forward, it lands on somebody else. Accepting it would put a stranger's
+ *   listings on our screen and, because the ownership gates share this rule,
+ *   hand us the right to edit and delete them.
+ *
+ *   So every candidate is put back through `pointerOf` and kept only if it
+ *   points at the id we searched for. The query is a way of finding rows to
+ *   ask about; `pointerOf` remains the only thing that decides.
+ *
+ * ── AND IT STOPS WHERE THE FORWARD WALK STOPS ───────────────────────────────
+ *
+ *   Same MAX_MIGRATION_HOPS, deliberately. A row nine hops away does NOT
+ *   forward-resolve to us — the walk gives up at the limit and stays where it
+ *   is — so a backward search that claimed it would disagree with the forward
+ *   one about who somebody is. That disagreement is #449's defect exactly, and
+ *   re-introducing it in the other direction is the one failure this module
+ *   exists to prevent.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * How many profiles one person may be found to have before the search stops.
+ *
+ * Production has people on six rows (#477 lists them), so this is not a cap on
+ * anything real — it is a cap on a pathological id turning one screen into an
+ * unbounded `IN` list. When it fires the result says so rather than quietly
+ * serving a subset.
+ */
+export const MAX_OWNED_PROFILES = 50;
+
+/** One row found pointing at the id that was searched for. */
+export interface PointingRow {
+    id: string;
+    row: UserRow;
+}
+
+export interface OwnedIdentities {
+    /**
+     * The live id FIRST, then every id whose forward walk lands on it.
+     * Deduplicated, and never empty — it always contains the id asked about.
+     */
+    ids: string[];
+    /** True when a limit stopped the search, so `ids` may be incomplete. */
+    truncated: boolean;
+    /** How many levels of supersession were crossed. 0 when there are none. */
+    depth: number;
+}
+
+/**
+ * Every id that belongs to the person `liveId` is signed in as.
+ *
+ * `readRowsPointingAt` is supplied by the caller for the same reason
+ * `resolveActiveUser` takes `readRow`: the RULE is what has to be shared, not
+ * the query. It may over-return — rows matching either pointer field is the
+ * cheapest thing a store can answer — because `pointerOf` filters below.
+ *
+ * Breadth-first, so a chain A → B → live is followed the whole way: B is found
+ * from live, and A is then found from B.
+ */
+export async function resolveOwnedIdentities(
+    liveId: string,
+    readRowsPointingAt: (id: string) => Promise<PointingRow[]>,
+): Promise<OwnedIdentities> {
+    const ids: string[] = [liveId];
+    //   Seeded with the live id, which is what stops the live row being
+    //   re-added when it is returned by its own `supabaseAuthId` — an active
+    //   row carries its OWN id there, as `pointerOf` notes.
+    const seen = new Set<string>([liveId]);
+
+    let frontier: string[] = [liveId];
+    let depth = 0;
+    let truncated = false;
+
+    while (frontier.length > 0 && depth < MAX_MIGRATION_HOPS) {
+        const next: string[] = [];
+
+        for (const target of frontier) {
+            for (const candidate of await readRowsPointingAt(target)) {
+                //   THE CONTROL. The store found this row by EITHER pointer;
+                //   only `pointerOf` decides where it actually resolves, and a
+                //   row whose `_migratedTo` names somebody else resolves to
+                //   them. See the header — this is 040's disagreeing-keys case.
+                if (pointerOf(candidate.row) !== target) continue;
+                if (seen.has(candidate.id)) continue;
+
+                if (ids.length >= MAX_OWNED_PROFILES) {
+                    truncated = true;
+                    continue;
+                }
+
+                seen.add(candidate.id);
+                ids.push(candidate.id);
+                next.push(candidate.id);
+            }
+        }
+
+        frontier = next;
+        depth += 1;
+    }
+
+    //   Rows were still being found when the hop limit ran out. Beyond it the
+    //   forward walk would not bring them here anyway, but the caller is told
+    //   its answer is partial rather than left to assume it is complete.
+    if (frontier.length > 0) truncated = true;
+
+    return { ids, truncated, depth };
+}
+
+/** The shape of a collection reference, narrowed to what the backward search needs. */
+export interface UserQueryCollection {
+    where: (field: string, op: string, value: unknown) => {
+        limit: (n: number) => {
+            get: () => Promise<{ docs: { id: string; data: () => UserRow | undefined }[] }>;
+        };
+    };
+}
+
+/**
+ * The form a reader uses: every id belonging to `liveId`, against `collection`.
+ *
+ * TWO QUERIES PER LEVEL, one per pointer field, because a row links itself by
+ * `_migratedTo` (the duplicate tool and user-migration.ts) or by
+ * `supabaseAuthId` alone (a legacy row linked to an auth account but never
+ * tombstoned). Both are indexed — idx_users_supabase_auth_id from #489, and
+ * idx_users_migrated_to from migration 042. #465 measured what querying either
+ * costs WITHOUT one: `canceling statement due to statement timeout`.
+ *
+ * Bounded per query as well as in total: a limit here is what keeps one
+ * pathological id from reading the user table into memory before the cap above
+ * ever gets to refuse it.
+ */
+export async function resolveOwnedUserIds(
+    liveId: string,
+    collection: UserQueryCollection,
+): Promise<OwnedIdentities> {
+    return resolveOwnedIdentities(liveId, async (id) => {
+        const [superseded, linked] = await Promise.all([
+            collection.where("_migratedTo", "==", id).limit(MAX_OWNED_PROFILES).get(),
+            collection.where("supabaseAuthId", "==", id).limit(MAX_OWNED_PROFILES).get(),
+        ]);
+
+        return [...superseded.docs, ...linked.docs]
+            .map((d) => ({ id: d.id, row: d.data() ?? {} }));
+    });
+}

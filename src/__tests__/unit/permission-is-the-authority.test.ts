@@ -211,9 +211,18 @@ describe('#365 — twelve more, all behaviour-identical', () => {
         // COUNTED, not merely present: notifications.ts has three of these and
         // land-actions two, and a mutant that widened only the first survived
         // a toContain on both files.
+        //
+        // #904 CHANGED THE OWNER HALF OF THE LAND GUARDS AND NOT THE ADMIN
+        // HALF, which is the distinction this test is for. `ownerId !==
+        // session.user.id` refused the owner of a listing filed under a profile
+        // they no longer sign in as — the one person the gate admits — so the
+        // comparison became isOwnedBySession, which resolves the row's owner
+        // forward by the rule every money path already uses (#449). The
+        // isPlatformAdmin half is untouched and still counted here, because
+        // that is what stops `moderator` editing anybody's land.
         const guards = [
             ['src/app/actions/notifications.ts', 'session.user.id !== userId && !isPlatformAdmin(session.user.roles)', 3],
-            ['src/app/actions/land-actions.ts', 'listingData.ownerId !== session.user.id && !isPlatformAdmin(session.user.roles)', 2],
+            ['src/app/actions/land-actions.ts', '!await isOwnedBySession(listingData.ownerId, session.user.id) && !isPlatformAdmin(session.user.roles)', 2],
             ['src/app/actions/wave/_wv_membership.ts', 'session.user.id !== userId && !isPlatformAdmin(session.user.roles)', 1],
         ] as const;
 

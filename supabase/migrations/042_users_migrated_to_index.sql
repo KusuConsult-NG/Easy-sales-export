@@ -1,0 +1,107 @@
+-- ============================================================================
+-- 042 — The supersession pointer, indexed in the direction it is now read
+-- ============================================================================
+--
+-- WHY
+-- ---
+-- #904's second cause: a land listing filed under a profile its owner no
+-- longer signs in as. The seller listed the parcel on one of their rows, an
+-- admin later settled the duplicate with the #724 tool, and the listing keeps
+-- `ownerId: <the id that lost>` while the seller arrives as the id that won.
+-- My Properties asks for the live id and the listing is invisible to the
+-- person who created it — the same empty screen migration 040 answered for a
+-- different cause.
+--
+-- The repair is read-time and not a backfill, because settling a duplicate
+-- MOVES NO DATA and that is the only reason it can be undone by clearing one
+-- field (#724: "clearing one field puts the group back exactly as it was").
+-- lib/owned-profile-ids.ts states that in full.
+--
+-- So the seller's own screens now search BACKWARD along `_migratedTo` — which
+-- ids point at me — where every existing reader walks it forward. Forward is a
+-- keyed lookup by primary key. Backward is a WHERE on a JSONB path, and this
+-- database has already paid for that once.
+--
+-- THE SAME FINDING AS #489, ON THE OTHER POINTER
+-- ----------------------------------------------
+-- 033 added idx_users_supabase_auth_id for exactly this, and quoted what the
+-- missing index cost:
+--
+--     "that field lives inside raw_data with no index, and #465 measured what
+--      querying it costs — `canceling statement due to statement timeout`."
+--
+-- `resolveOwnedUserIds` queries BOTH pointer fields, because a row links
+-- itself by `_migratedTo` (the duplicate tool, user-migration.ts) or by
+-- `supabaseAuthId` alone (linked to an auth account, never tombstoned). After
+-- 033 one of those two was an index scan and the other was not. This is the
+-- other.
+--
+-- ============================================================================
+-- MEASURED, on a real PostgreSQL 16: 50,000 users, 5,000 carrying the pointer
+-- ============================================================================
+--
+--   SELECT id FROM users WHERE raw_data->>'_migratedTo' = $1;
+--
+--   BEFORE  3 runs    9.550 ms   Seq Scan   cost 1573.00
+--                     9.339 ms
+--                     9.322 ms
+--   AFTER   3 runs    0.107 ms   Index Scan cost    8.31
+--                     0.072 ms
+--                     0.073 ms
+--
+-- ~130x, and as 041 said of the other half, the SHAPE matters more than the
+-- ratio: the seq scan's cost grows with the whole user table on every load of
+-- My Properties, while the index scan's is one keyed descent. 9.5 ms at 50,000
+-- rows is not a timeout — it is the same query that produced one at #465's
+-- scale, measured before it gets there.
+--
+-- COST OF KEEPING IT. 432 kB, over a value written once when a duplicate is
+-- settled and then not updated. A btree does not index NULLs, so it covers
+-- only the rows that carry the pointer — 5,000 here, not all 50,000.
+--
+-- A btree on an EXPRESSION, not a GIN over raw_data: this is an equality test
+-- on one extracted text value, which is what a btree serves. `users` carries
+-- idx_users_raw_data (GIN) already, and 036 recorded that it looks like it
+-- should help a `->>` equality and does not.
+--
+-- ============================================================================
+-- HOW TO APPLY  (#469)
+-- ============================================================================
+-- Paste this whole file into the Supabase SQL Editor, or let it arrive in the
+-- consolidated deploy. PLAIN `CREATE INDEX` under a lock_timeout, never
+-- CONCURRENTLY: 027's header records what that cost last time — "it could not
+-- be applied by the SQL Editor ... AND IT SAT UNAPPLIED" — because
+-- CONCURRENTLY cannot run inside a transaction and the Editor always opens
+-- one. The build takes a ShareLock: reads are unaffected, writes to `users`
+-- pause for its duration, and the lock_timeout turns the one real risk —
+-- queueing behind an open transaction — into a clean, re-runnable abort.
+--
+-- Additive only: it creates one index and reads, alters and deletes nothing.
+-- Safe to re-run: IF NOT EXISTS.
+--
+-- AND IT IS NOT REQUIRED FOR CORRECTNESS. The code is correct without it and
+-- merely slower, so deploying ahead of this migration is safe — the reverse of
+-- 040, where the code could do nothing until the rows were repaired.
+-- ============================================================================
+
+SET lock_timeout = '5s';
+
+CREATE INDEX IF NOT EXISTS idx_users_migrated_to
+    ON public.users ((raw_data ->> '_migratedTo'));
+
+RESET lock_timeout;
+
+
+-- ─── VERIFY. Read-only. Run after the index exists. ─────────────────────────
+--
+-- The plan must say Index Scan. If it still says Seq Scan on a table this
+-- size, the planner has stale statistics — run `ANALYZE public.users;`.
+--
+--   EXPLAIN SELECT id FROM public.users
+--    WHERE raw_data->>'_migratedTo' = 'any-live-user-id';
+--
+-- And the pair this pointer search actually issues, which must BOTH be index
+-- scans — the second has been one since 033:
+--
+--   EXPLAIN SELECT id FROM public.users
+--    WHERE raw_data->>'supabaseAuthId' = 'any-live-user-id';

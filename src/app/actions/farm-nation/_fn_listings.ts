@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -432,18 +433,32 @@ async function _getMyPropertiesAction(): Promise<ActionResponse<{ properties: Pr
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
+        /*
+         *   #904 (SECOND CAUSE) — the other door onto the same screen, and it
+         *   had to widen with land-actions.ts or the two would disagree about
+         *   what this person owns. See lib/owned-profile-ids.ts: a listing made
+         *   on a profile that was later superseded keeps that id, and the
+         *   seller now signs in as the row that replaced it.
+         */
+        const ownerIds = await ownedProfileIds(session.user.id);
+
         let snapshot;
         try { 
-            snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
-                .where("ownerId", "==", session.user.id)
+            snapshot = await filterByOwner(
+                db.collection(COLLECTIONS.LAND_LISTINGS), "ownerId", ownerIds,
+            )
                 .orderBy("createdAt", "desc")
                 .get();
         } catch (e: any) { 
             if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                 logger.warn("Missing index for getMyPropertiesAction, falling back to memory sort");
-                snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
-                    .where("ownerId", "==", session.user.id)
-                    .get();
+                //   The fallback widens too. A fallback that answered a
+                //   narrower question than the query it replaces is how a
+                //   screen silently loses rows exactly when it is already
+                //   degraded.
+                snapshot = await filterByOwner(
+                    db.collection(COLLECTIONS.LAND_LISTINGS), "ownerId", ownerIds,
+                ).get();
                 const properties = serializeDocs<Property>(snapshot.docs);
                 properties.sort((a, b) => {
                     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;

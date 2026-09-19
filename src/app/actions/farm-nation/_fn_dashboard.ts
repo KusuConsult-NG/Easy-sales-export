@@ -2,6 +2,7 @@
 
 import { isPurchasable } from "@/lib/land-listing-status";
 import { requireSession } from "@/lib/session-guard";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -17,14 +18,42 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
 
         const userId = session.user.id;
 
+        /*
+         *   #904 (SECOND CAUSE) — THE COUNT AND THE LIST HAVE TO AGREE.
+         *
+         *   This is the stat tile above the list that _fn_listings.ts renders.
+         *   Widening the list and not the count would trade an empty screen for
+         *   a contradictory one — "3 properties" over a list of one — which is
+         *   harder for the owner to report than either half being wrong alone.
+         *
+         *   `buyerId` below is deliberately NOT widened: see the note there.
+         */
+        const ownerIds = await ownedProfileIds(userId);
+
         // Fetch in parallel: user's listings + purchase transactions as buyer
         let listingsSnap, transactionsSnap, userDoc;
         try { 
             [listingsSnap, transactionsSnap, userDoc] = await Promise.all([
-                db.collection(COLLECTIONS.LAND_LISTINGS)
-                    .where('ownerId', '==', userId)
+                filterByOwner(db.collection(COLLECTIONS.LAND_LISTINGS), 'ownerId', ownerIds)
                     .orderBy('createdAt', 'desc')
                     .get(),
+                /*
+                 *   AND `buyerId` IS LEFT ALONE, WHICH IS A BOUNDARY RATHER
+                 *   THAN AN OVERSIGHT.
+                 *
+                 *   The same fault exists on the buyer side: a purchase made
+                 *   before the duplicate was settled carries the superseded id
+                 *   too. It is not what was reported, and the buyer surface is
+                 *   much wider than this one tile — orders, escrow, disputes,
+                 *   receipts. Widening THIS read alone would put a purchase on
+                 *   the dashboard that every other buyer screen still denies,
+                 *   which is the contradiction the note above refuses to create
+                 *   on the seller side.
+                 *
+                 *   So the owner surface is widened completely and the buyer
+                 *   surface not at all, and the two are honest about each
+                 *   other. Doing the buyer side is a piece of work, not a line.
+                 */
                 db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
                     .where('buyerId', '==', userId)
                     .orderBy('createdAt', 'desc')
@@ -37,7 +66,7 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
                 logger.warn("Missing index for Dashboard Stats, falling back to sequential memory sort");
                 // Fetch sequentially without sort
                 const [lSnap, tSnap, uDoc] = await Promise.all([
-                    db.collection(COLLECTIONS.LAND_LISTINGS).where('ownerId', '==', userId).get(),
+                    filterByOwner(db.collection(COLLECTIONS.LAND_LISTINGS), 'ownerId', ownerIds).get(),
                     db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).where('buyerId', '==', userId).limit(10).get(),
                     db.collection(COLLECTIONS.USERS).doc(userId).get(),
                 ]);
