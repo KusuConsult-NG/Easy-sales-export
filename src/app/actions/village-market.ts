@@ -26,6 +26,7 @@ import { notifyVillageMarketCreated } from "@/lib/marketplace-notifications";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { hydrateSellerTrust } from "@/lib/seller-trust";
 import { recordAdminAction } from "@/lib/audit-log";
+import { sellerIsApproved } from "@/lib/seller-approval";
 
 // ---------------------------------------------------------------------------
 // Admin: Create a Village Market Event
@@ -236,8 +237,9 @@ export async function joinVillageMarketEventAction(
         const userId = sessionResult.session.user.id;
 
         // Must be an approved seller
+        //   #885 Either record of the approval — see lib/seller-approval.ts.
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        if (userDoc.data()?.sellerVerificationStatus !== "approved") {
+        if (!sellerIsApproved(userDoc.data())) {
             return { success: false as const, error: "Your seller account must be approved to join Village Market events" , data: null };
         }
 

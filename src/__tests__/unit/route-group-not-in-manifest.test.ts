@@ -277,8 +277,21 @@ describe('member and admin pages sitting under a public prefix', () => {
         expect(orders).toMatch(/orderData\?\.buyerId\s*[!=]==\s*session\.user\.id/);
         expect(orders).toContain('Unauthorized');
         expect(source('src/app/actions/land-actions.ts')).toContain('return { success: false, error: "Unauthorized", data: null };');
-        expect(source('src/app/api/marketplace/create-product/route.ts'))
-            .toContain('userData.sellerVerificationStatus !== "approved"');
+        /*
+         *   AND THE SAME LESSON AGAIN, ON THE LINE BELOW THE ONE THAT TEACHES
+         *   IT. This pinned the literal `userData.sellerVerificationStatus !==
+         *   "approved"` and failed when #885 replaced that clause with the
+         *   shared `sellerIsApproved(userData)` — a change that WIDENS nothing
+         *   and fixes a live refusal, because the route was reading one of the
+         *   two records the platform keeps of a seller's approval.
+         *
+         *   The property is that this route refuses a caller who is not an
+         *   approved seller. Deleting the guard still fails here; restating it
+         *   does not.
+         */
+        const createProduct = source('src/app/api/marketplace/create-product/route.ts');
+        expect(createProduct).toMatch(/sellerIsApproved\(userData\)|sellerVerificationStatus/);
+        expect(createProduct).toContain('You must be an approved seller to list products');
     });
 });
 

@@ -11,6 +11,7 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
 import { checkProductPricing } from "@/lib/product-pricing-guard";
+import { sellerIsApproved } from "@/lib/seller-approval";
 
 /**
  * API Route: Create Product Listing
@@ -29,10 +30,15 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
 
         // Check if user is an approved seller — same check as createProductAction server action
-        // Admin approval sets sellerVerificationStatus: "approved" on the user doc
+        //
+        //   #885 AND THAT SAMENESS IS NOW LITERAL. The comment here said "Admin
+        //   approval sets sellerVerificationStatus: approved on the user doc",
+        //   which is true of the two admin doors and NOT of the onboarding
+        //   self-heal, which writes only serviceRegistrations.marketplace. One
+        //   predicate, so this route and the action cannot drift again.
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!userData || userData.sellerVerificationStatus !== "approved") {
+        if (!sellerIsApproved(userData)) {
             return NextResponse.json(
                 { success: false, message: "You must be an approved seller to list products" },
                 { status: 403 }

@@ -26,6 +26,7 @@ import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicat
 import { missingProfileFields, type MissingProfileField } from "@/lib/profile-completeness";
 import { HardLogoutButton } from "@/components/auth/HardLogoutButton";
 import { firstPasswordProblem } from "@/lib/password-policy";
+import { MFA_ENROL_NOTICE } from "@/lib/mfa-policy";
 
 export default function ProfileClient({ initialProfile = null }: {
     /**
@@ -589,6 +590,39 @@ export default function ProfileClient({ initialProfile = null }: {
                   *   the param is stripped from the URL on the first save and the
                   *   member may still be short a field.
                   */}
+                {/*
+                  *   #887 AND THE SAME SENTENCE FOR THE OTHER GATE THAT SENDS
+                  *   PEOPLE HERE.
+                  *
+                  *   mfa-policy redirects an administrator without a second
+                  *   factor to MFA_SETUP_PATH. That used to be
+                  *   `/profile?setup=mfa` — a parameter this screen does not
+                  *   read — so they landed on the General tab with no
+                  *   explanation, which is #529's finding repeated for a gate
+                  *   added after it. The path now names the security tab and
+                  *   this notice, and this is the half that says why.
+                  *
+                  *   It disappears on its own once MFA is on, because the
+                  *   condition is the fact and not the query parameter.
+                  */}
+                {notice === MFA_ENROL_NOTICE && !mfaEnabled && !mfaStatusUnknown && (
+                    <div className="p-4 rounded-xl border bg-amber-50 border-amber-300 text-amber-900">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-semibold">
+                                    Turn on two-factor authentication to open the admin portal
+                                </p>
+                                <p className="mt-1 text-sm">
+                                    Administrator accounts need a second factor. Use the
+                                    Two-Factor Authentication switch under Security below, then
+                                    go back to the admin portal.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {missing.length > 0 && (
                     <div className="p-4 rounded-xl border bg-amber-50 border-amber-300 text-amber-900">
                         <div className="flex items-start gap-3">

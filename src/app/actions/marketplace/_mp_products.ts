@@ -9,7 +9,6 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
-import { hasRole } from "@/lib/role-utils";
 import { ProductSchema } from "@/lib/validations/marketplace";
 //   #794 One rule for what a product may be listed at, shared with both API
 //   routes — see lib/product-pricing-guard.
@@ -18,6 +17,9 @@ import { priceReductionPatch, retailPriceOf } from "@/lib/price-reduction";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+//   #885 "Is this an approved seller" asked once, for both doors and the three
+//   siblings — see lib/seller-approval.ts.
+import { sellerRefusal } from "@/lib/seller-approval";
 import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
 import { retirementPatch } from "@/lib/record-retirement";
 
@@ -67,12 +69,18 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
         const userDoc = await userRef.get();
         const userData = userDoc.data();
 
-        if (!hasRole(userData?.roles || [], "seller")) { 
-            return { success: false as const, error: "You must have seller role to create products", data: null };
-        }
-
-        if (userData?.sellerVerificationStatus !== "approved") { 
-            return { success: false as const, error: "Your seller account must be approved first", data: null };
+        /*
+         *   #885 ASKED OF THE ACCOUNT, NOT OF ONE FIELD ON IT.
+         *
+         *   This read `sellerVerificationStatus` alone — the field
+         *   _mp_onboarding.ts calls "legacy" in as many words — while the
+         *   onboarding self-heal marks an approved seller in
+         *   `serviceRegistrations.marketplace.status` and nowhere else. So a
+         *   seller every screen calls approved was refused here.
+         */
+        const refusal = sellerRefusal(userData, { verb: "create" });
+        if (refusal) {
+            return { success: false as const, error: refusal, data: null };
         }
 
         // Extract and Prepare Data for Validation
@@ -317,12 +325,16 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
         const userDoc = await userRef.get();
         const userData = userDoc.data();
 
-        if (!hasRole(userData?.roles || [], "seller")) { 
-            return { success: false as const, error: "You must have seller role to update products", data: null };
-        }
-
-        if (userData?.sellerVerificationStatus !== "approved") { 
-            return { success: false as const, error: "Your seller account must be approved first", data: null };
+        /*
+         *   #885 THE DOOR THE OWNER REPORTED: "sellers still can't edit
+         *   products". The same two clauses as the create path above, and this
+         *   is the one a seller actually meets — the product list and the edit
+         *   form have no gate at all, so she reaches a filled-in form and is
+         *   refused only when she presses Save.
+         */
+        const refusal = sellerRefusal(userData, { verb: "update" });
+        if (refusal) {
+            return { success: false as const, error: refusal, data: null };
         }
 
         // Fetch product and verify ownership

@@ -25,9 +25,9 @@
  *        /api/upload was already fixed for exactly this (its own comment names
  *        the "doc.pdf/../x" case) by taking the extension from the DETECTED
  *        type. This action is the copy that was missed. The extension now comes
- *        from ALLOWED_TYPES[mimeType], which the auth/type gate has already
- *        validated — so it is one of jpg/png/pdf and cannot contain a
- *        separator.
+ *        from ALLOWED_TYPES keyed on the file's DETECTED content type — #222
+ *        moved that gate off the caller's claimed `mimeType` — so it is one of
+ *        jpg/png/pdf and cannot contain a separator.
  *
  *        writeToLocalDisk is hardened too: its docstring asked callers to
  *        sanitise every segment, one didn't, and a comment is not a control.
@@ -51,6 +51,25 @@ jest.mock('@/lib/storage-backend', () => ({
     writeToLocalDisk: (id: string, buf: Buffer) => writeToLocalDisk(id, buf),
 }));
 
+/*
+ *   THE DETECTOR IS MOCKED, for the reason its sibling suite already records:
+ *   `file-type` is pure ESM and this jest setup is CJS, so the real
+ *   detectFileType throws and the action fails closed. Every assertion below
+ *   would then pass for the wrong reason — nothing is written, so nothing
+ *   traverses — while every real upload broke.
+ *
+ *   #222 made this action validate CONTENT rather than the client's claimed
+ *   `mimeType`, and the stored extension now comes from the DETECTED type. That
+ *   is a strictly better answer to #244 than the one this file was written
+ *   against: the extension no longer depends on anything the caller says. The
+ *   fixture therefore reports the content the test intends the file to BE, and
+ *   the assertions are unchanged.
+ */
+const detectFileType = jest.fn(async () => 'image/png') as jest.Mock<any>;
+jest.mock('@/lib/storage-admin', () => ({
+    detectFileType: (...a: any[]) => detectFileType(...a),
+}));
+
 const CALLER = 'user-1';
 
 const actions = async () => await import('@/app/actions/upload');
@@ -66,6 +85,9 @@ function form(fileName: string, mimeType = 'image/png'): FormData {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    //   Default: the bytes really are a PNG. Cases that mean something else say
+    //   so, below.
+    detectFileType.mockResolvedValue('image/png');
     mockRequireSession.mockResolvedValue({
         session: { user: { id: CALLER, email: 'a@e.com', roles: ['general_user'] } },
         error: null,
@@ -91,6 +113,9 @@ describe('#244 — the stored id cannot be steered by the filename', () => {
         ['image/png', 'png'],
         ['application/pdf', 'pdf'],
     ])('%s stores the %s extension regardless of the filename', async (mime, expectedExt) => {
+        //   The CONTENT is what decides the extension now, so the fixture
+        //   reports the content this case is about.
+        detectFileType.mockResolvedValue(mime);
         const { uploadDocumentAction } = await actions();
         await uploadDocumentAction(form('whatever.zip.exe', mime)) as any;
 
@@ -118,6 +143,10 @@ describe('#244 — the stored id cannot be steered by the filename', () => {
     });
 
     it('still refuses a disallowed mime type before writing anything', async () => {
+        //   #222 moved this question from the CLAIM to the CONTENT, so the
+        //   fixture says the bytes really are an SVG. Claiming "image/png" over
+        //   SVG content is now refused too — that is its sibling suite's case.
+        detectFileType.mockResolvedValue('image/svg+xml');
         const { uploadDocumentAction } = await actions();
         const res = await uploadDocumentAction(form('a.svg', 'image/svg+xml')) as any;
         expect(res.success).toBe(false);

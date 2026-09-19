@@ -68,13 +68,76 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
                 if (verData.status === "approved") {
                     status = "approved";
                     accountType = verData.accountType || "seller";
-                    // Proactively backfill for performance in future logins
-                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+                    /*
+                     *   #885 THIS HEAL WROTE HALF THE RECORD, AND THE HALF IT
+                     *   LEFT OUT IS THE ONLY HALF THE SELLING DOORS READ.
+                     *
+                     *   THE OWNER: "sellers still can't edit products".
+                     *
+                     *   It backfilled `serviceRegistrations.marketplace.status`
+                     *   and nothing else — not `sellerVerificationStatus`, not
+                     *   the `seller` role. Both admin approval doors
+                     *   (api/.../approve-seller and admin/_marketplace) write
+                     *   all three together; this door wrote one. And the three
+                     *   fallbacks below this block copy legacy -> V2 and never
+                     *   V2 -> legacy, so once a seller was healed here the two
+                     *   records disagreed permanently.
+                     *
+                     *   WHAT THAT DID TO HER. Every screen said approved —
+                     *   onboarding, the dashboard and the sidebar all read what
+                     *   this function returns. Her products listed, the edit
+                     *   form opened and prefilled, and Save answered "Your
+                     *   seller account must be approved first". Nothing on any
+                     *   screen agreed with the refusal and there was no action
+                     *   she could take.
+                     *
+                     *   The gates are widened to accept either record (#885, see
+                     *   lib/seller-approval.ts) AND the record is completed
+                     *   here, because a gate that tolerates a half-written row
+                     *   leaves the row half-written for the next reader.
+                     *
+                     *   SAFE TO REPEAT AND SAFE TO RUN ON A GOOD ROW: every
+                     *   write is idempotent — a set to a constant and an
+                     *   arrayUnion — and nothing is removed. It only ever
+                     *   promotes to the state the admin already approved.
+                     *
+                     *   #844's rule on accountType is honoured: "both" gets both
+                     *   roles, a buyer-only record gets the buyer role, so this
+                     *   cannot grant selling rights to somebody approved to buy.
+                     */
+                    const heal: Record<string, unknown> = {
                         "serviceRegistrations.marketplace.status": "approved",
                         "serviceRegistrations.marketplace.accountType": accountType,
                         "serviceRegistrations.marketplace.syncedAt": new Date().toISOString(),
                         _version: FieldValue.increment(1)
-                    });
+                    };
+
+                    const sells = accountType === "seller" || accountType === "both";
+                    const buys = accountType === "buyer" || accountType === "both";
+
+                    if (sells) {
+                        heal.sellerVerificationStatus = "approved";
+                        heal.roles = FieldValue.arrayUnion("seller");
+                    } else if (buys) {
+                        heal.roles = FieldValue.arrayUnion("marketplace_buyer");
+                    }
+
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(heal);
+
+                    /*
+                     *   #692's lesson, which this heal needed and did not have:
+                     *   session-guard answers from CacheKeys.userProfile for up
+                     *   to five minutes. Granting a role and then answering from
+                     *   the copy taken before it was granted is how a heal
+                     *   appears not to have run — to the very person who asked
+                     *   the platform to look again.
+                     */
+                    try {
+                        const { invalidateServiceCache } = await import("@/lib/cache-invalidation");
+                        await invalidateServiceCache(session.user.id, "marketplace");
+                    } catch (cacheErr) {
+                        logger.warn("[checkMarketplaceStatus] cache invalidation after heal failed (non-fatal):", cacheErr as Error);
+                    }
                 } else if (verData.status) {
                     status = verData.status;
                     accountType = verData.accountType || accountType;

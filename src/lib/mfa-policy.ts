@@ -76,11 +76,60 @@
  *   override is ignored and the built-in date stands.
  */
 
-import { isAdmin } from "@/lib/role-utils";
+/*
+ *   #887 FROM admin-permissions, NOT role-utils — and the comment on
+ *   mfaEnrolmentRequired below has always said so.
+ *
+ *   It said "`isAdmin`, NOT `isPlatformAdmin` […] all ten admin roles, or the
+ *   rule protects the accounts that need it least", and then imported the
+ *   EIGHT-role `isAdmin` from role-utils, which lists the module admins and
+ *   omits `moderator` and `support`. Two functions share the name; the file
+ *   argued for one and called the other.
+ *
+ *   MEASURED across all ten roles: admin-permissions.isAdmin is true for every
+ *   one, role-utils.isAdmin is false for `moderator` and `support`. So the two
+ *   roles #353 had to rescue from a hand-written admin list were, once again,
+ *   the two a rule about administrators did not cover — and this time the rule
+ *   is a SECURITY control, exempting them from the second factor rather than
+ *   locking them out of a page.
+ */
+import { isAdmin } from "@/lib/admin-permissions";
 import type { UserRole } from "@/lib/types/roles";
 
-/** Where an administrator goes to enrol. Behind a session, never behind the admin gate. */
-export const MFA_SETUP_PATH = "/profile?setup=mfa";
+/**
+ * Where an administrator goes to enrol. Behind a session, never behind the
+ * admin gate.
+ *
+ *   #887 THIS POINTED AT A PARAMETER NOTHING READS, AND THE SAME MISTAKE IS
+ *        ALREADY WRITTEN UP TWENTY LINES INTO ProfileClient.
+ *
+ *        It was `/profile?setup=mfa`. The profile screen reads exactly two
+ *        query parameters — `tab` (#359) and `notice` (#529) — and `setup` is
+ *        neither. So the redirect landed an administrator on the GENERAL tab of
+ *        an ordinary-looking profile page, with no statement of why they were
+ *        sent there, no mention of MFA, and the enrolment toggle one unlabelled
+ *        tab away.
+ *
+ *        #529 is that exact finding, on this exact screen, for the hub guard:
+ *        "the member arrived at an ordinary-looking profile screen with no
+ *        statement of why their dashboard had refused them or what to do about
+ *        it." The lesson was learned for one gate and this gate, added later,
+ *        repeated it.
+ *
+ *        IT HAS A DATE ON IT. Enforcement begins at MFA_ADMIN_ENFORCE_FROM and
+ *        this file's own header records that NOT ONE ADMINISTRATOR ACCOUNT HAS
+ *        MFA TODAY — so on that morning every administrator is bounced out of
+ *        /admin onto a page that does not explain itself. Bounced, retried,
+ *        bounced again is indistinguishable from "the admin login is broken",
+ *        which is a sentence this platform's owner has had to write too often.
+ *
+ *        Now it names the tab that carries the toggle and a notice the screen
+ *        renders.
+ */
+export const MFA_SETUP_PATH = "/profile?tab=security&notice=enrol-mfa";
+
+/** The `notice` value MFA_SETUP_PATH carries, so the screen and the gate agree. */
+export const MFA_ENROL_NOTICE = "enrol-mfa";
 
 /**
  * Must an account with these roles have a second factor?

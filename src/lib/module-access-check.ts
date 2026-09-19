@@ -48,7 +48,11 @@ const APP_TO_ROLES: Partial<Record<AppIdentifier, string[]>> = {
     export:       ["export_participant"],
     cooperatives: ["cooperative_member"],
     "farm-nation": ["farmer", "land_owner", "investor"],
-    marketplace:  ["buyer", "seller", "marketplace_buyer"],
+    //   #885 `marketplace_seller` was the one missing from this pair. The list
+    //   carried `marketplace_buyer` beside `buyer` and then named `seller`
+    //   alone — and Layer 2.5 below compares with a raw `.includes()`, so no
+    //   canonicalisation could cover for it. Half a pair, hand-written.
+    marketplace:  ["buyer", "seller", "marketplace_buyer", "marketplace_seller"],
 };
 
 /**

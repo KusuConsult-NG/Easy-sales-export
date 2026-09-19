@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { hasSellerRole } from "@/lib/seller-approval";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
@@ -38,7 +39,11 @@ async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
 
-        if (!hasRole(userData?.roles || [], "seller")) { return { success: false as const, error: "Not authorized as seller", data: null };
+        //   #885 Either spelling of the selling role. `marketplace_seller` is a
+        //   first-class UserRole that canonicalRoles does not fold onto
+        //   `seller`, so `hasRole(roles, "seller")` was false for its holder and
+        //   this screen answered "Not authorized as seller" to a seller.
+        if (!hasSellerRole(userData?.roles || [])) { return { success: false as const, error: "Not authorized as seller", data: null };
         }
 
         let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
