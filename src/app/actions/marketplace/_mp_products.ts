@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 // import { uploadFileToStorage } from "@/lib/storage-admin";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isOwnedBySession } from "@/lib/owned-profile-ids";
 import type { Product } from "@/lib/types/marketplace";
 import { ProductSchema } from "@/lib/validations/marketplace";
 //   #794 One rule for what a product may be listed at, shared with both API
@@ -346,7 +347,11 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
         }
 
         const productData = productDoc.data();
-        if (productData?.sellerId !== userId) {
+        //   #904 (SELLER SIDE, THE REST) — My Products now lists rows filed
+        //   under a profile this person no longer signs in as, so this has to
+        //   admit them. A screen that shows a seller their product and then
+        //   refuses to change it is #884's complaint in a politer form.
+        if (!await isOwnedBySession(productData?.sellerId, userId)) {
             return { success: false as const, error: "You are not authorized to edit this product", data: null };
         }
 
@@ -613,7 +618,11 @@ async function _deleteProductAction(productId: string): Promise<ActionResponse<{
 
         const productData = productDoc.data();
         // Ensure ownership
-        if (productData?.sellerId !== userId) { 
+        //   #904 (SELLER SIDE, THE REST) — My Products now lists rows filed
+        //   under a profile this person no longer signs in as, so this has to
+        //   admit them. A screen that shows a seller their product and then
+        //   refuses to change it is #884's complaint in a politer form.
+        if (!await isOwnedBySession(productData?.sellerId, userId)) { 
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const roles = userDoc.data()?.roles || [];
             const isAdmin = roles.some((r: string) => r === "admin" || r === "super_admin" || r === "marketplace_admin");

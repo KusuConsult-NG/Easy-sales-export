@@ -10,6 +10,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { waveCommission, sumWaveCommissions } from "@/lib/wave-commission";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
 import { getFeatureToggle } from "@/app/actions/feature-toggles";
 import { compensateJsonbDebit } from "@/lib/wallet-ledger";
@@ -98,8 +99,15 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
         // totals.
         const ESCROW_SCAN_LIMIT = 2000;
 
-        const snapshot = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-            .where("sellerId", "==", userId)
+        //   #904 (SELLER SIDE, THE REST) — earnings are a TOTAL, and a total
+        //   that silently omits what a superseded profile earned is a wrong
+        //   number rather than a short list. The cap above already says a
+        //   silent cap would be worse than no cap; this is the same argument.
+        const sellerIdsOwned = await ownedProfileIds(userId);
+
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS), "sellerId", sellerIdsOwned,
+        )
             .limit(ESCROW_SCAN_LIMIT + 1)
             .get();
 

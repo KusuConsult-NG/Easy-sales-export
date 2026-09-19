@@ -62,8 +62,15 @@ describe('the commission is summed over escrow rows, not orders', () => {
     it('queries the escrow rows for this seller', () => {
         const src = code(EARNINGS);
 
+        //   #904 — still the escrow rows, still scoped to this seller, and now
+        //   to every profile they hold: earnings are a TOTAL, and one that
+        //   silently omitted what a superseded profile earned would be a wrong
+        //   number rather than a short list. What this test guards — that the
+        //   basis is escrow and not orders, and that it is scoped at all — is
+        //   unchanged; the assertion above still fails if either is dropped.
         expect(src).toContain('COLLECTIONS.ESCROW_TRANSACTIONS');
-        expect(src).toContain('.where("sellerId", "==", userId)');
+        expect(src).toContain('filterByOwner(');
+        expect(src).toContain('"sellerId", sellerIdsOwned');
     });
 
     it('takes the seller\'s own gross, not the order total', () => {

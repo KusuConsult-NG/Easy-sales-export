@@ -197,6 +197,27 @@ export async function liveProfileId(storedId: unknown): Promise<string> {
 }
 
 /**
+ * Narrow `query` to rows whose ARRAY field contains one of `ids`.
+ *
+ * The sibling of `filterByOwner`, for the other shape a seller is stored in. A
+ * marketplace order names its sellers in `sellerIds`, an array, because one
+ * order can span several — so the seller's own order list and the numbers above
+ * it ask `array-contains` rather than `==`.
+ *
+ * ONE ID STAYS `array-contains`, for the same reason the scalar helper keeps
+ * `==`: for the overwhelming majority of accounts this emits the identical
+ * query to the one that has always run, and a change that cannot alter the
+ * common case cannot regress it.
+ */
+export function filterByOwnerInArray<Q extends Filterable>(
+    query: Q, field: string, ids: string[],
+): Q {
+    return (ids.length === 1
+        ? query.where(field, "array-contains", ids[0])
+        : query.where(field, "array-contains-any", ids)) as Q;
+}
+
+/**
  * Is the caller either party to this row?
  *
  * The escrow and dispute gates are two-sided — "buyer or seller, and nobody

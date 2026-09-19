@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
@@ -23,8 +24,14 @@ export async function GET(request: NextRequest) {
         const userId = session.user.id;
 
         // Get seller's products (Admin SDK)
-        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("sellerId", "==", userId)
+        //   #904 (SELLER SIDE, THE REST) — the other door onto My Products.
+        //   It had to widen with _mp_seller_dashboard or the same list would
+        //   answer two ways depending on the route in.
+        const sellerIdsOwned = await ownedProfileIds(userId);
+
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.PRODUCTS), "sellerId", sellerIdsOwned,
+        )
             .orderBy("createdAt", "desc")
             .get();
 
