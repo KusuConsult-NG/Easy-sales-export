@@ -59,3 +59,71 @@ export async function findCooperativeMemberRow(
 
     return null;
 }
+
+/**
+ * WHICH ROW A REGISTRATION PAYMENT BELONGS TO.
+ *
+ *   ONE PERSON, TWO MEMBERSHIP ROWS: ONE HELD THE IDENTITY, THE OTHER HELD
+ *   THE MONEY, AND THE ADMIN SCREEN SHOWED THE EMPTY ONE.
+ *
+ *   api/cooperatives/register writes the member's whole profile — name,
+ *   phone, date of birth, occupation, LGA, address, next of kin,
+ *   registrationFee — to a document under an AUTO-GENERATED id, and hands
+ *   that id to Paystack as `metadata.membershipId`.
+ *
+ *   The webhook reads it back and fulfils onto the right row:
+ *
+ *       if (membershipId) memberRef = ...doc(membershipId)   (service.ts)
+ *
+ *   api/cooperative/verify-payment — the CLIENT half of the same payment,
+ *   racing the webhook by design — did not. It opened with
+ *
+ *       const membershipRef = db.collection(COOPERATIVE_MEMBERS).doc(userId);
+ *
+ *   and fulfilled there with set(merge:true), which CREATES the document
+ *   when it is absent. So the callback page manufactured a second membership
+ *   row carrying userId, paymentStatus, paymentReference and membershipTier
+ *   and nothing else — no name, no phone, no date of birth, no occupation,
+ *   no LGA, no ward, no address, and no registrationFee, which is why such a
+ *   member reads "Fee: ₦0" beside a completed payment.
+ *
+ *   Worse on the LOST claim: when the webhook won and fulfilled the correct
+ *   row, syncAlreadyProcessed still wrote doc(userId) — so the blank
+ *   duplicate appeared even on the path where nothing needed creating.
+ *
+ *   The member's details are not lost. They are on the other row, which
+ *   stays "pending" and unpaid for ever, while the row an admin opens says
+ *   active, paid, and blank.
+ *
+ * PRECEDENCE, cheapest-certain first:
+ *
+ *   1. `metadata.membershipId` — the row this payment was initiated for. Read
+ *      before use: a stale id must not conjure a row, and one carrying
+ *      somebody else's `userId` is refused outright rather than written to.
+ *      The metadata comes back from Paystack's own API, so it is ours; the
+ *      ownership check is there so that stays true if it ever is not.
+ *   2. The two-key walk above — doc id, then the `userId` field.
+ *   3. doc(userId), to be created. Legacy references carry no membershipId
+ *      (the webhook's own branch makes the same allowance) and a member who
+ *      has no row at all still needs one.
+ */
+export async function membershipRefForPayment(
+    membersCollection: any,
+    userId: string,
+    membershipId?: string | null,
+): Promise<{ ref: any; id: string }> {
+    if (membershipId && membershipId !== userId) {
+        const byMetadata = await membersCollection.doc(membershipId).get();
+        if (byMetadata.exists) {
+            const owner = byMetadata.data()?.userId;
+            if (!owner || owner === userId) {
+                return { ref: membersCollection.doc(membershipId), id: membershipId };
+            }
+        }
+    }
+
+    const row = await findCooperativeMemberRow(membersCollection, userId);
+    if (row) return { ref: membersCollection.doc(row.id), id: row.id };
+
+    return { ref: membersCollection.doc(userId), id: userId };
+}
