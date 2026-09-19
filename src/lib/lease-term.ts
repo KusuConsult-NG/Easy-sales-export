@@ -71,6 +71,55 @@ export function termInMonths(value: unknown, unit: unknown): number | null {
 }
 
 /**
+ * The term a stored listing carries, whichever vocabulary wrote it.
+ *
+ *   #897 TWO CREATORS, TWO FIELD NAMES, ONE COLLECTION — AND ONE READER.
+ *
+ *   Found while applying #895 and worth its own note, because the rule it
+ *   breaks is the one this audit meets most often:
+ *
+ *       land-listings.ts   submitLandListingAction writes
+ *                          `durationValue` + `durationUnit`. This is the door
+ *                          the listing FORM uses.
+ *       _fn_listings.ts    listPropertyAction writes `leaseDuration`, a number
+ *                          the type declares as MONTHS — and nothing else.
+ *
+ *   Both write LAND_LISTINGS. And the property page reads `durationValue`
+ *   only, so a lease created through the second door shows NO TERM AT ALL —
+ *   #861's finding verbatim, on rows written after it was fixed: "A listing
+ *   offered for rent with no term tells a buyer nothing about what she is being
+ *   offered."
+ *
+ *   ONE READER FOR BOTH SHAPES, the same answer lib/land-location gave when
+ *   #689 found four spellings of a listing's location on this same collection.
+ *   Rows already written either way are read correctly and nothing is
+ *   rewritten.
+ */
+export function readLeaseTerm(
+    row: Record<string, any> | null | undefined,
+): { value: number; unit: DurationUnit } | null {
+    if (!row) return null;
+
+    const explicit = termInMonths(row.durationValue, row.durationUnit);
+    if (explicit !== null) {
+        return {
+            value: Number(row.durationValue),
+            //   `years` is the stored default — see termInMonths.
+            unit: row.durationUnit === "months" ? "months" : "years",
+        };
+    }
+
+    //   The second vocabulary. Declared in types/farm-nation-actions as
+    //   "months, if type is lease", so it is read as months and not guessed.
+    const legacy = termInMonths(row.leaseDuration, "months");
+    if (legacy !== null) {
+        return { value: Number(row.leaseDuration), unit: "months" };
+    }
+
+    return null;
+}
+
+/**
  * Why this term may not be listed, or null when it may.
  *
  * Returns a SENTENCE, because both callers show it to the person typing: the

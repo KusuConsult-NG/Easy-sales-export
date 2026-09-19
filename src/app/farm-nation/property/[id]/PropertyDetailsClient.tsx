@@ -34,6 +34,7 @@ import { imageSrcOrNull, renderableImages } from "@/lib/first-image";
 //   #791 A broken thumbnail must not paint its alt text over the
 //   badges in the same box — see components/ui/ThumbnailImage.
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+import { readLeaseTerm } from "@/lib/lease-term";
 
 export default function PropertyDetailsClient({ initial = null }: {
     /**  #553 The property the server already fetched. A refusal passes null, so
@@ -86,6 +87,10 @@ export default function PropertyDetailsClient({ initial = null }: {
     const offerPrice = effectiveMode === "rent"
         ? (Number(property?.rentPrice) > 0 ? property?.rentPrice : property?.price)
         : property?.price;
+
+    //   #897 The term, whichever of the two creators wrote this row — see
+    //   lib/lease-term's readLeaseTerm.
+    const leaseTerm = readLeaseTerm(property as Record<string, any> | null);
     const { showToast } = useToast();
 
     /*
@@ -579,11 +584,19 @@ export default function PropertyDetailsClient({ initial = null }: {
                                    *   out which. The form collects it now; a stored field
                                    *   nothing displays is the other half of the same defect.
                                    */}
-                                 {effectiveMode === "rent" && typeof property.durationValue === "number"
-                                     && property.durationValue > 0 && (
+                                 {/*
+                                   *   #897 READ THROUGH THE SHARED READER, because
+                                   *   two creators wrote the term two ways onto this
+                                   *   one collection. listPropertyAction stores it as
+                                   *   `leaseDuration` in months; this read
+                                   *   `durationValue` alone, so a lease created
+                                   *   through that door showed no term at all — the
+                                   *   defect the note above says was fixed.
+                                   */}
+                                 {effectiveMode === "rent" && leaseTerm && (
                                      <p className="text-sm font-semibold text-slate-700">
-                                         Term: {property.durationValue}{" "}
-                                         {property.durationUnit ?? "years"}
+                                         Term: {leaseTerm.value}{" "}
+                                         {leaseTerm.unit}
                                      </p>
                                  )}
                              </div>

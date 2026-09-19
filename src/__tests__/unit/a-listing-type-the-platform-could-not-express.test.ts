@@ -213,14 +213,29 @@ describe('#861 — and a rent or lease carries its term, end to end', () => {
          */
         const src = code(DETAILS);
 
-        expect(src).toContain('property.durationValue');
+        /*
+         *   #897 SPELLED AS A PROPERTY. This pinned the literal
+         *   `property.durationValue`, and went red when the term started being
+         *   read through lib/lease-term's readLeaseTerm — a change that shows
+         *   MORE listings their term, not fewer: a second creator writes it as
+         *   `leaseDuration`, and rows from that door had been showing none.
+         *
+         *   What this test is for is that the screen SHOWS the stored term.
+         *   Deleting the block still fails here; reading it from one place
+         *   instead of two does not.
+         */
+        expect(src).toMatch(/readLeaseTerm\(|property\.durationValue/);
         expect(src).toContain('Term:');
     });
 
     it('AND A LISTING WITHOUT A TERM SHOWS NOTHING, not "Term: undefined"', () => {
         const src = code(DETAILS);
-        const at = src.indexOf('property.durationValue');
+        const at = src.indexOf('Term:');
 
-        expect(src.slice(at - 120, at + 200)).toContain('typeof property.durationValue === "number"');
+        //   #897 The guard is now the reader's own null return — readLeaseTerm
+        //   answers null for an absent, zero or unreadable term (asserted
+        //   directly in a-term-stored-where-nothing-read-it) — so the render is
+        //   gated on that rather than on a typeof beside it.
+        expect(src.slice(at - 200, at + 120)).toMatch(/leaseTerm &&|typeof property\.durationValue === "number"/);
     });
 });

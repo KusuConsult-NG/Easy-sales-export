@@ -13,6 +13,7 @@ import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Property, PropertyListingInput } from "@/lib/types/farm-nation-actions";
+import { leaseTermRefusal } from "@/lib/lease-term";
 
 /**
  * #432 — the retirement of _listPropertyAction. See the note on its write.
@@ -275,6 +276,30 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
 
         const validatedData = validation.data;
 
+        /*
+         *   #897 AND THE SAME MINIMUM TERM AS THE OTHER CREATOR — #895.
+         *
+         *   THE OWNER: "lease can be within a range from 1year and above."
+         *
+         *   #895 put that rule on land-listings.ts, which is the door the
+         *   listing FORM uses, and stopped there. This is the other door onto
+         *   the same collection, so a lease of one month was still creatable —
+         *   a rule applied to some of the places it names, which is this
+         *   audit's most repeated finding and this is the second time in two
+         *   days I have committed it.
+         *
+         *   `leaseDuration` is declared as MONTHS by its own type, so it is
+         *   passed as months rather than through the stored default.
+         */
+        const leaseRefusal = leaseTermRefusal({
+            offersLease: validatedData.type === "lease",
+            durationValue: validatedData.leaseDuration,
+            durationUnit: "months",
+        });
+        if (leaseRefusal) {
+            return { success: false as const, error: leaseRefusal, data: null };
+        }
+
         // Check State/LGA Validity after basic schema check
         if (!isValidState(validatedData.state)) { 
             return { success: false as const, data: null, error: `Invalid State: "${validatedData.state }"`, meta: null };
@@ -317,7 +342,25 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
             type: validatedData.type,
             category: validatedData.category,
             features: validatedData.features,
+            /*
+             *   #897 THE TERM, IN THE VOCABULARY THE SCREENS ACTUALLY READ.
+             *
+             *   This door wrote `leaseDuration` — months — and nothing else.
+             *   The other creator (land-listings.ts, which the listing FORM
+             *   uses) writes `durationValue` + `durationUnit`, and the property
+             *   page reads THOSE. So a lease created here showed the buyer no
+             *   term at all: #861's finding verbatim, on rows written after it
+             *   was fixed.
+             *
+             *   `leaseDuration` is KEPT and written exactly as before — rows
+             *   already holding it are unaffected, and nothing that reads it
+             *   loses anything. The canonical pair is written BESIDE it, so the
+             *   screens see the term without a migration.
+             */
             leaseDuration: validatedData.leaseDuration || null,
+            ...(typeof validatedData.leaseDuration === "number" && validatedData.leaseDuration > 0
+                ? { durationValue: validatedData.leaseDuration, durationUnit: "months" as const }
+                : {}),
             /**
              *   #432 — THIS CREATED A PURCHASABLE LISTING WITH NO EVIDENCE.
              *
