@@ -51,7 +51,7 @@ import {
 import {
     checkRepair,
     membershipRowFor,
-    COOPERATIVE_TIERS,
+    MEMBERSHIP_TIERS,
 } from '@/lib/cooperative-membership-repair';
 
 const REASON = 'Paid the registration fee in March; the payment reference is on their profile.';
@@ -148,7 +148,7 @@ describe('#726 — a known tier is copied, not offered as a choice', () => {
             reason: REASON,
         })).toMatchObject({ ok: false });
 
-        for (const t of COOPERATIVE_TIERS) {
+        for (const t of MEMBERSHIP_TIERS) {
             expect(checkRepair({
                 known: { knownTier: null, needsATier: true },
                 chosenTier: t,

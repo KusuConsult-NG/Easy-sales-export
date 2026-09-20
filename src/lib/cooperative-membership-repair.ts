@@ -44,6 +44,8 @@
  *   they are: a row the platform owes somebody, with every value already known.
  */
 
+import { COOPERATIVE_TIERS as TIER_SYSTEM } from "@/lib/cooperative-tiers";
+
 /** What the platform already knows about a member with no membership row. */
 export interface MissingMembershipCase {
     userId: string;
@@ -62,7 +64,68 @@ export interface MissingMembershipCase {
 }
 
 /** Tiers the cooperative actually offers. A row may not carry anything else. */
-export const COOPERATIVE_TIERS: readonly string[] = ["tier1", "tier2"];
+/**
+ * The values `membershipTier` may hold — derived, never spelled again here.
+ *
+ *   #803 THIS MODULE MINTED A SECOND `COOPERATIVE_TIERS`, AND THE TWO NAMES
+ *        DISAGREED ABOUT HOW MANY TIERS THE COOPERATIVE HAS.
+ *
+ *        lib/cooperative-tiers.ts    { Member: { minContribution: 5000,
+ *                                                maxLoanMultiplier: 0.5, … } }
+ *        here, until now            ["tier1", "tier2"]
+ *
+ *        The first is the live system: `calculateUserTier` returns "Member" at
+ *        every savings level, the membership schema is `z.enum(["Member"])`,
+ *        and every writer of the field defaults to `|| "Member"` — provisioning,
+ *        the registration action, the dashboard, the payment router. firestore.ts
+ *        says so in the field's own comment: "Unified single tier (legacy:
+ *        'basic' | 'premium' migrated)".
+ *
+ *        The second is the retired two-tier vocabulary, kept alive only by this
+ *        constant, and it fed the repair screen's radio buttons. Eighteen
+ *        members sat under "Need a tier chosen" being asked to pick between
+ *        tier1 and tier2 — neither of which this cooperative offers — while the
+ *        two rows that DID carry a recorded tier showed what the real
+ *        vocabulary looks like: "Member" and "member".
+ *
+ *        Whichever radio an admin picked, `membershipRowFor` wrote it straight
+ *        into `membershipTier`, so the repair would have created rows carrying
+ *        a value the membership schema rejects and no other row on the platform
+ *        holds. (Loans were never at risk: that path derives the tier from
+ *        savings via `calculateUserTier` rather than reading the row.)
+ *
+ *        Two exports under one name is how they drifted, so this one is renamed
+ *        AND derived. There is no second list to fall out of date.
+ *
+ * ── AND WITH ONE TIER THERE IS NOTHING TO CHOOSE ────────────────────────────
+ *
+ *   The header below says a tier "IS a decision, because a tier sets what the
+ *   member may borrow against". That was true of tier1/tier2. It is not true
+ *   now: one tier sets the same terms for everybody, so an absent tier is not a
+ *   question for a person — it is the platform's only answer, the same one
+ *   `|| "Member"` supplies on every other path.
+ *
+ *   The machinery stays rather than being deleted, because it is the guard as
+ *   much as the question: should the cooperative ever price a second tier
+ *   again, `MEMBERSHIP_TIERS.length > 1` makes the choice reappear and
+ *   `checkRepair` refuses anything outside the list either way.
+ */
+export const MEMBERSHIP_TIERS: readonly string[] = Object.keys(TIER_SYSTEM);
+
+/** What a member with no recorded tier is written as. */
+export const DEFAULT_MEMBERSHIP_TIER: string = MEMBERSHIP_TIERS[0];
+
+/**
+ * Is an absent tier a question for a person, or just the platform's one answer?
+ *
+ * A FUNCTION RATHER THAN AN EXPRESSION AT THE CALL SITE, so the rule can be
+ * exercised without a database. It lived inline in the listing action, where
+ * the only way to reach it was to stand up a fake store and read a report —
+ * which is how a rule ends up with no test at all.
+ */
+export function tierIsADecision(knownTier: string | null): boolean {
+    return knownTier === null && MEMBERSHIP_TIERS.length > 1;
+}
 
 export interface RepairCheck {
     /** What the platform knows; re-read by the server, never taken from the caller. */
@@ -96,20 +159,28 @@ export function checkRepair(input: RepairCheck): { ok: true; tier: string } | { 
          *   already records would turn a copy into a decision, and the value
          *   written would no longer match what the member paid for.
          */
-        if (chosenTier && chosenTier !== known.knownTier) {
+        //   #803 — `knownTier` is null when nothing was recorded AND the
+        //   cooperative offers a single tier, so the platform's only answer
+        //   stands in. Without this the arm returned null and the repair wrote
+        //   a membership row with no tier at all.
+        const tier = known.knownTier ?? DEFAULT_MEMBERSHIP_TIER;
+
+        if (chosenTier && chosenTier !== tier) {
             return {
                 ok: false,
-                reason: `This member's registration already records "${known.knownTier}". `
-                    + `Correcting a tier is a different act from creating the missing row.`,
+                reason: known.knownTier
+                    ? `This member's registration already records "${known.knownTier}". `
+                        + `Correcting a tier is a different act from creating the missing row.`
+                    : `This cooperative has one tier, "${tier}". There is nothing to choose.`,
             };
         }
-        return { ok: true, tier: known.knownTier! };
+        return { ok: true, tier };
     }
 
     if (!chosenTier) {
         return { ok: false, reason: "This member has no recorded tier — choose one." };
     }
-    if (!COOPERATIVE_TIERS.includes(chosenTier)) {
+    if (!MEMBERSHIP_TIERS.includes(chosenTier)) {
         return { ok: false, reason: `"${chosenTier}" is not a tier this cooperative offers.` };
     }
 
