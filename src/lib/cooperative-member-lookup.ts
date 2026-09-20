@@ -27,7 +27,7 @@
  * balance must not claim anything at all.
  */
 
-import { ownedProfileIdsFor } from "@/lib/owned-profile-ids";
+import { ownedProfileIdsFor, isSamePerson } from "@/lib/owned-profile-ids";
 
 /** The shape both loan doors need back: which row, and what is on it. */
 export interface CooperativeMemberRow {
@@ -146,10 +146,28 @@ export async function findCooperativeMemberRowForPerson(
  *      somebody else's `userId` is refused outright rather than written to.
  *      The metadata comes back from Paystack's own API, so it is ours; the
  *      ownership check is there so that stays true if it ever is not.
- *   2. The two-key walk above — doc id, then the `userId` field.
+ *   2. The walk above, ACROSS EVERY PROFILE THE PAYER OWNS, live row first.
  *   3. doc(userId), to be created. Legacy references carry no membershipId
  *      (the webhook's own branch makes the same allowance) and a member who
  *      has no row at all still needs one.
+ *
+ * AND ONE PERSON'S TWO IDS MUST NOT READ AS TWO PEOPLE HERE.
+ *
+ *   Both of those steps compared ids with `===`, which is the wrong question
+ *   when the platform hands one human being more than one profile.
+ *
+ *   Step 1 refused a membershipId whose row carries the payer's SUPERSEDED
+ *   id — their own registration row, from before the profiles were settled —
+ *   and step 2 then failed to find it either, so the payment fell through to
+ *   step 3 and manufactured the blank duplicate this header exists to
+ *   describe. The member's ₦10,000 landed on a row with no name on it while
+ *   their real registration stayed pending and unpaid.
+ *
+ *   `isSamePerson` is the question actually being asked — owned-profile-ids
+ *   describes it as "the opposite direction to every other use of this
+ *   module, and it is deliberate" — and a row belonging to somebody else is
+ *   still refused, because two ids that resolve to different live profiles
+ *   are two people.
  */
 export async function membershipRefForPayment(
     membersCollection: any,
@@ -160,13 +178,13 @@ export async function membershipRefForPayment(
         const byMetadata = await membersCollection.doc(membershipId).get();
         if (byMetadata.exists) {
             const owner = byMetadata.data()?.userId;
-            if (!owner || owner === userId) {
+            if (!owner || await isSamePerson(owner, userId)) {
                 return { ref: membersCollection.doc(membershipId), id: membershipId };
             }
         }
     }
 
-    const row = await findCooperativeMemberRow(membersCollection, userId);
+    const row = await findCooperativeMemberRowForPerson(membersCollection, userId);
     if (row) return { ref: membersCollection.doc(row.id), id: row.id };
 
     return { ref: membersCollection.doc(userId), id: userId };

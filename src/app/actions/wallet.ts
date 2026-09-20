@@ -18,7 +18,7 @@ import { requireSession } from "@/lib/session-guard";
 import { recordAdminAction } from "@/lib/audit-log";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isOwnedBySession } from "@/lib/owned-profile-ids";
+import { isOwnedBySession, ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { strandedWalletRows, totalWalletBalance } from "@/lib/wallet-lookup";
 import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
@@ -189,8 +189,26 @@ async function _getWalletAction(): Promise<ActionResponse<Wallet & {
     // from a complete one, so a long-standing account would silently see a
     // Total Funded and Total Spent that stopped counting — and a
     // Pending Withdrawals that could omit a real pending payout.
-    const txnsSnap = await db.collection(TXN_COLLECTION)
-        .where("userId", "==", userId)
+    //   EVERY PROFILE THIS PERSON OWNS — and note what is NOT widened three
+    //   lines above.
+    //
+    //   `wallet` comes from _getOrCreateWallet(userId), the LIVE row alone,
+    //   and lib/wallet-lookup.ts explains at length why it must stay that
+    //   way: a balance is SPENDABLE, migration 005's credit and debit
+    //   functions only ever move the live row, and a total summed across
+    //   profiles would put a figure on screen that checkout then refuses.
+    //
+    //   These three are the opposite kind of number. totalFunded and
+    //   totalSpent are LIFETIME HISTORY — nothing is paid out of them — and
+    //   pendingWithdrawals is money ALREADY DEBITED and awaiting payout, not
+    //   money still to be found. So the true figure is the sum, and it is
+    //   also the only figure that agrees with the transaction LIST below,
+    //   which reads the same collection. An aggregate counting fewer rows
+    //   than the list beside it is a page disagreeing with itself — the
+    //   export portfolio finding, on the other money screen.
+    const txnsSnap = await filterByOwner(
+        db.collection(TXN_COLLECTION), "userId", await ownedProfileIds(userId),
+    )
         .all()
         .get();
     if (txnsSnap.truncated) {
@@ -795,8 +813,16 @@ async function _getWalletTransactionsAction(options?: {
 
     const pageSize = options?.limit || 20;
     // Fetch more to ensure we can satisfy the page limit after filtering
-    let query = db.collection(TXN_COLLECTION)
-        .where("userId", "==", userId)
+    //   EVERY PROFILE THIS PERSON OWNS. A member whose profile was superseded
+    //   has their older funding, purchase and withdrawal rows filed under the
+    //   old id, and a single-id read gives them a statement that simply
+    //   begins later than their account does — with no gap to notice.
+    //
+    //   This is a HISTORY, not a balance; see the note on the stats above for
+    //   why the balance three hundred lines up stays on the live row alone.
+    let query = filterByOwner(
+        db.collection(TXN_COLLECTION), "userId", await ownedProfileIds(userId),
+    )
         .orderBy("createdAt", "desc")
         .limit(pageSize * 3 + 1);
 
