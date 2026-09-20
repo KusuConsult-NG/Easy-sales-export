@@ -103,6 +103,22 @@ function setWorld(opts: {
             // the three refusals passed because nothing happened at all.
             callerDocCall += 1;
             if (callerDocCall === 1) {
+                //   THE userId SWEEP'S PROFILE RESOLUTION, which now runs
+                //   FIRST — ownedProfileIdsFor reads the caller's row to
+                //   follow `_migratedTo` before any fallback is tried.
+                //
+                //   It is a USER row with no pointer, so the caller resolves
+                //   to themself and every assertion below is unchanged. The
+                //   ordinals after it shift by one, which is precisely the
+                //   brittleness the note above predicted: this fixture cannot
+                //   tell two reads apart by argument, so a read ADDED ahead of
+                //   them silently becomes the one it was describing.
+                return Promise.resolve({
+                    exists: true, empty: true, size: 0, docs: [], ref: { id: CALLER },
+                    data: () => ({ email: VICTIM_EMAIL }),
+                });
+            }
+            if (callerDocCall === 2) {
                 // Fallback 2 — the member document at the caller's id.
                 return Promise.resolve(
                     docAtId

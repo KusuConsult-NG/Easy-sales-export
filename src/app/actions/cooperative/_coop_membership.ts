@@ -17,6 +17,7 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { registrationProgressScore } from "@/lib/registration-progress";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /** How many members one directory read will return. */
 const DIRECTORY_ROW_CAP = 2000;
@@ -345,8 +346,9 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         // If no profile status was found above, check the source of truth for payments.
         // This handles cases where a user just paid but the background sync hasn't
         // finished updating the member/user documents.
-        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("userId", "==", session.user.id)
+        const paymentsSnap = await filterByOwner(
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
+            await ownedProfileIdsFor(session.user.id))
             .where("type", "==", "cooperative_membership_registration")
             .where("status", "==", "completed")
             .limit(1)

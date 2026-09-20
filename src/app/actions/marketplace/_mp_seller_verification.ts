@@ -19,6 +19,7 @@ import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransition } from "@/lib/status-transition";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * The seller categories, as a value rather than a type.
@@ -84,8 +85,9 @@ async function _submitSellerVerificationAction(
         const userId = session.user.id;
 
         // Check if already has a pending or approved verification
-        const existingDocs = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where("userId", "==", userId)
+        const existingDocs = await filterByOwner(
+            db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+            await ownedProfileIdsFor(userId))
             .get();
 
         if (!existingDocs.empty) { 
