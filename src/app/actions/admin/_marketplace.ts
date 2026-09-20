@@ -30,6 +30,7 @@ import {
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { notifyBadgeUpdated } from "@/lib/marketplace-notifications";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
+import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -878,8 +879,10 @@ async function _getMarketplaceUsersAction(options: {
                 name: data.fullName || data.name || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "Unknown"),
                 email: data.email,
                 phone: (() => {
-                    const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
-                    const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+                    //   One rule, not a seventh copy of it — see canonical/placeholder-names.
+                    //   All six private sets were missing "unknown member", the string 2,591
+                    //   skeleton profiles actually carry (#495).
+                    const isPlaceholder = (v: any) => isPlaceholderName(v);
                     let p = data.phone || data.phoneNumber || data.kyc?.phoneNumber || data.kyc?.phone || "";
                     if (isPlaceholder(p) && data.serviceRegistrations) {
                         for (const reg of Object.values(data.serviceRegistrations) as any[]) {

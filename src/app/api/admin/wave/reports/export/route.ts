@@ -10,6 +10,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { writeDataExportRecord } from "@/lib/data-export-record";
 import { formatShortDateOrDash } from "@/lib/date-utils";
 import { WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -93,8 +94,10 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
-        const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+        //   One rule, not a seventh copy of it — see canonical/placeholder-names.
+        //   All six private sets were missing "unknown member", the string 2,591
+        //   skeleton profiles actually carry (#495).
+        const isPlaceholder = (v: any) => isPlaceholderName(v);
 
         const applications = applicationsSnapshot.docs.map(doc => {
             const appData = doc.data();
