@@ -181,6 +181,16 @@ const IDENTITY_RESOLUTION = new Set([
     "isOwnedBySession", "isAnyOwnedBySession", "isSamePerson",
 ]);
 
+/**
+ * Helpers that turn ONE id into the list of profiles that id owns.
+ *
+ * Distinct from IDENTITY_RESOLUTION above, which is the set of GATES — they
+ * answer "may this caller touch this row" and are evidence on their own. These
+ * answer "which ids are this person", which is evidence only if the id handed
+ * in was session-derived. So they are looked THROUGH rather than credited.
+ */
+const OWNED_ID_RESOLVERS = new Set(["ownedProfileIds", "ownedProfileIdsFor"]);
+
 export interface OwnershipLead {
     file: string;
     name: string;
@@ -339,7 +349,33 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
                  *   `sessionDerived` walk that answers for `.where`.
                  */
                 if (name === "filterByOwner" || name === "filterByOwnerInArray") {
-                    const ids = n.arguments[2];
+                    /*
+                     *   THE IDS MAY ARRIVE INLINE, and the first version of
+                     *   this could not see through that.
+                     *
+                     *       filterByOwner(q, "investorId", await ownedProfileIds(userId))
+                     *
+                     *   `root` took the first word of the argument text, which
+                     *   here is `await` — in `fromSession` for nothing — so a
+                     *   correctly session-scoped read was reported as a lead.
+                     *   Assigning the list to a variable first happened to pass
+                     *   and writing it inline did not, which is a scanner
+                     *   grading the author's line breaks.
+                     *
+                     *   So the `await` is stripped and a wrapping
+                     *   `ownedProfileIds` / `ownedProfileIdsFor` is looked
+                     *   through to the id it resolves — which is the value that
+                     *   actually has to be session-derived.
+                     */
+                    let ids: ts.Node | undefined = n.arguments[2];
+                    while (ids && ts.isAwaitExpression(ids)) ids = ids.expression;
+                    if (
+                        ids && ts.isCallExpression(ids) && ts.isIdentifier(ids.expression) &&
+                        OWNED_ID_RESOLVERS.has(ids.expression.text)
+                    ) {
+                        ids = ids.arguments[0];
+                    }
+
                     const text = ids ? ids.getText() : "";
                     const root = text.split(/[^\w$]/)[0];
                     if (/\bsession\b/i.test(text) || fromSession.has(root)) {

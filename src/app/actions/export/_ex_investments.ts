@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { exportWindowAcceptsInvestment, exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
@@ -37,8 +38,16 @@ export async function getUserExportInvestmentsAction(
         const userId = session.user.id;
 
         // Fetch user's active Paystack-verified EXPORT_INVESTMENTS
-        const query = db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
-            .where("investorId", "==", userId)
+        //
+        //   Across every profile they own. An investment made before the
+        //   investor's profile was superseded is still their money at work,
+        //   and a portfolio that silently lists a subset is the worst kind of
+        //   wrong on a page about somebody's money: it renders, it balances,
+        //   and it is short.
+        const query = filterByOwner(
+            db.collection(COLLECTIONS.EXPORT_INVESTMENTS), "investorId",
+            await ownedProfileIds(userId),
+        )
 
         const snapshotRaw = await query.get();
         // Robust Sort: Handle both Timestamps and String dates gracefully
@@ -179,10 +188,50 @@ export async function getUserExportStatsAction() { try {
 
         const userId = session.user.id;
 
-        // Fetch O(1) Compiled Stats from Active Paystack Integration
-        const portfolioDoc = await db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(userId).get();
+        /*
+         *   EVERY PORTFOLIO THIS INVESTOR OWNS, SUMMED — and the reasoning is
+         *   the OPPOSITE of the wallet's, which is why it is written down.
+         *
+         *   A wallet balance is SPENDABLE, and the balance functions only ever
+         *   move the live row (migration 005), so summing across profiles would
+         *   put a figure on screen that checkout then refuses. lib/wallet-lookup
+         *   shows the live row alone for exactly that reason.
+         *
+         *   A portfolio total is HISTORICAL. Nothing is spent from it; it
+         *   records what was invested and what is expected back. Summing it is
+         *   not a promise about what the investor can do — it is simply the
+         *   true total, and it is the only figure that agrees with the
+         *   investment LIST above, which now spans every profile. An aggregate
+         *   that counted three of five investments while the list showed all
+         *   five would be a page disagreeing with itself.
+         *
+         *   Both writers key on the live session id (payments/service.ts and
+         *   export-payment.ts), so a superseded profile's portfolio is frozen
+         *   at whatever it held — real history, never added to again.
+         */
+        const portfolioIds = await ownedProfileIds(userId);
+        const portfolioDocs = await Promise.all(
+            portfolioIds.map((id) => db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(id).get()),
+        );
+        const present = portfolioDocs.filter((d) => d.exists);
 
-        if (portfolioDoc.exists) { const data = portfolioDoc.data()!;
+        if (present.length > 0) {
+            const sumOf = (pick: (d: Record<string, any>) => unknown): number =>
+                present.reduce((total, doc) => {
+                    const value = Number(pick(doc.data() ?? {}));
+                    return total + (Number.isFinite(value) ? value : 0);
+                }, 0);
+            const data = {
+                totalInvested: sumOf((d) => d.totalInvested ?? 0),
+                activeInvestments: sumOf((d) => d.activeInvestments ?? 0),
+                totalReturns: sumOf((d) => d.totalReturns ?? d.totalReturned ?? 0),
+                totalExpectedReturns: sumOf((d) => d.totalExpectedReturns ?? 0),
+                //   Only summed when every row carries it; otherwise the
+                //   derivation below is the honest answer.
+                pendingReturns: present.every((doc) => (doc.data() ?? {}).pendingReturns !== undefined)
+                    ? sumOf((d) => d.pendingReturns ?? 0)
+                    : undefined,
+            } as Record<string, any>;
              // THE NAMES THE PORTFOLIO IS ACTUALLY WRITTEN UNDER.
              //
              // This read `totalReturns` and `pendingReturns`. The only writer of
@@ -668,9 +717,10 @@ export async function getMyExportInvestmentsAction() { try {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized"};
 
-        const snapshot = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
-            .where("investorId", "==", session.user.id)
-            .get();
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.EXPORT_INVESTMENTS), "investorId",
+            await ownedProfileIds(session.user.id),
+        ).get();
         // Use in-memory sort to avoid index compilation errors
         // toMillis, not `x?.toMillis()`.
         //
