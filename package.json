@@ -55,6 +55,7 @@
     "backfill:enrolledcount": "tsx scripts/backfill-academy-enrolled-count.ts",
     "backfill:blankemails": "tsx scripts/backfill-blank-profile-emails.ts",
     "backfill:membernames": "tsx scripts/backfill-member-names.ts",
+    "backfill:membernames:run": "bash scripts/backfill-member-names-run.sh",
     "pg:start": "bash scripts/local-postgres.sh start",
     "pg:stop": "bash scripts/local-postgres.sh stop",
     "test:pg": "jest --config jest.config.pg.js --runInBand",
