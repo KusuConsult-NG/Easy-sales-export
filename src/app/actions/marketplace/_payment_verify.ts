@@ -336,6 +336,12 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 productSnapshots.push({ ref: productRef, doc, item });
             }
 
+            // Display only, and the doc id is deliberate — see the twin of
+            // this read in infrastructure/payments/service.ts. The
+            // balanceBefore/balanceAfter pair written further down describes
+            // the row credit_wallet_once and debit_wallet_once act on, which is
+            // the live id; a superseded wallet resolved in here would make the
+            // ledger describe a row that never moved.
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(userId);
             const walletSnap = await transaction.get(walletRef);
             let currentBalance = 0;

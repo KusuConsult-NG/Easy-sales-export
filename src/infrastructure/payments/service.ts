@@ -138,6 +138,12 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         const walletSnap = await walletRef.get();
         // Display only: the balanced pair of wallet_transactions rows below is
         // net zero, and no wallet balance is changed by this function.
+        //
+        // AND THE DOC-ID READ IS RIGHT HERE, unlike the guards in user.ts. The
+        // balanceBefore/balanceAfter pair below has to describe the row the
+        // balance functions act on, which is the LIVE id and only ever that
+        // (migration 005 keys both on p_user_id). Resolving a superseded wallet
+        // in here would have the ledger narrate a row that never moved.
         let currentBalance = 0;
         if (walletSnap.exists) {
             currentBalance = walletSnap.data()?.balance || 0;

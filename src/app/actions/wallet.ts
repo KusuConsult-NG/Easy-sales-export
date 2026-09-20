@@ -19,6 +19,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isOwnedBySession } from "@/lib/owned-profile-ids";
+import { strandedWalletRows, totalWalletBalance } from "@/lib/wallet-lookup";
 import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
@@ -122,6 +123,34 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
 
     if (snap.exists) {
         return serializeDoc<Wallet>(snap.id, snap.data());
+    }
+
+    /*
+     *   A MISS IS THE MOMENT A SECOND WALLET GETS MINTED, so it is the moment
+     *   to check whether the first one is sitting under a superseded profile.
+     *
+     *   ONLY ON A MISS. An account that already has a wallet here pays nothing
+     *   for this — same read, same plan — which is the same bargain
+     *   `isOwnedBySession` strikes: the matching case never walks.
+     *
+     *   The wallet is still created, and still at the LIVE id. It has to be:
+     *   `credit_wallet_once` and `debit_wallet_once` key on the session id
+     *   (migration 005), so the live row is the only one this person can ever
+     *   fund or spend from. Returning the superseded row instead would show a
+     *   balance that every checkout then refuses to honour.
+     *
+     *   What was missing was any record that it happened. Minting a zero wallet
+     *   beside somebody's money is not a neutral act, and it used to leave no
+     *   trace at all.
+     */
+    const stranded = await strandedWalletRows(db.collection(WALLET_COLLECTION), userId);
+    if (stranded.length > 0) {
+        logger.error(
+            `[Wallet] STRANDED BALANCE — user ${userId} has no wallet at their live id, but `
+            + `₦${totalWalletBalance(stranded).toLocaleString()} sits under superseded profile(s) `
+            + `${stranded.map((r) => r.id).join(", ")}. Creating their live wallet at ₦0; the `
+            + `balance above needs moving by hand and will not appear until it is.`,
+        );
     }
 
     const wallet: Omit<Wallet, "id"> = {
