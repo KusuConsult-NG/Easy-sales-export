@@ -29,6 +29,7 @@ import { repairFor, isRepairKind, type RepairKind, type RepairOffer } from "@/li
 import { requireAdmin } from "@/lib/require-admin";
 import { PRODUCT_VISIBLE_STATUSES } from "@/lib/product-status";
 import { recordAdminAction } from "@/lib/audit-log";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /*
  * ── #728 THE CEILINGS, NAMED ONCE ───────────────────────────────────────────
@@ -1036,8 +1037,29 @@ export async function runForensicScanAction(): Promise<
                 const memberData = memberRow.data || {};
                 const heldBalance = Number(memberData.savingsBalance || 0) + Number(memberData.lockedBalance || 0);
 
-                const transactionsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-                    .where("userId", "==", userId)
+                /*
+                 *   RESOLVED, and this one is a judgement rather than an
+                 *   obvious fix.
+                 *
+                 *   The argument for leaving a forensic RAW is real: a check
+                 *   that resolves can no longer see the thing it might be the
+                 *   only witness to. But this check compares a member's HELD
+                 *   balance against their ledger, and for a member whose
+                 *   contributions sit under a superseded profile the sum came
+                 *   to zero — so it reported a balance with no ledger behind
+                 *   it. That is a fraud signal, raised against somebody whose
+                 *   bookkeeping is fine, and it would send an investigator
+                 *   after the wrong thing.
+                 *
+                 *   The split itself is not lost by resolving here: it is what
+                 *   listDuplicateProfileGroupsAction exists to surface, and
+                 *   what the SPLIT ACCOUNT (#888) line logs on every login. A
+                 *   second, noisier detector that can only report it as
+                 *   suspected fraud is worse than none.
+                 */
+                const transactionsSnapshot = await filterByOwner(
+                    db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS), "userId",
+                    await ownedProfileIdsFor(userId))
                     .where("status", "==", "completed") // Only completed transactions count
                     .get();
 

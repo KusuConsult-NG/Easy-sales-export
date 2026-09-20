@@ -56,6 +56,7 @@ import {
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /** Matches the reconciliation check's own sample bound. */
 const SCAN_LIMIT = 200;
@@ -74,8 +75,15 @@ async function buildCase(doc: { id: string; data: () => any }): Promise<MissingM
     );
     if (existing) return null;
 
-    const ledger = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-        .where("userId", "==", userId)
+    //   ACROSS EVERY PROFILE ROW THEY OWN. This ledger DERIVES the savings
+    //   balance the repair writes, and this file's own header is unambiguous
+    //   about the stakes: "Inventing a savings figure would be inventing
+    //   money." A member whose contributions are filed under a superseded
+    //   profile would have had them summed to zero, and the repair would have
+    //   written that zero onto their membership as fact.
+    const ledger = await filterByOwner(
+        db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS), "userId",
+        await ownedProfileIdsFor(userId))
         .where("status", "==", "completed")
         .get();
 
