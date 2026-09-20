@@ -146,6 +146,19 @@ beforeEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Ids that look like what they stand for.
+ *
+ * Supabase Auth keys on UUIDs, so a profile id that is not one can never be
+ * looked up — which is now its own outcome rather than a transient failure.
+ * These tests therefore have to be explicit about which kind of id they mean.
+ */
+const U1 = '11111111-1111-4111-8111-111111111111';
+const U2 = '22222222-2222-4222-8222-222222222222';
+const U3 = '33333333-3333-4333-8333-333333333333';
+/** The real one, from the production log: a Firebase-era uid, 28 chars of base62. */
+const FIREBASE_UID = 'EHp5pfEwUqVBQve9s3fh3dfehrJ2';
+
 describe('#671 — the backfill fills a blank profile from the verified address', () => {
     it('IT WRITES THE ADDRESS AUTH HOLDS, NORMALISED', async () => {
         profiles = { u1: { email: '', roles: ['general_user'] } };
@@ -313,8 +326,13 @@ describe('#671 — and one bad row does not strand the other forty-seven', () =>
          *   know this person's address" is to write nothing and say so. The run
          *   under-repairs, reports it, and can simply be run again.
          */
-        profiles = { u1: { email: '' }, u2: { email: '' } };
-        authByUid = { u1: 'a@example.com', u2: 'b@example.com' };
+        //   UUID ids, because a profile id that is NOT one is now its own
+        //   outcome — Supabase Auth cannot hold it, so no run can ever answer
+        //   for it and "run again" would be false advice. These two rows are
+        //   about an Auth that could not be REACHED, which is the opposite
+        //   case, so they carry ids Auth could perfectly well have answered for.
+        profiles = { [U1]: { email: '' }, [U2]: { email: '' } };
+        authByUid = { [U1]: 'a@example.com', [U2]: 'b@example.com' };
         authThrows = true;
 
         const report = await backfillMissingEmails();
@@ -509,13 +527,15 @@ describe('#714 — "Auth says no" and "I could not ask Auth" are different answe
     });
 
     it('AND A LOOKUP THAT FAILED IS REPORTED AS A FAILED LOOKUP, NOT AS AN ABSENT ACCOUNT', async () => {
-        profiles = { unknown: { email: '' } };
-        authLookupFails = ['unknown'];
+        //   A UUID, so the failure under test is the transient one this test
+        //   is about rather than an id Auth could never have been asked about.
+        profiles = { [U1]: { email: '' } };
+        authLookupFails = [U1];
 
         const report = await backfillMissingEmails();
 
         expect(writes).toEqual([]);
-        expect(resultFor(report, 'unknown')).toBe('auth-lookup-failed');
+        expect(resultFor(report, U1)).toBe('auth-lookup-failed');
     });
 
     it('AND ONE FAILED LOOKUP DOES NOT CHANGE THE ANSWER FOR THE ROWS BESIDE IT', async () => {
@@ -523,15 +543,15 @@ describe('#714 — "Auth says no" and "I could not ask Auth" are different answe
         //   is how a partial failure arrives. A run that downgraded everything
         //   to "could not tell" would be as useless as one that upgraded
         //   everything to "no account".
-        profiles = { ok: { email: '' }, absent: { email: '' }, broken: { email: '' } };
-        authByUid = { ok: 'ada@example.com' };
-        authLookupFails = ['broken'];
+        profiles = { [U1]: { email: '' }, [U2]: { email: '' }, [U3]: { email: '' } };
+        authByUid = { [U1]: 'ada@example.com' };
+        authLookupFails = [U3];
 
         const report = await backfillMissingEmails();
 
-        expect(resultFor(report, 'ok')).toBe('filled');
-        expect(resultFor(report, 'absent')).toBe('no-auth-account');
-        expect(resultFor(report, 'broken')).toBe('auth-lookup-failed');
+        expect(resultFor(report, U1)).toBe('filled');
+        expect(resultFor(report, U2)).toBe('no-auth-account');
+        expect(resultFor(report, U3)).toBe('auth-lookup-failed');
         expect(report.filled).toBe(1);
     });
 
@@ -539,12 +559,48 @@ describe('#714 — "Auth says no" and "I could not ask Auth" are different answe
         //   "could not tell" with no reason attached sends the operator back to
         //   the same unanswerable question. The shim's message is passed
         //   through rather than replaced with a generic one.
-        profiles = { broken: { email: '' } };
-        authLookupFails = ['broken'];
+        profiles = { [U1]: { email: '' } };
+        authLookupFails = [U1];
 
         const report = await backfillMissingEmails();
 
         expect(report.outcomes[0].detail).toBe('service key rejected');
+    });
+
+    /*
+     *   AND THE ONE THE PRODUCTION LOG HAS BEEN REPORTING EVERY DAY.
+     *
+     *       could not reach Supabase Auth for 1 of 48 profile(s) … Run again.
+     *       EHp5pfEwUqVBQve9s3fh3dfehrJ2: Expected parameter to be UUID but is not
+     *
+     *   The lookup did not fail. It was never answerable: that is a Firebase-era
+     *   uid, and Supabase Auth keys on UUIDs. "Run again" is advice that can
+     *   only ever be wrong, and the row sat in the bucket the cron counts to
+     *   decide whether a run established anything — so every complete run has
+     *   been reporting itself as partially broken.
+     */
+    it('AND AN ID AUTH CAN NEVER HOLD IS NOT A FAILURE OF THIS RUN', async () => {
+        profiles = { [FIREBASE_UID]: { email: '' } };
+        authLookupFails = [FIREBASE_UID];
+
+        const report = await backfillMissingEmails();
+
+        expect(resultFor(report, FIREBASE_UID)).toBe('auth-id-not-usable');
+        expect(writes).toEqual([]);
+        //   And it says so in words that stop the retry, rather than inviting it.
+        expect(String(report.outcomes[0].detail)).toMatch(/retrying will not help/);
+    });
+
+    it('AND IT DOES NOT SWALLOW A REAL TRANSIENT FAILURE BESIDE IT', async () => {
+        //   THE CONTROL. A rule that called every failed lookup permanent would
+        //   pass the test above and lose the distinction #714 exists for.
+        profiles = { [FIREBASE_UID]: { email: '' }, [U1]: { email: '' } };
+        authLookupFails = [FIREBASE_UID, U1];
+
+        const report = await backfillMissingEmails();
+
+        expect(resultFor(report, FIREBASE_UID)).toBe('auth-id-not-usable');
+        expect(resultFor(report, U1)).toBe('auth-lookup-failed');
     });
 });
 

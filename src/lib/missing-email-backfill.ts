@@ -98,6 +98,8 @@ export interface EmailBackfillOutcome {
         | "filled"
         | "no-auth-account"
         | "auth-lookup-failed"
+        /** The id itself is one Supabase Auth cannot hold — see backfillDecision. */
+        | "auth-id-not-usable"
         | "auth-has-no-email"
         | "already-had-one"
         | "profile-vanished"
@@ -168,6 +170,11 @@ export type AuthLookup =
     /** The lookup did not work. Nothing is known about this account either way. */
     | { kind: "failed"; detail?: string };
 
+/** Supabase Auth keys on UUIDs; anything else it will refuse for ever. */
+function isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
 /**
  * Decide what to do about one profile, given what Auth says.
  *
@@ -182,11 +189,52 @@ export type AuthLookup =
 export function backfillDecision(
     storedEmail: unknown,
     lookup: AuthLookup,
+    /**
+     * The id Auth was actually asked about, when the caller knows it.
+     *
+     * Optional so the rule stays callable with two arguments — every existing
+     * caller and test passes two, and none of them is about an unusable id.
+     */
+    askedId?: string,
 ): { write: false; result: EmailBackfillOutcome["result"]; detail?: string } | { write: true; value: string } {
     //   Re-checked here rather than trusted from the query that selected the
     //   row. The scan and the write are two round trips apart, and a login in
     //   between would have filled it — at which point this must do nothing.
     if (!isBlankEmail(storedEmail)) return { write: false, result: "already-had-one" };
+
+    /*
+     *   A FAILURE THAT CANNOT BE RETRIED IS NOT A FAILURE OF THIS RUN.
+     *
+     *   From the owner's production log, every day:
+     *
+     *       could not reach Supabase Auth for 1 of 48 profile(s). These are NOT
+     *       known to be missing an account — the lookup did not work. Run again.
+     *       EHp5pfEwUqVBQve9s3fh3dfehrJ2:@supabase/auth-js: Expected parameter
+     *       to be UUID but is not
+     *
+     *   The header of this file already names that id as "a Firebase-era uid
+     *   Supabase will not accept". It is 28 characters of base62; Supabase Auth
+     *   keys on UUIDs and always will. The lookup did not fail — it was never
+     *   answerable, and "Run again" is advice that can only ever be wrong.
+     *
+     *   That matters beyond the wording: `auth-lookup-failed` is the bucket the
+     *   cron counts to decide whether a run ESTABLISHED anything, and a run that
+     *   reaches everything except one permanently unaskable row is a complete
+     *   run. Left in the transient bucket, this row makes every future run look
+     *   partially broken, which is how an operator learns to skip the report.
+     *
+     *   DECIDED FROM THE ID, NOT FROM THE MESSAGE. Reading the provider's prose
+     *   is how the login lockout broke — a guard matched wording somebody else
+     *   owned, that wording was improved, and the guard silently stopped firing.
+     *   The id's shape is ours to check and cannot be reworded.
+     */
+    if (lookup.kind === "failed" && askedId !== undefined && !isUuid(askedId)) {
+        return {
+            write: false,
+            result: "auth-id-not-usable",
+            detail: `${askedId} is not a UUID, so Supabase Auth can never hold it; retrying will not help`,
+        };
+    }
 
     //   Both write nothing, and they are still reported apart: `absent` is a
     //   fact about the account that somebody must now act on, `failed` is a
@@ -405,6 +453,7 @@ export async function backfillMissingEmails(limit = 500): Promise<EmailBackfillR
             //   The default is the honest one: an id this run never saw an
             //   answer for is one it could not find out about — #714.
             lookupById.get(askedAbout) ?? { kind: "failed", detail: "the Auth read returned nothing for this id" },
+            askedAbout,
         );
 
         if (!decision.write) {
