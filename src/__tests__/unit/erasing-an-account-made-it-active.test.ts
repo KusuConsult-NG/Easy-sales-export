@@ -43,6 +43,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
+import { countLivePeople } from '@/lib/user-population';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 import { lastActiveAt, isRecentlyActive, RECENT_ACTIVITY_DAYS } from '@/lib/recent-activity';
@@ -142,31 +143,140 @@ describe('#735 — and the service asks exactly that', () => {
      *   property it protects" shape #741 filed against #600 and #351. Restated
      *   against where the rule lives, plus the service reading it.
      */
-    it('IT SUBTRACTS BOTH TOMBSTONE STATES', () => {
-        const src = population();
+    /**
+     *   #804 THESE TWO PINNED THE SPELLING OF THE QUERIES, AND THE SPELLING WAS
+     *        THE THING THAT HAD TO CHANGE.
+     *
+     *   The comment above already names the shape — "pins the spelling of an
+     *   implementation rather than the property it protects" — and these were
+     *   the last two in this file still doing it. `countLivePeople` cannot ask
+     *   a `.count()` whether a pointer names another row, so the superseded
+     *   side became a read and `query.where(superseded, "!=", "").count()`
+     *   stopped existing. Both went red on a change that made the figure MORE
+     *   correct.
+     *
+     *   So they EXECUTE it now, against a fake query that reproduces the
+     *   adapter's `!=` semantics the module header documents: `f != ""` matches
+     *   rows that HAVE the field and no others, because `raw_data->>'f' <> 'x'`
+     *   is NULL, and therefore not true, for a row missing the key.
+     *
+     *   This also closes the hole the second test's own note admits: the
+     *   overlap sign was checked by grepping for `- (bothSnap…)` because "the
+     *   arithmetic exercised above is a COPY of the rule". There is no copy
+     *   now — flipping the sign changes a number this test reads.
+     */
+    type Row = { id: string; deleted?: boolean; _migratedTo?: string };
 
-        expect(src).toContain('query.where(erased, "==", true).count().get()');
-        expect(src).toContain('query.where(superseded, "!=", "").count().get()');
+    const fakeQuery = (
+        rows: Row[], filters: ((r: Row) => boolean)[] = [], fields: string[] | null = null,
+    ): any => {
+        const matching = () => rows.filter((r) => filters.every((f) => f(r)));
+        //   `.select()` IS REAL — #696. A field not named is not on the row, so
+        //   a fake that returns the whole row would hide exactly the mistake
+        //   the code comment warns about (selecting the pointer and forgetting
+        //   `deleted`, whose absence makes the overlap term silently zero).
+        const project = (r: Row) => (fields === null
+            ? r
+            : Object.fromEntries(fields.filter((f) => f in r).map((f) => [f, (r as any)[f]])));
+        return {
+            where(field: string, op: string, value: unknown) {
+                const f = (r: Row) => {
+                    const v = (r as Record<string, any>)[field];
+                    if (op === '==') return v === value;
+                    //   The documented adapter behaviour, not a convenience: a
+                    //   row MISSING the key does not match `!=`.
+                    if (op === '!=') return v !== undefined && v !== value;
+                    return true;
+                };
+                return fakeQuery(rows, [...filters, f], fields);
+            },
+            select: (...f: string[]) => fakeQuery(rows, filters, f),
+            all: () => fakeQuery(rows, filters, fields),
+            count: () => ({ get: async () => ({ data: () => ({ count: matching().length }) }) }),
+            get: async () => ({
+                docs: matching().map((r) => ({ id: r.id, data: () => project(r) })),
+            }),
+        };
+    };
+
+    const live = (rows: Row[]) => countLivePeople(fakeQuery(rows));
+
+    it('IT SUBTRACTS BOTH TOMBSTONE STATES', async () => {
+        const rows: Row[] = [
+            { id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' },
+            { id: 'e1', deleted: true },
+            { id: 'e2', deleted: true },
+            { id: 's1', _migratedTo: 'p1' },
+            { id: 's2', _migratedTo: 'p1' },
+            { id: 's3', _migratedTo: 'p2' },
+            { id: 'both', deleted: true, _migratedTo: 'p1' },
+        ];
+        //   10 rows − (3 erased + 4 superseded − 1 counted twice) = 4 people.
+        await expect(live(rows)).resolves.toBe(4);
+    });
+
+    it('AND TAKES THE OVERLAP, SO NOTHING IS SUBTRACTED TWICE', async () => {
+        const withOverlap: Row[] = [
+            { id: 'p1' }, { id: 'p2' },
+            { id: 'both', deleted: true, _migratedTo: 'p1' },
+        ];
+        //   The row is one tombstone, not two. Adding the overlap instead of
+        //   subtracting it would answer 1; ignoring it would answer 0.
+        await expect(live(withOverlap)).resolves.toBe(2);
+    });
+
+    it('A ROW WHOSE POINTER NAMES ITSELF IS A PERSON, NOT A TOMBSTONE', async () => {
+        /*
+         *   #804 THE UNDERCOUNT. `_migratedTo != ""` is true of a self-pointing
+         *   row, and resolveActiveUser hands that row to the person who signs
+         *   in — so every one of them was subtracted from "Total Users".
+         *
+         *   Resolving a duplicate was supposed to make the figure fall by one.
+         *   This made it fall by more than the duplicates.
+         */
+        const rows: Row[] = [
+            { id: 'p1' },
+            { id: 'self', _migratedTo: 'self' },
+            { id: 'gone', _migratedTo: 'p1' },
+        ];
+        await expect(live(rows)).resolves.toBe(2);
+    });
+
+    it('and a self-pointing row that is ALSO erased is still a tombstone', async () => {
+        // The pointer says nothing; `deleted` does. Both terms are independent.
+        await expect(live([
+            { id: 'p1' },
+            { id: 'self', deleted: true, _migratedTo: 'self' },
+        ])).resolves.toBe(1);
+    });
+
+    it('AND THE OVERLAP TERM READS A FIELD THAT WAS ACTUALLY SELECTED', async () => {
+        //   Dropping `erased` from the `.select()` leaves `deleted` undefined
+        //   on every row read, so the overlap silently becomes zero and a
+        //   both-tombstoned row is subtracted twice. The fake projects, so this
+        //   answers 2 only if the field is really asked for.
+        await expect(live([
+            { id: 'p1' }, { id: 'p2' },
+            { id: 'both', deleted: true, _migratedTo: 'p1' },
+        ])).resolves.toBe(2);
+    });
+
+    it('AND THE FIELD NAMES ARE STILL THE TWO TOMBSTONES', () => {
+        // The vocabulary IS a property — a third tombstone field added without
+        // being subtracted is the whole family of defects this file records.
+        const src = population();
         expect(src).toContain('erased: "deleted"');
         expect(src).toContain('superseded: "_migratedTo"');
     });
 
-    it('AND TAKES THE OVERLAP, SO NOTHING IS SUBTRACTED TWICE', () => {
-        /*
-         *   THE SIGN, NOT JUST THE QUERY — and my first version asserted only
-         *   that the fourth aggregate existed. A mutant flipping the overlap
-         *   from `-` to `+` SURVIVED: the arithmetic exercised above is a COPY
-         *   of the rule, so mutating the source changed nothing it could see.
-         */
-        const src = population();
+    it('POSITIVE CONTROL: the fake really does reproduce the adapter\'s `!=`', async () => {
+        //   Otherwise "the superseded rows were subtracted" could mean the fake
+        //   matched everything, or nothing, and every count above is an
+        //   accident. A row with no `_migratedTo` key must not match.
+        const q = fakeQuery([{ id: 'a' }, { id: 'b', _migratedTo: 'a' }]);
+        const matched = await q.where('_migratedTo', '!=', '').get();
 
-        expect(src).toContain('query.where(erased, "==", true).where(superseded, "!=", "")');
-        expect(src).toContain('- (bothSnap.data().count ?? 0);');
-        expect(src).not.toContain('+ (bothSnap.data().count ?? 0);');
-
-        //   And the two terms it corrects really are added, so the minus above
-        //   is correcting an over-subtraction rather than sitting in isolation.
-        expect(src).toContain('+ (supersededSnap.data().count ?? 0)');
+        expect(matched.docs.map((d: any) => d.id)).toEqual(['b']);
     });
 
     it('AND EVERY SUBTRAHEND IS SCOPED TO THE SAME WINDOW, BY CONSTRUCTION', () => {

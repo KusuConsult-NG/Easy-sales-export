@@ -42,6 +42,8 @@
  */
 
 /** The domain lib/user-erasure puts on every erased account. */
+import { supersedingPointer } from "@/lib/user-identity";
+
 const ERASED_EMAIL_DOMAIN = "@redacted.local";
 
 export interface ContactableVerdict {
@@ -111,11 +113,21 @@ export async function loadNonContactableUserIds(
 ): Promise<Set<string>> {
     const out = new Set<string>();
 
-    const collect = async (run: () => Promise<any>) => {
+    const collect = async (run: () => Promise<any>, supersededOnly = false) => {
         const snap = await run();
         for (const doc of snap.docs ?? []) {
             const id = doc.id ?? doc.data?.()?.id;
-            if (id) out.add(String(id));
+            if (!id) continue;
+            /*
+             *   #804 — `where("_migratedTo", "!=", "")` cannot ask whether the
+             *   pointer names ANOTHER row, and a row pointing at itself is
+             *   live. Adding it here dropped a real member from every audience
+             *   this set filters, which is the harm this module exists to
+             *   prevent, pointing the wrong way.
+             */
+            if (supersededOnly
+                && !supersedingPointer(String(id), doc.data?.()?._migratedTo)) continue;
+            out.add(String(id));
         }
     };
 
@@ -126,7 +138,7 @@ export async function loadNonContactableUserIds(
 
     try {
         await collect(() => db.collection(usersCollection)
-            .where("_migratedTo", "!=", "").select("_migratedTo").all().get());
+            .where("_migratedTo", "!=", "").select("_migratedTo").all().get(), true);
     } catch { /* fail open — see the header */ }
 
     return out;
@@ -176,10 +188,15 @@ export async function loadNonContactablePhones(
     const { normalisePhone } = await import("@/lib/phone");
     const out = new Set<string>();
 
-    const collect = async (run: () => Promise<any>) => {
+    const collect = async (run: () => Promise<any>, supersededOnly = false) => {
         const snap = await run();
         for (const doc of snap.docs ?? []) {
             const data = doc.data?.() ?? {};
+            //   #804 — as in loadNonContactableUserIds. A self-pointing row is
+            //   live, and blocking its NUMBER is worse than blocking its id:
+            //   nothing else carries that number, so the member simply stops
+            //   receiving SMS with no trace of why.
+            if (supersededOnly && !supersedingPointer(String(doc.id), data._migratedTo)) continue;
             for (const raw of [data.phone, data.phoneNumber, data.kyc?.phoneNumber]) {
                 const normalised = normalisePhone(raw);
                 if (normalised) out.add(normalised);
@@ -187,7 +204,11 @@ export async function loadNonContactablePhones(
         }
     };
 
-    const FIELDS = ["phone", "phoneNumber", "kyc"] as const;
+    //   `_migratedTo` IS IN THIS LIST, and has to be: #696 made `.select()`
+    //   real, so a field not named here is absent from the row — and the
+    //   self-pointer check above would read undefined on every row and drop
+    //   every superseded number from the set.
+    const FIELDS = ["phone", "phoneNumber", "kyc", "_migratedTo"] as const;
 
     try {
         await collect(() => db.collection(usersCollection)
@@ -196,7 +217,7 @@ export async function loadNonContactablePhones(
 
     try {
         await collect(() => db.collection(usersCollection)
-            .where("_migratedTo", "!=", "").select(...FIELDS).all().get());
+            .where("_migratedTo", "!=", "").select(...FIELDS).all().get(), true);
     } catch { /* fail open — see the header */ }
 
     return out;

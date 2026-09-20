@@ -81,6 +81,42 @@ function pointerOf(row: UserRow | null): string | null {
 }
 
 /**
+ * The id this row is superseded BY, or null when it is not superseded.
+ *
+ *   #804 A POINTER THAT NAMES ITS OWN ROW SUPERSEDES NOTHING, AND FOUR READERS
+ *        HAD TO KNOW IT SEPARATELY.
+ *
+ *   The walk below has always known: `if (!next || next === id)` ends it at
+ *   that row, which is what makes the row LIVE. `supabaseAuthId` is why — an
+ *   active row carries its own id there, as pointerOf's comment says — and
+ *   `_migratedTo` picked up the same shape somewhere in the migrations.
+ *
+ *   Everything that asked the question with a QUERY got it wrong, because
+ *   `where("_migratedTo", "!=", "")` cannot compare a field to the row's own
+ *   id. Three did:
+ *
+ *     duplicate-profile-resolution  reported settled pairs as cycles (#802)
+ *     user-population               subtracted live people from "Total Users"
+ *     contactable-account           put live people in the DO-NOT-CONTACT set
+ *
+ *   The last is the one that reached a person: a self-pointing row landed in
+ *   loadNonContactableUserIds and loadNonContactablePhones, so that member was
+ *   dropped from every in-app and SMS broadcast — the exact harm that module
+ *   exists to prevent, inverted.
+ *
+ *   TAKES THE POINTER RATHER THAN THE ROW, because the callers deliberately
+ *   read different fields: the duplicate resolver judges on `_migratedTo`
+ *   alone, while _wallet_consolidation and pointerOf also honour
+ *   `supabaseAuthId`. Sharing the RULE without flattening that difference is
+ *   the whole point — a helper that picked the field for them would silently
+ *   change what three modules mean by "superseded".
+ */
+export function supersedingPointer(id: string, pointer: unknown): string | null {
+    const to = str(pointer);
+    return to !== null && to !== id ? to : null;
+}
+
+/**
  * Walk `_migratedTo` from `startId` to the live row.
  *
  * `readRow` is supplied by the caller because the six readers reach two
