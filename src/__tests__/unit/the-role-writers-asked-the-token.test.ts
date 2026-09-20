@@ -473,7 +473,7 @@ describe('#750 — and the stale-JWT ledger recorded the progress', () => {
             .toContain('ledgerVerdict(jwtOnly.length, 77)');
     });
 
-    it('AND THE NAMED-PERMISSION CENSUS COUNTED THE TWELVE NEW GATES (70 AS OF #864)', () => {
+    it('AND THE NAMED-PERMISSION CENSUS COUNTED THE TWELVE NEW GATES (71 AS OF THE BACKFILL)', () => {
         //   55 → 67. That suite pins the permission each site names, so a gate
         //   added and forgotten fails it.
         //
@@ -481,8 +481,12 @@ describe('#750 — and the stale-JWT ledger recorded the progress', () => {
         //   inspector and approving the land. It is live-checked from the start
         //   rather than converted later, so the census grew by one and the
         //   stale-JWT ledger above did not move.
+        //
+        //   70 → 71: the cooperative identity backfill, for the 715 members who
+        //   were active, paid and unnamed. Live-checked from the start for the
+        //   same reason, so the ledger above is unmoved again.
         expect(code('src/__tests__/unit/require-admin-names-its-permission.test.ts'))
-            .toContain('expect(callSites().length).toBe(70)');
+            .toContain('expect(callSites().length).toBe(71)');
     });
 });
 

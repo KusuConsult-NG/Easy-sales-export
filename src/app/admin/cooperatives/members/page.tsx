@@ -110,6 +110,49 @@ export default function CooperativeMembersPage() {
 
     const [stats, setStats] = useState<{ totalMembers: number; paidMembers?: number; unpaidMembers?: number; pendingMembers: number; activeMembers: number; } | null>(null);
     const [selectedApplication, setSelectedApplication] = useState<StandardPendingForm<MembershipApplication> | null>(null);
+
+    /**
+     *   The identity backfill, in two presses.
+     *
+     *   `handleBackfillIdentities(true)` is a DRY RUN: the server reports what
+     *   it would write and nothing changes. The button then offers the write,
+     *   naming the count. Nothing about a member's status is touched either
+     *   way — see the action's own header.
+     */
+    const [backfillPreview, setBackfillPreview] = useState<{
+        fillable: number; namesRecovered: number;
+    } | null>(null);
+
+    const handleBackfillIdentities = useCallback(async (dryRun: boolean) => {
+        setProcessingId("backfill");
+        try {
+            const { backfillMemberIdentitiesAction } = await import("@/app/actions/admin");
+            const res = await (backfillMemberIdentitiesAction as any)({ dryRun });
+            if (!res?.success) {
+                showToast(res?.error || "Could not run the identity backfill", "error");
+                return;
+            }
+            const r = res.data;
+            if (dryRun) {
+                setBackfillPreview({ fillable: r.fillable, namesRecovered: r.namesRecovered });
+                showToast(
+                    r.fillable === 0
+                        ? `Checked ${r.scanned} member(s) — nothing further is known about them`
+                        : `${r.fillable} record(s) can be filled in, ${r.namesRecovered} of them with a name. `
+                          + `Press again to write.`,
+                    r.fillable === 0 ? "info" : "success",
+                );
+            } else {
+                setBackfillPreview(null);
+                showToast(`Filled in ${r.written} member record(s)`, "success");
+                loadApplications();
+            }
+        } catch {
+            showToast("Could not run the identity backfill", "error");
+        } finally {
+            setProcessingId(null);
+        }
+    }, [showToast, loadApplications]);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -362,6 +405,30 @@ export default function CooperativeMembersPage() {
                     >
                         <Users className="w-4 h-4" />
                         Onboard Legacy Member
+                    </button>
+                    {/*
+                      *   715 active, paid members whom the cooperative could
+                      *   not name. The details are usually on the person's
+                      *   user record or a module registration — see
+                      *   lib/cooperative-identity-backfill.
+                      *
+                      *   TWO CLICKS, NOT ONE. The first only REPORTS what
+                      *   would be written, per field; writing needs a second,
+                      *   explicit press. A button that silently rewrites 715
+                      *   rows on its first click is not one an admin can use
+                      *   carefully.
+                      */}
+                    <button
+                        onClick={() => handleBackfillIdentities(backfillPreview ? false : true)}
+                        disabled={processingId === "backfill"}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                    >
+                        <Search className="w-4 h-4" />
+                        {processingId === "backfill"
+                            ? "Working…"
+                            : backfillPreview
+                                ? `Fill in ${backfillPreview.fillable} record(s)`
+                                : "Find missing details"}
                     </button>
                     {/* Temporarily removed Export CSV button */}
                     {/* <button

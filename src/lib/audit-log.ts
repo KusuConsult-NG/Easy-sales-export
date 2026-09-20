@@ -43,6 +43,10 @@ export type AuditAction =
      *   be re-checked rather than taken on trust.
      */
     | 'cooperative_membership_repair'
+    //   Identity copied onto membership rows from the user document and
+    //   its module registrations. Never a status change — see
+    //   lib/cooperative-identity-backfill.
+    | 'cooperative_identity_backfill'
     | 'ai_chat_message'
     | 'user_impersonate'
     | 'user_kyc_verify_bvn'

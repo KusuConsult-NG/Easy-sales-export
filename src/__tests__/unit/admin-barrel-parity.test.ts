@@ -150,6 +150,18 @@ const ADDED_SINCE_SPLIT = [
      */
     'listMissingMembershipsAction',
     'createMissingMembershipAction',
+    /*
+     *   The cooperative identity backfill: copies what the platform already
+     *   knows about a member — from their user document and its module
+     *   registrations — onto a membership row that lacks it.
+     *
+     *   Unlike the pair above it creates nothing and decides nothing. It fills
+     *   only fields the row does not have, never touches membershipStatus,
+     *   paymentStatus or onboardingCompleted, and dry-runs by default. Written
+     *   for the 715 members who were active, paid, and whom the cooperative
+     *   could not name.
+     */
+    'backfillMemberIdentitiesAction',
 ].sort();
 
 const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();

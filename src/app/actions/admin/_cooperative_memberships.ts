@@ -46,6 +46,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { maskAddress } from "@/lib/missing-email-backfill";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { identityPatchFor, rowNamesSomebody } from "@/lib/cooperative-identity-backfill";
 import { ledgerBalanceOf } from "@/lib/cooperative-ledger-balance";
 import {
     checkRepair,
@@ -270,3 +271,136 @@ export const listMissingMembershipsAction = withFlexibleSafeAction(
 
 export const createMissingMembershipAction = withFlexibleSafeAction(
     "createMissingMembershipAction", _createMissingMembershipAction);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BACKFILLING THE IDENTITY OF MEMBERS THE PLATFORM PAID ATTENTION TO ONCE
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** What a backfill did, or would do. */
+export interface IdentityBackfillReport {
+    /** Membership rows examined — active/approved, paid, never onboarded. */
+    scanned: number;
+    /** Of those, how many name nobody. The 715. */
+    unnamed: number;
+    /** Rows this would write to. */
+    fillable: number;
+    /** Of those, how many gain a name specifically. */
+    namesRecovered: number;
+    /** Field name → how many rows would gain it. */
+    byField: Record<string, number>;
+    /** Rows written. Zero on a dry run. */
+    written: number;
+    /** True when the scan hit its bound and the counts are a lower bound. */
+    truncated: boolean;
+    dryRun: boolean;
+}
+
+/**
+ * Fill in what the platform already knows about members who never onboarded.
+ *
+ *   DRY RUN BY DEFAULT. 715 rows is not a thing to write to on the strength of
+ *   a function name, and the report below says exactly what would change —
+ *   per field, and how many members gain a NAME — before anything does.
+ *
+ *   NOTHING ABOUT STATUS CHANGES. Not membershipStatus, not paymentStatus, and
+ *   above all not `onboardingCompleted`: see the header of
+ *   lib/cooperative-identity-backfill for why setting that would hand these
+ *   members the exact grant three heal guards were just written to withhold.
+ *   Whether a member who still cannot be identified should stay active is a
+ *   separate decision about people's access, and this is not it.
+ */
+async function _backfillMemberIdentitiesAction(
+    input: { dryRun?: boolean; limit?: number } = {},
+): Promise<ActionResponse<IdentityBackfillReport>> {
+    const dryRun = input.dryRun !== false;
+    const limit = Math.max(1, Math.min(input.limit ?? 1000, 5000));
+
+    try {
+        const auth = await requireAdmin("cooperatives:approve_members");
+        if ("error" in auth) {
+            return { success: false as const, error: auth.error, data: null };
+        }
+
+        const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where("paymentStatus", "==", "completed")
+            .limit(limit + 1)
+            .get();
+
+        const rows = snap.docs.slice(0, limit);
+        const truncated = snap.docs.length > limit;
+
+        const report: IdentityBackfillReport = {
+            scanned: 0, unnamed: 0, fillable: 0, namesRecovered: 0,
+            byField: {}, written: 0, truncated, dryRun,
+        };
+
+        for (const doc of rows) {
+            const member = doc.data() ?? {};
+
+            //   The cohort: paid, never onboarded, and admitted anyway. A
+            //   member who completed the form is not this tool's business even
+            //   if a field is blank — they answered, and a blank is an answer.
+            if (member.onboardingCompleted === true) continue;
+            const status = String(member.membershipStatus ?? member.status ?? "").toLowerCase();
+            if (status !== "active" && status !== "approved") continue;
+
+            report.scanned += 1;
+            const wasUnnamed = !rowNamesSomebody(member);
+            if (wasUnnamed) report.unnamed += 1;
+
+            const userId = member.userId;
+            if (!userId) continue;
+
+            const userSnap = await db.collection(COLLECTIONS.USERS).doc(String(userId)).get();
+            const patch = identityPatchFor(member, userSnap.exists ? userSnap.data() : {});
+            if (patch.filled.length === 0) continue;
+
+            report.fillable += 1;
+            if (wasUnnamed && patch.filled.includes("fullName")) report.namesRecovered += 1;
+            for (const f of patch.filled) {
+                report.byField[f] = (report.byField[f] ?? 0) + 1;
+            }
+
+            if (dryRun) continue;
+
+            await doc.ref.set({
+                ...patch.fields,
+                //   Derived, and said so. An admin must always be able to tell
+                //   a value the member declared from one inferred for them.
+                _identityBackfilledAt: FieldValue.serverTimestamp(),
+                _identityBackfilledFields: patch.filled,
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+            report.written += 1;
+        }
+
+        if (!dryRun && report.written > 0) {
+            await createAdminAuditLog({
+                action: "cooperative_identity_backfill",
+                userId: auth.userId,
+                targetId: "cooperative_members",
+                targetType: "collection",
+                details: `Backfilled identity onto ${report.written} membership row(s) from the `
+                    + `user document and its module registrations. ${report.namesRecovered} gained a name. `
+                    + `No status and no onboardingCompleted flag was changed.`,
+                metadata: { ...report.byField, written: report.written, scanned: report.scanned },
+            });
+        }
+
+        logger.info(
+            `[cooperative-identity-backfill] ${dryRun ? "DRY RUN" : "WROTE"} — scanned ${report.scanned}, `
+            + `unnamed ${report.unnamed}, fillable ${report.fillable}, names ${report.namesRecovered}`,
+            report.byField,
+        );
+
+        return { success: true as const, error: null, data: report };
+    } catch (error: any) {
+        logger.error("[cooperative-identity-backfill] failed", {
+            error: error?.message ?? String(error),
+        });
+        return { success: false as const, error: "Could not run the identity backfill.", data: null };
+    }
+}
+
+export const backfillMemberIdentitiesAction = withFlexibleSafeAction(
+    "backfillMemberIdentitiesAction", _backfillMemberIdentitiesAction);

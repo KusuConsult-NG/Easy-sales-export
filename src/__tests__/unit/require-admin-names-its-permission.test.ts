@@ -365,7 +365,12 @@ describe('#375 — every gate names its permission, and the exception is stated'
          *   rather than active, the row is what cooperative access is read
          *   from. Whoever may write one should be whoever may approve one.
          */
-        'src/app/actions/admin/_cooperative_memberships.ts': Array(2).fill('cooperatives:approve_members'),
+        //   3, not 2: the identity backfill joins the listing and the row
+        //   repair, behind the same permission. It writes only fields a
+        //   membership row LACKS and never a status, but it reads every
+        //   member's identity to do it, so it is gated where the rest of
+        //   this file is.
+        'src/app/actions/admin/_cooperative_memberships.ts': Array(3).fill('cooperatives:approve_members'),
 
         'src/app/actions/admin/_erased.ts': ['users:read_erased'],
 
@@ -534,7 +539,9 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // ledger exists to catch.
         // 69 → 70: #864 added record-inspection, the step between dispatching an
         // inspector and approving the land.
-        expect(callSites().length).toBe(70);
+        // 70 → 71: the cooperative identity backfill — the 715 members who were
+        // active, paid and unnamed.
+        expect(callSites().length).toBe(71);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

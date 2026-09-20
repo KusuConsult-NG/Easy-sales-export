@@ -53,8 +53,13 @@ export type { FarmNationApprovalReport, FarmNationDecisionInput } from "./_farm_
 export {
     listMissingMembershipsAction,
     createMissingMembershipAction,
+    backfillMemberIdentitiesAction,
 } from "./_cooperative_memberships";
-export type { MissingMembershipReport, CreateMembershipInput } from "./_cooperative_memberships";
+export type {
+    MissingMembershipReport,
+    CreateMembershipInput,
+    IdentityBackfillReport,
+} from "./_cooperative_memberships";
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
 export type { EditableApplicationFields } from "./_applications";
