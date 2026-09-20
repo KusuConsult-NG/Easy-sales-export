@@ -10,6 +10,35 @@ import type { FinanceServiceContract, RevenueMetrics } from "@easy-sales/service
  * IMMUTABLE LEDGER ARCHITECTURE: Balances must be derived from ledger totals only.
  */
 
+/**
+ * NOT WIDENED ACROSS A PERSON'S PROFILES, AND THAT IS A DECISION.
+ *
+ *   The sweep that resolved a member's own records across every profile they
+ *   own reached this file and stopped. Both derivations below read
+ *   `.where("userId", "==", userId)` on one id, and they stay that way.
+ *
+ *   BECAUSE THEY DERIVE A BALANCE, AND NOTHING CALLS THEM.
+ *
+ *   lib/wallet-lookup.ts settles what a balance may be summed from: money
+ *   moves at the LIVE id and nowhere else — migration 005's credit and debit
+ *   functions both key on `p_user_id` — so a balance totalled across profiles
+ *   is not what the person can spend. Showing it would put a figure on screen
+ *   that checkout then refuses, which is worse than the figure being short.
+ *   A LIST or a LIFETIME TOTAL is the opposite case and is summed freely; see
+ *   the wallet action and the export portfolio for both sides worked through.
+ *
+ *   Which of those two these are depends on what a caller wants them for, and
+ *   there is no caller to ask. Both are unreferenced — a ratchet in
+ *   wallet-statement-names-non-wallet-money.test.ts asserts exactly that, and
+ *   it is why `#332` (a WAVE credit summed into a wallet balance) is recorded
+ *   as presentational rather than a money defect.
+ *
+ *   So widening here would decide the question in the dark, and leave behind
+ *   a function that LOOKS settled: the next person to want a derived balance
+ *   would find one already summing across profiles and use it as a spending
+ *   limit. Left alone, the question is still open where it belongs — at the
+ *   first call site, which has to answer it.
+ */
 export class FinanceService implements FinanceServiceContract {
     /**
      * Derives a user's balance purely from immutable ledger entries.

@@ -14,6 +14,8 @@ import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { checkAcademyPayment } from "@/lib/academy-plan";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { isDecidedAgainst } from "@/lib/registration-progress";
+import { membershipRefForPayment } from "@/lib/cooperative-member-lookup";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 import { findExportOrderByReference, fulfilExportBuyerOrder } from "@/lib/export-order-fulfilment";
 import { fulfilPropertyPurchase } from "@/lib/property-purchase-fulfilment";
@@ -711,21 +713,39 @@ export async function processCooperativeRegistration(reference: string, amount: 
         throw new Error("Insufficient payment amount");
     }
 
-    let memberRef: import("@/lib/supabase-db").SupabaseDocumentReference;
-    if (membershipId) {
-        memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(membershipId);
-    } else {
-        const querySnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("userId", "==", userId)
-            .orderBy("createdAt", "desc")
-            .limit(1)
-            .get();
-        if (!querySnap.empty) {
-            memberRef = querySnap.docs[0].ref;
-        } else {
-            memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            logger.info(`[Cooperative] Creating new member doc for legacy payment userId=${userId} ref=${reference}`);
-        }
+    /*
+     *   WHICH ROW THIS ₦10,000 IS FULFILLED ONTO — through the module that
+     *   already answers that question, rather than a fifth copy of the rule.
+     *
+     *   lib/cooperative-member-lookup.ts holds membershipRefForPayment and its
+     *   header is written about THIS payment. The three-branch walk that stood
+     *   here differed from it in two ways that both cost a member something:
+     *
+     *   IT TOOK metadata.membershipId ON TRUST. `doc(membershipId)` with no
+     *   read and no ownership check, so a stale or wrong id in the metadata
+     *   fulfilled somebody else's membership — marked another person active
+     *   and paid on this member's ₦10,000. The resolver reads the row first
+     *   and refuses one carrying a different person's `userId`.
+     *
+     *   ITS FALLBACK READ ONE KEY OF THE TWO. `.where("userId", "==", …)`
+     *   finds the auto-id rows and misses the doc-id rows, which are most of
+     *   them — so an existing member fell through to the `doc(userId)` branch
+     *   and had a SECOND row manufactured beside their real one, carrying a
+     *   payment and nothing else. That is the blank-duplicate defect the
+     *   resolver's header describes in full: "the member's details are not
+     *   lost, they are on the other row, which stays pending and unpaid for
+     *   ever, while the row an admin opens says active, paid, and blank."
+     *
+     *   The resolver walks doc-id then field, across every profile the payer
+     *   owns, LIVE ROW FIRST — deterministic, so the money does not land on
+     *   an arbitrary one of their rows — and still creates doc(userId) when
+     *   there is genuinely nothing, which legacy references need.
+     */
+    const { ref: memberRef, id: resolvedMembershipId } = await membershipRefForPayment(
+        db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId, membershipId,
+    );
+    if (resolvedMembershipId === userId && !membershipId) {
+        logger.info(`[Cooperative] Creating new member doc for legacy payment userId=${userId} ref=${reference}`);
     }
 
     // Claim the payment before fulfilling any of it.
@@ -958,8 +978,33 @@ export async function processAcademyRegistration(reference: string, amount: numb
     //
     // The client-side verify path (academy/_payment.ts) races this one by
     // design, so both halves need the same rule or whichever wins decides.
-    const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-        .where("userId", "==", userId)
+    /*
+     *   EVERY PROFILE THIS APPLICANT OWNS — AND THE COMMENT ABOVE IS WHY THIS
+     *   ONE COULD NOT BE LEFT FOR LATER.
+     *
+     *   "The client-side verify path (academy/_payment.ts) races this one by
+     *   design, so both halves need the same rule or whichever wins decides."
+     *   That was written about the decided-against rule. It is just as true
+     *   of WHICH APPLICATIONS EACH HALF CAN SEE, and the two halves had
+     *   stopped agreeing: academy/_payment.ts was widened across owned
+     *   profiles in an earlier tranche of this sweep and this half was not,
+     *   because the sweep was scoped to src/app/actions.
+     *
+     *   So for an applicant with two profiles whose REJECTED application sits
+     *   under the superseded one: the client half finds it and records the
+     *   payment without approving; this half found nothing, took the
+     *   `!hasApp` branch, and approved — `arrayUnion("academy_participant")`,
+     *   `isVerified: true`. The rejection an admin made, and the role that
+     *   was revoked, came back if the webhook won the race.
+     *
+     *   Both halves read the same set of ids now. `...For` rather than the
+     *   session-shaped helper because `userId` here arrives from the Paystack
+     *   metadata, not from a session.
+     */
+    const appQuery = await filterByOwner(
+        db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId",
+        await ownedProfileIdsFor(userId),
+    )
         .limit(APPLICATION_SCAN_LIMIT)
         .get();
 

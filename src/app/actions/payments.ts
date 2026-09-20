@@ -8,6 +8,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { requireSession, isAdmin } from "@/lib/session-guard";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { ActionResponse } from "@/lib/safe-action";
 
 /**
@@ -178,9 +179,25 @@ export async function getUserPaymentHistoryAction(userId: string): Promise<Payme
             return [];
         }
 
-        const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
-            .where("userId", "==", userId)
-            .get();
+        //   EVERY PROFILE THIS PERSON OWNS, and the AUTHORISATION above is
+        //   deliberately left alone.
+        //
+        //   Those are two different questions and this file is the reason to
+        //   keep them apart: the comment above records that this very clause
+        //   was once the vulnerability rather than the defence, because the
+        //   id being scoped to came from the CALLER. The session check is
+        //   what fixed that, so it stays exactly as strict as it is — a
+        //   caller still has to be the person they are asking about, or an
+        //   admin.
+        //
+        //   What widens is only WHICH OF THAT PERSON'S OWN IDS the rows are
+        //   gathered from, once they are past the gate. `...For` rather than
+        //   the session-shaped helper because `userId` arrives as an
+        //   argument, and an admin may legitimately pass a superseded id.
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.PAYMENTS), "userId",
+            await ownedProfileIdsFor(userId),
+        ).get();
 
         return serializeDocs<PaymentRecord>(snapshot.docs);
     } catch (error) { logger.error("Failed to fetch payment history:", error);
