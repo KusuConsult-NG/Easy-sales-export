@@ -179,8 +179,16 @@ describe('#496 — approval is not a payment', () => {
         //   never had processed_payments consulted, because the approval
         //   bypassed the gate and nobody bothered to look. One of the three
         //   non-legacy members on production is exactly this case.
+        //   `onboardingCompleted` ADDED, assertion untouched. This test is
+        //   about GATE 1 — that a real processed_payments row opens the
+        //   payment gate. It was also passing GATE 2 incidentally, because
+        //   the central-active heal used to activate any member whose user
+        //   document said "active", onboarding or not. That branch now
+        //   requires onboarding (it is where 387 blank members came from), so
+        //   the flag is stated here rather than supplied by the defect this
+        //   suite's own header describes.
         seedCentrallyActiveUser();
-        seedMembership();
+        seedMembership({ onboardingCompleted: true });
         store.seed(PAYMENTS, 'pay-1', {
             userId: MEMBER,
             type: 'cooperative_membership_registration',

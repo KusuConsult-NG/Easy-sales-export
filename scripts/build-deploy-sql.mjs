@@ -313,6 +313,42 @@ const EXPECTED = [
              "not matter — they are indexes, not functions. NOT REQUIRED FOR " +
              "CORRECTNESS: the code is right without it and merely slower.",
     },
+    {
+        n: "044",
+        why: "module_registration_counts extracted the same JSONB TWICE per row " +
+             "and detoasted it both times. Production EXPLAIN: two SubPlans, " +
+             "42,846 + 36,687 = 79,533 evaluations to read 42,846 rows, " +
+             "Execution Time 9948 ms against a statement_timeout of 8s — so the " +
+             "function never returned and the caller fell back to the fifteen " +
+             "scans it exists to replace. The scalar subquery is written once " +
+             "and evaluated twice because Postgres pulls the subquery up and " +
+             "does not eliminate the common subexpression across a WHERE and a " +
+             "GROUP BY. `OFFSET 0` fences the pull-up, so it is computed once " +
+             "and read twice: 960,642 buffers -> 480,560 and 988 ms -> 522 ms, " +
+             "measured at 40k production-sized rows. MUST come after 039, which " +
+             "creates the function. NOT REQUIRED FOR CORRECTNESS — identical " +
+             "rows either way; 039's behaviour is unchanged and only its cost " +
+             "moves.",
+    },
+    {
+        n: "045",
+        why: "the same rollup, reading a NARROW GENERATED COLUMN instead of " +
+             "detoasting raw_data. `users` is 106 MB over 42,845 rows, so " +
+             "raw_data averages ~2.5 kB and lives in TOAST; extracting one " +
+             "nested key from it detoasts the whole column. Measured at 40k " +
+             "production-sized rows: 960,642 buffers (039), 480,560 (044), " +
+             "1,216 (045) — 790x less traffic than 039, 988 ms -> 210 ms. " +
+             "Production confirmed 044 at 9,948 ms -> 6,302 ms, which fits the " +
+             "8s statement_timeout only just. ADD COLUMN ... GENERATED ... " +
+             "STORED REWRITES THE TABLE under ACCESS EXCLUSIVE and " +
+             "authenticator carries lock_timeout=8s, so RUN IT IN A QUIET " +
+             "WINDOW. IF NOT EXISTS because it is already applied on " +
+             "production by hand — a no-op there, the real thing elsewhere, " +
+             "the same relationship 043 has to 022. MUST come after 044; the " +
+             "column must exist before the function that reads it, which is " +
+             "why both statements are in the one file. NOT REQUIRED FOR " +
+             "CORRECTNESS — identical rows either way.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

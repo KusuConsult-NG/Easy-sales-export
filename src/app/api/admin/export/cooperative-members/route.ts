@@ -9,6 +9,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { writeDataExportRecord } from "@/lib/data-export-record";
+import { fillFromSibling, pickDetailRow } from "@/lib/cooperative-member-identity";
 
 export async function GET(request: NextRequest) {
     try {
@@ -54,6 +55,33 @@ export async function GET(request: NextRequest) {
         if (snapshot.truncated) {
             logger.error("[export/cooperative-members] cooperative members sweep hit the unbounded ceiling — the export below is incomplete.");
         }
+        /*
+         *   THE EXPORT SHIPPED THE BLANK HALF OF A MEMBER SPLIT IN TWO.
+         *
+         *   Same defect as the members screen, on the file an admin actually
+         *   distributes: a member whose profile is filed under one document
+         *   and whose payment landed on another exported as two rows, one of
+         *   them with no name, no phone, no occupation and no LGA. See
+         *   lib/cooperative-member-identity.ts.
+         *
+         *   Free here. The sweep above is `.all()`, so every row is already in
+         *   memory and the sibling costs no query — unlike the screen, which
+         *   pays for one lookup per page.
+         *
+         *   NOT COLLAPSED. Both rows are still exported. How the duplicate
+         *   pair should be reconciled is a decision about the DATA, and an
+         *   export quietly emitting fewer rows than the table holds is how an
+         *   admin comes to trust a file that is missing people.
+         */
+        const rowsByUser = new Map<string, any[]>();
+        for (const doc of snapshot.docs) {
+            const uid = doc.data().userId as string | undefined;
+            if (!uid) continue;
+            const list = rowsByUser.get(uid) || [];
+            list.push({ id: doc.id, ...doc.data() });
+            rowsByUser.set(uid, list);
+        }
+
         // Fallback user mapping to get names and emails for members missing them
         const userIds = [...new Set(snapshot.docs.map(doc => doc.data().userId || doc.id))];
         const userFallbackMap = new Map<string, any>();
@@ -82,7 +110,10 @@ export async function GET(request: NextRequest) {
         const rows: unknown[][] = [];
         
         snapshot.docs.forEach(doc => {
-            const data = doc.data();
+            const raw = doc.data();
+            const siblings = (rowsByUser.get(raw.userId as string) || [])
+                .filter((r: any) => r.id !== doc.id);
+            const data = fillFromSibling(raw, pickDetailRow(raw, siblings));
             const userId = data.userId || doc.id;
             const fallbackUser = userFallbackMap.get(userId) || {};
 

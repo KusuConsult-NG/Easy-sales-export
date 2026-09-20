@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner, filterByOwnerInArray } from "@/lib/owned-profile-ids";
 import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 import { serializeValue } from "@/lib/firestore-serialize";
 
@@ -140,17 +141,24 @@ async function _getDashboardStatsAction(): Promise<DashboardActionState> {
         //   EXPORT_SLOTS     { windowId, userId, volume, totalCost, status }
         //   EXPORT_BOOKINGS  { userId, exportWindowId, quantity, totalPrice, status }
         // Both are queried, because both are written and neither is a superset.
-        const exportSlotsPromise = db.collection(COLLECTIONS.EXPORT_SLOTS)
-            .where("userId", "==", userId)
-            .get();
+        /*
+         *   #904 (userId) — THE DASHBOARD IS A SET OF TOTALS, and a total that
+         *   silently omits what a superseded profile holds is a wrong number
+         *   rather than a short list. Every tile here widens together for the
+         *   same reason the cooperative card had to (#905): three numbers on
+         *   one screen drawn from two populations do not add up.
+         */
+        const ownerIds = await ownedProfileIds(userId);
 
-        const exportBookingsPromise = db.collection(COLLECTIONS.EXPORT_BOOKINGS)
-            .where("userId", "==", userId)
-            .get();
+        const exportSlotsPromise = filterByOwner(
+            db.collection(COLLECTIONS.EXPORT_SLOTS), "userId", ownerIds).get();
+
+        const exportBookingsPromise = filterByOwner(
+            db.collection(COLLECTIONS.EXPORT_BOOKINGS), "userId", ownerIds).get();
 
         // 3. Academy Enrollments (Use Count)
-        const enrollmentsPromise = db.collection(COLLECTIONS.ENROLLMENTS)
-            .where("userId", "==", userId)
+        const enrollmentsPromise = filterByOwner(
+            db.collection(COLLECTIONS.ENROLLMENTS), "userId", ownerIds)
             .count()
             .get();
 
@@ -280,9 +288,11 @@ async function _getRecentActivityAction(): Promise<ActivityActionState> {
         const activities: RecentActivity = [];
 
         // Fetch recent export windows
-        const exportsSnapshot = await db
-            .collection(COLLECTIONS.EXPORT_WINDOWS)
-            .where("userId", "==", userId)
+        //   #904 (userId) — recent activity, across every profile they hold.
+        const activityIds = await ownedProfileIds(userId);
+
+        const exportsSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.EXPORT_WINDOWS), "userId", activityIds)
             .orderBy("createdAt", "desc")
             .limit(3)
             .get();
@@ -300,9 +310,8 @@ async function _getRecentActivityAction(): Promise<ActivityActionState> {
         });
 
         // Fetch recent notifications
-        const notificationsSnapshot = await db
-            .collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
+        const notificationsSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.NOTIFICATIONS), "userId", activityIds)
             .orderBy("createdAt", "desc")
             .limit(2)
             .get();
@@ -344,13 +353,21 @@ async function _getEscrowStatusAction(): Promise<EscrowActionState> {
         const userId = session.user.id;
 
         // Fetch both export windows and marketplace escrows in parallel
+        /*
+         *   #904 (userId) — AND `participants` IS AN ARRAY, the third shape a
+         *   person is stored in. An escrow names both sides in it, so this asks
+         *   `array-contains`; filterByOwnerInArray is the sibling helper, and
+         *   widening the windows without it would leave the two halves of this
+         *   one figure disagreeing.
+         */
+        const escrowIds = await ownedProfileIds(userId);
+
         const [exportsSnapshot, marketplaceSnapshot] = await Promise.all([
-            db.collection(COLLECTIONS.EXPORT_WINDOWS)
-                .where("userId", "==", userId)
+            filterByOwner(db.collection(COLLECTIONS.EXPORT_WINDOWS), "userId", escrowIds)
                 .where("status", "in", ["in_transit", "delivered"])
                 .get(),
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                .where("participants", "array-contains", userId)
+            filterByOwnerInArray(
+                db.collection(COLLECTIONS.ESCROW_TRANSACTIONS), "participants", escrowIds)
                 .get()
         ]);
 

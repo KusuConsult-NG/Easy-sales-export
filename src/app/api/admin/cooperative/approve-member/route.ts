@@ -9,6 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
+import { approvalReadiness } from "@/lib/cooperative-approval-readiness";
 
 /**
  * API Route: Approve Cooperative Membership Application
@@ -60,6 +61,26 @@ export async function POST(request: NextRequest) {
         }
 
         const memberData = memberDoc.data();
+
+        //   APPROVAL REQUIRES KNOWING WHO IS BEING APPROVED.
+        //
+        //   This door wrote membershipStatus: "active" on nothing but the row
+        //   existing. 328 of the 715 members who are active, paid and blank
+        //   carry the `approvedBy` this route stamps — pressed on a screen
+        //   that gave no sign the onboarding form had never been filled in.
+        //   See lib/cooperative-approval-readiness.ts.
+        const readiness = approvalReadiness(memberData);
+        if (!readiness.ready) {
+            logger.warn(
+                `[approve-member] refused: ${memberId} has no ${readiness.missing.join(" and ")}`,
+                { memberId, adminId: session.user.id, missing: readiness.missing },
+            );
+            return NextResponse.json(
+                { success: false, message: readiness.reason },
+                { status: 422 }
+            );
+        }
+
         const userId = memberData?.userId || memberId;
 
         // Atomic update: member doc + user doc in a single transaction

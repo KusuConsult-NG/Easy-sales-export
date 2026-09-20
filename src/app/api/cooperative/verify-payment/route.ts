@@ -13,6 +13,7 @@ import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { paystackBaseUrl } from "@/lib/paystack-host";
 import { isDecidedAgainst } from "@/lib/registration-progress";
+import { findCooperativeMemberRow, membershipRefForPayment } from "@/lib/cooperative-member-lookup";
 
 // Rate limiter for payment verification (prevent fraud/double-verification)
 const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
@@ -27,8 +28,19 @@ const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
  * the payment was already applied, rather than off a racy read that only
  * inferred it.
  */
-async function syncAlreadyProcessed(userId: string, reference: string, amount: number | null) {
-    const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+async function syncAlreadyProcessed(
+    membershipRef: import("@/lib/supabase-db").SupabaseDocumentReference,
+    userId: string,
+    reference: string,
+    amount: number | null,
+) {
+    //   The ref is RESOLVED BY THE CALLER and no longer doc(userId).
+    //
+    //   This is the lost-claim branch: the webhook already fulfilled, onto the
+    //   row `metadata.membershipId` names. Computing doc(userId) here and
+    //   set(merge:true)-ing it MANUFACTURED a second membership row — the
+    //   money on one, the member's identity on the other. See
+    //   lib/cooperative-member-lookup.ts.
 
     // The lost-claim sync must not soften a decision either: writing
     // "legacy_pending_onboarding" over "suspended" on the user document clears
@@ -141,7 +153,7 @@ export async function POST(request: NextRequest) {
         }
 
         const userId = session.user.id;
-        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        const members = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
         // ── FAST PATH, not a guard ──────────────────────────────────────────────
         // This saves a Paystack round trip in the common case of a user
@@ -150,9 +162,16 @@ export async function POST(request: NextRequest) {
         // processed_payments that used to sit here is gone: it was the read half
         // of a check-then-write, and leaving it above the claim is exactly how it
         // came to be mistaken for protection in the first place.
-        const membershipDoc = await membershipRef.get();
+        //   THE TWO-KEY WALK, not doc(userId).
+        //
+        //   A member whose row sits under an auto-generated id — every member
+        //   who registered through api/cooperatives/register — was invisible to
+        //   the doc-id read, so this path could not see the payment they had
+        //   already made. #488's finding, on the fast path of the door that
+        //   takes the fee.
+        const existingRow = await findCooperativeMemberRow(members, userId);
 
-        if (membershipDoc.exists && membershipDoc.data()?.paymentStatus === "completed") {
+        if (existingRow && existingRow.data.paymentStatus === "completed") {
             logger.info(`[Cooperative verify-payment] Membership already completed for ${userId}`);
             // FIX: Also ensure the USERS doc is synced (fast-path for future status checks)
             try {
@@ -193,7 +212,7 @@ export async function POST(request: NextRequest) {
                 success: true,
                 message: "Payment already verified. Please continue your application.",
                 alreadyVerified: true,
-                onboardingCompleted: membershipDoc.data()?.onboardingCompleted === true,
+                onboardingCompleted: existingRow.data.onboardingCompleted === true,
             });
         }
 
@@ -256,6 +275,17 @@ export async function POST(request: NextRequest) {
             ?? verifyData.data.metadata?.membershipId
             ?? null;
 
+        //   WHICH ROW THIS PAYMENT IS FOR — read from the same metadata block
+        //   two lines above, which this route was already fetching and using
+        //   for the payer check while ignoring the row it names. The webhook
+        //   half of this payment has always honoured it; this half did not, and
+        //   that disagreement is what split a member in two. The resolver reads
+        //   the row before writing to it and refuses one owned by somebody
+        //   else — see lib/cooperative-member-lookup.ts.
+        const { ref: membershipRef } = await membershipRefForPayment(
+            members, userId, verifyData.data.metadata?.membershipId ?? null,
+        );
+
         if (payerId && payerId !== userId) {
             logger.error(
                 "[Cooperative verify-payment] reference belongs to another user — refusing",
@@ -311,7 +341,7 @@ export async function POST(request: NextRequest) {
             // failed after paying, then report success.
             logger.info(`[Cooperative verify-payment] Payment ${reference} already claimed for ${userId} — syncing.`);
             try {
-                await syncAlreadyProcessed(userId, reference, paidAmount);
+                await syncAlreadyProcessed(membershipRef, userId, reference, paidAmount);
             } catch (e) {
                 logger.warn(`[Cooperative verify-payment] Sync on lost claim failed (non-fatal):`, e as any);
             }

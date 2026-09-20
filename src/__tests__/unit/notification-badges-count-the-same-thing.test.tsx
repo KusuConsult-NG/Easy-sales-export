@@ -136,8 +136,14 @@ describe('#416 — one rule, one window, two badges', () => {
          * and capped at the window; the panel counts `!n.read` over the same
          * window it fetched. Two ways of writing one number.
          */
+        //   #904 (userId) — still scoped to this member, now to every profile
+        //   they hold: a notice written before #738's redirect sits on the
+        //   superseded row, and the badge said zero while it waited. The
+        //   property this guards — both sides counting the SAME thing — is
+        //   unchanged, and the panel assertion below still pins the other half.
         const rule = code(RULE);
-        expect(rule).toMatch(/\.where\("userId", "==", userId\)/);
+        expect(rule).toMatch(/filterByOwner\(/);
+        expect(rule).toMatch(/"userId",\s*\n?\s*await ownedProfileIdsFor\(userId\)/);
         expect(rule).toMatch(/\.where\("read", "==", false\)/);
         expect(code(PANEL)).toMatch(/notifications\.filter\(\(n\) => !n\.read\)\.length/);
     });

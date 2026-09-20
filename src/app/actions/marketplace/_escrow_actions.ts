@@ -186,14 +186,49 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
                     lastName: data.lastName,
                     email: data.email,
                     phoneNumber: data.phoneNumber || data.phone || "N/A",
+                    /*
+                     *   #903's DEFECT, ON THE SCREEN NEXT DOOR.
+                     *
+                     *   From the owner's production log, twice on one admin
+                     *   escrow list:
+                     *
+                     *       Only plain objects, and a few built-ins, can be
+                     *       passed to Client Components from Server Components.
+                     *       {bankCode: "044", … accountResolvedAt: {_seconds: …}}
+                     *
+                     *   `data.bankDetails` is the RAW user document's block —
+                     *   the one bank-account-provenance.ts stamps with
+                     *   `accountResolvedAt`. The four-field fallback beside it
+                     *   is all strings and was never the problem; the stored
+                     *   block carries a Timestamp, and a Timestamp is a class
+                     *   instance.
+                     *
+                     *   #903 is this exact fault: "Server Actions CANNOT pass
+                     *   class instances (like Firestore Timestamps) to Client
+                     *   Components", found when one member's date of birth took
+                     *   down the whole membership list. Its fix was
+                     *   serializeValue on a user map built for injection. THIS
+                     *   IS THE SAME SHAPE — a user map, built for injection,
+                     *   two files away — and the same call was missing.
+                     *
+                     *   _marketplace.ts already writes `serializeValue(
+                     *   data.bankDetails || {…})` for the very same field. The
+                     *   rule existed and reached some of the places it names,
+                     *   which is this audit's most common finding.
+                     *
+                     *   The throw happens while React serialises the payload,
+                     *   AFTER the action returns — so the action's own catch
+                     *   cannot see it and no detail survives to the screen. The
+                     *   admin sees the list come down and nothing saying why.
+                     */
                     ...(maySeeBankDetails
                         ? {
-                            bankDetails: data.bankDetails || {
+                            bankDetails: serializeValue(data.bankDetails || {
                                 bankName: data.bankName || data.bankAccount?.bankName || "N/A",
                                 accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
                                 accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
                                 bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
-                            }
+                            })
                         }
                         : {}),
                 };

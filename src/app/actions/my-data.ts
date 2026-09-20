@@ -282,9 +282,12 @@ export async function getMyNotifications(max = 200): Promise<any[]> {
         //   filtered AFTER the read, so a page made entirely of archived rows
         //   would come back empty while current ones sat just past the limit.
         //   Reading a multiple and trimming to `max` keeps the caller's contract.
-        const snap = await db
-            .collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
+        //   #904 (userId) — same argument as the order counts already widened
+        //   in this file: my-data answers "what do you hold about me", and a
+        //   notice on a superseded profile is still held about them.
+        const snap = await filterByOwner(
+            db.collection(COLLECTIONS.NOTIFICATIONS), "userId",
+            await ownedProfileIds(userId))
             .orderBy("createdAt", "desc")
             .limit(max * 3)
             .get();
@@ -595,13 +598,18 @@ export async function getMyWithdrawals(): Promise<any[]> {
         // Both collections, since this lives in the "my data" module and a
         // member's own record of their withdrawals should not omit a whole class
         // of them. `source` distinguishes the two for any caller that cares.
+        //   #904 (userId) — BOTH, for the reason the comment above already
+        //   gives about these two collections: "a member's own record of their
+        //   withdrawals should not omit a whole class of them". A profile is
+        //   another such class.
+        const withdrawalIds = await ownedProfileIds(userId);
+
         const [platformSnap, coopSnap] = await Promise.all([
-            db.collection(COLLECTIONS.WITHDRAWALS)
-                .where("userId", "==", userId)
+            filterByOwner(db.collection(COLLECTIONS.WITHDRAWALS), "userId", withdrawalIds)
                 .orderBy("createdAt", "desc")
                 .get(),
-            db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS)
-                .where("userId", "==", userId)
+            filterByOwner(db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS), "userId",
+                withdrawalIds)
                 .get(),
         ]);
 
@@ -785,9 +793,11 @@ export async function getMyApplicationStatus(
             };
         }
 
-        const snap = await db
-            .collection(spec.collection)
-            .where("userId", "==", userId)
+        //   #904 (userId) — "have I applied?" asked of every profile they
+        //   hold. Missing it tells somebody who HAS applied that they have not
+        //   (#849), which is the worst answer this function can give.
+        const snap = await filterByOwner(
+            db.collection(spec.collection), "userId", await ownedProfileIds(userId))
             .orderBy("createdAt", "desc")
             .limit(1)
             .get();
@@ -882,9 +892,10 @@ export async function getMyMembershipStatus(moduleType: string): Promise<MyMembe
 
         if (!spec.fallback) return { status: "unknown", data: null };
 
-        const fallbackSnap = await db
-            .collection(spec.fallback)
-            .where("userId", "==", userId)
+        //   The fallback widens too, or a degraded answer is narrower than
+        //   the one it replaces.
+        const fallbackSnap = await filterByOwner(
+            db.collection(spec.fallback), "userId", await ownedProfileIds(userId))
             .limit(1)
             .get();
 

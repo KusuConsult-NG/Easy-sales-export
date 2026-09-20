@@ -1,5 +1,6 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isSavedRow, SAVED_ITEMS_PER_USER_CAP, type SavedItemType } from "@/lib/saved-items";
 
 /**
@@ -51,9 +52,11 @@ export async function readSavedRows(
     userId: string,
     itemType: SavedItemType,
 ): Promise<SavedItemRow[]> {
-    const snapshot = await db
-        .collection(COLLECTIONS.SAVED_ITEMS)
-        .where("userId", "==", userId)
+    //   #904 (userId) — something saved from a profile this person no longer
+    //   signs in as is still saved. `userId` is a parameter, so it is resolved
+    //   forward before the backward search.
+    const snapshot = await filterByOwner(
+        db.collection(COLLECTIONS.SAVED_ITEMS), "userId", await ownedProfileIdsFor(userId))
         .where("itemType", "==", itemType)
         .limit(SAVED_ITEMS_PER_USER_CAP)
         .get();

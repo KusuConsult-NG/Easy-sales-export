@@ -1,5 +1,6 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { logger } from "@/lib/logger";
 import { NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
 
@@ -35,9 +36,12 @@ export async function countUnreadNotifications(userId: string): Promise<number> 
     if (!userId) return 0;
 
     try {
-        const snap = await db
-            .collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
+        //   #904 (userId) — #738 already redirects a NEW notice to the live
+        //   profile, but notices written before that fix sit on the superseded
+        //   row and were not counted. The badge said zero while they waited.
+        const snap = await filterByOwner(
+            db.collection(COLLECTIONS.NOTIFICATIONS), "userId",
+            await ownedProfileIdsFor(userId))
             .where("read", "==", false)
             .orderBy("createdAt", "desc")
             .limit(NOTIFICATION_BADGE_WINDOW)

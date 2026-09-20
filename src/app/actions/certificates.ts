@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIdsFor, filterByOwner, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { uploadFileToStorage, detectFileType } from "@/lib/storage-admin";
@@ -151,9 +152,17 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
         const sessionResult = await requireSession();
         const session = sessionResult.session;
         if (!session?.user?.id) return [];
-        if (session.user.id !== userId && !isAdmin(session.user.roles)) return [];
+        //   #904 (userId) A PERSON'S OWN RECORDS, UNDER THE FIELD THE EARLIER
+        //   PASSES SET ASIDE. `ownerId`, `buyerId` and `sellerId` were swept; `userId`
+        //   was called "the broad platform surface" and deferred twice, and the export
+        //   module showed what that costs — one module answering two ways about who
+        //   somebody is. These are the same question.
+        if (!await isOwnedBySession(userId, session.user.id) && !isAdmin(session.user.roles)) return [];
 
-        const q = db.collection(COLLECTIONS.CERTIFICATES).where("userId", "==", userId);
+        //   `userId` is a PARAMETER here, so it is resolved forward before the
+        //   backward search — ownedProfileIds expects a live id.
+        const ownerIds = await ownedProfileIdsFor(userId);
+        const q = filterByOwner(db.collection(COLLECTIONS.CERTIFICATES), "userId", ownerIds);
         const snapshot = await q.get();
 
         // #303 A certificate the owner removed leaves this list. Note that this

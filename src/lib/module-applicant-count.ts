@@ -52,6 +52,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { getCached, setCache, CACHE_TTL } from "@/lib/redis";
 
 /** The modules a person can apply to. */
 export type ModuleKey =
@@ -261,13 +262,56 @@ export function bucketStatusSets(rows: readonly StatusSetRow[]): ApplicantCounts
 }
 
 /**
- * The one-scan path. Null when the function is not there, so the caller falls
- * back rather than reporting nothing.
+ * Which of three things happened when the rollup was asked.
+ *
+ *   THE THIRD ONE IS THE POINT. This used to return `ApplicantCounts | null`,
+ *   where null meant "fall back to the fifteen scans" — and EVERY failure
+ *   produced it, a missing function and a statement timeout alike.
+ */
+type RollupOutcome =
+    | { kind: "counted"; counts: ApplicantCounts }
+    /** The migration is not applied yet. Fall back — that is what it is for. */
+    | { kind: "absent" }
+    /** It exists and did not answer. Do NOT fall back. See below. */
+    | { kind: "failed" };
+
+/**
+ *   PostgREST and Postgres codes that mean THE FUNCTION IS NOT THERE.
+ *
+ *   PGRST202 is "Could not find the function in the schema cache"; 42883 is
+ *   Postgres's own undefined_function. Nothing else means absent, and the
+ *   distinction is the whole fix — see countModuleApplicants.
+ */
+const FUNCTION_ABSENT_CODES = new Set(["PGRST202", "42883"]);
+
+/** A statement timeout. The exact code production reports on this function. */
+const STATEMENT_TIMEOUT = "57014";
+
+/**
+ * The one-scan path.
+ *
+ *   #850's fallback was written for one condition and fired on all of them:
+ *   "Code reaches production before a migration does — that is the normal
+ *   order on this platform". True, and it is the ONLY case a fallback of
+ *   fifteen sequential scans is an improvement on.
+ *
+ *   A TIMEOUT IS THE OPPOSITE CASE. The function timed out BECAUSE the scan is
+ *   expensive, and the fallback's answer to that was to run the same scan
+ *   another five to fifteen times, each under the same 8s cap. One cooperative
+ *   admin page load could spend two minutes of database time failing, having
+ *   started from a single failure — and, per 039's own header, a saturated
+ *   database is what made cheap queries like the login email lookup time out
+ *   alongside it.
+ *
+ *   So the fallback now fires only on the condition it was written for. Every
+ *   other failure reports `counted: false`, which the screens already render
+ *   as "—" rather than 0 (lib/admin-stat-display). An unknown figure is a
+ *   worse answer than a real one and a far better one than a stampede.
  */
 async function countFromRegistrationRollup(
     keys: readonly string[],
     since?: Date | null,
-): Promise<ApplicantCounts | null> {
+): Promise<RollupOutcome> {
     try {
         const { supabaseAdmin } = await import("@/lib/supabase");
         const { data, error } = await supabaseAdmin.rpc("module_registration_counts", {
@@ -280,25 +324,52 @@ async function countFromRegistrationRollup(
         });
 
         if (error || !Array.isArray(data)) {
-            /*
-             *   NOT AN ERROR PATH — it is the pre-migration path. A missing
-             *   function is PGRST202 / 42883, and reporting that at error level
-             *   would fill the log with a condition that is expected between a
-             *   deploy and a migration. Anything else is worth seeing once,
-             *   because the fallback below is fifteen scans.
-             */
-            if (error) logger.warn(
-                "[applicant-count] module_registration_counts unavailable; " +
-                "falling back to per-bucket counts (migration 039 not applied?)",
-                { code: (error as { code?: string }).code },
+            const code = (error as { code?: string } | null)?.code;
+
+            if (!error) {
+                //   A non-array with no error is not a shape this can bucket,
+                //   and it is not evidence the function is missing either.
+                logger.error(
+                    "[applicant-count] module_registration_counts returned a non-array with no error",
+                );
+                return { kind: "failed" };
+            }
+
+            if (code && FUNCTION_ABSENT_CODES.has(code)) {
+                /*
+                 *   NOT AN ERROR PATH — it is the pre-migration path. Reporting
+                 *   it at error level would fill the log with a condition that
+                 *   is expected between a deploy and a migration.
+                 */
+                logger.warn(
+                    "[applicant-count] module_registration_counts unavailable; " +
+                    "falling back to per-bucket counts (migration 039 not applied?)",
+                    { code },
+                );
+                return { kind: "absent" };
+            }
+
+            //   At ERROR, not warn. The rollup exists and could not answer;
+            //   every admin card it feeds now reads "—", and nothing else in
+            //   the log would say why.
+            logger.error(
+                code === STATEMENT_TIMEOUT
+                    ? "[applicant-count] module_registration_counts TIMED OUT — the users scan "
+                      + "exceeded statement_timeout. NOT falling back: the fallback is the same "
+                      + "scan five to fifteen times over."
+                    : "[applicant-count] module_registration_counts failed; NOT falling back",
+                { code, message: (error as { message?: string }).message },
             );
-            return null;
+            return { kind: "failed" };
         }
 
-        return bucketStatusSets(data as StatusSetRow[]);
+        return { kind: "counted", counts: bucketStatusSets(data as StatusSetRow[]) };
     } catch (e) {
-        logger.warn("[applicant-count] rollup call failed; falling back", e);
-        return null;
+        //   A thrown error is transport, not a missing function — a missing one
+        //   comes back as PGRST202 in `error`. Retrying it fifteen times over
+        //   the same transport is the stampede again.
+        logger.error("[applicant-count] rollup call threw; NOT falling back", e);
+        return { kind: "failed" };
     }
 }
 
@@ -313,7 +384,7 @@ async function countFromRegistrationRollup(
  *                  applications — a fresh inconsistency introduced by the fix
  *                  for the old one.
  */
-export async function countModuleApplicants(
+async function computeModuleApplicants(
     module: ModuleKey,
     since?: Date | null,
 ): Promise<ApplicantCounts> {
@@ -348,8 +419,17 @@ export async function countModuleApplicants(
          *   and #480 records the same arrangement for the email_normalised
          *   column. Until 039 is applied this behaves exactly as it does today.
          */
-        const viaOneScan = await countFromRegistrationRollup(keys, since);
-        if (viaOneScan) return viaOneScan;
+        const rollup = await countFromRegistrationRollup(keys, since);
+        if (rollup.kind === "counted") return rollup.counts;
+
+        //   THE FALLBACK IS FOR A MISSING MIGRATION, NOT A SLOW ONE.
+        //
+        //   Everything below is five to fifteen sequential scans of `users` —
+        //   the load 039 exists to remove. Reaching it because the rollup TIMED
+        //   OUT runs that same scan again and again, under the same cap, on the
+        //   table that was already too slow. Reported as not-counted instead:
+        //   the cards render "—", and the database is left alone.
+        if (rollup.kind === "failed") return EMPTY;
 
         /**
          * INCLUSION-EXCLUSION, not a sum.
@@ -460,6 +540,73 @@ export async function countModuleApplicants(
         logger.error(`[applicant-count] ${module} applicant counts could not be computed`, e);
         return EMPTY;
     }
+}
+
+/**
+ * The cache key for one module's applicant count.
+ *
+ * `since` is part of it because it is part of the QUESTION: the WAVE
+ * compliance route passes a timeframe and the other four surfaces do not, and
+ * serving one the other's answer would report every applicant ever against a
+ * single month — the inconsistency countModuleApplicants' own `since`
+ * parameter exists to prevent.
+ */
+export const applicantCountCacheKey = (module: string, since?: Date | null): string =>
+    `applicants:${module}:${since ? since.toISOString() : "all"}`;
+
+/**
+ * Count the people who have applied to a module, from cache when it is warm.
+ *
+ *   FIVE ADMIN SURFACES SCANNED A 106 MB TABLE ON EVERY PAGE LOAD.
+ *
+ *   The WAVE compliance route, the academy, export and farm-nation admin
+ *   actions and the cooperative reports action all call this, and nothing
+ *   cached it. Each call is a full sequential scan of `users` — by
+ *   construction, since `WHERE p_since_iso IS NULL OR ...` must read every
+ *   row — and before migration 044 it was five to fifteen of them.
+ *
+ *   MEASURED ON PRODUCTION, the same query, same plan, same 8,963 buffers,
+ *   twice within a few minutes: 2,076 ms and 8,334 ms. The work did not
+ *   change; the machine's available capacity did. The second is ABOVE the 8s
+ *   statement_timeout `authenticator` imposes, so at that moment the count
+ *   failed — and 039's header had already named the shape: "A cheap query
+ *   timing out is what a saturated database looks like."
+ *
+ *   No amount of further tuning answers a 4x swing in wall-clock on identical
+ *   work. Not running the query is what answers it.
+ *
+ *   TTL: CACHE_TTL.STATS, the existing two-minute value for dashboard
+ *   figures, rather than a number invented here. An applicant count does not
+ *   need to be second-fresh, and two minutes turns "several scans per page
+ *   view" into at most one per module per two minutes however many admins are
+ *   looking.
+ *
+ *   A FAILURE IS NEVER CACHED. `counted: false` means the count could not be
+ *   taken — storing it would make one transient timeout the answer every
+ *   admin gets for the next two minutes, which is the opposite of what this
+ *   is for. Only a real count is written, and only a real count is served.
+ *
+ *   The cache fails open in both directions: getCached returns null and
+ *   setCache discards when Redis is absent (see lib/cache-fallback), so this
+ *   degrades to exactly the behaviour it had before.
+ */
+export async function countModuleApplicants(
+    module: ModuleKey,
+    since?: Date | null,
+): Promise<ApplicantCounts> {
+    const key = applicantCountCacheKey(module, since);
+
+    const cached = await getCached<ApplicantCounts>(key);
+    //   `cached.counted` re-checked on the way OUT as well as on the way in.
+    //   Nothing should ever have written a failure, and a cache is exactly
+    //   where a should-never would survive for two minutes at a time.
+    if (cached && cached.counted) return cached;
+
+    const counts = await computeModuleApplicants(module, since);
+
+    if (counts.counted) await setCache(key, counts, CACHE_TTL.STATS);
+
+    return counts;
 }
 
 /**

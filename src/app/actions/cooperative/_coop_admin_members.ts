@@ -18,6 +18,8 @@ import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { paginatedOk, paginatedErr, PaginatedAdminResponse } from "@/lib/admin-action-response";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAdminScope } from "@/lib/cooperative-admin-scope";
+import { mergeMemberIdentity, pickDetailRow } from "@/lib/cooperative-member-identity";
+import { approvalReadiness, isAdmittingStatus } from "@/lib/cooperative-approval-readiness";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
@@ -332,6 +334,38 @@ async function _updateMemberStatusAction(
                 error: "Unauthorized: Cannot change membership status for another cooperative",
                 data: null,
             };
+        }
+
+        //   THE SAME RULE AS THE ROUTE, ON THE DOOR BESIDE IT.
+        //
+        //   The comment further down this function reads "No status guard
+        //   here, so there is no check-then-write to claim: this writes
+        //   membershipStatus unconditionally." That was true of the ADMISSION
+        //   as well, and this is the server action the members screen calls —
+        //   api/admin/cooperative/approve-member is the other door onto the
+        //   same write. Fixing one of two doors is the defect class this
+        //   codebase has recorded more than a dozen times, so the rule is
+        //   stated once in lib/cooperative-approval-readiness.ts and asked
+        //   here too.
+        //
+        //   BELOW THE SCOPE GUARD, NOT ABOVE IT. Authorisation first: an
+        //   admin who may not touch this member at all is told that, and is
+        //   not handed "this member has no name" about somebody else's
+        //   cooperative. Written above it first, which is how the IDOR
+        //   suite's own refusal message changed underneath it.
+        //
+        //   SUSPENSION PASSES. isAdmittingStatus is false for it, and an
+        //   incomplete record is exactly one an admin may need to act
+        //   against.
+        if (isAdmittingStatus(status)) {
+            const readiness = approvalReadiness(memberData);
+            if (!readiness.ready) {
+                logger.warn(
+                    `[updateMemberStatus] refused: ${memberId} has no ${readiness.missing.join(" and ")}`,
+                    { memberId, adminId: session.user.id, missing: readiness.missing },
+                );
+                return { success: false as const, error: readiness.reason, data: null };
+            }
         }
 
         let targetUserId = memberData.userId;
@@ -696,6 +730,43 @@ export async function requestCooperativeRevisionAction(
 }
 
 
+/**
+ * Every membership row belonging to the members on this page, grouped by user.
+ *
+ * One indexed query per thirty members — `idx_cm_user_id` covers
+ * `raw_data->>'userId'` (migration 022) — alongside the USERS hydration that
+ * was already here, and on the same page-sized set of ids rather than the
+ * whole collection.
+ *
+ * Most members have exactly one row and cost nothing but the lookup. The ones
+ * that have two are the reason this exists: see
+ * lib/cooperative-member-identity.ts.
+ */
+async function siblingMemberRowsByUserId(userIds: string[]): Promise<Map<string, any[]>> {
+    const byUser = new Map<string, any[]>();
+    if (userIds.length === 0) return byUser;
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < userIds.length; i += 30) chunks.push(userIds.slice(i, i + 30));
+
+    const snaps = await Promise.all(chunks.map(chunk =>
+        db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("userId", "in", chunk).get()));
+
+    for (const snap of snaps) {
+        //   Serialised for the same reason the user documents above it are:
+        //   a Timestamp reaching a Client Component takes the whole page down
+        //   rather than the one field (#903).
+        for (const row of serializeDocs(snap.docs)) {
+            const uid = (row as any).userId as string | undefined;
+            if (!uid) continue;
+            const list = byUser.get(uid) || [];
+            list.push(row);
+            byUser.set(uid, list);
+        }
+    }
+    return byUser;
+}
+
 export async function getStandardCooperativeMembersAction(
     options: {
         // "under_review" is gone and "rejected" is here instead.
@@ -1031,28 +1102,27 @@ export async function getStandardCooperativeMembersAction(
              *   did not, and the default page is the one that opens on arrival.
              */
             userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+            const siblingMap = await siblingMemberRowsByUserId(userIds);
 
             const mapped = applications.map((app: any) => {
                 const uData = (userMap.get(app.userId as string) || {}) as any;
-                const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : (app.fullName || null);
+
+                //   The member's OTHER membership row, where the onboarding
+                //   form's answers are if this row was written by the payment.
+                //   See lib/cooperative-member-identity.ts — nothing is written
+                //   and no field the row already has can be displaced.
+                const siblings = (siblingMap.get(app.userId as string) || [])
+                    .filter((r: any) => r.id !== app.id);
+                const sibling = pickDetailRow(app, siblings);
+
+                const mergedData = mergeMemberIdentity(app, uData, sibling);
+
+                const localName = mergedData.firstName
+                    ? `${mergedData.firstName} ${mergedData.lastName || ''}`.trim()
+                    : (mergedData.fullName || null);
                 const userName = uData.firstName
                     ? `${uData.firstName} ${uData.lastName || ''}`.trim()
                     : (uData.fullName || uData.name || uData.displayName || localName || "");
-
-                const mergedData = {
-                    ...app,
-                    phone:               app.phone               || uData.phone              || uData.phoneNumber || null,
-                    gender:              app.gender              || uData.gender             || null,
-                    dateOfBirth:         app.dateOfBirth         || uData.dateOfBirth        || uData.dob        || null,
-                    occupation:          app.occupation          || uData.occupation         || null,
-                    stateOfOrigin:       app.stateOfOrigin       || uData.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state : null) || null,
-                    lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
-                    ward:                app.ward                || uData.ward               || (typeof uData.address === 'object' ? uData.address?.ward  : null) || null,
-                    residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                    firstName:           app.firstName           || uData.firstName          || null,
-                    lastName:            app.lastName            || uData.lastName           || null,
-                    email:               app.email               || uData.email              || uData.userEmail  || null,
-                };
 
                 const bankDetails = uData.bankDetails || {
                     bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
@@ -1114,7 +1184,11 @@ export async function getStandardCooperativeMembersAction(
 
             // Sort by gender in-memory
             const order = options.sortOrder || "desc";
-            mapped.sort((a, b) => {
+            //   Typed `any` because mergeMemberIdentity returns a
+            //   Record rather than a literal, and an object spread of a
+            //   Record drops its index signature — so `data.createdAt`,
+            //   which is read here, stops resolving.
+            mapped.sort((a: any, b: any) => {
                 const ga = (a.user?.gender || "").toLowerCase();
                 const gb = (b.user?.gender || "").toLowerCase();
                 if (ga === gb) {
@@ -1140,28 +1214,27 @@ export async function getStandardCooperativeMembersAction(
             //   #903 — see the note on the sibling loop above. This is the
             //   loop the DEFAULT page load runs.
             userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+            const siblingMap = await siblingMemberRowsByUserId(userIds);
 
             standardForms = paged.map((app: any) => {
                 const uData = (userMap.get(app.userId as string) || {}) as any;
-                const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : (app.fullName || null);
+
+                //   The member's OTHER membership row, where the onboarding
+                //   form's answers are if this row was written by the payment.
+                //   See lib/cooperative-member-identity.ts — nothing is written
+                //   and no field the row already has can be displaced.
+                const siblings = (siblingMap.get(app.userId as string) || [])
+                    .filter((r: any) => r.id !== app.id);
+                const sibling = pickDetailRow(app, siblings);
+
+                const mergedData = mergeMemberIdentity(app, uData, sibling);
+
+                const localName = mergedData.firstName
+                    ? `${mergedData.firstName} ${mergedData.lastName || ''}`.trim()
+                    : (mergedData.fullName || null);
                 const userName = uData.firstName
                     ? `${uData.firstName} ${uData.lastName || ''}`.trim()
                     : (uData.fullName || uData.name || uData.displayName || localName || "");
-
-                const mergedData = {
-                    ...app,
-                    phone:               app.phone               || uData.phone              || uData.phoneNumber || null,
-                    gender:              app.gender              || uData.gender             || null,
-                    dateOfBirth:         app.dateOfBirth         || uData.dateOfBirth        || uData.dob        || null,
-                    occupation:          app.occupation          || uData.occupation         || null,
-                    stateOfOrigin:       app.stateOfOrigin       || uData.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state : null) || null,
-                    lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
-                    ward:                app.ward                || uData.ward               || (typeof uData.address === 'object' ? uData.address?.ward  : null) || null,
-                    residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                    firstName:           app.firstName           || uData.firstName          || null,
-                    lastName:            app.lastName            || uData.lastName           || null,
-                    email:               app.email               || uData.email              || uData.userEmail  || null,
-                };
 
                 const bankDetails = uData.bankDetails || {
                     bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",

@@ -962,6 +962,28 @@ export default function CooperativeMembersPage() {
                                     </span>
                                 </div>
                             )}
+                            {/*
+                              *   A BLANK PROFILE AND AN UNFILLED FORM LOOKED
+                              *   THE SAME.
+                              *
+                              *   `onboardingCompleted` has been on this
+                              *   screen's own type since it was written and
+                              *   was never rendered, so a member who paid and
+                              *   never completed the form showed as "active",
+                              *   "completed", and empty — indistinguishable
+                              *   from a member whose details the screen had
+                              *   failed to read. It is the second of those an
+                              *   admin has to act on, and they could not tell
+                              *   which they were looking at.
+                              */}
+                            {selectedApplication.data.onboardingCompleted !== true && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-slate-500 font-medium">Onboarding:</span>
+                                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                                        Not completed
+                                    </span>
+                                </div>
+                            )}
                             <div className="ml-auto text-xs text-slate-500">
                                 Fee: <span className="font-bold text-slate-700">₦{(selectedApplication.data.registrationFee || 0).toLocaleString()}</span>
                             </div>
@@ -971,7 +993,22 @@ export default function CooperativeMembersPage() {
                         {!isEditMode ? (
                             <>
                                 <div>
-                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Personal Information</h4>
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                                        Personal Information
+                                        {/*   Where the details came from, when
+                                          *   they came from the member's other
+                                          *   membership row rather than this
+                                          *   one. An admin comparing the record
+                                          *   with the roster should not have to
+                                          *   guess why it is fuller than the row
+                                          *   they opened. */}
+                                        {(selectedApplication.data as any)._detailsFromMemberRow && (
+                                            <span className="ml-2 normal-case tracking-normal font-normal text-amber-700">
+                                                — merged from this member&apos;s other record{" "}
+                                                <code className="text-[10px]">{String((selectedApplication.data as any)._detailsFromMemberRow).slice(-6)}</code>
+                                            </span>
+                                        )}
+                                    </h4>
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-3 bg-slate-50 rounded-xl p-4 text-sm">
                                         <div>
                                             <p className="text-xs text-slate-400 mb-0.5">Full Name</p>

@@ -218,6 +218,27 @@ export function filterByOwnerInArray<Q extends Filterable>(
 }
 
 /**
+ * Every id belonging to the person `anyId` names — live or superseded.
+ *
+ *   `ownedProfileIds` searches BACKWARD and therefore expects the LIVE id:
+ *   handed a superseded one it finds what points AT it and misses the live row
+ *   entirely. That is fine where the id comes from the session, which is live
+ *   by construction, and wrong everywhere else.
+ *
+ *   A reader that takes an id as a PARAMETER cannot make that assumption — a
+ *   certificate list, a saved-items store, an unread count, an admin opening a
+ *   member's record by an id they were given. Composing the forward walk with
+ *   the backward one is the whole fix, and it is one line rather than two at
+ *   every call site precisely so nobody has to remember which case they are in.
+ *
+ *   ONE EXTRA KEYED READ over `ownedProfileIds`, and only that: a live id
+ *   resolves to itself on the first hop.
+ */
+export async function ownedProfileIdsFor(anyId: string): Promise<string[]> {
+    return ownedProfileIds(await liveProfileId(anyId));
+}
+
+/**
  * Is the caller either party to this row?
  *
  * The escrow and dispute gates are two-sided — "buyer or seller, and nobody
