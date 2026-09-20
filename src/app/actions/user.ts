@@ -12,7 +12,7 @@ import type { ActionResponse } from "@/lib/safe-action";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { walletRowsFor, totalWalletBalance } from "@/lib/wallet-lookup";
-import { ownedProfileIdsFor } from "@/lib/owned-profile-ids";
+import { ownedProfileIdsFor, filterByOwner, filterByOwnerInArray } from "@/lib/owned-profile-ids";
 
 /**
  * NDPR Compliant "Right to be Forgotten" Account Deletion.
@@ -119,9 +119,17 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         // erasure for ever.
         const UNSETTLED = ["pending", "reviewing", "approved", "partially_approved", "disbursed", "active"];
 
+        //   AND ACROSS EVERY PROFILE, like the two blockers above it.
+        //
+        //   This was the one read in this guard still asking about a single id,
+        //   sitting between a wallet check and a savings check that had both
+        //   been widened. A borrower whose profile was superseded, with a loan
+        //   filed under the id that lost, passed this blocker and could be
+        //   erased while still owing the money — which is, word for word, the
+        //   failure the comment above says this exists to prevent.
         const [generalLoans, coopLoans] = await Promise.all([
-            db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("userId", "==", userId).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_LOANS).where("memberId", "==", userId).get(),
+            filterByOwner(db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", memberIds).get(),
+            filterByOwner(db.collection(COLLECTIONS.COOPERATIVE_LOANS), "memberId", memberIds).get(),
         ]);
 
         const openLoans = [...generalLoans.docs, ...coopLoans.docs].filter((d) =>
@@ -133,9 +141,12 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
 
         // Escrow is checked on both sides: as buyer their money is held, as
         // seller they are owed it. Either way the account cannot go yet.
-        const escrowSnap = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-            .where("participants", "array-contains", userId)
-            .get();
+        //   `filterByOwnerInArray`, because an escrow names its parties in an
+        //   ARRAY — and a transaction funded under a superseded profile is
+        //   still money in flight for this person, on either side of it.
+        const escrowSnap = await filterByOwnerInArray(
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS), "participants", memberIds,
+        ).get();
         const liveEscrows = escrowSnap.docs.filter((d) =>
             ["funded", "delivered", "disputed"].includes(String(d.data()?.status))
         );
@@ -178,14 +189,24 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
          */
         const batch = db.batch();
 
-        const kycSnap = await db.collection(COLLECTIONS.KYC_VERIFICATIONS).where("userId", "==", userId).get();
+        //   Every owned profile, for the same reason the wallet marker below
+        //   covers them: a KYC row left unmarked under a superseded id keeps a
+        //   BVN, a NIN and an identity document for somebody the platform has
+        //   just been asked to forget.
+        const kycSnap = await filterByOwner(
+            db.collection(COLLECTIONS.KYC_VERIFICATIONS), "userId", memberIds,
+        ).get();
         kycSnap.docs.forEach(doc => batch.update(doc.ref, erasedOwnerMarker(userId)));
 
-        batch.set(
-            db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(userId),
-            erasedOwnerMarker(userId),
-            { merge: true },
-        );
+        //   One per owned profile — a seller verification filed under the old
+        //   id carries the same papers as the live one.
+        for (const ownedId of memberIds) {
+            batch.set(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(ownedId),
+                erasedOwnerMarker(userId),
+                { merge: true },
+            );
+        }
         // The same widening on the write side, for the same reason. Marking
         // only the live row would retire the wallet the person could see and
         // leave an unmarked one under a superseded profile — a row with no

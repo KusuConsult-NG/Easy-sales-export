@@ -75,6 +75,14 @@ const WRITING_SCRIPTS = [
     //   field, never overwrites one that is set, and refuses rather than invent
     //   an address for somebody the platform cannot identify.
     'scripts/backfill-blank-profile-emails.ts',
+    //   #715/#495 — names the cooperative members carrying no name at all,
+    //   from the strongest record the platform already holds: a bank-resolved
+    //   account holder, then KYC, then a module application, then an order,
+    //   searched across every profile the member owns. It refuses a placeholder
+    //   and refuses a skeleton profile whatever that profile calls itself, and
+    //   where two records disagree at the same strength it reports and writes
+    //   nothing — picking one is a decision about who somebody is.
+    'scripts/backfill-member-names.ts',
     'scripts/backfill-export-funding-goals.ts',
     'scripts/backfill-fixed-savings-ledger.ts',
     'scripts/firebase-schema-fix.ts',

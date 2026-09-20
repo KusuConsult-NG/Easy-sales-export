@@ -16,6 +16,7 @@ import { isDecidedAgainst } from "@/lib/registration-progress";
 import { isRetired } from "@/lib/record-retirement";
 import { latestApplication } from "@/lib/latest-application";
 import { formatShortDateOrDash } from "@/lib/date-utils";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Check Academy application status for current user
@@ -37,9 +38,10 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         // If status is not approved, check the source of truth for applications.
         if (currentStatus !== "approved") {
             let appDoc: any = null;
-            const appSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("userId", "==", session.user.id)
-                .get();
+            const appSnap = await filterByOwner(
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId",
+                await ownedProfileIds(session.user.id),
+            ).get();
 
             if (!appSnap.empty) {
                 //   #507 An eleventh copy, in a file the ratchet's AFFECTED
@@ -98,8 +100,10 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         }
 
         // ── FINAL FALLBACK: Check for any payment records ──────────────
-        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("userId", "==", session.user.id)
+        const paymentsSnap = await filterByOwner(
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
+            await ownedProfileIds(session.user.id),
+        )
             .where("type", "==", "academy_registration")
             .where("status", "==", "completed")
             .limit(1)
@@ -418,12 +422,20 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
         // the union means the affected records are recognised on the next
         // dashboard load instead of being zeroed one final time, so no backfill
         // is needed for this to stop.
+        //   AND ACROSS EVERY PROFILE, which matters more here than anywhere
+        //   else in this module: reading EMPTY is what triggers the reset
+        //   described above, so a learner whose progress sits under a
+        //   superseded profile would have it zeroed on the next dashboard load.
+        //   The `resolvedUserId` FIELD is the separate legacy naming bug this
+        //   comment is about; both spellings are still read, now for every
+        //   owned id.
+        const ownedIds = await ownedProfileIds(resolvedUserId);
         const [progressSubSnap, progressSnap, legacyProgressSnap, enrollmentsSnap, legacyEnrollmentsSnap] = await Promise.all([
             db.collection(`user_progress/${resolvedUserId}/courses`).get(),
-            db.collection(COLLECTIONS.COURSE_PROGRESS).where("userId", "==", resolvedUserId).get(),
-            db.collection(COLLECTIONS.COURSE_PROGRESS).where("resolvedUserId", "==", resolvedUserId).get(),
-            db.collection(COLLECTIONS.COURSE_ENROLLMENTS).where("userId", "==", resolvedUserId).get(),
-            db.collection(COLLECTIONS.COURSE_ENROLLMENTS).where("resolvedUserId", "==", resolvedUserId).get()
+            filterByOwner(db.collection(COLLECTIONS.COURSE_PROGRESS), "userId", ownedIds).get(),
+            filterByOwner(db.collection(COLLECTIONS.COURSE_PROGRESS), "resolvedUserId", ownedIds).get(),
+            filterByOwner(db.collection(COLLECTIONS.COURSE_ENROLLMENTS), "userId", ownedIds).get(),
+            filterByOwner(db.collection(COLLECTIONS.COURSE_ENROLLMENTS), "resolvedUserId", ownedIds).get()
         ]);
 
         const existingProgressSubs = new Set(progressSubSnap.docs.map(doc => doc.id));
@@ -472,7 +484,25 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
             // progressPercent, completed and completedAt — so if the guard above
             // is ever wrong again, a learner loses their progress. Reading the
             // document costs one round trip and removes that entirely.
-            const alreadyHasProgress = existingProgresses.has(progressRefId)
+            /*
+             *   EVERY ID THIS LEARNER OWNS, not just the live one.
+             *
+             *   COURSE_PROGRESS is keyed `${userId}_${courseId}`, so a learner
+             *   whose profile was superseded has their row under
+             *   `${oldId}_${courseId}`. Widening the QUERY above was not enough
+             *   on its own: this membership test asked for the LIVE-keyed id,
+             *   so the row it had just fetched could never match.
+             *
+             *   The consequence is not destruction — the old row is untouched —
+             *   but a second row at the live id with progressPercent 0,
+             *   alongside the real one. The dashboard now reads both, so the
+             *   learner would see their course listed twice, once at zero.
+             *
+             *   `existingEnrollments` below needs none of this: it keys on
+             *   `courseId` alone, so the widened query already settles it.
+             */
+            const ownedProgressIds = ownedIds.map((id) => `${id}_${courseId}`);
+            const alreadyHasProgress = ownedProgressIds.some((rid) => existingProgresses.has(rid))
                 || (await progressRef.get()).exists;
 
             if (!alreadyHasProgress) {

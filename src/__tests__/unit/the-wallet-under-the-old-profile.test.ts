@@ -217,6 +217,95 @@ describe('account deletion counts every wallet the person owns', () => {
         expect(r.success).toBe(true);
     });
 
+    it('REFUSES WHILE A LOAN UNDER THE OLD PROFILE IS OUTSTANDING', async () => {
+        /*
+         *   THE ONE THE FIRST PASS MISSED, and it sat between two blockers
+         *   that had both been widened — the wallet above it and the
+         *   cooperative savings below.
+         *
+         *   A borrower whose profile was superseded, with a loan filed under
+         *   the id that lost, passed this blocker and could be erased while
+         *   still owing the money. That is word for word the failure this
+         *   guard's own comment says it exists to prevent: "An outstanding
+         *   cooperative loan survived while the borrower's name and contact
+         *   details were scrubbed, which is worse than either outcome alone."
+         */
+        store.seed(COLLECTIONS.LOAN_APPLICATIONS, 'loan-1', {
+            userId: OLD, status: 'disbursed', amount: 50_000,
+        });
+
+        const r = await deleteAccount();
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/outstanding loan/i);
+    });
+
+    it('and a COOPERATIVE loan under the old profile, which keys on memberId', async () => {
+        //   The two collections use different fields — LOAN_APPLICATIONS on
+        //   userId, COOPERATIVE_LOANS on memberId — and an earlier version of
+        //   this guard got that wrong in a way that matched nothing.
+        store.seed(COLLECTIONS.COOPERATIVE_LOANS, 'cl-1', {
+            memberId: OLD, status: 'active', amount: 30_000,
+        });
+
+        const r = await deleteAccount();
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/outstanding loan/i);
+    });
+
+    it('and a live escrow under the old profile, on either side of it', async () => {
+        //   An escrow names its parties in an ARRAY, so this one needed
+        //   filterByOwnerInArray rather than the scalar helper.
+        store.seed(COLLECTIONS.ESCROW_TRANSACTIONS, 'esc-1', {
+            participants: [OLD, 'a-seller'], status: 'funded', amount: 12_000,
+        });
+
+        const r = await deleteAccount();
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/escrow/i);
+    });
+
+    it('but a SETTLED loan under the old profile does not block erasure for ever', async () => {
+        //   The vacuity control on the three above. A guard that refused on any
+        //   loan row at all would pass them and lock every past borrower out of
+        //   their right to be forgotten.
+        store.seed(COLLECTIONS.LOAN_APPLICATIONS, 'loan-done', {
+            userId: OLD, status: 'repaid', amount: 50_000,
+        });
+        store.seed(COLLECTIONS.ESCROW_TRANSACTIONS, 'esc-done', {
+            participants: [OLD, 'a-seller'], status: 'released', amount: 12_000,
+        });
+
+        const r = await deleteAccount();
+
+        expect(r.success).toBe(true);
+    });
+
+    it('and a STRANGER\'s outstanding loan never blocks this account', async () => {
+        store.seed(COLLECTIONS.LOAN_APPLICATIONS, 'loan-other', {
+            userId: STRANGER, status: 'disbursed', amount: 90_000,
+        });
+
+        const r = await deleteAccount();
+
+        expect(r.success).toBe(true);
+    });
+
+    it('marks the KYC rows filed under the old profile too', async () => {
+        //   A KYC row left unmarked under a superseded id keeps a BVN, a NIN
+        //   and an identity document for somebody just asked to be forgotten.
+        store.seed(COLLECTIONS.KYC_VERIFICATIONS, 'kyc-old', { userId: OLD, bvn: '12345678901' });
+        store.seed(COLLECTIONS.KYC_VERIFICATIONS, 'kyc-other', { userId: STRANGER, bvn: '99999999999' });
+
+        const r = await deleteAccount();
+        expect(r.success).toBe(true);
+
+        expect(store.get(COLLECTIONS.KYC_VERIFICATIONS, 'kyc-old')).toMatchObject({ ownerErased: true });
+        expect(store.get(COLLECTIONS.KYC_VERIFICATIONS, 'kyc-other')).not.toHaveProperty('ownerErased');
+    });
+
     it('counts cooperative savings under a superseded profile too', async () => {
         //   The same keying, the same guard, one line apart.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, OLD, { savingsBalance: 3_400 });

@@ -26,6 +26,7 @@ import {
 import { isAmountAtLeast } from "@/lib/amount";
 import { paidButNotFulfilled } from "@/lib/paid-but-not-fulfilled";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -791,8 +792,10 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         claimedReference = reference;
 
         {
-            const appQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("userId", "==", session.user.id)
+            const appQuery = filterByOwner(
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId",
+                await ownedProfileIds(session.user.id),
+            )
                 .orderBy("submittedAt", "desc")
                 .limit(1);
             const appSnap = await appQuery.get();
@@ -968,8 +971,13 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         }
 
         // ── AUTHORITATIVE FALLBACK 1: Processed Payments ─────────────────
-        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("userId", "==", session.user.id)
+        //   AN AUTHORITATIVE CHECK HAS TO SEE EVERY PROFILE, or it is not
+        //   authoritative. A learner who paid before their profile was
+        //   superseded reads as never having paid, and is asked to pay again.
+        const paymentsSnap = await filterByOwner(
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
+            await ownedProfileIds(session.user.id),
+        )
             .where("type", "==", "academy_registration")
             .where("status", "==", "completed")
             .limit(1)
@@ -980,9 +988,10 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         }
 
         // ── AUTHORITATIVE FALLBACK 2: Application Payment Status ─────────
-        const appSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-            .where("userId", "==", session.user.id)
-            .get();
+        const appSnap = await filterByOwner(
+            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId",
+            await ownedProfileIds(session.user.id),
+        ).get();
 
         if (!appSnap.empty) {
             const hasPaidApp = appSnap.docs.some(doc => doc.data().paymentStatus === "completed");

@@ -257,11 +257,29 @@ describe('the academy rename, and what it cost', () => {
         expect(fn).toContain('userId: resolvedUserId');
     });
 
+    /**
+     * Does this function query `field` at all, however the query is spelled?
+     *
+     *   THE FIRST VERSION PINNED THE CALL SHAPE — `.where("userId", "==",
+     *   resolvedUserId)` — and the userId sweep broke it by replacing that
+     *   read with `filterByOwner(collection, "userId", ownedIds)`, which
+     *   queries the SAME FIELD for every profile the learner owns.
+     *
+     *   Nothing about the defect this guards had changed, so a test that went
+     *   red was a test pinned to an implementation detail. This repository has
+     *   found that shape more than once — #469's own header calls it "the
+     *   worst of the three: it pinned the file to the one form that could not
+     *   be used" — so the assertion moves to the PROPERTY: the field is asked
+     *   for. A query that went back to asking for the wrong field still fails.
+     */
+    const queriesField = (fn: string, field: string): boolean =>
+        fn.includes(`.where("${field}", "==",`) || fn.includes(`, "${field}", ownedIds)`);
+
     it('queries the field every other writer writes', async () => {
         const src = await academySource();
         const fn = src.slice(src.indexOf('export async function autoEnrollPaidUser'));
 
-        expect(fn).toContain('.where("userId", "==", resolvedUserId)');
+        expect(queriesField(fn, 'userId')).toBe(true);
     });
 
     it('still reads the legacy field, so corrupted rows are recognised', async () => {
@@ -271,7 +289,17 @@ describe('the academy rename, and what it cost', () => {
         const src = await academySource();
         const fn = src.slice(src.indexOf('export async function autoEnrollPaidUser'));
 
-        expect(fn).toContain('.where("resolvedUserId", "==", resolvedUserId)');
+        expect(queriesField(fn, 'resolvedUserId')).toBe(true);
+    });
+
+    it('VACUITY GUARD: the matcher refuses a field the function does not query', () => {
+        //   Two `includes` calls that matched anything would pass both tests
+        //   above against a function that queried neither name.
+        const fn = 'filterByOwner(db.collection(X), "userId", ownedIds).get();';
+
+        expect(queriesField(fn, 'userId')).toBe(true);
+        expect(queriesField(fn, 'resolvedUserId')).toBe(false);
+        expect(queriesField(fn, 'somethingNobodyWrites')).toBe(false);
     });
 
     it('checks the progress document by id before overwriting it', async () => {
@@ -302,7 +330,17 @@ describe('the academy rename, and what it cost', () => {
         // deliberate legacy read — one for COURSE_PROGRESS and one for
         // COURSE_ENROLLMENTS, the two collections the bug wrote into. A third
         // would mean the pattern had spread again.
-        const queries = [...src.matchAll(/\.where\("resolvedUserId"/g)];
+        //
+        //   BOTH SPELLINGS COUNTED. The sweep rewrote these two reads as
+        //   `filterByOwner(collection, "resolvedUserId", ownedIds)`, which
+        //   queries the same field for every profile the learner owns. Counting
+        //   only `.where(` read ZERO and would have passed this test while the
+        //   legacy recovery was silently deleted — the exact failure this
+        //   assertion exists to catch, arriving through its own blind spot.
+        const queries = [
+            ...src.matchAll(/\.where\("resolvedUserId"/g),
+            ...src.matchAll(/,\s*"resolvedUserId",/g),
+        ];
         expect(queries.length).toBe(2);
     });
 });
