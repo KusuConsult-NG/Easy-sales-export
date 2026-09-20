@@ -10,6 +10,7 @@ import { isIssuedCertificate } from "@/lib/certificate-kind";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, Lesson, Quiz, UserProgress } from "@/lib/types/academy-actions";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Mark lesson as complete
@@ -466,9 +467,10 @@ async function _getUserAggregateProgressAction(userId: string): Promise<ActionRe
          */
         let certificatesEarned = 0;
         try {
-            const certSnapshot = await db.collection(COLLECTIONS.CERTIFICATES)
-                .where("userId", "==", userId)
-                .get();
+            const certSnapshot = await filterByOwner(
+                db.collection(COLLECTIONS.CERTIFICATES), "userId",
+                await ownedProfileIds(userId),
+            ).get();
             // Only credentials the platform issued. A file the learner attached
             // to their own profile lives in this collection too, and counting
             // it would let anybody inflate their own figure by uploading a PDF.
@@ -481,9 +483,10 @@ async function _getUserAggregateProgressAction(userId: string): Promise<ActionRe
 
         let totalHoursLearned = 0;
         try {
-            const watchSnapshot = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS)
-                .where("userId", "==", userId)
-                .get();
+            const watchSnapshot = await filterByOwner(
+                db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS), "userId",
+                await ownedProfileIds(userId),
+            ).get();
             const seconds = watchSnapshot.docs.reduce((sum, d) => {
                 const watched = Number(d.data()?.lastWatchedSecond);
                 // A row whose figure is unreadable contributes nothing rather

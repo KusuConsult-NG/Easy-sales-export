@@ -213,6 +213,22 @@ export function scanWriteSites(): WriteSite[] {
  * collection, plus `data.field` reads in the same function. It exists to answer
  * one question — is there a field the code depends on that some writer never
  * supplies — and over-collecting is safer than under-collecting for that.
+ *
+ * ── AND `filterByOwner`, WHICH IT COULD NOT SEE ─────────────────────────────
+ *
+ * `.where(...)` is a property access; `filterByOwner(collection, "field", ids)`
+ * is a plain call, so this walker stepped straight past it. That mattered more
+ * every week: the userId sweep converted dozens of owner reads to exactly that
+ * shape, and each conversion took a field out of the scanner's view.
+ *
+ * The symptom was a FIX reading as a regression — three entries in
+ * collection-field-drift's accepted list went "stale" when the academy reads
+ * were widened, because the scanner stopped seeing the legacy `resolvedUserId`
+ * query it had been reporting. Nothing about those reads had changed except
+ * their spelling.
+ *
+ * `filterByOwnerInArray` is here for the same reason: it is the array-shaped
+ * sibling and carries its field name in the same position.
  */
 export function readerFieldsFor(collection: string): string[] {
     const fields = new Set<string>();
@@ -223,6 +239,11 @@ export function readerFieldsFor(collection: string): string[] {
 
         const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true);
         const visit = (n: ts.Node) => {
+            /** A field name, unless it is a nested path or a Firestore internal. */
+            const keep = (name: string) => {
+                if (!name.includes(".") && !name.startsWith("__")) fields.add(name);
+            };
+
             if (
                 ts.isCallExpression(n) &&
                 ts.isPropertyAccessExpression(n.expression) &&
@@ -233,9 +254,26 @@ export function readerFieldsFor(collection: string): string[] {
                 if (first && ts.isStringLiteral(first) && chain.includes(`COLLECTIONS.${collection}`)) {
                     // Nested paths and Firestore internals are not fields a
                     // writer omits; they are noise in this comparison.
-                    if (!first.text.includes(".") && !first.text.startsWith("__")) {
-                        fields.add(first.text);
-                    }
+                    keep(first.text);
+                }
+            }
+
+            //   filterByOwner(<collection>, "field", ids) — the sweep's shape.
+            //   The collection is argument 0 and the field is argument 1, so
+            //   the collection name is looked for in the first argument rather
+            //   than in a property-access chain.
+            if (
+                ts.isCallExpression(n) &&
+                ts.isIdentifier(n.expression) &&
+                (n.expression.text === "filterByOwner" || n.expression.text === "filterByOwnerInArray")
+            ) {
+                const target = n.arguments[0];
+                const field = n.arguments[1];
+                if (
+                    target && field && ts.isStringLiteral(field) &&
+                    target.getText().includes(`COLLECTIONS.${collection}`)
+                ) {
+                    keep(field.text);
                 }
             }
             ts.forEachChild(n, visit);
