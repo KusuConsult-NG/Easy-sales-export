@@ -96,6 +96,55 @@ function str(v: unknown): string | null {
     return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 }
 
+/**
+ * Where this row points, or null when it points nowhere.
+ *
+ *   #802 A ROW POINTING AT ITSELF POINTS NOWHERE, AND THIS FILE WAS THE ONE
+ *        PLACE ON THE PLATFORM THAT DID NOT KNOW IT.
+ *
+ *        resolveActiveUser — the walk every money path and every session goes
+ *        through — stops on a self-pointer and calls that row LIVE:
+ *
+ *            const next = pointerOf(row);
+ *            if (!next || next === id) { ... stoppedBecause: "no-pointer" }
+ *
+ *        _wallet_consolidation restates it when it looks for superseded rows
+ *        ("A row pointing at ITSELF is not superseded"), and checkResolution
+ *        below already allows such a row to be kept. classifyGroup did not:
+ *        it put every `_migratedTo` into the pointer map, so a self-pointing
+ *        row was never counted among the live ones.
+ *
+ *        WHAT THAT DID TO THE WORKLIST, counted on production: of 496 groups,
+ *        3 needed a decision, 340 were settled and 153 were reported as
+ *        "Look at this one" — and the self-pointer shape `{A → A, B → A}`
+ *        recurs the whole way down that third list. It is an ordinary settled
+ *        migration whose live row happens to name itself; with no row left
+ *        unpointed the `live.length === 0` branch fired, so the screen called
+ *        it "a cycle that needs a person to break it" and printed the live
+ *        record as `superseded → <its own id>`.
+ *
+ *        How many of the 153 this moves is deliberately not asserted here: the
+ *        screen lists groups rather than tallying them by shape, and the split
+ *        is only visible on a re-read. Nor does it move them all one way —
+ *        `{A → A, B → B}` is two rival live records and becomes work that was
+ *        never shown as work.
+ *
+ *        Worse than the noise: on a group with SOME self-pointers the screen
+ *        named the wrong live row. For one five-record address the only row
+ *        this file counted as live carried ONE registration, while the row the
+ *        platform actually hands the person carries THREE and points at itself.
+ *        An operator following the screen would have superseded the record the
+ *        login prefers.
+ *
+ *        The forensic scan classifies through this same function (#736, so the
+ *        two cannot disagree), so it counted all 153 as unsettled duplicates.
+ *        One rule, one fix, both reports.
+ */
+function pointerFrom(id: string, data: Record<string, unknown>): string | null {
+    const to = str(data._migratedTo);
+    return to !== null && to !== id ? to : null;
+}
+
 function createdAtIso(v: unknown): string | null {
     const raw = asRecord(v).createdAt;
     if (!raw) return null;
@@ -162,7 +211,7 @@ export function classifyGroup(
     const ids = new Set(rows.map((r) => r.id));
     const pointers = new Map<string, string>();
     for (const r of rows) {
-        const to = str(r.data._migratedTo);
+        const to = pointerFrom(r.id, r.data);
         if (to) pointers.set(r.id, to);
     }
 
@@ -232,7 +281,7 @@ export function describeGroup(
         const d = row.data;
         return {
             id,
-            migratedTo: str(d._migratedTo),
+            migratedTo: pointerFrom(id, d),
             supabaseAuthId: str(d.supabaseAuthId),
             roles: Array.isArray(d.roles) ? (d.roles as unknown[]).map(String) : [],
             registrations: registrationWeight(d),
