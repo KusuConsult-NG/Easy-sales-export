@@ -12,6 +12,7 @@ import { readSavedRows } from "@/lib/saved-items-store";
 import { publicSellerSummary, type PublicSellerSummary } from "@/lib/public-seller-summary";
 import { isLandListingViewable } from "@/lib/land-visibility";
 import { firstImageSrc } from "@/lib/first-image";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Saving a seller, and saving a property — #105.
@@ -216,9 +217,17 @@ async function _getSavedSellersAction(): Promise<ActionResponse<{ sellers: Saved
         const sellers: SavedSellerRecord[] = await Promise.all(
             rows.map(async (row) => {
                 try {
-                    const verSnap = await db
-                        .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                        .where("userId", "==", row.targetId)
+                    //   EVERY PROFILE THAT SELLER OWNS. `row.targetId` is an
+                    //   id saved at some point in the past, so it is exactly
+                    //   the value most likely to name a profile that has since
+                    //   been superseded — and a saved seller whose
+                    //   verification is no longer findable renders as
+                    //   `seller: null`, which reads to the buyer as the seller
+                    //   having gone away.
+                    const verSnap = await filterByOwner(
+                        db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+                        await ownedProfileIdsFor(row.targetId),
+                    )
                         .where("status", "==", "approved")
                         .limit(5)
                         .get();

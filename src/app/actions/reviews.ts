@@ -11,7 +11,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isOwnedBySession } from "@/lib/owned-profile-ids";
+import { isOwnedBySession, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import type { ProductReview, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -551,8 +551,16 @@ export async function moderateReviewAction(
  */
 export async function getSellerRatingAction(sellerId: string): Promise<ActionResponse<{ averageRating: number; totalReviews: number; distribution: Record<number, number> }>> { 
     try {
-        const snapshot = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-            .where("sellerId", "==", sellerId)
+        //   EVERY PROFILE THIS SELLER OWNS. This is the SECOND rating surface
+        //   on this platform — getSellerReviewSummaryAction averages
+        //   SELLER_REVIEWS, this one averages PRODUCT_REVIEWS — and only the
+        //   first was widened earlier in the sweep. Two averages of the same
+        //   seller computed over different halves of their history is worse
+        //   than either being short on its own.
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.PRODUCT_REVIEWS), "sellerId",
+            await ownedProfileIdsFor(sellerId),
+        )
             .where("status", "==", "approved")
             .get();
 
