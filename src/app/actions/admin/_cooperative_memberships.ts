@@ -51,8 +51,7 @@ import { ledgerBalanceOf } from "@/lib/cooperative-ledger-balance";
 import {
     checkRepair,
     membershipRowFor,
-    type MissingMembershipCase,
-} from "@/lib/cooperative-membership-repair";
+    type MissingMembershipCase, tierIsADecision } from "@/lib/cooperative-membership-repair";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
@@ -103,7 +102,11 @@ async function buildCase(doc: { id: string; data: () => any }): Promise<MissingM
         paymentReference: typeof registration.paymentReference === "string"
             ? registration.paymentReference
             : null,
-        needsATier: knownTier === null,
+        //   #803 — a decision only when the cooperative actually offers a
+        //   choice. It has one tier, so an absent tier is not a question for a
+        //   person; checkRepair writes DEFAULT_MEMBERSHIP_TIER. Should a second
+        //   tier ever be priced again, this turns the question back on.
+        needsATier: tierIsADecision(knownTier),
     };
 }
 

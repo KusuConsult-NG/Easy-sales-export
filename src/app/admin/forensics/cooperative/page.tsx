@@ -15,11 +15,21 @@
  * they have to trust. There is no input for it, because there is nothing to
  * decide — inventing a savings figure would be inventing money.
  *
- * AND IT ONLY ASKS FOR A TIER WHEN THERE IS NONE. Where the registration
- * already records one, the screen states it rather than offering a box. An
- * editable field would invite an admin to "correct" a tier the member paid for,
- * and the server refuses that anyway — so offering it would be a form that lies
- * about what it can do.
+ * AND IT ONLY ASKS FOR A TIER WHEN THERE IS ONE TO CHOOSE. Where the
+ * registration already records a tier, the screen states it rather than
+ * offering a box. An editable field would invite an admin to "correct" a tier
+ * the member paid for, and the server refuses that anyway — so offering it
+ * would be a form that lies about what it can do.
+ *
+ *   #803 AND FOR A WHILE IT WAS EXACTLY THAT FORM. This cooperative has a
+ *   single tier, "Member" — calculateUserTier returns it at every savings
+ *   level and the membership schema admits nothing else — but the screen
+ *   offered a choice between "tier1" and "tier2" from a stale second constant
+ *   that happened to share the name COOPERATIVE_TIERS with the live one.
+ *   Eighteen members were held under "Need a tier chosen" waiting on a
+ *   decision that does not exist, and either answer would have written a value
+ *   the schema rejects. The list is derived from the tier system now, so the
+ *   radios appear only if a second tier is ever priced again.
  *
  * THE ROW IS CREATED `pending`, AND THE TEXT SAYS SO. An admin who believes
  * this activates a membership would be surprised later; one who knows it does
@@ -33,7 +43,11 @@ import {
     createMissingMembershipAction,
     type MissingMembershipReport,
 } from "@/app/actions/admin";
-import { COOPERATIVE_TIERS, type MissingMembershipCase } from "@/lib/cooperative-membership-repair";
+import {
+    MEMBERSHIP_TIERS,
+    DEFAULT_MEMBERSHIP_TIER,
+    type MissingMembershipCase,
+} from "@/lib/cooperative-membership-repair";
 
 const naira = (n: number) => `₦${n.toLocaleString()}`;
 
@@ -166,7 +180,10 @@ export default function CooperativeMembershipsPage() {
                                     <div>
                                         <dt className="text-xs text-slate-500">Tier</dt>
                                         <dd className="text-slate-900">
-                                            {c.knownTier ?? "not recorded — choose below"}
+                                            {c.knownTier
+                                                ?? (c.needsATier
+                                                    ? "not recorded — choose below"
+                                                    : `not recorded — will be written as "${DEFAULT_MEMBERSHIP_TIER}"`)}
                                         </dd>
                                     </div>
                                     <div>
@@ -192,7 +209,7 @@ export default function CooperativeMembershipsPage() {
                                     {c.needsATier && (
                                         <div className="flex flex-wrap gap-3 text-sm">
                                             <span className="text-slate-600">Tier:</span>
-                                            {COOPERATIVE_TIERS.map((t) => (
+                                            {MEMBERSHIP_TIERS.map((t) => (
                                                 <label key={t} className="flex items-center gap-1.5">
                                                     <input
                                                         type="radio"
