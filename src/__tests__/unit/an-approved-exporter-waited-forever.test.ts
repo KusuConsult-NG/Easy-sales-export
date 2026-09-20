@@ -71,6 +71,13 @@ const PENDING_SCREENS: ReadonlyArray<{ module: string; file: string }> = [
     { module: 'academy', file: 'src/app/academy/application/pending/page.tsx' },
     { module: 'wave', file: 'src/app/wave/application/review-pending/page.tsx' },
     { module: 'farm-nation', file: 'src/app/farm-nation/onboarding/pending/page.tsx' },
+    //   FIVE BECAME SIX. The dashboard built /cooperatives/onboarding/pending
+    //   for cooperative members and the route did not exist — a 404 observed
+    //   in production, twice in thirty-two seconds from one phone. The screen
+    //   was added with its APPLICATION_QUERIES entry in the same change,
+    //   because #799 is precisely the finding that a pending screen without
+    //   one polls for ever and never redirects an approved applicant.
+    { module: 'cooperatives', file: 'src/app/cooperatives/onboarding/pending/page.tsx' },
 ];
 
 const MY_DATA = 'src/app/actions/my-data.ts';
@@ -86,10 +93,10 @@ function lookupOf(file: string): { collection: string; statusField: string } {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#799 — every pending screen can actually be answered', () => {
-    it('the five screens are real files that still use the hook', () => {
+    it('the six screens are real files that still use the hook', () => {
         //   Vacuity guard. Every assertion below is trivially true of a screen
         //   whose file has moved or which no longer polls at all.
-        expect(PENDING_SCREENS.length).toBe(5);
+        expect(PENDING_SCREENS.length).toBe(6);
         for (const { module, file } of PENDING_SCREENS) {
             expect({ module, polls: read(file).includes('usePendingApplicationStatus({') })
                 .toEqual({ module, polls: true });
