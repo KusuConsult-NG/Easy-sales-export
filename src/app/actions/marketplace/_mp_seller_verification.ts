@@ -263,9 +263,12 @@ async function _getSellerVerificationAction(): Promise<ActionResponse<{ verifica
         }
 
         if (!verDoc) {
-            const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("userId", "==", userId)
-                .get();
+            //   A verification submitted before the seller's profile was
+            //   superseded is still their verification.
+            const snapshot = await filterByOwner(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+                await ownedProfileIdsFor(userId),
+            ).get();
 
             if (!snapshot.empty) {
                 const sortedDocs = snapshot.docs.sort((a, b) => { 
@@ -366,9 +369,10 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
 
         if (!docRef) {
             // Find the most recent rejected verification for this user
-            const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("userId", "==", userId)
-                .get();
+            const snapshot = await filterByOwner(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+                await ownedProfileIdsFor(userId),
+            ).get();
 
             if (!snapshot.empty) {
                 const sortedDocs = snapshot.docs.sort((a, b) => {
@@ -595,9 +599,10 @@ async function setSellerBadge(
     // Keep the verification record in step, as toggleVerifiedBadgeAction does.
     // The admin seller table reads the badge from THAT document, so updating
     // only the user left the two disagreeing.
-    const verifications = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-        .where("userId", "==", userId)
-        .get();
+    const verifications = await filterByOwner(
+        db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+        await ownedProfileIdsFor(userId),
+    ).get();
 
     if (!verifications.empty) {
         const newest = verifications.docs.sort(
@@ -725,6 +730,12 @@ async function _updateSellerCategoryAction(
 
         const now = FieldValue.serverTimestamp();
 
+        //   RESOLVED BEFORE THE TRANSACTION OPENS. A transaction may only read
+        //   through its own handle, so the identity lookup has to happen out
+        //   here — and it is the same answer either way, because supersession
+        //   is not changing under us mid-write.
+        const sellerIds = await ownedProfileIdsFor(sellerId);
+
         // Perform updates in a single transaction for atomicity
         await db.runTransaction(async (transaction) => { 
             // 1. Update User Document
@@ -736,8 +747,8 @@ async function _updateSellerCategoryAction(
             });
 
             // 2. Update Verification Document
-            const verSnap = await transaction.get(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("userId", "==", sellerId));
+            const verSnap = await transaction.get(filterByOwner(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId", sellerIds));
             if (!verSnap.empty) { 
                 const sortedDocs = verSnap.docs.sort((a, b) => {
                     const aData = a.data();
@@ -754,8 +765,14 @@ async function _updateSellerCategoryAction(
             }
 
             // 3. Denormalize onto all products
-            const productsSnap = await transaction.get(db.collection(COLLECTIONS.PRODUCTS)
-                .where("sellerId", "==", sellerId));
+            //   EVERY PRODUCT THEY OWN. This denormalises the seller
+            //   category onto their catalogue, and _mp_products reads it back
+            //   as the filter for both the wholesale and the retail view — so
+            //   a product listed under a superseded profile kept a stale
+            //   category and dropped out of the view its seller had just been
+            //   moved into.
+            const productsSnap = await transaction.get(filterByOwner(
+                db.collection(COLLECTIONS.PRODUCTS), "sellerId", sellerIds));
             if (!productsSnap.empty) { 
                 productsSnap.docs.forEach((doc) => {
                     transaction.update(doc.ref, { 

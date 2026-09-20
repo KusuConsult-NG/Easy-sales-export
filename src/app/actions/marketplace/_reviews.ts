@@ -10,7 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isOwnedBySession, ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
+import { isOwnedBySession, ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { withSafeAction } from "@/lib/safe-action";
 import type { ActionResponse } from "@/lib/safe-action";
@@ -211,6 +211,18 @@ async function _submitSellerReviewAction(data: {
         //   profile, or the same person reviews one seller twice for one order.
         const reviewerIds = await ownedProfileIds(buyerId);
 
+        //   `buyerId` IS WIDENED AND `sellerId` IS NOT, deliberately.
+        //
+        //   This asks "has this buyer already reviewed this order?", so the
+        //   buyer is the owner and every profile they own has to be searched —
+        //   otherwise one person with two profiles reviews the same order
+        //   twice. The seller here is the COUNTERPARTY, and the row is already
+        //   pinned by `orderId`, which names one seller and one order.
+        //
+        //   Widening it would scope the duplicate check across a seller's
+        //   whole profile history for an order that belongs to exactly one of
+        //   them — broader than the question, and a way to refuse a legitimate
+        //   second review of a genuinely different order.
         const existingSnap = await filterByOwner(
             db.collection(COLLECTIONS.SELLER_REVIEWS), "buyerId", reviewerIds,
         )
@@ -316,8 +328,17 @@ async function _getSellerReviewSummaryAction(sellerId: string): Promise<ActionRe
     try {
         sessionResult = await requireSession().catch(() => ({ session: null }));
 
-        const snap = await db.collection(COLLECTIONS.SELLER_REVIEWS)
-            .where("sellerId", "==", sellerId)
+        //   A SELLER'S REPUTATION IS NOT SPLIT BY THEIR PROFILE HISTORY.
+        //   Reviews left before a seller's profile was superseded are still
+        //   about the same person, and showing half of them understates a
+        //   rating the buyer is deciding on.
+        //
+        //   `ownedProfileIdsFor`, because `sellerId` arrives as a parameter
+        //   from a catalogue link and may itself be the superseded one.
+        const snap = await filterByOwner(
+            db.collection(COLLECTIONS.SELLER_REVIEWS), "sellerId",
+            await ownedProfileIdsFor(sellerId),
+        )
             .where("status", "==", "approved")
             .get();
 

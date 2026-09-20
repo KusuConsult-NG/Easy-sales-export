@@ -24,6 +24,7 @@ import { sellerRefusal } from "@/lib/seller-approval";
 import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
 import { retirementPatch } from "@/lib/record-retirement";
 import { toDateOrNull } from "@/lib/date-utils";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -209,7 +210,8 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
         // Fetch Seller Info
         const [vendorDoc, verificationSnap] = await Promise.all([
             db.collection(COLLECTIONS.VENDOR_PROFILES).doc(userId).get(),
-            db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("userId", "==", userId).get()
+            filterByOwner(db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+                await ownedProfileIdsFor(userId)).get()
         ]);
 
         const vendorData = vendorDoc.data();
