@@ -344,6 +344,25 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/actions/admin/_duplicate_profiles.ts': Array(2).fill('users:update'),
 
         /*
+         *   The way OUT of a stranded wallet balance — one filed under a
+         *   profile nobody signs in as, which no member, checkout or
+         *   withdrawal can reach.
+         *
+         *   `users:update` and not a finance permission, deliberately, and it
+         *   is the same reasoning as the duplicate tool above: this is the
+         *   SETTLEMENT of a duplicate profile finishing its job. Whoever may
+         *   decide that two records are one person is exactly whoever should
+         *   be able to bring that person's money along — splitting it across
+         *   two permissions would leave the balance behind by default, which
+         *   is the state being repaired.
+         *
+         *   The READ is gated as tightly as the write for the same reason as
+         *   above, and a sharper one: the list is a map of where unreachable
+         *   money is sitting and whose it is.
+         */
+        'src/app/actions/admin/_wallet_consolidation.ts': Array(2).fill('users:update'),
+
+        /*
          *   #725 — the Farm Nation approval review. TWO gates, one permission:
          *   the read that lists the cases and the write that records a
          *   decision.
@@ -541,7 +560,7 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // inspector and approving the land.
         // 70 → 71: the cooperative identity backfill — the 715 members who were
         // active, paid and unnamed.
-        expect(callSites().length).toBe(71);
+        expect(callSites().length).toBe(73);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

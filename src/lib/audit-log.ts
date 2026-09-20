@@ -28,6 +28,8 @@ export type AuditAction =
      *   re-derivable — the evidence on the rows will have moved.
      */
     | 'user_profile_supersede'
+    /** A stranded wallet balance moved onto the live profile — migration 046. */
+    | 'wallet_balance_consolidated'
     /**
      *   #725 — an admin reviewed a Farm Nation approval the forensic scan could
      *   not settle: confirmed it, revoked it, or reconciled a disagreement. Its

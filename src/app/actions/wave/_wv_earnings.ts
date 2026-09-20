@@ -10,7 +10,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { waveCommission, sumWaveCommissions } from "@/lib/wave-commission";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
 import { getFeatureToggle } from "@/app/actions/feature-toggles";
 import { compensateJsonbDebit } from "@/lib/wallet-ledger";
@@ -103,7 +103,32 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
         //   that silently omits what a superseded profile earned is a wrong
         //   number rather than a short list. The cap above already says a
         //   silent cap would be worse than no cap; this is the same argument.
-        const sellerIdsOwned = await ownedProfileIds(userId);
+        /*
+         *   ONE LIST, BOTH SIDES OF THE SUBTRACTION.
+         *
+         *   `entitlement = calculatedPaidAmount - withdrawnAmount`, and until
+         *   now those two were resolved DIFFERENTLY in this same function:
+         *   the escrow query below walked every profile the member owns, and
+         *   the withdrawals query 110 lines down asked for the live id alone.
+         *
+         *   So for a member whose profile was superseded the numerator was
+         *   complete and the denominator was short, and the entitlement came
+         *   out TOO HIGH — money they had already withdrawn read as still
+         *   owed. Worse, where `availableBalance` was unset the auto-backfill
+         *   below WROTE that figure to serviceRegistrations.wave, turning a
+         *   display error into a stored one.
+         *
+         *   Naming the list once and handing it to both queries is what makes
+         *   that impossible to reintroduce: the two sides cannot disagree
+         *   about who this person is, because they are given the same answer.
+         *
+         *   `ownedProfileIdsFor` and not `ownedProfileIds`: an ADMIN may pass
+         *   somebody else's id here (see the guard at the top of this action),
+         *   and a backward-only search handed a superseded id finds what
+         *   points AT it and misses the live row entirely.
+         */
+        const ownedIds = await ownedProfileIdsFor(userId);
+        const sellerIdsOwned = ownedIds;
 
         const snapshot = await filterByOwner(
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS), "sellerId", sellerIdsOwned,
@@ -219,8 +244,12 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             "completed",
         ];
 
-        const withdrawalsSnap = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
-            .where("userId", "==", userId)
+        //   The same `ownedIds` the commissions above were summed over. A
+        //   withdrawal filed under a superseded profile is money this member
+        //   has already taken, and leaving it out inflates what they are owed.
+        const withdrawalsSnap = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_WITHDRAWALS), "userId", ownedIds,
+        )
             .where("status", "in", COMMITTED_WITHDRAWAL_STATUSES)
             .get();
         

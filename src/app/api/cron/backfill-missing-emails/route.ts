@@ -82,7 +82,14 @@ export async function GET(request: NextRequest) {
          *   would fold in `already-had-one`, which is not a problem at all.
          */
         const needsAPerson = report.outcomes.filter(
-            (o) => o.result === "no-auth-account" || o.result === "auth-has-no-email" || o.result === "write-failed",
+            (o) => o.result === "no-auth-account" || o.result === "auth-has-no-email" || o.result === "write-failed"
+                //   A profile whose id Supabase Auth can never hold — the
+                //   Firebase-era uid this module's header names. It sat in
+                //   `couldNotTell` below, so every daily run reported a
+                //   partially failed lookup and told the operator to run again,
+                //   for a row no number of runs can change. It belongs on this
+                //   side: a fact about a PERSON, waiting on a decision.
+                || o.result === "auth-id-not-usable",
         );
         if (needsAPerson.length > 0) {
             logger.warn(

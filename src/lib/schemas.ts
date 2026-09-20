@@ -2,6 +2,7 @@ import { z } from "zod";
 import { PASSWORD_RULES } from "@/lib/password-policy";
 import { nationalIdField } from '@/lib/kyc-validators';
 import { personNameField } from '@/lib/types/person-name-field';
+import { phoneNumberField } from '@/lib/types/phone-number-field';
 import { ALL_USER_ROLES } from "@/lib/types/roles";
 
 // ============================================
@@ -35,10 +36,17 @@ export const strictEmailSchema = z.string()
         return true;
     }, { message: "Email contains too many periods (possible abuse pattern)" });
 
-export const strictPhoneSchema = z.string()
-    .min(7, "Phone number is too short")
-    .max(20, "Phone number is too long")
-    .regex(/^\+?[0-9\s\-()]+$/, "Invalid phone number format. Please include your country code (e.g., +1234567890)");
+/**
+ * A phone number, judged on its DIGITS rather than its punctuation.
+ *
+ * The rule that stood here capped CHARACTERS at 20, so `+234 (0) 803 000 1111`
+ * — one ordinary Nigerian number, written the way a business card writes it —
+ * was refused as "too long" while `+2348030001111` passed. See
+ * types/phone-number-field for the measurements and for why 15 is the bound.
+ *
+ * Seven digits is the shortest this platform has ever accepted and is kept.
+ */
+export const strictPhoneSchema = phoneNumberField(7);
 
 export const strictNigerianPhoneSchema = z.string()
     .regex(/^(\+234|0)[789]\d{9}$/, "Invalid Nigerian phone number (e.g., +2348012345678 or 08012345678)");

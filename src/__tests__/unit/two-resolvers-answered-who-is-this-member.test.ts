@@ -191,6 +191,81 @@ describe('#754 — and a placeholder is not a name', () => {
         expect(code('src/lib/canonical/normalizer.ts')).toContain('from "./placeholder-names"');
         expect(code(shared)).toContain('export const PLACEHOLDER_NAMES');
     });
+
+    it('AND NO PRIVATE COPY SURVIVES ANYWHERE — the assertion above did not check', () => {
+        /*
+         *   THIS RATCHET DID NOT RATCHET, and the comment above says why in the
+         *   past tense: "`_users.ts` HAD its own set". It still did. Asserting
+         *   that the shared file exists and that ONE caller imports it says
+         *   nothing about the callers that never converted.
+         *
+         *   SIX private copies were live when this was written — _users.ts,
+         *   analytics.service.ts, _marketplace.ts and three admin EXPORT routes,
+         *   all with the identical five-element set and none of them knowing
+         *   "unknown member". The export routes are the worst of the six: that
+         *   string was being written into the CSVs the owner downloads as a
+         *   member's name.
+         *
+         *   Found only because a production query surfaced 41 members about to
+         *   be named "Unknown Member" by a repair — and then only because a
+         *   `grep | head -20` had hidden four of the six from the first sweep.
+         */
+        const { execSync } = require('child_process');
+        const copies = execSync(
+            `grep -rnE 'PLACEHOLDER_NAMES[^=]*= new Set' src/ --include=*.ts --include=*.tsx | grep -v '/__tests__/' || true`,
+            { encoding: 'utf8', cwd: process.cwd() },
+        ).trim().split('\n').filter(Boolean)
+            //   The one definition is allowed. Everything else is a copy.
+            .filter((l: string) => !l.startsWith('src/lib/canonical/placeholder-names.ts:'));
+
+        expect({ copies }).toEqual({ copies: [] });
+    });
+
+    it('VACUITY GUARD: the search finds the real definition', () => {
+        //   A grep that matched nothing would pass the test above against a
+        //   codebase with six copies in it — which is exactly what happened.
+        //
+        //   AND IT EARNED ITS KEEP IMMEDIATELY: the first version of the
+        //   pattern was `PLACEHOLDER_NAMES = new Set`, which does not match
+        //   the real definition because that one carries a type annotation
+        //   (`: ReadonlySet<string> =`). The census above would have passed
+        //   while finding nothing at all.
+        const { execSync } = require('child_process');
+        const found = execSync(
+            `grep -rnE 'PLACEHOLDER_NAMES[^=]*= new Set' src/ --include=*.ts | grep -v '/__tests__/' || true`,
+            { encoding: 'utf8', cwd: process.cwd() },
+        ).trim();
+
+        expect(found).toContain('src/lib/canonical/placeholder-names.ts');
+    });
+
+    it('AND THE SPELLING THE PLATFORM ACTUALLY WROTE IS REFUSED — #495', () => {
+        /*
+         *   2,591 profiles carry `fullName: "Unknown Member"` with
+         *   firstName "Unknown", lastName "Member", no email, no phone, and
+         *   verified/isVerified/profileComplete all true — written on
+         *   29 May 2026 by a backfill that is in no commit on any branch.
+         *
+         *   Every placeholder set on the platform, shared and private alike,
+         *   was missing it. So the one string that most needed rejecting was
+         *   the one spelling nothing recognised, and _users.ts stopped looking
+         *   for a better name the moment it found one.
+         */
+        expect(isPlaceholderName('Unknown Member')).toBe(true);
+        expect(isPlaceholderName('unknown member')).toBe(true);
+        expect(isPlaceholderName('  UNKNOWN MEMBER  ')).toBe(true);
+        //   Both halves of the pair those rows carry.
+        expect(isPlaceholderName('Unknown')).toBe(true);
+        expect(isPlaceholderName('Member')).toBe(true);
+
+        //   And it did not become a rule that rejects people. The names here
+        //   are the real ones recovered from the cooperative register.
+        for (const real of ['Ngozi Eledumare', 'Bulus Zipporah', 'Hafsatu Dange Umar',
+                            'Abubakar Junaidu Umar', 'Nimota Afolasade Odumala']) {
+            expect({ real, placeholder: isPlaceholderName(real) })
+                .toEqual({ real, placeholder: false });
+        }
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

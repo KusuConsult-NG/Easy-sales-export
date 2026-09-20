@@ -20,11 +20,37 @@
  *   adds goes into one of them.
  */
 
-/** Lower-cased strings that stand in for a name rather than being one. */
+/**
+ * Lower-cased strings that stand in for a name rather than being one.
+ *
+ *   "unknown member" IS THE ONE THE PLATFORM ACTUALLY WROTE, and it was the
+ *   one spelling nothing recognised. #495 measured it:
+ *
+ *       rows carrying `_system_skeleton_backfill: true`    3,605
+ *         ...whose fullName is literally "Unknown Member"  2,591
+ *
+ *   with `firstName: "Unknown"`, `lastName: "Member"`, no email, no phone, and
+ *   verified/isVerified/profileComplete all true. The writer is in no commit on
+ *   any branch.
+ *
+ *   So every resolver on this platform treated "Unknown Member" as a person's
+ *   name: `_users.ts` stopped looking for a better one the moment it found it,
+ *   and a repair reading a member's live profile would happily copy it onto a
+ *   cooperative row — converting "we do not know who this is" into "this person
+ *   is called Unknown Member", which then satisfies every later name check and
+ *   prints on an ID card.
+ *
+ *   "member" ON ITS OWN is here for the other half of that pair. A surname of
+ *   "Member" is not impossible, and rejecting one costs that person a fall
+ *   through to their email address, which is recoverable and visible. Accepting
+ *   it costs a skeleton row reading as a real human being, which is neither.
+ */
 export const PLACEHOLDER_NAMES: ReadonlySet<string> = new Set([
     "user",
     "unknown",
     "unknown user",
+    "unknown member",
+    "member",
     "n/a",
     "na",
     "null",

@@ -15,6 +15,7 @@ import { z } from "zod";
  *   resolves symlinks to their real path. Both typechecks are run over this.
  */
 import { personNameField } from "./person-name-field";
+import { phoneNumberField } from "./phone-number-field";
 
 const strictNameSchema = personNameField(1, 100);
 
@@ -23,10 +24,20 @@ const strictEmailSchema = z.string()
     .toLowerCase()
     .trim();
 
-const strictPhoneSchema = z.string()
-    .min(10, "Phone number must be at least 10 digits")
-    .max(15, "Phone number is too long")
-    .regex(/^[\+\d\s\-\(\)]+$/, "Invalid phone number format");
+/*
+ *   THE SECOND COPY OF THE PHONE RULE, and it had drifted further than the
+ *   name rule did: max 15 CHARACTERS against schemas.ts's 20, and a `+`
+ *   permitted anywhere rather than only at the front.
+ *
+ *   Fifteen characters refuses `+234 803 000 1111` — a Nigerian number written
+ *   with spaces — outright, so the cooperative onboarding form was the
+ *   strictest door on the platform and it was strict about the wrong thing.
+ *
+ *   Both copies call the one rule now. Ten digits is this form's own minimum
+ *   and is kept; the maximum is E.164's fifteen DIGITS, which no amount of
+ *   spacing can reach.
+ */
+const strictPhoneSchema = phoneNumberField(10);
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

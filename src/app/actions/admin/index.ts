@@ -40,6 +40,20 @@ export {
 } from "./_duplicate_profiles";
 export type { DuplicateProfileReport, ResolveDuplicateInput } from "./_duplicate_profiles";
 
+// ─── Stranded wallet balances (_wallet_consolidation.ts) ──────────────────────
+//
+// The way OUT of the state the duplicate tool now refuses to create: a balance
+// filed under a profile nobody signs in as, which no member, checkout or
+// withdrawal can reach. The move itself is migration 046 — one transaction,
+// and it refuses any pair the platform does not already say is one person.
+export {
+    findStrandedWalletsAction,
+    consolidateWalletAction,
+} from "./_wallet_consolidation";
+export type {
+    StrandedWallet, StrandedWalletReport, ConsolidateWalletInput,
+} from "./_wallet_consolidation";
+
 //   #725 — the Farm Nation approval review. Same reason as above: the barrel is
 //   where this domain says what it offers.
 export {

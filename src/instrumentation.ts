@@ -1,3 +1,6 @@
+import type { Instrumentation } from "next";
+import { isConnectionGoneAway } from "@/lib/request-abort";
+
 export async function register() {
     // Non-blocking initialization to ensure fast boot time on Railway/Docker.
     // This prevents the Load Balancer from marking the container as unhealthy 
@@ -72,3 +75,58 @@ export async function register() {
         });
     }
 }
+
+/**
+ * Every server error, with the request that caused it.
+ *
+ *   THE OWNER'S LOG SHOWED TWENTY OF THESE AND NAMED NO ROUTE:
+ *
+ *       ⨯ Error: The destination stream closed early.
+ *           at ignore-listed frames { digest: '2398141500' }
+ *
+ *   Twenty identical lines, no path, no method, no route — so "a person
+ *   navigated away", "one page is too slow and a proxy cut it" and "the
+ *   container restarted mid-request" all look exactly the same, and they need
+ *   three different answers. Nothing in this codebase recorded which.
+ *
+ *   `onRequestError` is the hook that has it. It is handed the request path and
+ *   method and the route context — which route file, whether the error came
+ *   from a render, a route handler, a server action or the proxy — and it fires
+ *   for every server error, not just these.
+ *
+ * ── SO IT DOES TWO THINGS ───────────────────────────────────────────────────
+ *
+ *   A CLOSED CONNECTION IS LOGGED WITH ITS ROUTE AND NOT SENT TO SENTRY. The
+ *   render was fine until nobody was listening, so no stack trace helps — and
+ *   at the volume above, reporting them buries the errors somebody could act
+ *   on. The log line keeps the volume visible and adds the one fact that makes
+ *   it answerable: spread across many routes it is ordinary internet, all on
+ *   one route it is that route.
+ *
+ *   EVERYTHING ELSE GOES TO SENTRY, which is the point of adding the hook at
+ *   all. Without an onRequestError export the Sentry SDK receives no server
+ *   error from the App Router, so this is not a filter bolted onto reporting —
+ *   it is the reporting, with one class of non-fault held back.
+ *
+ *   `err` is typed `unknown` deliberately: the Next documentation warns that
+ *   React may hand back something other than the value that was thrown.
+ */
+export const onRequestError: Instrumentation.onRequestError = async (err, request, context) => {
+    try {
+        if (isConnectionGoneAway(err)) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(
+                `[request] the connection closed before the response did — ${request.method} ${request.path} `
+                + `(route ${context.routePath ?? "unknown"}, ${context.routeType}`
+                + `${context.renderSource ? `/${context.renderSource}` : ""}): ${message}`,
+            );
+            return;
+        }
+    } catch {
+        //   A classifier that threw must not swallow the error it was
+        //   classifying. Fall through and report.
+    }
+
+    const { captureRequestError } = await import("@sentry/nextjs");
+    captureRequestError(err, request, context);
+};

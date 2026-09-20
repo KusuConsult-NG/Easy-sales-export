@@ -18,6 +18,7 @@ import type {
     ModuleRegistrationStats,
     UserSegments
 } from "@easy-sales/services";
+import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -1260,8 +1261,17 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         // Hydrate phone numbers for transactions where phone is missing/placeholder
         try {
-            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
-            const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+            /*
+             *   THE THIRD AND FOURTH COPIES OF THIS RULE, now gone.
+             *
+             *   #754 consolidated it into canonical/placeholder-names and said
+             *   why: "a set of placeholder strings maintained in two files is
+             *   the same defect waiting to recur — the next spelling somebody
+             *   adds goes into one of them." These two were never converted,
+             *   and that is exactly what happened: none of the three sets knew
+             *   "unknown member", the string 2,591 production rows carry (#495).
+             */
+            const isPlaceholder = (v: any) => isPlaceholderName(v);
 
             const userIdsToFetch = new Set<string>();
 

@@ -10,6 +10,7 @@ import { csvDocument } from "@/lib/csv-safe";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { writeDataExportRecord } from "@/lib/data-export-record";
 import { fillFromSibling, pickDetailRow } from "@/lib/cooperative-member-identity";
+import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
 export async function GET(request: NextRequest) {
     try {
@@ -130,8 +131,10 @@ export async function GET(request: NextRequest) {
             const fullName = `${derivedFirstName} ${derivedLastName}`.trim();
             const email = data.email || fallbackUser.email || "";
 
-            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
-            const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+            //   One rule, not a seventh copy of it — see canonical/placeholder-names.
+            //   All six private sets were missing "unknown member", the string 2,591
+            //   skeleton profiles actually carry (#495).
+            const isPlaceholder = (v: any) => isPlaceholderName(v);
 
             let phone = data.phone || data.phoneNumber || fallbackUser.phone || fallbackUser.phoneNumber || fallbackUser.kyc?.phoneNumber || fallbackUser.kyc?.phone || "";
             if (isPlaceholder(phone) && fallbackUser.serviceRegistrations) {

@@ -58,7 +58,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { execFileSync } from 'child_process';
-import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from 'fs';
+import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync, cpSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -67,6 +67,39 @@ const MIGRATIONS = 'supabase/migrations';
 
 const build = (args: string[] = []) =>
     execFileSync('node', [BUILDER, ...args], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
+
+/**
+ * Run `body` against a PRIVATE COPY of supabase/migrations.
+ *
+ *   PROVING A REFUSAL MEANS PRESENTING THE THING BEING REFUSED, and the two
+ *   tests below used to do that in the real directory — writing a probe file
+ *   into it, and rewriting 027 in place — putting both back afterwards.
+ *
+ *   Jest runs suites in parallel workers, and two of them LIST that directory:
+ *   the deploy-file suite ("every migration on disk is named in DEPLOY.sql")
+ *   and this suite's own last section. Either could look while the probe was
+ *   there or while 027 was mid-rewrite. That is a test failing perhaps one run
+ *   in three, naming a file nobody wrote, passing every time in isolation — and
+ *   the pre-push hook runs this same suite, so it could reject a push for it.
+ *
+ *   Restoring afterwards was never the fix. The window is the whole problem,
+ *   and the only way to close it is to not open it: the copy is the thing that
+ *   gets mutated, and the builder is pointed at it with `--migrations`.
+ */
+function inMigrationsCopy(body: (dir: string) => void): void {
+    const dir = mkdtempSync(join(tmpdir(), 'mig469-'));
+    try {
+        //   Every .sql, because the builder REFUSES on a missing expected
+        //   migration as readily as on an unknown one — a partial copy would
+        //   fail for the wrong reason and prove nothing.
+        for (const f of readdirSync(MIGRATIONS).filter((x) => x.endsWith('.sql'))) {
+            cpSync(join(MIGRATIONS, f), join(dir, f));
+        }
+        body(dir);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
 
 /** SQL comments, so a statement NAMED in a header is not read as one written. */
 const statementsOf = (sql: string) =>
@@ -121,20 +154,46 @@ describe('#469 — the builder REFUSES rather than quietly excluding', () => {
      * then had nowhere to go. A builder that only bans is a builder that
      * encourages the next person to add an EXCLUDED entry and move on.
      */
-    const withTempMigration = (body: string, run: () => void) => {
-        const name = '999_temp_469_probe.sql';
-        const path = join(MIGRATIONS, name);
-        writeFileSync(path, body);
-        try { run(); } finally { rmSync(path, { force: true }); }
-    };
-
     it('AN UNKNOWN MIGRATION STOPS THE BUILD — the check that already existed', () => {
-        withTempMigration('SELECT 1;\n', () => {
-            const failed = (() => { try { build(); return null; } catch (e: any) { return e; } })();
+        inMigrationsCopy((dir) => {
+            writeFileSync(join(dir, '999_temp_469_probe.sql'), 'SELECT 1;\n');
+
+            const failed = (() => {
+                try { build(['--migrations', dir]); return null; } catch (e: any) { return e; }
+            })();
 
             expect(failed).not.toBeNull();
             expect(String(failed.stderr)).toContain('does not know about');
         });
+    });
+
+    it('and the copy it runs against is otherwise buildable', () => {
+        //   THE CONTROL THE COPY NOW NEEDS. Both refusals above are proved by
+        //   the builder exiting non-zero — which it would also do if the copy
+        //   were incomplete, or if --migrations were ignored and it read the
+        //   real directory while ANOTHER worker had it mid-mutation. An
+        //   unmutated copy that builds cleanly is what rules both out.
+        inMigrationsCopy((dir) => {
+            expect(() => build(['--migrations', dir])).not.toThrow();
+        });
+    });
+
+    it('and nothing it does is visible in the real directory', () => {
+        //   THE RACE ITSELF, ASSERTED. This is the property the rewrite exists
+        //   for, and it is worth stating rather than trusting: no file appears
+        //   in supabase/migrations while the probes run, and 027 is untouched.
+        const before = readdirSync(MIGRATIONS).sort();
+        const saved027 = readFileSync(join(MIGRATIONS, '027_dedicated_table_created_at_indexes.sql'), 'utf-8');
+
+        inMigrationsCopy((dir) => {
+            writeFileSync(join(dir, '999_temp_469_probe.sql'), 'SELECT 1;\n');
+            try { build(['--migrations', dir]); } catch { /* expected to refuse */ }
+
+            expect(readdirSync(MIGRATIONS).sort()).toEqual(before);
+        });
+
+        expect(readdirSync(MIGRATIONS).sort()).toEqual(before);
+        expect(readFileSync(join(MIGRATIONS, '027_dedicated_table_created_at_indexes.sql'), 'utf-8')).toBe(saved027);
     });
 
     it('AND ITS MESSAGE SAYS WHY EXCLUDING IT IS NOT THE ANSWER', () => {
@@ -156,24 +215,27 @@ describe('#469 — the builder REFUSES rather than quietly excluding', () => {
     });
 
     it('and it exits non-zero — a warning nobody reads is not a guard', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mig469-'));
-        try {
+        inMigrationsCopy((dir) => {
             // A migration that IS expected, rewritten to hold the statement.
-            const real = join(MIGRATIONS, '027_dedicated_table_created_at_indexes.sql');
-            const saved = readFileSync(real, 'utf-8');
-            writeFileSync(join(dir, 'saved.sql'), saved);
-            writeFileSync(real, saved.replace(/^CREATE INDEX /m, 'CREATE INDEX CONCURRENTLY '));
+            //
+            // In the COPY. This used to rewrite the real 027 and write it back
+            // afterwards — which left the file changed on disk for the length
+            // of a child process, in a directory two other suites read.
+            const target = join(dir, '027_dedicated_table_created_at_indexes.sql');
+            const saved = readFileSync(target, 'utf-8');
+            const rewritten = saved.replace(/^CREATE INDEX /m, 'CREATE INDEX CONCURRENTLY ');
+            //   The replace has to bite, or this asserts a refusal of nothing.
+            expect(rewritten).not.toBe(saved);
+            writeFileSync(target, rewritten);
 
-            const failed = (() => { try { build(); return null; } catch (e: any) { return e; } })();
-
-            writeFileSync(real, saved);
+            const failed = (() => {
+                try { build(['--migrations', dir]); return null; } catch (e: any) { return e; }
+            })();
 
             expect(failed).not.toBeNull();
             expect(failed.status).toBe(1);
             expect(String(failed.stderr)).toContain('cannot run inside a transaction');
-        } finally {
-            rmSync(dir, { recursive: true, force: true });
-        }
+        });
     });
 });
 

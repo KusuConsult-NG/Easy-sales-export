@@ -80,18 +80,60 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                     // ── STEP 3: Rate limit check ─────────────────────────────
                     const { consumeLoginAttempt, resetLoginAttempts } = await import("@/lib/rate-limit");
+
+                    /*
+                     *   THE LOCKOUT WAS NOT WORKING, AND THE LOG SAID SO EVERY TIME.
+                     *
+                     *   From the owner's production log, verbatim:
+                     *
+                     *       [Auth:Fallback] Redis consumeLoginAttempt failed, failing
+                     *       open. Error: Too many failed login attempts. If you cannot
+                     *       remember your credentials, please contact support …
+                     *
+                     *   Read that twice. The limiter REFUSED — that is its refusal, word
+                     *   for word — and this block logged the refusal as an infrastructure
+                     *   failure and let the login through.
+                     *
+                     *   HOW. The refusal was raised as a `throw` INSIDE the try, so the
+                     *   circuit breaker's catch received it, and the catch told a real
+                     *   refusal from a Redis outage by matching the message:
+                     *
+                     *       err.message.includes("Too many login attempts")
+                     *
+                     *   rate-limit.ts says "Too many FAILED login attempts". The word was
+                     *   added when the message was made friendlier — it also gained the
+                     *   support address and "try again in N minutes" — and "Too many login
+                     *   attempts" stopped being a substring of it. Nothing failed; the
+                     *   re-throw simply never fired again, and brute-force lockout on this
+                     *   path has been off ever since.
+                     *
+                     *   THE FIX IS NOT A BETTER STRING. A rule that depends on wording
+                     *   somebody else owns will break again the next time somebody
+                     *   improves a sentence, and it will break silently and open. The
+                     *   `allowed` flag is already the answer, so the decision moves OUT of
+                     *   the try and nothing is matched at all:
+                     *
+                     *       the try covers the I/O          — which is what may fail
+                     *       the refusal happens after it    — where no catch can eat it
+                     *
+                     *   FAILING OPEN IS STILL THE CHOICE ON AN OUTAGE, deliberately and
+                     *   unchanged: Upstash being down must not lock every member out of
+                     *   the platform. `null` is that case and only that case.
+                     *
+                     *   The pre-validate copy in actions/auth.ts never had this: it
+                     *   RETURNS its refusal, and a return inside a try is not caught.
+                     */
+                    let rateLimitResult: { allowed: boolean; error?: string } | null = null;
                     try {
-                        const rateLimitResult = await consumeLoginAttempt(email);
-                        if (!rateLimitResult.allowed) {
-                            throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
-                        }
+                        rateLimitResult = await consumeLoginAttempt(email);
                     } catch (err: any) {
                         // CIRCUIT BREAKER: Fail Open
                         // If Upstash Redis times out or crashes, do NOT block the login.
-                        if (err.message && err.message.includes("Too many login attempts")) {
-                            throw err; // Real rate limit
-                        }
                         logger.error(`[Auth:Fallback] Redis consumeLoginAttempt failed, failing open. Error: ${err.message}`);
+                    }
+
+                    if (rateLimitResult && !rateLimitResult.allowed) {
+                        throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
                     }
 
                     // ── STEP 4: Supabase Auth Verification with JIT Fallback ──

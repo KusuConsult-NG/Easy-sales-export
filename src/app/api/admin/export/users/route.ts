@@ -10,6 +10,7 @@ import { csvDocument } from "@/lib/csv-safe";
 import { writeDataExportRecord } from "@/lib/data-export-record";
 import { revealedIdentityFields } from "@/lib/kyc-identity-store";
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
+import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
 /** #779 What an exporter without the live permission sees in those columns. */
 const WITHHELD_IDENTITY = {
@@ -105,8 +106,10 @@ export async function GET(request: NextRequest) {
             
             const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : "";
 
-            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
-            const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+            //   One rule, not a seventh copy of it — see canonical/placeholder-names.
+            //   All six private sets were missing "unknown member", the string 2,591
+            //   skeleton profiles actually carry (#495).
+            const isPlaceholder = (v: any) => isPlaceholderName(v);
 
             let phone = data.phone || data.phoneNumber || data.kyc?.phoneNumber || data.kyc?.phone || "";
             if (isPlaceholder(phone) && data.serviceRegistrations) {
