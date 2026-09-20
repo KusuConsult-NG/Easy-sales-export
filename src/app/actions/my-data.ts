@@ -726,6 +726,38 @@ const APPLICATION_QUERIES: Record<
         statusField: "status",
         fromServiceRegistrations: "export",
     },
+    /*
+     *   COOPERATIVE — THE FIFTH DOOR, ADDED WITH THE SCREEN THAT NEEDS IT.
+     *
+     *   /cooperatives/onboarding/pending did not exist at all: the dashboard
+     *   built that URL for cooperative members and the route 404'd, while the
+     *   other three modules resolved. Observed in production, twice in
+     *   thirty-two seconds from one phone.
+     *
+     *   THE ENTRY GOES IN WITH THE PAGE, not after it, because #799 above
+     *   records exactly what a pending screen does without one: the poll
+     *   returns UNKNOWN, usePendingApplicationStatus sets `checkFailed` and
+     *   returns early, `status` never leaves its initial "pending", and the
+     *   approval redirect never fires. Export sat like that for the whole
+     *   life of #415. Adding the page alone would have reproduced it here —
+     *   the same finding, one module over, in the fix for a sibling of it.
+     *
+     *   `cooperatives`, PLURAL. Both spellings live on this platform and
+     *   schema-normalizer mirrors them as a pair, but every status transition
+     *   writes the plural — _coop_membership, _coop_registration,
+     *   _coop_identity and _coop_admin_members all do. Reading the singular
+     *   would answer for a field the writers only reach through a mirror.
+     *
+     *   From serviceRegistrations rather than a membership row, for the reason
+     *   given for farm-nation and export above: it is the field EVERY
+     *   transition writes, including revision_required, which the page
+     *   redirects on.
+     */
+    [`${COLLECTIONS.USERS}:cooperatives`]: {
+        collection: COLLECTIONS.USERS,
+        statusField: "status",
+        fromServiceRegistrations: "cooperatives",
+    },
 };
 
 export interface MyApplicationStatus {

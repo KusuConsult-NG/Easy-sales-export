@@ -64,6 +64,41 @@
 --   is nothing to consolidate today. This exists so that the day there is,
 --   the answer is not hand-written SQL against production.
 
+-- ── ON THE DOLLAR-QUOTE TAGS ────────────────────────────────────────────────
+--
+-- The body is delimited `$fn$` and the check block `$chk$`, not bare `$$`.
+--
+-- WHAT IS KNOWN. Applied with psql this file was correct with bare `$$` and is
+-- correct now — verified both ways against a real Postgres, with the function's
+-- sixteen behavioural tests passing either side of the change. Pasted into the
+-- Supabase SQL Editor, it failed with
+--
+--     ERROR: 42601: syntax error at or near "raw_data"
+--     LINE 1:             raw_data   = jsonb_set(
+--
+-- `LINE 1` on an indented continuation is a FRAGMENT of the function body being
+-- executed as a whole statement. Something split the body, and the body holds
+-- 48 semicolons for a splitter to find.
+--
+-- WHAT IS NOT KNOWN, AND IS NOT GUESSED AT HERE. Exactly what that editor does
+-- with `$$`. Two attempts to reproduce the split locally — modelling a splitter
+-- that recognises dollar tags only at the start of a line — did NOT produce the
+-- reported fragment, so the obvious theory (that `AS $$` mid-line is missed and
+-- the remaining tags pair up wrongly) is unverified. It is written down as a
+-- suspicion rather than a cause, because a confident explanation that cannot be
+-- reproduced is worse than none: the next person would stop looking.
+--
+-- WHY THE TAGS CHANGE ANYWAY. Named tags are the standard remedy for this class
+-- of failure and cost nothing: each is unambiguous alone, and two DIFFERENT
+-- tags cannot pair with each other even if an opening tag is missed. That is a
+-- strictly safer file for any splitter, whether or not it is the fix for this
+-- one. Nothing about the SQL changed.
+--
+-- IF IT STILL FAILS IN THE EDITOR, apply it with psql instead, which is the
+-- path that has actually been verified:
+--
+--     psql "$PROD_URL" -f supabase/migrations/046_consolidate_wallet_to_live_profile.sql
+--
 BEGIN;
 
 CREATE OR REPLACE FUNCTION consolidate_wallet_to_live_profile(
@@ -79,7 +114,7 @@ RETURNS TABLE (
     reason       TEXT
 )
 LANGUAGE plpgsql SECURITY DEFINER
-AS $$
+AS $fn$
 DECLARE
     v_from_balance NUMERIC := 0;
     v_to_balance   NUMERIC := 0;
@@ -257,7 +292,7 @@ BEGIN
 
     RETURN QUERY SELECT TRUE, v_amount, 0::NUMERIC, v_to_balance, NULL::TEXT;
 END;
-$$;
+$fn$;
 
 COMMENT ON FUNCTION consolidate_wallet_to_live_profile(text, text, text) IS
     'Moves a stranded wallet balance from a superseded profile to the live one '
@@ -273,13 +308,13 @@ COMMENT ON FUNCTION consolidate_wallet_to_live_profile(text, text, text) IS
  *   function safe to CALL, not safe to expose — a browser that could reach it
  *   could still enumerate ids looking for a pair that satisfies it.
  */
-DO $$
+DO $chk$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
         REVOKE ALL ON FUNCTION consolidate_wallet_to_live_profile(text, text, text) FROM PUBLIC;
         EXECUTE 'GRANT EXECUTE ON FUNCTION consolidate_wallet_to_live_profile(text, text, text) TO service_role';
     END IF;
-END $$;
+END $chk$;
 
 COMMIT;
 
