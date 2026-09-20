@@ -558,7 +558,20 @@ export async function getMyDisputes(): Promise<any[]> {
     }
 }
 
-/** The caller's wallet balance. Wallet id is the user id. */
+/**
+ * The caller's SPENDABLE wallet balance. Wallet id is the user id.
+ *
+ * The live id, and on purpose — this is the figure the dashboard puts in front
+ * of somebody about to spend it, and the balance functions only ever move the
+ * live row (migration 005 keys both on p_user_id). A balance resolved across a
+ * superseded profile would be a number this platform then refuses to honour at
+ * checkout, which is a worse failure than the one it would be fixing.
+ *
+ * Money left under a superseded profile is caught where it matters instead:
+ * the account-deletion guard counts every row (actions/user.ts), the supersede
+ * tool refuses to strand it in the first place (admin/_duplicate_profiles.ts),
+ * and wallet creation logs it (actions/wallet.ts).
+ */
 export async function getMyWalletBalance(): Promise<number> {
     const userId = await currentUserId();
     if (!userId) return 0;

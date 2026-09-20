@@ -10,6 +10,7 @@ import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/
 import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Optimized dashboard data loader
@@ -40,10 +41,15 @@ export async function getDashboardDataAction() {
         const userId = session.user.id;
         logger.info(`[getDashboardData] Loading data for user: ${userId}`);
 
+        //   The member's own profile rows, resolved once. Hoisted OUT of the
+        //   runQueryWithRetry callbacks below — those are synchronous arrow
+        //   functions, so an await inside one is a compile error, and putting
+        //   it there would also re-resolve on every retry.
+        const ownedIds = await ownedProfileIdsFor(userId);
+
         // ── FALLBACK 1: Query by userId field ──────────────────────────────────
         let membershipSnapshot = await runQueryWithRetry(() =>
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where('userId', '==', userId)
+            filterByOwner(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), 'userId', ownedIds)
                 .get()
         );
 
@@ -131,8 +137,7 @@ export async function getDashboardDataAction() {
             logger.warn(`[getDashboardData] All direct lookups failed for ${userId} — checking processed_payments`);
 
             const paymentSnap = await runQueryWithRetry(() =>
-                db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                    .where("userId", "==", userId)
+                filterByOwner(db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId", ownedIds)
                     .where("type", "==", "cooperative_membership_registration")
                     .where("status", "==", "completed")
                     .limit(1)

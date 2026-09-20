@@ -14,6 +14,7 @@ import { isDecidedAgainst } from "@/lib/registration-progress";
 import { sortApplicationsNewestFirst } from "@/lib/latest-application";
 import { revalidatePath } from "next/cache";
 import type { SupabaseDocumentSnapshot } from "@/lib/supabase-db";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 // ============================================
 // MEMBER ID CARD
@@ -56,8 +57,9 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 
         // NOTE: .orderBy removed — requires composite index (userId+createdAt) that crashes without deploy.
         // In-memory sort below handles ordering (users have at most 1-2 membership docs).
-        const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("userId", "==", userId)
+        const memberSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), "userId",
+            await ownedProfileIdsFor(userId))
             .limit(5)
             .get();
 
@@ -583,8 +585,9 @@ export async function updatePassportPhotoAction(
         const userPlan = (userData?.serviceRegistrations?.academy?.plan || "free").toLowerCase();
         const isPremiumSubscriber = ["elite", "standard", "foundation", "advanced"].includes(userPlan);
 
-        const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("userId", "==", userId)
+        const memberSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), "userId",
+            await ownedProfileIdsFor(userId))
             .orderBy("createdAt", "desc")
             .limit(1)
             .get();
@@ -717,8 +720,9 @@ export async function updateMemberProfileDetailsAction(
         const isPremiumSubscriber = ["elite", "standard", "foundation", "advanced"].includes(userPlan);
 
         // Fetch Cooperative Member record
-        const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("userId", "==", userId)
+        const memberSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), "userId",
+            await ownedProfileIdsFor(userId))
             .limit(5)
             .get();
 

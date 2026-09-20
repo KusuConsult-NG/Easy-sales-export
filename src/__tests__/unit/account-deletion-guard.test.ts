@@ -69,16 +69,21 @@ function setState({
     coopLoanStatuses = [] as string[],       // in COOPERATIVE_LOANS, keyed memberId
     escrowStatuses = [] as string[],
 } = {}) {
-    // The harness calls mockFirestoreCollection(name) before .doc(), and
-    // mockFirestoreGet(docId) for a doc read — so a doc read carries the ID, not
-    // the collection. wallets/:userId and cooperative_members/:userId are
-    // therefore indistinguishable by argument alone. Tracking the last
-    // collection is what tells them apart.
-    let lastCollection = '';
-    (global as any).mockFirestoreCollection.mockImplementation((name: string) => { lastCollection = name; });
-
-    (global as any).mockFirestoreGet.mockImplementation((key: string) => {
-        const where = lastCollection || key;
+    // THE COLLECTION IS THE SECOND ARGUMENT, not a variable tracked on the side.
+    //
+    // This used to record the last name passed to mockFirestoreCollection and
+    // read that, because wallets/:userId and cooperative_members/:userId look
+    // identical by doc id alone. But "the last collection mentioned" is only the
+    // collection being read when nothing else reads anything in between — and
+    // the guard now resolves the caller's owned profiles first, which reads
+    // `users` and left every wallet and member read afterwards looking like a
+    // user read. The blockers silently vanished and two assertions here went
+    // green-to-red for a reason that was entirely in this fixture.
+    //
+    // firestore-mock-db passes `(id, collection)` on a doc get and
+    // `(name, filters)` on a query, so the real answer was always available.
+    (global as any).mockFirestoreGet.mockImplementation((key: string, second?: unknown) => {
+        const where = (typeof second === 'string' ? second : '') || key;
         if (where === 'wallets') return Promise.resolve({ exists: true, data: () => ({ balance: wallet }), docs: [], empty: false });
         if (where === 'cooperative_members') return Promise.resolve({ exists: true, data: () => ({ savingsBalance: savings, lockedBalance: locked }), docs: [], empty: false });
         // The two loan collections are stubbed SEPARATELY and deliberately.

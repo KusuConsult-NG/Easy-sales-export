@@ -11,6 +11,8 @@ import { logger } from "@/lib/logger";
 import type { ActionResponse } from "@/lib/safe-action";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
+import { walletRowsFor, totalWalletBalance } from "@/lib/wallet-lookup";
+import { ownedProfileIdsFor } from "@/lib/owned-profile-ids";
 
 /**
  * NDPR Compliant "Right to be Forgotten" Account Deletion.
@@ -56,15 +58,49 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         // — far worse — succeeding and losing their money.
         const blockers: string[] = [];
 
-        const walletSnap = await db.collection(COLLECTIONS.WALLETS).doc(userId).get();
-        const walletBalance = Number(walletSnap.data()?.balance || 0);
+        // EVERY WALLET ROW THIS PERSON OWNS, not just the one at the live id.
+        //
+        // The wallet id is the user id, so a member whose profile was
+        // superseded (#724) has their old wallet filed under the id that lost.
+        // Money cannot MOVE there — credit_wallet_once and debit_wallet_once
+        // both key on the live session id (migration 005), which is why the
+        // dashboard deliberately keeps showing the live row's balance and only
+        // that. But money can still SIT there, and this is the one path that
+        // acts irreversibly on the answer.
+        //
+        // Reading a single doc id here meant a stranded balance read as ₦0,
+        // raised no blocker, and let the account be erased with the naira still
+        // in a row nothing would ever look at again. The comment above names
+        // that outcome as the thing this guard exists to prevent: "or — far
+        // worse — succeeding and losing their money."
+        const walletRows = await walletRowsFor(db.collection(COLLECTIONS.WALLETS), userId);
+        const walletBalance = totalWalletBalance(walletRows);
         if (walletBalance > 0) {
-            blockers.push(`a wallet balance of ₦${walletBalance.toLocaleString()}`);
+            const stranded = walletRows.filter((r) => !r.live && r.balance > 0);
+            blockers.push(
+                `a wallet balance of ₦${walletBalance.toLocaleString()}` +
+                // Named, because the ordinary remedy does not work on it: this
+                // person cannot withdraw it themselves, so "withdraw your funds
+                // and try again" would send them round a loop for ever.
+                (stranded.length > 0
+                    ? ` (₦${totalWalletBalance(stranded).toLocaleString()} of it held under an earlier profile, which support has to move for you)`
+                    : "")
+            );
         }
 
-        const memberSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-        const savings = Number(memberSnap.data()?.savingsBalance || 0);
-        const locked = Number(memberSnap.data()?.lockedBalance || 0);
+        // The cooperative row is keyed by the user id too, so it strands the
+        // same way and on the same irreversible path. Widened with it rather
+        // than left as the one doc-id read in a guard that no longer makes
+        // that assumption anywhere else.
+        const memberIds = await ownedProfileIdsFor(userId);
+        const memberSnaps = await Promise.all(
+            memberIds.map((id) => db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(id).get()),
+        );
+        const sumAcross = (field: string) => memberSnaps.reduce(
+            (total, snap) => total + Number(snap.data()?.[field] || 0), 0,
+        );
+        const savings = sumAcross("savingsBalance");
+        const locked = sumAcross("lockedBalance");
         if (savings > 0) blockers.push(`₦${savings.toLocaleString()} in cooperative savings`);
         if (locked > 0) blockers.push(`₦${locked.toLocaleString()} locked in a pending withdrawal`);
 
@@ -150,11 +186,22 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
             erasedOwnerMarker(userId),
             { merge: true },
         );
-        batch.set(
-            db.collection(COLLECTIONS.WALLETS).doc(userId),
-            erasedOwnerMarker(userId),
-            { merge: true },
-        );
+        // The same widening on the write side, for the same reason. Marking
+        // only the live row would retire the wallet the person could see and
+        // leave an unmarked one under a superseded profile — a row with no
+        // owner, no marker, and nothing to say why it is inert.
+        //
+        // `set` with merge, so the live row is still CREATED when they never
+        // had a wallet at all. That is what this line did before and it is what
+        // makes the marker unconditional.
+        const walletIdsToRetire = new Set<string>([userId, ...walletRows.map((r) => r.id)]);
+        for (const walletId of walletIdsToRetire) {
+            batch.set(
+                db.collection(COLLECTIONS.WALLETS).doc(walletId),
+                erasedOwnerMarker(userId),
+                { merge: true },
+            );
+        }
 
         // The index of this person's uploaded documents, kept before the user
         // row loses it. Server-only: document_collections has RLS on and no

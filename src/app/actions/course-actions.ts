@@ -13,6 +13,7 @@ import { AuditActionType, type CourseProgress } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Update lesson progress (called by video player)
@@ -244,8 +245,9 @@ async function loadCourseForCompletion(courseId: string): Promise<{
 
 /** The lessons of this course the learner has actually finished. */
 async function completedLessonIds(userId: string, courseId: string): Promise<Set<string>> {
-    const snap = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS)
-        .where("userId", "==", userId)
+    const snap = await filterByOwner(
+        db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS), "userId",
+        await ownedProfileIdsFor(userId))
         .where("courseId", "==", courseId)
         .get();
     const done = new Set<string>();

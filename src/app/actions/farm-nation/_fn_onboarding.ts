@@ -17,6 +17,7 @@ import { requiredNationalIdField } from "@/lib/kyc-validators";
 import { hashData } from "@/lib/security";
 import { kycReadableField } from "@/lib/kyc-identity-store";
 import { latestApplication } from "@/lib/latest-application";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Submit Farm Nation Onboarding
@@ -282,14 +283,16 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
             let appDoc: any = null;
             let appSnap;
             try {
-                appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                    .where("userId", "==", session.user.id)
+                appSnap = await filterByOwner(
+                    db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId",
+                    await ownedProfileIdsFor(session.user.id))
                     .get();
             } catch (e: any) {
                 if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                     logger.warn("Missing index for checkFarmNationStatusAction, falling back to memory sort");
-                    appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                        .where("userId", "==", session.user.id)
+                    appSnap = await filterByOwner(
+                        db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId",
+                        await ownedProfileIdsFor(session.user.id))
                         .get();
                 } else {
                     throw e;

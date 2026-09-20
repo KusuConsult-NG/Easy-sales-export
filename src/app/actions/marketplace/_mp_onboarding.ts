@@ -16,6 +16,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { MarketplaceOnboardingSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { toMillis } from "@/lib/firestore-serialize";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -37,8 +38,9 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
         // ── AUTHORITATIVE CHECK: Check real verification record ──────
         if (status !== "approved") {
             let verDoc: any = null;
-            const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("userId", "==", session.user.id)
+            const verSnap = await filterByOwner(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+                await ownedProfileIdsFor(session.user.id))
                 .get();
 
             if (!verSnap.empty) {

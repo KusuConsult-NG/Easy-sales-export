@@ -53,6 +53,7 @@ import {
 } from "@/lib/duplicate-profile-resolution";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
+import { walletRowsFor, totalWalletBalance } from "@/lib/wallet-lookup";
 
 /** Matches the forensic scan's own paging, so both read the same population. */
 const PAGE = 1000;
@@ -204,6 +205,61 @@ async function _resolveDuplicateProfileGroupAction(
         const verdict = checkResolution({ group, keepId, supersedeIds });
         if (!verdict.ok) {
             return { success: false as const, error: verdict.reason, data: null };
+        }
+
+        /*
+         *   AND NOT WHILE ONE OF THEM STILL HOLDS MONEY.
+         *
+         *   THIS IS THE ONLY WAY A WALLET BALANCE EVER BECOMES UNREACHABLE.
+         *   The wallet id is the user id, and both balance functions key on the
+         *   session's id (migration 005: `credit_wallet_once` inserts at
+         *   `p_user_id`, `debit_wallet_once` updates `WHERE id = p_user_id`).
+         *   A session id is live by construction — profile-choice ranks a
+         *   superseded row last (#490) — so no naira can ever ARRIVE under a
+         *   superseded profile. It can only be left there, by this action,
+         *   pointing a funded row at another one.
+         *
+         *   After which nothing can reach it: not the person, whose dashboard
+         *   reads the live row; not checkout, which debits the live row; not
+         *   support, without hand-written SQL. It is the one irreversible thing
+         *   an otherwise perfectly reversible tool can do, and the header above
+         *   promises the opposite — "if the owner picks wrong, clearing the
+         *   pointer puts the group back exactly as it was". A stranded balance
+         *   is not put back by clearing the pointer.
+         *
+         *   So the money moves first, and a person decides how. Refusing costs
+         *   an admin one more step on a group they can settle a minute later;
+         *   allowing it costs somebody their balance with no trace of where it
+         *   went.
+         *
+         *   NOT A RULE IN checkResolution, deliberately: that function is pure
+         *   and synchronous, and every rule in it is derivable from the group it
+         *   is handed. This one needs a read of another collection.
+         */
+        const funded: string[] = [];
+        for (const id of supersedeIds) {
+            const rows = await walletRowsFor(db.collection(COLLECTIONS.WALLETS), id);
+            //   walletRowsFor resolves forward first, so handing it a row that
+            //   ALREADY points somewhere returns that person's whole set. Only
+            //   the row being superseded here matters, so it is picked out by id.
+            const own = rows.filter((r) => r.id === id);
+            if (totalWalletBalance(own) > 0) funded.push(id);
+        }
+
+        if (funded.length > 0) {
+            logger.warn(
+                `[admin/duplicate-profiles] refused ${maskAddress(email)}: `
+                + `${funded.length} record(s) still hold a wallet balance.`,
+            );
+            return {
+                success: false as const,
+                error:
+                    `${funded.length === 1 ? "One of those records" : `${funded.length} of those records`} `
+                    + "still holds a wallet balance. Superseding it would leave the money in a wallet "
+                    + "nothing can reach — not the member, not checkout, not this screen. "
+                    + "Move the balance onto the record you are keeping first, then settle the group.",
+                data: null,
+            };
         }
 
         //   Written BEFORE the effect, as #530 established for the erasure

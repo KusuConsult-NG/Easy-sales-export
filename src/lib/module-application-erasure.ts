@@ -3,6 +3,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { erasedOwnerMarker } from "@/lib/user-erasure";
 import { logger } from "@/lib/logger";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Right-to-erasure, for the rows the USER DOCUMENT is not.
@@ -404,6 +405,39 @@ export async function eraseModuleApplications(
      *   before the scrub, which is where the callers now capture it.
      */
     const erasureEmail = String(contact.email ?? "").trim().toLowerCase();
+
+    /**
+     *   EVERY PROFILE ROW THIS PERSON HAS, NOT ONLY THE ONE THEY LAST SIGNED
+     *   IN AS.
+     *
+     *   #376's finding was that erasure "scrubbed one row out of nine" —
+     *   every module keeps its own copy of the member's name, phone, address,
+     *   next of kin, BVN and bank account. This is the same finding one axis
+     *   over: the rows are found by `userId`, and a member whose profile was
+     *   superseded has module rows filed under the id they no longer use.
+     *   765 profiles in production carry that pointer.
+     *
+     *   So a right-to-erasure request could scrub the live profile's WAVE
+     *   application and leave the superseded profile's — same person, same
+     *   NIN, same bank account, still on the platform, still readable by
+     *   every admin screen.
+     *
+     *   BOTH LOOKUPS NEEDED IT, and the second is easy to miss:
+     *   `deterministicIds(userId)` derives document ids FROM the id it is
+     *   given, so passing only the live one cannot reach a row keyed on the
+     *   old one however many collections are swept.
+     *
+     *   THE EMAIL SWEEP IS DELIBERATELY NOT WIDENED. It is already keyed on
+     *   the address rather than on any profile, and #36's rule stands: an
+     *   email match is a CLAIM, not proof of ownership.
+     *
+     *   FAILING CLOSED IS NOT AN OPTION HERE, and failing open is not either.
+     *   ownedProfileIds returns [liveId] when resolution fails, so a lookup
+     *   error narrows this to exactly today's behaviour rather than widening
+     *   it to rows that may not be theirs.
+     */
+    const ownedIds = await ownedProfileIdsFor(userId);
+
     const retained: RetainedModuleDocument[] = [];
     const failures: string[] = [];
     const patches: Array<{ target: ModuleErasureTarget; docId: string }> = [];
@@ -412,10 +446,9 @@ export async function eraseModuleApplications(
         try {
             const seen = new Set<string>();
 
-            const snapshot = await db
-                .collection(target.collection)
-                .where("userId", "==", userId)
-                .get();
+            const snapshot = await filterByOwner(
+                db.collection(target.collection), "userId", ownedIds,
+            ).get();
 
             for (const doc of snapshot.docs) {
                 seen.add(doc.id);
@@ -426,7 +459,11 @@ export async function eraseModuleApplications(
             // The id shapes the writers derive from the user id. A row created
             // before the userId field existed carries no userId, and the query
             // above cannot see it.
-            for (const docId of target.deterministicIds(userId)) {
+            //   Derived for EVERY id this person owns — see the header. A
+            //   deterministic id built from the live profile cannot name a row
+            //   keyed on the superseded one.
+            const deterministic = ownedIds.flatMap((id) => target.deterministicIds(id));
+            for (const docId of deterministic) {
                 if (seen.has(docId)) continue;
                 const snap = await db.collection(target.collection).doc(docId).get();
                 if (!snap.exists) continue;

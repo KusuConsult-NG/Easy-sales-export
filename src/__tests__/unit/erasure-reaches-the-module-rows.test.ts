@@ -470,7 +470,24 @@ describe('#376 — the sweep, end to end', () => {
             expect({ c: t.collection, filters: asked?.filters })
                 .toEqual({ c: t.collection, filters: [{ field: 'userId', op: '==', value: UID }] });
         }
-        expect(queried).toHaveLength(MODULE_ERASURE_TARGETS.length);
+
+        /*
+         *   THE TARGET QUERIES, counted apart from the two that resolve the
+         *   person.
+         *
+         *   The sweep now asks `users` for this member's other profile rows
+         *   first — `_migratedTo` and `supabaseAuthId`, the pair
+         *   ownedProfileIds walks — because an erasure that scrubs one
+         *   profile and leaves the other leaves the same person's NIN and
+         *   bank account on the platform.
+         *
+         *   Those two are NOT target collections, and folding them into this
+         *   count would be the same mistake in miniature: a number that no
+         *   longer means "every module was asked". Excluded by name, so the
+         *   assertion still fails if a module is dropped or asked twice.
+         */
+        const targetQueries = queried.filter((q) => q.collection !== COLLECTIONS.USERS);
+        expect(targetQueries).toHaveLength(MODULE_ERASURE_TARGETS.length);
     });
 
     it('THE REFERENCES ARE RETAINED, AND BEFORE THE SCRUB COMMITS', async () => {

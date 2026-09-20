@@ -17,6 +17,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { sendEmailNotification } from "@/lib/email-notifications";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 // ============================================
 // Academy Application Management (Admin)
@@ -621,8 +622,12 @@ async function _manualAcademyEnrollmentAction(
         // ── Write/Update Application for Admin Dashboard ────────────────────────
         // Find existing applications for this user and update them, or create a mock one
         try {
-            const appsQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("userId", "==", userId)
+            //   An admin acting on a learner acts on all of that learner's
+            //   applications, not only the ones filed under the profile they
+            //   last signed in as.
+            const appsQuery = await filterByOwner(
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId",
+                await ownedProfileIdsFor(userId))
                 .get();
 
             if (!appsQuery.empty) {

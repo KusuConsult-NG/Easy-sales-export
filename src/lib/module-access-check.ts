@@ -29,6 +29,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-progress";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */
@@ -80,6 +81,33 @@ export async function checkModuleAccess(
 
     try {
         const db = getAdminDb();
+
+        /**
+         *   THE MEMBER'S OWN PROFILE ROWS, RESOLVED ONCE.
+         *
+         *   Every collection lookup below asked `where("userId","==",userId)`
+         *   with the id of the row the caller signed in as. A member whose
+         *   profile was superseded — the `_migratedTo` population the userId
+         *   sweep exists for — has their application filed under the OLD id,
+         *   so the query returned nothing and this function answered "no
+         *   access".
+         *
+         *   THAT IS WORSE HERE THAN ON A LISTING. A listing that misses shows
+         *   an empty table; this is the gate. It tells a member who paid and
+         *   was approved that they have not applied, on every one of the six
+         *   modules below.
+         *
+         *   LAZY, AND AT MOST ONCE. Layer 1 returns above this line for the
+         *   99% of requests its own comment describes, so the fast path pays
+         *   nothing. Past it, the resolution is two indexed queries per
+         *   supersession level and is shared by every layer that follows.
+         */
+        let ownedIdsCache: string[] | null = null;
+        const ownedIds = async (): Promise<string[]> => {
+            if (ownedIdsCache === null) ownedIdsCache = await ownedProfileIdsFor(userId);
+            return ownedIdsCache;
+        };
+
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) return false;
@@ -222,8 +250,8 @@ export async function checkModuleAccess(
         // Handles legacy/bulk-imported cooperative members whose user documents
         // were never updated/backfilled, and whose roles/serviceRegistrations are empty.
         if (app === "cooperatives") {
-            const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("userId", "==", userId)
+            const memberQuery = await filterByOwner(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), "userId", await ownedIds())
                 .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
@@ -354,8 +382,8 @@ export async function checkModuleAccess(
                         //   completed registration payment exists, so reading a
                         //   bounded handful and testing `.empty` is the same
                         //   answer for the same cost.
-                        const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                            .where("userId", "==", userId)
+                        const authPayment = await filterByOwner(
+                            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId", await ownedIds())
                             .where("type", "==", "cooperative_membership_registration")
                             .where("status", "==", "completed")
                             .limit(APPLICATION_SCAN_LIMIT)
@@ -431,8 +459,8 @@ export async function checkModuleAccess(
         // Handles manually approved/assigned academy learners whose user documents
         // were never updated/backfilled, and whose roles/serviceRegistrations are empty.
         if (app === "academy") {
-            const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("userId", "==", userId)
+            const appQuery = await filterByOwner(
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId", await ownedIds())
                 .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
@@ -508,8 +536,8 @@ export async function checkModuleAccess(
 
         // ── Layer 2.8: Direct Collection query/lookup fallback for WAVE ─────────
         if (app === "wave") {
-            const appQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("userId", "==", userId)
+            const appQuery = await filterByOwner(
+                db.collection(COLLECTIONS.WAVE_APPLICATIONS), "userId", await ownedIds())
                 .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
@@ -590,8 +618,8 @@ export async function checkModuleAccess(
 
         // ── Layer 2.9: Direct Collection query/lookup fallback for Export ────────
         if (app === "export") {
-            const appQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                .where("userId", "==", userId)
+            const appQuery = await filterByOwner(
+                db.collection(COLLECTIONS.EXPORT_APPLICATIONS), "userId", await ownedIds())
                 .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
@@ -672,8 +700,8 @@ export async function checkModuleAccess(
 
         // ── Layer 2.10: Direct Collection query/lookup fallback for Farm Nation ──
         if (app === "farm-nation") {
-            const appQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("userId", "==", userId)
+            const appQuery = await filterByOwner(
+                db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId", await ownedIds())
                 .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
@@ -763,8 +791,8 @@ export async function checkModuleAccess(
 
         // ── Layer 2.11: Direct Collection query/lookup fallback for Marketplace Seller ─
         if (app === "marketplace") {
-            const verQuery = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("userId", "==", userId)
+            const verQuery = await filterByOwner(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId", await ownedIds())
                 .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
