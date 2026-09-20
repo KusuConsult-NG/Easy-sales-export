@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { gradeStoredQuiz } from "@/lib/academy-grading";
 import { isAcademyQuizApiEnabled, ACADEMY_QUIZ_API_REFUSAL } from "@/lib/academy-quiz-api";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * API Route: Submit Quiz Attempt
@@ -92,8 +93,32 @@ export async function POST(request: NextRequest) {
         // as given, while the fetch route returned a hardcoded `attemptNumber:
         // 1`. So the limit was decorative and the recorded number was whatever
         // the client said.
-        const priorAttempts = await db.collection(COLLECTIONS.QUIZ_ATTEMPTS)
-            .where("userId", "==", session.user.id)
+        //   EVERY PROFILE THIS LEARNER OWNS, and this one REFUSES MORE rather
+        //   than less — the `isSamePerson` direction, as with the cooperative's
+        //   one-open-loan bar. A limit counted against a single id hands a
+        //   learner with two profiles a fresh set of attempts.
+        //
+        //   NOT A LIVE DEFECT, AND SAYING SO IS THE POINT. #386 measured this
+        //   subsystem: COLLECTIONS.QUIZZES has one writer, on a screen nothing
+        //   links, so the store is empty and QUIZ_ATTEMPTS has never been
+        //   written. This route refuses with 410 before any of it runs, behind
+        //   ACADEMY_QUIZ_API. So no learner has ever reset an attempt count
+        //   here, because no learner has ever taken one of these quizzes.
+        //
+        //   Widened anyway, because the alternative is leaving a per-profile
+        //   limit for whoever finishes the feature to switch on — and #386
+        //   records that this route is the more complete of the two quiz
+        //   implementations precisely BECAUSE it enforces the limit its
+        //   sibling does not. A limit that is wrong the moment it is enabled
+        //   is not a saving.
+        //
+        //   attemptNumber is derived from this same count two lines below, so
+        //   the recorded number stays truthful about how many times the
+        //   PERSON has attempted the quiz.
+        const priorAttempts = await filterByOwner(
+            db.collection(COLLECTIONS.QUIZ_ATTEMPTS), "userId",
+            await ownedProfileIds(session.user.id),
+        )
             .where("quizId", "==", quizId)
             .get();
 

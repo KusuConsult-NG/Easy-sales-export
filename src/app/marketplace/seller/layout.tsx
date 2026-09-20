@@ -14,6 +14,7 @@ import { requireHubRegistration } from "@/lib/hub-guard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { toMillis } from "@/lib/firestore-serialize";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 
 export default async function SellerLayout({ children }: { children: React.ReactNode }) {
     // 1. Authenticate and ensure fully registered
@@ -66,10 +67,15 @@ export default async function SellerLayout({ children }: { children: React.React
                         };
                     } else {
                         // Fallback: query SELLER_VERIFICATIONS by userId field
-                        const verSnap = await adminDb
-                            .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                            .where("userId", "==", userId)
-                            .get();
+                        //   EVERY PROFILE THIS SELLER OWNS. This is the
+                        //   seller's own gate into /marketplace/seller — a
+                        //   verification approved under a superseded profile
+                        //   read as no verification at all, and the seller was
+                        //   sent back to apply for something they already hold.
+                        const verSnap = await filterByOwner(
+                            adminDb.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+                            await ownedProfileIds(userId),
+                        ).get();
 
                         if (!verSnap.empty) {
                             const sortedDocs = verSnap.docs.map(d => d.data()).sort((a: any, b: any) => {

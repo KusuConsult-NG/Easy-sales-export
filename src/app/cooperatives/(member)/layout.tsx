@@ -14,6 +14,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 // import CooperativeSidebar from "./CooperativeSidebar"; // Removed in favor of global Sidebar
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { findCooperativeMemberRowForPerson } from "@/lib/cooperative-member-lookup";
 
 async function CooperativeLayoutContent({ children }: { children: React.ReactNode }) {
     // Detect dedicated domain server-side
@@ -68,22 +69,22 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 // Query by userId since document ID may be a generated ID
                 // NOTE: Do NOT add orderBy here — it requires a composite index.
                 // A simple where("userId") query is sufficient and always works.
-                const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                     .where("userId", "==", userId)
-                     .limit(1)
-                     .get();
-                    
-                if (!memberQuery.empty) {
-                    memberData = memberQuery.docs[0].data();
+                //   A SEVENTH COPY OF THE MEMBER WALK, and the shared one
+                //   does both keys in the documented order AND spans every
+                //   profile this person owns, live row first. A membership
+                //   created before their profile was superseded read as no
+                //   membership here, which on a LAYOUT means the member is
+                //   bounced out of the cooperative section entirely.
+                const ownRow = await findCooperativeMemberRowForPerson(
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+                );
+
+                if (ownRow) {
+                    memberData = ownRow.data;
                     // Cache for 5 minutes
                     await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
                 } else {
-                    // Fallback to legacy document ID check
-                    const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-                    if (memberSnapshot.exists) {
-                        memberData = memberSnapshot.data();
-                        await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
-                    } else {
+                    {
                         memberData = null; // Explicitly set to null if not found
                     }
                 }

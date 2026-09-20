@@ -1,6 +1,7 @@
 
 import { db } from "./firebase-admin";
 import { COLLECTIONS } from "./types/firestore";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * CANONICAL VERIFICATION SCHEMA
@@ -100,8 +101,15 @@ export async function getCanonicalProfile(userId: string): Promise<CanonicalVeri
     };
 
     // 2. Supplement from Seller Verifications (usually has better business/doc data)
-    const sellerSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-        .where("userId", "==", userId)
+    //   EVERY PROFILE THIS PERSON OWNS, newest row first. A verification filed
+    //   before their profile was superseded still describes the same business,
+    //   and without it this "canonical" profile silently loses the business
+    //   name, address, category and documents — the fields it exists to
+    //   supply.
+    const sellerSnap = await filterByOwner(
+        db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
+        await ownedProfileIdsFor(userId),
+    )
         .orderBy("createdAt", "desc")
         .limit(1)
         .get();
@@ -141,6 +149,18 @@ export async function getCanonicalProfile(userId: string): Promise<CanonicalVeri
  * WRITE: Atomic update to canonical profile and all relevant sub-collections.
  */
 export async function updateCanonicalProfile(userId: string, updates: Partial<CanonicalVerificationProfile>, adminId?: string) {
+    /*
+     *   RESOLVED BEFORE THE TRANSACTION OPENS, not inside it.
+     *
+     *   A transaction may only read through its own handle, and the sync below
+     *   already reads through `db` rather than `transaction` — so adding
+     *   another such read inside the callback would compound that rather than
+     *   inherit it. Supersession is not changing under us mid-write, so the id
+     *   list is safe to compute first. Same treatment as the marketplace
+     *   category write.
+     */
+    const ownerIds = await ownedProfileIdsFor(userId);
+
     return await db.runTransaction(async (transaction) => {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         
@@ -160,9 +180,17 @@ export async function updateCanonicalProfile(userId: string, updates: Partial<Ca
         transaction.update(userRef, userUpdate);
 
         // 2. Sync to Seller Verifications (if exists)
-        const sellerSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where("userId", "==", userId)
-            .get();
+        //   THE WRITE FAN-OUT WIDENS WITH THE READ ABOVE, and it has to.
+        //   readCanonicalProfile now supplements from the newest verification
+        //   row across every profile this person owns; if the sync did not
+        //   reach the same rows, an admin's correction would be written to one
+        //   and then read back from the other — the edit would appear to have
+        //   been lost. Two rows for one person are already inconsistent, and
+        //   the answer is to update both, not to read widely and write
+        //   narrowly.
+        const sellerSnap = await filterByOwner(
+            db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId", ownerIds,
+        ).get();
         
         sellerSnap.forEach(doc => {
             transaction.update(doc.ref, {

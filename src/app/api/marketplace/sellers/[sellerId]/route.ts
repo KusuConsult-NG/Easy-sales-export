@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { publicSellerSummary } from "@/lib/public-seller-summary";
 import { latestApplication } from "@/lib/latest-application";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +35,34 @@ export async function GET(
     }
 
     try {
+        /*
+         *   EVERY PROFILE THIS SELLER OWNS — AND THIS IS THE PAGE THE BUYER IS
+         *   ON.
+         *
+         *   getSellerReviewSummaryAction was widened for exactly this defect in
+         *   an earlier tranche of the sweep, and this route was not, because
+         *   that tranche was scoped to src/app/actions. So the action a seller
+         *   sees and the page a BUYER sees disagreed about the same seller.
+         *
+         *   All three reads below are keyed on the id from the URL, and every
+         *   one of them changes what the buyer is shown:
+         *
+         *       the verification   a 404 for the whole page, below, when the
+         *                          approved record sits under the old profile
+         *       the products       a partial catalogue
+         *       the reviews        half the reviews, and so a different star
+         *                          rating on the thing a buyer decides with
+         *
+         *   `...For` rather than the session-shaped helper: the id arrives in
+         *   the path, there is no session here at all, and a catalogue link
+         *   minted before the profiles were settled carries the OLD id — which
+         *   is the case a public page most needs to survive.
+         */
+        const sellerIds = await ownedProfileIdsFor(sellerId);
+
         // Seller verification doc (contains businessName, bio, badge, etc.)
-        const verSnap = await db
-            .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where("userId", "==", sellerId)
+        const verSnap = await filterByOwner(
+            db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId", sellerIds)
             .where("status", "==", "approved")
             .get();
 
@@ -72,9 +97,8 @@ export async function GET(
         // business, on the page a buyer uses to decide whether to trust it.
         let products: any[] | null = null;
         try {
-            const prodSnap = await db
-                .collection(COLLECTIONS.PRODUCTS)
-                .where("sellerId", "==", sellerId)
+            const prodSnap = await filterByOwner(
+                db.collection(COLLECTIONS.PRODUCTS), "sellerId", sellerIds)
                 .where("status", "in", [...PRODUCT_VISIBLE_STATUSES])
                 .orderBy("createdAt", "desc")
                 .limit(20)
@@ -112,9 +136,8 @@ export async function GET(
             //
             // Rejecting a fake one-star changed nothing a buyer could see here,
             // which is the one thing the moderation queue exists for.
-            const reviewSnap = await db
-                .collection(COLLECTIONS.SELLER_REVIEWS)
-                .where("sellerId", "==", sellerId)
+            const reviewSnap = await filterByOwner(
+                db.collection(COLLECTIONS.SELLER_REVIEWS), "sellerId", sellerIds)
                 .where("status", "==", "approved")
                 .limit(REVIEW_SCAN_LIMIT)
                 .get();

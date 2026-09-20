@@ -86,6 +86,22 @@ export async function getAuditLogsAction(filters: { userId?: string;
         let q = db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc");
 
         // Apply filters
+        /*
+         *   NOT WIDENED ACROSS THE SUBJECT'S PROFILES, AND THAT IS A DECISION.
+         *
+         *   Everywhere else in this sweep a `userId` clause means "this
+         *   person's own records" and is resolved across every profile they
+         *   own. Here it is an ADMIN'S SEARCH PARAMETER over the audit log,
+         *   and the audit log is the one place where WHICH ID acted is the
+         *   fact being recorded.
+         *
+         *   An investigator filtering on a superseded id is asking what that
+         *   id did, and silently folding in a second profile's rows would
+         *   answer a question they did not ask — in the record that exists to
+         *   be precise about exactly this. The duplicate-profile forensics at
+         *   /admin/forensics/duplicates is where "show me everything this
+         *   person did" is answered, and it is built for it.
+         */
         if (filters.userId) { q = q.where("userId", "==", filters.userId);
         }
 

@@ -23,6 +23,7 @@ import type { Notification as SharedNotification } from "@/lib/types/shared";
 // screen is a "use client" file and must not reach this one.
 import { NOTIFICATION_PAGE_SIZE } from "@/lib/notification-filter";
 import { countUnreadNotifications } from "@/lib/unread-notification-count";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Server-side Notification shape.
@@ -180,8 +181,13 @@ export async function getUserNotifications(
 ): Promise<NotificationPage> {
     const limit = Math.max(1, Math.min(options.limit ?? NOTIFICATION_PAGE_SIZE, 200));
 
-    let query = db.collection(COLLECTIONS.NOTIFICATIONS)
-        .where("userId", "==", userId)
+    //   EVERY PROFILE THIS PERSON OWNS. A notice sent before their profile was
+    //   superseded — a loan decision, a withdrawal outcome, an admin message —
+    //   is still addressed to them, and a single-id read makes their bell
+    //   begin the day the migration happened.
+    let query = filterByOwner(
+        db.collection(COLLECTIONS.NOTIFICATIONS), "userId", await ownedProfileIdsFor(userId),
+    )
         .orderBy("createdAt", "desc");
 
     if (options.before) {
@@ -275,8 +281,11 @@ export async function markAllAsRead(userId: string): Promise<ActionResponse<any>
          *   `.all()` is the adapter's honest escape hatch for a sweep that
          *   genuinely needs everything, and it reports its own ceiling.
          */
-        const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
+        //   The same ids as the list above, or the badge would count a
+        //   different set of notices than the page it sits on shows.
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.NOTIFICATIONS), "userId", await ownedProfileIdsFor(userId),
+        )
             .where("read", "==", false)
             .all()
             .get();
@@ -316,8 +325,10 @@ export async function markAllAsRead(userId: string): Promise<ActionResponse<any>
         //   database instead — `.count()` is a server-side aggregate and is not
         //   subject to the row cap — and the caller is told it is incomplete.
         if (snapshot.truncated) {
-            const remaining = await db.collection(COLLECTIONS.NOTIFICATIONS)
-                .where("userId", "==", userId)
+            const remaining = await filterByOwner(
+                db.collection(COLLECTIONS.NOTIFICATIONS), "userId",
+                await ownedProfileIdsFor(userId),
+            )
                 .where("read", "==", false)
                 .count()
                 .get();

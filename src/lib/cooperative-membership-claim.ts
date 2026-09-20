@@ -43,6 +43,7 @@
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { isSamePerson } from "@/lib/owned-profile-ids";
 
 export interface EmailMatchedMembership {
     /** The membership row's data. */
@@ -66,11 +67,25 @@ export async function mayClaimMembershipByEmail(
     const data = membership.data;
     if (!data) return false;
 
-    // Already theirs.
-    if (data.userId === userId) return true;
+    /*
+     *   "ALREADY THEIRS" IS A QUESTION ABOUT THE PERSON, NOT THE STRING.
+     *
+     *   Both comparisons were `===`, which is the wrong question on a platform
+     *   that hands one human being more than one profile. A member whose
+     *   profile was superseded, whose membership row carries their OLD id,
+     *   failed the first test and then matched the second — so their own
+     *   record was refused as "owned by another user", and the warning below
+     *   was logged about them.
+     *
+     *   `isSamePerson` resolves both ids to their live profile and compares
+     *   those, so it answers yes only for one person's own ids. Two ids that
+     *   resolve to different live profiles are still two people, and the
+     *   refusal below still fires for them — which is what this gate is for.
+     */
+    if (await isSamePerson(data.userId, userId)) return true;
 
     // Somebody else's, explicitly. Never claimable.
-    if (data.userId && data.userId !== userId) {
+    if (data.userId) {
         logger.warn(
             "[membership-claim] email matched a membership owned by another user — not claiming",
             { membershipId: membership.id, callerId: userId },

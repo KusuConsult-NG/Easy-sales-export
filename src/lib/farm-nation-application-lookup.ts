@@ -63,6 +63,7 @@
 
 import { MODULE_ERASURE_TARGETS } from "@/lib/module-application-erasure";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIdsFor, filterByOwner, isSamePerson } from "@/lib/owned-profile-ids";
 
 const FARM_NATION_COLLECTION = COLLECTIONS.FARM_NATION_APPLICATIONS;
 
@@ -97,12 +98,22 @@ export interface FarmNationApplicantKeys {
 
 const rowsOf = (snap: any): any[] => (snap && !snap.empty ? snap.docs ?? [] : []);
 
-/** A row matched by address counts only if nobody else owns it. */
-const claimableBy = (docs: any[], userId: string): any | null =>
-    docs.find((d) => {
+/**
+ * A row matched by address counts only if nobody else owns it.
+ *
+ *   `owner === userId` asked about the STRING. One human being holds more than
+ *   one profile on this platform, so their own application — carrying their
+ *   superseded id — read as somebody else's and was refused. Resolved to the
+ *   live profile on both sides now; two ids that resolve differently are still
+ *   two people, and the refusal that matters still fires for them.
+ */
+const claimableBy = async (docs: any[], userId: string): Promise<any | null> => {
+    for (const d of docs) {
         const owner = (d.data() ?? {}).userId;
-        return !owner || owner === userId;
-    }) ?? null;
+        if (!owner || await isSamePerson(owner, userId)) return d;
+    }
+    return null;
+};
 
 /**
  * Locate every application belonging to this user, by every key the product
@@ -126,7 +137,14 @@ export async function findFarmNationApplications(
     //      to ask about. All of a user's rows, not one — the caller decides
     //      which is current, and a member may hold an older rejected
     //      application beside a newer approved one.
-    const byField = rowsOf(await applications.where("userId", "==", userId).get());
+    //   EVERY PROFILE THIS APPLICANT OWNS. This is step 1 of a walk whose
+    //   whole purpose is that returning [] must honestly mean "no application
+    //   record" — so a row filed under a superseded profile falling through to
+    //   the address match below, which is a CLAIM, is the wrong outcome twice
+    //   over: it is their own row, and it should never have needed claiming.
+    const byField = rowsOf(await filterByOwner(
+        applications, "userId", await ownedProfileIdsFor(userId),
+    ).get());
     if (byField.length > 0) {
         return byField.map((d) => ({ id: d.id, data: d.data() ?? {}, via: "userId" as const }));
     }
@@ -175,7 +193,7 @@ export async function findFarmNationApplications(
 
     //   4. The address the account signed up with, which is what submission
     //      writes to `userEmail`. Unclaimed-or-own only — see the header.
-    const byUserEmail = claimableBy(rowsOf(await applications.where("userEmail", "==", email).limit(5).get()), userId);
+    const byUserEmail = await claimableBy(rowsOf(await applications.where("userEmail", "==", email).limit(5).get()), userId);
     if (byUserEmail) {
         return [{ id: byUserEmail.id, data: byUserEmail.data() ?? {}, via: "userEmail" }];
     }
@@ -186,7 +204,7 @@ export async function findFarmNationApplications(
     //      on it: a user this platform already lets into Farm Nation on the
     //      strength of such a row is not a user with "no application record",
     //      whatever one thinks of the key. Same unclaimed-or-own restriction.
-    const byProfileEmail = claimableBy(rowsOf(await applications.where("profile.email", "==", email).limit(5).get()), userId);
+    const byProfileEmail = await claimableBy(rowsOf(await applications.where("profile.email", "==", email).limit(5).get()), userId);
     if (byProfileEmail) {
         return [{ id: byProfileEmail.id, data: byProfileEmail.data() ?? {}, via: "profileEmail" }];
     }

@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { FieldValue } from "@/lib/firestore-compat";
 import { recordAdminAction } from "@/lib/audit-log";
 import { registrationProgressScore } from "@/lib/registration-progress";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * The most recent application in a collection, and the date it was submitted.
@@ -43,8 +44,13 @@ async function latestApplicationFor(
     collection: string,
     userId: string
 ): Promise<{ data: Record<string, any>; submittedAt: any } | null> {
-    const snap = await db.collection(collection)
-        .where("userId", "==", userId)
+    //   EVERY PROFILE THIS PERSON OWNS — and on a RECOVERY tool that is the
+    //   whole point. The records hardest to find are the ones filed under a
+    //   profile that was later superseded, which is exactly the case somebody
+    //   reaches for this tool to resolve.
+    const snap = await filterByOwner(
+        db.collection(collection), "userId", await ownedProfileIdsFor(userId),
+    )
         .orderBy("createdAt", "desc")
         .limit(1)
         .get();

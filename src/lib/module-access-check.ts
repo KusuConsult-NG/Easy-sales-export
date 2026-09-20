@@ -30,6 +30,7 @@ import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-progress";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */
@@ -257,6 +258,10 @@ export async function checkModuleAccess(
 
             let memberDocData: any = null;
             let memberRef: any = null;
+            //   Whether the row above was located by the caller's EMAIL alone.
+            //   See the gate on the writes further down for why that matters
+            //   and why the READ is deliberately not gated on it.
+            let matchedByEmailOnly = false;
 
             if (!memberQuery.empty) {
                 const latestMember = latestApplication(memberQuery.docs);
@@ -268,6 +273,32 @@ export async function checkModuleAccess(
                     memberDocData = memberDoc.data();
                     memberRef = memberDoc.ref;
                 } else if (userData.email) {
+                    /*
+                     *   THE SEVENTH DOOR WITH THE EMAIL FALLBACK, AND THE ONE
+                     *   THAT DECIDES ACCESS TO THE MODULE ITSELF.
+                     *
+                     *   lib/cooperative-membership-claim.ts names five readers
+                     *   that match a membership on the caller's email and then
+                     *   treat it as theirs; the onboarding page was a sixth.
+                     *   All six are under src/app. This is the seventh, and it
+                     *   is not a screen — it is Layer 2.6 of the access check,
+                     *   so what an email match buys here is the cooperative
+                     *   MODULE: savings, contributions, loans and withdrawals.
+                     *
+                     *   And it does not merely read. The heal below writes
+                     *   `membershipStatus: "active"` back onto whichever row
+                     *   this found and grants the cooperative role with it.
+                     *
+                     *   "A MATCHING EMAIL IS NOT PROOF OF OWNERSHIP. The
+                     *   caller's address comes from their own profile, and
+                     *   profile.ts lets them change it." An orphaned
+                     *   membership sits at an address no account holds, which
+                     *   is precisely what makes it reachable.
+                     *
+                     *   Same gate as the other six: either the row is already
+                     *   this person's, or a completed registration payment
+                     *   ties it to their money.
+                     */
                     const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                         .where("email", "==", userData.email.toLowerCase())
                         .limit(APPLICATION_SCAN_LIMIT)
@@ -276,6 +307,11 @@ export async function checkModuleAccess(
                         const latestByEmail = latestApplication(emailQuery.docs);
                         memberDocData = latestByEmail?.data();
                         memberRef = latestByEmail?.ref;
+                        //   A READ, NOT PROOF. Flagged so the WRITES below ask
+                        //   the claim gate; the access decision itself does
+                        //   not, because this fallback is what legacy
+                        //   spreadsheet imports are found by.
+                        matchedByEmailOnly = true;
                     }
                 }
             }
@@ -419,7 +455,33 @@ export async function checkModuleAccess(
                         `[ModuleAccess] Layer 2.6 — Direct query confirmed '${app}' access (uid: ${userId}, status: ${status}, isHealable: ${isHealable}).`
                     );
                     
-                    if (isHealable && memberRef) {
+                    /*
+                     *   MAY THIS CALLER BE WRITTEN ONTO THIS ROW?
+                     *
+                     *   Trivially yes when the row was found by document id or
+                     *   by its `userId` field — those ARE ownership. Only an
+                     *   email match needs the claim gate, which demands a
+                     *   completed registration payment tying the row to the
+                     *   caller's money rather than to a string they can edit.
+                     *
+                     *   Access above is already decided; this only decides
+                     *   whether anything is written back. A legacy imported
+                     *   member keeps their module and simply takes the slow
+                     *   path on each load, which is the cost the heal existed
+                     *   to save and a fair price for not binding a stranger's
+                     *   savings to whoever shares an address with them.
+                     */
+                    const mayWriteToRow = !matchedByEmailOnly || await mayClaimMembershipByEmail(
+                        db, { data: memberDocData, id: memberRef?.id ?? "" }, userId,
+                    );
+                    if (!mayWriteToRow) {
+                        logger.warn(
+                            `[ModuleAccess] Layer 2.6 — membership matched on email only and is `
+                            + `not claimable (uid: ${userId}). Access granted, NOTHING written.`,
+                        );
+                    }
+
+                    if (isHealable && memberRef && mayWriteToRow) {
                         try {
                             // Update membership status to active
                             await memberRef.update({
@@ -445,8 +507,12 @@ export async function checkModuleAccess(
                         } catch (healErr) {
                             logger.error(`[ModuleAccess] Failed to heal membership status for user ${userId}`, healErr);
                         }
-                    } else if (!memberDocData.userId && memberRef) {
-                        // Heal the membership document with the userId if missing
+                    } else if (!memberDocData.userId && memberRef && mayWriteToRow) {
+                        //   THE BINDING. `userId` on this row makes it the
+                        //   caller's for every later reader, savings and
+                        //   documents included — so it needs the claim gate
+                        //   above, which a row found by id or userId field
+                        //   passes trivially.
                         await memberRef.update({ userId });
                         logger.info(`[ModuleAccess] Healed membership ${memberRef.id} with userId ${userId}`);
                     }

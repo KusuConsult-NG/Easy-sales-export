@@ -294,7 +294,24 @@ describe('#486 — the forensic check compares two things that should agree', ()
         //   A door that ignored its argument would satisfy the three lines
         //   above and compare each farmer against the whole queue again.
         const lookup = code('src/lib/farm-nation-application-lookup.ts');
-        expect(lookup).toContain('.where("userId", "==", userId)');
+        //   #671's claim, asserted as the PROPERTY rather than the spelling.
+        //
+        //   This named `.where("userId", "==", userId)` verbatim and broke
+        //   when that step was widened across the applicant's owned profiles —
+        //   a change that strengthens exactly what this test guards, because
+        //   a row filed under a superseded profile otherwise fell through to
+        //   the ADDRESS match, which is a claim rather than a lookup.
+        //
+        //   What has to hold is that the userId step is keyed on the `userId`
+        //   this lookup was handed, by either filtering shape. A door that
+        //   ignored its argument would compare each farmer against the whole
+        //   queue again, which is the defect this test exists for.
+        const flat = lookup.replace(/\s+/g, ' ');
+        const bare = /\.where\("userId", "==", userId\)/.test(flat);
+        const widened = /filterByOwner\( ?applications, ?"userId", ?await ownedProfileIdsFor\(userId\)/
+            .test(flat);
+
+        expect(bare || widened).toBe(true);
         expect(lookup).toContain('applications.doc(keys.applicationId)');
         //   #671 The document-id door is driven by the per-collection list
         //   module-application-erasure already keeps, rather than a second
@@ -302,6 +319,20 @@ describe('#486 — the forensic check compares two things that should agree', ()
         //   this scan is asking about, which is what this test is for.
         expect(lookup).toContain('deterministicIdsFor(FARM_NATION_COLLECTION, userId)');
         expect(lookup).toContain('applications.doc(candidate)');
+    });
+
+    it('VACUITY GUARD: and a lookup that ignored its argument fails that', () => {
+        const flat = (t: string) => t.replace(/\s+/g, ' ');
+        const ok = (t: string) =>
+            /\.where\("userId", "==", userId\)/.test(flat(t))
+            || /filterByOwner\( ?applications, ?"userId", ?await ownedProfileIdsFor\(userId\)/.test(flat(t));
+
+        expect(ok('.where("userId", "==", userId)')).toBe(true);
+        expect(ok('filterByOwner(applications, "userId", await ownedProfileIdsFor(userId))')).toBe(true);
+        //   The two ways it could go wrong: no filter at all, and a filter on
+        //   somebody other than the user handed in.
+        expect(ok('await applications.get()')).toBe(false);
+        expect(ok('filterByOwner(applications, "userId", await ownedProfileIdsFor(other))')).toBe(false);
     });
 
     it('and the population it scans is stated, so a pass cannot be read as more than it is', () => {
