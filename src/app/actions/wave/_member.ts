@@ -6,6 +6,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
@@ -93,15 +94,20 @@ export async function getWaveMemberStatsAction(): Promise<ActionResponse<{ stats
         }
         const membership = membershipResult.data!;
 
+        //   Resolved ONCE and handed to both reads. Two resolutions of the
+        //   same session id would cost two extra lookups to reach the same
+        //   answer, and — as _wv_earnings showed — two chances to diverge.
+        const ownedIds = await ownedProfileIds(session.user.id);
+
         // Get resources accessed
-        const resourceAccessSnap = await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS)
-            .where("userId", "==", session.user.id)
-            .get();
+        const resourceAccessSnap = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS), "userId", ownedIds,
+        ).get();
 
         // Get training registrations
-        const trainingSnap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
-            .where("userId", "==", session.user.id)
-            .get();
+        const trainingSnap = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS), "userId", ownedIds,
+        ).get();
 
         /**
          * #302 The counts exclude registrations whose event was cancelled.
@@ -174,8 +180,14 @@ export async function trackResourceAccessAction(resourceId: string): Promise<Act
         }
 
         // Check if already accessed
-        const accessSnap = await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS)
-            .where("userId", "==", session.user.id)
+        //
+        //   Widened, and that makes this check STRONGER: it asks whether this
+        //   person has already taken this resource, and one person with two
+        //   profiles could answer no twice.
+        const accessSnap = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS), "userId",
+            await ownedProfileIds(session.user.id),
+        )
             .where("resourceId", "==", resourceId)
             .get();
 
@@ -225,9 +237,10 @@ export async function getUserTrainingRegistrationsAction(): Promise<ActionRespon
         if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
-            .where("userId", "==", session.user.id)
-            .get();
+        const snap = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS), "userId",
+            await ownedProfileIds(session.user.id),
+        ).get();
 
         const registrations = serializeDocs(snap.docs);
 

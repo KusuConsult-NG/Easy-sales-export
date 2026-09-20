@@ -8,6 +8,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -234,9 +235,12 @@ async function _getMemberCertificatesAction(userId: string): Promise<ActionRespo
         // Allow reading own certificates
         if (session.user.id !== userId) return { success: false as const, error: "Unauthorized", data: null };
 
-        const snapshot = await db.collection(COLLECTIONS.WAVE_CERTIFICATES)
-            .where("memberId", "==", userId)
-            .get();
+        //   A certificate earned under a profile that has since been
+        //   superseded is still this member's certificate.
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_CERTIFICATES), "memberId",
+            await ownedProfileIds(userId),
+        ).get();
 
         return { error: null, success: true as const, data: serializeDocs<WaveCertificate>(snapshot.docs) };
     } catch (error) {

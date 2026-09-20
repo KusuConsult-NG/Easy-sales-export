@@ -8,6 +8,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 import { checkModuleAccess } from "@/lib/module-access-check";
@@ -35,9 +36,14 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
         let status = registration?.status;
         if (status !== "approved") {
             let appDoc: any = null;
-            const appSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("userId", "==", session.user.id)
-                .get();
+            //   EVERY PROFILE THIS PERSON OWNS. A member who applied, was
+            //   superseded by the #724 tool, and signs in as the row that won
+            //   reads as never having applied — and this branch then offers
+            //   them the form again.
+            const appSnap = await filterByOwner(
+                db.collection(COLLECTIONS.WAVE_APPLICATIONS), "userId",
+                await ownedProfileIds(session.user.id),
+            ).get();
 
             if (!appSnap.empty) {
                 /**
@@ -291,8 +297,10 @@ async function _enrollInWaveAction(userId: string): Promise<ActionResponse<null>
         const registrationStatus = String(userData?.serviceRegistrations?.wave?.status || "");
 
         let applicationStatus = "";
-        const ownApps = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-            .where("userId", "==", session.user.id)
+        const ownApps = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_APPLICATIONS), "userId",
+            await ownedProfileIds(session.user.id),
+        )
             .limit(25)
             .get();
 

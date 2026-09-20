@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
@@ -29,9 +30,10 @@ async function _getShipmentTrackingAction(userId: string): Promise<ActionRespons
         // Users can only see their own shipments
         if (session.user.id !== userId) return { success: false as const, error: "Unauthorized to view other shipments", data: null };
 
-        const snapshot = await db.collection(COLLECTIONS.WAVE_SHIPMENTS)
-            .where("memberId", "==", userId)
-            .get();
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_SHIPMENTS), "memberId",
+            await ownedProfileIds(userId),
+        ).get();
 
         return { error: null, success: true as const, data: serializeDocs<ShipmentTracking>(snapshot.docs) };
     } catch (error) {

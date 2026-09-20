@@ -7,6 +7,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { incrementWithinCeiling } from "@/lib/wallet-ledger";
 import { serializeDocs, toMillis, toIsoOrEmpty } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -378,8 +379,15 @@ async function _registerForTrainingAction(
          * not an oversubscribed event. A unique index is the real fix and needs
          * a migration.
          */
-        const existing = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
-            .where("userId", "==", userId)
+        //   WIDENED, WHICH MAKES THIS CHECK STRONGER RATHER THAN WEAKER.
+        //   It asks "has this person already taken a seat?", and one person
+        //   with two profiles could answer no twice and take two seats at an
+        //   event they are counted at once for. Same direction as
+        //   `isSamePerson`: the widening refuses more, deliberately.
+        const existing = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS), "userId",
+            await ownedProfileIds(userId),
+        )
             .where("eventId", "==", eventId)
             .limit(1)
             .get();

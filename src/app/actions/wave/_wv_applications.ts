@@ -10,6 +10,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission, isPlatformAdmin } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { z } from "zod";
 import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { phoneLookupVariants } from "@/lib/phone";
@@ -610,9 +611,14 @@ async function _getWaveApplicationStatusAction(userId?: string): Promise<ActionR
         }
         const targetId = requestedId || session.user.id;
 
-        const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-            .where("userId", "==", targetId)
-            .get();
+        //   `ownedProfileIdsFor`, not `ownedProfileIds`: `targetId` may be an
+        //   id an ADMIN supplied (the guard above permits that), and a
+        //   backward-only search handed a superseded id finds what points AT
+        //   it and misses the live row.
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.WAVE_APPLICATIONS), "userId",
+            await ownedProfileIdsFor(targetId),
+        ).get();
 
         if (snapshot.empty) {
             /**
