@@ -53,11 +53,22 @@ import {
     type FarmerCase,
 } from "@/lib/farm-nation-approval-decision";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { mapWithConcurrency } from "@/lib/bounded-concurrency";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
 
 /** Matches the scan's own bound, so both look at the same population. */
 const SCAN_LIMIT = 200;
+
+/**
+ * How many farmers are looked up at once — #805.
+ *
+ * Deliberately modest. Each one is a chain of up to eight keyed reads, so this
+ * is about forty statements in flight at the peak, not two hundred: enough to
+ * take the scan off the timeout without asking the connection pool for
+ * something it has no reason to grant.
+ */
+const SCAN_CONCURRENCY = 8;
 
 /** Build one member's case, or null when there is nothing wrong with them. */
 async function buildCase(doc: { id: string; data: () => any }): Promise<FarmerCase | null> {
@@ -124,11 +135,22 @@ async function _listFarmNationApprovalCasesAction(): Promise<ActionResponse<Farm
             .limit(SCAN_LIMIT)
             .get();
 
-        const cases: FarmerCase[] = [];
-        for (const doc of farmers.docs) {
-            const c = await buildCase(doc as any);
-            if (c) cases.push(c);
-        }
+        /*
+         *   #805 — SEVERAL AT A TIME. This awaited buildCase once per farmer,
+         *   in sequence, and buildCase is eight round trips deep on the path
+         *   177 of the 178 production cases take. See lib/bounded-concurrency
+         *   for the count; the screen started answering "Could not read the
+         *   Farm Nation approvals" because the total sat on the function's
+         *   timeout.
+         *
+         *   Nothing about WHAT is read changes, and the array is indexed by
+         *   input position, so `cases` is the same list in the same order it
+         *   was before the sort below.
+         */
+        const built = await mapWithConcurrency(
+            farmers.docs, SCAN_CONCURRENCY, (doc: any) => buildCase(doc),
+        );
+        const cases: FarmerCase[] = built.filter((c): c is FarmerCase => c !== null);
 
         //   Unsettled first: a case somebody already decided is not work.
         cases.sort((a, b) => {

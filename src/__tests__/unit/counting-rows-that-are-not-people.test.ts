@@ -60,38 +60,68 @@ const ROOT = process.cwd();
 const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8'), { label: rel });
 
 /**
- * A query that answers each of the four aggregates from a supplied table,
- * keyed by the filters applied to it — so the test drives the real function
- * rather than a copy of its arithmetic.
+ * A query that drives the real function rather than a copy of its arithmetic.
+ *
+ *   #804 IT USED TO ANSWER FOUR `.count()` AGGREGATES. The superseded side is
+ *   a READ now — a count cannot ask whether a pointer names ANOTHER row, and
+ *   that question decides whether the row is a tombstone or a person — so the
+ *   fake supplies ROWS for that half and counts for the other two.
+ *
+ *   The split is not a convenience: it is what the function does, and keeping
+ *   `all` and `erased` as free-standing counts is also what keeps the floor
+ *   test below constructible (rows alone can never out-number themselves).
  */
-function fakeQuery(counts: { all: number; erased: number; superseded: number; both: number }, applied: string[] = []) {
-    const self: any = {
+type PointingRow = { id: string; _migratedTo?: string; deleted?: boolean };
+
+function fakeQuery(
+    counts: { all: number; erased: number },
+    pointing: PointingRow[] = [],
+    applied: string[] = [],
+    fields: string[] | null = null,
+): any {
+    return {
         where(field: string, _op: string, _value: unknown) {
-            return fakeQuery(counts, [...applied, field]);
+            return fakeQuery(counts, pointing, [...applied, field], fields);
         },
+        select: (...f: string[]) => fakeQuery(counts, pointing, applied, f),
+        all: () => fakeQuery(counts, pointing, applied, fields),
         count() {
-            const hasErased = applied.includes(TOMBSTONE_FIELDS.erased);
-            const hasSuperseded = applied.includes(TOMBSTONE_FIELDS.superseded);
-            const n = hasErased && hasSuperseded ? counts.both
-                : hasErased ? counts.erased
-                    : hasSuperseded ? counts.superseded
-                        : counts.all;
+            const n = applied.includes(TOMBSTONE_FIELDS.erased) ? counts.erased : counts.all;
             return { get: async () => ({ data: () => ({ count: n }) }) };
         },
+        get: async () => ({
+            docs: pointing.map((r) => ({
+                id: r.id,
+                //   `.select()` is real (#696): a field not named is not on the
+                //   row. Projecting here is what makes "forgot to select
+                //   `deleted`" a failure rather than a silent zero overlap.
+                data: () => (fields === null
+                    ? r
+                    : Object.fromEntries(
+                        fields.filter((k) => k in r).map((k) => [k, (r as any)[k]]))),
+            })),
+        }),
     };
-    return self;
 }
+
+/** `n` rows superseded onto a live row, optionally also erased. */
+const superseded = (n: number, opts: { erased?: boolean } = {}): PointingRow[] =>
+    Array.from({ length: n }, (_, i) => ({
+        id: `s${opts.erased ? 'b' : ''}${i}`,
+        _migratedTo: 'the-live-row',
+        ...(opts.erased ? { deleted: true } : {}),
+    }));
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#747 — the count reports people, not rows', () => {
     it('AN ERASED ACCOUNT IS NOT A USER — the defect', async () => {
-        expect(await countLivePeople(fakeQuery({ all: 100, erased: 7, superseded: 0, both: 0 }))).toBe(93);
+        expect(await countLivePeople(fakeQuery({ all: 100, erased: 7 }))).toBe(93);
     });
 
     it('AND NEITHER IS A SUPERSEDED DUPLICATE', async () => {
         //   #724's resolver made these. Counting both halves of a resolved
         //   duplicate is the platform contradicting its own record.
-        expect(await countLivePeople(fakeQuery({ all: 100, erased: 0, superseded: 4, both: 0 }))).toBe(96);
+        expect(await countLivePeople(fakeQuery({ all: 100, erased: 0 }, superseded(4)))).toBe(96);
     });
 
     it('AND A ROW THAT IS BOTH IS SUBTRACTED ONCE, NOT TWICE', async () => {
@@ -101,20 +131,24 @@ describe('#747 — the count reports people, not rows', () => {
          *   aggregates with no rows to inspect, so an overlap can only be
          *   corrected by adding it back.
          */
-        expect(await countLivePeople(fakeQuery({ all: 100, erased: 7, superseded: 4, both: 3 }))).toBe(92);
+        //   4 pointing rows, 3 of them also erased — so `erased` (7) and the read
+        //   (4) both count those 3, and the overlap has to come back.
+        expect(await countLivePeople(fakeQuery(
+            { all: 100, erased: 7 }, [...superseded(3, { erased: true }), ...superseded(1)],
+        ))).toBe(92);
     });
 
     it('AND A CLEAN COLLECTION IS UNCHANGED — the direction that must not move', async () => {
         //   Vacuity guard: a function that subtracted something from every
         //   count would pass all three assertions above.
-        expect(await countLivePeople(fakeQuery({ all: 100, erased: 0, superseded: 0, both: 0 }))).toBe(100);
+        expect(await countLivePeople(fakeQuery({ all: 100, erased: 0 }))).toBe(100);
     });
 
     it('AND IT NEVER GOES NEGATIVE', async () => {
         //   Four aggregates taken separately can in principle disagree. "None"
         //   is a readable answer on a dashboard; "-3" is an alarm about the
         //   wrong thing. #735's guard, carried over.
-        expect(await countLivePeople(fakeQuery({ all: 2, erased: 5, superseded: 5, both: 0 }))).toBe(0);
+        expect(await countLivePeople(fakeQuery({ all: 2, erased: 5 }, superseded(5)))).toBe(0);
     });
 
     it('AND IT NARROWS THE QUERY IT WAS GIVEN, SO A WINDOW SURVIVES', async () => {
@@ -127,14 +161,18 @@ describe('#747 — the count reports people, not rows', () => {
          */
         const seen: string[][] = [];
         const tracking = (applied: string[] = []): any => ({
-            where: (f: string) => { const next = [...applied, f]; return tracking(next); },
+            where: (f: string) => tracking([...applied, f]),
+            select: () => tracking(applied),
+            all: () => tracking(applied),
             count: () => ({ get: async () => { seen.push(applied); return { data: () => ({ count: 0 }) }; } }),
+            get: async () => { seen.push(applied); return { docs: [] }; },
         });
 
         await countLivePeople(tracking(['updatedAt']));
 
-        //   Every one of the four aggregates carries the caller's filter.
-        expect(seen).toHaveLength(4);
+        //   #804 — THREE aggregates now, not four: the two counts and the read
+        //   that replaced the other two. Every one carries the caller's filter.
+        expect(seen).toHaveLength(3);
         for (const applied of seen) expect(applied[0]).toBe('updatedAt');
     });
 });
@@ -206,7 +244,10 @@ describe('#747 — and the fields it keys on are the ones the platform writes', 
          */
         const src = code('src/lib/user-population.ts');
 
-        expect(src).toContain('query.where(superseded, "!=", "").count().get()');
+        //   #804 — the AGGREGATE this filter feeds changed from a count to a
+        //   read, so the old assertion pinned a spelling rather than the
+        //   choice. What must not change is the operator.
+        expect(src).toContain('query.where(superseded, "!=", "")');
         expect(src).not.toContain('query.where(superseded, "==", "")');
     });
 });
@@ -218,16 +259,25 @@ describe('#747 — and the fields it keys on are the ones the platform writes', 
  *   keyed by full path, each mutant proving its edit landed by a unique string
  *   on disk.
  *
- *     MUTANT                                                        RESULT
- *     the erased count stops being subtracted                        KILLED
- *     the superseded count stops being subtracted                    KILLED
- *     the overlap is subtracted instead of added back                KILLED
- *     the floor at zero is removed                                   KILLED
+ *   RE-RUN IN FULL FOR #804, because the fake changed: the superseded side is
+ *   a read now, so every result below was re-measured rather than carried
+ *   over. Run against this suite AND erasing-an-account-made-it-active (31).
+ *
+ *     MUTANT                                                  DEAD   RESULT
+ *     the erased count stops being subtracted                    6   KILLED
+ *     the superseded count stops being subtracted                6   KILLED
+ *     the overlap is subtracted instead of added back            4   KILLED
+ *     the floor at zero is removed                               2   KILLED
+ *     the self-pointer skip is removed (#804's own defect)       1   KILLED
+ *     `erased` is dropped from the .select() — #696's trap       4   KILLED
  *     it counts the collection instead of the query it was given     KILLED
  *     the dashboard total goes back to a raw count                   KILLED
  *     global-aggregation's active figure goes back to a raw count    KILLED
  *     verified is left counting rows while total does not            KILLED
  *
  *     CONTROL — SHOULD SURVIVE
- *     reword this header                                             SURVIVED ✓
+ *     reword a comment in the function                           0   SURVIVED ✓
+ *
+ *   The last four were measured against the previous implementation and are
+ *   untouched by this change — they mutate the CALL SITES, not the counting.
  */

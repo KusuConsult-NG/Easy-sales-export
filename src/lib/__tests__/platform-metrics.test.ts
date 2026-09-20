@@ -73,20 +73,44 @@ describe("getPlatformMetricsAction", () => {
          *
          *   41,000 rows: 900 erased, 400 superseded, 100 of them both. The
          *   overlap is added back, so 41,000 - 900 - 400 + 100 = 39,800.
+         *
+         *   #804 — THREE AGGREGATES NOW, NOT FOUR. The superseded side is a
+         *   READ, because a `.count()` cannot ask whether a pointer names
+         *   another row. This mock queues results positionally, so the third
+         *   one had to become a page of rows; left as a count it silently
+         *   supplied no `docs`, nothing was subtracted for supersession, and
+         *   the figure came back 40,100.
+         *
+         *   THE FIVE SELF-POINTING ROWS ARE THE POINT OF THE CHANGE. They
+         *   carry `_migratedTo`, so the query returns them, and they are
+         *   people — resolveActiveUser stops there and signs them in. The
+         *   expected total is unchanged BECAUSE they are not subtracted.
          */
         //   mockReset, not clearAllMocks: the latter keeps queued `once`
-        //   implementations, so the four this block sets would have queued
-        //   BEHIND the four from beforeEach and never been read.
+        //   implementations, so the ones this block sets would have queued
+        //   BEHIND those from beforeEach and never been read.
         global.mockFirestoreGet.mockReset();
         mockRpc.mockResolvedValue({
             data: [{ total_revenue: 1, transaction_count: 1 }],
             error: null,
         });
+
+        const pointing = [
+            ...Array.from({ length: 100 }, (_, i) => ({
+                id: `both${i}`, data: () => ({ _migratedTo: "live", deleted: true }),
+            })),
+            ...Array.from({ length: 300 }, (_, i) => ({
+                id: `gone${i}`, data: () => ({ _migratedTo: "live" }),
+            })),
+            ...Array.from({ length: 5 }, (_, i) => ({
+                id: `self${i}`, data: () => ({ _migratedTo: `self${i}` }),
+            })),
+        ];
+
         global.mockFirestoreGet
             .mockResolvedValueOnce({ data: () => ({ count: 41_000 }) })
             .mockResolvedValueOnce({ data: () => ({ count: 900 }) })
-            .mockResolvedValueOnce({ data: () => ({ count: 400 }) })
-            .mockResolvedValueOnce({ data: () => ({ count: 100 }) })
+            .mockResolvedValueOnce({ docs: pointing })
             .mockResolvedValue({ data: () => ({ count: 0 }) });
 
         const result = await getPlatformMetricsAction();

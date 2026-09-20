@@ -49,6 +49,7 @@
  */
 
 import { registrationWeight } from "@/lib/profile-choice";
+import { supersedingPointer } from "@/lib/user-identity";
 
 /** One profile in a group, with the evidence a person needs to choose. */
 export interface DuplicateCandidate {
@@ -141,8 +142,10 @@ function str(v: unknown): string | null {
  *        One rule, one fix, both reports.
  */
 function pointerFrom(id: string, data: Record<string, unknown>): string | null {
-    const to = str(data._migratedTo);
-    return to !== null && to !== id ? to : null;
+    //   #804 — the rule itself now lives in user-identity, beside the walk that
+    //   has always applied it. Three modules had grown their own copy; this is
+    //   the one that reads `_migratedTo` alone, deliberately (see above).
+    return supersedingPointer(id, data._migratedTo);
 }
 
 function createdAtIso(v: unknown): string | null {

@@ -46,6 +46,8 @@
  *   too.
  */
 
+import { supersedingPointer } from "@/lib/user-identity";
+
 /** The two fields that mark a row as not a current person. */
 export const TOMBSTONE_FIELDS = { erased: "deleted", superseded: "_migratedTo" } as const;
 
@@ -57,6 +59,16 @@ export const TOMBSTONE_FIELDS = { erased: "deleted", superseded: "_migratedTo" }
 export interface CountableQuery {
     where(field: string, op: string, value: unknown): CountableQuery;
     count(): { get(): Promise<{ data(): { count?: number | null } }> };
+    /*
+     *   #804 — the superseded side is READ rather than counted now. A
+     *   `.count()` cannot answer "does this pointer name a different row", and
+     *   that question decides whether the row is a tombstone or a person.
+     *   `.all()` because a bare `.get()` stops at the adapter's 5,000-row
+     *   default and would silently undercount the subtrahend.
+     */
+    select(...fields: string[]): CountableQuery;
+    all(): CountableQuery;
+    get(): Promise<{ docs: { id: string; data(): Record<string, unknown> }[] }>;
 }
 
 /**
@@ -72,18 +84,36 @@ export async function countLivePeople(query: CountableQuery): Promise<number> {
     const erased = TOMBSTONE_FIELDS.erased;
     const superseded = TOMBSTONE_FIELDS.superseded;
 
-    const [allSnap, erasedSnap, supersededSnap, bothSnap] = await Promise.all([
+    const [allSnap, erasedSnap, pointing] = await Promise.all([
         query.count().get(),
         query.where(erased, "==", true).count().get(),
-        query.where(superseded, "!=", "").count().get(),
-        query.where(erased, "==", true).where(superseded, "!=", "").count().get(),
+        /*
+         *   Every row carrying a pointer, with the two fields the subtraction
+         *   needs. `erased` is selected alongside because #696 made `.select()`
+         *   real: a field not named here is not on the row, and the both-count
+         *   below would read undefined and never fire.
+         */
+        query.where(superseded, "!=", "").select(superseded, erased).all().get(),
     ]);
 
+    /*
+     *   THE PART A QUERY COULD NOT DO. A row whose pointer names ITSELF is
+     *   live — resolveActiveUser stops there and hands that row to the person
+     *   — so counting it as a tombstone subtracted real members from the
+     *   figure. Resolving duplicates was supposed to make "Total Users" fall;
+     *   this made it fall by more than the duplicates.
+     */
+    let supersededCount = 0;
+    let bothCount = 0;
+    for (const doc of pointing.docs ?? []) {
+        const data = doc.data() ?? {};
+        if (!supersedingPointer(doc.id, data[superseded])) continue;
+        supersededCount += 1;
+        if (data[erased] === true) bothCount += 1;
+    }
+
     const all = allSnap.data().count ?? 0;
-    const tombstoned =
-        (erasedSnap.data().count ?? 0)
-        + (supersededSnap.data().count ?? 0)
-        - (bothSnap.data().count ?? 0);
+    const tombstoned = (erasedSnap.data().count ?? 0) + supersededCount - bothCount;
 
     //   Never below zero: a count that disagrees with its own subtrahend should
     //   read as "none", not as a negative figure on an admin dashboard. #735's
