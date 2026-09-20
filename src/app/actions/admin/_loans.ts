@@ -18,6 +18,8 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { LoanApplicationReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { notifyLoanDecision } from "@/lib/loan-decision-notice";
+import { OPEN_LOAN_STATUSES } from "@/lib/loan-application-location";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 // ============================================
 // Loan Application Management (Admin)
@@ -157,16 +159,38 @@ async function _approveLoanApplication(
                 return { error: null, success: true as const, alreadyProcessed: true, loanData };
             }
 
-            // Double-lending verification: Check for other active/pending loans platform-wide
+            /*
+             *   THE FOURTH DOUBLE-LENDING DOOR, and the fourth copy of the
+             *   status list.
+             *
+             *   Tranche 9 of this sweep found three — the member's apply
+             *   action, the cooperative approve action, and
+             *   api/cooperative/apply-loan — and put the list in
+             *   lib/loan-application-location.ts so the rule had one home.
+             *   This is the ADMIN approval path, and it was outside that
+             *   directory, so it kept its own literal and its own single id.
+             *
+             *   Asked about one id, a borrower with two profiles answers "no
+             *   open loan" twice and an admin approves the second. Same rule,
+             *   same direction: the widening REFUSES MORE.
+             *
+             *   THE IDS ARE RESOLVED BEFORE THE TRANSACTION READS, deliberately.
+             *   ownedProfileIdsFor reads the users collection through `db`,
+             *   and a transaction may only read through its own handle;
+             *   supersession is not changing under us mid-approval. Same
+             *   treatment as the marketplace category write.
+             */
             const borrowerId = loanData.userId;
-            const otherGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("userId", "==", borrowerId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const borrowerIds = await ownedProfileIdsFor(borrowerId);
+
+            const otherGeneralLoansQuery = filterByOwner(
+                db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES]);
             const otherGeneralLoansSnap = await transaction.get(otherGeneralLoansQuery);
 
-            const otherCoopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-                .where("memberId", "==", borrowerId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const otherCoopLoansQuery = filterByOwner(
+                db.collection(COLLECTIONS.COOPERATIVE_LOANS), "memberId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES]);
             const otherCoopLoansSnap = await transaction.get(otherCoopLoansQuery);
 
             const otherGeneralLoansCount = otherGeneralLoansSnap.docs.filter(doc => doc.id !== applicationId).length;

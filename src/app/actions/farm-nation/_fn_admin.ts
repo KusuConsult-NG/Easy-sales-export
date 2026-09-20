@@ -15,6 +15,7 @@ import type { Property } from "@/lib/types/farm-nation-actions";
 import { recordAdminAction } from "@/lib/audit-log";
 import { resolveProfileEmail } from "@/lib/profile-email-resolution";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 async function _approveFarmNationSellerAction(userId: string): Promise<ActionResponse<null>> { 
     try {
@@ -50,9 +51,19 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
-        // Fetch application outside transaction
-        const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-            .where("userId", "==", userId);
+        //   EVERY PROFILE THIS APPLICANT OWNS. An admin is verifying a named
+        //   person; an application filed before their profile was superseded
+        //   is the one being verified, and a single-id read reports it as
+        //   absent — which on this door means the admin is told there is
+        //   nothing to approve for somebody who applied.
+        //
+        //   Fetched outside the transaction, as it already was: a transaction
+        //   may only read through its own handle, and ownedProfileIdsFor reads
+        //   the users collection through `db`.
+        const appQuery = filterByOwner(
+            db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId",
+            await ownedProfileIdsFor(userId),
+        );
         const appSnap = await appQuery.get();
 
         /**
@@ -202,9 +213,19 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
-        // Fetch application outside transaction
-        const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-            .where("userId", "==", userId);
+        //   EVERY PROFILE THIS APPLICANT OWNS. An admin is verifying a named
+        //   person; an application filed before their profile was superseded
+        //   is the one being verified, and a single-id read reports it as
+        //   absent — which on this door means the admin is told there is
+        //   nothing to approve for somebody who applied.
+        //
+        //   Fetched outside the transaction, as it already was: a transaction
+        //   may only read through its own handle, and ownedProfileIdsFor reads
+        //   the users collection through `db`.
+        const appQuery = filterByOwner(
+            db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId",
+            await ownedProfileIdsFor(userId),
+        );
         const appSnap = await appQuery.get();
 
         // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────

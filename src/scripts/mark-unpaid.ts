@@ -74,6 +74,11 @@ export async function markUnpaid(): Promise<Target[]> {
     // where each one blocked the batch being assembled.
     const targets: Target[] = [];
     for (const { userId, current } of candidates) {
+        //   NOT WIDENED. `userId` here is a candidate this script itself
+        //   collected by walking the users collection, so each profile is
+        //   visited on its own turn — resolving across owned profiles would
+        //   make two candidates report the same application and the script
+        //   would offer to mark it twice. The report names the id it found.
         const appSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where("userId", "==", userId)
             .limit(1)
