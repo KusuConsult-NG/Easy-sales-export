@@ -63,19 +63,73 @@
 const GONE_CODES = new Set(["ECONNRESET", "ECONNABORTED", "EPIPE", "ERR_STREAM_PREMATURE_CLOSE"]);
 
 /**
- * Next and Node phrasings for the same event.
+ * Next and Node phrasings for the same event, matched as SUBSTRINGS.
  *
  * Lower-cased before comparison so a capitalisation change alone cannot
  * silence this the way it silenced the lockout guard.
+ *
+ * Every entry here is a distinctive multi-word phrase that does not occur in
+ * ordinary application prose. "client network socket disconnected" has to be a
+ * substring because Node's message continues "...before secure TLS connection
+ * was established"; the rest are whole messages today, and are kept here
+ * rather than moved below so that a wrapper adding context — "fetch failed:
+ * socket hang up" — still classifies.
  */
 const GONE_PHRASES = [
     "the destination stream closed early",
-    "aborted",
     "premature close",
     "socket hang up",
     "client network socket disconnected",
     "request aborted",
 ];
+
+/**
+ * THE ONE WORD THAT CANNOT BE A SUBSTRING, AND WHY IT IS SEPARATED OUT.
+ *
+ *   `"aborted"` sat in the list above and was matched with `.includes`. So
+ *   ANY server error whose message contained the word anywhere was classified
+ *   as a dead connection and withheld from Sentry:
+ *
+ *       current transaction is aborted, commands ignored until end of
+ *       transaction block                                    ← Postgres
+ *       Payment aborted by provider
+ *       Upload aborted: invalid file type
+ *
+ *   The first of those is a standard Postgres error and this platform talks to
+ *   Postgres. A real fault, in the error tracker's blind spot, by a rule
+ *   written to remove noise.
+ *
+ * AND IT FAILED IN THE DIRECTION THIS MODULE'S HEADER SAYS IT DOES NOT.
+ *
+ *   The note above on matching somebody else's message argues the risk is
+ *   acceptable because "this one fails NOISY — if Next rewords the message,
+ *   aborts start reaching Sentry again, which is visible within a day". That
+ *   is true of a REWORD. It was never true of an over-match: a real error
+ *   silently withheld produces nothing to notice, which is the lockout
+ *   guard's failure mode, in the module written to learn from it.
+ *
+ *   Node emits this one as the COMPLETE message — `Error: aborted`, with
+ *   ECONNRESET beside it, which the code check above catches first anyway. So
+ *   an exact match loses nothing real and closes the hole. A wrapped variant
+ *   would now reach Sentry, which is the direction that is safe to be wrong in.
+ */
+const GONE_EXACT_MESSAGES = new Set(["aborted"]);
+
+/**
+ * Trimmed and lower-cased, and nothing else.
+ *
+ *   A first version also stripped trailing `.` and `!`, on the theory that
+ *   Next punctuates and Node does not. Nothing emits `aborted` with a full
+ *   stop, so no test could reach that branch — a mutation run deleting it
+ *   killed nothing — and an untested normalisation is the kind of line a
+ *   later reader treats as load-bearing.
+ *
+ *   It would also have cost nothing to be without: a punctuated variant fails
+ *   the exact match and reaches Sentry, which is the direction this module is
+ *   safe to be wrong in. Next's own message DOES end in a full stop, and it is
+ *   matched as a substring, where trailing punctuation never mattered.
+ */
+const normaliseMessage = (message: string): string => message.trim().toLowerCase();
 
 /**
  * Did this error mean the caller stopped listening?
@@ -99,6 +153,7 @@ export function isConnectionGoneAway(error: unknown): boolean {
     const message = (error as { message?: unknown })?.message;
     if (typeof message !== "string" || message === "") return false;
 
-    const lowered = message.toLowerCase();
+    const lowered = normaliseMessage(message);
+    if (GONE_EXACT_MESSAGES.has(lowered)) return true;
     return GONE_PHRASES.some((phrase) => lowered.includes(phrase));
 }

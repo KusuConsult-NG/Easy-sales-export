@@ -36,6 +36,20 @@
  *   nothing but noise. Node's `code` is checked first precisely because it does
  *   not depend on anybody's prose, and the last test here is the ratchet on
  *   that ordering.
+ *
+ * AND THAT ARGUMENT HAD A HOLE IN IT, WHICH THIS FILE MISSED.
+ *
+ *   "Fails noisy" is true of a REWORD. It was never true of an OVER-MATCH.
+ *   `"aborted"` was in the substring list, so every server error whose message
+ *   merely contained the word — Postgres's "current transaction is aborted,
+ *   commands ignored until end of transaction block" among them — was
+ *   classified as a dead connection and withheld from Sentry. A real fault
+ *   silently removed from the error tracker produces nothing to notice, which
+ *   is the lockout guard's failure mode exactly.
+ *
+ *   The control below ('AND IT IS NOT A CATCH-ALL') existed and did not catch
+ *   it, because not one of its negative cases contained the word. A control is
+ *   only as good as the cases somebody thought to put in it.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -95,6 +109,15 @@ describe('classifying a connection that went away', () => {
         //   platform's entire error stream.
         expect(isConnectionGoneAway(new Error('Cannot read properties of undefined'))).toBe(false);
         expect(isConnectionGoneAway(new Error('Wallet debit failed: insufficient funds'))).toBe(false);
+        //   THE CASES THIS CONTROL WAS MISSING. Every one of these was
+        //   classified as a dead connection and withheld from Sentry, because
+        //   `"aborted"` was matched as a substring.
+        expect(isConnectionGoneAway(new Error(
+            'current transaction is aborted, commands ignored until end of transaction block',
+        ))).toBe(false);
+        expect(isConnectionGoneAway(new Error('Payment aborted by provider'))).toBe(false);
+        expect(isConnectionGoneAway(new Error('Upload aborted: invalid file type'))).toBe(false);
+        expect(isConnectionGoneAway(new Error('Escrow release aborted — ledger mismatch'))).toBe(false);
         expect(isConnectionGoneAway(new TypeError('x is not a function'))).toBe(false);
         expect(isConnectionGoneAway({ code: 'ENOENT', message: 'no such file' })).toBe(false);
         expect(isConnectionGoneAway(null)).toBe(false);
@@ -146,6 +169,42 @@ describe('what the hook does with each', () => {
         expect(captureRequestError).toHaveBeenCalledTimes(1);
         expect(captureRequestError).toHaveBeenCalledWith(real, REQUEST, CONTEXT);
         expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('THE test for the over-match — a Postgres abort REACHES Sentry', async () => {
+        /*
+         *   The assertion that discriminates, and the reason it is written at
+         *   the hook rather than at the classifier.
+         *
+         *   `expect(isConnectionGoneAway(...)).toBe(false)` above says the
+         *   classifier changed its mind. What anybody actually cares about is
+         *   the consequence: this error appears in the error tracker. Before
+         *   the fix it did not — it was logged as a client disconnect and
+         *   dropped, with nothing anywhere to say a real fault had been
+         *   removed.
+         *
+         *   Postgres emits this verbatim, and this platform talks to Postgres.
+         */
+        const pg = new Error(
+            'current transaction is aborted, commands ignored until end of transaction block',
+        );
+
+        await (await hook())(pg, REQUEST, CONTEXT);
+
+        expect(captureRequestError).toHaveBeenCalledTimes(1);
+        expect(captureRequestError).toHaveBeenCalledWith(pg, REQUEST, CONTEXT);
+        //   And it is NOT written off as a disconnect in the log either.
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('while the genuine Node abort is still held back', async () => {
+        //   The other side of the same line. `Error: aborted` is what Node
+        //   throws on a real client disconnect and it must keep its old
+        //   treatment, or the fix has traded one fault for another.
+        await (await hook())(new Error('aborted'), REQUEST, CONTEXT);
+
+        expect(captureRequestError).not.toHaveBeenCalled();
+        expect(String(warn.mock.calls[0]?.[0] ?? '')).toContain('/dashboard');
     });
 
     it('and a thrown classifier reports rather than swallows', async () => {
