@@ -276,15 +276,124 @@ describe('Layer 2.6 — a cooperative membership record found by query', () => {
         expect(await access(UID, [], 'cooperatives')).toBe(true);
     });
 
-    it('and stamps the userId onto a membership that lacked one', async () => {
-        // The heal. Without it the same member takes the slow path — three queries
-        // — on every single page load, forever.
+    it('and stamps the userId onto a membership the caller PAID for', async () => {
+        /*
+         *   The heal. Without it the same member takes the slow path — three
+         *   queries — on every single page load, forever.
+         *
+         *   THIS USED TO NEED NO PAYMENT, and that was the hole. The stamp
+         *   binds the row to the caller for every later reader — savings,
+         *   loans, documents, BVN and NIN — and it fired on nothing more than
+         *   a matching email, which the caller controls through profile.ts.
+         *   lib/cooperative-membership-claim.ts is written about exactly this
+         *   and named five doors; this layer was a seventh.
+         *
+         *   So the row now carries a paymentReference, and a completed
+         *   registration payment under that reference names the caller. That
+         *   is the evidence the gate demands: the caller's MONEY, not a string
+         *   they can edit.
+         */
         store.seed(COLLECTIONS.USERS, UID, { email: 'member@example.com' });
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-x',
-            { email: 'member@example.com', membershipStatus: 'active', paymentStatus: 'completed' });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-x', {
+            email: 'member@example.com', membershipStatus: 'active',
+            paymentStatus: 'completed', paymentReference: 'COOP-REF-7',
+        });
+        store.seed(COLLECTIONS.PROCESSED_PAYMENTS, 'COOP-REF-7', {
+            reference: 'COOP-REF-7', userId: UID,
+            type: 'cooperative_membership_registration', status: 'completed',
+        });
 
         expect(await access(UID, [], 'cooperatives')).toBe(true);
         expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-x')?.userId).toBe(UID);
+    });
+
+    it('but NOT onto one it merely shares an address with', async () => {
+        /*
+         *   THE test for the seventh door. An orphaned membership — somebody
+         *   who paid and never finished registering — sits at an address no
+         *   account currently holds, because Supabase enforces uniqueness
+         *   among registered ones. That is precisely what makes it reachable:
+         *   set your profile email to it and load any cooperative page.
+         */
+        store.seed(COLLECTIONS.USERS, UID, { email: 'orphan@example.com' });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'orphan-row', {
+            email: 'orphan@example.com', membershipStatus: 'active',
+            paymentStatus: 'completed', savingsBalance: 400_000,
+        });
+
+        await access(UID, [], 'cooperatives');
+
+        expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'orphan-row')?.userId)
+            .toBeUndefined();
+    });
+
+    it('and an email-matched row is not PROMOTED to active either', async () => {
+        /*
+         *   The other write, and it survived a mutation run until this test
+         *   existed. The heal does not only stamp `userId` — for a row that
+         *   is paid and onboarded but not yet active it writes
+         *   `membershipStatus: "active"` back onto the row and grants
+         *   cooperative_member on the user document.
+         *
+         *   Run against a row matched on email alone, that promotes somebody
+         *   else's half-finished membership and hands the caller the role
+         *   that goes with it. Same gate as the stamp.
+         */
+        store.seed(COLLECTIONS.USERS, UID, { email: 'orphan2@example.com' });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'healable-orphan', {
+            email: 'orphan2@example.com', membershipStatus: 'pending',
+            onboardingCompleted: true, paymentStatus: 'completed',
+        });
+
+        await access(UID, [], 'cooperatives');
+
+        expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'healable-orphan')?.membershipStatus)
+            .toBe('pending');
+    });
+
+    it('VACUITY CONTROL: and it IS promoted when the payment names the caller', async () => {
+        //   Without this the test above passes against a heal that never runs
+        //   at all.
+        store.seed(COLLECTIONS.USERS, UID, { email: 'mine@example.com' });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'healable-mine', {
+            email: 'mine@example.com', membershipStatus: 'pending',
+            onboardingCompleted: true, paymentStatus: 'completed',
+            paymentReference: 'COOP-REF-8',
+        });
+        store.seed(COLLECTIONS.PROCESSED_PAYMENTS, 'COOP-REF-8', {
+            reference: 'COOP-REF-8', userId: UID,
+            type: 'cooperative_membership_registration', status: 'completed',
+        });
+
+        await access(UID, [], 'cooperatives');
+
+        expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'healable-mine')?.membershipStatus)
+            .toBe('active');
+    });
+
+    it('and the legacy import still gets in, which is why the READ is not gated', async () => {
+        /*
+         *   Gating the READ is the obvious fix and the wrong one, so this
+         *   pins the cost of getting it wrong.
+         *
+         *   The email fallback exists for members imported from a spreadsheet
+         *   with no ids at all. Those rows carry no paymentReference, so the
+         *   claim gate refuses every one of them — and refusing the read would
+         *   take the cooperative module away from genuine members. Worse than
+         *   the fault being repaired, and in the direction this platform cares
+         *   about most.
+         *
+         *   So: access yes, write no. The member simply takes the slow path on
+         *   each load, which is the cost the heal existed to save.
+         */
+        store.seed(COLLECTIONS.USERS, UID, { email: 'imported@example.com' });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'imported-row', {
+            email: 'imported@example.com', membershipStatus: 'active', isLegacy: true,
+        });
+
+        expect(await access(UID, [], 'cooperatives')).toBe(true);
+        expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'imported-row')?.userId)
+            .toBeUndefined();
     });
 
     it('a pending membership does not grant access', async () => {
