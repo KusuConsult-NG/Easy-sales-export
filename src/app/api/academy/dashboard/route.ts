@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isIssuedCertificate } from "@/lib/certificate-kind";
 import { autoEnrollPaidUser } from "@/app/actions/academy";
+import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * API Route: Get Student Dashboard Data
@@ -87,9 +88,14 @@ export async function GET(request: NextRequest) {
         });
 
         // Get certificates (Admin SDK)
-        const certSnapshot = await db.collection(COLLECTIONS.CERTIFICATES)
-            .where("userId", "==", userId)
-            .get();
+        //   EVERY PROFILE THIS LEARNER OWNS. A certificate is issued once and
+        //   never reissued, so one earned before their profile was superseded
+        //   is the only copy — and a dashboard that cannot see it tells them
+        //   they never completed the course.
+        const certSnapshot = await filterByOwner(
+            db.collection(COLLECTIONS.CERTIFICATES), "userId",
+            await ownedProfileIds(userId),
+        ).get();
 
         // Only credentials the platform issued. This counted every row for the
         // user, and uploadCertificateAction writes user-attached files into the

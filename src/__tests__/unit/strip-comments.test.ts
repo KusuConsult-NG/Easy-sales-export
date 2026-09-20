@@ -320,6 +320,7 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   contorted to dodge this list.
         'src/__tests__/unit/a-guard-on-the-door-money-leaves-by-only.test.ts',
         'src/__tests__/unit/a-guard-that-guarded-the-wrong-thing.test.ts',
+        'src/__tests__/unit/academy-quiz-grading.test.ts',
         'src/__tests__/unit/admin-approval-audit.test.ts',
         'src/__tests__/unit/admin-route-authority.test.ts',
         'src/__tests__/unit/broadcast-access.test.ts',
@@ -427,6 +428,37 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   what IS. A file left on it after it stopped qualifying is the same
         //   stale-pin problem in the other direction, and it would mask the
         //   day the route crosses back.
+        //   ELEVEN became TWELVE when academy-quiz-grading.test.ts had its
+        //   maxAttempts ratchet rewritten (the userId sweep). Same mechanism
+        //   as harness-covers-adapter above, in its fourth form — and the file
+        //   was ALREADY carrying the trap before this edit, at
+        //
+        //       !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*')
+        //
+        //   three literals in one line, two of which open something for the
+        //   naive regex. What the edit changed is where it CLOSES: the naive
+        //   block-comment match runs from that `'/*'` to the next `*/`, and
+        //   the rewritten assertion moved that landing point.
+        //
+        //   MEASURED, same method as the entry above:
+        //
+        //       before   naive 203 / good 219 = 0.927   not affected
+        //       after    naive  54 / good 219 = 0.247   AFFECTED
+        //
+        //   The good baseline did not move, which is the honest reading: the
+        //   file did not get worse, the naive stripper's re-sync point did.
+        //
+        //   I TRIED TO AVOID THE ENTRY FIRST, by writing the new comment as
+        //   `//` lines instead of a block. That made it WORSE, not better —
+        //   the block's own `*/` had been the earlier re-sync point, so
+        //   removing it let the match run 10,689 characters further, to a
+        //   `*/` sitting inside the replacement prose. Recorded because a
+        //   future reader will have the same instinct and it is wrong.
+        //
+        //   Nothing reads this file with a naive stripper — it asserts on the
+        //   quiz route's source, never on its own — so no assertion is
+        //   affected. It is on the list because the list is about which files
+        //   the naive stripper mangles, not about which are read.
         'src/lib/csp.ts',
     ];
 

@@ -297,10 +297,43 @@ describe('the route credits the quiz\'s own course', () => {
 describe('maxAttempts is enforced, having been enforced nowhere', () => {
     const route = source('src/app/api/academy/quiz/submit/route.ts');
 
-    it('counts the attempts already recorded', () => {
+    it('counts the attempts already recorded, for this quiz', () => {
         expect(route).toContain('COLLECTIONS.QUIZ_ATTEMPTS');
         expect(route).toContain('.where("quizId", "==", quizId)');
-        expect(route).toContain('.where("userId", "==", session.user.id)');
+    });
+
+    it('and scopes them to the SESSION, never to a value from the body', () => {
+        /*
+         *   This named the query verbatim — `.where("userId", "==",
+         *   session.user.id)` — and broke when the count was widened across
+         *   the learner's owned profiles, a change that preserved the property
+         *   it was guarding and strengthened the limit it protects.
+         *
+         *   WHAT ACTUALLY HAS TO HOLD is that the id being counted comes from
+         *   the session. A count scoped to an id from the request body is not
+         *   a weaker limit, it is no limit at all: the caller picks whose
+         *   attempts to count. So the assertion is `session.user.id` reaching
+         *   the filter, by either shape, and nothing from the body doing so.
+         */
+        const flat = route.replace(/\s+/g, ' ');
+
+        const bare = /\.where\("userId", "==", session\.user\.id\)/.test(flat);
+        const widened = /filterByOwner\( ?db\.collection\(COLLECTIONS\.QUIZ_ATTEMPTS\), ?"userId", ?await ownedProfileIds\(session\.user\.id\)/
+            .test(flat);
+
+        expect(bare || widened).toBe(true);
+    });
+
+    it('VACUITY GUARD: and a body-supplied id would not satisfy that', () => {
+        const flat = (t: string) => t.replace(/\s+/g, ' ');
+        const ok = (t: string) =>
+            /\.where\("userId", "==", session\.user\.id\)/.test(flat(t))
+            || /filterByOwner\( ?db\.collection\(COLLECTIONS\.QUIZ_ATTEMPTS\), ?"userId", ?await ownedProfileIds\(session\.user\.id\)/.test(flat(t));
+
+        expect(ok('.where("userId", "==", session.user.id)')).toBe(true);
+        expect(ok('filterByOwner(db.collection(COLLECTIONS.QUIZ_ATTEMPTS), "userId", await ownedProfileIds(session.user.id))')).toBe(true);
+        expect(ok('.where("userId", "==", body.userId)')).toBe(false);
+        expect(ok('filterByOwner(db.collection(COLLECTIONS.QUIZ_ATTEMPTS), "userId", await ownedProfileIds(body.userId))')).toBe(false);
     });
 
     it('refuses once the limit is reached', () => {

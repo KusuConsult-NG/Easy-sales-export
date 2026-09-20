@@ -56,6 +56,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /** PLACE B's document id. Deterministic, so existence is knowable without a query. */
 export function courseProgressDocId(userId: string, courseId: string): string {
@@ -123,8 +124,21 @@ export async function ensureCourseEnrolmentRecord(
 ): Promise<boolean> {
     if (!userId || !courseId) return false;
 
-    const existing = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
-        .where("userId", "==", userId)
+    //   CHECKED ACROSS EVERY PROFILE, WRITTEN UNDER ONE — the shape the
+    //   academy enrolment guard already uses.
+    //
+    //   This is a duplicate guard, so it refuses more: a learner who enrolled
+    //   before their profile was superseded has a row under the old id, and a
+    //   single-id check does not see it and adds a second. Their course list
+    //   then shows the course twice, and the certificates route reads the same
+    //   collection.
+    //
+    //   The row created below still carries `userId` — the live id — because a
+    //   new enrolment belongs to the profile the learner is actually using.
+    const existing = await filterByOwner(
+        db.collection(COLLECTIONS.COURSE_ENROLLMENTS), "userId",
+        await ownedProfileIdsFor(userId),
+    )
         .where("courseId", "==", courseId)
         .get();
 
