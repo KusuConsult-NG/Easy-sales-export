@@ -26,12 +26,43 @@
  *   node scripts/build-deploy-sql.mjs                 # write to stdout
  *   node scripts/build-deploy-sql.mjs --out deploy.sql
  *   node scripts/build-deploy-sql.mjs --skip-rls      # omit 004
+ *   node scripts/build-deploy-sql.mjs --migrations DIR  # read from DIR (tests)
  */
 
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const MIGRATIONS_DIR = "supabase/migrations";
+/**
+ * Where the migrations are read from.
+ *
+ *   `--migrations <dir>` EXISTS SO THE TESTS STOP MUTATING THE REAL DIRECTORY.
+ *
+ *   The #469 suite proves this script REFUSES two things — a migration it does
+ *   not know about, and a statement that cannot run in a transaction — and the
+ *   only way to prove a refusal is to present the thing being refused. It did
+ *   that by writing `999_temp_469_probe.sql` into supabase/migrations and by
+ *   rewriting 027 in place, restoring both afterwards.
+ *
+ *   Which works, right up until something else reads the directory at the same
+ *   moment. Jest runs suites in parallel workers, and two of them list these
+ *   files: the deploy-file suite asserts every migration on disk is named in
+ *   DEPLOY.sql, and this suite's own last section scans them all. Either could
+ *   see the probe, or see 027 mid-rewrite. The result was a test that failed
+ *   perhaps one run in three, naming a file nobody had written, in a suite that
+ *   passed in isolation every time — and because the pre-push hook runs the
+ *   same suite, it could reject a push for it.
+ *
+ *   A flag rather than an environment variable: the other options this script
+ *   takes are flags, an env var is inherited by accident where an argument
+ *   never is, and `--migrations` says what it does at the call site.
+ *
+ *   Read straight from argv because MIGRATIONS_DIR is needed above the
+ *   arg-parsing block further down, and join() is happy with an absolute path.
+ */
+const migrationsFlag = process.argv.indexOf("--migrations");
+const MIGRATIONS_DIR = migrationsFlag !== -1 && process.argv[migrationsFlag + 1]
+    ? process.argv[migrationsFlag + 1]
+    : "supabase/migrations";
 
 /**
  * Every migration expected in a complete deployment, in application order.
