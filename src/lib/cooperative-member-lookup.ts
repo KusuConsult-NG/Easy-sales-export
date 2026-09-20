@@ -27,6 +27,8 @@
  * balance must not claim anything at all.
  */
 
+import { ownedProfileIdsFor } from "@/lib/owned-profile-ids";
+
 /** The shape both loan doors need back: which row, and what is on it. */
 export interface CooperativeMemberRow {
     id: string;
@@ -57,6 +59,48 @@ export async function findCooperativeMemberRow(
         return { id: doc.id, data: doc.data() ?? {} };
     }
 
+    return null;
+}
+
+/**
+ * The same lookup, across every profile this person owns — LIVE ROW FIRST.
+ *
+ *   A member whose profile was superseded signs in as the live id. Their
+ *   membership row may have been written under the old one, and the two-read
+ *   walk above never looks there: it reports "no membership", and the caller
+ *   tells somebody who joined and paid that they must join a cooperative.
+ *   That is the failed-lookup-rendered-as-absence shape this module's header
+ *   condemns, arriving through the profile pointer instead of the row key.
+ *
+ * WHY LIVE-FIRST IS THE WHOLE DESIGN, AND NOT AN ORDERING DETAIL
+ * --------------------------------------------------------------
+ *   Some callers DEBIT the row this returns. `filterByOwner(...).limit(1)`
+ *   over the owned ids would answer with an ARBITRARY one of the person's
+ *   rows — nothing in the query orders them — so a member with savings on
+ *   their live row and an empty superseded row would be told "insufficient
+ *   savings" depending on which came back. Walking the ids in order removes
+ *   the ambiguity: `ownedProfileIdsFor` resolves FORWARD before it searches
+ *   backward, so ids[0] is the live id and a row there always wins.
+ *
+ *   Savings sitting on a superseded row BESIDE a live row are still stranded,
+ *   and are settled the way lib/wallet-lookup.ts settles the same condition —
+ *   reported to a person, not silently reached across by a read path.
+ *
+ *   Two reads per profile at worst, and one profile is the overwhelming case,
+ *   so this costs a member with a single profile exactly what the walk above
+ *   already cost them.
+ */
+export async function findCooperativeMemberRowForPerson(
+    membersCollection: any,
+    userId: string,
+): Promise<CooperativeMemberRow | null> {
+    if (!userId) return null;
+
+    const owned = await ownedProfileIdsFor(userId);
+    for (const id of owned.length ? owned : [userId]) {
+        const row = await findCooperativeMemberRow(membersCollection, id);
+        if (row) return row;
+    }
     return null;
 }
 

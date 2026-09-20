@@ -68,6 +68,40 @@ export const LOAN_APPLICATION_COLLECTIONS = [
 export const ONE_OPEN_LOAN_APPLICATION_MESSAGE =
     "You already have a loan application in progress. Only one may be open at a time — check its status before applying again.";
 
+/**
+ * The statuses that mean a loan is still OPEN, and so bars another.
+ *
+ *   THE THREE DOORS DID NOT AGREE, AND THE WIDEST-OPEN ONE WAS A ROUTE.
+ *
+ *   One borrower may carry one open loan. Three places enforce it:
+ *
+ *       cooperative/_loans_applications   at the point of applying
+ *       cooperative/_loans_decisions      again at the point of approving
+ *       api/cooperative/apply-loan        the OTHER application path
+ *
+ *   The first two asked about five statuses across BOTH collections. The
+ *   third asked about three — "pending", "approved", "active" — in
+ *   loan_applications ONLY. So a member whose loan was `reviewing`,
+ *   `partially_approved` or `disbursed`, or whose loan was filed in
+ *   cooperative_loans at all, was refused by the two actions and admitted by
+ *   the route. The route is the one /cooperatives/loans posts to.
+ *
+ *   `active` is in neither of the other two lists and is written by nothing in
+ *   this codebase — it is kept below so that a legacy row carrying it still
+ *   bars, which is the direction this rule must fail in.
+ *
+ *   This is the sibling-doors shape the header above already describes, on the
+ *   rule rather than on the lookup. One list, three importers.
+ */
+export const OPEN_LOAN_STATUSES = [
+    "pending",
+    "reviewing",
+    "approved",
+    "partially_approved",
+    "disbursed",
+    "active",
+] as const;
+
 export interface ResolvedLoanApplication {
     /** Document reference in the collection that actually holds the row. */
     ref: any;

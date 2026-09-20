@@ -475,35 +475,72 @@ describe("the member's own view of their own applications", () => {
         expect(handler).not.toContain('COLLECTIONS.COOPERATIVE_LOANS');
     });
 
+    /*
+     *   WHICH COLLECTION IS READ ON WHICH KEY, not how the read is spelled.
+     *
+     *   These three assertions used to name the query verbatim —
+     *   `db.collection(COLLECTIONS.COOPERATIVE_LOANS).where("memberId", "==",
+     *   userId)` — and so they broke when those reads were widened across a
+     *   borrower's owned profiles, a change that preserved every property they
+     *   were guarding. A test pinned to spelling reports an edit; this one
+     *   reports a defect.
+     */
+    const flat = (s: string) => s.replace(/\s+/g, ' ');
+
+    /** Does `src` read `collection` on `key`, by either filtering shape? */
+    const readsBy = (src: string, collection: string, key: string): boolean => {
+        const f = flat(src);
+        const bare = new RegExp(
+            `db\\.collection\\(COLLECTIONS\\.${collection}\\) ?\\.where\\("${key}", "==",`);
+        const widened = new RegExp(
+            `filterByOwner\\( ?db\\.collection\\(COLLECTIONS\\.${collection}\\), ?"${key}"`);
+        return bare.test(f) || widened.test(f);
+    };
+
     it('the applications list covers both collections', () => {
         // THE test.
         const route = code(MEMBER_ROUTE);
 
-        expect(route).toContain('db.collection(COLLECTIONS.COOPERATIVE_LOANS)');
-        expect(route).toContain('.where("memberId", "==", userId)');
+        expect(readsBy(route, 'LOAN_APPLICATIONS', 'userId')).toBe(true);
+        expect(readsBy(route, 'COOPERATIVE_LOANS', 'memberId')).toBe(true);
         expect(route).toContain('normaliseLoanApplication(');
     });
 
     it('and so does the loan history action beside it', () => {
         const history = fn(APPLICATIONS, 'getUserLoanApplicationsAction');
 
-        expect(history).toContain('db.collection(COLLECTIONS.COOPERATIVE_LOANS).where("memberId", "==", userId)');
+        expect(readsBy(history, 'LOAN_APPLICATIONS', 'userId')).toBe(true);
+        expect(readsBy(history, 'COOPERATIVE_LOANS', 'memberId')).toBe(true);
         expect(history).toContain('normaliseLoanApplication(');
     });
 
-    it('each using the borrower key its own collection carries', () => {
-        // Vacuity guard: querying cooperative_loans by `userId` would return
-        // nothing and look exactly like a fix.
+    it('each using the borrower key its own collection carries, and not the other', () => {
+        //   Vacuity guard on the pairing: querying cooperative_loans by
+        //   `userId` returns nothing and looks exactly like a fix. Both
+        //   readers are checked for the WRONG pairing being absent, which is
+        //   what the assertions above cannot see on their own.
         const route = code(MEMBER_ROUTE);
         const history = fn(APPLICATIONS, 'getUserLoanApplicationsAction');
 
-        // Whitespace-collapsed: the route writes its two queries across lines.
-        const flat = (s: string) => s.replace(/\s+/g, ' ');
-
-        for (const src of [flat(route), flat(history)]) {
-            expect(src).toMatch(/COLLECTIONS\.LOAN_APPLICATIONS\)\s*\.where\("userId", "==", userId\)/);
-            expect(src).toMatch(/COLLECTIONS\.COOPERATIVE_LOANS\)\s*\.where\("memberId", "==", userId\)/);
+        for (const src of [route, history]) {
+            expect(readsBy(src, 'COOPERATIVE_LOANS', 'userId')).toBe(false);
+            expect(readsBy(src, 'LOAN_APPLICATIONS', 'memberId')).toBe(false);
         }
+    });
+
+    it('VACUITY GUARD: readsBy sees both shapes, and no others', () => {
+        //   Without this, a regex that matched nothing would make the three
+        //   assertions above pass by returning false where false is expected
+        //   and... failing where true is. Pinned both ways round.
+        const bare = 'db.collection(COLLECTIONS.LOAN_APPLICATIONS)\n  .where("userId", "==", userId)';
+        const widened = 'filterByOwner(\n  db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", ids)';
+        const wrongKey = 'filterByOwner(db.collection(COLLECTIONS.LOAN_APPLICATIONS), "memberId", ids)';
+        const wrongCollection = 'filterByOwner(db.collection(COLLECTIONS.COOPERATIVE_LOANS), "userId", ids)';
+
+        expect(readsBy(bare, 'LOAN_APPLICATIONS', 'userId')).toBe(true);
+        expect(readsBy(widened, 'LOAN_APPLICATIONS', 'userId')).toBe(true);
+        expect(readsBy(wrongKey, 'LOAN_APPLICATIONS', 'userId')).toBe(false);
+        expect(readsBy(wrongCollection, 'LOAN_APPLICATIONS', 'userId')).toBe(false);
     });
 
     it('and the page really does submit into the collection they were missing', () => {

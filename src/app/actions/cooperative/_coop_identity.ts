@@ -14,7 +14,7 @@ import { isDecidedAgainst } from "@/lib/registration-progress";
 import { sortApplicationsNewestFirst } from "@/lib/latest-application";
 import { revalidatePath } from "next/cache";
 import type { SupabaseDocumentSnapshot } from "@/lib/supabase-db";
-import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { filterByOwner, ownedProfileIdsFor } from "@/lib/owned-profile-ids";
 
 // ============================================
 // MEMBER ID CARD
@@ -129,9 +129,10 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         // ── FALLBACK 4: processed_payments ────────────────────────────────────
         if (sortedDocs.length === 0) {
             logger.warn(`[getCooperativeMemberIdCardAction] All direct lookups failed for ${userId} — checking processed_payments`);
+            const paymentIds = await ownedProfileIdsFor(userId);
             const paymentSnap = await runQueryWithRetry(() =>
-                db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                    .where("userId", "==", userId)
+                filterByOwner(
+                    db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId", paymentIds)
                     .where("type", "==", "cooperative_membership_registration")
                     .where("status", "==", "completed")
                     .limit(1)
@@ -409,8 +410,11 @@ export async function getCooperativeMemberIdCardAction(): Promise<
              */
             if (!effectivePaymentCompleted && !isLegacy) {
                 try {
-                    const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                        .where("userId", "==", userId)
+                    //   A registration fee paid before the member's profile
+                    //   was superseded still paid for their membership.
+                    const authPayment = await filterByOwner(
+                        db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
+                        await ownedProfileIdsFor(userId))
                         .where("type", "==", "cooperative_membership_registration")
                         .where("status", "==", "completed")
                         .limit(1)

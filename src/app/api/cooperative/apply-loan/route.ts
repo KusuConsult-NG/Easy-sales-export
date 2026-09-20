@@ -14,6 +14,8 @@ import { withRateLimit } from "@/lib/rate-limit";
 import { isRetired } from "@/lib/record-retirement";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
+import { OPEN_LOAN_STATUSES } from "@/lib/loan-application-location";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * API Route: Submit Loan Application
@@ -191,13 +193,34 @@ async function applyLoanHandler(request: NextRequest) {
             );
         }
 
-        // ELIGIBILITY CHECK #2: Check for existing active loans (Admin SDK)
-        const existingLoansSnapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("userId", "==", userId)
-            .where("status", "in", ["pending", "approved", "active"])
-            .get();
+        /*
+         *   ELIGIBILITY CHECK #2: one open loan per borrower.
+         *
+         *   THE THIRD DOOR, AND IT WAS THE WIDEST OPEN OF THE THREE. This asked
+         *   about three statuses in ONE collection while the two cooperative
+         *   actions asked about five across BOTH — so a borrower whose loan was
+         *   `reviewing`, `partially_approved` or `disbursed`, or whose loan sat
+         *   in cooperative_loans at all, was refused by those two and admitted
+         *   here. This is the route /cooperatives/loans posts to.
+         *
+         *   Both collections now, off OPEN_LOAN_STATUSES — one list, three
+         *   importers — and across EVERY PROFILE THE BORROWER OWNS, which is
+         *   the widening the rest of this sweep is about. It refuses MORE, and
+         *   on this rule that is the point: a person with two profiles answered
+         *   "no open loan" twice and could borrow twice.
+         */
+        const borrowerIds = await ownedProfileIdsFor(userId);
 
-        if (!existingLoansSnapshot.empty) {
+        const [existingLoansSnapshot, existingCoopLoansSnapshot] = await Promise.all([
+            filterByOwner(db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES])
+                .get(),
+            filterByOwner(db.collection(COLLECTIONS.COOPERATIVE_LOANS), "memberId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES])
+                .get(),
+        ]);
+
+        if (!existingLoansSnapshot.empty || !existingCoopLoansSnapshot.empty) {
             return NextResponse.json(
                 {
                     success: false,

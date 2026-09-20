@@ -45,7 +45,7 @@ import {
 } from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { isRetired } from "@/lib/record-retirement";
-import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { findCooperativeMemberRow, findCooperativeMemberRowForPerson } from "@/lib/cooperative-member-lookup";
 import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 
 /**
@@ -286,6 +286,7 @@ export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiate
 // "A \"use server\" file can only export async functions, found string."
 import { UNPAID_CONTRIBUTION_MESSAGE } from "@/lib/server-action-values";
 import { isAmountAtLeast, isPositiveAmount } from "@/lib/amount";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 async function _makeContributionAction(
     _prevState: MakeContributionState,
@@ -521,8 +522,10 @@ async function _getTransactionsAction(): Promise<GetTransactionsState> { try {
         }
 
         const userId = session.user.id;
-        const snapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-            .where("userId", "==", userId)
+        const snapshot = await filterByOwner(
+            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS), "userId",
+            await ownedProfileIdsFor(userId),
+        )
             .orderBy("date", "desc")
             .get();
 
@@ -848,12 +851,39 @@ async function _createFixedSavingsAction(
         if (!isPositiveAmount(amount)) { return { error: "Amount must be positive", success: false as const, data: null };
         }
 
-        const membershipSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("userId", "==", userId)
-            .limit(1)
-            .get();
+        /*
+         *   NOT WIDENED, AND THE ONLY SITE IN THIS SWEEP THAT IS NOT.
+         *
+         *   Every other read here answers "what does this person have" and is
+         *   right to look under every profile they own. This one picks the row
+         *   a DEBIT lands on, four lines below, and that is the wallet module's
+         *   distinction exactly: what you are SHOWN is everything you hold,
+         *   what money MOVES ON is one row.
+         *
+         *   `filterByOwner(...).limit(1)` over the owned ids returns an
+         *   ARBITRARY one of the person's membership rows — nothing in that
+         *   query orders them — and debitJsonbBalance then charges whichever
+         *   came back. A member with savings on their live row and an empty
+         *   superseded row would be told "insufficient savings balance"
+         *   depending on which the store handed back. That is a worse fault
+         *   than the one being repaired.
+         *
+         *   findCooperativeMemberRowForPerson walks the owned ids IN ORDER
+         *   instead, and ownedProfileIdsFor resolves forward before it searches
+         *   backward, so the live row always wins when there is one. It also
+         *   walks doc-id then userId-field per profile, so an auto-id
+         *   membership row is not read as an absent membership — the raw field
+         *   read this replaces missed the doc-id rows, which are most of them.
+         *
+         *   Savings stranded on a superseded row BESIDE a live one are a real
+         *   condition and are settled where the wallet settles the same thing —
+         *   reported to a person, not silently reached across by a read path.
+         */
+        const memberRow = await findCooperativeMemberRowForPerson(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
-        if (membershipSnapshot.empty) {
+        if (!memberRow) {
             return { success: false as const, error: "Membership not found", data: null };
         }
 
@@ -864,11 +894,11 @@ async function _createFixedSavingsAction(
         // unlike the loan path there is no second number bounding it: a pending
         // member whose contribution had already landed could lock it into a
         // fixed plan they were not entitled to open.
-        if (!canTransactAsMember(membershipSnapshot.docs[0].data())) {
+        if (!canTransactAsMember(memberRow.data)) {
             return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
         }
 
-        const membershipId = membershipSnapshot.docs[0].id;
+        const membershipId = memberRow.id;
 
         // Lock the savings before creating the plan.
         //
@@ -955,7 +985,7 @@ async function _createFixedSavingsAction(
         await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(reference).set({
             id: reference,
             userId,
-            cooperativeId: membershipSnapshot.docs[0].data()?.cooperativeId || "default",
+            cooperativeId: memberRow.data?.cooperativeId || "default",
             type: "fixed_savings_lock",
             amount,
             currency: "NGN",

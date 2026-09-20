@@ -13,9 +13,10 @@ import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
-import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication, ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
+import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication, ONE_OPEN_LOAN_APPLICATION_MESSAGE, OPEN_LOAN_STATUSES } from "@/lib/loan-application-location";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Submit loan application
@@ -247,14 +248,24 @@ export async function submitLoanApplicationAction(formData: {
         // and approval is claimed.
         const docRef = await (async () => {
             // 1. Double-lending verification
-            const generalLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("userId", "==", formData.userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            //   EVERY PROFILE THIS BORROWER OWNS, and the widening REFUSES
+            //   MORE rather than less — the same direction as `isSamePerson`.
+            //
+            //   This is the check that stops one person holding two loans at
+            //   once. Asked about a single id, somebody with two profiles
+            //   answered "no open loan" twice and could borrow twice; the
+            //   second application is a different id to this query and the
+            //   same person to the cooperative.
+            const borrowerIds = await ownedProfileIdsFor(formData.userId);
+
+            const generalLoansQuery = filterByOwner(
+                db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES]);
             const generalLoansSnap = await generalLoansQuery.get();
 
-            const coopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-                .where("memberId", "==", formData.userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const coopLoansQuery = filterByOwner(
+                db.collection(COLLECTIONS.COOPERATIVE_LOANS), "memberId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES]);
             const coopLoansSnap = await coopLoansQuery.get();
 
             if (!generalLoansSnap.empty || !coopLoansSnap.empty) {
@@ -264,8 +275,11 @@ export async function submitLoanApplicationAction(formData: {
             }
 
             // 2. Standard eligibility check (using active/disbursed only for balance calculation)
-            const activeLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("userId", "==", formData.userId)
+            //   The BALANCE this borrower already carries, over the same ids.
+            //   A balance short by one profile understates what they owe and
+            //   lets the eligibility ceiling be crossed.
+            const activeLoansQuery = filterByOwner(
+                db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", borrowerIds)
                 .where("status", "in", ["approved", "disbursed"]);
             const activeLoansSnap = await activeLoansQuery.get();
 
@@ -331,9 +345,10 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
         //
         // Both collections, with the borrower key each one uses. Same split the
         // admin queue was fixed for; see lib/loan-application-location.ts.
+        const historyIds = await ownedProfileIdsFor(userId);
         const [generalSnap, coopSnap] = await Promise.all([
-            db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("userId", "==", userId).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_LOANS).where("memberId", "==", userId).get(),
+            filterByOwner(db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", historyIds).get(),
+            filterByOwner(db.collection(COLLECTIONS.COOPERATIVE_LOANS), "memberId", historyIds).get(),
         ]);
 
         return [
