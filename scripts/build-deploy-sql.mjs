@@ -380,6 +380,24 @@ const EXPECTED = [
              "why both statements are in the one file. NOT REQUIRED FOR " +
              "CORRECTNESS — identical rows either way.",
     },
+    {
+        n: "046",
+        why: "the way OUT of a stranded wallet balance — one filed under a " +
+             "profile nobody signs in as, which no member, checkout or " +
+             "withdrawal can reach. Money moves at the LIVE id and nowhere " +
+             "else: 005's credit and debit both key on p_user_id, and a " +
+             "session id is live by construction (#490). The repair has to be " +
+             "ONE function because a credit and a debit as two calls are each " +
+             "idempotent but NOT atomic as a pair, and a credit that lands " +
+             "without its debit mints money. It carries its own " +
+             "authorisation — the _migratedTo / supabaseAuthId pointer is " +
+             "re-read inside the same transaction and any pair the platform " +
+             "does not already call one person is refused — so it can never " +
+             "be a general transfer primitive. Writes both copies of the " +
+             "balance, per 011. MUST come after 011, whose pattern it " +
+             "follows. Applying it moves nothing; it is only callable " +
+             "deliberately.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

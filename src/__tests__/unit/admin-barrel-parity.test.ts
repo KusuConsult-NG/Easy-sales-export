@@ -162,6 +162,20 @@ const ADDED_SINCE_SPLIT = [
      *   could not name.
      */
     'backfillMemberIdentitiesAction',
+    /*
+     *   The way OUT of a stranded wallet balance: a read that finds superseded
+     *   profiles still holding money, and a write that moves one onto the live
+     *   profile.
+     *
+     *   The write decides nothing and can widen nothing. Migration 046 does the
+     *   move in ONE transaction — a credit and a debit as two RPC calls would
+     *   mint money if the pair broke halfway — and re-reads the `_migratedTo` /
+     *   `supabaseAuthId` pointer inside that transaction, refusing any pair the
+     *   platform does not already say is one person. What the action adds is
+     *   who asked and why, written before anything moves.
+     */
+    'findStrandedWalletsAction',
+    'consolidateWalletAction',
 ].sort();
 
 const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();

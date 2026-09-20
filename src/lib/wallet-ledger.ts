@@ -931,3 +931,66 @@ export async function claimSingleOpenLoanApplication(params: {
 
     return { claimed: Boolean(r.claimed), existingId: r.existing_id ?? null };
 }
+
+/**
+ * Move a stranded wallet balance onto the profile the platform calls live.
+ *
+ *   THE ONE PATH THAT MOVES MONEY BETWEEN TWO WALLETS. Everything else in this
+ *   file moves it into or out of one, and that difference is why this is a
+ *   single database function rather than a credit followed by a debit:
+ *   `creditWalletOnce` and `debitWalletOnce` are each idempotent, but the PAIR
+ *   is not atomic, and a credit that lands without its debit does not lose
+ *   money — it mints it.
+ *
+ *   THE AUTHORISATION IS NOT HERE, DELIBERATELY. Migration 046 re-reads the
+ *   `_migratedTo` / `supabaseAuthId` pointer inside the same transaction as the
+ *   move, and refuses any pair the platform does not already say is one person.
+ *   This wrapper cannot widen that, which is the point: a caller added six
+ *   months from now inherits the rule whether or not they know it exists.
+ *
+ *   IDEMPOTENT. The source is zeroed, so a second call reports
+ *   `nothing_to_move` rather than moving anything again.
+ */
+export interface WalletConsolidationResult {
+    moved: boolean;
+    amount: number;
+    fromBalance: number;
+    toBalance: number;
+    /** Why nothing moved. Null when it did. */
+    reason: string | null;
+}
+
+export async function consolidateWalletToLiveProfile(params: {
+    fromId: string;
+    toId: string;
+    actorId?: string;
+}): Promise<WalletConsolidationResult> {
+    const { fromId, toId, actorId } = params;
+
+    if (!fromId) throw new Error("consolidateWalletToLiveProfile: fromId is required");
+    if (!toId) throw new Error("consolidateWalletToLiveProfile: toId is required");
+
+    const { data, error } = await supabaseAdmin.rpc("consolidate_wallet_to_live_profile", {
+        p_from_id: fromId,
+        p_to_id: toId,
+        p_actor: actorId ?? null,
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] consolidate_wallet_to_live_profile failed", { fromId, toId, error });
+        throw new Error(`Wallet consolidation failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
+        throw new Error("Wallet consolidation returned no result");
+    }
+
+    return {
+        moved: Boolean(row.moved),
+        amount: Number(row.amount ?? 0),
+        fromBalance: Number(row.from_balance ?? 0),
+        toBalance: Number(row.to_balance ?? 0),
+        reason: row.reason ?? null,
+    };
+}
