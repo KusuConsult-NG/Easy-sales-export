@@ -2,7 +2,8 @@ import "server-only";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { findCooperativeMemberRowForPerson } from "@/lib/cooperative-member-lookup";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { fixedSavingsPlanStatus } from "@/lib/cooperative-savings";
 import { normaliseLoanApplication } from "@/lib/loan-application-location";
 import { serializeValue } from "@/lib/firestore-serialize";
@@ -63,9 +64,20 @@ import { serializeValue } from "@/lib/firestore-serialize";
  * ── AND THEY ARE STILL SESSION-SCOPED ───────────────────────────────────────
  *
  *   Each function takes a user id and reads only that member's rows, exactly as
- *   the handlers did after their own requireSession. Nothing here widens what a
- *   member can see; the caller is responsible for having resolved the session,
- *   and both callers do.
+ *   the handlers did after their own requireSession. The caller is responsible
+ *   for having resolved the session, and both callers do.
+ *
+ *   THIS ONCE READ "Nothing here widens what a member can see", AND THAT IS NO
+ *   LONGER THE WHOLE TRUTH — the qualification matters, so it is written out
+ *   rather than deleted.
+ *
+ *   These reads now resolve the caller's OWNED PROFILES. A person whose
+ *   profile was superseded signs in as the live id while their older records
+ *   are filed under the old one, and a single-id read shows them a loan
+ *   history and a savings screen with their own records missing. What widens
+ *   is which of THEIR OWN ids are asked about; no row belonging to anybody
+ *   else becomes visible, because ownedProfileIdsFor answers only with
+ *   profiles the same person holds. See lib/owned-profile-ids.ts.
  */
 
 export type CooperativeMembership =
@@ -74,7 +86,10 @@ export type CooperativeMembership =
 
 /** Whether this user is a cooperative member, and what their status is. */
 export async function readCooperativeMembership(userId: string): Promise<CooperativeMembership> {
-    const memberRow = await findCooperativeMemberRow(
+    //   Across every profile this person owns, live row first. A membership
+    //   written before their profile was superseded is still a membership, and
+    //   a single-id walk reports it as none at all.
+    const memberRow = await findCooperativeMemberRowForPerson(
         db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
     );
 
@@ -97,8 +112,13 @@ export async function readCooperativeMembership(userId: string): Promise<Coopera
 
 /** This member's fixed savings plans, newest first, with a DERIVED status. */
 export async function readFixedSavingsPlans(userId: string): Promise<Record<string, any>[]> {
-    const snapshot = await db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS)
-        .where("memberId", "==", userId)
+    //   EVERY PROFILE THIS MEMBER OWNS. A plan locked before their profile was
+    //   superseded is still their money, and a single-id read hides it — which
+    //   on this screen reads as the plan having vanished.
+    const snapshot = await filterByOwner(
+        db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS), "memberId",
+        await ownedProfileIdsFor(userId),
+    )
         .orderBy("createdAt", "desc")
         .get();
 
@@ -175,13 +195,16 @@ export async function readActiveLoanProducts(): Promise<Record<string, unknown>[
  *   Both collections, newest first. See lib/loan-application-location.ts.
  */
 export async function readMyLoanApplications(userId: string): Promise<Record<string, any>[]> {
+    //   EVERY PROFILE THIS MEMBER OWNS, each collection on the borrower key it
+    //   actually carries — `userId` here, `memberId` there. Querying either by
+    //   the other's key returns nothing and looks exactly like a fix.
+    const historyIds = await ownedProfileIdsFor(userId);
+
     const [generalSnap, coopSnap] = await Promise.all([
-        db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("userId", "==", userId)
+        filterByOwner(db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", historyIds)
             .orderBy("appliedAt", "desc")
             .get(),
-        db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-            .where("memberId", "==", userId)
+        filterByOwner(db.collection(COLLECTIONS.COOPERATIVE_LOANS), "memberId", historyIds)
             .get(),
     ]);
 

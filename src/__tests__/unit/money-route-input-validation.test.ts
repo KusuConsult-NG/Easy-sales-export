@@ -87,7 +87,15 @@ describe('POST /api/cooperative/apply-loan — amount validation', () => {
         global.mockFirestoreGet.mockImplementation((key: string) => {
             if (key === USER_ID) return Promise.resolve(ACTIVE_MEMBER);
             if (key === 'prod-1') return Promise.resolve(product);
+            //   BOTH loan collections. The route's one-open-loan bar used to
+            //   ask only loan_applications; it now asks cooperative_loans too,
+            //   because a loan filed there barred the borrower at the two
+            //   cooperative actions and not at this route. A collection left
+            //   out of this stub answers with the default below, which has no
+            //   `.empty` — so `!snap.empty` is true and every application here
+            //   is refused 403 for a reason the test is not about.
             if (key === 'loan_applications') return Promise.resolve({ empty: true, docs: [] });
+            if (key === 'cooperative_loans') return Promise.resolve({ empty: true, docs: [] });
             return Promise.resolve({ exists: false, data: () => undefined });
         });
     }

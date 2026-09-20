@@ -15,10 +15,11 @@ import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
-import { resolveLoanApplication } from "@/lib/loan-application-location";
+import { resolveLoanApplication, OPEN_LOAN_STATUSES } from "@/lib/loan-application-location";
 import { isCooperativeLoan } from "@/lib/loan-product";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /**
  * Admin: Approve loan
@@ -74,14 +75,24 @@ export async function approveLoanAction(
             }
 
             // Double-lending verification: Check for other active/pending loans platform-wide
-            const otherGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("userId", "==", appData.userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            //   EVERY PROFILE THIS BORROWER OWNS, and the widening REFUSES
+            //   MORE rather than less — the same direction as `isSamePerson`.
+            //
+            //   This is the check that stops one person holding two loans at
+            //   once. Asked about a single id, somebody with two profiles
+            //   answered "no open loan" twice and could borrow twice; the
+            //   second application is a different id to this query and the
+            //   same person to the cooperative.
+            const borrowerIds = await ownedProfileIdsFor(appData.userId);
+
+            const otherGeneralLoansQuery = filterByOwner(
+                db.collection(COLLECTIONS.LOAN_APPLICATIONS), "userId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES]);
             const otherGeneralLoansSnap = await otherGeneralLoansQuery.get();
 
-            const otherCoopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-                .where("memberId", "==", appData.userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const otherCoopLoansQuery = filterByOwner(
+                db.collection(COLLECTIONS.COOPERATIVE_LOANS), "memberId", borrowerIds)
+                .where("status", "in", [...OPEN_LOAN_STATUSES]);
             const otherCoopLoansSnap = await otherCoopLoansQuery.get();
 
             const otherGeneralLoansCount = otherGeneralLoansSnap.docs.filter(doc => doc.id !== applicationId).length;

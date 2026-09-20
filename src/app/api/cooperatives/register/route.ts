@@ -11,6 +11,7 @@ import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import { getBaseUrl } from "@/lib/server-utils";
 import { paystackBaseUrl } from "@/lib/paystack-host";
+import { findCooperativeMemberRowForPerson } from "@/lib/cooperative-member-lookup";
 
 export async function POST(request: NextRequest) {
     try {
@@ -63,16 +64,30 @@ export async function POST(request: NextRequest) {
         // same rule as the action-path initiator (_coop_money.ts): an active or
         // paid membership does not buy another, and a decided-against one does
         // not buy its way back.
-        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
-        const memberSnap = await memberRef.get();
-        let existingMember = memberSnap.exists ? memberSnap.data() : null;
-        if (!existingMember) {
-            const byUserId = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("userId", "==", session.user.id)
-                .limit(1)
-                .get();
-            existingMember = byUserId.empty ? null : byUserId.docs[0].data();
-        }
+        //   A THIRD HAND-ROLLED COPY OF THE MEMBER WALK, ON A GUARD THAT
+        //   REFUSES A SECOND ₦10,000 CHARGE.
+        //
+        //   The doc-id-then-userId-field walk written out here is
+        //   findCooperativeMemberRow, which exists because three call sites
+        //   needed it and three copies of a lookup rule is how this codebase
+        //   arrived at the defect that module fixes. This was the fourth.
+        //
+        //   AND IT ASKED ABOUT ONE PROFILE. A member whose profile was
+        //   superseded signs in as the live id; their membership row may sit
+        //   under the old one, where neither half of this walk looked. The
+        //   guard then found nothing, and the route charged them the
+        //   registration fee a second time for a membership they already hold
+        //   — and, for a SUSPENDED member, the webhook fulfilment rewrote them
+        //   "active" again, which is the reversal-for-the-price-of-the-fee this
+        //   guard was added to stop.
+        //
+        //   ...ForPerson walks every profile they own, live row first, so it
+        //   refuses MORE. That is the correct direction for a guard, and the
+        //   same direction as the one-open-loan bar in this sweep.
+        const memberRow = await findCooperativeMemberRowForPerson(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
+        );
+        const existingMember = memberRow?.data ?? null;
         if (existingMember) {
             const status = String(existingMember.membershipStatus ?? existingMember.status ?? "");
             if (isDecidedAgainst(status)) {

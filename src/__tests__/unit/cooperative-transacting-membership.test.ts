@@ -255,7 +255,43 @@ describe('the two doors that asked nothing', () => {
         // THE test for the second — the one nothing else bounded.
         const create = fn(MONEY, '_createFixedSavingsAction');
 
-        expect(create).toContain('if (!canTransactAsMember(membershipSnapshot.docs[0].data()))');
+        expect(create).toContain('if (!canTransactAsMember(');
+    });
+
+    it('asking about the very row it is about to debit', () => {
+        /*
+         *   The assertion above used to name the argument in full —
+         *   `canTransactAsMember(membershipSnapshot.docs[0].data())` — and so
+         *   it broke when the lookup was replaced by findCooperativeMemberRow,
+         *   a change that did not touch the rule it was guarding.
+         *
+         *   What actually has to hold is that the status is read off the SAME
+         *   row the debit lands on. Two lookups, one for the check and another
+         *   for the charge, is how a door ends up approving row A and debiting
+         *   row B — which is exactly what this door risked while it located
+         *   the member with `limit(1)` across their owned profiles.
+         *
+         *   So: the value handed to canTransactAsMember and the value whose id
+         *   becomes membershipId must come from one binding, whatever it is
+         *   called.
+         */
+        const create = fn(MONEY, '_createFixedSavingsAction');
+        const root = (expr: string) => expr.trim().match(/^[A-Za-z_$][\w$]*/)?.[0];
+
+        const checked = create.match(/canTransactAsMember\(([^)]*(?:\([^)]*\))?[^)]*)\)/)?.[1];
+        const debited = create.match(/const membershipId = ([^;]+);/)?.[1];
+
+        expect(checked).toBeTruthy();
+        expect(debited).toBeTruthy();
+        expect(root(checked!)).toBe(root(debited!));
+    });
+
+    it('VACUITY GUARD: and that pairing rejects two different rows', () => {
+        const root = (expr: string) => expr.trim().match(/^[A-Za-z_$][\w$]*/)?.[0];
+
+        expect(root('memberRow.data')).toBe(root('memberRow.id'));
+        expect(root('checkRow.data')).not.toBe(root('chargeRow.id'));
+        expect(root('membershipSnapshot.docs[0].data()')).toBe(root('membershipSnapshot.docs[0].id'));
     });
 
     it('before it debits anything', () => {
