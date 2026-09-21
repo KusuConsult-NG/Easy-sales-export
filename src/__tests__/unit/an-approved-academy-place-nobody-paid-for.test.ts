@@ -174,6 +174,21 @@ describe('and every door that really settles a payment still opens it', () => {
         expect(await access(UID)).toBe(true);
     });
 
+    it('POSITIVE CONTROL: AN ADMIN GRANT — "waived" opens the module too', async () => {
+        //   THE OWNER: "fix the admin approval writing paymentStatus completed
+        //   without a payment." Both admin doors write "waived" now instead of
+        //   claiming money arrived — so this gate has to honour it, or the fix
+        //   for a bookkeeping lie becomes a lockout for every learner an admin
+        //   deliberately let in.
+        //
+        //   THIS IS THE CASE THAT MAKES THE SPLIT SAFE. It is the difference
+        //   between isAcademyEntitled and isAcademyPaid, and the mutant that
+        //   swaps them dies here and nowhere else in this file.
+        healedRegistration({ paymentStatus: 'waived' });
+
+        expect(await access(UID)).toBe(true);
+    });
+
     it('POSITIVE CONTROL: THE LEGACY IMPORT — the carve-out the owner asked for', async () => {
         //   admin/_legacy.ts writes BOTH of these. Either alone is enough, so
         //   an import that set one and not the other still admits.

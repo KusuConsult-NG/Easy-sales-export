@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { isAcademyEntitled } from "@/lib/academy-entitlement";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
@@ -548,7 +549,11 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
 
         // Check if already paid — return success with redirect so the UI continues gracefully
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        if (userDoc.data()?.serviceRegistrations?.academy?.paymentStatus === "completed") {
+        //   isAcademyEntitled: a learner an admin granted a place to has
+        //   nothing left to pay, and this guard is what stops them being sent
+        //   to Paystack for it. Reading only "completed" would charge them for
+        //   a place they already hold.
+        if (isAcademyEntitled(userDoc.data()?.serviceRegistrations?.academy?.paymentStatus)) {
             return { error: null, success: true as const, data: { paymentUrl: "/academy/application" } };
         }
 
@@ -969,7 +974,10 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed" || userData?.legacyOnboardedBy) {
+        //   isAcademyEntitled, not === "completed": an admin grant is recorded
+        //   as "waived" now, and a learner an admin let in must not be sent to
+        //   a payment page. See lib/academy-entitlement.
+        if (isAcademyEntitled(userData?.serviceRegistrations?.academy?.paymentStatus) || userData?.legacyOnboardedBy) {
             return { error: null, success: true as const, data: "paid" };
         }
 
@@ -997,7 +1005,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         ).get();
 
         if (!appSnap.empty) {
-            const hasPaidApp = appSnap.docs.some(doc => doc.data().paymentStatus === "completed");
+            const hasPaidApp = appSnap.docs.some(doc => isAcademyEntitled(doc.data().paymentStatus));
             if (hasPaidApp) {
                 return { error: null, success: true as const, data: "paid" };
             }
@@ -1006,7 +1014,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
                 .where("personalInfo.email", "==", userData.email.toLowerCase())
                 .limit(1)
                 .get();
-            if (!emailQuery.empty && emailQuery.docs[0].data().paymentStatus === "completed") {
+            if (!emailQuery.empty && isAcademyEntitled(emailQuery.docs[0].data().paymentStatus)) {
                 return { error: null, success: true as const, data: "paid" };
             }
         }

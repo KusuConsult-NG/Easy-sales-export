@@ -13,6 +13,7 @@
 "use server";
 
 import { getAdminDb } from "@/lib/supabase-db";
+import { isAcademyEntitled } from "@/lib/academy-entitlement";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/africastalking";
@@ -509,7 +510,7 @@ async function collectSmsRecipients(
                 let currentStatus = a.status || "pending";
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
                 
-                if (currentStatus !== "approved" && !["completed", "paid", "successful"].includes(a.paymentStatus)) {
+                if (currentStatus !== "approved" && !isAcademyEntitled(a.paymentStatus)) {
                     continue; // Skip unpaid Academy applications
                 }
 
