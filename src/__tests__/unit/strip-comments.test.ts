@@ -387,6 +387,15 @@ describe('it agrees with the naive version everywhere the naive version is right
         //   OTHER files with its own line-based codeOnly(), never the
         //   block-eating regex measured here, and no assertion in it reads its
         //   own text.
+        //   The upload-ceiling ratchet, joined on the plainest form of the
+        //   trap. Its own codeOf helper skips comment lines with
+        //   `t.startsWith('//')` and `t.startsWith('/*')`, so it holds both
+        //   literals inside strings, and its block comments supply the closing
+        //   `*/` the naive regex needs. Written that way deliberately: it
+        //   sweeps for megabyte figures and must not read a header EXPLAINING
+        //   the old `200 * 1024 * 1024` as a live instance of it. Recorded
+        //   here rather than contorted to dodge this list.
+        'src/__tests__/unit/the-ceiling-that-outlived-its-own-change.test.ts',
         'src/__tests__/unit/wave-training-access.test.ts',
         //   #810 REMOVED src/app/api/id-card/pdf/route.ts — THE FIRST FILE TO
         //   LEAVE THIS LIST, which is the direction #676 said a set records and
@@ -540,6 +549,16 @@ describe('it agrees with the naive version everywhere the naive version is right
         // 10% threshold to over it — exactly what happened to
         // harness-covers-adapter.test.ts, and the reason this is a ratio rather
         // than a flag.
+        //
+        // FIFTEEN became SIXTEEN when the-ceiling-that-outlived-its-own-change
+        // .test.ts was added. Eighth form, and the plainest one yet: that file
+        // sweeps source for megabyte figures, so it must not read a header
+        // EXPLAINING the old `200 * 1024 * 1024` as a live instance of it — and
+        // skipping those lines means holding '//' and '/*' inside strings.
+        // Raised rather than relaxed, for the reason every entry gives: nothing
+        // strips that file, so no assertion in it is affected, and the list is
+        // about which files the naive stripper mangles rather than which are
+        // read.
         //
         // Raised rather than relaxed, on the same test as every time: the file
         // strips actions/broadcast.ts with its own line-based filter and reads

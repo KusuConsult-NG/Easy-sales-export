@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { uploadFileToStorage } from "@/lib/storage-admin";
+import { uploadFileToStorage, uploadSizeLimitBytes } from "@/lib/storage-admin";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -96,8 +96,22 @@ export async function uploadResourceAction(formData: FormData): Promise<
         if (!file || !title || !description || !category) { return { success: false as const, error: "Missing required fields", data: null };
         }
 
-        // Validate file size (50MB for documents, 200MB for videos)
-        const maxSize = category === "video" ? 200 * 1024 * 1024 : 50 * 1024 * 1024;
+        /*
+         *   THE SHARED CEILING, NOT A THIRD COPY OF IT.
+         *
+         *   This line held `category === "video" ? 200 * 1024 * 1024 : 50 *
+         *   1024 * 1024` — the ORIGINAL of the rule lib/upload-limits was
+         *   created to make single, and it was still here. Lowering video to
+         *   100MB in that one file would have left this door promising 200MB,
+         *   which is the drift the shared module exists to stop.
+         *
+         *   Asked of the FILE'S TYPE rather than the submitted category, like
+         *   every other door: a category is a label the client chose, and the
+         *   allow-list below is what reconciles the two. This also picks up the
+         *   MAX_VIDEO_UPLOAD_SIZE_MB / MAX_UPLOAD_SIZE_MB overrides, which the
+         *   hardcoded pair could not.
+         */
+        const maxSize = uploadSizeLimitBytes(file.type);
         if (file.size > maxSize) { return { success: false as const, error: `File too large. Max size: ${maxSize / (1024 * 1024)}MB`
             };
         }

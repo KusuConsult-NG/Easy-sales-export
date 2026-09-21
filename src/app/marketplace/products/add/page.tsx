@@ -18,6 +18,9 @@ import { logger } from "@/lib/logger";
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
 import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
+//   The number the server actually enforces, not a second copy of it — the
+//   hardcoded "200MB" here outlived the server's 200MB by one commit.
+import { DEFAULT_MAX_VIDEO_UPLOAD_MB } from "@/lib/upload-limits";
 
 const CATEGORY_TITLES: Record<string, string[]> = {
     grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
@@ -740,7 +743,7 @@ export default function AddProductPage() {
                                                 <p className="text-sm font-semibold text-slate-900 mb-1">
                                                     Click to upload video
                                                 </p>
-                                                <p className="text-xs text-slate-500">MP4, MOV (max 200MB)</p>
+                                                <p className="text-xs text-slate-500">MP4, MOV (max {DEFAULT_MAX_VIDEO_UPLOAD_MB}MB)</p>
                                                 <input
                                                     type="file"
                                                     accept="video/*"

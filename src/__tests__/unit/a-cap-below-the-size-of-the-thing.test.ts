@@ -65,18 +65,40 @@ async function limitFor(type?: string): Promise<number> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('video is allowed more than a document', () => {
-    it('A VIDEO MAY BE 200MB — the defect', async () => {
-        //   THE test. 120MB is an ordinary lesson recording and was refused.
-        expect(await limitFor('video/mp4')).toBe(200 * MB);
-        expect(120 * MB).toBeLessThan(await limitFor('video/mp4'));
+    it('A VIDEO MAY BE 100MB — the defect', async () => {
+        //   THE test. An ordinary lesson recording was refused at 50MB, and
+        //   80MB is one; it is accepted, and it is well clear of the 50MB a
+        //   document still gets.
+        expect(await limitFor('video/mp4')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
+        expect(80 * MB).toBeLessThan(await limitFor('video/mp4'));
+        expect(await limitFor('application/pdf')).toBeLessThan(await limitFor('video/mp4'));
+    });
+
+    it('AND 120MB IS REFUSED HERE RATHER THAN BY CLOUDINARY', async () => {
+        /*
+         *   This assertion used to say the opposite, and it was right at the
+         *   time: 120MB is an ordinary recording and a 50MB cap refused it.
+         *
+         *   What changed is not the appetite for large video, it is the
+         *   discovery that the ceiling was above what the storage backend
+         *   accepts. Cloudinary refuses a single upload over 100MB on this
+         *   account's plan, so a 120MB file passed every check here, uploaded
+         *   COMPLETELY, and died at the far end with "File size too large. Got
+         *   125829120. Maximum is 104857600."
+         *
+         *   Refusing it here costs the person nothing. Refusing it there costs
+         *   them the whole upload. That is the only difference, and it is the
+         *   entire reason for the number.
+         */
+        expect(120 * MB).toBeGreaterThan(await limitFor('video/mp4'));
     });
 
     it('AND SO MAY THE OTHER TWO VIDEO TYPES THIS PLATFORM ACCEPTS', async () => {
         //   storage-admin's own EXTENSION_FOR_TYPE lists three. A rule written
         //   against "video/mp4" alone would leave .mov — what a phone records —
         //   on the old ceiling.
-        expect(await limitFor('video/quicktime')).toBe(200 * MB);
-        expect(await limitFor('video/webm')).toBe(200 * MB);
+        expect(await limitFor('video/quicktime')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
+        expect(await limitFor('video/webm')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
     });
 
     it('AND A DOCUMENT IS STILL 50MB, which is the part that must not move', async () => {
@@ -121,20 +143,20 @@ describe('the limit is configurable, per kind', () => {
         //   Two knobs, two answers. A deployment tightening documents to 5MB
         //   has not said anything about video.
         process.env.MAX_UPLOAD_SIZE_MB = '5';
-        expect(await limitFor('video/mp4')).toBe(200 * MB);
+        expect(await limitFor('video/mp4')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
     });
 
     it('AN UNREADABLE OVERRIDE FALLS BACK rather than disarming the ceiling', async () => {
         //   #350's lesson. parseInt("abc") is NaN, and a NaN ceiling compares
         //   false against every size — a limit that refuses nothing.
         process.env.MAX_VIDEO_UPLOAD_SIZE_MB = 'abc';
-        expect(await limitFor('video/mp4')).toBe(200 * MB);
+        expect(await limitFor('video/mp4')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
 
         process.env.MAX_VIDEO_UPLOAD_SIZE_MB = '0';
-        expect(await limitFor('video/mp4')).toBe(200 * MB);
+        expect(await limitFor('video/mp4')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
 
         process.env.MAX_VIDEO_UPLOAD_SIZE_MB = '-1';
-        expect(await limitFor('video/mp4')).toBe(200 * MB);
+        expect(await limitFor('video/mp4')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
     });
 });
 
@@ -185,7 +207,12 @@ describe('and the browser agrees with the server about what it will take', () =>
         //   and the file-type sniffer, which are server code — so the numbers
         //   live in a client-safe module and BOTH sides read them.
         expect(DEFAULT_MAX_UPLOAD_MB).toBe(50);
-        expect(DEFAULT_MAX_VIDEO_UPLOAD_MB).toBe(200);
+        //   PINNED TO CLOUDINARY'S OWN CEILING, not to a preference. 200
+        //   here let a 150MB video upload completely and be refused by the
+        //   storage backend at the far end — the person waits out the whole
+        //   upload and loses it. Raise this only with the storage plan, and
+        //   check the plan's figure first.
+        expect(DEFAULT_MAX_VIDEO_UPLOAD_MB).toBe(100);
         expect(defaultLimitMbFor('video/mp4')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB);
         expect(defaultLimitMbFor('application/pdf')).toBe(DEFAULT_MAX_UPLOAD_MB);
     });
@@ -227,9 +254,9 @@ describe('and the browser agrees with the server about what it will take', () =>
  *
  *   MUTANT                                    DEAD  FIRST TO FAIL
  *   ───────────────────────────────────────── ────  ──────────────────────────
- *   video ceiling back to 50 — the defect       4   "A VIDEO MAY BE 200MB"
+ *   video ceiling back to 50 — the defect       4   "A VIDEO MAY BE 100MB"
  *
- *   every type gets 200MB                       2   "AND A DOCUMENT IS STILL
+ *   every type gets the video ceiling           2   "AND A DOCUMENT IS STILL
  *                                                   50MB"
  *
  *   isVideoType matches the filename instead    1   "and 'video' is asked of

@@ -90,7 +90,7 @@ export default function MasterUploader({
     folder,
     moduleId,
     accept = "image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    maxSize, // Omitted: 50MB, or 200MB for video — see the note in handleFileChange
+    maxSize, // Omitted: the platform default for the chosen file — see handleFileChange
     onComplete,
     onError,
     required = false,
@@ -135,8 +135,9 @@ export default function MasterUploader({
          *   thing this uploader is most used for — so a course recording over
          *   50MB was refused IN THE BROWSER, before a request was made, with
          *   "File size must be less than 50MB". The server had meanwhile been
-         *   taught that video gets 200MB, which the person never got to find
-         *   out.
+         *   taught that video gets a larger allowance, which the person never
+         *   got to find out. Both sides read lib/upload-limits now, so neither
+         *   number can be restated here and drift.
          *
          *   A caller that passes maxSize still wins: several pass 5, and a
          *   screen that knows its own rule keeps it. Omitted, the limit is the
