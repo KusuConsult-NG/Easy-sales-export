@@ -27,6 +27,7 @@ import {
 } from "@/lib/land-listing-status";
 import { inspectionRefusal } from "@/lib/land-inspection";
 import { priceReductionPatch } from "@/lib/price-reduction";
+import { requiresReverification } from "@/lib/land-reverification";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -480,7 +481,30 @@ async function _updateLandListing(
              */
             ...(priceReductionPatch(listingData.price, updateData.price) ?? {}),
             updatedAt: FieldValue.serverTimestamp(),
-            status: 'pending_verification' 
+            /*
+             *   BACK FOR REVIEW ONLY IF THE PARCEL CHANGED — see
+             *   lib/land-reverification for the whole argument.
+             *
+             *   This was `status: 'pending_verification'`, unconditionally, and
+             *   pending_verification is not in PUBLIC_LAND_STATUSES. So every
+             *   owner edit took the listing off the properties list, the map,
+             *   the detail page and Hot Deals — a corrected typo pulled a
+             *   verified parcel off the market until an admin re-approved it,
+             *   and nothing on the edit screen said so.
+             *
+             *   THE LINE ABOVE IS THE PROOF IT WAS WRONG. priceReductionPatch
+             *   is #867, raising a Hot Deal when an owner cuts the price; the
+             *   next line then hid the listing from Hot Deals. The feature
+             *   could not fire once. Two adjacent lines, contradicting.
+             *
+             *   Spread, so an edit that changes nothing verifiable leaves the
+             *   status field untouched rather than writing back the value it
+             *   already had — a listing mid-way through some other transition
+             *   must not be rewritten by an unrelated description edit.
+             */
+            ...(requiresReverification(listingData, validated)
+                ? { status: 'pending_verification' }
+                : {}),
         });
 
         // Audit log
