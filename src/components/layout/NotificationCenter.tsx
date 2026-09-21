@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Menu, Transition } from "@headlessui/react";
+import { Menu, Transition, Portal } from "@headlessui/react";
 import { Fragment } from "react";
 import { Bell, BellDot, Package, DollarSign, GraduationCap, Users, Wallet, TrendingUp, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -23,6 +23,29 @@ export default function NotificationCenter() {
     const { data: session } = useSession();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    /**
+     *   #!! THE PANEL OPENED AND WAS NEVER VISIBLE.
+     *
+     *   The owner's words: "when there is a notification and a user clicks on
+     *   it, it is always hidden under the hero section of the dashboard".
+     *
+     *   It is not a z-index problem, which is why raising z-50 would not have
+     *   helped. ClientLayout wraps the whole shell in
+     *
+     *       <div className="flex h-screen overflow-hidden">
+     *
+     *   and the panel is an ABSOLUTE child whose containing block sits inside
+     *   that. `overflow: hidden` CLIPS a descendant regardless of its stacking
+     *   order — so a 384px-wide panel hanging off a ~272px sidebar column was
+     *   cut off at the column edge, and what remained was painted under the
+     *   content beside it.
+     *
+     *   A portal takes the panel out of that subtree entirely, so nothing
+     *   upstream can clip it. Its position is then measured from the button,
+     *   because a portalled element has no layout relationship to its trigger.
+     */
+    const anchorRef = useRef<HTMLDivElement | null>(null);
+    const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
     const [loading, setLoading] = useState(true);
     /** #416 — the last poll could not be read. Distinct from "there are none". */
     const [loadFailed, setLoadFailed] = useState(false);
@@ -245,12 +268,31 @@ export default function NotificationCenter() {
     }
 
     return (
-        <Menu as="div" className="relative">
+        <Menu as="div" className="relative" ref={anchorRef}>
             {({ open }) => (
                 <>
                     <Menu.Button
                         className="relative p-2 rounded-xl hover:bg-slate-100 transition-colors"
-                        onClick={() => setIsOpen(!isOpen)}
+                        onClick={() => {
+                            //   Measured on the way open, from the trigger, because
+                            //   the panel is portalled out of this subtree and has no
+                            //   layout relationship to the button any more.
+                            const rect = anchorRef.current?.getBoundingClientRect();
+                            if (rect) {
+                                const PANEL = 384; // w-96
+                                const GUTTER = 8;
+                                //   Clamped so it never hangs off the right edge on a
+                                //   narrow window — the panel is wider than the sidebar
+                                //   it opens from, which is the whole reason it used to
+                                //   be clipped.
+                                const left = Math.max(
+                                    GUTTER,
+                                    Math.min(rect.left, window.innerWidth - PANEL - GUTTER),
+                                );
+                                setAnchor({ top: rect.bottom + GUTTER, left });
+                            }
+                            setIsOpen(!isOpen);
+                        }}
                     >
                         {unreadCount > 0 ? (
                             <>
@@ -264,6 +306,9 @@ export default function NotificationCenter() {
                         )}
                     </Menu.Button>
 
+                    {/*   PORTALLED, so no ancestor's overflow can clip it. See the
+                          note on `anchor` above for what was actually wrong. */}
+                    <Portal>
                     <Transition
                         as={Fragment}
                         show={open}
@@ -274,7 +319,21 @@ export default function NotificationCenter() {
                         leaveFrom="transform opacity-100 scale-100"
                         leaveTo="transform opacity-0 scale-95"
                     >
-                        <Menu.Items className="absolute left-0 mt-2 w-96 max-w-[calc(100vw-2rem)] origin-top-left rounded-2xl bg-white shadow-xl ring-1 ring-black/5 focus:outline-none z-50">
+                        <Menu.Items
+                            //   FIXED, not absolute: a portalled panel is positioned
+                            //   against the viewport, and `fixed` is also what keeps it
+                            //   out of every scrolling ancestor it used to be trapped in.
+                            //
+                            //   AND STILL z-50. The first draft of this fix raised it to
+                            //   z-[100], and #883's test caught that: capping
+                            //   `.leaflet-container` to z-index 0 was chosen precisely so
+                            //   "nothing else had to move", and a bigger number here would
+                            //   start the arms race that decision avoided. The bug was
+                            //   never stacking — it was CLIPPING — so the portal alone is
+                            //   the fix and the ordinary z-50 is left exactly as it was.
+                            style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
+                            className="fixed w-96 max-w-[calc(100vw-1rem)] origin-top-left rounded-2xl bg-white shadow-xl ring-1 ring-black/5 focus:outline-none z-50"
+                        >
                             {/* Header */}
                             <div className="px-6 py-4 border-b border-slate-200">
                                 <div className="flex items-center justify-between">
@@ -389,6 +448,7 @@ export default function NotificationCenter() {
                             )}
                         </Menu.Items>
                     </Transition>
+                    </Portal>
                 </>
             )}
         </Menu>
