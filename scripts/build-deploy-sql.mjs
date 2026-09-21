@@ -398,6 +398,23 @@ const EXPECTED = [
              "follows. Applying it moves nothing; it is only callable " +
              "deliberately.",
     },
+    {
+        n: "047",
+        why: "the two `users` scans that time out. 044 and 045 fixed the " +
+             "rollup; these are the other two 57014s. searchUserIdsByQuery " +
+             "fires up to SEVENTEEN queries per admin search, TWELVE of them " +
+             "name prefix ranges across fullName/firstName/lastName — none of " +
+             "which is a native column and none of which had an index, while " +
+             "036 had indexed the phone half of the same helper. The GDPR " +
+             "purge filters deletedAt <= threshold AND gdprPurgedAt IS NULL, " +
+             "both inside raw_data, neither indexed. Measured at 40k rows, " +
+             "54 MB: name prefix 8,635 buffers -> 32 (270x), purge 6,667 -> " +
+             "11 (600x). The purge index is PARTIAL on being soft-deleted, " +
+             "because nearly every row has a null gdprPurgedAt and indexing " +
+             "that alone would cover the table — 16 kB against 1,248 kB for " +
+             "each name index. Order does not matter: four indexes, no table " +
+             "rewritten, no row touched, every statement IF NOT EXISTS.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

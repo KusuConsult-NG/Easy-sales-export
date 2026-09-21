@@ -129,6 +129,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         type: "marketplace_order",
         source: "webhook",
         metadata: { orderId: orderData.orderId || orderDoc.id },
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -521,6 +522,7 @@ export async function processExportInvestment(reference: string, amount: number,
         source: "webhook",
         status: "pending_fulfilment",
         metadata: { exportId },
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -774,6 +776,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
         amount,
         type: "cooperative_membership_registration",
         source: "webhook",
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -1058,6 +1061,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
         amount,
         type: "academy_registration",
         source: "webhook",
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -1193,6 +1197,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
         amount,
         type: "farmnation_registration",
         source: "webhook",
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -1283,6 +1288,7 @@ export async function processWaveRegistration(reference: string, amount: number,
         amount,
         type: "wave_registration",
         source: "webhook",
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -1384,6 +1390,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         // filed under two names depending on which path wins the race.
         type: CLAIM_TYPE.COOPERATIVE_CONTRIBUTION,
         source: "webhook",
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -1618,6 +1625,7 @@ export async function processExportBuyerOrder(reference: string, amount: number,
         type: "export_buyer_order",
         source: "webhook",
         metadata: { orderId: order.data.orderId || order.docId },
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -1693,6 +1701,7 @@ export async function processPropertyPurchase(
         type: "farm_nation_escrow",
         source: "webhook",
         metadata: { propertyId },
+        paidAt
     });
 
     if (!claim.claimed) {
@@ -1799,6 +1808,7 @@ export async function processAcademyCoursePurchase(
         type: "academy_enrollment",
         source: "webhook",
         metadata: { courseId },
+        paidAt
     });
 
     /*

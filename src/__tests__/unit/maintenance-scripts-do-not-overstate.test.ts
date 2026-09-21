@@ -70,6 +70,15 @@ function read(rel: string): string {
 /** Every maintenance script that writes to the database. */
 const WRITING_SCRIPTS = [
     'scripts/backfill-academy-enrolled-count.ts',
+    //   Diffs processed_payments against the Paystack transaction list in both
+    //   directions. The ONLY thing --apply writes is raw_data.paidAt on rows
+    //   that already matched a transaction: additive, idempotent, no row
+    //   created and none deleted. The two faults it cannot repair by itself —
+    //   money Paystack has that the ledger does not, and a row Paystack has
+    //   never heard of — are reported for a human, because creating one means
+    //   deciding what the payer bought and deleting one revokes whatever was
+    //   fulfilled against it.
+    'scripts/reconcile-paystack-ledger.ts',
     //   #489 — fills the email on the 49 profiles two admin approvals minted
     //   with `email: ""`, from each profile's OWN auth record. It writes one
     //   field, never overwrites one that is set, and refuses rather than invent

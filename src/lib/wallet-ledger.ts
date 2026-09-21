@@ -25,6 +25,7 @@
  */
 
 import { supabaseAdmin } from "@/lib/supabase";
+import { settlementMetadata } from "@/lib/payment-settlement";
 import { logger } from "@/lib/logger";
 
 export interface CreditResult {
@@ -319,8 +320,24 @@ export async function claimPaymentOnce(params: {
     metadata?: Record<string, any>;
     /** Anything that is not money in must not be "completed" — see creditWalletOnce. */
     status?: string;
+    /**
+     * WHEN THE MONEY MOVED, as the processor reports it — Paystack's `paid_at`.
+     *
+     *   Without this a ledger row's only date is `created_at`, the moment the
+     *   INSERT ran, which equals settlement only for a webhook processed live.
+     *   A backfill stamps every row it writes with the date of the backfill:
+     *   five Academy payments spanning February to May all read 2026-07-06.
+     *
+     *   Every process*() already takes `paidAt` and writes it to the user
+     *   document and the application. Only the ledger row went without.
+     *
+     *   Folded into the row's raw_data, which 009_claim_payment_once.sql
+     *   preserves for any key its overlay does not name — so no migration and
+     *   no signature change to the RPC. See lib/payment-settlement.
+     */
+    paidAt?: Date | string | number | null;
 }): Promise<ClaimResult> {
-    const { reference, userId, amount, type, source, metadata, status } = params;
+    const { reference, userId, amount, type, source, metadata, status, paidAt } = params;
 
     if (!reference) throw new Error("claimPaymentOnce: reference is required");
 
@@ -330,7 +347,9 @@ export async function claimPaymentOnce(params: {
         p_amount: amount ?? null,
         p_type: type ?? null,
         p_source: source ?? null,
-        p_raw_data: metadata ?? {},
+        //   Settlement date LAST so an explicit `paidAt` wins over a stale one
+        //   a caller happened to leave in its metadata bag.
+        p_raw_data: { ...(metadata ?? {}), ...settlementMetadata(paidAt) },
         p_status: status ?? "completed",
     });
 
