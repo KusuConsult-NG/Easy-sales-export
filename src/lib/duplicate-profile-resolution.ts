@@ -65,6 +65,15 @@ export interface DuplicateCandidate {
     fullName: string;
     /** True when this row is the one every existing reader would already pick. */
     recommended: boolean;
+    /**
+     * Naira sitting in the wallet filed under exactly this id — #806.
+     *
+     * Shown because it DECIDES the group. Superseding a funded row strands the
+     * money, so the operator needs the figure before they choose, not after the
+     * server refuses them. Zero for the overwhelming majority: 272 superseded
+     * profiles carry a wallet row and every one was measured at zero.
+     */
+    walletBalance: number;
 }
 
 export type GroupState =
@@ -275,6 +284,17 @@ export function describeGroup(
     email: string,
     maskedEmail: string,
     rows: { id: string; data: Record<string, unknown> }[],
+    /**
+     *   #806 — balances by id, read by the caller.
+     *
+     *   A PARAMETER RATHER THAN A READ, because this function is pure and
+     *   synchronous and every other value on a candidate is derivable from the
+     *   rows it was handed. Defaulting to zero is safe in the one direction
+     *   that matters: a caller that does not supply balances cannot be shown a
+     *   figure that is wrong, only one that is absent — and the SERVER's
+     *   refusal reads the wallets itself rather than trusting this.
+     */
+    balances: Record<string, number> = {},
 ): DuplicateGroup {
     const ranked = rankCandidates(rows);
     const best = ranked[0];
@@ -294,6 +314,7 @@ export function describeGroup(
                 ?? [str(d.firstName), str(d.lastName)].filter(Boolean).join(" ")
                 ?? "",
             recommended: id === best,
+            walletBalance: balances[id] ?? 0,
         };
     });
 
