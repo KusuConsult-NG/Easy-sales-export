@@ -13,6 +13,7 @@ import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFai
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { checkAcademyPayment } from "@/lib/academy-plan";
 import { checkCooperativeRegistrationPayment } from "@/lib/cooperative-limits";
+import { normaliseMembershipTier } from "@/lib/cooperative-tiers";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import { membershipRefForPayment } from "@/lib/cooperative-member-lookup";
@@ -705,7 +706,9 @@ export async function processExportInvestment(reference: string, amount: number,
  * Handle Cooperative Membership Registration Fulfillment
  */
 export async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string, membershipId?: string, paidAt?: Date) {
-    const normalisedTier = "Member";
+    //   #809 — through the shared rule. This path was already correct; a
+    //   correct copy is still a copy, and the two heal paths drifted from it.
+    const normalisedTier = normaliseMembershipTier(tier);
 
     // The shared rule, so the three registration paths cannot drift — and so
     // an amount that could not be read is refused rather than waved through.

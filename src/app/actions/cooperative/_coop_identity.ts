@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { normaliseMembershipTier } from "@/lib/cooperative-tiers";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
@@ -169,7 +170,10 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                         paymentStatus: "completed",
                         paymentReference,
                         membershipStatus: "pending",
-                        membershipTier: paymentData.tier || "Member",
+                        //   #809 — the PAYMENT's tier is the retired fee band
+                        //   (`tier1`), not a membership tier. The webhook already
+                        //   normalises; this heal path did not.
+                        membershipTier: normaliseMembershipTier(paymentData.tier),
                         createdAt: paymentData.processedAt || FieldValue.serverTimestamp(),
                         updatedAt: FieldValue.serverTimestamp(),
                         _healedFromPayment: true,
@@ -255,7 +259,9 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 documents: { passportPhoto: { url: userData?.passportPhotoUrl || userData?.photoUrl || null } },
                 membershipStatus: "active",
                 paymentStatus: "completed",
-                membershipTier: userPlan.charAt(0).toUpperCase() + userPlan.slice(1)
+                //   #809 — capitalising a PLAN name produced "Premium" and
+                //   "Tier1" in a field whose only value is "Member".
+                membershipTier: normaliseMembershipTier(userPlan)
             };
         }
 
