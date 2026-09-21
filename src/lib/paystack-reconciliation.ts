@@ -9,10 +9,23 @@
  *        ₦50,000 on 2026-04-03 against reference `j559i4zu6j`. There is no row.
  *        The platform took her money and never wrote it down.
  *
- *     2. A ROW PAYSTACK HAS NEVER HEARD OF. `TEST_E2E_REF_123456`, ₦50,000,
- *        type `academy_registration` — the exact output of the isTestRef mock
- *        removed in cc50b3b8, written when the e2e suite ran against
- *        production as a real user.
+ *     2. ROWS PAYSTACK HAS NEVER HEARD OF. The live sweep found THREE, all
+ *        ₦50,000 `academy_registration`, all written on 2026-07-10 while the
+ *        isTestRef mock removed in cc50b3b8 was still fabricating successes
+ *        and the e2e suite was pointed at production:
+ *
+ *            TEST_E2E_REF_123456   academyuser02@gmail.com
+ *            T1783690499905        e2e.user@easysalesexport.com
+ *            T1783698149704        e2e.user@easysalesexport.com
+ *
+ *        THE LAST TWO ARE WHY THE T-FORM IS NOT ACTUALLY AMBIGUOUS. The mock
+ *        matched `reference.startsWith('T')`, and Paystack really does issue
+ *        T-references — but its are T + FIFTEEN digits, and these are T +
+ *        THIRTEEN: a JavaScript `Date.now()`, minted by
+ *        tests/e2e/financial-workflow.spec.ts. Decoded, they give 13:34:59
+ *        and 15:42:29 against created_at of 13:35 and 15:42. A reference that
+ *        encodes the moment OUR INSERT ran cannot have come from Paystack, so
+ *        this is a proof of provenance rather than a guess about shape.
  *
  *     3. ROWS WHOSE DATES DISAGREE. Five references spanning February to May
  *        all stamped 2026-07-06, because a ledger row never carried a
