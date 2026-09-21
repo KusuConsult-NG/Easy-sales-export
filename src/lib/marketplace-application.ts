@@ -88,6 +88,27 @@ export function productStatusLabel(value: unknown): string {
 export const ACCOUNT_TYPES = ["buyer", "seller", "both"] as const;
 export const BUSINESS_TYPES = ["individual", "cooperative", "company"] as const;
 
+/**
+ * What the Business Type row shows when nothing has been chosen.
+ *
+ *   THE DEFAULT IS THE FORM'S, NOT THE RULE'S, and that distinction cost a CI
+ *   run. The step renders `businessType || "individual"`, so the screen shows
+ *   Individual highlighted from the moment it opens — but `formData.businessType`
+ *   stays undefined until somebody actually clicks a button. The Zod schema this
+ *   rule replaced carried `.default("individual")`, which quietly papered over
+ *   that; the rule does not, so a member who accepted the default was refused at
+ *   submit with "Please select a business type" while the screen showed one
+ *   selected. Nothing on it could be corrected, because nothing was wrong.
+ *
+ *   The rule STILL has no default — a request that reaches the server without a
+ *   business type is refused, which is the check worth keeping. What changed is
+ *   that the form now applies this constant everywhere it speaks: to draw the
+ *   row, to validate the step, to build the submission, and to build the object
+ *   the guard reads. One spelling, so the display and the payload cannot
+ *   disagree again.
+ */
+export const DEFAULT_BUSINESS_TYPE: (typeof BUSINESS_TYPES)[number] = "individual";
+
 // ─────────────────────────────────────────────────────────────────────────────
 //   THE APPLICATION
 

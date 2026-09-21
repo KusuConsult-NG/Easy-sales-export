@@ -10,6 +10,7 @@ import { useState } from "react";
 import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 import {
     BUSINESS_STATUSES,
+    DEFAULT_BUSINESS_TYPE,
     businessStatusLabel,
     missingForStep,
     type BusinessStatus,
@@ -46,7 +47,10 @@ interface BusinessProfileStepProps {
 
 export default function BusinessProfileStep({ data, onChange, onNext, onBack }: BusinessProfileStepProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const businessType = data?.businessType || "individual";
+    //   What the row below draws as selected when nothing has been chosen —
+    //   shared, because the submission has to say the same thing. See
+    //   lib/marketplace-application.
+    const businessType = data?.businessType || DEFAULT_BUSINESS_TYPE;
 
     /*
      *   THE SAME RULE THE SUBMIT GUARD AND THE SERVER USE.

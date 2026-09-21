@@ -49,6 +49,7 @@ import type { SellerCategory } from "@/lib/seller-category";
  *   lib/marketplace-application.
  */
 import {
+    DEFAULT_BUSINESS_TYPE,
     missingApplicationFields,
     type BusinessStatus,
     type MarketplaceApplication,
@@ -352,7 +353,28 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
          *   to a step comes WITH each missing answer rather than being
          *   reconstructed from an error path here.
          */
-        const missing = missingApplicationFields(formData as MarketplaceApplication);
+        /*
+         *   ── THE GUARD CHECKS WHAT IS ACTUALLY SENT ─────────────────────────
+         *
+         *   It read `formData` directly, and the payload below applied
+         *   `|| "individual"` to the business type — so the two were different
+         *   objects and the guard refused a submission the server would have
+         *   accepted. CI caught it: a buyer who never clicked a business type,
+         *   which is everyone who accepts the one the screen already shows
+         *   selected, got "Please select a business type" pointing at a row with
+         *   a selection on it.
+         *
+         *   That is the SAME defect this whole change is about — three places
+         *   asking one question and disagreeing — reintroduced one layer up
+         *   while fixing it. So there is one object now, built here, checked
+         *   here, and sent below.
+         */
+        const application: MarketplaceApplication = {
+            ...formData,
+            businessType: formData.businessType || DEFAULT_BUSINESS_TYPE,
+        };
+
+        const missing = missingApplicationFields(application);
         if (missing.length > 0) {
             const first = missing[0];
             setCurrentStep(first.step);
@@ -396,7 +418,9 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
             formDataPayload.append("accountType", formData.accountType!);
             if (formData.sellerCategory) formDataPayload.append("sellerCategory", formData.sellerCategory);
             formDataPayload.append("businessName", formData.businessName || "");
-            formDataPayload.append("businessType", formData.businessType || "individual");
+            //   The object the guard above checked, not a second reading of
+            //   `formData` — that divergence is what it was refusing.
+            formDataPayload.append("businessType", String(application.businessType));
             //   The owner's two status fields, and the acceptance the server had
             //   no record of. All three are applied by the SAME rule on the far
             //   side — see lib/marketplace-application.
@@ -479,7 +503,7 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                     <BusinessProfileStep
                         data={{
                             businessName: formData.businessName || "",
-                            businessType: formData.businessType || "individual",
+                            businessType: formData.businessType || DEFAULT_BUSINESS_TYPE,
                             businessStatus: formData.businessStatus,
                             phone: formData.phone || "",
                             location: formData.location || { state: "", lga: "", address: "" }

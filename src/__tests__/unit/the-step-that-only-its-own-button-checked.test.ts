@@ -61,6 +61,7 @@ import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import {
     BUSINESS_STATUSES,
+    DEFAULT_BUSINESS_TYPE,
     PRODUCT_STATUSES,
     businessStatusLabel,
     productStatusLabel,
@@ -160,6 +161,84 @@ describe('the rule refuses an application that skipped a question', () => {
         const empty = missingApplicationFields({});
         expect(empty[0].field).toBe('accountType');
         expect(empty.map((m) => m.step)).toEqual([...empty.map((m) => m.step)].sort((a, b) => a - b));
+    });
+
+    it('AND A MEMBER WHO ACCEPTED THE BUSINESS TYPE ON SCREEN IS NOT REFUSED', () => {
+        /*
+         *   A DEFECT I SHIPPED TO CI AND THIS PINS.
+         *
+         *   The Business Type row renders `businessType || "individual"`, so
+         *   Individual shows selected the moment the step opens — but
+         *   `formData.businessType` stays undefined until somebody clicks. The
+         *   Zod schema this rule replaced carried `.default("individual")` and
+         *   papered over it; the rule does not.
+         *
+         *   So the submit guard refused every member who accepted the default —
+         *   "Please select a business type", pointing at a row with a selection
+         *   on it, and nothing they could correct. The e2e buyer journey failed
+         *   on exactly that, one step from the end.
+         *
+         *   THE RULE IS STILL STRICT, deliberately: a request that arrives with
+         *   no business type is refused, which is the check worth keeping. What
+         *   the fix changed is that the FORM applies its own default before
+         *   asking — the same constant it draws the row with.
+         */
+        const accepted = { ...complete(), businessType: DEFAULT_BUSINESS_TYPE };
+        expect(missingApplicationFields(accepted)).toEqual([]);
+
+        //   And the guard is handed that object, rather than reading the raw
+        //   state a second time. Asserted on the client, because the divergence
+        //   was between two readings in one function.
+        const client = code('src/app/marketplace/onboarding/MarketplaceOnboardingClient.tsx');
+        expect(client).toContain('businessType: formData.businessType || DEFAULT_BUSINESS_TYPE');
+        expect(client).toContain('missingApplicationFields(application)');
+        //   The payload sends the checked object, not a third reading.
+        expect(client).not.toContain('formData.businessType || "individual"');
+    });
+
+    it('AND THE E2E BUYER JOURNEY, FIELD FOR FIELD, IS ACCEPTED', () => {
+        /*
+         *   The submission tests/e2e/onboarding-flow.spec.ts actually builds,
+         *   reproduced here because the e2e suite needs a Docker-backed Supabase
+         *   this container cannot start — so this is the closest I can get to
+         *   re-running the job that failed.
+         *
+         *   Every value below is the one the spec types, and `businessType` is
+         *   ABSENT exactly as it is there: the spec never clicks that row,
+         *   because the screen already shows Individual selected. That is what
+         *   failed, one step from the end, with the page still on
+         *   /marketplace/onboarding.
+         */
+        const typedByTheSpec = {
+            accountType: 'buyer',
+            businessName: 'Test Buyer Business',
+            businessStatus: 'registered',
+            phone: '08012345678',
+            location: { state: 'Lagos', lga: 'Ikeja', address: '123 Test Street, Ikeja' },
+            buyerInterests: ['Grains & Cereals', 'Roots & Tubers'],
+            termsAccepted: true,
+        };
+
+        //   What the guard now checks: the form's own default applied first.
+        const application = {
+            ...typedByTheSpec,
+            businessType: (typedByTheSpec as { businessType?: string }).businessType
+                || DEFAULT_BUSINESS_TYPE,
+        };
+
+        expect(missingApplicationFields(application)).toEqual([]);
+
+        //   And the failure it had, so this is not vacuous.
+        expect(fieldsMissingFrom(typedByTheSpec)).toEqual(['businessType']);
+    });
+
+    it('AND THE RULE ITSELF STILL HAS NO DEFAULT — the half that must not move', () => {
+        //   Fixing the above by defaulting inside the rule would have made the
+        //   server accept a crafted submission carrying no business type at
+        //   all, which is the opposite of what this rule is for.
+        expect(fieldsMissingFrom(without('businessType'))).toContain('businessType');
+        expect(fieldsMissingFrom({ ...complete(), businessType: 'farming' }))
+            .toContain('businessType');
     });
 
     it('and a step sees only its own questions', () => {
