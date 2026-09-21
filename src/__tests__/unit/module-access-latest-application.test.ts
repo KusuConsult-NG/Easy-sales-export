@@ -77,6 +77,20 @@ const seedRejectedMember = (regKey: string) => {
  * arbitrary pick landed on the right row by luck. A fixture that makes the bug
  * invisible is worse than no fixture.
  */
+/**
+ * An application, seeded as PAID.
+ *
+ *   `paymentStatus` is here because Academy is gated on payment now — the owner
+ *   asked for it after finding that an approved application alone opened the
+ *   module. These cases are parameterised over academy, wave and export, and
+ *   what they are about is WHICH application wins when several exist, not
+ *   whether it was paid for. Seeding it settled keeps them about that; the
+ *   payment gate itself is pinned in
+ *   an-approved-academy-place-nobody-paid-for.test.ts.
+ *
+ *   Inert for wave and export, which have no payment gate — so one spelling
+ *   serves all three rather than a branch per module inside the fixture.
+ */
 const seedApp = (
     collection: string,
     id: string,
@@ -85,7 +99,9 @@ const seedApp = (
     extra: Record<string, unknown> = {},
 ) => {
     store.seed(collection, id, {
-        userId: MEMBER, status, submittedAt, createdAt: submittedAt, ...extra,
+        userId: MEMBER, status, submittedAt, createdAt: submittedAt,
+        paymentStatus: 'completed',
+        ...extra,
     });
 };
 
@@ -225,20 +241,59 @@ describe('#227 — the choice is deterministic', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('the layers above the fallback are untouched', () => {
+    /*
+     *   THESE TWO USED TO ASK ACADEMY, AND NOW ASK WAVE.
+     *
+     *   Their property is that #227/#228's work on the FALLBACK layer left
+     *   Layers 1 and 2 alone, and that is still worth holding. Academy simply
+     *   stopped being the module that can demonstrate it: the owner asked for
+     *   it to be gated on payment, so neither a JWT role nor an approved
+     *   registration is sufficient there any more. Asking it here would pin the
+     *   defect rather than the property.
+     *
+     *   WAVE has no payment gate and exercises the identical code path, so the
+     *   guard survives intact — and the academy case below states the new rule
+     *   in the same breath, so the change is visible from here rather than only
+     *   from the file that made it.
+     */
     it('Layer 1 still grants on the JWT role alone', async () => {
-        store.seed(USERS, MEMBER, { email: 'member@e.com', roles: ['academy_participant'] });
+        store.seed(USERS, MEMBER, { email: 'member@e.com', roles: ['wave_participant'] });
 
-        expect(await (await access()).checkModuleAccess(MEMBER, ['academy_participant'] as never, 'academy' as never))
+        expect(await (await access()).checkModuleAccess(MEMBER, ['wave_participant'] as never, 'wave' as never))
             .toBe(true);
     });
 
     it('Layer 2 still grants on an approved registration', async () => {
         store.seed(USERS, MEMBER, {
             email: 'member@e.com', roles: ['general_user'],
+            serviceRegistrations: { wave: { status: 'approved' } },
+        });
+
+        expect(await (await access()).checkModuleAccess(MEMBER, ['general_user'], 'wave' as never))
+            .toBe(true);
+    });
+
+    it('AND ACADEMY IS THE EXCEPTION, at both of those layers', async () => {
+        //   The new rule, stated where the old one was. Neither the role nor
+        //   the approved registration opens Academy without a settled payment —
+        //   which matters because those two fields are exactly what the unpaid
+        //   enrolment defect wrote. See
+        //   an-approved-academy-place-nobody-paid-for.test.ts.
+        store.seed(USERS, MEMBER, {
+            email: 'member@e.com', roles: ['academy_participant'],
             serviceRegistrations: { academy: { status: 'approved' } },
         });
 
-        expect(await (await access()).checkModuleAccess(MEMBER, ['general_user'], 'academy' as never))
+        expect(await (await access()).checkModuleAccess(MEMBER, ['academy_participant'] as never, 'academy' as never))
+            .toBe(false);
+
+        //   And settles the moment the payment is on the record.
+        store.seed(USERS, MEMBER, {
+            email: 'member@e.com', roles: ['academy_participant'],
+            serviceRegistrations: { academy: { status: 'approved', paymentStatus: 'completed' } },
+        });
+
+        expect(await (await access()).checkModuleAccess(MEMBER, ['academy_participant'] as never, 'academy' as never))
             .toBe(true);
     });
 

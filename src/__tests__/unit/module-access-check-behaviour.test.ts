@@ -464,9 +464,25 @@ describe('Layer 2.6 — a cooperative membership record found by query', () => {
 // ─── Layers 2.7 to 2.11 ──────────────────────────────────────────────────────
 
 describe('Layer 2.7 — an approved academy application', () => {
+    /*
+     *   `paymentStatus` APPEARS IN THESE FIXTURES NOW, and it is a behaviour
+     *   change rather than a test repair.
+     *
+     *   THE OWNER: "Academy is gated but it is granting permission to users
+     *   even before they make the payment" — then, on being told the cost,
+     *   "gate academy behind payment with a legacy carve-out."
+     *
+     *   An approved application used to be the whole condition, so these seeded
+     *   no payment at all and passed. It is now approved AND settled, exactly
+     *   as Layer 2.6 has required for cooperatives since #497. The refusals are
+     *   pinned in an-approved-academy-place-nobody-paid-for.test.ts; what these
+     *   keep honest is that a PAYING learner still gets in and still gets the
+     *   backfill.
+     */
     it('grants access and backfills the user document', async () => {
         bareUser();
-        store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'app-1', { userId: UID, status: 'approved' });
+        store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'app-1',
+            { userId: UID, status: 'approved', paymentStatus: 'completed' });
 
         expect(await access(UID, [], 'academy')).toBe(true);
 
@@ -479,7 +495,7 @@ describe('Layer 2.7 — an approved academy application', () => {
     it('found by the nested personalInfo email when there is no userId', async () => {
         store.seed(COLLECTIONS.USERS, UID, { email: 'Learner@Example.com' });
         store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'app-2',
-            { status: 'approved', personalInfo: { email: 'learner@example.com' } });
+            { status: 'approved', paymentStatus: 'completed', personalInfo: { email: 'learner@example.com' } });
 
         expect(await access(UID, [], 'academy')).toBe(true);
         // And healed with the userId, so the query finds it directly next time.
@@ -624,7 +640,10 @@ describe('a module’s fallback layers are its own', () => {
         // guarded by `if (app === ...)`, and one missing guard would make an
         // academy application open the export module.
         bareUser();
-        store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'a', { userId: UID, status: 'approved' });
+        //   Paid as well as approved — see the note on Layer 2.7 above. The
+        //   property under test is cross-module leakage, not the payment gate.
+        store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'a',
+            { userId: UID, status: 'approved', paymentStatus: 'completed' });
         store.seed(COLLECTIONS.WAVE_APPLICATIONS, 'w', { userId: UID, status: 'rejected' });
 
         expect(await access(UID, [], 'academy')).toBe(true);
