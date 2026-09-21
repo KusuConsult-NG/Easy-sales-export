@@ -207,6 +207,53 @@ export default function DuplicateProfilesPage() {
                                         </span>
                                     </div>
 
+                                    {/*
+                                      *   #813 — SAID ONCE, WHERE THE DECISION IS MADE.
+                                      *
+                                      *   "Choose the one that is the person" reads as
+                                      *   irreversible, and an operator who did not
+                                      *   onboard these members — and whose colleague
+                                      *   who did has left — will stall on it rather
+                                      *   than risk it. Two facts unstick that, and
+                                      *   both are properties of the code rather than
+                                      *   reassurance: supersession writes ONE pointer
+                                      *   field, and resolveOwnedUserIds walks that
+                                      *   pointer backwards, so the keeper reads
+                                      *   everything the other record holds.
+                                      *
+                                      *   The money is named as the exception because
+                                      *   it IS one — it moves only on a separate,
+                                      *   consented act and does not come back by
+                                      *   clearing a field.
+                                      */}
+                                    {group.state === "needs-a-decision" && !settled && (
+                                        <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                                            <p className="text-xs text-slate-700 leading-relaxed">
+                                                <strong>Choosing loses nothing.</strong> Superseding writes one
+                                                pointer field, and every order, listing, enrolment and membership
+                                                filed under the other record stays readable from the one you keep.
+                                                Clearing that field puts the group back.{" "}
+                                                <strong>The one exception is money</strong> — a wallet balance moves
+                                                only if you tick the box below, and that does not come back by
+                                                clearing a field.
+                                            </p>
+                                            {report.richest?.[group.email] && (
+                                                <p className="text-xs text-slate-700 mt-2">
+                                                    On the evidence below,{" "}
+                                                    <code className="text-xs">{report.richest[group.email]}</code>{" "}
+                                                    holds more than the others.
+                                                </p>
+                                            )}
+                                            {report.richest?.[group.email] === null && (
+                                                <p className="text-xs text-slate-500 mt-2">
+                                                    Nothing in what these records hold tells them apart — the
+                                                    suggested one is the record the platform already signs this
+                                                    person in as.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {done[group.email] && (
                                         <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
                                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -257,6 +304,45 @@ export default function DuplicateProfilesPage() {
                                                         {c.profileComplete ? " · profile complete" : ""}
                                                         {c.createdAt ? ` · created ${c.createdAt.slice(0, 10)}` : ""}
                                                     </p>
+
+                                                    {/*
+                                                      *   #813 — WHAT THIS RECORD ACTUALLY HOLDS.
+                                                      *
+                                                      *   The line above describes the ROW. This one
+                                                      *   describes the PERSON'S WORK, which is what
+                                                      *   an operator who never met them can actually
+                                                      *   judge. A source that could not be read says
+                                                      *   so; it never renders as a zero.
+                                                      */}
+                                                    {report?.footprints?.[c.id] && (
+                                                        <div className="mt-2 pt-2 border-t border-slate-100">
+                                                            {report.footprints[c.id].total === 0
+                                                                && !report.footprints[c.id].incomplete ? (
+                                                                <p className="text-xs text-slate-500">
+                                                                    Nothing is filed under this record.
+                                                                </p>
+                                                            ) : (
+                                                                <p className="text-xs text-slate-700">
+                                                                    {Object.entries(report.footprints[c.id].counts)
+                                                                        .filter(([, n]) => n === null || (n ?? 0) > 0)
+                                                                        .map(([label, n]) => (
+                                                                            <span key={label} className="mr-3 inline-block">
+                                                                                {label}:{" "}
+                                                                                <strong className={n === null ? "text-red-700" : ""}>
+                                                                                    {n === null ? "could not read" : n}
+                                                                                </strong>
+                                                                            </span>
+                                                                        ))}
+                                                                </p>
+                                                            )}
+                                                            {report.footprints[c.id].incomplete && (
+                                                                <p className="text-xs text-red-700 mt-1">
+                                                                    Some sources could not be read, so this is a floor
+                                                                    and not a total.
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </label>
                                         ))}

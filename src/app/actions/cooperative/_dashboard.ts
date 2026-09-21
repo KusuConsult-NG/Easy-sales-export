@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { normaliseMembershipTier } from "@/lib/cooperative-tiers";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -196,7 +197,10 @@ export async function getDashboardDataAction() {
                         paymentStatus: "completed",
                         paymentReference,
                         membershipStatus: "pending",
-                        membershipTier: paymentData.tier || "Member",
+                        //   #809 — the PAYMENT's tier is the retired fee band
+                        //   (`tier1`), not a membership tier. The webhook already
+                        //   normalises; this heal path did not.
+                        membershipTier: normaliseMembershipTier(paymentData.tier),
                         createdAt: paymentData.processedAt || FieldValue.serverTimestamp(),
                         updatedAt: FieldValue.serverTimestamp(),
                         _healedFromPayment: true,

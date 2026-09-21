@@ -7141,40 +7141,94 @@ COMMENT ON FUNCTION module_registration_counts(text[], text) IS
 --   is nothing to consolidate today. This exists so that the day there is,
 --   the answer is not hand-written SQL against production.
 
--- ── ON THE DOLLAR-QUOTE TAGS ────────────────────────────────────────────────
+-- ── WHY THIS FUNCTION CONTAINS NO `SELECT … INTO` ───────────────────────────
 --
--- The body is delimited `$fn$` and the check block `$chk$`, not bare `$$`.
+-- REPRODUCED, at last, with the evidence in hand. Pasted into the Supabase SQL
+-- Editor this file failed twice, and the second failure named its own cause:
 --
--- WHAT IS KNOWN. Applied with psql this file was correct with bare `$$` and is
--- correct now — verified both ways against a real Postgres, with the function's
--- sixteen behavioural tests passing either side of the change. Pasted into the
--- Supabase SQL Editor, it failed with
+--     ERROR: 42601: unterminated dollar-quoted string at or near "$fn$"
+--     LINE 16: AS $fn$
 --
---     ERROR: 42601: syntax error at or near "raw_data"
---     LINE 1:             raw_data   = jsonb_set(
+-- and the editor had APPENDED this to the statement it ran:
 --
--- `LINE 1` on an indented continuation is a FRAGMENT of the function body being
--- executed as a whole statement. Something split the body, and the body holds
--- 48 semicolons for a splitter to find.
+--     -- Added by Supabase: enable Row Level Security on newly created tables
+--     ALTER TABLE v_pointer     ENABLE ROW LEVEL SECURITY;
+--     ALTER TABLE v_target_row  ENABLE ROW LEVEL SECURITY;
+--     ALTER TABLE v_from_balance ENABLE ROW LEVEL SECURITY;
+--     ALTER TABLE v_to_balance  ENABLE ROW LEVEL SECURITY;
 --
--- WHAT IS NOT KNOWN, AND IS NOT GUESSED AT HERE. Exactly what that editor does
--- with `$$`. Two attempts to reproduce the split locally — modelling a splitter
--- that recognises dollar tags only at the start of a line — did NOT produce the
--- reported fragment, so the obvious theory (that `AS $$` mid-line is missed and
--- the remaining tags pair up wrongly) is unverified. It is written down as a
--- suspicion rather than a cause, because a confident explanation that cannot be
--- reproduced is worse than none: the next person would stop looking.
+-- Those four names are not tables. They are the four DECLARE variables this
+-- function used to read into, and they are named because in PLAIN SQL —
+-- outside a plpgsql body — `SELECT … INTO name FROM …` IS `CREATE TABLE AS`:
 --
--- WHY THE TAGS CHANGE ANYWAY. Named tags are the standard remedy for this class
--- of failure and cost nothing: each is unambiguous alone, and two DIFFERENT
--- tags cannot pair with each other even if an opening tag is missed. That is a
--- strictly safer file for any splitter, whether or not it is the fix for this
--- one. Nothing about the SQL changed.
+--     SELECT 2 AS y INTO v_pointer;   -- creates a table called v_pointer
 --
--- IF IT STILL FAILS IN THE EDITOR, apply it with psql instead, which is the
--- path that has actually been verified:
+-- Verified on PostgreSQL 16, one line, in this repository's own local cluster.
+--
+-- So the editor parses the function BODY as top-level SQL, finds four table
+-- creations that were never there, truncates the statement it is building in
+-- order to append its RLS block — and the body is cut off mid-function, which
+-- is what leaves `$fn$` unterminated. The earlier failure in this same file
+-- (`syntax error at or near "raw_data"`, reported as `LINE 1` of an indented
+-- continuation) is the same cut, landing in a different place.
+--
+-- THE DOLLAR TAGS WERE NEVER THE CAUSE. They were changed from `$$` to `$fn$`
+-- and `$chk$` on the suspicion that they were, and that theory could not be
+-- reproduced. It is recorded here as wrong rather than quietly deleted. The
+-- named tags are kept because they cost nothing and are strictly safer.
+--
+-- REMOVING THAT PATTERN WAS NECESSARY AND NOT SUFFICIENT, and the second half
+-- is recorded as plainly as the first because the first was already written
+-- down here as a cure before it had been tried.
+--
+-- Every read is now an assignment — `v_x := (SELECT …)` — with existence asked
+-- separately via EXISTS, because `:=` does not set FOUND and conflating "no
+-- row" with "a row holding NULL" would change two of the refusals below. That
+-- removes the RLS injection: there are no invented tables left to name.
+--
+-- THE EDITOR STILL COULD NOT RUN IT. Pasted again, it failed with
+--
+--     ERROR: 42601: syntax error at or near "RETURN"
+--     LINE 1:  RETURN QUERY SELECT FALSE, … 'no_source_wallet'::TEXT;
+--
+-- `LINE 1` again, on a line that is not line 1 of anything — another fragment
+-- of the body run as a whole statement, cut at a different place. So the
+-- editor has a SECOND defect independent of the first: its statement splitter
+-- does not respect dollar quoting, and a 200-line plpgsql body offers it
+-- roughly fifty semicolons to cut at.
+--
+-- WHAT IS NOT CLAIMED. Exactly which token it cuts on. Two cuts were observed,
+-- in the same region of two different bodies, and that is not enough to name a
+-- rule. It is left unexplained rather than guessed at.
+--
+-- HOW TO APPLY THIS FILE, THEN. Either path is verified against a real
+-- PostgreSQL 16 with the sixteen behavioural tests:
+--
+--   psql, which was never affected and is the path of record:
 --
 --     psql "$PROD_URL" -f supabase/migrations/046_consolidate_wallet_to_live_profile.sql
+--
+--   or, for the SQL Editor, the same function with its body written as a
+--   standard single-quoted string literal instead of a dollar-quoted block.
+--   That is ONE statement containing no statement boundary a splitter can
+--   find — and no `$` at all. It is generated from this file rather than kept
+--   beside it, because two hand-maintained copies of a money function is the
+--   drift this repository keeps filing against:
+--
+--     python3 - <<'EOF'
+--     import re
+--     s = open("supabase/migrations/046_consolidate_wallet_to_live_profile.sql").read()
+--     s = s[s.index("BEGIN;"):s.index("COMMIT;") + 7]
+--     lit = lambda b: "'" + b.replace("'", "''") + "'"
+--     for tag, kw in (("fn", "AS "), ("chk", "DO ")):
+--         m = re.search(r"%s\$%s\$([\s\S]*?)\$%s\$;" % (kw, tag, tag), s)
+--         s = s[:m.start()] + kw + lit(m.group(1)) + ";" + s[m.end():]
+--     open("046-paste.sql", "w").write(s)
+--     EOF
+--
+--   MEASURED EQUIVALENT, not assumed: applied to two fresh databases built
+--   from schema.sql and every other migration, `md5(prosrc)` for the resulting
+--   function is identical, and both pass all sixteen tests.
 --
 BEGIN;
 
@@ -7199,6 +7253,8 @@ DECLARE
     v_pointer      TEXT;
     v_target_ptr   TEXT;
     v_target_row   BOOLEAN;
+    v_source_row   BOOLEAN;
+    v_source_wlt   BOOLEAN;
     v_reference    TEXT;
     v_now          TEXT;
 BEGIN
@@ -7216,12 +7272,14 @@ BEGIN
     --   THE AUTHORISATION, RE-READ HERE. See the header: this is what stops the
     --   function being a general transfer primitive, so it is not delegated to
     --   the caller and not taken from an argument.
-    SELECT COALESCE(u.raw_data ->> '_migratedTo', u.raw_data ->> 'supabaseAuthId')
-      INTO v_pointer
-      FROM public.users u
-     WHERE u.id = p_from_id;
+    v_source_row := EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_from_id);
+    v_pointer := (
+        SELECT COALESCE(u.raw_data ->> '_migratedTo', u.raw_data ->> 'supabaseAuthId')
+          FROM public.users u
+         WHERE u.id = p_from_id
+    );
 
-    IF NOT FOUND THEN
+    IF NOT v_source_row THEN
         RETURN QUERY SELECT FALSE, 0::NUMERIC, 0::NUMERIC, 0::NUMERIC, 'source_profile_not_found'::TEXT;
         RETURN;
     END IF;
@@ -7238,10 +7296,12 @@ BEGIN
     --   And the target must be the END of the chain. Moving a balance onto a
     --   row that is ITSELF superseded stranded it again, one hop along, which
     --   would be this whole defect performed by its own repair.
-    SELECT TRUE, u.raw_data ->> '_migratedTo'
-      INTO v_target_row, v_target_ptr
-      FROM public.users u
-     WHERE u.id = p_to_id;
+    v_target_row := EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_to_id);
+    v_target_ptr := (
+        SELECT u.raw_data ->> '_migratedTo'
+          FROM public.users u
+         WHERE u.id = p_to_id
+    );
 
     IF NOT COALESCE(v_target_row, FALSE) THEN
         RETURN QUERY SELECT FALSE, 0::NUMERIC, 0::NUMERIC, 0::NUMERIC, 'target_profile_not_found'::TEXT;
@@ -7262,22 +7322,23 @@ BEGIN
      ORDER BY w.id
        FOR UPDATE;
 
-    SELECT COALESCE((w.raw_data ->> 'balance')::numeric, w.balance, 0)
-      INTO v_from_balance
-      FROM public.wallets w
-     WHERE w.id = p_from_id;
+    v_source_wlt := EXISTS (SELECT 1 FROM public.wallets w WHERE w.id = p_from_id);
+    v_from_balance := (
+        SELECT COALESCE((w.raw_data ->> 'balance')::numeric, w.balance, 0)
+          FROM public.wallets w
+         WHERE w.id = p_from_id
+    );
 
-    IF NOT FOUND THEN
+    IF NOT v_source_wlt THEN
         RETURN QUERY SELECT FALSE, 0::NUMERIC, 0::NUMERIC, 0::NUMERIC, 'no_source_wallet'::TEXT;
         RETURN;
     END IF;
 
-    SELECT COALESCE((w.raw_data ->> 'balance')::numeric, w.balance, 0)
-      INTO v_to_balance
-      FROM public.wallets w
-     WHERE w.id = p_to_id;
-
-    v_to_balance := COALESCE(v_to_balance, 0);
+    v_to_balance := COALESCE((
+        SELECT COALESCE((w.raw_data ->> 'balance')::numeric, w.balance, 0)
+          FROM public.wallets w
+         WHERE w.id = p_to_id
+    ), 0);
 
     IF v_from_balance <= 0 THEN
         --   The idempotent case, and the ordinary one: all 272 superseded

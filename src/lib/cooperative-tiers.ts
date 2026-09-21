@@ -341,3 +341,73 @@ export function loanDurationProblem(durationMonths: unknown, maxDuration: number
     }
     return null;
 }
+
+/**
+ *   #809 THREE WRITERS, THREE VOCABULARIES, ONE FIELD DECLARED AS ONE VALUE.
+ *
+ *        `membershipTier` is typed `"Member"` in types/index.ts and on the
+ *        admin members screen. Three paths write it and only one of them
+ *        writes that:
+ *
+ *          payments/service.ts       `normalisedTier = "Member"`        ✓
+ *          _dashboard / _coop_identity
+ *            (heal a membership       `paymentData.tier || "Member"` —
+ *             from its payment)        the PAYMENT's tier, which is the
+ *                                      retired fee band `tier1`          ✗
+ *          _coop_identity
+ *            (synthesise an ID card)  `userPlan` with its first letter
+ *                                      capitalised — "Premium", "Tier1"  ✗
+ *
+ *        THE FEE BAND IS NOT THE MEMBERSHIP TIER. `tier1`/`tier2` was a
+ *        two-band registration fee, 10,000 and 20,000 naira. There is one fee
+ *        now — flat 10,000, COOPERATIVE_CONFIG.registrationFee — so `tier2`
+ *        denotes a price nobody is charged, and neither name denotes a
+ *        membership tier at all.
+ *
+ *        WHAT IT COSTS. The admin members screen renders the value, so a
+ *        healed membership reads "tier1" where every other member reads
+ *        "Member". Worse, _cooperative_memberships takes it as `knownTier`,
+ *        and the repair screen then writes that string onto a real membership
+ *        record — the retired vocabulary propagating out of a heal path into
+ *        the thing it heals.
+ *
+ *        Nothing crashes: getMaxLoanAmount derives the tier from the
+ *        contribution rather than reading this field, and getTierInterestRate
+ *        and getTierMaxDuration ignore their argument entirely. That is why it
+ *        went unnoticed, and it is not a reason to leave it.
+ */
+
+/** The tier a membership gets when nothing better is known. */
+export const DEFAULT_COOPERATIVE_TIER: CooperativeTier =
+    (Object.keys(COOPERATIVE_TIERS) as CooperativeTier[])[0];
+
+/**
+ * Whatever was stored, as a tier this cooperative actually has.
+ *
+ * Case-insensitive because the writers above disagree on capitalisation too,
+ * and anything unrecognised — `tier1`, `premium`, an empty string, a number —
+ * becomes the default rather than being passed through. Passing it through is
+ * precisely how a fee band came to be stored as a membership tier.
+ */
+export function normaliseMembershipTier(
+    value: unknown,
+    //   A PARAMETER FOR THE SAME REASON `isApply(argv = process.argv)` TAKES
+    //   ONE — so the rule can be exercised without reaching around it.
+    //
+    //   This cooperative has exactly ONE tier today, which makes "look the name
+    //   up" and "always answer the default" the same function: every mutant of
+    //   the lookup survives, because both answer "Member" to everything. The
+    //   lookup is still what is wanted — the day a second tier is added, a
+    //   stored "Member" must not silently become whatever sorts first — so the
+    //   seam exists to keep that claim measurable rather than aspirational.
+    tiers: readonly string[] = Object.keys(COOPERATIVE_TIERS),
+): CooperativeTier {
+    const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+    const fallback = (tiers[0] ?? DEFAULT_COOPERATIVE_TIER) as CooperativeTier;
+    if (!raw) return fallback;
+
+    for (const key of tiers) {
+        if (key.toLowerCase() === raw) return key as CooperativeTier;
+    }
+    return fallback;
+}

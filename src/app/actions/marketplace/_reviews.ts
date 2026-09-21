@@ -5,6 +5,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { optionalFreeText, COMMENT_MAX_LENGTH } from "@/lib/free-text";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
@@ -41,6 +42,14 @@ async function _submitProductReviewAction(data: {
         // A comparison is not a validation — see isValidReviewRating. NaN and
         // the string "5" both passed this pair of `<`/`>` tests, and both
         // corrupt an average downstream.
+        //   #812 — the comment was stored exactly as it arrived, with no cap
+        //   here and none on the form either. `_quote_offers` already caps its
+        //   own free text server-side; this is the sibling that did not.
+        const body = optionalFreeText(data.comment, COMMENT_MAX_LENGTH, "Review");
+        if (!body.ok) {
+            return { success: false as const, error: body.message, data: null };
+        }
+
         if (!isValidReviewRating(data.rating)) {
             return { success: false as const, error: "Rating must be a whole number between 1 and 5", data: null };
         }
@@ -112,7 +121,7 @@ async function _submitProductReviewAction(data: {
             ...reviewerIdentityFields(buyerId),
             orderId: data.orderId,
             rating: data.rating,
-            comment: data.comment || null,
+            comment: body.text,
             imageUrls: data.imageUrls || [],
             helpful: 0,
             verified: true,
@@ -179,6 +188,14 @@ async function _submitSellerReviewAction(data: {
         // A comparison is not a validation — see isValidReviewRating. NaN and
         // the string "5" both passed this pair of `<`/`>` tests, and both
         // corrupt an average downstream.
+        //   #812 — the comment was stored exactly as it arrived, with no cap
+        //   here and none on the form either. `_quote_offers` already caps its
+        //   own free text server-side; this is the sibling that did not.
+        const body = optionalFreeText(data.comment, COMMENT_MAX_LENGTH, "Review");
+        if (!body.ok) {
+            return { success: false as const, error: body.message, data: null };
+        }
+
         if (!isValidReviewRating(data.rating)) {
             return { success: false as const, error: "Rating must be a whole number between 1 and 5", data: null };
         }
@@ -241,7 +258,7 @@ async function _submitSellerReviewAction(data: {
             buyerId,
             orderId: data.orderId,
             rating: data.rating,
-            comment: data.comment || null,
+            comment: body.text,
             verified: true,
             status: "pending",
             createdAt: FieldValue.serverTimestamp(),

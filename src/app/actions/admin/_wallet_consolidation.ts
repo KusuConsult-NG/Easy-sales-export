@@ -43,6 +43,8 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { logger } from "@/lib/logger";
 import { consolidateWalletToLiveProfile } from "@/lib/wallet-ledger";
 import { isPositiveAmount } from "@/lib/amount";
+import { supersedingPointer } from "@/lib/user-identity";
+import { mapWithConcurrency } from "@/lib/bounded-concurrency";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
 
 /** One profile holding money it cannot spend, and where the money should go. */
@@ -94,10 +96,16 @@ async function _findStrandedWalletsAction(): Promise<ActionResponse<StrandedWall
 
             for (const d of snap.docs) {
                 const data = (d.data() ?? {}) as Record<string, unknown>;
-                const pointer = data._migratedTo ?? data.supabaseAuthId;
-                //   A row pointing at ITSELF is not superseded — that is what
-                //   `supabaseAuthId` looks like on an ordinary linked account.
-                if (typeof pointer === "string" && pointer !== "" && pointer !== d.id) {
+                //   #810 — the shared rule, not a fourth copy of it. This one
+                //   was CORRECT; #804 fixed three readers that were not, and
+                //   left this one spelling the same comparison out by hand. A
+                //   correct copy is how the next one drifts.
+                //
+                //   `supabaseAuthId` is honoured alongside `_migratedTo` here
+                //   deliberately — the same pair pointerOf reads — because on an
+                //   ordinary linked account that field names the row itself,
+                //   which is exactly the case the rule exists to exclude.
+                if (supersedingPointer(d.id, data._migratedTo ?? data.supabaseAuthId)) {
                     superseded.push({ id: d.id, data });
                 }
             }
@@ -106,12 +114,47 @@ async function _findStrandedWalletsAction(): Promise<ActionResponse<StrandedWall
             if (snap.docs.length < PAGE) break;
         }
 
+        /*
+         *   #810 THE SAME SHAPE THAT TIMED THE FARM NATION SCREEN OUT.
+         *
+         *   This was `for (const row of superseded) { await …doc(row.id).get() }`
+         *   — one keyed read per superseded profile, one after another. The
+         *   measured population is 765 superseded profiles, 272 of them
+         *   carrying a wallet row, so that is 765 serialized round trips before
+         *   the screen can answer. At 20ms each that is fifteen seconds; at
+         *   50ms, thirty-eight. #805 is the bill for doing exactly this in
+         *   _farm_nation_approvals, and the pool written there is reused rather
+         *   than a second one appearing beside it.
+         *
+         *   The bound is the same 8, and for the same reason: eight primary-key
+         *   reads in flight is a modest ask of the connection pool, where 765
+         *   is not.
+         *
+         *   ORDER IS PRESERVED — mapWithConcurrency indexes results by input
+         *   position — so `stranded` is the same list, in the same order, that
+         *   the sequential loop produced. Nothing about what is read changes.
+         */
+        const SCAN_CONCURRENCY = 8;
+
+        //   `exists` is carried separately from `balance` on purpose. A wallet
+        //   row that exists with NO balance field still counts towards
+        //   `scanned` — it is a superseded profile carrying a wallet — and
+        //   collapsing the two into one `undefined` would quietly drop it from
+        //   that figure while leaving `stranded` correct.
+        const wallets = await mapWithConcurrency(
+            superseded, SCAN_CONCURRENCY,
+            async (row): Promise<{ exists: boolean; balance: unknown }> => {
+                const snap = await db.collection(COLLECTIONS.WALLETS).doc(row.id).get();
+                return { exists: Boolean(snap.exists), balance: snap.data()?.balance };
+            },
+        );
+
         const stranded: StrandedWallet[] = [];
         let scanned = 0;
 
-        for (const row of superseded) {
-            const snap = await db.collection(COLLECTIONS.WALLETS).doc(row.id).get();
-            if (!snap.exists) continue;
+        for (const [index, row] of superseded.entries()) {
+            const wallet = wallets[index];
+            if (!wallet.exists) continue;
             scanned += 1;
 
             /*
@@ -122,9 +165,8 @@ async function _findStrandedWalletsAction(): Promise<ActionResponse<StrandedWall
              *   that today, which is precisely the upstream coupling the shared
              *   helper removes.
              */
-            const raw = snap.data()?.balance;
-            if (!isPositiveAmount(raw)) continue;
-            const balance = Number(raw);
+            if (!isPositiveAmount(wallet.balance)) continue;
+            const balance = Number(wallet.balance);
 
             stranded.push({
                 fromId: row.id,

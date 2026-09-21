@@ -91,6 +91,11 @@ const NAV_ITEMS = [
     { label: "Farm Nation Approvals", href: "/admin/forensics/farm-nation", icon: Sprout, section: "platform", permission: "farm_nation:verify_applications" as AdminPermission },
     //   #726 — the last of the three the scan names and cannot settle.
     { label: "Coop Memberships", href: "/admin/forensics/cooperative", icon: Landmark, section: "platform", permission: "cooperatives:approve_members" as AdminPermission },
+    //   #811 — the repair that had no door at all. findStrandedWalletsAction and
+    //   consolidateWalletAction were written, tested and shipped with no caller,
+    //   so the only way to move a balance nobody can reach was a database
+    //   console — which is the thing migration 046 exists to make unnecessary.
+    { label: "Stranded Wallets", href: "/admin/forensics/stranded-wallets", icon: Wallet, section: "platform", platformOnly: true },
     // Announcements and banners render site-wide via AnnouncementBanner.tsx.
     // The actions existed and the page did not, so the only way to publish was
     // to write to the database by hand.
