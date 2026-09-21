@@ -251,6 +251,32 @@ const LIMITS = {
         maxRequests: 120,
     },
 
+    /**
+     * Address geocoding over OpenStreetMap — api/geocode, behind checkout's
+     * delivery-address field.
+     *
+     * NOMINATIM IS A DONATED SERVICE AND ITS POLICY IS THE BUDGET: an absolute
+     * maximum of one request a second across the whole application, results
+     * cached, and no autocomplete. This platform is not entitled to it and
+     * cannot buy more of it, so exceeding it does not cost money — it gets the
+     * application blocked, and every buyer's delivery address stops resolving
+     * at once.
+     *
+     * Sized against a person completing a checkout: a handful of searches while
+     * they settle on the right street, plus one verification per cart. Thirty in
+     * ten minutes covers a hesitant buyer several times over and is useless for
+     * scraping. Keyed per USER, since the route requires a session, for the same
+     * reason `aiChat` is — Nigerian carrier NAT would make an IP key punish
+     * everybody behind it.
+     *
+     * Its own bucket rather than `api`'s: 200 a minute of the shared API limit
+     * is two hundred times the upstream ceiling, which is no limit at all here.
+     */
+    geocode: {
+        interval: 10 * 60 * 1000, // 10 minutes
+        maxRequests: 30,
+    },
+
     // Admin operations - generous (legitimate admin workload)
     admin: {
         interval: 60 * 1000, // 1 minute

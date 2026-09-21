@@ -225,7 +225,17 @@ describe('a server answer must not be silently discarded', () => {
         //   literally `catch { // No logs yet }` — a comment asserting the
         //   thing it had not checked, above a screen that then stated "No logs
         //   recorded yet" to an administrator whose read had thrown.
-        expect(ledgerVerdict(n('D5'), 43)).toBe(LEDGER_HELD);
+        //
+        //   43 -> 41: checkout's delivery address. Two of the swallowing
+        //   catches were Google Maps geocoder wrappers, each of which logged to
+        //   the console and fell through to the state centroid without ever
+        //   telling the buyer the lookup had failed — so a service outage and
+        //   "no such street" produced the same screen. The replacement
+        //   distinguishes them: lib/geocode-request returns an `error` when the
+        //   lookup did not HAPPEN, separately from an empty result, and the
+        //   field says which. Recorded here rather than absorbed, which is this
+        //   ledger's point.
+        expect(ledgerVerdict(n('D5'), 41)).toBe(LEDGER_HELD);
     });
 });
 

@@ -22,12 +22,27 @@
  * cannot drift apart.
  */
 
+/*
+ *   GOOGLE MAPS IS GONE FROM ALL THREE DIRECTIVES.
+ *
+ *   `maps.googleapis.com` was on script-src and connect-src and
+ *   `maps.google.com` on connect-src, for one caller: the checkout delivery
+ *   address. The owner asked for OpenStreetMap there instead, and the
+ *   replacement talks to this origin's own api/geocode — so the browser makes
+ *   no cross-origin request at all and the hosts have no remaining use.
+ *
+ *   An allow-list entry with no caller is not harmless: it is standing
+ *   permission for a script host that nothing on the platform needs, and the
+ *   next person to read it will take it as evidence that Google Maps is in use
+ *   somewhere. The Nominatim call is made server side (lib/nominatim explains
+ *   why), which is also why nothing is added here to replace them.
+ */
+
 /** Hosts that legitimately serve executable script. */
 const SCRIPT_HOSTS = [
     "https://js.paystack.co",
     "https://www.googletagmanager.com",
     "https://meet.jit.si",
-    "https://maps.googleapis.com",
 ];
 
 const CONNECT_HOSTS = [
@@ -43,8 +58,6 @@ const CONNECT_HOSTS = [
     "https://storage.googleapis.com",
     "https://*.jit.si",
     "wss://*.jit.si",
-    "https://maps.googleapis.com",
-    "https://maps.google.com",
 ];
 
 const FRAME_HOSTS = [

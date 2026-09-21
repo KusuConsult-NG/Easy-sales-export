@@ -168,10 +168,13 @@ describe('#743 — and every population ledger is on it', () => {
         //   absorbing it, and the number had to be lowered by hand in both
         //   places it is written down.
         expect(cra).toContain("ledgerVerdict(n('D4'), 39)");
-        //   44 → 43 when #804 converted admin/settings/logs. Moved by hand in
-        //   both places the number is written down, which is the point of this
-        //   second statement of it.
-        expect(cra).toContain("ledgerVerdict(n('D5'), 43)");
+        //   44 → 43 when #804 converted admin/settings/logs, then 43 → 41 when
+        //   checkout's delivery address lost its two Google geocoder wrappers —
+        //   each of which logged to the console and fell through to the state
+        //   centroid without telling the buyer the lookup had failed. Moved by
+        //   hand in both places the number is written down, which is the point
+        //   of this second statement of it.
+        expect(cra).toContain("ledgerVerdict(n('D5'), 41)");
 
         expect(code('src/__tests__/unit/half-converted-off-the-stale-token.test.ts'))
             //   84 → 80 when #748 converted the four money-OUT gates. The ledger

@@ -55,7 +55,7 @@ interface ValidProductMarker {
     locationName?: string;
 }
 
-interface CheckoutMapFallbackProps {
+interface CheckoutRouteMapProps {
     destination: { lat: number; lng: number };
     products: ProductMarker[];
 }
@@ -75,7 +75,7 @@ function MapController({ bounds, center }: { bounds: L.LatLngBoundsExpression; c
     return null;
 }
 
-export default function CheckoutMapFallback({ destination, products }: CheckoutMapFallbackProps) {
+export default function CheckoutRouteMap({ destination, products }: CheckoutRouteMapProps) {
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {

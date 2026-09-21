@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -14,6 +13,17 @@ import PhoneInput, { isValidNigerianPhone } from "@/components/ui/PhoneInput";
 import type { Product, CartItem } from "@/lib/types/marketplace";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { getUserProfileAction } from "@/app/actions/profile";
+/**
+ *   THE OWNER: "For delivery address, we want to use openstreet map instead of
+ *   google map."
+ *
+ *   The route map below this field has been Leaflet over OpenStreetMap all
+ *   along. What was Google is the ADDRESS: an Autocomplete on the street input
+ *   and two geocoders. All three now go through api/geocode — see
+ *   lib/nominatim for why the call is made on the server.
+ */
+import { geocodeAddress, type GeocodeResult } from "@/lib/geocode-request";
+import { SEARCH_DEBOUNCE_MS } from "@/lib/nominatim";
 
 // Disable static generation for this page - must be client-only due to Paystack
 export const dynamic = 'force-dynamic';
@@ -65,26 +75,34 @@ function estimateCartWeight(items: any[]): number {
 
 
 import dynamicImport from "next/dynamic";
-import { NIGERIAN_STATE_COORDINATES } from "@/lib/locations";
+import { stateCentroid } from "@/lib/locations";
 import { firstImageSrc } from "@/lib/first-image";
 
-/**
- * The Google Maps key, or empty when this deployment has none.
+/*
+ *   #821 IS RESOLVED BY DELETION, NOT BY A BETTER KEY.
  *
- *   #821 One expression, read by the loader AND by the decision not to load.
- *   Two spellings of "do we have a key?" is how the old code came to warn about
- *   a problem and then cause it in the next line.
+ *   That issue found checkout loading Google Maps with a Firebase key — not a
+ *   Maps key, so Google served the script, refused the key and painted its own
+ *   grey box while `onLoad` fired and the app believed Maps was working. It was
+ *   fixed by loading Google ONLY with a real Maps key and falling back to
+ *   Leaflet/OpenStreetMap otherwise.
  *
- *   The FIREBASE key is deliberately not a fallback. It is not enabled for the
- *   Maps JavaScript API, so using it produced a rejected key and a grey box.
+ *   The owner has now asked for OpenStreetMap outright, so the key, the loader,
+ *   the `gm_authFailure` handler and the two `mapsLoaded`/`mapsError` states are
+ *   gone with it. There is one path instead of two, and it needs no key, no
+ *   billing account and no Google Cloud project — which is also the end of the
+ *   whole class of defect #821 was about, where a deployment's configuration
+ *   decided whether a buyer could enter an address.
  */
-const GOOGLE_MAPS_KEY =
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    || process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
-    || "";
 
-const CheckoutMapFallback = dynamicImport(
-    () => import("@/components/marketplace/CheckoutMapFallback"),
+/**
+ *   The route map. RENAMED FROM CheckoutMapFallback, because it is not one:
+ *   with Google gone there is no primary for it to be the fallback to, and a
+ *   name that says "fallback" invites the next reader to wonder what the real
+ *   map is. Leaflet over OpenStreetMap is the real map.
+ */
+const CheckoutRouteMap = dynamicImport(
+    () => import("@/components/marketplace/CheckoutRouteMap"),
     {
         ssr: false,
         loading: () => (
@@ -132,57 +150,21 @@ export default function CheckoutPage() {
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [verificationError, setVerificationError] = useState<string | null>(null);
 
-    const [mapsLoaded, setMapsLoaded] = useState(false);
-    const [mapsError, setMapsError] = useState(false);
     const [productCoords, setProductCoords] = useState<Record<string, { lat: number; lng: number }>>({});
     const [destinationCoords, setDestinationCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-    // Set mapsLoaded if google is already defined on mount (handles Next.js Script caching)
-    useEffect(() => {
-        if (typeof window !== "undefined" && (window as any).google) {
-            setMapsLoaded(true);
-        }
-        
-        /*
-         *   #821 NO MAPS KEY IS A DECISION, NOT A WARNING.
-         *
-         *   This used to warn that the Firebase key "might cause restriction
-         *   errors" and then use it anyway. Without a real Maps key the Google
-         *   path is not attempted at all and checkout falls back to
-         *   Leaflet/OpenStreetMap, which needs no key.
-         */
-        /*
-         *   NOT AN ERROR STATE, deliberately. Having no Maps key is a
-         *   configuration, not a failure: `mapsLoaded` simply stays false, and
-         *   geocodeManualAddress's existing else-branch verifies the address
-         *   from NIGERIAN_STATE_COORDINATES, sets destinationCoords and renders
-         *   the Leaflet map. Flagging it red would tell the buyer something
-         *   broke while the thing worked.
-         *
-         *   `mapsError` stays reserved for Google having been TRIED and refused
-         *   — the load error below, and gm_authFailure.
-         */
-
-        /*
-         *   #821 THE CALLBACK GOOGLE ITSELF CALLS WHEN IT REFUSES A KEY.
-         *
-         *   A rejected key still serves a 200, so `onError` on the <Script>
-         *   never fires and the grey "This page can't load Google Maps
-         *   correctly" box is all anybody sees. `gm_authFailure` is the only
-         *   signal, and nothing was listening for it.
-         */
-        const previous = (window as any).gm_authFailure;
-        (window as any).gm_authFailure = () => {
-            console.error("[Google Maps] the API key was rejected");
-            setMapsError(true);
-            setMapsLoaded(false);
-            setVerificationError(
-                "The map could not be loaded. You can still enter your address and continue.",
-            );
-            if (typeof previous === "function") previous();
-        };
-        return () => { (window as any).gm_authFailure = previous; };
-    }, []);
+    /*
+     *   The suggestion list that replaces Google Places Autocomplete.
+     *
+     *   NOT SEARCH-AS-YOU-TYPE. Nominatim's usage policy forbids autocomplete,
+     *   and the control this replaces fired a request per keystroke. A search
+     *   happens after typing stops for SEARCH_DEBOUNCE_MS, or when Search is
+     *   pressed — see lib/nominatim.
+     */
+    const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchNotice, setSearchNotice] = useState<string | null>(null);
+    const searchAbort = useRef<AbortController | null>(null);
 
     const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
         const R = 6371; // Radius of the Earth in km
@@ -197,181 +179,156 @@ export default function CheckoutPage() {
         return Math.round(d * 10) / 10; // Round to 1 decimal place
     };
 
-    // Geocode product locations when maps script loads and cart changes
+    /*
+     *   Where each cart item ships FROM, for the route line and the distance
+     *   the delivery fee is priced on.
+     *
+     *   ONE LOOKUP PER DISTINCT LGA, not per item. The Google version geocoded
+     *   every line in the cart, so three bags of rice from the same farm cost
+     *   three requests. Nominatim is a donated service with a ceiling this
+     *   platform does not control (see lib/nominatim), and an LGA does not move
+     *   — so the key is the place, the answer is cached upstream for a day, and
+     *   a cart of ten items from two farms spends two lookups.
+     *
+     *   THE STATE CENTROID REMAINS THE FALLBACK. It is what ran on every
+     *   deployment without a Maps key already, and it is what runs when the
+     *   service is unreachable. A coarse origin prices a slightly wrong
+     *   distance; no origin draws no route at all.
+     */
     useEffect(() => {
         if (!isClient || cart.length === 0) return;
 
-        // If Google Maps is loaded, use it. Otherwise, use our local fallback coordinates.
-        if (mapsLoaded && (window as any).google?.maps?.Geocoder) {
-            try {
-                const geocoder = new (window as any).google.maps.Geocoder();
-                const newCoords = { ...productCoords };
-                let updated = false;
+        let cancelled = false;
 
-                const geocodePromises = cart.map((item) => {
-                    const lga = item.location?.lga && item.location.lga.toLowerCase() !== "unknown" ? item.location.lga : "";
-                    const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
-                    
-                    const locKey = `${lga}, ${state}`.trim();
-                    if (!locKey || productCoords[item.id]) return Promise.resolve();
+        const named = (value?: string): string =>
+            value && value.toLowerCase() !== "unknown" ? value : "";
 
-                    const addressStr = `${lga ? lga + ", " : ""}${state}, Nigeria`;
-                    
-                    return new Promise<void>((resolve) => {
-                        geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-                            if (status === "OK" && results && results[0] && results[0].geometry) {
-                                const loc = results[0].geometry.location;
-                                newCoords[item.id] = { lat: loc.lat(), lng: loc.lng() };
-                                updated = true;
-                            } else {
-                                console.error(`Geocoding failed for product ${item.id} (${addressStr}):`, status);
-                                // Fallback locally for this item
-                                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                                    s => s.toLowerCase() === state.toLowerCase()
-                                );
-                                if (matchedState) {
-                                    newCoords[item.id] = NIGERIAN_STATE_COORDINATES[matchedState];
-                                    updated = true;
-                                }
-                            }
-                            resolve();
-                        });
-                    });
-                });
-
-                Promise.all(geocodePromises).then(() => {
-                    if (updated) {
-                        setProductCoords(newCoords);
-                    }
-                });
-            } catch (e) {
-                console.error("Failed to geocode product locations with Google Maps:", e);
-            }
-        } else {
-            // Local geocoding fallback
-            const newCoords = { ...productCoords };
-            let updated = false;
-            cart.forEach((item) => {
-                if (productCoords[item.id]) return;
-                const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
-                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                    s => s.toLowerCase() === state.toLowerCase()
-                );
-                if (matchedState) {
-                    newCoords[item.id] = NIGERIAN_STATE_COORDINATES[matchedState];
-                    updated = true;
-                }
-            });
-            if (updated) {
-                setProductCoords(newCoords);
-            }
+        //   Every item still needing a pin, grouped by the place it comes from.
+        const byPlace = new Map<string, { lga: string; state: string; ids: string[] }>();
+        for (const item of cart) {
+            if (productCoords[item.id]) continue;
+            const lga = named(item.location?.lga);
+            const state = named(item.location?.state) || "Lagos";
+            const key = `${lga}|${state}`;
+            const group = byPlace.get(key);
+            if (group) group.ids.push(item.id);
+            else byPlace.set(key, { lga, state, ids: [item.id] });
         }
-    }, [mapsLoaded, cart, isClient, productCoords]);
+        if (byPlace.size === 0) return;
 
-    // Initialize Google Places Autocomplete
-    useEffect(() => {
-        if (!mapsLoaded || !(window as any).google) return;
-
-        try {
-            const inputEl = document.getElementById("delivery-street-input") as HTMLInputElement;
-            if (!inputEl) return;
-
-            if (!(window as any).google.maps?.places?.Autocomplete) {
-                console.warn("Google Places Autocomplete library is not loaded yet.");
-                return;
-            }
-
-            const autocomplete = new (window as any).google.maps.places.Autocomplete(inputEl, {
-                componentRestrictions: { country: "ng" },
-                fields: ["address_components", "geometry"],
-            });
-
-            autocomplete.addListener("place_changed", () => {
-                const place = autocomplete.getPlace();
-                if (!place.geometry || !place.geometry.location) {
-                    showToast("No geometry details available for the selected place.", "warning");
-                    return;
-                }
-
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
-                setDestinationCoords({ lat, lng });
-                setIsAddressVerified(true);
-                setVerificationError(null);
-                
-                // Extract address components
-                let street = "";
-                let city = "";
-                let rawState = "";
-                let rawLga = "";
-
-                const components = place.address_components || [];
-                
-                components.forEach((c: any) => {
-                    const types = c.types;
-                    if (types.includes("street_number")) {
-                        street = c.long_name + " " + street;
-                    } else if (types.includes("route")) {
-                        street = street + c.long_name;
-                    } else if (types.includes("locality") || types.includes("sublocality")) {
-                        city = c.long_name;
-                    } else if (types.includes("administrative_area_level_1")) {
-                        rawState = c.long_name.replace(/\s*state$/i, "").trim();
-                    } else if (types.includes("administrative_area_level_2")) {
-                        rawLga = c.long_name;
-                    }
-                });
-
-                if (!street) {
-                    street = inputEl.value.split(",")[0] || "";
-                }
-
-                // Robust state matching
-                let matchedState = "";
-                const stateKey = Object.keys(NIGERIAN_LOCATIONS).find(
-                    (s) => s.toLowerCase() === rawState.toLowerCase()
-                );
-                if (stateKey) {
-                    matchedState = stateKey;
-                } else if (rawState.toLowerCase() === "federal capital territory" || rawState.toLowerCase() === "abuja") {
-                    matchedState = "FCT";
-                }
-
-                // Robust LGA matching
-                let matchedLga = "";
-                if (matchedState && NIGERIAN_LOCATIONS[matchedState]) {
-                    const lgaList = NIGERIAN_LOCATIONS[matchedState];
-                    const lgaLower = rawLga.toLowerCase();
-                    const directLgaMatch = lgaList.find(
-                        (l) => l.toLowerCase() === lgaLower
-                    );
-                    if (directLgaMatch) {
-                        matchedLga = directLgaMatch;
-                    } else {
-                        // Find partial match
-                        const partialLgaMatch = lgaList.find(
-                            (l) => l.toLowerCase().includes(lgaLower) || lgaLower.includes(l.toLowerCase())
-                        );
-                        if (partialLgaMatch) {
-                            matchedLga = partialLgaMatch;
-                        }
-                    }
-                }
-
-                setDeliveryAddress({
-                    street: street.trim(),
-                    city: city || rawLga || "",
-                    state: matchedState,
-                    lga: matchedLga,
-                });
-            });
-        } catch (e) {
-            console.error("Failed to initialize Google Places Autocomplete:", e);
+        //   The centroids first, synchronously, so the map draws immediately
+        //   and the lookups below only ever improve on it.
+        const seeded: Record<string, { lat: number; lng: number }> = {};
+        for (const { state, ids } of byPlace.values()) {
+            const centroid = stateCentroid(state);
+            if (!centroid) continue;
+            for (const id of ids) seeded[id] = centroid;
         }
-    }, [mapsLoaded, showToast]);
+        if (Object.keys(seeded).length > 0) {
+            setProductCoords(prev => ({ ...seeded, ...prev }));
+        }
+
+        (async () => {
+            for (const { lga, state, ids } of byPlace.values()) {
+                if (cancelled) return;
+                if (!lga) continue; // The state centroid is already the best answer.
+
+                const { results } = await geocodeAddress(`${lga}, ${state}, Nigeria`, { limit: 1 });
+                if (cancelled || results.length === 0) continue;
+
+                const { lat, lng } = results[0];
+                setProductCoords(prev => {
+                    const next = { ...prev };
+                    for (const id of ids) next[id] = { lat, lng };
+                    return next;
+                });
+            }
+        })();
+
+        return () => { cancelled = true; };
+        //   `productCoords` is deliberately NOT a dependency: this effect
+        //   writes it, and reading it here through the setter's callback is
+        //   what keeps that from being a loop. The guard above reads the
+        //   render's snapshot only to decide what still needs looking up.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cart, isClient]);
+
+    /**
+     * Fill the whole address from a place the buyer picked.
+     *
+     *   The Google version unpacked `address_components` inside its own
+     *   listener, and the state/LGA reconciliation — "Federal Capital
+     *   Territory" means FCT, "Jos North Local Government Area" means
+     *   "Jos North" — lived only there. So the MANUAL path, which is the one
+     *   most buyers take, reconciled nothing and left the dependent selects
+     *   empty. That rule is now in lib/nominatim and both paths use it.
+     */
+    const applySuggestion = useCallback((place: GeocodeResult) => {
+        setDestinationCoords({ lat: place.lat, lng: place.lng });
+        setIsAddressVerified(true);
+        setVerificationError(null);
+        setSuggestions([]);
+        setSearchNotice(null);
+        setDeliveryAddress({
+            street: place.street,
+            city: place.city,
+            state: place.state,
+            lga: place.lga,
+        });
+    }, []);
+
+    /**
+     * Look the typed street up and offer what came back.
+     *
+     *   CALLED ON A PAUSE OR A PRESS, never per keystroke — Nominatim's usage
+     *   policy forbids autocomplete and the Google control this replaces fired
+     *   on every character. See lib/nominatim.
+     */
+    const searchAddress = useCallback(async (query: string, announce: boolean): Promise<GeocodeResult[]> => {
+        const trimmed = query.trim();
+        if (trimmed.length < 3) {
+            setSuggestions([]);
+            if (announce) showToast("Type a little more of the address first.", "warning");
+            return [];
+        }
+
+        //   One search at a time: a newer one replaces the one in flight, so a
+        //   slow answer cannot land on top of a faster, later one.
+        searchAbort.current?.abort();
+        const controller = new AbortController();
+        searchAbort.current = controller;
+
+        setIsSearching(true);
+        setSearchNotice(null);
+
+        //   The state gives the search somewhere to look when the buyer has
+        //   already chosen one, which is most of the difference between
+        //   "Main Street" finding the right road and finding forty.
+        const scoped = [trimmed, deliveryAddress.city, deliveryAddress.state, "Nigeria"]
+            .filter(Boolean).join(", ");
+
+        const { results, error } = await geocodeAddress(scoped, { signal: controller.signal });
+        if (controller.signal.aborted) return [];
+
+        setIsSearching(false);
+        setSuggestions(results);
+
+        if (error) {
+            //   A failed lookup is not "no such address". Saying so would send
+            //   a buyer to correct an address that is already right.
+            setSearchNotice(error);
+            if (announce) showToast(error, "error");
+            return [];
+        }
+        if (results.length === 0) {
+            setSearchNotice("No match on the map. Check the spelling, or use Verify Address to place it by state.");
+            if (announce) showToast("No matching address found.", "warning");
+        }
+        return results;
+    }, [deliveryAddress.city, deliveryAddress.state, showToast]);
 
     // Manual geocoding function for input addresses
-    const geocodeManualAddress = useCallback((force = false) => {
+    const geocodeManualAddress = useCallback(async (force = false) => {
         if (!deliveryAddress.street.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state) {
             // Do not geocode automatically if required fields are missing
             if (force === true) {
@@ -385,93 +342,95 @@ export default function CheckoutPage() {
 
         const addressStr = `${deliveryAddress.street}, ${deliveryAddress.city}, ${deliveryAddress.state}, Nigeria`;
 
-        // Check if Google Maps Geocoder is available
-        const hasGoogleGeocoder = typeof window !== "undefined" && (window as any).google?.maps?.Geocoder;
+        /**
+         * The state's centroid — the answer when the map has none.
+         *
+         *   Unchanged from before, and still the last resort rather than the
+         *   first: it prices a delivery from the middle of a state, which is
+         *   approximately right everywhere and exactly right nowhere.
+         */
+        const fallbackToState = (reason: string | null) => {
+            const centroid = stateCentroid(deliveryAddress.state);
 
-        if (hasGoogleGeocoder) {
-            try {
-                const geocoder = new (window as any).google.maps.Geocoder();
-                geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-                    setIsGeocoding(false);
-                    if (status === "OK" && results && results[0] && results[0].geometry) {
-                        const loc = results[0].geometry.location;
-                        setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
-                        setIsAddressVerified(true);
-                        setVerificationError(null);
-                        showToast("Location successfully verified on Google Maps!", "success");
-                    } else {
-                        console.error("Geocoding failed for manual address:", status);
-                        // Local geocoding fallback
-                        const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                            s => s.toLowerCase() === deliveryAddress.state.toLowerCase()
-                        );
-                        if (matchedState) {
-                            setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
-                            setIsAddressVerified(true);
-                            setVerificationError(null);
-                            showToast(`Address verified using local ${matchedState} state coordinates fallback.`, "success");
-                        } else {
-                            setDestinationCoords(null);
-                            setIsAddressVerified(false);
-                            let errMsg = `Google Places could not find this location (Status: ${status}). Try selecting from the dropdown or click 'Use Address Anyway' to bypass.`;
-                            if (status === "REQUEST_DENIED") {
-                                errMsg = "Google Maps API request was denied. This usually means the Geocoding API or Places API is not enabled in your Google Cloud Console, or billing is not linked to your project. Please verify your Google Developer Console settings, or click 'Use Address Anyway' to bypass.";
-                            }
-                            setVerificationError(errMsg);
-                            showToast(status === "REQUEST_DENIED" ? "Maps API request denied. See details below." : "Could not verify address. Please use the dropdown options or bypass.", "error");
-                        }
-                    }
-                });
-            } catch (e: any) {
-                console.error("Error in Google geocodeManualAddress:", e);
-                // Local geocoding fallback on catch
-                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                    s => s.toLowerCase() === deliveryAddress.state.toLowerCase()
-                );
-                if (matchedState) {
-                    setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
-                    setIsAddressVerified(true);
-                    setVerificationError(null);
-                    showToast(`Address verified using local ${matchedState} state coordinates fallback.`, "success");
-                } else {
-                    setIsGeocoding(false);
-                    setDestinationCoords(null);
-                    setIsAddressVerified(false);
-                    setVerificationError(e?.message || "Google Maps could not be loaded. Please check your connection or use the bypass below.");
-                    showToast("Address verification failed.", "error");
-                }
-            }
-        } else {
-            // No Google Maps geocoder available, use local state coordinates
-            const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                s => s.toLowerCase() === deliveryAddress.state.toLowerCase()
-            );
-            setIsGeocoding(false);
-            if (matchedState) {
-                setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
+            if (centroid) {
+                setDestinationCoords(centroid);
                 setIsAddressVerified(true);
                 setVerificationError(null);
-                showToast(`Address verified using local ${matchedState} state coordinates fallback.`, "success");
-            } else {
-                setDestinationCoords(null);
-                setIsAddressVerified(false);
-                setVerificationError("Google Maps is not loaded and the selected state is invalid. Please select a valid state.");
-                showToast("State coordinates not found.", "error");
+                showToast(`Address placed using ${deliveryAddress.state} state coordinates.`, "success");
+                return;
             }
-        }
-    }, [deliveryAddress, showToast]);
 
-    // Auto-geocode when fields change and are complete, debounced by 1000ms
-    useEffect(() => {
-        if (isAddressVerified) return;
-        if (!deliveryAddress.street.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state) {
+            setDestinationCoords(null);
+            setIsAddressVerified(false);
+            setVerificationError(reason
+                || "We could not place this address. Please check the state, or continue anyway.");
+            showToast("Could not verify address.", "error");
+        };
+
+        const { results, error } = await geocodeAddress(addressStr, { limit: 1 });
+        setIsGeocoding(false);
+
+        if (results.length > 0) {
+            setDestinationCoords({ lat: results[0].lat, lng: results[0].lng });
+            setIsAddressVerified(true);
+            setVerificationError(null);
+            showToast("Address located on the map.", "success");
             return;
         }
-        const timer = setTimeout(() => {
-            geocodeManualAddress(false);
-        }, 1000);
+
+        //   A SERVICE FAILURE AND A GENUINE MISS ARE DIFFERENT THINGS and the
+        //   Google version collapsed them, telling a buyer her address could
+        //   not be found when the API key had been refused.
+        fallbackToState(error
+            ? `${error} Your address has been placed by state instead.`
+            : null);
+    }, [deliveryAddress, showToast]);
+
+    /*
+     *   ── ONE LOOKUP PER PAUSE, NOT TWO ──────────────────────────────────────
+     *
+     *   This replaced two debounced effects, and for a while during the change
+     *   it WAS two: a suggestion search at 800ms and the original auto-verify
+     *   at 1000ms, both firing on the same typing. That is twice the request
+     *   rate against a ceiling this platform does not control, for one buyer
+     *   typing one address.
+     *
+     *   So there is one search, and the auto-verify rides the results it
+     *   already has. It sets the COORDINATES only and leaves the typed city and
+     *   state alone, exactly as the version before it did — filling the fields
+     *   in is what picking a suggestion does, and doing it silently would
+     *   overwrite what the buyer typed with the geocoder's spelling of it.
+     *
+     *   Nominatim's policy is the reason for the wait, and lib/nominatim owns
+     *   the number so it cannot be tuned down from here.
+     */
+    useEffect(() => {
+        if (isAddressVerified) return;
+
+        const street = deliveryAddress.street.trim();
+        if (street.length < 3) {
+            setSuggestions([]);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            const results = await searchAddress(street, false);
+            if (results.length === 0) return;
+            if (!deliveryAddress.city.trim() || !deliveryAddress.state) return;
+
+            setDestinationCoords({ lat: results[0].lat, lng: results[0].lng });
+            setIsAddressVerified(true);
+            setVerificationError(null);
+        }, SEARCH_DEBOUNCE_MS);
+
         return () => clearTimeout(timer);
-    }, [deliveryAddress.street, deliveryAddress.city, deliveryAddress.state, deliveryAddress.lga, isAddressVerified, geocodeManualAddress]);
+    }, [
+        deliveryAddress.street, deliveryAddress.city, deliveryAddress.state,
+        isAddressVerified, searchAddress,
+    ]);
+
+    //   Nothing in flight outlives the page.
+    useEffect(() => () => { searchAbort.current?.abort(); }, []);
 
     // Recalculate distance when destination or product coordinates change
     useEffect(() => {
@@ -497,7 +456,7 @@ export default function CheckoutPage() {
         }
     }, [destinationCoords, productCoords, cart]);
 
-    const handleUseSavedAddress = () => {
+    const handleUseSavedAddress = async () => {
         if (!savedAddress) return;
         setDeliveryAddress({
             street: savedAddress.street,
@@ -505,67 +464,43 @@ export default function CheckoutPage() {
             state: savedAddress.state,
             lga: savedAddress.lga,
         });
+        setSuggestions([]);
+        setSearchNotice(null);
+        showToast("Address populated from your profile!", "success");
 
-        // Geocode the saved address
-        const fullAddressStr = `${savedAddress.street}, ${savedAddress.city || ""}, ${savedAddress.state}, Nigeria`;
-        try {
-            if (typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
-                const geocoder = new (window as any).google.maps.Geocoder();
-                geocoder.geocode({ address: fullAddressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-                    if (status === "OK" && results && results[0] && results[0].geometry) {
-                        const loc = results[0].geometry.location;
-                        setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
-                        setIsAddressVerified(true);
-                        setVerificationError(null);
-                    } else {
-                        console.error("Geocoding failed for saved address:", status);
-                        // Fallback locally
-                        const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                            s => s.toLowerCase() === savedAddress.state.toLowerCase()
-                        );
-                        if (matchedState) {
-                            setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
-                            setIsAddressVerified(true);
-                            setVerificationError(null);
-                        } else {
-                            setIsAddressVerified(false);
-                            let errMsg = `Saved address could not be verified by Google Places (Status: ${status}).`;
-                            if (status === "REQUEST_DENIED") {
-                                errMsg = "Google Maps API request was denied for your saved address. This usually means the Geocoding API is not enabled in Google Cloud Console, or billing is not linked to your project. Click 'Verify Address' to retry or click 'Use Address Anyway' below.";
-                            }
-                            setVerificationError(errMsg);
-                        }
-                    }
-                });
-            } else {
-                console.error("Google Maps Geocoder is not loaded yet. Falling back to local state coordinates.");
-                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                    s => s.toLowerCase() === savedAddress.state.toLowerCase()
-                );
-                if (matchedState) {
-                    setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
-                    setIsAddressVerified(true);
-                    setVerificationError(null);
-                } else {
-                    setIsAddressVerified(false);
-                    setVerificationError("Google Maps Geocoder is not loaded yet. Click 'Verify Address' when loaded or use the bypass below.");
-                }
-            }
-        } catch (e: any) {
-            console.error("Error in handleUseSavedAddress geocoding:", e);
-            // Fallback locally
-            const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                s => s.toLowerCase() === savedAddress.state.toLowerCase()
-            );
-            if (matchedState) {
-                setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
-                setIsAddressVerified(true);
-                setVerificationError(null);
-            } else {
-                setIsAddressVerified(false);
-                setVerificationError(e?.message || "An error occurred during saved address geocoding.");
-            }
+        /*
+         *   THE SAME PLACEMENT AS THE TYPED PATH, through the same door.
+         *
+         *   This was seventy lines of Google Geocoder with three fallback
+         *   branches that each rebuilt the state-centroid lookup, and the
+         *   messages it could reach named the Google Cloud Console and a
+         *   billing account — to a buyer, on a checkout screen, as an
+         *   explanation of why her own saved address would not verify.
+         */
+        setIsGeocoding(true);
+        const fullAddress = `${savedAddress.street}, ${savedAddress.city || ""}, ${savedAddress.state}, Nigeria`;
+        const { results } = await geocodeAddress(fullAddress, { limit: 1 });
+        setIsGeocoding(false);
+
+        if (results.length > 0) {
+            setDestinationCoords({ lat: results[0].lat, lng: results[0].lng });
+            setIsAddressVerified(true);
+            setVerificationError(null);
+            return;
         }
+
+        const centroid = stateCentroid(savedAddress.state);
+
+        if (centroid) {
+            setDestinationCoords(centroid);
+            setIsAddressVerified(true);
+            setVerificationError(null);
+            return;
+        }
+
+        setIsAddressVerified(false);
+        setVerificationError(
+            "We could not place your saved address. Check the state on it, or continue anyway.");
         showToast("Address populated from your profile!", "success");
     };
 
@@ -771,10 +706,10 @@ export default function CheckoutPage() {
         }
 
         if (!isAddressVerified || !destinationCoords) {
-            setError("Address verification is required. If Google Places cannot locate your address, click the 'Use Address Anyway' option under the Street Address field to proceed.");
+            setError("Address verification is required. If the map cannot locate your address, click the 'Use Address Anyway' option under the Street Address field to proceed.");
             showToast("Address verification required.", "error");
             if (!verificationError) {
-                setVerificationError("Google Places verification is required. If your address is not found, click 'Use Address Anyway' below to proceed.");
+                setVerificationError("Address verification is required. If your address is not found, click 'Use Address Anyway' below to proceed.");
             }
             return;
         }
@@ -1051,25 +986,50 @@ export default function CheckoutPage() {
                                                 setDestinationCoords(null);
                                                 setVerificationError(null);
                                             }}
-                                            onBlur={() => geocodeManualAddress(false)}
                                             placeholder="e.g. 123 Main Street"
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                                            autoComplete="off"
                                             required
                                         />
+
+                                        {/*
+                                          *   THE SUGGESTION LIST, which replaces the
+                                          *   Google Places dropdown. It is a real list
+                                          *   in this page rather than a control Google
+                                          *   attaches to the input, so it is styled with
+                                          *   the rest of the form and cannot be painted
+                                          *   grey by a refused key.
+                                          */}
+                                        {suggestions.length > 0 && !isAddressVerified && (
+                                            <ul className="mt-2 border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white shadow-sm">
+                                                {suggestions.map((place, index) => (
+                                                    <li key={`${place.lat},${place.lng},${index}`}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => applySuggestion(place)}
+                                                            className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                                        >
+                                                            {place.label}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+
                                         <div className="mt-2 space-y-2">
                                             <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
                                                 <div>
-                                                    {isGeocoding ? (
+                                                    {isGeocoding || isSearching ? (
                                                         <span className="text-blue-600 font-medium flex items-center gap-1 animate-pulse">
-                                                            🌀 Locating address via Google Places...
+                                                            🌀 Searching OpenStreetMap...
                                                          </span>
-                                                    ) : mapsError ? (
-                                                        <span className="text-red-600 font-medium flex items-center gap-1">
-                                                            🔴 Google Maps failed to load. Please use the bypass below.
-                                                        </span>
                                                     ) : isAddressVerified && destinationCoords ? (
                                                         <span className="text-green-600 font-semibold flex items-center gap-1">
                                                             🟢 Address verified (Distance: {distance} km)
+                                                        </span>
+                                                    ) : searchNotice ? (
+                                                        <span className="text-amber-600 font-medium flex items-center gap-1">
+                                                            🟡 {searchNotice}
                                                         </span>
                                                     ) : (
                                                         <span className="text-amber-600 font-medium flex items-center gap-1">
@@ -1077,19 +1037,38 @@ export default function CheckoutPage() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => geocodeManualAddress(true)}
-                                                    disabled={isGeocoding || !deliveryAddress.street.trim()}
-                                                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold rounded-lg border border-slate-300 transition-colors shrink-0"
-                                                >
-                                                    Verify Address
-                                                </button>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {/*
+                                                      *   The deliberate press. Typing pauses
+                                                      *   search too, but a buyer who wants an
+                                                      *   answer NOW should not have to stop
+                                                      *   typing to get one — and Nominatim's
+                                                      *   policy is the reason there is no
+                                                      *   per-keystroke option. See
+                                                      *   lib/nominatim.
+                                                      */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => searchAddress(deliveryAddress.street, true)}
+                                                        disabled={isSearching || !deliveryAddress.street.trim()}
+                                                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold rounded-lg border border-slate-300 transition-colors"
+                                                    >
+                                                        Search
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => geocodeManualAddress(true)}
+                                                        disabled={isGeocoding || !deliveryAddress.street.trim()}
+                                                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold rounded-lg border border-slate-300 transition-colors"
+                                                    >
+                                                        Verify Address
+                                                    </button>
+                                                </div>
                                             </div>
 
                                             {isAddressVerified && destinationCoords && (
                                                 <div className="mt-3">
-                                                    <CheckoutMapFallback
+                                                    <CheckoutRouteMap
                                                         destination={destinationCoords}
                                                         products={cart.map(item => ({
                                                             id: item.id,
@@ -1158,12 +1137,10 @@ export default function CheckoutPage() {
                                                     lga: "" // Reset LGA when state changes
                                                 });
                                                 setVerificationError(null);
-                                                // Auto-set coords from local state map — works without Google Maps
-                                                const matchedStateKey = Object.keys(NIGERIAN_STATE_COORDINATES).find(
-                                                    s => s.toLowerCase() === selectedState.toLowerCase()
-                                                );
-                                                if (matchedStateKey) {
-                                                    setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedStateKey]);
+                                                // Auto-set coords from the local state table — no lookup needed
+                                                const centroid = stateCentroid(selectedState);
+                                                if (centroid) {
+                                                    setDestinationCoords(centroid);
                                                     setIsAddressVerified(true);
                                                 } else {
                                                     setIsAddressVerified(false);
@@ -1354,56 +1331,6 @@ export default function CheckoutPage() {
                         </div>
                     </div>
                 </div>
-                {/*
-                  *   #821 CHECKOUT LOADED GOOGLE MAPS WITH A KEY THAT IS NOT A
-                  *   MAPS KEY, AND CALLED THE RESULT SUCCESS.
-                  *
-                  *   The owner: "the google mapping and location is not fixed?"
-                  *
-                  *   TWO DEFECTS, and the second is why nobody could see the
-                  *   first.
-                  *
-                  *   1. THE KEY. This fell back to
-                  *      NEXT_PUBLIC_FIREBASE_API_KEY when no Maps key was set.
-                  *      A Firebase Web API key is not enabled for the Maps
-                  *      JavaScript API, so Google rejects it. The code knew:
-                  *      it console.warn'd "might cause restriction errors" and
-                  *      then did it anyway.
-                  *
-                  *   2. THE REJECTION IS NOT A LOAD ERROR. `onError` fires for
-                  *      a NETWORK failure. A rejected key is not one — the
-                  *      script is served 200, runs, and Google paints its own
-                  *      grey "This page can't load Google Maps correctly" box.
-                  *      So `onLoad` fired, mapsLoaded went true, and the app
-                  *      believed Maps was working while the buyer looked at a
-                  *      broken map and geocoding quietly returned nothing.
-                  *
-                  *   That is the silent-failure shape this audit keeps meeting:
-                  *   the call succeeded, the outcome did not, and only the
-                  *   person looking at the screen could tell.
-                  *
-                  *   WHAT CHANGES. Google is loaded ONLY with a real Maps key.
-                  *   With none configured the script is not requested at all
-                  *   and checkout uses the Leaflet/OpenStreetMap fallback,
-                  *   which needs no key and no account — so this works on a
-                  *   deployment that has never been given one.
-                  *
-                  *   And `gm_authFailure` — the callback Google itself invokes
-                  *   when it refuses a key — is wired to the same error state,
-                  *   so a WRONG key is reported instead of rendering grey.
-                  */}
-                {GOOGLE_MAPS_KEY ? (
-                    <Script
-                        src={`https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places`}
-                        onLoad={() => setMapsLoaded(true)}
-                        onError={() => {
-                            console.error("Google Maps Script failed to load");
-                            setMapsError(true);
-                            setVerificationError("Google Maps library failed to load. Please check your internet connection or click 'Use Address Anyway' below to bypass.");
-                        }}
-                        strategy="afterInteractive"
-                    />
-                ) : null}
             </div>
         </MarketplaceErrorBoundary>
     );

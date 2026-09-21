@@ -112,12 +112,18 @@ describe('#643 — every wrapped route names its own key space', () => {
     it('THE SWEEP FINDS THE ROUTES IT IS ABOUT — a positive control', () => {
         /*
          *   Without this, a regex that matched nothing would make every
-         *   assertion below pass over a codebase that still pools. Thirteen
-         *   call sites across twelve routes; the admin password-reset file
+         *   assertion below pass over a codebase that still pools. FOURTEEN
+         *   call sites across THIRTEEN routes; the admin password-reset file
          *   wraps two methods.
+         *
+         *   13/12 -> 14/13: api/geocode, added with the OpenStreetMap delivery
+         *   address. It takes its own `geocode` budget rather than the shared
+         *   `api` one, which is the rule this file exists to hold — 200 a
+         *   minute of the shared limit is two hundred times Nominatim's own
+         *   ceiling.
          */
-        expect(wrapped.length).toBe(13);
-        expect(new Set(wrapped.map((w) => w.file)).size).toBe(12);
+        expect(wrapped.length).toBe(14);
+        expect(new Set(wrapped.map((w) => w.file)).size).toBe(13);
     });
 
     it('AND NOT ONE OF THEM IS UNNAMED', () => {
