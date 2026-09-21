@@ -1,6 +1,7 @@
 "use server";
 
 import { userMetricsService } from "@/services";
+import { settledAt } from "@/lib/payment-settlement";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
@@ -184,7 +185,25 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             const amount = Number(p.amount) || 0;
             totalCourseRevenue += amount;
 
-            const date = p.createdAt?.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+            //   WHEN THE MONEY MOVED, not when the row was written.
+            //
+            //   This read `createdAt`, which on a ledger row is the moment the
+            //   INSERT ran. For anything backfilled that is the date of the
+            //   backfill: the Paystack reconciliation found five Academy
+            //   payments spanning February to May all stamped 2026-07-06, so a
+            //   month-over-month figure counted them in whichever month the
+            //   import happened to land in. settledAt prefers the processor's
+            //   own paid_at and falls back to createdAt. See
+            //   lib/payment-settlement.
+            //
+            //   A row with no readable date is left OUT of both buckets rather
+            //   than silently landing in the current one — it still counts in
+            //   totalCourseRevenue, so the totals and the monthly split can
+            //   disagree, and that disagreement is the visible symptom of a row
+            //   nobody can date.
+            const date = settledAt(p);
+            if (!date) return;
+
             if (date >= thirtyDaysAgo) {
                 monthlyRevenue += amount;
             } else if (date >= sixtyDaysAgo && date < thirtyDaysAgo) {

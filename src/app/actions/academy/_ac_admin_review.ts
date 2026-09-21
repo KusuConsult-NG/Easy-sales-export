@@ -1,6 +1,8 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -326,6 +328,17 @@ export const rejectAcademyApplicationAction = withFlexibleSafeAction("rejectAcad
 /**
  * Update Academy Application Payment Status (Admin)
  */
+/**
+ * Is this the admin saying money actually arrived?
+ *
+ *   The signature is "pending" | "completed" | "paid" and only the last two
+ *   mean settled. Shared with the ledger write below so the row and the
+ *   `paymentVerifiedAt`/`paymentVerifiedBy` stamps cannot disagree about it.
+ */
+function isSettledAdminPayment(status: string): boolean {
+    return status === "completed" || status === "paid";
+}
+
 async function _updateAcademyApplicationPaymentAction(
     applicationId: string,
     paymentStatus: "pending" | "completed" | "paid",
@@ -379,8 +392,8 @@ async function _updateAcademyApplicationPaymentAction(
                 paymentStatus,
                 paymentAmount,
                 plan: normalisedPlan,
-                paymentVerifiedAt: paymentStatus === "completed" || paymentStatus === "paid" ? FieldValue.serverTimestamp() : null,
-                paymentVerifiedBy: paymentStatus === "completed" || paymentStatus === "paid" ? session.user.id : null,
+                paymentVerifiedAt: isSettledAdminPayment(paymentStatus) ? FieldValue.serverTimestamp() : null,
+                paymentVerifiedBy: isSettledAdminPayment(paymentStatus) ? session.user.id : null,
                 _version: FieldValue.increment(1),
             });
 
@@ -398,6 +411,82 @@ async function _updateAcademyApplicationPaymentAction(
         //   and checkCourseAccess reads `plan` from it. Cleared after the
         //   transaction commits, not inside it.
         if (applicantUserId) await invalidateServiceCache(applicantUserId, 'academy');
+
+        //   MONEY AN ADMIN VERIFIES NOW REACHES THE LEDGER.
+        //
+        //   This door recorded ₦`paymentAmount` on the application and the user
+        //   registration and wrote NOTHING to processed_payments — the file did
+        //   not mention it. So a bank transfer an admin confirmed was invisible
+        //   to every figure built on the ledger, which is what totalCourseRevenue
+        //   and the fabricated-payment sweep both read. A Paystack
+        //   reconciliation of the Academy cohort found real settled money with
+        //   no ledger row behind it; this is one way that happens.
+        //
+        //   THE REFERENCE IS DELIBERATELY NOT PAYSTACK-SHAPED. There is no
+        //   processor reference here — nobody charged a card — so inventing
+        //   something that looks like one would put a row in the ledger that a
+        //   reconciliation could never match and would eventually be read as
+        //   fabricated. `admin-verified:<applicationId>` says what it is, and
+        //   being deterministic it is also the idempotency key: claimPaymentOnce
+        //   is INSERT … ON CONFLICT DO NOTHING, so recording the same payment
+        //   twice writes one row.
+        //
+        //   NO paidAt. We know when the admin verified, not when the money
+        //   landed, and settledAt falls back to created_at rather than being
+        //   handed a date nobody observed.
+        if (applicantUserId && isSettledAdminPayment(paymentStatus) && Number(paymentAmount) > 0) {
+            try {
+                //   ONLY WHEN NOTHING IS THERE ALREADY. If the webhook also
+                //   fulfilled this learner, a second row would double the money
+                //   in every total. The admin row is the fallback for the case
+                //   where no processor row exists, never an addition to one.
+                //   EVERY PROFILE THIS PERSON OWNS, not just the id on the
+                //   application. A learner with a split account has their
+                //   processor payment filed under the OTHER row, so a bare
+                //   `where("userId", "==", …)` would find nothing and write the
+                //   duplicate admin row this guard exists to prevent — doubling
+                //   the money in every total, which is exactly the failure the
+                //   guard was added for.
+                const existing = await filterByOwner(
+                    db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
+                    await ownedProfileIdsFor(applicantUserId),
+                )
+                    .where("type", "in", ["academy_registration", "academy_enrollment"])
+                    .where("status", "==", "completed")
+                    .limit(1)
+                    .get();
+
+                if (existing.empty) {
+                    await claimPaymentOnce({
+                        reference: `admin-verified:${applicationId}`,
+                        userId: applicantUserId,
+                        amount: Number(paymentAmount),
+                        type: "academy_registration",
+                        source: "admin_verified",
+                        metadata: {
+                            applicationId,
+                            verifiedBy: session.user.id,
+                            plan: normalisedPlan ?? null,
+                        },
+                    });
+                } else {
+                    logger.info(
+                        `[Academy Admin Payment] ${applicationId}: a processor row already exists for `
+                        + `${applicantUserId}; not writing an admin-verified row over it.`,
+                    );
+                }
+            } catch (ledgerErr) {
+                //   The application and the registration are already written and
+                //   the learner has their place. A ledger write that fails must
+                //   not undo that or fail the admin's action — it is loud and
+                //   reconcilable instead.
+                logger.error(
+                    `[Academy Admin Payment] ${applicationId}: recorded on the application but NOT in `
+                    + `processed_payments. Revenue will under-count until this is reconciled.`,
+                    ledgerErr,
+                );
+            }
+        }
 
         await createAdminAuditLog({
             action: "academy_update_payment",

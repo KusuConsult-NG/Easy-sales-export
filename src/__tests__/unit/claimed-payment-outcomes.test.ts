@@ -265,7 +265,26 @@ describe('#259 — the rule, across every claim site', () => {
      * Paystack retries the delivery: the retry IS the recovery, and a
      * reconciliation row would be noise in a queue a person works by hand.
      */
-    const NEEDS_NO_MARKER = new Set(['src/app/api/webhooks/paystack/route.ts']);
+    /**
+     * The second, for the same structural reason and not a weaker one.
+     *
+     * academy/_ac_admin_review claims LAST, not first. An admin recording a
+     * verified bank transfer writes the application and the registration inside
+     * a transaction, and the ledger row is bookkeeping ABOUT that write — so the
+     * claim is the final statement, with no fulfilment after it to die. The
+     * inversion is deliberate: gating an admin's record of a payment on a ledger
+     * write would let a bookkeeping hiccup refuse the thing they actually asked
+     * for.
+     *
+     * Its catch is loud and names the consequence ("revenue will under-count
+     * until this is reconciled"), and scripts/reconcile-paystack-ledger.ts is
+     * the queue that finds it — the same job markFulfilmentFailed exists to
+     * feed, reached the other way round.
+     */
+    const NEEDS_NO_MARKER = new Set([
+        'src/app/api/webhooks/paystack/route.ts',
+        'src/app/actions/academy/_ac_admin_review.ts',
+    ]);
 
     it('AND EVERY ONE CAN RECORD A FULFILMENT THAT DIED', () => {
         // markFulfilmentFailed is the codebase's own answer to "claimed, then
