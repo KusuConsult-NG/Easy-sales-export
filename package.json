@@ -62,6 +62,7 @@
     "stack:up": "bash scripts/local-stack/up.sh",
     "stack:down": "bash scripts/local-stack/down.sh",
     "sql:only": "node scripts/build-deploy-sql.mjs --only",
+    "sql:apply": "node scripts/apply-sql.mjs",
     "assets:manifest": "node scripts/generate-public-asset-manifest.mjs"
   },
   "dependencies": {

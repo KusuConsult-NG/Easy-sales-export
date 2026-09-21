@@ -12,6 +12,7 @@ import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { checkAcademyPayment } from "@/lib/academy-plan";
+import { checkCooperativeRegistrationPayment } from "@/lib/cooperative-limits";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import { membershipRefForPayment } from "@/lib/cooperative-member-lookup";
@@ -706,10 +707,20 @@ export async function processExportInvestment(reference: string, amount: number,
 export async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string, membershipId?: string, paidAt?: Date) {
     const normalisedTier = "Member";
 
-    const expectedAmount = 10000; // Registration fee is 10,000 NGN
-
-    if (amount < expectedAmount - 1) {
-        logger.error(`[Paystack Webhook] Cooperative Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
+    // The shared rule, so the three registration paths cannot drift — and so
+    // an amount that could not be read is refused rather than waved through.
+    // lib/cooperative-limits.ts has the whole account; the short version is
+    // that `const expectedAmount = 10000` stood here while register/route.ts
+    // and verify-payment/route.ts both read COOPERATIVE_CONFIG, and that
+    // `NaN < expectedAmount - 1` is FALSE.
+    const amountVerdict = checkCooperativeRegistrationPayment(amount);
+    if (!amountVerdict.ok) {
+        logger.error(`[Paystack Webhook] Cooperative payment refused on amount`, {
+            reference,
+            reason: amountVerdict.reason,
+            paid: amount,
+            expected: amountVerdict.fee,
+        });
         throw new Error("Insufficient payment amount");
     }
 
