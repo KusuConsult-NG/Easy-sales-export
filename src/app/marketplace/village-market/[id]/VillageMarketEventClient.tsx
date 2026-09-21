@@ -327,19 +327,42 @@ export default function VillageMarketEventClient({ initial = null }: { initial?:
             </div>
 
             <div className="max-w-5xl mx-auto px-6 py-8">
-                {/* Add Product Banner */}
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-8 flex items-center justify-between gap-4 flex-wrap">
-                    <div>
-                        <p className="font-semibold text-emerald-900">Are you participating in this event?</p>
-                        <p className="text-sm text-emerald-700">List your products to appear in this flash sale.</p>
+                {/*
+                  *   ADD PRODUCT IS FOR PARTICIPANTS, AND THIS ASKED NOBODY.
+                  *
+                  *   THE OWNER: "Remove add product button for buyers".
+                  *
+                  *   The banner was unconditional — every visitor to a Village
+                  *   Market event, buyer included, was asked "Are you
+                  *   participating in this event?" and offered Add Product.
+                  *
+                  *   The server was never fooled: addFlashSaleProductAction
+                  *   refuses anyone who is not in `participantSellerIds`, and
+                  *   joining requires sellerIsApproved. So a buyer pressing it
+                  *   got "You must join the event before listing products" — a
+                  *   refusal naming a step they can never complete, which is
+                  *   the shape this codebase keeps finding and fixing.
+                  *
+                  *   GATED ON `hasJoined`, NOT ON A ROLE. It is the same
+                  *   question the server asks, read from the event's own
+                  *   participant list, so the button appears exactly when the
+                  *   action behind it would succeed. A roles check would also
+                  *   have gone stale the way the marketplace hub link did.
+                  */}
+                {hasJoined && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-8 flex items-center justify-between gap-4 flex-wrap">
+                        <div>
+                            <p className="font-semibold text-emerald-900">You are participating in this event</p>
+                            <p className="text-sm text-emerald-700">List your products to appear in this flash sale.</p>
+                        </div>
+                        <button
+                            onClick={() => setShowAddProduct(true)}
+                            className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition text-sm flex items-center gap-2"
+                        >
+                            <ShoppingBag className="w-4 h-4" /> Add Product
+                        </button>
                     </div>
-                    <button
-                        onClick={() => setShowAddProduct(true)}
-                        className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition text-sm flex items-center gap-2"
-                    >
-                        <ShoppingBag className="w-4 h-4" /> Add Product
-                    </button>
-                </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Flash Sale Products */}
