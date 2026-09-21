@@ -213,9 +213,24 @@ dbDescribe('#467 — every dedicated table can be ordered by created_at cheaply'
     it('POSITIVE CONTROL: a query with no index still sorts', async () => {
         // Without this, "no Sort node" could mean the plan text is being read
         // wrongly rather than the index being used.
+        //
+        //   ORDERED BY AN EXPRESSION NO INDEX CAN SERVE, not by a bare column
+        //   that merely happens to be unindexed today.
+        //
+        //   This read `order by raw_data->>'fullName'`, chosen because nothing
+        //   indexed it — and 047 then indexed it, for the admin search box.
+        //   The planner started answering from idx_users_full_name, the Sort
+        //   node vanished, and a control that was correct went red without
+        //   anything it was controlling for having changed.
+        //
+        //   A control that depends on the absence of an index is a control
+        //   that any future index can break. `length(...)` cannot be served by
+        //   a b-tree on the value, so the only way to make this plan
+        //   index-only is to add an index for this expression specifically,
+        //   which nobody will do by accident.
         const { rows } = await client!.query(
             `explain (analyze, format json)
-             select id from users order by raw_data->>'fullName' limit 20`,
+             select id from users order by length(raw_data->>'fullName') limit 20`,
         );
 
         expect(JSON.stringify(rows[0]['QUERY PLAN'])).toContain('"Node Type":"Sort"');
