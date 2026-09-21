@@ -48,6 +48,8 @@ import {
 } from "@/app/actions/admin";
 import type { DuplicateGroup } from "@/lib/duplicate-profile-resolution";
 
+const naira = (n: number) => `₦${n.toLocaleString()}`;
+
 const STATE_STYLE: Record<string, { label: string; cls: string }> = {
     "needs-a-decision": { label: "Needs a decision", cls: "bg-amber-100 text-amber-800 border-amber-200" },
     inconsistent: { label: "Look at this one", cls: "bg-red-100 text-red-800 border-red-200" },
@@ -62,6 +64,9 @@ export default function DuplicateProfilesPage() {
     const [choice, setChoice] = useState<Record<string, string>>({});
     const [reason, setReason] = useState<Record<string, string>>({});
     const [done, setDone] = useState<Record<string, string>>({});
+    //   #806 — consent to move a balance, per group. Never defaulted to true:
+    //   the whole point is that moving somebody's money is a second decision.
+    const [moveMoney, setMoveMoney] = useState<Record<string, boolean>>({});
 
     const load = async () => {
         setLoading(true);
@@ -83,12 +88,30 @@ export default function DuplicateProfilesPage() {
         }
     };
 
+    /** Records that would be superseded by the current choice AND hold money. */
+    const fundedLosers = (group: DuplicateGroup, keepId: string | undefined) =>
+        group.candidates.filter((c) => c.id !== keepId && c.walletBalance > 0);
+
     const apply = async (group: DuplicateGroup) => {
         const keepId = choice[group.email] ?? group.candidates.find((c) => c.recommended)?.id;
         const why = (reason[group.email] ?? "").trim();
         if (!keepId) return;
         if (why.length < 4) {
             setError("Say why that record is the person before applying it.");
+            return;
+        }
+
+        /*
+         *   #806 — the server refuses this too, and says so specifically. This
+         *   is here so the operator is stopped by a sentence naming the amount
+         *   rather than by a round trip.
+         */
+        const stranding = fundedLosers(group, keepId);
+        if (stranding.length > 0 && !moveMoney[group.email]) {
+            setError(
+                `${stranding.map((c) => `${c.id} holds ${naira(c.walletBalance)}`).join(" and ")}. `
+                + "Confirm the move before applying, or keep that record instead.",
+            );
             return;
         }
 
@@ -100,6 +123,7 @@ export default function DuplicateProfilesPage() {
                 keepId,
                 supersedeIds: group.candidates.filter((c) => c.id !== keepId).map((c) => c.id),
                 reason: why,
+                moveBalances: moveMoney[group.email] === true,
             });
             if (!res?.success) {
                 setError(res?.error ?? "Could not apply that decision.");
@@ -107,7 +131,8 @@ export default function DuplicateProfilesPage() {
             }
             setDone((d) => ({
                 ...d,
-                [group.email]: `Kept ${keepId}. ${res.data.superseded.length} record(s) marked superseded.`,
+                [group.email]: `Kept ${keepId}. ${res.data.superseded.length} record(s) marked superseded`
+                    + `${res.data.moved?.length ? `, and moved ${res.data.moved.join(" and ")} onto it` : ""}.`,
             }));
             await load();
         } catch {
@@ -222,6 +247,11 @@ export default function DuplicateProfilesPage() {
                                                         )}
                                                     </p>
                                                     <p className="text-xs text-slate-500 break-all mt-0.5">{c.id}</p>
+                                                    {c.walletBalance > 0 && (
+                                                        <p className="text-xs font-medium text-amber-700 mt-1">
+                                                            holds {naira(c.walletBalance)} in its wallet
+                                                        </p>
+                                                    )}
                                                     <p className="text-xs text-slate-600 mt-1">
                                                         {c.registrations} registration(s) · {c.roles.length} role(s)
                                                         {c.profileComplete ? " · profile complete" : ""}
@@ -231,6 +261,40 @@ export default function DuplicateProfilesPage() {
                                             </label>
                                         ))}
                                     </div>
+
+                                    {!settled && fundedLosers(group, keepId).length > 0 && (
+                                        /*
+                                         *   #806 — THE SECOND DECISION, STATED.
+                                         *
+                                         *   Superseding a funded record used to
+                                         *   be refused outright, with an
+                                         *   instruction ("move the balance
+                                         *   first") that no screen could carry
+                                         *   out. It can be done now, and the
+                                         *   amount is named here rather than
+                                         *   moved quietly: the member can reach
+                                         *   the money on the keeper, but it is
+                                         *   still their money changing rows.
+                                         */
+                                        <label className="mt-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="mt-0.5"
+                                                checked={moveMoney[group.email] === true}
+                                                onChange={(e) =>
+                                                    setMoveMoney((m) => ({ ...m, [group.email]: e.target.checked }))}
+                                            />
+                                            <span className="text-sm text-amber-900">
+                                                Also move{" "}
+                                                {fundedLosers(group, keepId)
+                                                    .map((c) => `${naira(c.walletBalance)} from ${c.id}`)
+                                                    .join(" and ")}{" "}
+                                                onto {keepId}. Without this the group cannot be settled —
+                                                superseding a funded record would leave the money where
+                                                nothing can reach it.
+                                            </span>
+                                        </label>
+                                    )}
 
                                     {!settled && (
                                         <div className="mt-4 flex flex-col sm:flex-row gap-3">

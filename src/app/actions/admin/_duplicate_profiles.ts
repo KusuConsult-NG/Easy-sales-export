@@ -53,7 +53,8 @@ import {
 } from "@/lib/duplicate-profile-resolution";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
-import { walletRowsFor, totalWalletBalance } from "@/lib/wallet-lookup";
+import { walletBalancesFor } from "@/lib/wallet-lookup";
+import { consolidateWalletToLiveProfile } from "@/lib/wallet-ledger";
 
 /** Matches the forensic scan's own paging, so both read the same population. */
 const PAGE = 1000;
@@ -102,9 +103,28 @@ async function _listDuplicateProfileGroupsAction(): Promise<ActionResponse<Dupli
         const byEmail = await loadGroups();
         const groups: DuplicateGroup[] = [];
 
+        /*
+         *   #806 — THE BALANCE IS EVIDENCE, AND IT DECIDES THE GROUP.
+         *
+         *   Superseding a funded record strands the money, so the operator
+         *   needs the figure BEFORE they choose. Until now the server read the
+         *   wallets only on the way to refusing them, which meant the one fact
+         *   that could change their answer arrived after the answer.
+         *
+         *   Read for every candidate in every group, settled ones included: a
+         *   balance on an ALREADY superseded row is the failure this module
+         *   exists to prevent, and no other screen would show it.
+         */
+        const candidateIds = [...byEmail.values()]
+            .filter((rows) => rows.length >= 2)
+            .flatMap((rows) => rows.map((r) => r.id));
+        const balances = await walletBalancesFor(
+            db.collection(COLLECTIONS.WALLETS), candidateIds,
+        );
+
         for (const [email, rows] of byEmail) {
             if (rows.length < 2) continue;
-            groups.push(describeGroup(email, maskAddress(email), rows));
+            groups.push(describeGroup(email, maskAddress(email), rows, balances));
         }
 
         /*
@@ -149,11 +169,18 @@ export interface ResolveDuplicateInput {
     supersedeIds: string[];
     /** Why, in the operator's own words. Recorded on every superseded row. */
     reason: string;
+    /**
+     * Consent to move the balances off the records being superseded — #806.
+     *
+     * Absent or false, a funded record is refused exactly as before. This is
+     * not a formality: see the block that reads it.
+     */
+    moveBalances?: boolean;
 }
 
 async function _resolveDuplicateProfileGroupAction(
     input: ResolveDuplicateInput,
-): Promise<ActionResponse<{ superseded: string[] } | null>> {
+): Promise<ActionResponse<{ superseded: string[]; moved: string[] } | null>> {
     try {
         const authCheck = await requireAdmin("users:update");
         if ("error" in authCheck) {
@@ -166,6 +193,7 @@ async function _resolveDuplicateProfileGroupAction(
             ? [...new Set(input.supersedeIds.map((s) => String(s).trim()).filter(Boolean))]
             : [];
         const reason = String(input?.reason ?? "").trim();
+        const moveBalances = input?.moveBalances === true;
 
         if (!email || !keepId) {
             return { success: false as const, error: "An address and a record to keep are required.", data: null };
@@ -236,28 +264,67 @@ async function _resolveDuplicateProfileGroupAction(
          *   and synchronous, and every rule in it is derivable from the group it
          *   is handed. This one needs a read of another collection.
          */
-        const funded: string[] = [];
-        for (const id of supersedeIds) {
-            const rows = await walletRowsFor(db.collection(COLLECTIONS.WALLETS), id);
-            //   walletRowsFor resolves forward first, so handing it a row that
-            //   ALREADY points somewhere returns that person's whole set. Only
-            //   the row being superseded here matters, so it is picked out by id.
-            const own = rows.filter((r) => r.id === id);
-            if (totalWalletBalance(own) > 0) funded.push(id);
-        }
+        const balances = await walletBalancesFor(
+            db.collection(COLLECTIONS.WALLETS), supersedeIds,
+        );
+        const funded = supersedeIds.filter((id) => (balances[id] ?? 0) > 0);
+        const naira = (n: number) => `₦${n.toLocaleString()}`;
 
-        if (funded.length > 0) {
+        /*
+         *   #806 — IT USED TO REFUSE HERE, AND THE INSTRUCTION IT GAVE COULD
+         *   NOT BE FOLLOWED.
+         *
+         *   "Move the balance onto the record you are keeping first, then
+         *   settle the group." There was no way to do that. The mover is
+         *   migration 046, which re-reads the pointer inside its own
+         *   transaction and answers `not_the_same_person` when the source
+         *   "points somewhere ELSE or points nowhere at all" — its words. A
+         *   split account has no pointer, so:
+         *
+         *       supersede  →  refused, move the money first
+         *       move       →  refused, settle the duplicate first
+         *
+         *   Each named the other as its prerequisite and neither could go
+         *   first. `findStrandedWalletsAction` could not help either: it lists
+         *   rows that ALREADY point somewhere, so a split account never
+         *   appeared on it. The deadlock had no exit inside the product.
+         *
+         * ── WHAT BREAKS IT, AND WHY IT IS SAFE TO ────────────────────────────
+         *
+         *   The pointer is written FIRST and the money moves SECOND. That is
+         *   the only order 046 accepts, and it is not a way around its guard:
+         *   the guard asks whether the platform records these two rows as one
+         *   person, and an admin with `users:update`, a written reason and an
+         *   audit row has just recorded exactly that. 046 still refuses any
+         *   pair this action did not point.
+         *
+         * ── AND WHY IT IS NOT AUTOMATIC ─────────────────────────────────────
+         *
+         *   `moveBalances` is required, and the refusal below now states the
+         *   record and the amount. Moving somebody's money as a silent side
+         *   effect of an identity decision is the shape this audit keeps
+         *   filing against — #463's lesson in one line, "an operator about to
+         *   repair live data is owed the specific sentence".
+         *
+         *   It also costs something real. The header promises that clearing one
+         *   field puts the group back as it was; once the balance has moved
+         *   that is no longer wholly true, because the money is on the keeper.
+         *   The member can reach it there, which is the direction that matters
+         *   — but it is a second act, so it is consented to and audited as one.
+         */
+        if (funded.length > 0 && !moveBalances) {
             logger.warn(
-                `[admin/duplicate-profiles] refused ${maskAddress(email)}: `
-                + `${funded.length} record(s) still hold a wallet balance.`,
+                `[admin/duplicate-profiles] ${maskAddress(email)}: `
+                + `${funded.length} record(s) hold a balance and no move was authorised.`,
             );
+            const detail = funded.map((id) => `${id} (${naira(balances[id] ?? 0)})`).join(", ");
             return {
                 success: false as const,
                 error:
-                    `${funded.length === 1 ? "One of those records" : `${funded.length} of those records`} `
-                    + "still holds a wallet balance. Superseding it would leave the money in a wallet "
-                    + "nothing can reach — not the member, not checkout, not this screen. "
-                    + "Move the balance onto the record you are keeping first, then settle the group.",
+                    `${funded.length === 1 ? "One of those records holds" : `${funded.length} of those records hold`} `
+                    + `a wallet balance — ${detail}. Superseding without moving it would leave the money `
+                    + "in a wallet nothing can reach: not the member, not checkout, not this screen. "
+                    + `Confirm the move onto ${keepId} and apply again.`,
                 data: null,
             };
         }
@@ -272,10 +339,31 @@ async function _resolveDuplicateProfileGroupAction(
             targetType: "user",
             details: `Chose ${keepId} as the person for ${maskAddress(email)}; superseded `
                 + `${supersedeIds.length} record(s). Reason: ${reason}`,
-            metadata: { keepId, supersedeIds, reason },
+            metadata: { keepId, supersedeIds, reason, funded },
         });
 
+        /*
+         *   PUTTING ONE ROW BACK. Not a delete — `FieldValue.delete()` is
+         *   refused by this module's own ratchet, and rightly: nothing here
+         *   destroys. An empty string is what every reader already treats as
+         *   "no pointer", because they all go through `str()`, which answers
+         *   null for it — and `where("_migratedTo", "!=", "")` does not match
+         *   it either, so the row leaves the superseded population the same way
+         *   it would if the field had never been written.
+         */
+        const clearPointer = async (id: string) => {
+            await db.collection(COLLECTIONS.USERS).doc(id).set({
+                _migratedTo: "",
+                supersededAt: null,
+                supersededBy: "",
+                supersededReason: "",
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+        };
+
         const superseded: string[] = [];
+        const movedTotals: string[] = [];
+
         for (const id of supersedeIds) {
             /*
              *   ONE FIELD, MERGED. `_migratedTo` is what every reader already
@@ -284,8 +372,7 @@ async function _resolveDuplicateProfileGroupAction(
              *   rather than that living only in the audit table.
              *
              *   Nothing else is touched. No delete, no clear, no copy between
-             *   rows — which is what makes clearing `_migratedTo` a complete
-             *   undo.
+             *   rows.
              */
             await db.collection(COLLECTIONS.USERS).doc(id).set({
                 _migratedTo: keepId,
@@ -294,15 +381,94 @@ async function _resolveDuplicateProfileGroupAction(
                 supersededReason: reason,
                 updatedAt: FieldValue.serverTimestamp(),
             }, { merge: true });
+
+            if ((balances[id] ?? 0) > 0) {
+                //   Its own audit row, before its own effect, in the same
+                //   vocabulary _wallet_consolidation uses for the same act.
+                await createAdminAuditLog({
+                    action: "wallet_balance_consolidated",
+                    userId: authCheck.userId,
+                    targetId: keepId,
+                    targetType: "wallet",
+                    details: `Moved ${naira(balances[id] ?? 0)} from superseded profile ${id} to `
+                        + `${keepId} while settling ${maskAddress(email)}. Reason: ${reason}`,
+                    metadata: { fromId: id, toId: keepId, reason },
+                });
+
+                let outcome: { moved: boolean; amount: number; reason: string | null };
+                try {
+                    outcome = await consolidateWalletToLiveProfile({
+                        fromId: id, toId: keepId, actorId: authCheck.userId,
+                    });
+                } catch (moveError: any) {
+                    /*
+                     *   THE POINTER GOES BACK. Leaving it would produce exactly
+                     *   the state the old refusal existed to prevent — a
+                     *   superseded row still holding money — and it would be
+                     *   this action that created it.
+                     *
+                     *   The likeliest cause by far is migration 046 not being
+                     *   applied, in which case the RPC does not exist and this
+                     *   throws rather than answering. The operator is told that
+                     *   in the one place they are already looking.
+                     */
+                    await clearPointer(id);
+                    logger.error(
+                        `[admin/duplicate-profiles] wallet move failed for ${id} -> ${keepId}; `
+                        + `pointer rolled back`,
+                        { error: moveError?.message ?? String(moveError) },
+                    );
+                    return {
+                        success: false as const,
+                        error: `${id} was put back: its balance could not be moved (`
+                            + `${moveError?.message ?? "unknown error"}). If migration 046 has not been `
+                            + `applied to this database, that is why. `
+                            + `${superseded.length} record(s) were settled before it.`,
+                        data: null,
+                    };
+                }
+
+                /*
+                 *   `nothing_to_move` IS NOT A FAILURE. It means the balance
+                 *   reached zero between the read above and the call — somebody
+                 *   spent it, or another admin moved it — and the state this
+                 *   asked for now holds. Every other reason means the pair was
+                 *   refused, and the pointer goes back.
+                 */
+                if (!outcome.moved && outcome.reason !== "nothing_to_move") {
+                    await clearPointer(id);
+                    logger.error(
+                        `[admin/duplicate-profiles] wallet move refused for ${id} -> ${keepId}: `
+                        + `${outcome.reason}; pointer rolled back`,
+                    );
+                    return {
+                        success: false as const,
+                        error: `${id} was put back: the database refused to move its balance `
+                            + `(${outcome.reason ?? "no reason given"}). `
+                            + `${superseded.length} record(s) were settled before it.`,
+                        data: null,
+                    };
+                }
+
+                if (outcome.moved) movedTotals.push(`${naira(outcome.amount)} from ${id}`);
+            }
+
             superseded.push(id);
         }
 
         logger.info(
             `[admin/duplicate-profiles] ${authCheck.userId} kept ${keepId} for ${maskAddress(email)} `
-            + `and superseded ${superseded.length} record(s).`,
+            + `and superseded ${superseded.length} record(s)`
+            + `${movedTotals.length > 0 ? `, moving ${movedTotals.join(" and ")}` : ""}.`,
         );
 
-        return { success: true as const, error: null, data: { superseded } };
+        //   `moved` is reported back so the screen can SAY what happened to the
+        //   money rather than leaving the operator to infer it from silence.
+        return {
+            success: true as const,
+            error: null,
+            data: { superseded, moved: movedTotals },
+        };
     } catch (error: any) {
         logger.error("[admin/duplicate-profiles] Could not resolve the group", {
             error: error?.message ?? String(error),

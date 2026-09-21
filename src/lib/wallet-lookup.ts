@@ -58,6 +58,7 @@
  */
 
 import { ownedProfileIdsFor } from "@/lib/owned-profile-ids";
+import { mapWithConcurrency } from "@/lib/bounded-concurrency";
 
 /** One wallet row: whose id it is filed under, and what is on it. */
 export interface WalletRow {
@@ -116,6 +117,44 @@ export async function strandedWalletRows(
 ): Promise<WalletRow[]> {
     const rows = await walletRowsFor(wallets, userId);
     return rows.filter((r) => !r.live && r.balance > 0);
+}
+
+/**
+ * What is filed under exactly these ids — #806.
+ *
+ *   NOT `walletRowsFor`, and the difference is the whole point. That function
+ *   answers "everything this PERSON holds": it resolves forward to the live id
+ *   and then searches backward, so handing it a superseded id returns the live
+ *   row too. Right for a balance a member is shown; wrong for the question the
+ *   duplicate tool asks, which is "would superseding THIS ROW strand
+ *   anything".
+ *
+ *   The old caller got there by taking walletRowsFor and filtering back down to
+ *   `r.id === id` — correct, and a resolve-then-discard per row. This is the
+ *   keyed read it was reducing to, and it is now the ONE source for both the
+ *   figure the screen shows and the refusal the server applies, so the two
+ *   cannot disagree about whether a record holds money.
+ */
+export async function walletBalancesFor(
+    wallets: WalletCollection,
+    ids: readonly string[],
+): Promise<Record<string, number>> {
+    /*
+     *   SEVERAL AT A TIME. The duplicate screen asks this for every candidate
+     *   in every group — about twelve hundred keyed reads on the measured
+     *   population — and #805 is the bill for doing that one await at a time:
+     *   a forensics screen that answered in the morning and timed out by
+     *   evening. Same bound, same reasoning.
+     */
+    const wanted = ids.filter(Boolean);
+    const balances = await mapWithConcurrency(wanted, 8, async (id) => {
+        const snap = await wallets.doc(id).get();
+        return snap.exists ? Number(snap.data()?.balance) || 0 : 0;
+    });
+
+    const out: Record<string, number> = {};
+    wanted.forEach((id, i) => { out[id] = balances[i]; });
+    return out;
 }
 
 /** Every naira this person holds in a wallet, reachable or not. */
