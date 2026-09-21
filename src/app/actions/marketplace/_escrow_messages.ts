@@ -4,6 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
+import { requiredFreeText, MESSAGE_MAX_LENGTH } from "@/lib/free-text";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAnyOwnedBySession, isOwnedBySession } from "@/lib/owned-profile-ids";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
@@ -59,6 +60,19 @@ async function _sendEscrowMessageAction(data: { escrowId: string;
         if (session.user.id !== data.senderId) { return { success: false as const, error: "Unauthorized"};
         }
 
+        //   #812 — THE INPUT ALREADY SAYS WHAT THE RULE IS, and only the input
+        //   was applying it: EscrowChatClient refuses an empty message and caps
+        //   it at 1000 characters. A server action is a public HTTP endpoint, so
+        //   none of that reached here — a blank bubble from a named participant,
+        //   or a message of any size, could be posted straight to it.
+        //
+        //   Checked BEFORE the escrow is read: there is no reason to fetch a row
+        //   in order to refuse an empty string.
+        const body = requiredFreeText(data.message, MESSAGE_MAX_LENGTH, "Message");
+        if (!body.ok) {
+            return { success: false as const, error: body.message };
+        }
+
         const escrowDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(data.escrowId).get();
         if (!escrowDoc.exists) { return { success: false as const, error: "Escrow transaction not found"};
         }
@@ -91,7 +105,7 @@ async function _sendEscrowMessageAction(data: { escrowId: string;
             escrowId: data.escrowId,
             senderId: data.senderId,
             senderName,
-            message: data.message,
+            message: body.text,
             timestamp: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
             read: false };
