@@ -512,56 +512,61 @@ describe('the button, and the slots behind it', () => {
  * ── MUTATION TABLE ──────────────────────────────────────────────────────────
  *
  *   Applied to lib/marketplace-application.ts,
- *   actions/marketplace/_mp_onboarding.ts, the two step components and
- *   MarketplaceOnboardingClient.tsx; this suite re-run each time. Counts are
- *   MEASURED, not predicted.
+ *   actions/marketplace/_mp_onboarding.ts and BusinessVerificationStep.tsx,
+ *   this suite re-run against each. COUNTS ARE MEASURED.
  *
  *   MUTANT                                    DEAD  FIRST TO FAIL
  *   ───────────────────────────────────────── ────  ──────────────────────────
- *   drop the productStatus rule — the defect     4  'NAMES productStatus'
+ *   drop the productStatus rule — the defect     5  'NAMES productStatus'
  *
- *   drop the sellerCategories rule — the         4  'NAMES sellerCategories'
+ *   drop the sellerCategories rule — the         3  'NAMES sellerCategories'
  *   defect, the half that reached the database
  *
- *   restore `|| "retail"` on sellerCategory      2  'NAMES sellerCategory'
+ *   drop the sellerCategory rule, restoring      1  'NAMES sellerCategory'
+ *   the "retail" default
  *
- *   the rule refuses everything (returns one    10  'A COMPLETE APPLICATION IS
- *   entry per field unconditionally)                MISSING NOTHING'
+ *   the rule returns [] always                  22  'NAMES accountType'
  *
- *   the rule returns [] always                  13  'NAMES accountType'
+ *   the rule reads no account type, so it       23  'A COMPLETE APPLICATION IS
+ *   refuses far more than it should                 MISSING NOTHING'
  *
- *   buyerInterests asked of a SELLER too         2  'A COMPLETE APPLICATION IS
+ *   buyerInterests asked of a SELLER too         1  'A COMPLETE APPLICATION IS
  *                                                   MISSING NOTHING'
  *
  *   sellerCategories asked of a BUYER            1  'AND A BUYER IS ASKED WHAT
  *                                                   SHE BUYS'
  *
- *   missingApplicationFields sorted by field     1  'and the FIRST missing
- *   name instead of step order                      answer is the earliest one'
+ *   missing answers sorted by field name         1  'and a step sees only its
+ *   instead of step order                           own questions' — NOT the
+ *                                                   ordering assertion, which
+ *                                                   survives it: sorting the
+ *                                                   whole list happens to keep
+ *                                                   accountType first. The
+ *                                                   step-2 key ORDER is what
+ *                                                   catches it.
  *
- *   server keeps reading documents as Files      5  'RECORDS A DOCUMENT THE
- *   only — the second defect                        BROWSER ALREADY STORED'
+ *   server reads documents as Files only —       3  'RECORDS A DOCUMENT THE
+ *   the second defect                               BROWSER ALREADY STORED'
  *
  *   server takes any URL the client sends        1  'AND REFUSES A URL FROM
  *                                                   SOMEWHERE WE DO NOT STORE'
  *
- *   server takes the URL and stops uploading     2  'POSITIVE CONTROL: A REAL
+ *   server keeps URLs and stops uploading        1  'POSITIVE CONTROL: A REAL
  *   real Files                                      FILE IS STILL UPLOADED'
- *
- *   documents made mandatory                     1  'POSITIVE CONTROL: and an
- *                                                   application with no
- *                                                   documents is still filed'
  *
  *   the rule runs AFTER the uploads              1  'AND REFUSES BEFORE
  *                                                   UPLOADING ANYTHING'
  *
- *   sample slots back to two fixed indices       2  'THE SLOTS ARE NO LONGER
+ *   a product sample made mandatory              5  'A WIZARD SUBMISSION IS
+ *                                                   ACCEPTED'
+ *
+ *   sample slots back to two fixed indices       1  'THE SLOTS ARE NO LONGER
  *                                                   TWO HARD-CODED INDICES'
  *
- *   the cap removed                              1  'AND THE BUTTON STOPS AT
+ *   the cap removed from the button              1  'AND THE BUTTON STOPS AT
  *                                                   THE CAP'
  *
- *   CONTROL — SHOULD SURVIVE
- *   reword this file's module header             0  SURVIVED ✓
+ *   CONTROLS — SHOULD SURVIVE
+ *   reword this module's header                  0  SURVIVED ✓
  *   rename a status LABEL (not its value)        0  SURVIVED ✓
  */
