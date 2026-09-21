@@ -16,7 +16,7 @@ import { registerCooperativeMemberAction } from "./_coop_registration";
 import { isAdmin } from "@/lib/admin-permissions";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { registrationProgressScore } from "@/lib/registration-progress";
-import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { findCooperativeMemberRowForPerson } from "@/lib/cooperative-member-lookup";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 /** How many members one directory read will return. */
@@ -60,7 +60,21 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
          *        That is the shared module's own recorded decision and it is
          *        right.
          */
-        const memberRow = await findCooperativeMemberRow(
+        /*
+         *   #816 — THE PERSON, NOT THE ID IN THE SESSION.
+         *
+         *   `findCooperativeMemberRow` reads the id it is handed and stops, so
+         *   a member whose row sits under a profile they no longer sign in as
+         *   was not found here. #815 fixed the tier reader for exactly this;
+         *   these were the two the file had left.
+         *
+         *   It does NOT weaken the email rule below. The person-aware walk
+         *   resolves OWNED PROFILE IDS and nothing else — no address is matched
+         *   by it — so the claim step stays exactly where it was, behind its own
+         *   guard. If anything it is reached less often, because a row filed
+         *   under the member's other profile is now found before it.
+         */
+        const memberRow = await findCooperativeMemberRowForPerson(
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
         );
 
@@ -138,7 +152,21 @@ async function _getUserTierAction(): Promise<{ success: true; error: null; data:
          *
          *        And the tier decides their loan ceiling.
          */
-        const memberRow = await findCooperativeMemberRow(
+        /*
+         *   #815 — THE PERSON, NOT THE SESSION ID.
+         *
+         *   This read `findCooperativeMemberRow`, which takes the id it is
+         *   handed and stops there. A member whose membership row sits under a
+         *   profile they no longer sign in as therefore read as a NON-member:
+         *   no tier and zero contributions on their own dashboard, and — since
+         *   Farm Nation checkout decides on this answer — refused at the point
+         *   of buying land.
+         *
+         *   #488's note above is about a row keyed by an auto-generated id.
+         *   This is the same wound one layer out: the row is found, but only if
+         *   you look under every profile the person owns.
+         */
+        const memberRow = await findCooperativeMemberRowForPerson(
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
         );
 
@@ -215,7 +243,21 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
          *        — which is how the first copy came to heal a missing `userId`
          *        field and this one not to.
          */
-        const memberRow = await findCooperativeMemberRow(
+        /*
+         *   #816 — THE PERSON, NOT THE ID IN THE SESSION.
+         *
+         *   `findCooperativeMemberRow` reads the id it is handed and stops, so
+         *   a member whose row sits under a profile they no longer sign in as
+         *   was not found here. #815 fixed the tier reader for exactly this;
+         *   these were the two the file had left.
+         *
+         *   It does NOT weaken the email rule below. The person-aware walk
+         *   resolves OWNED PROFILE IDS and nothing else — no address is matched
+         *   by it — so the claim step stays exactly where it was, behind its own
+         *   guard. If anything it is reached less often, because a row filed
+         *   under the member's other profile is now found before it.
+         */
+        const memberRow = await findCooperativeMemberRowForPerson(
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
         );
 

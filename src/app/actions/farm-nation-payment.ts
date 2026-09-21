@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { cooperativeTierForPerson } from "@/lib/cooperative-member-lookup";
 import { releasedReservationFields } from "@/lib/land-reservation-expiry";
 import { logger } from '@/lib/logger';
 import { fulfilPropertyPurchase } from "@/lib/property-purchase-fulfilment";
@@ -74,6 +75,56 @@ async function _initializePropertyPaymentAction(
 
         if (!session?.user) { 
             return { success: false, error: "Authentication required", data: null };
+        }
+
+        /*
+         *   #815 THE MEMBERSHIP RULE, ENFORCED WHERE IT CAN BE.
+         *
+         *   Farm Nation land is sold to cooperative members. That rule lived in
+         *   the checkout SCREEN and nowhere else — `getUserTierAction()` then
+         *   `if (tier !== "Member") router.push(...)` — and this action, which
+         *   is what actually takes the money, checked nothing.
+         *
+         *   A SERVER ACTION IS A PUBLIC HTTP ENDPOINT. A client-side gate on a
+         *   purchase path stops the buyer who uses the buttons and nobody else,
+         *   which is the same finding as the escrow chat's maxLength one layer
+         *   further in: the rule was real, the enforcement was decoration.
+         *
+         *   FIRST, because it is an eligibility rule about the CALLER. There is
+         *   no reason to read a property, price it, or resolve an offer for
+         *   somebody who may not buy it at all.
+         *
+         *   AND IT FAILS CLOSED. A membership that cannot be read is not a
+         *   membership — on the path that charges a card, the safe direction is
+         *   to refuse and say so. The screen tells the buyer the same thing and
+         *   offers a retry, so a transient fault costs a retry rather than a
+         *   wrong charge.
+         */
+        let tier: "Member" | null;
+        try {
+            tier = await cooperativeTierForPerson(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
+            );
+        } catch (error) {
+            logger.error("[farm-nation-payment] could not read cooperative membership", {
+                userId: session.user.id,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return {
+                success: false,
+                error: "We could not confirm your cooperative membership just now. "
+                    + "Nothing has been charged — please try again.",
+                data: null,
+            };
+        }
+
+        if (tier !== "Member") {
+            return {
+                success: false,
+                error: "Land on Farm Nation is sold to cooperative members. "
+                    + "Join the cooperative to complete this purchase.",
+                data: null,
+            };
         }
 
         // Strict validation of zoning compliance declaration
