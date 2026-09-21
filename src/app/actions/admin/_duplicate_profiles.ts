@@ -54,6 +54,7 @@ import {
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { walletBalancesFor } from "@/lib/wallet-lookup";
+import { footprintsFor, clearlyRicher, type Footprint } from "@/lib/profile-footprint";
 import { consolidateWalletToLiveProfile } from "@/lib/wallet-ledger";
 
 /** Matches the forensic scan's own paging, so both read the same population. */
@@ -87,6 +88,22 @@ async function loadGroups(): Promise<Map<string, { id: string; data: Record<stri
 
 export interface DuplicateProfileReport {
     groups: DuplicateGroup[];
+    /**
+     * What each candidate HOLDS — #813, and only for the groups that need a
+     * decision. Keyed by profile id; absent for a candidate not asked about.
+     *
+     * A source that could not be read is `null` in the counts and never 0:
+     * "this record holds nothing" is the sentence that would send an operator
+     * to discard the record that holds everything.
+     */
+    footprints: Record<string, Footprint>;
+    /**
+     * Per group email: the id that clearly holds more, or null when nothing
+     * distinguishes them. NOT a recommendation — the screen already recommends
+     * from the ranking the login itself applies, and a second rule is how a
+     * tool comes to disagree with the platform it describes.
+     */
+    richest: Record<string, string | null>;
     /** Counts by state, so the screen can lead with how much is actually owed. */
     needsADecision: number;
     inconsistent: number;
@@ -135,6 +152,34 @@ async function _listDuplicateProfileGroupsAction(): Promise<ActionResponse<Dupli
          *   and a resolved pair is not, so a screen sorted by size would bury
          *   the three real decisions under thirty settled migrations.
          */
+        /*
+         *   #813 — WHAT EACH RECORD HOLDS, for the groups that need a decision.
+         *
+         *   The owner's answer to "choose the one that is the person" was that
+         *   they cannot: they did not onboard these members and the staff who
+         *   did have left. That is a question this screen should never have
+         *   needed a human memory for — the platform knows which record placed
+         *   the orders, holds the membership and sat the course, and was simply
+         *   not showing it.
+         *
+         *   ONLY the groups that need a decision. Nine count queries per
+         *   candidate across twelve hundred records would answer a question 493
+         *   of the 496 groups do not ask.
+         */
+        const undecided = groups.filter((g) => g.state === "needs-a-decision");
+        const footprints = await footprintsFor(
+            db as any, undecided.flatMap((g) => g.candidates.map((c) => c.id)),
+        );
+
+        const richest: Record<string, string | null> = {};
+        for (const g of undecided) {
+            const forGroup: Record<string, Footprint> = {};
+            for (const c of g.candidates) {
+                if (footprints[c.id]) forGroup[c.id] = footprints[c.id];
+            }
+            richest[g.email] = clearlyRicher(forGroup);
+        }
+
         const rank = { "needs-a-decision": 0, inconsistent: 1, resolved: 2 } as const;
         groups.sort((a, b) => {
             const byState = rank[a.state] - rank[b.state];
@@ -147,6 +192,8 @@ async function _listDuplicateProfileGroupsAction(): Promise<ActionResponse<Dupli
             error: null,
             data: {
                 groups,
+                footprints,
+                richest,
                 needsADecision: groups.filter((g) => g.state === "needs-a-decision").length,
                 inconsistent: groups.filter((g) => g.state === "inconsistent").length,
                 resolved: groups.filter((g) => g.state === "resolved").length,
