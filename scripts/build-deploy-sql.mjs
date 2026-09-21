@@ -415,6 +415,25 @@ const EXPECTED = [
              "each name index. Order does not matter: four indexes, no table " +
              "rewritten, no row touched, every statement IF NOT EXISTS.",
     },
+    {
+        n: "048",
+        why: "the six indexes 022 declared and no deploy could ever apply. 022 " +
+             "writes all nine with CREATE INDEX CONCURRENTLY, which cannot run " +
+             "inside a transaction block, which is why 022 is in EXCLUDED and " +
+             "has to be applied BY HAND. 041 and 043 each rescued ONE into the " +
+             "plain form under 022's own name; six were never rescued, among " +
+             "them the (collection_name, status) and (collection_name, userId) " +
+             "pair 041's own header calls \"the two that cover most of the " +
+             "application\", and the reference every payment looks a " +
+             "marketplace order up by. Measured at 200k document_collections " +
+             "rows: a user's own rows in a collection 23,963 buffers -> 4, an " +
+             "order by reference 2,223 -> 4. NOT rescued: 022's two " +
+             "cooperative_members indexes, because FIELD_TO_COLUMN routes both " +
+             "names to native columns so the JSONB path is never emitted and " +
+             "neither could be reached. Order does not matter: six indexes, no " +
+             "table rewritten, no row touched, every statement IF NOT EXISTS " +
+             "on 022's own names, so it is a no-op wherever 022 was applied.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
