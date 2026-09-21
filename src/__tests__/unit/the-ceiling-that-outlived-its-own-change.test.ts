@@ -39,6 +39,26 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
+import { DEFAULT_MAX_UPLOAD_MB, DEFAULT_MAX_VIDEO_UPLOAD_MB } from '@/lib/upload-limits';
+
+/**
+ * The numbers to hunt for, TAKEN FROM THE CONSTANTS rather than restated.
+ *
+ *   THIS LIST WAS FROZEN ONCE AND IT COST A SURVIVING MUTANT. It read
+ *   `(50|100|200)` — the ceilings on the day it was written — and when the
+ *   image cap moved to 10, a hardcoded `10 * 1024 * 1024` planted in a second
+ *   file passed every assertion here. A ratchet that names the values it
+ *   guards stops guarding them the moment they change, which is exactly when
+ *   a stale copy is most likely to be left behind.
+ *
+ *   Derived, it cannot fall out of step: change either constant and the scan
+ *   changes with it. 200 stays in the list because it is the value this file
+ *   was created to hunt down, and a copy of it left anywhere is still wrong.
+ */
+const CEILINGS = [...new Set([DEFAULT_MAX_UPLOAD_MB, DEFAULT_MAX_VIDEO_UPLOAD_MB, 200])]
+    .sort((a, b) => b - a)
+    .join('|');
+
 const SRC = join(process.cwd(), 'src');
 const OWNER = join('lib', 'upload-limits.ts');
 
@@ -52,9 +72,31 @@ const OWNER = join('lib', 'upload-limits.ts');
 const ALLOWED = [
     //   The owner of the numbers.
     OWNER,
-    //   Callers that pass their OWN smaller bound for their own screen — the
-    //   `maxSize` prop MasterUploader documents. Those are deliberately not
-    //   the platform ceiling, and 5MB for an avatar is not a copy of 100MB.
+
+    /*
+     *   AND THREE FILES THAT CHOOSE THE SAME NUMBER FOR THEIR OWN REASONS.
+     *
+     *   THE SCAN CANNOT TELL A COINCIDENCE FROM A COPY, and this is where that
+     *   bites. A screen setting its own, narrower bound is legitimate — the
+     *   `maxSize` prop MasterUploader documents, 5MB for an avatar — and while
+     *   the platform ceiling was 50MB these three were plainly narrower than
+     *   it. They collide only because the image ceiling moved to 10, which is
+     *   a number a screen is likely to pick for itself.
+     *
+     *   Listed rather than the scan being weakened, because each was READ and
+     *   is its own rule, not a restatement of the platform's:
+     */
+
+    //   A bound on what the image PROXY will fetch and relay onward. Not an
+    //   upload ceiling at all — nothing is being stored.
+    join('app', 'api', 'proxy-image', 'route.ts'),
+
+    //   "Max 5 files, 10MB each" — the dispute form's own attachment rule,
+    //   which also caps the COUNT, so it is plainly a rule of its own.
+    join('dashboard', 'disputes', 'new', 'NewDisputeClient.tsx'),
+
+    //   The loan wizard's own stated bound, in copy only; it computes nothing.
+    join('components', 'LoanApplicationWizard.tsx'),
 ] as const;
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -108,7 +150,7 @@ describe('the upload ceiling has exactly one definition', () => {
          */
         const offenders = files
             .filter((f) => !ALLOWED.some((a) => f.file.endsWith(a)))
-            .filter((f) => /\b(50|100|200)\s*\*\s*1024\s*\*\s*1024\b/.test(f.code))
+            .filter((f) => new RegExp(`\\b(${CEILINGS})\\s*\\*\\s*1024\\s*\\*\\s*1024\\b`).test(f.code))
             .map((f) => f.file.replace(process.cwd() + '/', ''));
 
         expect(offenders).toEqual([]);
@@ -131,7 +173,7 @@ describe('the upload ceiling has exactly one definition', () => {
          */
         const offenders = files
             .filter((f) => !ALLOWED.some((a) => f.file.endsWith(a)))
-            .filter((f) => /(?<![-\w.])(50|100|200)MB\b/i.test(f.code))
+            .filter((f) => new RegExp(`(?<![-\\w.])(${CEILINGS})MB\\b`, 'i').test(f.code))
             .map((f) => f.file.replace(process.cwd() + '/', ''));
 
         expect(offenders).toEqual([]);
