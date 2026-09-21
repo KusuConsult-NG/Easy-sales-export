@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
-import { assertAllowedFileType, cloudinaryResourceType, detectFileType, extensionForType } from "@/lib/storage-admin";
+import { assertAllowedFileType, cloudinaryResourceType, detectFileType, extensionForType, uploadSizeLimitBytes } from "@/lib/storage-admin";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 
 /**
@@ -41,7 +41,9 @@ const ALLOWED_UPLOAD_TYPES = [
  * Using Cloudinary instead — configured via CLOUDINARY_* env vars.
  *
  * Form Data:
- * - file: File (Required) - Max 50MB: images (JPG/PNG/WebP), PDFs, videos (MP4/MOV/WebM)
+ * - file: File (Required) - images (JPG/PNG/WebP) and PDFs up to 50MB, videos
+ *   (MP4/MOV/WebM) up to 200MB. The ceiling is lib/storage-admin's, asked once
+ *   of the declared type and again of the detected one.
  * - folder: string (Optional) - Default 'uploads'
  * - documentType: string (Optional) - Default 'document'
  */
@@ -114,13 +116,29 @@ async function uploadHandler(request: NextRequest) {
             );
         }
 
-        // Validate file size
-        // MasterUploader defaults to 50MB for Academy/admin content; other flows use 5MB.
-        // The API accepts up to 50MB so components can control limits client-side.
-        const maxSize = 50 * 1024 * 1024; // 50 MB
+        /**
+         *   THE CEILING IS READ, NOT RESTATED.
+         *
+         *   This was `const maxSize = 50 * 1024 * 1024`, a fourth copy of a
+         *   number three other places also held — and it was the copy that
+         *   mattered, because this is "the generic one behind MasterUploader,
+         *   and so the one most uploads actually use". Meanwhile
+         *   actions/resource-actions.ts had already decided video gets 200MB.
+         *   So the platform's stated rule and its live door disagreed, and the
+         *   door won: every video over 50MB was refused here whatever any other
+         *   file said.
+         *
+         *   lib/storage-admin owns it now — including the video split and the
+         *   re-check against the DETECTED type, which is the half a route
+         *   cannot do for itself before reading the body.
+         */
+        const maxSize = uploadSizeLimitBytes(file.type);
         if (file.size > maxSize) {
             return NextResponse.json(
-                { success: false, error: "File is too large. Maximum allowed size is 50MB." },
+                {
+                    success: false,
+                    error: `File is too large. Maximum allowed size is ${Math.round(maxSize / (1024 * 1024))}MB.`,
+                },
                 { status: 400 }
             );
         }
@@ -218,6 +236,27 @@ async function uploadHandler(request: NextRequest) {
         if (!detectedType || !ALLOWED_UPLOAD_TYPES.includes(detectedType)) {
             return NextResponse.json(
                 { success: false, error: "This file's contents do not match an allowed file type." },
+                { status: 400 }
+            );
+        }
+
+        //   AND THE SIZE CEILING, ASKED AGAIN OF THE BYTES.
+        //
+        //   The check near the top had to pick a ceiling from `file.type`,
+        //   because the body had not been read yet. Video is allowed 200MB and
+        //   everything else 50MB, so that claim is worth four times the
+        //   allowance to anyone willing to type it. Here the type is known, and
+        //   this is the last point before the file is stored and served.
+        const detectedLimit = uploadSizeLimitBytes(detectedType);
+        if (file.size > detectedLimit) {
+            logger.warn("[upload] File claimed a larger ceiling than its bytes allow", {
+                declared: file.type, detected: detectedType, size: file.size,
+            });
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: `File is too large. Maximum allowed size is ${Math.round(detectedLimit / (1024 * 1024))}MB.`,
+                },
                 { status: 400 }
             );
         }

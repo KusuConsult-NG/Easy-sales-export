@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Upload, X, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { postUploadWithRetry } from "@/lib/upload-request";
+import { DEFAULT_MAX_UPLOAD_MB, DEFAULT_MAX_VIDEO_UPLOAD_MB, defaultLimitMbFor } from "@/lib/upload-limits";
 
 interface MasterUploaderProps {
     label: string;
@@ -89,7 +90,7 @@ export default function MasterUploader({
     folder,
     moduleId,
     accept = "image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    maxSize = 50, // Default 50MB for Academy content
+    maxSize, // Omitted: 50MB, or 200MB for video — see the note in handleFileChange
     onComplete,
     onError,
     required = false,
@@ -107,13 +108,47 @@ export default function MasterUploader({
     // AbortController for cancelling in-flight fetch
     const abortRef = useRef<AbortController | null>(null);
 
+    /**
+     *   What this box will accept, said before a file is chosen.
+     *
+     *   It used to read `Up to {maxSize}MB supported` against a prop that
+     *   always had a value. Now that the ceiling depends on the FILE, there are
+     *   two numbers and no file yet — so where video is on offer, both are
+     *   named. Saying only the smaller one is how a person with a 120MB lesson
+     *   recording decides not to try.
+     */
+    const offersVideo = accept.includes("video/") || accept.includes("*/*");
+    const limitLabel = maxSize !== undefined
+        ? `Up to ${maxSize}MB supported`
+        : offersVideo
+            ? `Up to ${DEFAULT_MAX_UPLOAD_MB}MB, or ${DEFAULT_MAX_VIDEO_UPLOAD_MB}MB for video`
+            : `Up to ${DEFAULT_MAX_UPLOAD_MB}MB supported`;
+
     async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const selectedFile = e.target.files?.[0];
         if (!selectedFile) return;
 
-        // Validation
-        if (selectedFile.size > maxSize * 1024 * 1024) {
-            const err = `File size must be less than ${maxSize}MB`;
+        /**
+         *   THE CEILING DEPENDS ON WHAT WAS CHOSEN, NOT ON THIS COMPONENT.
+         *
+         *   `maxSize` defaulted to 50 here, and Academy lesson videos are the
+         *   thing this uploader is most used for — so a course recording over
+         *   50MB was refused IN THE BROWSER, before a request was made, with
+         *   "File size must be less than 50MB". The server had meanwhile been
+         *   taught that video gets 200MB, which the person never got to find
+         *   out.
+         *
+         *   A caller that passes maxSize still wins: several pass 5, and a
+         *   screen that knows its own rule keeps it. Omitted, the limit is the
+         *   platform's, and the platform's depends on the file.
+         *
+         *   Advisory only. lib/upload-limits says why: the env overrides are
+         *   server-side, so this can be wrong in a deployment that lowers them,
+         *   and the server refusing is the control.
+         */
+        const limitMb = maxSize ?? defaultLimitMbFor(selectedFile.type);
+        if (selectedFile.size > limitMb * 1024 * 1024) {
+            const err = `File size must be less than ${limitMb}MB`;
             showToast(err, "error");
             setError(err);
             return;
@@ -276,7 +311,7 @@ export default function MasterUploader({
                         <Upload className="w-6 h-6 text-slate-400" />
                     </div>
                     <p className="text-sm font-semibold text-slate-700">Click to upload or drag and drop</p>
-                    <p className="text-xs text-slate-400 mt-1">Up to {maxSize}MB supported</p>
+                    <p className="text-xs text-slate-400 mt-1">{limitLabel}</p>
                 </label>
             )}
 

@@ -740,7 +740,7 @@ export default function AddProductPage() {
                                                 <p className="text-sm font-semibold text-slate-900 mb-1">
                                                     Click to upload video
                                                 </p>
-                                                <p className="text-xs text-slate-500">MP4, MOV (max 50MB)</p>
+                                                <p className="text-xs text-slate-500">MP4, MOV (max 200MB)</p>
                                                 <input
                                                     type="file"
                                                     accept="video/*"

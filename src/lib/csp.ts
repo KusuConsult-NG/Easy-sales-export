@@ -55,6 +55,51 @@ const FRAME_HOSTS = [
     "https://firebasestorage.googleapis.com",
     "https://docs.google.com",
     "https://*.jit.si",
+    //   The Academy lesson page embeds its course DOCUMENT and SPREADSHEET in
+    //   iframes — the PDF straight from Cloudinary, the spreadsheet through
+    //   Office's viewer. Neither host was listed, so both panes were blank for
+    //   the same reason the video would not play. See MEDIA_HOSTS below.
+    "https://res.cloudinary.com",
+    "https://view.officeapps.live.com",
+];
+
+/**
+ * Where audio and video may be LOADED FROM.
+ *
+ *   #!! THE ALLOW-LIST NAMED THE STORAGE THIS PROJECT DOES NOT HAVE.
+ *
+ *   media-src read, in full:
+ *
+ *       media-src 'self' https://firebasestorage.googleapis.com
+ *                        https://storage.googleapis.com blob:
+ *
+ *   Both of those are Firebase Storage, and api/upload says of itself, at the
+ *   top of the file: "Firebase Storage bucket doesn't exist on this project.
+ *   Using Cloudinary instead." Every upload this platform has ever taken is
+ *   served from res.cloudinary.com, and res.cloudinary.com was not on the
+ *   list. So the policy permitted exactly the backend that was never
+ *   provisioned and forbade the only one in use, and NO UPLOADED VIDEO COULD
+ *   PLAY — an Academy lesson recording, a marketplace product demo, any of
+ *   them. The browser blocks the load and the element sits there empty.
+ *
+ *   WHY IT WENT UNNOTICED FOR SO LONG, AND ONLY VIDEO BROKE. Look at the
+ *   neighbouring directive: `img-src 'self' data: https: blob:` allows ANY
+ *   https host. Images from Cloudinary were therefore fine, and images are
+ *   most of what gets uploaded — so the allow-list looked right every day
+ *   until somebody uploaded a video.
+ *
+ *   connect-src has `https://api.cloudinary.com`, which is the UPLOAD API.
+ *   That is the half of Cloudinary a developer adds while making uploading
+ *   work; res.cloudinary.com is the half you only need when something plays it
+ *   back.
+ */
+const MEDIA_HOSTS = [
+    //   Where this platform actually stores things.
+    "https://res.cloudinary.com",
+    //   Kept: harmless if unused, and a bucket may yet be provisioned. They are
+    //   not the reason this directive exists any more, which is the point.
+    "https://firebasestorage.googleapis.com",
+    "https://storage.googleapis.com",
 ];
 
 export interface CspOptions {
@@ -95,7 +140,7 @@ export function buildCsp({ nonce, isDev = false }: CspOptions = {}): string {
         "font-src 'self' data: https://fonts.gstatic.com",
         `connect-src ${connectSrc}`,
         `frame-src 'self' ${FRAME_HOSTS.join(" ")}`,
-        "media-src 'self' https://firebasestorage.googleapis.com https://storage.googleapis.com blob:",
+        `media-src 'self' ${MEDIA_HOSTS.join(" ")} blob:`,
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",
