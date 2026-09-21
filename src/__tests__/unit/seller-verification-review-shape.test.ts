@@ -236,17 +236,29 @@ describe('onboarding validates before it uploads', () => {
         // business registration, farm photos and product samples to storage. The
         // seller retried and uploaded them all again — orphaned copies on every
         // failed attempt, referenced by nothing.
+        //   RE-ANCHORED. This searched for two hand-written error strings —
+        //   "Location details (State, LGA, Address) are required" and the bank
+        //   equivalent — which were four inline checks covering a fraction of
+        //   what the wizard asks. They are now one call to the rule the wizard
+        //   itself applies (lib/marketplace-application), so the strings are
+        //   gone and the ORDERING this protects is unchanged.
+        //
+        //   The ordering is also asserted by EXECUTION, by counting uploads on
+        //   a refused submission, in
+        //   the-step-that-only-its-own-button-checked.test.ts. This stays
+        //   because it is the cheap guard that catches somebody moving the
+        //   block.
         const src = code(ONBOARDING);
         const fn = src.slice(src.indexOf('async function _submitMarketplaceOnboardingAction'));
 
-        const locationCheck = fn.indexOf('Location details (State, LGA, Address) are required');
-        const bankCheck = fn.indexOf('Bank account details (Bank Name, Account Number, Account Name) are required');
+        const ruleCheck = fn.indexOf('missingApplicationFields(application)');
+        const bankParse = fn.indexOf('parseJsonField<{');
         const firstUpload = fn.indexOf('const uploadFile = async');
 
-        expect(locationCheck).toBeGreaterThan(-1);
-        expect(bankCheck).toBeGreaterThan(-1);
-        expect(firstUpload).toBeGreaterThan(locationCheck);
-        expect(firstUpload).toBeGreaterThan(bankCheck);
+        expect(ruleCheck).toBeGreaterThan(-1);
+        expect(bankParse).toBeGreaterThan(-1);
+        expect(firstUpload).toBeGreaterThan(ruleCheck);
+        expect(firstUpload).toBeGreaterThan(bankParse);
     });
 
     it('and no JSON.parse is left unguarded', () => {

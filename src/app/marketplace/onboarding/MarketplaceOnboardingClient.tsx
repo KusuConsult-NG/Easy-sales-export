@@ -13,7 +13,6 @@
 
 import { useState, useEffect } from "react";
 import { restoredStepIndex } from "@/lib/draft-step";
-import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
 import { useRouter } from "next/navigation";
@@ -44,6 +43,18 @@ import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
 import type { SellerCategory } from "@/lib/seller-category";
 
+/**
+ *   ONE RULE FOR WHAT AN APPLICATION MUST CARRY, shared with the two steps
+ *   that ask the questions and with the server action that files it — see
+ *   lib/marketplace-application.
+ */
+import {
+    missingApplicationFields,
+    type BusinessStatus,
+    type MarketplaceApplication,
+    type ProductStatus,
+} from "@/lib/marketplace-application";
+
 type AccountType = "buyer" | "seller" | "both";
 
 interface OnboardingData {
@@ -60,6 +71,7 @@ interface OnboardingData {
     // Step 2: Business Profile
     businessName: string;
     businessType: "individual" | "cooperative" | "company";
+    businessStatus?: BusinessStatus;
     phone: string;
     location: {
         state: string;
@@ -72,6 +84,7 @@ interface OnboardingData {
     orderVolume?: string;
     deliveryPreferences?: string[];
     sellerCategories?: string[];
+    productStatus?: ProductStatus;
     productionCapacity?: string;
     certifications?: string[];
 
@@ -320,63 +333,33 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
     };
 
     async function handleSubmit() {
-        // ── Pre-submission Zod Guard ───────────────────────────────────────────
-        const locationSchema = z.object({
-            state: z.string().trim().min(1, "State is required."),
-            lga: z.string().trim().min(1, "LGA is required."),
-            address: z.string().trim().min(1, "Address is required."),
-        }, { message: "Location is required." });
-
-        const baseSchema = z.object({
-            accountType: z.enum(["buyer", "seller", "both"], {
-                message: "Please select an account type.",
-            }),
-            businessName: z.string().trim().min(2, "Business name must be at least 2 characters."),
-            businessType: z.enum(["individual", "cooperative", "company"], {
-                message: "Please select a business type.",
-            }).default("individual"),
-            phone: z.string().trim().min(5, "Phone number is required."),
-            location: locationSchema,
-            termsAccepted: z.boolean().refine(val => val === true, {
-                message: "You must accept the terms and conditions.",
-            }),
-        });
-
-        let marketplaceSchema = baseSchema;
-        if (formData.accountType === "seller" || formData.accountType === "both") {
-            marketplaceSchema = baseSchema.extend({
-                bankAccount: z.object({
-                    bankName: z.string().trim().min(1, "Bank name is required."),
-                    accountNumber: z.string().trim().length(10, "Account number must be exactly 10 digits."),
-                    accountName: z.string().trim().min(1, "Account name is required."),
-                }, { message: "Bank account details are required for sellers." }),
-            });
-        }
-
-        const validation = marketplaceSchema.safeParse(formData);
-        if (!validation.success) {
-            const firstError = validation.error.issues[0];
-            const errorPath = firstError.path;
-            
-            // Map the error path back to step ID
-            if (errorPath[0] === "accountType") {
-                setCurrentStep(1);
-            } else if (errorPath[0] === "businessName" || errorPath[0] === "businessType" || errorPath[0] === "phone" || errorPath[0] === "location") {
-                setCurrentStep(2);
-            } else if (errorPath[0] === "buyerInterests" || errorPath[0] === "orderVolume" || errorPath[0] === "sellerCategories") {
-                setCurrentStep(3);
-            } else if (errorPath[0] === "termsAccepted") {
-                setCurrentStep(4);
-            } else if (errorPath[0] === "documents") {
-                setCurrentStep(5);
-            } else if (errorPath[0] === "bankAccount") {
-                setCurrentStep(6);
-            }
-            
-            toast.error(firstError.message);
+        /*
+         *   ── ONE RULE, NOT A SECOND SCHEMA ──────────────────────────────────
+         *
+         *   This was an inline Zod schema, and it left the whole of step 3 out:
+         *   no `buyerInterests`, no `sellerCategories`, no product status. The
+         *   error handler below it nevertheless mapped those exact paths back to
+         *   step 3 — a branch the schema could never produce. Somebody meant to
+         *   check the step; the schema was never given the fields.
+         *
+         *   That mattered because the step's own Continue button is SKIPPABLE: a
+         *   restored draft jumps straight to the step it was saved at, so a
+         *   member resuming at step 4 never ran steps 2 or 3 at all, and nothing
+         *   after that asked again. The server did not ask either.
+         *
+         *   The rule now lives in lib/marketplace-application and is the same
+         *   one the two step components and the server action apply. The mapping
+         *   to a step comes WITH each missing answer rather than being
+         *   reconstructed from an error path here.
+         */
+        const missing = missingApplicationFields(formData as MarketplaceApplication);
+        if (missing.length > 0) {
+            const first = missing[0];
+            setCurrentStep(first.step);
+            toast.error(first.message);
             return;
         }
-        // ────────────────────────────────────────────────────────────────────────
+
         setIsSubmitting(true);
 
         try {
@@ -414,13 +397,20 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
             if (formData.sellerCategory) formDataPayload.append("sellerCategory", formData.sellerCategory);
             formDataPayload.append("businessName", formData.businessName || "");
             formDataPayload.append("businessType", formData.businessType || "individual");
+            //   The owner's two status fields, and the acceptance the server had
+            //   no record of. All three are applied by the SAME rule on the far
+            //   side — see lib/marketplace-application.
+            if (formData.businessStatus) formDataPayload.append("businessStatus", formData.businessStatus);
+            formDataPayload.append("termsAccepted", String(formData.termsAccepted === true));
             formDataPayload.append("phone", formData.phone || "");
             formDataPayload.append("location", JSON.stringify(formData.location));
 
             if (formData.sellerCategories) formDataPayload.append("sellerCategories", JSON.stringify(formData.sellerCategories));
+            if (formData.productStatus) formDataPayload.append("productStatus", formData.productStatus);
             if (formData.productionCapacity) formDataPayload.append("productionCapacity", formData.productionCapacity);
             if (formData.certifications) formDataPayload.append("certifications", JSON.stringify(formData.certifications));
             if (formData.buyerInterests) formDataPayload.append("buyerInterests", JSON.stringify(formData.buyerInterests));
+            if (formData.orderVolume) formDataPayload.append("orderVolume", formData.orderVolume);
             if (formData.documents?.businessRegistration) formDataPayload.append("businessRegistration", JSON.stringify(formData.documents.businessRegistration));
 
             formData.documents?.farmPhotos?.forEach((file, index) => {
@@ -490,6 +480,7 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                         data={{
                             businessName: formData.businessName || "",
                             businessType: formData.businessType || "individual",
+                            businessStatus: formData.businessStatus,
                             phone: formData.phone || "",
                             location: formData.location || { state: "", lga: "", address: "" }
                         }}
@@ -507,6 +498,7 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                             orderVolume: formData.orderVolume,
                             deliveryPreferences: formData.deliveryPreferences,
                             sellerCategories: formData.sellerCategories,
+                            productStatus: formData.productStatus,
                             productionCapacity: formData.productionCapacity,
                             certifications: formData.certifications
                         }}

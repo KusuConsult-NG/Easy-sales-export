@@ -10,7 +10,20 @@
 import { useState } from "react";
 import DocumentUpload from "@/components/shared/DocumentUpload";
 import { postUploadWithRetry } from "@/lib/upload-request";
-import { FileText, Image as ImageIcon, Package } from "lucide-react";
+import { FileText, Image as ImageIcon, Package, Plus } from "lucide-react";
+
+/**
+ *   THE OWNER: "Add more product sample button."
+ *
+ *   This section drew exactly two slots, hard-coded at indices 0 and 1, so a
+ *   seller with a range could show two of them and no more. The cap is here
+ *   rather than unbounded because each slot is a 5 MB upload and the admin
+ *   review screen renders every one of them.
+ */
+const MAX_PRODUCT_SAMPLES = 8;
+
+/** The two the step has always opened with. */
+const INITIAL_PRODUCT_SAMPLES = 2;
 
 interface BusinessVerificationData {
     businessRegistration?: { name: string; url: string };
@@ -33,6 +46,22 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
 
     const [uploading, setUploading] = useState<string[]>([]);
     const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+
+    /*
+     *   How many sample slots are open. Seeded from what the application
+     *   already carries so that coming BACK to this step — from step 6, or
+     *   through the edit link on a submitted application — shows every sample
+     *   already attached rather than the first two of them.
+     */
+    const [sampleSlots, setSampleSlots] = useState(
+        () => Math.min(
+            MAX_PRODUCT_SAMPLES,
+            Math.max(INITIAL_PRODUCT_SAMPLES, data.productSamples?.length ?? 0),
+        ),
+    );
+
+    const addSampleSlot = () =>
+        setSampleSlots((count) => Math.min(MAX_PRODUCT_SAMPLES, count + 1));
 
     const updateDocuments = (updates: Partial<BusinessVerificationData>) => {
         setDocuments(prev => {
@@ -284,20 +313,33 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                         Upload photos of your products to showcase quality
                     </p>
                     <div className="grid grid-cols-2 gap-4">
-                        <DocumentUpload
-                            label="Product 1"
-                            accept=".jpg,.jpeg,.png"
-                            maxSize={5}
-                            error={uploadErrors["productSamples-0"]}
-                            onUpload={(file) => uploadPhotoAt("productSamples", 0, file, "marketplace_product_sample")}
-                        />
-                        <DocumentUpload
-                            label="Product 2"
-                            accept=".jpg,.jpeg,.png"
-                            maxSize={5}
-                            error={uploadErrors["productSamples-1"]}
-                            onUpload={(file) => uploadPhotoAt("productSamples", 1, file, "marketplace_product_sample")}
-                        />
+                        {Array.from({ length: sampleSlots }, (_, index) => (
+                            <DocumentUpload
+                                key={index}
+                                label={`Product ${index + 1}`}
+                                accept=".jpg,.jpeg,.png"
+                                maxSize={5}
+                                error={uploadErrors[`productSamples-${index}`]}
+                                onUpload={(file) => uploadPhotoAt("productSamples", index, file, "marketplace_product_sample")}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={addSampleSlot}
+                            disabled={sampleSlots >= MAX_PRODUCT_SAMPLES}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 border-2 border-slate-300 text-slate-900 font-semibold rounded-lg text-sm hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-300 disabled:hover:bg-transparent"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Add more product sample
+                        </button>
+                        <span className="text-sm text-slate-500">
+                            {sampleSlots >= MAX_PRODUCT_SAMPLES
+                                ? `Up to ${MAX_PRODUCT_SAMPLES} samples`
+                                : `${sampleSlots} of ${MAX_PRODUCT_SAMPLES}`}
+                        </span>
                     </div>
                 </div>
 

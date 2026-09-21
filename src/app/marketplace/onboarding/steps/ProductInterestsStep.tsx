@@ -7,6 +7,12 @@
 "use client";
 
 import { useState } from "react";
+import {
+    PRODUCT_STATUSES,
+    productStatusLabel,
+    missingForStep,
+    type ProductStatus,
+} from "@/lib/marketplace-application";
 
 interface ProductInterestsData {
     // Buyer fields
@@ -16,6 +22,14 @@ interface ProductInterestsData {
 
     // Seller fields
     sellerCategories?: string[];
+    /**
+     *   THE OWNER: "Product ... status should be mandatory."
+     *
+     *   A seller listing a harvest three months out is not the same applicant
+     *   as one with stock in a warehouse today, and nothing on the application
+     *   said which. See lib/marketplace-application.
+     */
+    productStatus?: ProductStatus;
     productionCapacity?: string;
     certifications?: string[];
 }
@@ -60,16 +74,15 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
         onChange({ certifications: updated });
     };
 
+    /*
+     *   THE SAME RULE THE SUBMIT GUARD AND THE SERVER USE.
+     *
+     *   Until now this button was the ONLY place these were checked anywhere on
+     *   the platform — the submit guard's schema had no field for them and the
+     *   server defaulted them away. See lib/marketplace-application.
+     */
     const validate = () => {
-        const newErrors: Record<string, string> = {};
-
-        if (isBuyer && (!data.buyerInterests || data.buyerInterests.length === 0)) {
-            newErrors.buyerInterests = "Select at least one product category";
-        }
-
-        if (isSeller && (!data.sellerCategories || data.sellerCategories.length === 0)) {
-            newErrors.sellerCategories = "Select at least one product category";
-        }
+        const newErrors = missingForStep(3, { ...data, accountType });
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -180,6 +193,36 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                             </div>
                             {errors.sellerCategories && (
                                 <p className="mt-2 text-sm text-red-600">{errors.sellerCategories}</p>
+                            )}
+                        </div>
+
+                        {/* Product Status */}
+                        <div>
+                            <label
+                                htmlFor="productStatus"
+                                className="block text-sm font-semibold text-slate-900 mb-3"
+                            >
+                                Product Status *
+                            </label>
+                            <select
+                                id="productStatus"
+                                value={data.productStatus || ""}
+                                onChange={(e) => onChange({ productStatus: e.target.value as ProductStatus })}
+                                className={`w-full px-4 py-3 border-2 rounded-xl text-sm font-medium bg-white text-slate-900 ${errors.productStatus ? "border-red-500" : "border-slate-300"
+                                    } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                            >
+                                <option value="">Select product status</option>
+                                {PRODUCT_STATUSES.map((value) => (
+                                    <option key={value} value={value}>
+                                        {productStatusLabel(value)}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="mt-2 text-sm text-slate-600">
+                                Whether buyers can order from you today, in season, or ahead of harvest.
+                            </p>
+                            {errors.productStatus && (
+                                <p className="mt-2 text-sm text-red-600">{errors.productStatus}</p>
                             )}
                         </div>
 

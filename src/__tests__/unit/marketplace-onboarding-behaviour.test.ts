@@ -134,11 +134,19 @@ function submission(overrides: Record<string, unknown> = {}): FormData {
     const fields: Record<string, unknown> = {
         accountType: 'seller',
         businessName: 'Obi Farms',
-        businessType: 'farming',
+        //   WAS 'farming', which is not one of the three the form offers and
+        //   not one the client could ever send. The server took it: the only
+        //   thing it checked from this step was the business NAME. The shared
+        //   rule checks the whole step now — see lib/marketplace-application.
+        businessType: 'cooperative',
+        businessStatus: 'registered',
         businessDescription: 'Rice and maize',
         phone: '08012345678',
         sellerCategory: 'wholesale',
+        productStatus: 'available',
         productionCapacity: '5 tonnes',
+        termsAccepted: 'true',
+        buyerInterests: JSON.stringify(['Grains & Cereals']),
         location: JSON.stringify({ state: 'Plateau', lga: 'Jos North', address: '12 Market Road' }),
         bankAccount: JSON.stringify({
             // #346 bankCode is what the server re-resolves on. `accountName`
@@ -312,7 +320,7 @@ describe('submitMarketplaceOnboardingAction — the refusals', () => {
 
         const { submitMarketplaceOnboardingAction } = await actions();
         expect(await submitMarketplaceOnboardingAction(fd)).toMatchObject({
-            success: false, error: 'Account type is required.',
+            success: false, error: 'Please select an account type.',
         });
     });
 
@@ -320,22 +328,25 @@ describe('submitMarketplaceOnboardingAction — the refusals', () => {
         seedUser();
         const { submitMarketplaceOnboardingAction } = await actions();
         expect(await submitMarketplaceOnboardingAction(submission({ accountType: 'admin' })))
-            .toMatchObject({ success: false, error: 'Invalid account type.' });
+            .toMatchObject({ success: false, error: 'That is not an account type we offer.' });
     });
 
     it('requires a business name that is not just spaces', async () => {
         seedUser();
         const { submitMarketplaceOnboardingAction } = await actions();
         expect(await submitMarketplaceOnboardingAction(submission({ businessName: '   ' })))
-            .toMatchObject({ success: false, error: 'Business name is required.' });
+            .toMatchObject({ success: false, error: 'Business/Farm name is required.' });
     });
 
     it('requires the full location', async () => {
         seedUser();
         const { submitMarketplaceOnboardingAction } = await actions();
+        //   Per-field now, and the FIRST missing one is named — the step-2
+        //   order is state, LGA, address, so a location carrying only a state
+        //   is refused for its LGA.
         expect(((await submitMarketplaceOnboardingAction(
             submission({ location: JSON.stringify({ state: 'Plateau' }) }))) as any).error)
-            .toContain('Location details');
+            .toBe('LGA is required.');
     });
 
     it('names the field when the location JSON is malformed', async () => {
@@ -379,7 +390,7 @@ describe('submitMarketplaceOnboardingAction — the refusals', () => {
         const { submitMarketplaceOnboardingAction } = await actions();
         expect(((await submitMarketplaceOnboardingAction(
             submission({ bankAccount: JSON.stringify({ bankName: 'Zenith' }) }))) as any).error)
-            .toContain('Bank account details');
+            .toBe('Account number is required.');
     });
 
     it('and from BOTH', async () => {
@@ -387,7 +398,7 @@ describe('submitMarketplaceOnboardingAction — the refusals', () => {
         const { submitMarketplaceOnboardingAction } = await actions();
         expect(((await submitMarketplaceOnboardingAction(
             submission({ accountType: 'both', bankAccount: '{}' }))) as any).error)
-            .toContain('Bank account details');
+            .toBe('Bank name is required.');
     });
 
     it('but not from a buyer', async () => {
@@ -503,9 +514,11 @@ describe('submitMarketplaceOnboardingAction — what a SELLER gets', () => {
             userId: SELLER,
             status: 'pending',
             businessName: 'Obi Farms',
-            businessType: 'farming',
+            businessType: 'cooperative',
+            businessStatus: 'registered',
             accountType: 'seller',
             sellerCategory: 'wholesale',
+            productStatus: 'available',
             productionCapacity: '5 tonnes',
         });
         expect(verification.location).toMatchObject({ state: 'Plateau', lga: 'Jos North' });
@@ -573,21 +586,47 @@ describe('submitMarketplaceOnboardingAction — what a SELLER gets', () => {
         expect(profile.isCanonical).toBe(true);
         expect(profile.status).toBe('pending');
         expect(profile.business).toMatchObject({
-            name: 'Obi Farms', type: 'farming', state: 'Plateau', category: 'wholesale',
+            name: 'Obi Farms', type: 'cooperative', status: 'registered',
+            state: 'Plateau', category: 'wholesale',
         });
         expect(profile.email).toBe('ada@example.com');
     });
 
-    it('defaults the seller category to retail', async () => {
+    it('REFUSES A SELLER WHO NAMED NO CATEGORY — it used to assume retail', async () => {
+        /*
+         *   THIS TEST WAS CALLED "defaults the seller category to retail" and
+         *   pinned that as intended behaviour.
+         *
+         *   `sellerCategory` is not a label. It is stamped onto every one of
+         *   the seller's products and it is what the wholesale and retail
+         *   broadcast audiences are selected by — see lib/seller-category. A
+         *   default meant an application that never answered the question was
+         *   filed as a retail seller, and the seller found out when the
+         *   wholesale buyers never saw her.
+         *
+         *   The wizard has always asked. The server is what did not check.
+         */
         seedUser();
         const fd = submission();
         fd.delete('sellerCategory');
 
         const { submitMarketplaceOnboardingAction } = await actions();
-        await submitMarketplaceOnboardingAction(fd);
+        expect(await submitMarketplaceOnboardingAction(fd)).toMatchObject({
+            success: false,
+            error: 'Select whether you sell wholesale, retail or both.',
+        });
+        expect(store.size(VERIFICATIONS)).toBe(0);
+    });
 
-        expect(reg().sellerCategory).toBe('retail');
-        expect(readUser().sellerCategory).toBe('retail');
+    it('and a BUYER needs no category, because nothing stamps one on her', async () => {
+        //   The control. Widening the refusal above to everybody would block
+        //   every buyer from a field that does not apply to her.
+        seedUser();
+        const fd = submission({ accountType: 'buyer', bankAccount: '{}' });
+        fd.delete('sellerCategory');
+
+        const { submitMarketplaceOnboardingAction } = await actions();
+        expect(await submitMarketplaceOnboardingAction(fd)).toMatchObject({ success: true });
     });
 });
 
