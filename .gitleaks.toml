@@ -77,6 +77,24 @@ commits = [
     "42104e00e327a79d5da35defff7623eb3dc8c649",  # test fixture: 'test_api_key_12345'
     "bed50716b4191be80fee507105a80a85c3911e98",  # firebase-debug.log — emulator output
     "5c350d3c3e6ce14e6859bb14db5bebbb7a9e8637",  # setup script, placeholder values
+
+    # Test fixture: PAYSTACK_SECRET_KEY = 'sk_test_marketplace', in a suite
+    # whose fetch is mocked. gitleaks reads the `sk_test_` prefix as a Stripe
+    # access token; the value authorises nothing and never left the test.
+    #
+    # ALREADY REMOVED FROM THE TREE — the fixture was renamed to something not
+    # secret-shaped in 98f986b5, so nothing new can match it. That did not turn
+    # this check green, and the reason is worth writing down: the scan runs
+    # `git log -p` over the PR's COMMIT RANGE, not over the working tree, so a
+    # string is flagged for as long as the commit that introduced it is in
+    # history. Deleting it later is invisible to this scanner. That is the same
+    # property this whole file exists because of.
+    #
+    # Triaged here rather than added to `regexes` above, which would permit the
+    # string everywhere and for ever; and rather than rewriting the branch,
+    # which would renumber eleven commits on an open PR to erase a value that
+    # grants nothing.
+    "b2ccc432aa9ed0e53c5e0d14ea9d523608fa15b2",  # test fixture: 'sk_test_marketplace'
 ]
 
 # ── A note on what this does NOT do ──────────────────────────────────────────

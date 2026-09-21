@@ -391,13 +391,41 @@ export function hasVerifiedWards(lga: string, state?: string): boolean {
  * is reference data with no React in it, and this module already owns the
  * state and LGA lists it is keyed by.
  *
- * The checkout page looks a state up case-insensitively in five places:
+ * The checkout page looked a state up case-insensitively in five places:
  *
  *     Object.keys(NIGERIAN_STATE_COORDINATES).find(s => s.toLowerCase() === state.toLowerCase())
  *
- * which is a helper waiting to be named. Not named here: that would change five
- * call sites in a file with no rendering tests, and this commit is a move.
+ * and that comment then said "which is a helper waiting to be named. Not named
+ * here: that would change five call sites in a file with no rendering tests,
+ * and this commit is a move." IT IS NAMED NOW — `stateCentroid` below.
+ *
+ * Named while replacing Google Maps on that page with OpenStreetMap, and for a
+ * reason that came out of TESTING it rather than reading it. Every one of those
+ * five sites is the offline last resort: what checkout uses to place a delivery
+ * when the geocoding service is unreachable. A mutant that gutted one of them
+ * survived a test asserting the file still mentioned the table and still called
+ * `setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState])`, because
+ * both lines are still there when the LOOKUP between them has gone. A rule
+ * spelled out at five call sites inside a 1400-line client component cannot be
+ * executed by a test; one exported function can.
  */
+
+/**
+ * The centre of a state, whatever case it was written in.
+ *
+ *   `null` when the name is not one of the thirty-seven, which is a real
+ *   outcome and not an error: it is what tells checkout it has no offline
+ *   answer and must say so rather than place a pin somewhere plausible.
+ */
+export function stateCentroid(state: unknown): { lat: number; lng: number } | null {
+    if (typeof state !== "string" || !state.trim()) return null;
+
+    const wanted = state.trim().toLowerCase();
+    const key = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+        (name) => name.toLowerCase() === wanted);
+
+    return key ? NIGERIAN_STATE_COORDINATES[key] : null;
+}
 
 export const NIGERIAN_STATE_COORDINATES: Record<string, { lat: number; lng: number }> = {
     "Abia": { lat: 5.5249, lng: 7.4898 },

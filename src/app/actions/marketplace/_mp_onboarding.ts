@@ -14,6 +14,13 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { MarketplaceOnboardingSchema } from "@/lib/validations/marketplace";
+/**
+ *   ONE RULE FOR WHAT AN APPLICATION MUST CARRY, shared with the wizard's
+ *   submit guard and with the two steps that ask the questions — see
+ *   lib/marketplace-application. This action used to check `businessName` and
+ *   the location and nothing else from those two steps.
+ */
+import { missingApplicationFields, type MarketplaceApplication } from "@/lib/marketplace-application";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { toMillis } from "@/lib/firestore-serialize";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
@@ -259,21 +266,7 @@ async function _submitMarketplaceOnboardingAction(
             return { success: false as const, error: "You are already registered for Marketplace.", data: null };
         }
 
-        // DISEASE 6 FIX: Validate the fields this action actually reads from FormData.
-        // MarketplaceOnboardingSchema has different field names than the form, so we
-        // inline-validate the minimum required fields here to prevent empty submissions.
         const accountType = formData.get("accountType") as string;
-        const businessName = formData.get("businessName") as string;
-        if (!accountType) {
-            return { success: false as const, error: "Account type is required.", data: null };
-        }
-        if (!businessName?.trim()) {
-            return { success: false as const, error: "Business name is required.", data: null };
-        }
-        if (!["seller", "buyer", "both"].includes(accountType)) {
-            return { success: false as const, error: "Invalid account type.", data: null };
-        }
-
 
         // EVERY validation first, then the uploads.
         //
@@ -308,10 +301,6 @@ async function _submitMarketplaceOnboardingAction(
         }
         const location = locationParsed.value ?? {};
 
-        if (!location?.state || !location?.lga || !location?.address) {
-            return { success: false as const, error: "Location details (State, LGA, Address) are required.", data: null };
-        }
-
         const bankParsed = parseJsonField<{
             bankName?: string; accountNumber?: string; accountName?: string; bankCode?: string;
         }>("bankAccount", {});
@@ -320,9 +309,58 @@ async function _submitMarketplaceOnboardingAction(
         }
         const bankAccount = bankParsed.value ?? {};
 
+        const categoriesParsed = parseJsonField<string[]>("sellerCategories", []);
+        const certificationsParsed = parseJsonField<string[]>("certifications", []);
+        if (!categoriesParsed.ok || !certificationsParsed.ok) {
+            return { success: false as const, error: "Categories or certifications could not be read. Please re-select them.", data: null };
+        }
+        const sellerCategories = categoriesParsed.value ?? [];
+        const certifications = certificationsParsed.value ?? [];
+
+        const interestsParsed = parseJsonField<string[]>("buyerInterests", []);
+        if (!interestsParsed.ok) {
+            return { success: false as const, error: "Product interests could not be read. Please re-select them.", data: null };
+        }
+        const buyerInterests = interestsParsed.value ?? [];
+
         const isSeller = accountType === "seller" || accountType === "both";
-        if (isSeller && (!bankAccount?.bankName || !bankAccount?.accountNumber || !bankAccount?.accountName)) {
-            return { success: false as const, error: "Bank account details (Bank Name, Account Number, Account Name) are required.", data: null };
+
+        /*
+         *   ── EVERY QUESTION THE WIZARD ASKS, ASKED AGAIN HERE ────────────────
+         *
+         *   This block used to be four inline checks covering `accountType`,
+         *   `businessName`, the location, and the seller's bank details. The
+         *   WHOLE of step 3 — the product interests, the categories to sell —
+         *   was enforced by nothing but that step's own Continue button, and a
+         *   restored draft jumps straight past it. `sellerCategories` fell
+         *   through to `[]` and `sellerCategory` to `"retail"`, so an
+         *   application that never answered either was filed as a retail seller
+         *   of nothing. `businessType`, `phone` and the acceptance of the terms
+         *   were read into the record without ever being looked at.
+         *
+         *   The rule is lib/marketplace-application, and it is the same object
+         *   the browser applied before submitting — so the two can no longer
+         *   drift, and a request that never went through the wizard is held to
+         *   exactly what the wizard asks.
+         */
+        const application: MarketplaceApplication = {
+            accountType,
+            sellerCategory: formData.get("sellerCategory"),
+            businessName: formData.get("businessName"),
+            businessType: formData.get("businessType"),
+            businessStatus: formData.get("businessStatus"),
+            phone: formData.get("phone"),
+            location,
+            buyerInterests,
+            sellerCategories,
+            productStatus: formData.get("productStatus"),
+            termsAccepted: formData.get("termsAccepted") === "true",
+            bankAccount,
+        };
+
+        const missing = missingApplicationFields(application);
+        if (missing.length > 0) {
+            return { success: false as const, error: missing[0].message, data: null };
         }
 
         /**
@@ -373,14 +411,6 @@ async function _submitMarketplaceOnboardingAction(
             ? { ...bankAccount, accountName: resolvedAccountName, verified: true, ...bankAccountResolutionStamp() }
             : bankAccount;
 
-        const categoriesParsed = parseJsonField<string[]>("sellerCategories", []);
-        const certificationsParsed = parseJsonField<string[]>("certifications", []);
-        if (!categoriesParsed.ok || !certificationsParsed.ok) {
-            return { success: false as const, error: "Categories or certifications could not be read. Please re-select them.", data: null };
-        }
-        const sellerCategories = categoriesParsed.value ?? [];
-        const certifications = certificationsParsed.value ?? [];
-
         // 1. Handle File Uploads (Admin SDK Storage)
         const uploadFile = async (file: File, path: string) => {
             const extension = file.name.split('.').pop();
@@ -398,35 +428,104 @@ async function _submitMarketplaceOnboardingAction(
             return await uploadFileToStorage(file, destination);
         };
 
+        /*
+         *   ── TWO SHAPES ARRIVE HERE AND ONLY ONE WAS HANDLED ────────────────
+         *
+         *   Every branch below read `formData.get(key) as File` and tested
+         *   `file.size > 0`. THE WIZARD DOES NOT SEND FILES. Step 5 uploads each
+         *   document to /api/upload as it is chosen — that is #866, and it is
+         *   why the step no longer hits the 1 MB server-action body limit — and
+         *   then submits the RESULT:
+         *
+         *       formDataPayload.append(`productSamples_${index}`, JSON.stringify(file));
+         *                                        // -> '{"name":"a.jpg","url":"https://…"}'
+         *
+         *   A string has no `.size`, so `undefined > 0` is false and the entry
+         *   was skipped in silence. EVERY seller verification document filed
+         *   through the wizard — the CAC certificate, the farm photos, the
+         *   product samples — was uploaded by the browser, paid for in
+         *   bandwidth, shown as attached, and then dropped on the floor here.
+         *   The application reached the admin queue with
+         *   `documents: { businessRegistrationUrl: "", farmPhotoUrls: [],
+         *   productSampleUrls: [] }` and nothing on either screen said so.
+         *
+         *   AND THE TEST SUITE WAS GREEN, because its fixture appends real
+         *   `File` objects — it exercises a shape no caller sends.
+         *
+         *   Both shapes are accepted now. A File is still uploaded here (the
+         *   admin doors and any future caller may send one); an already-stored
+         *   document is recorded by its URL, which is what the browser has.
+         */
+
+        /**
+         * The URL of a document the browser has already stored, or null.
+         *
+         *   THE URL IS CHECKED, NOT TAKEN. It arrives from the client, so
+         *   without this an arbitrary string would be filed as a seller's
+         *   business registration and shown to an approver as one. Only the
+         *   backends /api/upload actually writes to are accepted: Cloudinary,
+         *   or a relative path from the local-disk backend.
+         */
+        const storedDocumentUrl = (entry: FormDataEntryValue | null): string | null => {
+            if (typeof entry !== "string" || !entry) return null;
+
+            let url: unknown;
+            try {
+                url = (JSON.parse(entry) as { url?: unknown })?.url;
+            } catch {
+                return null;
+            }
+            if (typeof url !== "string" || !url) return null;
+
+            //   The local-disk backend returns a site-relative path. Rejecting
+            //   "//host/…" matters: that is protocol-relative and would leave
+            //   the site.
+            if (url.startsWith("/") && !url.startsWith("//")) return url;
+
+            try {
+                const parsed = new URL(url);
+                const allowed = parsed.protocol === "https:"
+                    && (parsed.hostname === "res.cloudinary.com"
+                        || parsed.hostname.endsWith(".cloudinary.com"));
+                return allowed ? url : null;
+            } catch {
+                return null;
+            }
+        };
+
+        /** A document as it was submitted, whichever of the two shapes it came in. */
+        const documentUrl = async (entry: FormDataEntryValue | null, path: string): Promise<string | null> => {
+            const stored = storedDocumentUrl(entry);
+            if (stored) return stored;
+
+            const file = entry as File | null;
+            if (file && typeof file.size === "number" && file.size > 0) {
+                return await uploadFile(file, path);
+            }
+            return null;
+        };
+
         let businessRegistrationUrl = "";
         const farmPhotoUrls: string[] = [];
         const productSampleUrls: string[] = [];
 
-        // Upload Business Registration
-        const bizRegFile = formData.get("businessRegistration") as File;
-        if (bizRegFile && bizRegFile.size > 0) { 
-            businessRegistrationUrl = await uploadFile(bizRegFile, "start_selling/documents");
-        }
+        // Business Registration
+        businessRegistrationUrl = (await documentUrl(
+            formData.get("businessRegistration"), "start_selling/documents")) ?? "";
 
-        // Upload Farm Photos
+        // Farm Photos
         for (const key of Array.from(formData.keys())) { 
             if (key.startsWith("farmPhotos_")) {
-                const file = formData.get(key) as File;
-                if (file.size > 0) {
-                    const url = await uploadFile(file, "start_selling/farm_photos");
-                    farmPhotoUrls.push(url);
-                }
+                const url = await documentUrl(formData.get(key), "start_selling/farm_photos");
+                if (url) farmPhotoUrls.push(url);
             }
         }
 
-        // Upload Product Samples
+        // Product Samples
         for (const key of Array.from(formData.keys())) { 
             if (key.startsWith("productSamples_")) {
-                const file = formData.get(key) as File;
-                if (file.size > 0) {
-                    const url = await uploadFile(file, "start_selling/product_samples");
-                    productSampleUrls.push(url);
-                }
+                const url = await documentUrl(formData.get(key), "start_selling/product_samples");
+                if (url) productSampleUrls.push(url);
             }
         }
 
@@ -444,10 +543,22 @@ async function _submitMarketplaceOnboardingAction(
             businessType: formData.get("businessType"),
             phone: formData.get("phone"),
             location,
-            sellerCategory: (formData.get("sellerCategory") as string) || "retail",
+            //   No longer a default: `sellerCategory` decides which broadcast
+            //   audiences a seller appears in, and the shared rule above refuses
+            //   a seller who has not answered. See lib/seller-category.
+            sellerCategory: formData.get("sellerCategory") as string,
+            businessStatus: formData.get("businessStatus") as string,
             accountType: formData.get("accountType"), 
             sellerCategories,
+            productStatus: (formData.get("productStatus") as string) || "",
             productionCapacity: formData.get("productionCapacity"),
+            //   COLLECTED SINCE THE STEP EXISTED AND STORED BY NOBODY. The
+            //   wizard has always submitted `buyerInterests`, and this record —
+            //   the only one an approver reads — had no field for it. The same
+            //   for the order volume, which the wizard did not even send.
+            buyerInterests,
+            orderVolume: (formData.get("orderVolume") as string) || "",
+            termsAccepted: true,
             certifications,
             documents: {
                 businessRegistrationUrl,
@@ -511,12 +622,22 @@ async function _submitMarketplaceOnboardingAction(
                 business: {
                     name: formData.get("businessName") as string,
                     type: formData.get("businessType") as string,
+                    //   The owner's "business status" — see
+                    //   lib/marketplace-application. It is what tells a reviewer
+                    //   whether to expect the CAC certificate that the
+                    //   verification step marks Optional for everybody.
+                    status: formData.get("businessStatus") as string,
                     description: formData.get("businessDescription") as string || "",
                     address: location.address,
                     state: location.state,
                     lga: location.lga,
                     category: (formData.get("sellerCategory") as string) || "retail"
                 },
+                //   A BUYER WRITES NO VERIFICATION RECORD, so this profile is
+                //   the only place her answers to step 3 can live.
+                buyerInterests,
+                orderVolume: (formData.get("orderVolume") as string) || "",
+                productStatus: (formData.get("productStatus") as string) || "",
                 bankDetails: bankAccountRecord,
                 documents: {
                     businessDoc: businessRegistrationUrl || undefined,

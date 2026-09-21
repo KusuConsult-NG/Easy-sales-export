@@ -27,6 +27,8 @@ import {
 } from "@/lib/land-listing-status";
 import { inspectionRefusal } from "@/lib/land-inspection";
 import { priceReductionPatch } from "@/lib/price-reduction";
+import { serializeValue } from "@/lib/firestore-serialize";
+import { requiresReverification } from "@/lib/land-reverification";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -155,7 +157,7 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
         let listings = snapshot.docs
             .map(doc => { 
                 const data = doc.data();
-                return {
+                const shaped = {
                     id: doc.id,
                     ...data,
                     //   #689 One reader for four shapes — see lib/land-location.ts.
@@ -168,7 +170,40 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
                     createdAt: safeToISOString(data.createdAt, new Date().toISOString()),
                     updatedAt: safeToISOString(data.updatedAt, new Date().toISOString()),
                     verifiedAt: safeToISOStringOptional(data.verifiedAt) ?? null 
-                } as unknown as LandListing;
+                };
+                /*
+                 *   #!! AND A FOURTH TIMESTAMP ARRIVED AFTER THE LIST WAS
+                 *       WRITTEN, which is why this is no longer a list.
+                 *
+                 *       The three lines above convert createdAt, updatedAt and
+                 *       verifiedAt BY HAND and spread everything else raw. #867
+                 *       then added `priceReducedAt` to this collection, nobody
+                 *       added a fourth line, and a stored Timestamp went across
+                 *       the server-client boundary:
+                 *
+                 *         Only plain objects ... can be passed to Client
+                 *         Components. {... priceReducedAt: {_seconds: ...,
+                 *         _nanoseconds: 850000000, seconds: ..., nanoseconds:
+                 *         ...} ...}
+                 *
+                 *       observed three times in one production session. It
+                 *       throws during render, so the listing does not appear —
+                 *       and because priceReducedAt is written ONLY when an
+                 *       owner cuts the price, the crash lands exactly on the
+                 *       listings that have just been edited, and on Hot Deals,
+                 *       which is the feature that field exists for.
+                 *
+                 *       serializeValue converts EVERY timestamp at any depth,
+                 *       including the next field somebody adds. It also catches
+                 *       the GeoPoint that readLandLocation spreads through from
+                 *       `...obj` — another class instance, the same crash, one
+                 *       row of test data away.
+                 *
+                 *       Applied to the finished object rather than to
+                 *       doc.data(), so readLandLocation still sees the raw
+                 *       shapes it was written to read.
+                 */
+                return serializeValue(shaped) as unknown as LandListing;
             })
             .filter(listing => (listing as any).status !== 'deleted');
 
@@ -323,7 +358,7 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
         const listings = snapshot.docs
             .map(doc => {
                 const data = doc.data();
-                return {
+                const shaped = {
                     id: doc.id,
                     ...data,
                     //   #689 One reader for four shapes — see lib/land-location.ts.
@@ -365,7 +400,22 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
                     createdAt: safeToISOString(data.createdAt, new Date().toISOString()),
                     updatedAt: safeToISOString(data.updatedAt, new Date().toISOString()),
                     verifiedAt: safeToISOStringOptional(data.verifiedAt) ?? null 
-                } as unknown as LandListing;
+                };
+                /*
+                 *   #!! AND THE FOURTH TIMESTAMP, ON THE SCREEN THE OWNER EDITS
+                 *       FROM. The note above says these three were "done by
+                 *       hand" and names that as the defect; the hand-written
+                 *       list then stayed three long while #867 added a fourth
+                 *       field to the collection.
+                 *
+                 *       `priceReducedAt` reached a Client Component as a stored
+                 *       Timestamp and threw during render — see the fuller note
+                 *       in _getLandListings above. This action feeds My
+                 *       Properties and List Land, so the crash landed on the
+                 *       seller's own listings the moment one of them had its
+                 *       price cut.
+                 */
+                return serializeValue(shaped) as unknown as LandListing;
             })
             .filter(listing => (listing as any).status !== 'deleted');
 
@@ -480,7 +530,30 @@ async function _updateLandListing(
              */
             ...(priceReductionPatch(listingData.price, updateData.price) ?? {}),
             updatedAt: FieldValue.serverTimestamp(),
-            status: 'pending_verification' 
+            /*
+             *   BACK FOR REVIEW ONLY IF THE PARCEL CHANGED — see
+             *   lib/land-reverification for the whole argument.
+             *
+             *   This was `status: 'pending_verification'`, unconditionally, and
+             *   pending_verification is not in PUBLIC_LAND_STATUSES. So every
+             *   owner edit took the listing off the properties list, the map,
+             *   the detail page and Hot Deals — a corrected typo pulled a
+             *   verified parcel off the market until an admin re-approved it,
+             *   and nothing on the edit screen said so.
+             *
+             *   THE LINE ABOVE IS THE PROOF IT WAS WRONG. priceReductionPatch
+             *   is #867, raising a Hot Deal when an owner cuts the price; the
+             *   next line then hid the listing from Hot Deals. The feature
+             *   could not fire once. Two adjacent lines, contradicting.
+             *
+             *   Spread, so an edit that changes nothing verifiable leaves the
+             *   status field untouched rather than writing back the value it
+             *   already had — a listing mid-way through some other transition
+             *   must not be rewritten by an unrelated description edit.
+             */
+            ...(requiresReverification(listingData, validated)
+                ? { status: 'pending_verification' }
+                : {}),
         });
 
         // Audit log

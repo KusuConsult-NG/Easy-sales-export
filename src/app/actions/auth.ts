@@ -11,7 +11,6 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { User as FirestoreUser } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
-import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { ZodError } from "zod";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { cookies } from "next/headers";
@@ -208,50 +207,44 @@ export async function getPostLoginRedirect(email: string) { try {
             // CRITICAL: Check application status and redirect accordingly
             // Priority: Approved > Pending > No Applications
 
-            // ── MODULE-TO-DASHBOARD MAP ──────────────────────────────────────
-            // Route approved users DIRECTLY to their module dashboard.
-            // This bypasses getPrimaryApp(userRoles) which relies on the JWT
-            // session roles — those can be stale for hours after admin approval.
-            const approvedDashboardMap: Record<string, string> = { 'academy': '/academy/dashboard',
-                'wave': '/wave/dashboard',
-                'export': '/export/dashboard',
-                'marketplace': '/marketplace/buyer/dashboard',
-                'cooperatives': '/cooperatives/dashboard',
-                'farmNation': '/farm-nation/dashboard',
-                'farm_nation': '/farm-nation/dashboard' };
-
-            // 1. Check for approved modules
-            const approvedModules = Object.entries(serviceRegistrations)
-                .filter(([_, reg]: [string, any]) => reg?.status === 'approved' || reg?.status === 'active');
-
-            if (approvedModules.length > 0) {
-                // Prefer the first approved module's direct dashboard URL.
-                // This avoids relying on session-cached roles that may be stale.
-                const [firstApprovedKey] = approvedModules[0];
-                const directDashboard = approvedDashboardMap[firstApprovedKey];
-
-                if (directDashboard) {
-                    logger.info(`[getPostLoginRedirect] User ${email} approved for '${firstApprovedKey}', direct redirect to: ${directDashboard}`);
-                    return { error: null, success: true as const, data: { redirectUrl: directDashboard } };
-                }
-
-                // Fallback for unknown modules: use role-based primary app
-                const primaryApp = getPrimaryApp(userRoles as import("@/lib/types/roles").UserRole[]);
-
-                // getPrimaryApp answers "/" when no role names a module — a
-                // general_user, in its own words, "starts at the Hub". Landing
-                // a signed-in user on the marketing hub is not what this branch
-                // wants, and it is not what used to happen: getPrimaryApp threw
-                // for anyone carrying a legacy role, the catch below returned
-                // /dashboard, and that is where these users have always gone.
-                // Every neighbouring branch here returns /dashboard for the
-                // same case, so it is stated rather than left to an exception.
-                const redirectUrl = primaryApp === "/" ? "/dashboard" : primaryApp;
-                logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${redirectUrl}`);
-                return { error: null, success: true as const, data: { redirectUrl } };
-            }
-
-            // 2. Check for pending applications
+            /*
+             * ── SIGNING IN LANDS ON THE HUB, NOT INSIDE ONE MODULE ───────────
+             *
+             *   This used to dive straight into a module dashboard: take the
+             *   FIRST entry of serviceRegistrations whose status is approved or
+             *   active, look it up in a module-to-dashboard map, and go there.
+             *
+             *   THE PLATFORM IS SIX MODULES AND /dashboard IS WHERE THEY ARE.
+             *   Its own page builds `modulesDef` — all six, each with its live
+             *   application status — so it is the one screen that shows a member
+             *   what they belong to and what they could apply for. Diving past it
+             *   hid the other five from everybody who had joined one, and a
+             *   member approved for Academy had no way to discover Farm Nation
+             *   except by knowing the URL.
+             *
+             *   AND "FIRST" WAS NEVER A DECISION. Object.entries returns
+             *   insertion order, so a member approved for three modules landed
+             *   in whichever one happened to have been written to their record
+             *   earliest — not their newest, not their busiest, not one they
+             *   chose. #458 records the same class of defect in the admin
+             *   ordering: two places ranked the modules differently and nobody
+             *   had decided either ranking.
+             *
+             *   WHAT THE OLD BRANCH WAS ACTUALLY FOR, and why removing it costs
+             *   nothing: its comment says it routes on the REGISTRATION rather
+             *   than the role because "JWT session roles can be stale for hours
+             *   after admin approval". That is a real hazard and it is answered
+             *   better here — /dashboard reads the registrations itself, so a
+             *   member approved a minute ago sees the module unlocked on the
+             *   hub whatever their session still claims. The staleness never
+             *   reaches a routing decision because there is no longer a routing
+             *   decision to make.
+             *
+             *   Admins are untouched: adminLandingPath above still takes them to
+             *   their console, and a member who followed a link keeps their
+             *   callbackUrl — LoginForm honours it before ever asking this.
+             */
+            logger.info(`[getPostLoginRedirect] User ${email} signing in to the hub`);
             // REMOVED: Users are now allowed to access the Dashboard even if they have pending applications.
             // They can check their pending status and navigate to pending pages from the Dashboard.
             // 

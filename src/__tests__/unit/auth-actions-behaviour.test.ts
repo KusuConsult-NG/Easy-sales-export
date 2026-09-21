@@ -243,50 +243,81 @@ describe('an administrator lands on a console', () => {
     });
 });
 
-describe('an approved module takes the member straight to its dashboard', () => {
+/*
+ *   SIGNING IN LANDS ON THE HUB, NOT INSIDE ONE MODULE.
+ *
+ *   This block used to be called "an approved module takes the member straight
+ *   to its dashboard" and asserted exactly that, module by module. It was
+ *   deliberate, and it is deliberately reversed: the platform is six modules,
+ *   /dashboard is the only screen that shows all six with their live
+ *   application status, and diving past it hid the other five from everybody
+ *   who had joined one.
+ *
+ *   The old behaviour also had a defect of its own that no test named. It took
+ *   the FIRST entry of serviceRegistrations, and Object.entries is insertion
+ *   order — so a member approved for three modules landed in whichever had been
+ *   written to their record earliest. Not their newest, not their busiest, not
+ *   one they chose.
+ *
+ *   The assertions are kept rather than deleted, inverted, so the reversal is
+ *   legible and so a silent drift back to the dive is caught.
+ */
+describe('an approved module no longer swallows the login', () => {
     it.each([
-        ['academy', '/academy/dashboard'],
-        ['wave', '/wave/dashboard'],
-        ['export', '/export/dashboard'],
-        ['marketplace', '/marketplace/buyer/dashboard'],
-        ['cooperatives', '/cooperatives/dashboard'],
-        ['farmNation', '/farm-nation/dashboard'],
-        ['farm_nation', '/farm-nation/dashboard'],
-    ])('%s', async (module, expected) => {
+        ['academy'],
+        ['wave'],
+        ['export'],
+        ['marketplace'],
+        ['cooperatives'],
+        ['farmNation'],
+        ['farm_nation'],
+    ])('%s lands on the hub', async (module) => {
         store.clear();
         seedUser({ serviceRegistrations: { [module]: { status: 'approved' } } });
-        expect(await redirectFor()).toBe(expected);
+        expect(await redirectFor()).toBe('/dashboard');
     });
 
-    it('accepting "active" as well as "approved"', async () => {
+    it('and "active" is treated the same as "approved"', async () => {
         seedUser({ serviceRegistrations: { wave: { status: 'active' } } });
-        expect(await redirectFor()).toBe('/wave/dashboard');
+        expect(await redirectFor()).toBe('/dashboard');
     });
 
-    it('and bypassing the role-based lookup, because JWT roles go stale', async () => {
-        // The reason this branch exists. An admin approves the module; the
-        // member's session still carries the old roles for up to an hour. Routing
-        // on the REGISTRATION rather than the role is what makes the approval take
-        // effect on the next login.
+    it('A MEMBER OF SEVERAL MODULES IS NOT DROPPED INTO AN ARBITRARY ONE', async () => {
+        //   The case the old code answered by accident of key order. There is
+        //   no "first" module, so the question is no longer asked.
         seedUser({
-            roles: ['user'],
-            serviceRegistrations: { cooperatives: { status: 'approved' } },
+            serviceRegistrations: {
+                academy: { status: 'approved' },
+                cooperatives: { status: 'approved' },
+                farmNation: { status: 'active' },
+            },
         });
 
-        expect(await redirectFor()).toBe('/cooperatives/dashboard');
+        expect(await redirectFor()).toBe('/dashboard');
     });
 
-    it('while a pending registration does NOT', async () => {
+    it('a pending registration lands there too', async () => {
         seedUser({ serviceRegistrations: { wave: { status: 'pending' } } });
         expect(await redirectFor()).toBe('/dashboard');
     });
 
-    it('and an unknown module name falls through to /dashboard rather than the marketing hub', async () => {
-        // getPrimaryApp answers "/" when no role names a module — the Hub. Landing
-        // a signed-in member on the marketing page is not what this branch wants,
-        // and it is not what used to happen.
+    it('and so does an unknown module name, rather than the marketing hub', async () => {
+        //   "/" is the marketing page. A signed-in member must never land on it
+        //   — that was true before this change and is unaffected by it.
         seedUser({ serviceRegistrations: { some_new_module: { status: 'approved' } } });
         expect(await redirectFor()).toBe('/dashboard');
+    });
+
+    it('POSITIVE CONTROL: AN ADMIN STILL GOES TO THEIR CONSOLE', async () => {
+        //   The direction that must not move. Sending everybody to /dashboard
+        //   would satisfy every assertion above and strand every admin.
+        store.clear();
+        seedUser({
+            roles: ['super_admin'],
+            serviceRegistrations: { academy: { status: 'approved' } },
+        });
+
+        expect(await redirectFor()).toBe('/admin');
     });
 });
 

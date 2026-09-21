@@ -28,7 +28,9 @@ import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
  * server action's parameter types are erased at the wire — see the runtime
  * validation in _escrow_lifecycle.ts for the same reasoning.
  */
-const SELLER_CATEGORIES = ["wholesale", "retail"] as const;
+//   #!! "both" joined this vocabulary — see lib/seller-category for why it
+//   could not simply be a third string.
+import { SELLER_CATEGORIES } from "@/lib/seller-category";
 
 /**
  * Live roles, not the session's copy.
@@ -692,7 +694,7 @@ export const revokeSellerVerifiedBadgeAction = withSafeAction("revokeSellerVerif
  */
 async function _updateSellerCategoryAction(
     sellerId: string,
-    category: "wholesale" | "retail"
+    category: "wholesale" | "retail" | "both"
 ): Promise<ActionResponse<{ message: string }>> { 
     let sessionResult;
     try {

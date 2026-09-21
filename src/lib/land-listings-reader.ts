@@ -3,6 +3,7 @@ import "server-only";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
  * The publicly visible land listings, read once and defined once.
@@ -52,7 +53,7 @@ export async function readPublicLandListings(): Promise<Record<string, any>[]> {
 
     return snapshot.docs.map((doc: any) => {
         const data = stripInternalLandFields(doc.data() ?? {});
-        return {
+        const shaped = {
             id: doc.id,
             ...data,
             totalPrice: data.totalPrice ?? data.price ?? 0,
@@ -61,5 +62,28 @@ export async function readPublicLandListings(): Promise<Record<string, any>[]> {
             createdAt: data.createdAt?.toDate?.() || new Date(),
             updatedAt: data.updatedAt?.toDate?.() || new Date(),
         };
+        /*
+         *   THE THIRD DOOR WITH A HAND-WRITTEN LIST OF TIMESTAMPS.
+         *
+         *   Two converted by name — createdAt and updatedAt — and everything
+         *   else spread raw, which is the same shape as the two readers in
+         *   actions/land-actions.ts and fails the same way. `priceReducedAt`
+         *   went straight through as a stored Timestamp and React refused it:
+         *
+         *       Only plain objects ... can be passed to Client Components.
+         *       {... verificationStatus: ..., priceReducedAt: {_seconds: ...}}
+         *
+         *   BOTH CALLERS ARE SERVER COMPONENTS FEEDING CLIENT ONES —
+         *   /farm-nation/map and /land — so the throw takes the whole page.
+         *   Reproduced locally three times in one full e2e run, on exactly
+         *   those two routes plus the map screenshot that visits one of them.
+         *
+         *   The two hand-converted fields stay: `?.toDate?.() || new Date()`
+         *   is a fallback this function has always had, and serializeValue
+         *   turns the resulting Date into an ISO string, which is what the
+         *   other readers already hand their clients. Neither map client reads
+         *   either field.
+         */
+        return serializeValue(shaped) as Record<string, any>;
     });
 }

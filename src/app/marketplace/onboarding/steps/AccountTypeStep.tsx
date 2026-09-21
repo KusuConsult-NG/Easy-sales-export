@@ -9,7 +9,14 @@
 
 import { ShoppingCart, Store, Users, Package, ShoppingBag } from "lucide-react";
 
-export type SellerCategoryType = "wholesale" | "retail";
+import { kindsOf, sellerCategoryFor, type SellerCategory } from "@/lib/seller-category";
+
+/**
+ *   "both" joined this the way it has always been on the account type beside
+ *   it. See lib/seller-category — the value is queried by the broadcast
+ *   audiences, so the vocabulary is shared rather than restated here.
+ */
+export type SellerCategoryType = SellerCategory;
 
 interface AccountTypeStepProps {
     value?: "buyer" | "seller" | "both";
@@ -142,30 +149,55 @@ export default function AccountTypeStep({ value, sellerCategory, onChange, onSel
             {showCategoryPicker && (
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-slate-900 mb-1">Seller Category</h3>
-                    <p className="text-sm text-slate-500 mb-4">Choose the type that best describes your business</p>
+                    <p className="text-sm text-slate-500 mb-4">Choose everything that describes your business — you can pick both</p>
                     <div className="grid grid-cols-2 gap-4">
-                        <button
-                            onClick={() => onSellerCategoryChange?.("wholesale")}
-                            className={`p-4 rounded-xl border-2 text-left transition-all ${sellerCategory === "wholesale"
-                                ? "border-blue-500 bg-blue-50"
-                                : "border-slate-200 bg-white hover:border-blue-300"
-                                }`}
-                        >
-                            <Package className="w-8 h-8 text-blue-600 mb-2" />
-                            <p className="font-bold text-slate-900">Wholesale</p>
-                            <p className="text-xs text-slate-500 mt-0.5">Bulk orders, large quantities, B2B trade</p>
-                        </button>
-                        <button
-                            onClick={() => onSellerCategoryChange?.("retail")}
-                            className={`p-4 rounded-xl border-2 text-left transition-all ${sellerCategory === "retail"
-                                ? "border-emerald-500 bg-emerald-50"
-                                : "border-slate-200 bg-white hover:border-emerald-300"
-                                }`}
-                        >
-                            <ShoppingBag className="w-8 h-8 text-emerald-600 mb-2" />
-                            <p className="font-bold text-slate-900">Retail</p>
-                            <p className="text-xs text-slate-500 mt-0.5">Individual buyers, smaller quantities, B2C</p>
-                        </button>
+                        {/*
+                          *   TOGGLES, NOT A CHOICE OF ONE.
+                          *
+                          *   THE OWNER: "select both wholesale and retail should be
+                          *   enabled during onboarding on marketplace."
+                          *
+                          *   These were exclusive — clicking one replaced the other —
+                          *   so a seller who does both had to pick the one they did
+                          *   less of. Each is its own tick now and the two together
+                          *   store "both", which is the same shape the ACCOUNT type
+                          *   above has always had.
+                          */}
+                        {([
+                            { kind: "wholesale" as const, Icon: Package, label: "Wholesale",
+                              blurb: "Bulk orders, large quantities, B2B trade",
+                              on: "border-blue-500 bg-blue-50", hover: "hover:border-blue-300", tint: "text-blue-600" },
+                            { kind: "retail" as const, Icon: ShoppingBag, label: "Retail",
+                              blurb: "Individual buyers, smaller quantities, B2C",
+                              on: "border-emerald-500 bg-emerald-50", hover: "hover:border-emerald-300", tint: "text-emerald-600" },
+                        ]).map(({ kind, Icon, label, blurb, on, hover, tint }) => {
+                            const chosen = kindsOf(sellerCategory);
+                            const selected = chosen.includes(kind);
+                            return (
+                                <button
+                                    key={kind}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    onClick={() => {
+                                        const next = selected
+                                            ? chosen.filter((k) => k !== kind)
+                                            : [...chosen, kind];
+                                        //   Null when they have just unticked the last
+                                        //   one, which is what the "you must choose"
+                                        //   guard below tests for.
+                                        onSellerCategoryChange?.(sellerCategoryFor(next) as SellerCategoryType);
+                                    }}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all ${selected
+                                        ? on
+                                        : `border-slate-200 bg-white ${hover}`
+                                        }`}
+                                >
+                                    <Icon className={`w-8 h-8 ${tint} mb-2`} />
+                                    <p className="font-bold text-slate-900">{label}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             )}

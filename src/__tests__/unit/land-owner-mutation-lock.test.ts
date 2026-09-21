@@ -128,9 +128,44 @@ describe('#237 — a reservation survives its owner', () => {
 
             expect(await update()).toMatchObject({ success: true });
             expect(store.get(LISTINGS, 'plot-1')?.price).toBe(750_000);
-            // An edit goes back through review, as before.
-            expect(store.get(LISTINGS, 'plot-1')?.status).toBe('pending_verification');
         });
+
+    /*
+     *   AND A PRICE EDIT NO LONGER TAKES THE LISTING OFF THE MARKET.
+     *
+     *   This block used to assert `status === 'pending_verification'` after
+     *   every edit, with the comment "an edit goes back through review, as
+     *   before". That was the live behaviour and it was a defect:
+     *   pending_verification is not in PUBLIC_LAND_STATUSES, so correcting a
+     *   price — or a typo — pulled a verified parcel off the properties list,
+     *   the map and Hot Deals until an admin re-approved it.
+     *
+     *   `update()` above sends a PRICE, which is the case that proves it: the
+     *   same write raises a Hot Deal through priceReductionPatch (#867) and
+     *   then, one line later, hid the listing from Hot Deals. See
+     *   lib/land-reverification.
+     */
+    it.each(['verified', 'available', 'approved'])(
+        'A PRICE EDIT LEAVES A PUBLIC LISTING PUBLIC — %s', async (status) => {
+            seedListing(status);
+
+            expect(await update()).toMatchObject({ success: true });
+            expect(store.get(LISTINGS, 'plot-1')?.status).toBe(status);
+        });
+
+    it('BUT CHANGING THE PARCEL ITSELF STILL GOES BACK FOR REVIEW', async () => {
+        //   The direction that must not move. Size is something an admin
+        //   verified; a seller who can change it after approval without
+        //   re-review can bait-and-switch.
+        seedListing('verified');
+
+        const res = await (await actions()).updateLandListing({
+            listingId: 'plot-1', size: 999,
+        } as any) as any;
+
+        expect(res).toMatchObject({ success: true });
+        expect(store.get(LISTINGS, 'plot-1')?.status).toBe('pending_verification');
+    });
 
     it('still deletes a verified listing', async () => {
         seedListing('verified');

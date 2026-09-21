@@ -98,7 +98,14 @@ describe('buildCsp', () => {
         const scriptSrc = directives(buildCsp({ nonce: 'n' }))['script-src'];
 
         expect(scriptSrc).toContain('https://js.paystack.co');
-        expect(scriptSrc).toContain('https://maps.googleapis.com');
+        expect(scriptSrc).toContain('https://www.googletagmanager.com');
+
+        //   maps.googleapis.com WAS asserted here and is gone on purpose: its
+        //   one caller, checkout's delivery address, now uses OpenStreetMap
+        //   through this origin's own api/geocode. Asserted as absent rather
+        //   than just dropped, because a host with no caller is standing
+        //   permission nobody would notice coming back.
+        expect(scriptSrc).not.toContain('maps.googleapis.com');
     });
 
     it('upgrades insecure requests outside development', async () => {

@@ -36,16 +36,29 @@ test.describe('User Onboarding Journey', () => {
         await page.click('button:has-text("Continue")');
 
         // 5. Step 2: Business Profile
+        //
+        //   ADDRESSED BY ID, NOT BY POSITION. This read
+        //   `page.locator('select').first()` for the State, and a Business
+        //   Status select was added above it — so `.first()` resolved to the
+        //   new control and the test spent sixty seconds looking for "Lagos"
+        //   among its three options. A positional locator on a form is a test
+        //   that breaks the next time anybody adds a field, which is not what
+        //   it is here to detect.
         await page.fill('input[placeholder="Enter your business or farm name"]', 'Test Buyer Business');
         // Business type defaults to 'individual', which is correct, so no need to click.
+        await page.selectOption('#businessStatus', 'registered');
         await page.fill('input[placeholder="08012345678"]', testPhone);
-        await page.locator('select').first().selectOption('Lagos');
-        await page.locator('select').nth(1).selectOption('Ikeja');
+        await page.selectOption('#state', 'Lagos');
+        await page.selectOption('#lga', 'Ikeja');
         await page.fill('textarea[placeholder="Enter your complete business address"]', '123 Test Street, Ikeja');
         await page.click('button:has-text("Continue")');
 
         // 6. Step 3: Product Interests
-        // Select some category buttons
+        //   These two set `buyerInterests`, which is now required of a buyer —
+        //   the step used to be enforced by nothing but its own button, and
+        //   that button is skippable via a restored draft. A seller would also
+        //   have to answer Product Status here; a buyer does not, because it
+        //   describes goods she is not selling.
         await page.click('button:has-text("Grains & Cereals")');
         await page.click('button:has-text("Roots & Tubers")');
         await page.click('button:has-text("Continue")');

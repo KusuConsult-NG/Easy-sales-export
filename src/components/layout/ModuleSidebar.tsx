@@ -210,7 +210,18 @@ const MARKETPLACE_NAV: NavItem[] = [
     // Both quote lists were unreachable: nothing linked to either, and the
     // seller's RFQ notification pointed at a route that did not exist.
     { name: "My Quotes",         href: "/marketplace/buyer/quotes",   icon: FileText },
-    { name: "Village Market",    href: "/marketplace/village-market", icon: Zap },
+    /*
+     *   VILLAGE MARKET IS A SELLER SURFACE.
+     *
+     *   THE OWNER: "remove village market tab for buyers since the products
+     *   are visible on browse products" — and that is exactly right, the
+     *   buyer's Browse Products list already folds flash-sale items in
+     *   (BuyerProductsClient reads getActiveFlashSaleProductsAction and links
+     *   each one through to its event). So the tab offered a buyer a second
+     *   door to things they could already see, on a screen whose purpose is
+     *   listing products for sale.
+     */
+    { name: "Village Market",    href: "/marketplace/village-market", icon: Zap, sellerOnly: true },
     { name: "Escrow",            href: "/escrow",                     icon: Lock },
     { name: "Seller Dashboard",  href: "/marketplace/seller",         icon: Store,    sellerOnly: true },
     { name: "Quote Requests",    href: "/marketplace/seller/quotes",  icon: FileText, sellerOnly: true },
