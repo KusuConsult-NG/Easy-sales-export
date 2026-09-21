@@ -353,7 +353,10 @@ test.afterAll(() => {
 
     //   Printed as well as written: the run's own output is where somebody
     //   looks first, and a file they have to find is a file they do not read.
-    // eslint-disable-next-line no-console
+    //
+    //   No eslint-disable here: `no-console` is not enabled for e2e specs, and
+    //   an UNUSED disable directive is itself a warning — which `npm run lint`
+    //   turns into a failure under --max-warnings=0.
     console.log(`\n${results.length} screens photographed, ${errors.length} errors. `
         + `See ${OUT}/MANIFEST.md`);
 });
