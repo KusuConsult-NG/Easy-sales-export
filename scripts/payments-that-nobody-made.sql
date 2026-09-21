@@ -130,6 +130,11 @@ SELECT 2,
                THEN 'Paystack T-shape, but ₦50,000 exactly  <-- check first'
            WHEN reference ~ '^T[0-9]{15}$'
                THEN 'Paystack T-shape, amount is not the mock''s'
+           --   T + THIRTEEN digits is a JavaScript Date.now(). Section 5
+           --   proves it per row by decoding the digits and comparing them
+           --   with the row's own created_at.
+           WHEN reference ~ '^T[0-9]{13}$'
+               THEN 'T + 13 digits — a Date.now() timestamp; see section 5'
            ELSE 'starts with T but NOT Paystack''s shape  <-- check first'
        END,
        count(*)::bigint
@@ -182,6 +187,58 @@ FROM payments
 WHERE ptype IN ('academy_registration', 'academy_enrollment')
 GROUP BY 3
 
+UNION ALL
+
+-- ── 5. THE T-REFERENCE THAT ENCODES ITS OWN INSERT TIME. ───────────────────
+--
+--   Section 2 can only call a T + 13 reference suspicious. This settles it.
+--
+--   tests/e2e/financial-workflow.spec.ts mints its reference as
+--
+--       const reference = `T${Date.now()}`;
+--
+--   so the thirteen digits ARE the millisecond the row was created. Decode
+--   them and compare with the row's own created_at: if they agree to within a
+--   few minutes, the reference was minted by our own client at insert time.
+--
+--   PAYSTACK CANNOT PRODUCE THAT. Its T-form is fifteen digits, and no
+--   reference it issues could encode the moment OUR INSERT ran. This is a
+--   proof about provenance, not a guess about shape, which is why it can
+--   promote a row from "check first" to fabricated without ever risking a
+--   real payer — the risk that kept section 2 ambiguous in the first place.
+--
+--   The live sweep found two: T1783690499905 decodes to 13:34:59.905 against
+--   a created_at of 13:35, and T1783698149704 to 15:42:29.704 against 15:42.
+--
+--   MATERIALIZED is load-bearing. Without it the planner may hoist the
+--   substring cast above the regex filter and try to read a bigint out of a
+--   reference that is not all digits, failing the whole sweep.
+SELECT 5,
+       'T-REFERENCE THAT ENCODES ITS OWN INSERT TIME — fabricated, not ambiguous',
+       reference
+         || '  |  ₦' || coalesce(amount::text, '?')
+         || '  |  reference says ' || to_char(minted_at, 'YYYY-MM-DD HH24:MI:SS')
+         || '  |  row says ' || coalesce(to_char(created_at, 'YYYY-MM-DD HH24:MI:SS'), '(undated)')
+         || '  |  ' || CASE
+                WHEN created_at IS NULL THEN 'undated row — compare by hand'
+                WHEN abs(extract(epoch FROM (created_at - minted_at))) <= 600
+                    THEN 'AGREE to within 10 minutes — minted by our own client'
+                ELSE 'disagree by '
+                     || round(abs(extract(epoch FROM (created_at - minted_at))) / 60)::text
+                     || ' minutes — still a Date.now() shape'
+            END,
+       count(*)::bigint
+FROM (
+    SELECT reference, amount, created_at,
+           to_timestamp(substring(reference FROM 2)::bigint / 1000.0) AT TIME ZONE 'UTC' AS minted_at
+    FROM (
+        SELECT reference, amount, created_at
+        FROM payments
+        WHERE reference ~ '^T[0-9]{13}$'
+    ) guarded
+) decoded
+GROUP BY reference, amount, created_at, minted_at
+
 ) x
 ORDER BY sort, label;
 
@@ -207,3 +264,54 @@ ORDER BY sort, label;
 --     OR p.reference LIKE 'TEST\_E2E\_REF\_%'
 --     OR (p.reference LIKE 'T%' AND p.reference !~ '^T[0-9]{15}$')
 --  ORDER BY p.created_at;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+--  REMOVING THE THREE, IF THAT IS WHAT YOU DECIDE.
+--
+--  THE GENERAL RULE IS STILL "DO NOT DELETE". A fabricated row may have had
+--  something fulfilled against it months ago, and deleting it revokes whatever
+--  that was from whoever has been using it. That is a decision about a person.
+--
+--  THESE THREE ARE THE EXCEPTION, AND ONLY BECAUSE BOTH HALVES ARE PROVEN:
+--
+--    * fabricated — TEST_E2E_REF_123456 is a test-only shape, and the other
+--      two encode their own insert time (section 5), which Paystack cannot do;
+--    * and held by test accounts — academyuser02@gmail.com and
+--      e2e.user@easysalesexport.com, not customers.
+--
+--  Neither half alone is enough. A real payer on a fabricated row keeps it.
+--
+--  WHAT THIS DOES NOT DO: it removes the RECORD OF PAYMENT, not the
+--  ENTITLEMENT. `academy_participant` lives on the user document, in roles and
+--  serviceRegistrations.academy — deleting the ledger row leaves those test
+--  accounts holding Academy access with nothing behind it, which is a
+--  different wrong answer than the one you started with. Decide both together.
+--
+--  RUN THE SELECT FIRST. If it does not return exactly these three rows, stop:
+--  something has changed since this was written and the DELETE is not safe.
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+--  SELECT p.reference, p.amount, p.created_at, u.email, u.roles
+--  FROM processed_payments p
+--  LEFT JOIN users u ON u.id = p.user_id
+--  WHERE p.reference IN ('TEST_E2E_REF_123456','T1783690499905','T1783698149704');
+--
+--  -- Then, with the three confirmed, inside a transaction that refuses to
+--  -- commit if the count is not exactly three:
+--  BEGIN;
+--
+--  DELETE FROM processed_payments
+--   WHERE reference IN ('TEST_E2E_REF_123456','T1783690499905','T1783698149704');
+--
+--  -- psql prints "DELETE 3". Anything else and the next line aborts.
+--  DO $$
+--  DECLARE remaining int;
+--  BEGIN
+--      SELECT count(*) INTO remaining FROM processed_payments
+--       WHERE reference IN ('TEST_E2E_REF_123456','T1783690499905','T1783698149704');
+--      IF remaining <> 0 THEN
+--          RAISE EXCEPTION 'expected none left, found %', remaining;
+--      END IF;
+--  END $$;
+--
+--  COMMIT;   -- or ROLLBACK; if the count surprised you
