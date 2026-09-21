@@ -151,7 +151,43 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             icon: Package,
             color: "from-orange-500 to-amber-600",
             onboardingUrl: "/marketplace/onboarding",
-            dashboardUrl: (roles.includes("seller") || roles.includes("marketplace_seller")) ? "/marketplace/seller/dashboard" : "/marketplace/buyer/dashboard",
+            /*
+             *   THE HUB DOES NOT DECIDE THIS, because it cannot.
+             *
+             *   THE OWNER: "users sign up as seller but sees buyer's dashboard
+             *   and all features, why?"
+             *
+             *   This read
+             *
+             *       (roles.includes("seller") || roles.includes("marketplace_seller"))
+             *           ? "/marketplace/seller/dashboard"
+             *           : "/marketplace/buyer/dashboard"
+             *
+             *   which asks the SESSION's roles array. An admin approving a
+             *   seller grants the role with arrayUnion on the user document —
+             *   the JWT keeps the old array until it is minted again, which is
+             *   up to the eight-hour session lifetime. So a freshly approved
+             *   seller reached the hub, fell down the `:` branch, and was given
+             *   the BUYER dashboard and the buyer's features, with nothing to
+             *   say why.
+             *
+             *   /marketplace/dashboard already answers this correctly and from
+             *   the right source: it reads
+             *   `serviceRegistrations.marketplace.accountType` out of the
+             *   database and says so in its own comment — "Check Firestore for
+             *   authoritative accountType (JWT may be stale)". It routes
+             *   seller and "both" to the seller dashboard, buyer to the buyer
+             *   dashboard, and nobody to onboarding.
+             *
+             *   This was the THIRD copy of that rule and the only one deciding
+             *   from a stale source. Deleting it is the fix; the redirect costs
+             *   one hop and is the same hop /marketplace/dashboard exists for.
+             *
+             *   A seller still mid-verification is unaffected either way: their
+             *   registration status is `pending`, so `status` below resolves to
+             *   'pending' and the href is pendingUrl, not this.
+             */
+            dashboardUrl: "/marketplace/dashboard",
             pendingUrl: "/marketplace/onboarding/pending",
         },
         {
