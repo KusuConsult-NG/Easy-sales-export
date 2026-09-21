@@ -126,6 +126,21 @@ beforeEach(() => {
     claimed.clear();
     store = installFakeDb();
     actAs(BUYER);
+
+    /*
+     *   #815 — THE BUYER IS A COOPERATIVE MEMBER, because Farm Nation land is
+     *   sold to members and the ACTION enforces that now rather than only the
+     *   checkout screen.
+     *
+     *   Every test in this file is about something else — a listing's status,
+     *   the price that is charged, an owner buying their own land — and each
+     *   one reached the membership gate first and was refused by it. Seeding
+     *   the row puts them back on the subject they were written for.
+     *
+     *   The gate itself is tested in a-purchase-gate-only-the-buttons-obeyed,
+     *   where a buyer WITHOUT this row is the case under test.
+     */
+    seedMember(BUYER);
     resetFallbackLimit(`payment:${BUYER}`);
     mockInit.mockResolvedValue({ authorizationUrl: 'https://paystack.test/pay', reference: REF, accessCode: 'ac' });
     mockVerify.mockResolvedValue({
@@ -137,6 +152,12 @@ beforeEach(() => {
         },
     });
 });
+
+/** A cooperative membership for `id` — see the note in beforeEach (#815). */
+const seedMember = (id: string) =>
+    store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, id, {
+        userId: id, membershipStatus: 'active', totalContributions: 50_000,
+    });
 
 const payment = () => import('@/app/actions/farm-nation-payment');
 
@@ -183,6 +204,10 @@ describe('initializePropertyPaymentAction', () => {
 
     it('refuses a property that does not exist', async () => {
         store.clear();
+        //   clear() takes the membership row with it, and the eligibility gate
+        //   runs before the property is read — so without this the refusal
+        //   under test is never reached.
+        seedMember(BUYER);
         expect(await initialise()).toMatchObject({ success: false, error: 'Property not found' });
     });
 
@@ -251,6 +276,9 @@ describe('initializePropertyPaymentAction', () => {
         expect((await initialise()).success).toBe(true);
 
         actAs('buyer-2');
+        //   A second person, so a second membership: the gate is about the
+        //   CALLER, not about the property.
+        seedMember('buyer-2');
         resetFallbackLimit('payment:buyer-2');
 
         expect(await initialise()).toMatchObject({

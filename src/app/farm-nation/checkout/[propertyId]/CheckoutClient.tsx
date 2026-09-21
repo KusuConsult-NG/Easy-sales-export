@@ -66,6 +66,16 @@ export default function CheckoutClient({ initial = null }: {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [userTier, setUserTier] = useState<"Member" | null>(null);
+    /**
+     *   #814 — WHY CHECKOUT IS REFUSED, so the buyer can be told.
+     *
+     *   `null` while unknown, and one of two answers once the membership read
+     *   has happened. Kept apart from `error` because neither of these is an
+     *   error: one is a rule and the other is a read that did not answer, and
+     *   both need a different thing said to the person.
+     */
+    const [membershipBlock, setMembershipBlock] =
+        useState<"not-a-member" | "could-not-check" | null>(null);
     const [agreed, setAgreed] = useState(false);
 
     const [buyerInfo, setBuyerInfo] = useState({
@@ -97,15 +107,37 @@ export default function CheckoutClient({ initial = null }: {
         if (status === "unauthenticated") {
             router.replace(`/auth/register?callbackUrl=/farm-nation/checkout/${propertyId}`);
         } else if (status === "authenticated") {
+            /*
+             *   #814 THE ONE REFUSAL ON THIS PAGE THAT SAID NOTHING.
+             *
+             *   This used to be `router.push(property page)` and nothing else.
+             *   A buyer pressed Buy on a verified property, arrived back at the
+             *   listing, and was told NOTHING — not on the way out and not when
+             *   they got there. The property page does not mention membership
+             *   either, so the only available reading is that the button is
+             *   broken.
+             *
+             *   Every other refusal in this file already speaks: "This property
+             *   is no longer available", "Phone number is required", "Please
+             *   specify your intended use". The one that blocks the PURCHASE was
+             *   the silent one.
+             *
+             *   AND A READ THAT DID NOT ANSWER IS NOT A PASS. `res.success ===
+             *   false` fell through this block entirely, so a membership check
+             *   that failed rendered the full checkout form — the buyer then
+             *   fills it in and finds out at the payment step, if at all. It is
+             *   its own state now, with a retry, rather than being folded into
+             *   either answer.
+             */
             getUserTierAction().then((res) => {
                 if (res.success && res.data) {
                     const tier = res.data.tier;
                     setUserTier(tier || null);
-                    if (tier !== "Member") {
-                        router.push(`/farm-nation/property/${propertyId}`);
-                    }
+                    setMembershipBlock(tier === "Member" ? null : "not-a-member");
+                    return;
                 }
-            });
+                setMembershipBlock("could-not-check");
+            }).catch(() => setMembershipBlock("could-not-check"));
 
             setBuyerInfo(prev => ({
                 ...prev,
@@ -220,6 +252,60 @@ export default function CheckoutClient({ initial = null }: {
                 <div className="text-center">
                     <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto mb-4" />
                     <p className="text-slate-600">Loading checkout...</p>
+                </div>
+            </div>
+        );
+    }
+
+    /*
+     *   #814 — BEFORE THE FORM, so it cannot be filled in by somebody who is
+     *   going to be refused at the end of it.
+     */
+    if (membershipBlock !== null) {
+        const isNotAMember = membershipBlock === "not-a-member";
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+                <div className="max-w-md text-center">
+                    <AlertCircle
+                        className={`w-16 h-16 mx-auto mb-4 ${isNotAMember ? "text-amber-600" : "text-red-600"}`}
+                    />
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">
+                        {isNotAMember
+                            ? "Cooperative membership is required"
+                            : "We could not check your membership"}
+                    </h1>
+                    <p className="text-slate-600 mb-6">
+                        {isNotAMember
+                            ? "Land on Farm Nation is sold to cooperative members. Join the "
+                              + "cooperative and you can complete this purchase — the property "
+                              + "stays where it is in the meantime."
+                            : "Your membership could not be read just now, so we have not taken "
+                              + "you any further. Nothing has been charged and nothing has been "
+                              + "submitted. Please try again."}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        {isNotAMember ? (
+                            <button
+                                onClick={() => router.push("/cooperatives/onboarding")}
+                                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition"
+                            >
+                                Join the cooperative
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition"
+                            >
+                                Try again
+                            </button>
+                        )}
+                        <button
+                            onClick={() => router.push(`/farm-nation/property/${propertyId}`)}
+                            className="px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl transition"
+                        >
+                            Back to property
+                        </button>
+                    </div>
                 </div>
             </div>
         );

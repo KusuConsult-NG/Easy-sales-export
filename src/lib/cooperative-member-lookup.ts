@@ -28,6 +28,7 @@
  */
 
 import { ownedProfileIdsFor, isSamePerson } from "@/lib/owned-profile-ids";
+import type { CooperativeTier } from "@/lib/cooperative-tiers";
 
 /** The shape both loan doors need back: which row, and what is on it. */
 export interface CooperativeMemberRow {
@@ -188,4 +189,36 @@ export async function membershipRefForPayment(
     if (row) return { ref: membersCollection.doc(row.id), id: row.id };
 
     return { ref: membersCollection.doc(userId), id: userId };
+}
+
+/**
+ * The cooperative tier this PERSON holds, or null when they hold none.
+ *
+ *   #815 ONE RULE, BECAUSE TWO SIDES NOW DECIDE ON IT.
+ *
+ *   Farm Nation land is sold to cooperative members. Until now that rule lived
+ *   only in the checkout SCREEN — `getUserTierAction()` then
+ *   `if (tier !== "Member") router.push(...)` — and
+ *   `initializePropertyPaymentAction` checked nothing at all. A server action is
+ *   a public HTTP endpoint, so the gate stopped honest buyers and nobody else.
+ *
+ *   Both sides read this now, so they cannot disagree about who is a member.
+ *
+ *   AND IT RESOLVES THE PERSON, NOT THE SESSION ID. `getUserTierAction` used
+ *   `findCooperativeMemberRow`, which reads the id it is handed and stops. A
+ *   member whose membership row sits under a profile they no longer sign in as
+ *   therefore read as a NON-member — refused at checkout, and shown no tier and
+ *   no contributions on their own dashboard. That is the defect the userId
+ *   sweep exists to remove, and this is one more reader catching up: the
+ *   person-aware lookup walks every profile they own.
+ */
+export async function cooperativeTierForPerson(
+    membersCollection: any,
+    userId: string,
+): Promise<CooperativeTier | null> {
+    const row = await findCooperativeMemberRowForPerson(membersCollection, userId);
+    if (!row) return null;
+
+    const { calculateUserTier } = await import("@/lib/cooperative-tiers");
+    return calculateUserTier(Number(row.data?.totalContributions) || 0);
 }
