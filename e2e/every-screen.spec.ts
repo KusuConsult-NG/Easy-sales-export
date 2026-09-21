@@ -268,6 +268,40 @@ let PARAMS: Record<string, string> = {};
  */
 const SESSIONS = new Map<Persona, Awaited<ReturnType<BrowserContext['cookies']>>>();
 
+/**
+ *   A BOT IS IDLE BY DEFINITION, AND THE APP SIGNS IDLE PEOPLE OUT.
+ *
+ *   SessionActivityTracker signs a member out after ten minutes with no
+ *   mousemove, keydown, click, scroll or touchstart, and sends them to
+ *   `/auth/login?callbackUrl=<whatever is on screen>`. Its clock is
+ *   `localStorage.lastActivity`, read fresh on every tick, and the ONLY thing
+ *   that writes it is one of those five events.
+ *
+ *   `page.goto` is not one of them. So this sweep walks hundreds of screens
+ *   generating no activity at all, the clock runs down from the moment the
+ *   persona signed in, and whichever route is on screen at the ten-minute mark
+ *   is photographed as the login page.
+ *
+ *   THAT ALREADY HAPPENED, and it cost a screen. The first full run recorded
+ *   `/farm-nation/checkout/[propertyId]` as "redirected → /auth/login" and the
+ *   PNG beside it is a picture of "Welcome Back". It reads like a checkout
+ *   guard and is nothing of the kind — the middleware sends a signed-out
+ *   visitor to /auth/REGISTER, and a signed-in one straight through. The
+ *   checkout screen was simply never photographed.
+ *
+ *   One mouse move per route is the whole fix, and it is the honest one: it is
+ *   what the person this screen was built for would be doing. Verified both
+ *   ways against the running app — eleven idle minutes redirects to
+ *   /auth/login, and a single move at the nine-minute mark keeps the session
+ *   alive past eighteen.
+ */
+async function keepAwake(page: Page): Promise<void> {
+    //   Two points, because the listener is on `mousemove` and a move to the
+    //   position the pointer already occupies emits nothing.
+    await page.mouse.move(8, 8).catch(() => undefined);
+    await page.mouse.move(9, 9).catch(() => undefined);
+}
+
 async function signIn(ctx: BrowserContext, page: Page, persona: Persona): Promise<void> {
     const saved = SESSIONS.get(persona);
     if (saved && saved.length > 0) {
@@ -305,6 +339,8 @@ for (const { module, persona } of MODULES) {
             for (const route of routes) {
                 let landed: string;
 
+                await keepAwake(page);
+
                 if (isDynamic(route)) {
                     const filled = fillRoute(route, PARAMS);
                     if (!filled) {
@@ -333,6 +369,13 @@ for (const { module, persona } of MODULES) {
                  *   redirected, and the remaining thirteen screens were all
                  *   recorded as "redirected → /auth/login" — twenty screens of
                  *   evidence about the spec rather than about the module.
+                 *
+                 *   WHAT SENT IT TO THE LOGIN PAGE WAS NOT A GUARD, and this
+                 *   comment used to imply it was. It was the idle logout —
+                 *   see keepAwake above, which is the actual fix. This guard
+                 *   stays because it is still right for the case it names, and
+                 *   because it is what kept the other nineteen farm-nation
+                 *   screens honest once the clock had fired.
                  *
                  *   The session is re-established before the next route, so a
                  *   redirect is reported for the ROUTE THAT CAUSED IT and for

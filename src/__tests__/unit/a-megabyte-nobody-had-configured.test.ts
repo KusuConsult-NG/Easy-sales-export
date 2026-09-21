@@ -73,17 +73,33 @@ describe('#866 — no file goes through a Server Action any more', () => {
         expect(missing).toEqual([]);
     });
 
-    it('AND THE ROUTE THEY USE ACCEPTS MORE THAN THE FORMS PROMISE', () => {
+    it('AND THE ROUTE THEY USE ACCEPTS MORE THAN THE FORMS PROMISE', async () => {
         /*
          *   The check that makes the repair real rather than a relocation. The
          *   controls in front of these callers advertise 5 MB; the route has to
          *   accept at least that or the defect has only moved.
+         *
+         *   ASKED OF THE LIMIT, NOT OF THE SPELLING. This read
+         *
+         *       expect(route.slice(at, at + 120)).toContain('50 * 1024 * 1024')
+         *
+         *   which pinned a LITERAL in the route — so when the ceiling moved to
+         *   lib/storage-admin (video needs 200MB, documents stay at 50, and a
+         *   fourth copy of the number was the one that had gone wrong), this
+         *   failed while the property it exists to protect was untouched.
+         *
+         *   The property is "at least what the forms promise". That is a
+         *   comparison, so it is made by running the rule.
          */
-        const route = code('src/app/api/upload/route.ts');
-        const at = route.indexOf('const maxSize');
+        const { uploadSizeLimitBytes } = await import('@/lib/storage-admin');
+        const FORMS_PROMISE_MB = 5;
 
-        expect(at).toBeGreaterThan(-1);
-        expect(route.slice(at, at + 120)).toContain('50 * 1024 * 1024');
+        expect(uploadSizeLimitBytes('application/pdf'))
+            .toBeGreaterThanOrEqual(FORMS_PROMISE_MB * 1024 * 1024);
+
+        //   And the route reads that rule rather than restating it, which is
+        //   how the two came to disagree in the first place.
+        expect(code('src/app/api/upload/route.ts')).toContain('uploadSizeLimitBytes(');
     });
 
     it('AND THE FORMS STILL SAY WHAT THEY ENFORCE', () => {

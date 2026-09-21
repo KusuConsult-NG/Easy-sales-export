@@ -1,5 +1,6 @@
 import { logger } from "@/lib/logger";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
+import { defaultLimitMbFor, isVideoType } from "@/lib/upload-limits";
 
 /**
  * Server-side file upload.
@@ -56,17 +57,48 @@ const EXTENSION_FOR_TYPE: Record<string, string> = {
 };
 
 /**
- * The largest upload this platform accepts, in bytes.
+ * The largest upload this platform accepts, in bytes, for a file of this type.
  *
  * 50MB by default — the same figure api/upload/route.ts already enforces, so
  * the two agree rather than being two numbers that have to be kept in step.
  * MAX_UPLOAD_SIZE_MB overrides it. Callers with a tighter rule (certificates
  * use MAX_CERTIFICATE_SIZE_MB, 10MB) still apply theirs; this is the ceiling
  * none of them can exceed.
+ *
+ * ── VIDEO GETS ITS OWN, LARGER CEILING ──────────────────────────────────────
+ *
+ *   A 50MB cap on video is a cap below the size of the thing. A ten-minute
+ *   lesson recording does not fit in it, and the platform had already decided
+ *   as much in one place and not the others: actions/resource-actions.ts reads
+ *
+ *       const maxSize = category === "video" ? 200 * 1024 * 1024 : 50 * ...
+ *
+ *   while api/upload — "the generic one behind MasterUploader, and so the one
+ *   most uploads actually use" — refused anything over 50MB whatever it was.
+ *   Two copies of one rule, disagreeing, with the live door holding the wrong
+ *   number. That is the shape this module exists to stop, so the split lives
+ *   here now and every door reads it.
+ *
+ * WHICH TYPE IS BEING ASKED ABOUT, AND WHY IT IS ASKED TWICE
+ * ----------------------------------------------------------
+ *   The size guard must run BEFORE `file.arrayBuffer()` (see the note at the
+ *   call site), and at that moment the only type available is the one the
+ *   CLIENT declared — which is worth exactly nothing on its own. So this is
+ *   called twice: once with the declared type, to pick a ceiling generous
+ *   enough not to refuse a real video unread, and again with the DETECTED type
+ *   once the bytes have been sniffed. A 150MB PDF announcing itself as
+ *   video/mp4 gets as far as the buffer and no further.
+ *
+ *   What the declared type can therefore cost is bandwidth and one buffer, up
+ *   to the video ceiling — never storage, and never a served asset. #527's
+ *   rate-limit note is the other half of that bound.
  */
-export function uploadSizeLimitBytes(): number {
-    const configured = Number.parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "", 10);
-    const mb = Number.isFinite(configured) && configured > 0 ? configured : 50;
+export function uploadSizeLimitBytes(type?: string): number {
+    const video = isVideoType(type);
+    const envVar = video ? process.env.MAX_VIDEO_UPLOAD_SIZE_MB : process.env.MAX_UPLOAD_SIZE_MB;
+
+    const configured = Number.parseInt(envVar ?? "", 10);
+    const mb = Number.isFinite(configured) && configured > 0 ? configured : defaultLimitMbFor(type);
     return mb * 1024 * 1024;
 }
 
@@ -222,7 +254,15 @@ export async function uploadFileToStorage(
     //
     //        `file.size` needs no buffer, so this runs first. A guard placed
     //        after arrayBuffer() would allocate the very thing it refuses.
-    const maxUploadBytes = uploadSizeLimitBytes();
+    //
+    //        THE DECLARED TYPE PICKS THE CEILING, AND IS NOT TRUSTED WITH IT.
+    //        Video is allowed 200MB and everything else 50MB, so the ceiling
+    //        cannot be chosen from the bytes — they have not been read yet, and
+    //        reading them is the thing being bounded. `file.type` is the
+    //        client's word, so this is the GENEROUS bound only: it stops a
+    //        real video being refused unread, and the exact check happens
+    //        below, once the bytes say what they are.
+    const maxUploadBytes = uploadSizeLimitBytes(file.type);
     if (!Number.isFinite(file.size) || file.size > maxUploadBytes) {
         logger.warn('[storage-admin] Blocked oversized upload', { fileName: file.name, size: file.size });
         throw new Error(`File is too large. Maximum allowed size is ${Math.round(maxUploadBytes / (1024 * 1024))}MB.`);
@@ -230,6 +270,21 @@ export async function uploadFileToStorage(
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const detectedMime = await assertAllowedFileType(buffer, file.name);
+
+    //   AND NOW THE SAME QUESTION, ASKED OF THE BYTES.
+    //
+    //        Without this, `video/mp4` in a form field is a 200MB allowance for
+    //        anything at all: a 150MB PDF declared as video passes the guard
+    //        above, fails no other check that cares about size, and is stored.
+    //        The declared type may only ever BUY THE READ; what is kept has to
+    //        earn its ceiling from its own first bytes.
+    const detectedLimit = uploadSizeLimitBytes(detectedMime);
+    if (file.size > detectedLimit) {
+        logger.warn('[storage-admin] Blocked upload that claimed a larger ceiling than its bytes allow', {
+            fileName: file.name, size: file.size, declared: file.type, detected: detectedMime,
+        });
+        throw new Error(`File is too large. Maximum allowed size is ${Math.round(detectedLimit / (1024 * 1024))}MB.`);
+    }
 
     // THE EXTENSION COMES FROM THE BYTES, NOT FROM THE FILENAME.
     //

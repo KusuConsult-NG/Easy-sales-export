@@ -74,6 +74,79 @@ const WARNING_THRESHOLD_MS = 60 * 1000;       // Show warning 60 seconds before 
 const ACTIVITY_DEBOUNCE_MS = 30 * 1000;       // Update activity timestamp max once per 30 seconds
 
 /**
+ * How long PASSIVE engagement may hold the clock open past the last real input.
+ *
+ *   Watching is not clicking, and this control only ever watched for clicks.
+ *   See `passivelyEngaged` below for what goes wrong without this; see the
+ *   ceiling argument here for why it is not simply unlimited.
+ *
+ *   A video left playing on an unattended machine is exactly the case #240
+ *   cared about — "on a shared computer the next person to open the browser is
+ *   signed in as them" — so "media is playing" cannot mean "signed in for
+ *   ever". Two hours covers the longest thing this platform actually shows: a
+ *   full Academy lesson, or a live class. Past that, the ordinary ten-minute
+ *   rule comes back, and a person who is really there dismisses one warning.
+ *
+ *   It is a bound on the BROWSER control only. The server session is
+ *   `maxAge: 8 * 60 * 60` whatever happens here, which is the honest ceiling on
+ *   all of it.
+ */
+const PASSIVE_CEILING_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+/**
+ * Is the member engaged with something that generates no input events?
+ *
+ *   #!! THE FIVE EVENTS THIS TRACKER LISTENS FOR — mousemove, keydown, click,
+ *       scroll, touchstart — ARE ALL THINGS YOU DO WITH YOUR HANDS. Watching a
+ *       video is not one of them. Neither is reading.
+ *
+ *       So an Academy learner fifteen minutes into a lesson recording was
+ *       signed out mid-lesson, having done nothing wrong and nothing unusual.
+ *       The warning modal is no help there: it renders in the page, and the
+ *       video they are watching is very often FULLSCREEN, which covers it. The
+ *       first they know is the login screen.
+ *
+ *       The same holds, for a second reason, wherever the page embeds a
+ *       cross-origin iframe — the lesson PDF, the Office spreadsheet viewer,
+ *       the Jitsi classroom. Events inside an iframe do not reach the parent
+ *       document's listeners, so a member who is scrolling a course document,
+ *       or talking in a live class, is generating plenty of input and this
+ *       tracker sees absolutely none of it.
+ *
+ *  TWO SIGNALS, BOTH DELIBERATELY NARROW:
+ *
+ *   1. Media that is genuinely PLAYING. Not merely present, not paused, not
+ *      ended, and far enough along to have data — `readyState >= HAVE_CURRENT_DATA`.
+ *      A decorative <video> that has not been started counts for nothing.
+ *
+ *   2. Focus sitting inside an iframe WHILE THIS DOCUMENT HAS FOCUS. Both
+ *      halves matter: activeElement stays on the iframe after the member
+ *      switches to another application, and `document.hasFocus()` is what
+ *      tells us they came back.
+ *
+ *  Wrapped, because it runs on a one-second interval on every authenticated
+ *  page: if anything here throws, the answer is "not engaged", which restores
+ *  exactly the behaviour that existed before this function did.
+ */
+export function passivelyEngaged(doc: Document | undefined = typeof document !== "undefined" ? document : undefined): boolean {
+    if (!doc) return false;
+
+    try {
+        const media = doc.querySelectorAll("video, audio");
+        for (const el of Array.from(media) as HTMLMediaElement[]) {
+            if (!el.paused && !el.ended && el.readyState >= 2) return true;
+        }
+
+        const active = doc.activeElement;
+        if (active && active.tagName === "IFRAME" && doc.hasFocus()) return true;
+
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+/**
  *   #350 EVERY localStorage CALL IN THIS FILE WAS UNGUARDED, and this
  *        component mounts in ClientLayout for EVERY authenticated page. In
  *        Safari private browsing and wherever site data is blocked, the accessor
@@ -140,6 +213,26 @@ export default function SessionActivityTracker() {
      */
     const loggingOut = useRef(false);
 
+    /**
+     *   When the member last did something with their HANDS.
+     *
+     *   Distinct from `lastActivity`, which passive engagement also writes.
+     *   PASSIVE_CEILING_MS is measured against this one, so a video cannot keep
+     *   renewing the budget that is supposed to bound it.
+     *
+     *   Seeded alongside the stored timestamp in the mount effect below: on a
+     *   resumed session the last real input is whatever the previous page
+     *   recorded, and on a fresh one it is now — signing in is typing.
+     *
+     *   ZERO UNTIL THEN, AND NOT `Date.now()`. Calling it here is an impure
+     *   read during render, which the lint rule rejects and React's own docs
+     *   warn about. It also fails the safe way: while the session is still
+     *   loading the mount effect returns early and this stays 0, so the ceiling
+     *   below reads as long exceeded and passive engagement is ignored — which
+     *   is exactly the behaviour that existed before any of this.
+     */
+    const lastRealInput = useRef<number>(0);
+
     async function handleLogout() {
         if (loggingOut.current) return;
         loggingOut.current = true;
@@ -155,6 +248,13 @@ export default function SessionActivityTracker() {
     // Update activity timestamp
     const updateActivity = useCallback(() => {
         const now = Date.now();
+
+        //   Recorded before the debounce, because this is what the passive
+        //   ceiling is measured against and it must not be rate-limited: a
+        //   member interacting every ten seconds is as present as one
+        //   interacting every forty.
+        lastRealInput.current = now;
+
         const timeSinceLastUpdate = now - lastActivityTime;
 
         // Debounce: only update if > 30 seconds since last update
@@ -213,6 +313,28 @@ export default function SessionActivityTracker() {
             const timeSinceActivity = Date.now() - lastActivity;
             const remaining = SESSION_TIMEOUT_MS - timeSinceActivity;
 
+            /**
+             *   WATCHING COUNTS, UP TO A POINT.
+             *
+             *   Checked only as the deadline approaches, not on every one of
+             *   the ticks before it: this walks the DOM, and there is no reason
+             *   to ask whether a video is playing when eight minutes remain.
+             *
+             *   The ceiling is measured from the last REAL input, not from the
+             *   last write — otherwise each extension would reset its own
+             *   budget and "unlimited" would be the only possible outcome.
+             */
+            if (remaining <= WARNING_THRESHOLD_MS && passivelyEngaged()) {
+                const sinceRealInput = Date.now() - lastRealInput.current;
+                if (sinceRealInput < PASSIVE_CEILING_MS) {
+                    writeLastActivity(Date.now());
+                    setLastActivityTime(Date.now());
+                    setShowWarning(false);
+                    setTimeRemaining(SESSION_TIMEOUT_MS);
+                    return;
+                }
+            }
+
             setTimeRemaining(remaining);
 
             // Show warning if close to timeout
@@ -251,6 +373,11 @@ export default function SessionActivityTracker() {
         const resume = belongsToThisSession(stored, authAt);
         if (!resume) writeLastActivity(Date.now());
         setTimeout(() => setLastActivityTime(resume ? stored : Date.now()), 0);
+
+        //   The passive budget resumes with the clock it bounds. Seeding it to
+        //   `now` on every mount would hand a fresh two hours to each
+        //   navigation, and a lesson page that reloads is not a person.
+        lastRealInput.current = resume ? stored : Date.now();
 
         // Check every second
         const interval = setInterval(checkTimeout, 1000);
