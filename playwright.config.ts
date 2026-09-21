@@ -161,6 +161,30 @@ export default defineConfig({
         // ── Full suite: Chromium (primary CI browser) ──────────────────────────
         {
             name: 'chromium',
+            /*
+             *   THE WHOLE-PRODUCT SWEEP IS OPT-IN, AND THE REASON IS THE LOGIN
+             *   BUDGET THIS FILE ALREADY DOCUMENTS.
+             *
+             *   `consumeLoginAttempt` allows FIVE attempts per fifteen minutes
+             *   PER EMAIL once NODE_ENV is production, which `next start` sets.
+             *   The webServer note above records that this is why the suite had
+             *   to stop signing in ~205 times.
+             *
+             *   every-screen.spec.ts signs in once per module — and again
+             *   whenever a route lands on /auth/*, which is the guard that keeps
+             *   its own manifest honest. Left in the default run it spends the
+             *   SHARED seller budget, and the next spec to want that account
+             *   runs signed out: marketplace-seller-products failed exactly that
+             *   way, navigated to /auth/login?callbackUrl=/marketplace/seller/products
+             *   in the middle of editing a listing.
+             *
+             *   It is also seventeen minutes of evidence gathering rather than a
+             *   test — nothing fails but an ERROR row — so it does not belong in
+             *   the run that gates a merge either way.
+             *
+             *       EVERY_SCREEN=1 npx playwright test e2e/every-screen.spec.ts
+             */
+            testIgnore: process.env.EVERY_SCREEN ? [] : ['**/every-screen.spec.ts'],
             use: { ...devices['Desktop Chrome'], ...chromiumLaunch },
         },
 

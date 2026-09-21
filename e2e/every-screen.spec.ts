@@ -247,6 +247,38 @@ async function capture(
 const ALL = routesOnDisk();
 let PARAMS: Record<string, string> = {};
 
+/**
+ * The authenticated cookies for each persona, captured on its ONE sign-in.
+ *
+ *   THE LOGIN BUDGET IS SHARED AND SMALL. `consumeLoginAttempt` allows five
+ *   attempts per fifteen minutes PER EMAIL once NODE_ENV is production, which
+ *   `next start` sets — the webServer note in playwright.config records that
+ *   this is why the suite had to stop signing in ~205 times.
+ *
+ *   This sweep signs in once per module, and the seller covers TWO of them. Add
+ *   a re-login every time a route lands on /auth/* and the budget is gone: the
+ *   account is locked out, this run's own pages come back signed out, and the
+ *   next spec to want that account runs signed out too. That is what broke
+ *   marketplace-seller-products in CI, and what made farm-nation look like
+ *   fourteen access-control redirects.
+ *
+ *   So a persona signs in ONCE and its cookies are kept. Restoring a session is
+ *   `addCookies`, which costs no attempt at all — the NextAuth session cookie is
+ *   a JWT and stays valid on its own terms.
+ */
+const SESSIONS = new Map<Persona, Awaited<ReturnType<BrowserContext['cookies']>>>();
+
+async function signIn(ctx: BrowserContext, page: Page, persona: Persona): Promise<void> {
+    const saved = SESSIONS.get(persona);
+    if (saved && saved.length > 0) {
+        await ctx.addCookies(saved);
+        return;
+    }
+    const who = USERS[persona as keyof typeof USERS];
+    await loginAs(page, who.email, who.password);
+    SESSIONS.set(persona, await ctx.cookies());
+}
+
 test.beforeAll(() => {
     mkdirSync(OUT, { recursive: true });
     PARAMS = resolveParams();
@@ -267,8 +299,7 @@ for (const { module, persona } of MODULES) {
 
         try {
             if (persona !== 'public') {
-                const who = USERS[persona];
-                await loginAs(page, who.email, who.password);
+                await signIn(context, page, persona);
             }
 
             for (const route of routes) {
@@ -308,8 +339,7 @@ for (const { module, persona } of MODULES) {
                  *   nothing else.
                  */
                 if (persona !== 'public' && landed.startsWith('/auth/')) {
-                    const who = USERS[persona];
-                    await loginAs(page, who.email, who.password).catch(() => undefined);
+                    await signIn(context, page, persona).catch(() => undefined);
                 }
             }
         } finally {
