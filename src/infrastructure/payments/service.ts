@@ -963,7 +963,11 @@ export async function processAcademyRegistration(reference: string, amount: numb
     // registration was accepted — and they race by design. The fee table, the
     // "advanced" → "standard" mapping and the one-naira tolerance all live in
     // lib/academy-plan.ts now; this is the same behaviour, expressed once.
-    const verdict = checkAcademyPayment(amount, plan);
+    //   `paidAt` is Paystack's settlement time, already a parameter of this
+    //   function and until now unused by the amount check. It decides WHICH
+    //   price list the payment is measured against, so a learner who settled
+    //   under the old one is not turned into an underpayment by a later rise.
+    const verdict = checkAcademyPayment(amount, plan, paidAt);
     if (!verdict.ok) {
         logger.error(`[Paystack Webhook] Academy payment refused on amount`, {
             reference,

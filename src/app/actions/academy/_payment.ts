@@ -657,7 +657,10 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         // a payment first decided whether an underpaid registration was accepted.
         // Same shape as the marketplace order defect, with the permissive path on
         // the other side. See lib/academy-plan.ts.
-        const amountVerdict = checkAcademyPayment(paidAmount, metadata.plan);
+        //   Same settlement time the webhook uses, so the two fulfilment paths
+        //   that race each other cannot reach different verdicts about whether
+        //   a payment predates the current price list.
+        const amountVerdict = checkAcademyPayment(paidAmount, metadata.plan, verify.data.paid_at);
         if (!amountVerdict.ok) {
             /*
              *   #760 — THE SAME DEFECT AS THE COURSE PATH, ON THE PLAN FEE.

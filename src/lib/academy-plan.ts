@@ -94,10 +94,113 @@ export function resolveApplicationPlan(
     return normaliseAcademyPlan(applicationPlan) ?? normaliseAcademyPlan(userAcademyPlan);
 }
 
-/** What a plan costs, in naira. */
-export function academyPlanFee(plan: unknown): number {
+/**
+ * THE PRICES BEFORE THE CURRENT ONES, AND WHY THEY ARE STILL ENFORCED.
+ *
+ *   THE OWNER: "ensure that this change in price doesn't affect the ones who
+ *   had paid before (25k, 50k and 100k) but ensure that all those paying now
+ *   are paying the new prices."
+ *
+ * Two prices for the same plan, decided by WHEN the money moved. A learner who
+ * settled under the old list is judged against the old list forever; everybody
+ * else is charged and judged at today's.
+ *
+ * ── WHERE THESE THREE FIGURES COME FROM ─────────────────────────────────────
+ *
+ *   ·  The owner named them.
+ *   ·  _payment.ts already says so in its own words, in the comment above the
+ *      refusal this rule feeds: "₦25,000, ₦50,000 and ₦100,000 are PLAN
+ *      prices". That comment predates this change.
+ *   ·  And the Paystack reconciliation of every Academy payment ever settled
+ *      found exactly those three amounts and no others, until June:
+ *
+ *          ₦25,000  x2    ₦50,000  x2    ₦100,000  x5      Feb – May 2026
+ *          ₦90,000  x1                                     June 2026
+ *
+ *      ₦90,000 is today's Standard fee. It is the FIRST payment at the current
+ *      list and the only one, which is what fixes the changeover between
+ *      2026-05-05 (the last old-list payment) and 2026-06-06 (that one).
+ *
+ * ── WHY A DATE AND NOT AN AMOUNT ────────────────────────────────────────────
+ *
+ *   Classifying by amount cannot work here: ₦100,000 is both the old Elite
+ *   price AND today's Standard `originalFee`, so the same figure means two
+ *   different things depending on when it was paid. The plan recorded beside a
+ *   payment cannot break the tie either — the reconciliation found ₦100,000
+ *   filed under Elite, Foundation AND Standard on three different records. The
+ *   settlement date is the only field on a payment that is not in dispute.
+ *
+ * ── WHY AN UNKNOWN DATE MEANS TODAY'S PRICE ─────────────────────────────────
+ *
+ *   `paidAt` absent or unreadable falls through to the CURRENT list, so the
+ *   grandfather clause has to be proven, never assumed. The alternative fails
+ *   the second half of the instruction: a new registration that arrived
+ *   without a timestamp would be admitted at ₦25,000. Paystack stamps
+ *   `paid_at` on every successful transaction, so a real payment always has
+ *   one, and both fulfilment paths now pass it.
+ */
+export const LEGACY_ACADEMY_PLAN_FEES: Readonly<Record<AcademyPlan, number>> = {
+    foundation: 25000,
+    standard: 50000,
+    elite: 100000,
+};
+
+/**
+ * The instant the current price list took effect.
+ *
+ *   Any cutoff between 2026-05-05 and 2026-06-06 classifies all ten reconciled
+ *   payments identically, because nothing settled in that gap. This is the
+ *   round date inside it. If the real changeover turns out to be elsewhere,
+ *   THIS LINE IS THE ONLY THING TO EDIT.
+ */
+export const ACADEMY_PRICES_EFFECTIVE_FROM = Date.UTC(2026, 5, 1);
+
+/** A timestamp from whatever a caller has, or null when it cannot be read. */
+function settlementTime(paidAt: unknown): number | null {
+    if (paidAt instanceof Date) {
+        return Number.isNaN(paidAt.getTime()) ? null : paidAt.getTime();
+    }
+    if (typeof paidAt === "number") {
+        return Number.isFinite(paidAt) ? paidAt : null;
+    }
+    if (typeof paidAt === "string" && paidAt.trim()) {
+        const parsed = Date.parse(paidAt);
+        return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+}
+
+/**
+ * Did this payment settle under the old price list?
+ *
+ *   False for an unknown date, deliberately — see the header above.
+ */
+export function isLegacyAcademyPayment(paidAt: unknown): boolean {
+    const settled = settlementTime(paidAt);
+    return settled !== null && settled < ACADEMY_PRICES_EFFECTIVE_FROM;
+}
+
+/**
+ * What a plan costs, in naira, for a payment settled at a given moment.
+ *
+ *   Omit `paidAt` to ask what it costs TODAY — which is what the checkout path
+ *   wants, and why `academyPlanFee` below is this function with no date.
+ */
+export function academyPlanFeeOn(plan: unknown, paidAt?: unknown): number {
     const normalised = normaliseAcademyPlan(plan) ?? DEFAULT_ACADEMY_PLAN;
-    return ACADEMY_CONFIG.plans[normalised].fee;
+    return isLegacyAcademyPayment(paidAt)
+        ? LEGACY_ACADEMY_PLAN_FEES[normalised]
+        : ACADEMY_CONFIG.plans[normalised].fee;
+}
+
+/**
+ * What a plan costs today — the price a new learner is charged.
+ *
+ *   One implementation with the dated rule, rather than a second copy of the
+ *   fee lookup that could drift from it.
+ */
+export function academyPlanFee(plan: unknown): number {
+    return academyPlanFeeOn(plan);
 }
 
 /**
@@ -186,8 +289,16 @@ export function isPurchasedCourse(progress: { purchased?: unknown } | null | und
 export const ACADEMY_AMOUNT_TOLERANCE = 1;
 
 export type AcademyPaymentVerdict =
-    | { ok: true; plan: AcademyPlan; fee: number; overpaidBy: number }
-    | { ok: false; reason: "underpaid"; plan: AcademyPlan; fee: number; shortfall: number; message: string }
+    | { ok: true; plan: AcademyPlan; fee: number; overpaidBy: number; grandfathered: boolean }
+    | {
+          ok: false;
+          reason: "underpaid";
+          plan: AcademyPlan;
+          fee: number;
+          shortfall: number;
+          message: string;
+          grandfathered: boolean;
+      }
     | { ok: false; reason: "unreadable_amount"; message: string };
 
 /**
@@ -200,8 +311,18 @@ export type AcademyPaymentVerdict =
  * who has been charged with no registration and an error, which is the outcome
  * this codebase treats as the worst one everywhere it appears. The caller is
  * told by how much so it can be recorded.
+ *
+ * WHICH PRICE IT IS MEASURED AGAINST DEPENDS ON `paidAt` — see
+ * LEGACY_ACADEMY_PLAN_FEES. A payment settled before the current list took
+ * effect is judged against the old one, so raising a price cannot retroactively
+ * turn a settled registration into an underpaid one. Omit `paidAt` and today's
+ * price applies, which is the strict reading and the safe default.
  */
-export function checkAcademyPayment(amountPaid: unknown, plan: unknown): AcademyPaymentVerdict {
+export function checkAcademyPayment(
+    amountPaid: unknown,
+    plan: unknown,
+    paidAt?: unknown,
+): AcademyPaymentVerdict {
     const paid = Number(amountPaid);
     if (!Number.isFinite(paid) || paid <= 0) {
         return {
@@ -212,7 +333,8 @@ export function checkAcademyPayment(amountPaid: unknown, plan: unknown): Academy
     }
 
     const resolved = normaliseAcademyPlan(plan) ?? DEFAULT_ACADEMY_PLAN;
-    const fee = ACADEMY_CONFIG.plans[resolved].fee;
+    const grandfathered = isLegacyAcademyPayment(paidAt);
+    const fee = academyPlanFeeOn(resolved, paidAt);
 
     if (paid + ACADEMY_AMOUNT_TOLERANCE < fee) {
         return {
@@ -222,6 +344,7 @@ export function checkAcademyPayment(amountPaid: unknown, plan: unknown): Academy
             fee,
             shortfall: Number((fee - paid).toFixed(2)),
             message: `The amount paid is less than the ${ACADEMY_CONFIG.plans[resolved].name} fee.`,
+            grandfathered,
         };
     }
 
@@ -231,5 +354,6 @@ export function checkAcademyPayment(amountPaid: unknown, plan: unknown): Academy
         plan: resolved,
         fee,
         overpaidBy: surplus > ACADEMY_AMOUNT_TOLERANCE ? Number(surplus.toFixed(2)) : 0,
+        grandfathered,
     };
 }
