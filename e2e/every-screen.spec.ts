@@ -185,13 +185,14 @@ async function settle(page: Page) {
 
 async function capture(
     page: Page, module: string, persona: Persona, route: string, url: string,
-): Promise<void> {
+): Promise<string> {
     const dir = join(OUT, module);
     mkdirSync(dir, { recursive: true });
     const file = join(dir, `${slug(route)}.png`);
 
     let outcome: Shot['outcome'] = 'rendered';
     let detail = '';
+    let landedAt = url;
     const errors: string[] = [];
 
     const onError = (e: Error) => errors.push(e.message);
@@ -203,6 +204,7 @@ async function capture(
         await settle(page);
 
         const landed = new URL(page.url()).pathname;
+        landedAt = landed;
         const text = (await page.locator('body').innerText().catch(() => '')).trim();
 
         //   The Next error overlay and its server-rendered equivalent. Checked
@@ -237,6 +239,7 @@ async function capture(
     }
 
     results.push({ module, route, url, persona, outcome, detail, file });
+    return landedAt;
 }
 
 // ─── the run ─────────────────────────────────────────────────────────────────
@@ -269,6 +272,8 @@ for (const { module, persona } of MODULES) {
             }
 
             for (const route of routes) {
+                let landed: string;
+
                 if (isDynamic(route)) {
                     const filled = fillRoute(route, PARAMS);
                     if (!filled) {
@@ -278,10 +283,34 @@ for (const { module, persona } of MODULES) {
                         });
                         continue;
                     }
-                    await capture(page, module, persona, route, filled);
-                    continue;
+                    landed = await capture(page, module, persona, route, filled);
+                } else {
+                    landed = await capture(page, module, persona, route, route);
                 }
-                await capture(page, module, persona, route, route);
+
+                /*
+                 *   ONE PAGE MUST NOT LOG THE WHOLE SWEEP OUT.
+                 *
+                 *   The middleware says so in its own comment: it "clears the
+                 *   session cookies when a 3xx points at /auth/login". So a
+                 *   single route whose guard redirects to the login page takes
+                 *   the session with it, and EVERY route after it in this
+                 *   module is then photographed as a signed-out visitor.
+                 *
+                 *   That is exactly what happened to farm-nation on the first
+                 *   full run: /farm-nation rendered, the checkout route
+                 *   redirected, and the remaining thirteen screens were all
+                 *   recorded as "redirected → /auth/login" — twenty screens of
+                 *   evidence about the spec rather than about the module.
+                 *
+                 *   The session is re-established before the next route, so a
+                 *   redirect is reported for the ROUTE THAT CAUSED IT and for
+                 *   nothing else.
+                 */
+                if (persona !== 'public' && landed.startsWith('/auth/')) {
+                    const who = USERS[persona];
+                    await loginAs(page, who.email, who.password).catch(() => undefined);
+                }
             }
         } finally {
             await context.close();
