@@ -327,6 +327,43 @@ export default function CheckoutPage() {
         return results;
     }, [deliveryAddress.city, deliveryAddress.state, showToast]);
 
+    /**
+     * Place the pin at the middle of the state — the answer when the map has none.
+     *
+     *   Still the last resort rather than the first: it prices a delivery from
+     *   the centre of a state, which is approximately right everywhere and
+     *   exactly right nowhere.
+     *
+     *   LIFTED OUT OF geocodeManualAddress, because the SEARCH path needs it
+     *   too and I had left it without one. The bypass below the field
+     *   ("Use Address Anyway") renders only when `verificationError` is set, and
+     *   the old 1000ms auto-geocode set it on every failure — so replacing that
+     *   with a search that set only a quiet notice left a buyer whose address
+     *   the map does not know with NO visible way forward until she pressed
+     *   Complete Payment and was refused. That is the silent-refusal shape this
+     *   audit keeps finding, introduced while fixing something else.
+     */
+    const fallbackToState = useCallback((reason: string | null, announce: boolean) => {
+        const centroid = stateCentroid(deliveryAddress.state);
+
+        if (centroid) {
+            setDestinationCoords(centroid);
+            setIsAddressVerified(true);
+            setVerificationError(null);
+            setSearchNotice(null);
+            if (announce) {
+                showToast(`Address placed using ${deliveryAddress.state} state coordinates.`, "success");
+            }
+            return;
+        }
+
+        setDestinationCoords(null);
+        setIsAddressVerified(false);
+        setVerificationError(reason
+            || "We could not place this address. Please check the state, or continue anyway.");
+        if (announce) showToast("Could not verify address.", "error");
+    }, [deliveryAddress.state, showToast]);
+
     // Manual geocoding function for input addresses
     const geocodeManualAddress = useCallback(async (force = false) => {
         if (!deliveryAddress.street.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state) {
@@ -341,31 +378,6 @@ export default function CheckoutPage() {
         setVerificationError(null);
 
         const addressStr = `${deliveryAddress.street}, ${deliveryAddress.city}, ${deliveryAddress.state}, Nigeria`;
-
-        /**
-         * The state's centroid — the answer when the map has none.
-         *
-         *   Unchanged from before, and still the last resort rather than the
-         *   first: it prices a delivery from the middle of a state, which is
-         *   approximately right everywhere and exactly right nowhere.
-         */
-        const fallbackToState = (reason: string | null) => {
-            const centroid = stateCentroid(deliveryAddress.state);
-
-            if (centroid) {
-                setDestinationCoords(centroid);
-                setIsAddressVerified(true);
-                setVerificationError(null);
-                showToast(`Address placed using ${deliveryAddress.state} state coordinates.`, "success");
-                return;
-            }
-
-            setDestinationCoords(null);
-            setIsAddressVerified(false);
-            setVerificationError(reason
-                || "We could not place this address. Please check the state, or continue anyway.");
-            showToast("Could not verify address.", "error");
-        };
 
         const { results, error } = await geocodeAddress(addressStr, { limit: 1 });
         setIsGeocoding(false);
@@ -383,8 +395,8 @@ export default function CheckoutPage() {
         //   not be found when the API key had been refused.
         fallbackToState(error
             ? `${error} Your address has been placed by state instead.`
-            : null);
-    }, [deliveryAddress, showToast]);
+            : null, true);
+    }, [deliveryAddress, fallbackToState, showToast]);
 
     /*
      *   ── ONE LOOKUP PER PAUSE, NOT TWO ──────────────────────────────────────
@@ -415,18 +427,30 @@ export default function CheckoutPage() {
 
         const timer = setTimeout(async () => {
             const results = await searchAddress(street, false);
-            if (results.length === 0) return;
+
+            //   Nothing is auto-placed until the address is complete enough to
+            //   place. A half-typed one just shows its suggestions.
             if (!deliveryAddress.city.trim() || !deliveryAddress.state) return;
 
-            setDestinationCoords({ lat: results[0].lat, lng: results[0].lng });
-            setIsAddressVerified(true);
-            setVerificationError(null);
+            if (results.length > 0) {
+                setDestinationCoords({ lat: results[0].lat, lng: results[0].lng });
+                setIsAddressVerified(true);
+                setVerificationError(null);
+                return;
+            }
+
+            //   No match, or the service did not answer. The auto-verify this
+            //   replaced placed the pin by state here rather than leaving the
+            //   buyer with nothing — and the bypass button renders off
+            //   `verificationError`, which only this sets. Quiet, because the
+            //   buyer did not ask for it: no toast on a keystroke-driven path.
+            fallbackToState(null, false);
         }, SEARCH_DEBOUNCE_MS);
 
         return () => clearTimeout(timer);
     }, [
         deliveryAddress.street, deliveryAddress.city, deliveryAddress.state,
-        isAddressVerified, searchAddress,
+        isAddressVerified, searchAddress, fallbackToState,
     ]);
 
     //   Nothing in flight outlives the page.

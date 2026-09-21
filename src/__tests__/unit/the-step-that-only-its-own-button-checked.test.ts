@@ -289,7 +289,14 @@ beforeEach(() => {
     store.seed(COLLECTIONS.USERS, SELLER, {
         email: 'ada@example.com', firstName: 'Ada', lastName: 'Obi', roles: ['general_user'],
     });
-    process.env.PAYSTACK_SECRET_KEY = 'sk_test_marketplace';
+    //   DELIBERATELY NOT `sk_test_…`. gitleaks reads that prefix as a Stripe
+    //   access token and failed the build on this line; the neighbouring
+    //   suites predate the scanner's window and were never rescanned. The
+    //   resolver only checks that the variable is non-empty, so a value that
+    //   is not secret-shaped costs nothing — and .gitleaks.toml says why
+    //   widening its allowlist instead would be the wrong fix: "A broad
+    //   allowlist is how a scanner stops being worth running."
+    process.env.PAYSTACK_SECRET_KEY = 'paystack-key-placeholder-for-a-mocked-fetch';
     global.fetch = jest.fn(async () => ({
         ok: true,
         json: async () => ({ status: true, data: { account_name: 'ADAEZE N OBI', account_number: '0123456789' } }),

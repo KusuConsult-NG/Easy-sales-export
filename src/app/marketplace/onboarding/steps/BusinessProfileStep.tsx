@@ -193,10 +193,11 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* State */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                    <label htmlFor="state" className="block text-sm font-semibold text-slate-900 mb-2">
                         State *
                     </label>
                     <select
+                        id="state"
                         value={data?.location?.state || ""}
                         onChange={(e) => onChange({ location: { ...(data?.location || {}), state: e.target.value, lga: "" } as any })}
                         className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.state ? "border-red-500" : "border-slate-300"
@@ -216,10 +217,11 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* LGA */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                    <label htmlFor="lga" className="block text-sm font-semibold text-slate-900 mb-2">
                         Local Government Area *
                     </label>
                     <select
+                        id="lga"
                         value={data?.location?.lga || ""}
                         onChange={(e) => onChange({ location: { ...(data?.location || {}), lga: e.target.value } as any })}
                         disabled={!data?.location?.state}

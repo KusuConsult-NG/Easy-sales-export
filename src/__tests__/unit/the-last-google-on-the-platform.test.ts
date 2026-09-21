@@ -412,6 +412,37 @@ describe('and the map itself, which was never the problem', () => {
         expect((src.match(/stateCentroid\(/g) || []).length).toBeGreaterThanOrEqual(4);
     });
 
+    it('AND A BUYER THE MAP CANNOT FIND IS NOT LEFT WITHOUT A WAY FORWARD', () => {
+        /*
+         *   A REGRESSION I INTRODUCED AND ALMOST SHIPPED, pinned so it cannot
+         *   come back.
+         *
+         *   "Use Address Anyway" renders off `verificationError`, and the
+         *   1000ms auto-geocode this change replaced set that on every failure.
+         *   The search that replaced it set only a quiet `searchNotice` — so a
+         *   buyer whose street the map does not know saw no escape hatch at all
+         *   until she pressed Complete Payment and was refused. That is the
+         *   silent-refusal shape this audit keeps finding, introduced while
+         *   fixing something else.
+         *
+         *   `fallbackToState` is shared by both paths now, and it is the ONLY
+         *   thing that sets `verificationError` outside the submit guard.
+         */
+        const src = code(CHECKOUT);
+
+        //   The search path reaches it.
+        const at = src.indexOf('const results = await searchAddress(street, false)');
+        expect(at).toBeGreaterThan(-1);
+        expect(src.slice(at, at + 700)).toContain('fallbackToState(');
+
+        //   And so does the explicit verify.
+        const verify = src.indexOf('const geocodeManualAddress');
+        expect(src.slice(verify, verify + 1400)).toContain('fallbackToState(');
+
+        //   It is one function, not two copies that can drift.
+        expect((src.match(/const fallbackToState = /g) || []).length).toBe(1);
+    });
+
     it('POSITIVE CONTROL: and "Use Address Anyway" still exists', () => {
         //   The buyer's own override, for an address no map knows. It is the
         //   thing that stops any of this blocking a sale.
