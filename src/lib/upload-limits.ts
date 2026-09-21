@@ -25,6 +25,34 @@
  *   whatever it was. The stated rule and the live door disagreed and the door
  *   won.
  *
+ * ── AND WHY IT IS NOT 200MB EITHER ──────────────────────────────────────────
+ *
+ *   THE OWNER: "make the video size 100mb instead of 200mb. file upload for
+ *   products on marketplace etc was failing."
+ *
+ *   A CEILING ABOVE WHAT THE STORAGE BACKEND ACCEPTS IS NOT A CEILING. It is a
+ *   promise the platform cannot keep. Cloudinary refuses a single upload over
+ *   100MB on the plan this account is on, and our guard let 200MB through — so
+ *   a 150MB video passed every check here, uploaded COMPLETELY, and was
+ *   rejected at the far end with
+ *
+ *       File size too large. Got 157286400. Maximum is 104857600.
+ *
+ *   which api/upload surfaces as a 502. The person waits out the whole upload
+ *   and then loses it.
+ *
+ *   That is the exact failure this file was written to prevent, one layer
+ *   further out: the note below says the browser must not "accept one [the
+ *   server] would not and the person watches a 180MB upload run to the end and
+ *   fail". The same sentence is true of the server and the storage backend, and
+ *   it was not being asked. Three parties have to agree, not two — and the
+ *   smallest of them decides.
+ *
+ *   SO THIS NUMBER IS NOT A PREFERENCE. It tracks the storage account's own
+ *   per-file limit and must be lowered with it, never raised past it. If the
+ *   plan changes, raise MAX_VIDEO_UPLOAD_SIZE_MB on the server rather than
+ *   editing this default, and check the new plan's figure first.
+ *
  *   THE ENV OVERRIDES ARE SERVER-SIDE ONLY. MAX_UPLOAD_SIZE_MB and
  *   MAX_VIDEO_UPLOAD_SIZE_MB are read by storage-admin; they are not
  *   NEXT_PUBLIC_, so the browser cannot see them and does not try. A
@@ -35,8 +63,8 @@
 /** Everything that is not a video. */
 export const DEFAULT_MAX_UPLOAD_MB = 50;
 
-/** Video — see the note above. */
-export const DEFAULT_MAX_VIDEO_UPLOAD_MB = 200;
+/** Video — see the note above. Tracks Cloudinary's own per-upload ceiling. */
+export const DEFAULT_MAX_VIDEO_UPLOAD_MB = 100;
 
 /**
  * Is this a video, for the purpose of which ceiling applies?
