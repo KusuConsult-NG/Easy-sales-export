@@ -178,6 +178,37 @@ describe('a price-reduced listing survives the boundary', () => {
         expect(unserialisablePaths(res.data)).toEqual([]);
     });
 
+    it('AND SO DOES THE PUBLIC MAP READER — the third door, found in a full e2e run', async () => {
+        /*
+         *   lib/land-listings-reader feeds /farm-nation/map and /land, both
+         *   server components handing the result to a client one. It had the
+         *   SAME shape as the two readers above — createdAt and updatedAt
+         *   converted by name, everything else spread raw — so priceReducedAt
+         *   crossed the boundary and React refused it, taking the whole page.
+         *
+         *   NOT FOUND BY READING THE CODE. Every farm-nation action I checked
+         *   serialized, and a targeted browser probe came back clean because
+         *   Playwright reuses an already-running server and then does not pipe
+         *   its stdout — so the crash lines were simply absent from that log.
+         *   It took running the full chromium project and reading the
+         *   [WebServer] output around each failure to pin the two routes.
+         */
+        store.seed(LISTINGS, 'plot-9', {
+            ownerId: OWNER, title: 'Public parcel', size: 4, price: 1_000_000,
+            status: 'verified',
+            location: { state: 'Plateau', city: 'Jos' },
+            createdAt: '2026-01-01T00:00:00.000Z',
+            previousPrice: 1_500_000,
+            priceReducedAt: storedTimestamp('2026-02-01T00:00:00Z'),
+        });
+
+        const { readPublicLandListings } = await import('@/lib/land-listings-reader');
+        const rows = await readPublicLandListings();
+
+        expect(rows.length).toBeGreaterThan(0);
+        expect(unserialisablePaths(rows)).toEqual([]);
+    });
+
     it('AND THE FIELD IS STILL THERE, not dropped to make it safe', async () => {
         //   Deleting the field would satisfy every assertion above and silently
         //   remove the Hot Deal badge the value exists for.
@@ -276,6 +307,9 @@ describe('and the ordinary row is unchanged', () => {
  *
  *   return [] from the reader                    2  "POSITIVE CONTROL: A
  *                                                   LISTING WITH NO PRICE CUT"
+ *
+ *   drop serializeValue from the public map      1  "AND SO DOES THE PUBLIC
+ *   reader (lib/land-listings-reader)               MAP READER"
  *
  *   MEASURED, not predicted. The first draft of this table said 3/1/4, and the
  *   run said 1/1/2 — because the GeoPoint case cannot reach the reader through
