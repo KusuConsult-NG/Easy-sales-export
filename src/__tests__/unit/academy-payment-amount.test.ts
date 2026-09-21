@@ -113,7 +113,17 @@ describe('the amount rule', () => {
     it('accepts an exact payment for every plan', () => {
         for (const plan of ACADEMY_PLANS) {
             const v = checkAcademyPayment(ACADEMY_CONFIG.plans[plan].fee, plan);
-            expect(v).toEqual({ ok: true, plan, fee: ACADEMY_CONFIG.plans[plan].fee, overpaidBy: 0 });
+            // `grandfathered` is false here because no settlement date was
+            // passed: an undated payment is judged at today's price, which is
+            // the strict default. See LEGACY_ACADEMY_PLAN_FEES and
+            // the-price-that-went-up-under-people-who-already-paid.test.ts.
+            expect(v).toEqual({
+                ok: true,
+                plan,
+                fee: ACADEMY_CONFIG.plans[plan].fee,
+                overpaidBy: 0,
+                grandfathered: false,
+            });
         }
     });
 
