@@ -45,7 +45,7 @@ export interface CanonicalVerificationProfile {
         address: string;
         state: string;
         lga: string;
-        category: "wholesale" | "retail";
+        category: "wholesale" | "retail" | "both";
     };
 
     // Bank Details

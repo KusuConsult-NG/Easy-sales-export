@@ -26,6 +26,7 @@ import { categorizeUser } from "@/lib/broadcast-logic";
 import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
 import { recordAdminAction } from "@/lib/audit-log";
 import { isRecentlyActive } from "@/lib/recent-activity";
+import { sellerCategoryMatches } from "@/lib/seller-category";
 
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
@@ -384,8 +385,8 @@ async function collectSmsRecipients(
             if (filters.sellerStatus && filters.sellerStatus !== "all") {
                 q = q.where("status", "==", filters.sellerStatus);
             }
-            if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
-            if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
+            if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "in", [...sellerCategoryMatches("wholesale")]);
+            if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "in", [...sellerCategoryMatches("retail")]);
             
             const sellerStream = q.select("userId", "address").get();
             const userIds: string[] = [];

@@ -42,13 +42,20 @@ import BankAccountStep from "./steps/BankAccountStep";
 import { onboardingDestination } from "@/lib/onboarding-destination";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
+import type { SellerCategory } from "@/lib/seller-category";
 
 type AccountType = "buyer" | "seller" | "both";
 
 interface OnboardingData {
     // Step 1: Account Type
     accountType: AccountType;
-    sellerCategory?: "wholesale" | "retail"; // NEW: wholesale or retail
+    /**
+     *   "both" is a real answer here now — see lib/seller-category. A seller
+     *   who does wholesale AND retail had to pick one, and the value is queried
+     *   by the broadcast audiences, so the vocabulary is shared rather than
+     *   spelled out in each file that holds it.
+     */
+    sellerCategory?: SellerCategory;
 
     // Step 2: Business Profile
     businessName: string;

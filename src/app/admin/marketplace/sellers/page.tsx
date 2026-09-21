@@ -25,6 +25,7 @@ import AdminReadFailed from "@/components/admin/AdminReadFailed";
 //   (where their payouts land) were not correctable at all.
 import { MARKETPLACE_EDITABLE_FIELDS, seedEditDraft } from "@/lib/admin-editable-fields";
 import { statText, statValueClass } from "@/lib/admin-stat-display";
+import { sellerCategoryLabel } from "@/lib/seller-category";
 
 type SellerVerification = {
     id: string;
@@ -47,7 +48,7 @@ type SellerVerification = {
     approvedBy?: string;
     approvedAt?: Date;
     // Phase 12 new fields
-    sellerCategory?: "wholesale" | "retail";
+    sellerCategory?: "wholesale" | "retail" | "both";
     isVerifiedBadge?: boolean;
     allowsPaymentOnDelivery?: boolean;
 };
@@ -521,7 +522,7 @@ export default function AdminSellersPage() {
                                                         ? "bg-blue-100 text-blue-700"
                                                         : "bg-emerald-100 text-emerald-700"
                                                         }`}>
-                                                        {v.sellerCategory === "wholesale" ? "Wholesale" : "Retail"}
+                                                        {sellerCategoryLabel(v.sellerCategory)}
                                                     </span>
                                                 )}
                                                 {v.isVerifiedBadge && (

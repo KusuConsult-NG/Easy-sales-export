@@ -50,6 +50,7 @@ import type { Notification } from "@/lib/types/firestore";
 import { loadNonContactableUserIds } from "@/lib/contactable-account";
 import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
 import { recordAdminAction } from "@/lib/audit-log";
+import { sellerCategoryMatches } from "@/lib/seller-category";
 
 export type NotificationType = Notification["type"];
 
@@ -247,8 +248,8 @@ export async function collectRecipientUserIds(
             if (filters.sellerStatus && filters.sellerStatus !== "all") {
                 q = q.where("status", "==", filters.sellerStatus);
             }
-            if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
-            if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
+            if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "in", [...sellerCategoryMatches("wholesale")]);
+            if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "in", [...sellerCategoryMatches("retail")]);
             const snap = await q.get();
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
