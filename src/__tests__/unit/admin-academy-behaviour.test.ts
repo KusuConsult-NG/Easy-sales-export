@@ -27,6 +27,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { isAcademyEntitled, isAcademyPaid } from '@/lib/academy-entitlement';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
@@ -109,7 +110,14 @@ describe('approving an academy application', () => {
         const user = store.get(COLLECTIONS.USERS, LEARNER)!;
         expect(user.roles).toContain('academy_participant');
         expect(user.serviceRegistrations.academy.status).toBe('approved');
-        expect(user.serviceRegistrations.academy.paymentStatus).toBe('completed');
+        // A GRANT, NOT A PAYMENT. This read 'completed' — approval claiming
+        // money had arrived, with nothing in the door that verifies any. The
+        // learner is still entitled; the record just no longer lies about why.
+        expect(user.serviceRegistrations.academy.paymentStatus).toBe('waived');
+        expect(isAcademyEntitled(user.serviceRegistrations.academy.paymentStatus)).toBe(true);
+        expect(isAcademyPaid(user.serviceRegistrations.academy.paymentStatus)).toBe(false);
+        expect(user.serviceRegistrations.academy.grantedBy).toBeTruthy();
+        expect(user.serviceRegistrations.academy.paymentVerifiedBy).toBeNull();
     });
 
     it('keeping the roles the learner already had', async () => {
@@ -246,7 +254,10 @@ describe('manual enrolment', () => {
         expect(user.roles).toContain('academy_participant');
         expect(user.serviceRegistrations.academy.status).toBe('active');
         expect(user.serviceRegistrations.academy.plan).toBe('elite');
-        expect(user.serviceRegistrations.academy.paymentStatus).toBe('completed');
+        // Manual enrolment is a grant too — see the approval case above.
+        expect(user.serviceRegistrations.academy.paymentStatus).toBe('waived');
+        expect(isAcademyEntitled(user.serviceRegistrations.academy.paymentStatus)).toBe(true);
+        expect(user.serviceRegistrations.academy.grantedBy).toBeTruthy();
     });
 
     it('and CREATES an application record so the dashboard has something to show', async () => {
@@ -279,7 +290,11 @@ describe('manual enrolment', () => {
             const app = store.get(COLLECTIONS.ACADEMY_APPLICATIONS, id)!;
             expect(app.status).toBe('approved');
             expect(app.plan).toBe('foundation');
-            expect(app.paymentStatus).toBe('completed');
+            // The applications carry the grant too, so an admin reading one
+            // sees the same story the registration tells.
+            expect(app.paymentStatus).toBe('waived');
+            expect(isAcademyEntitled(app.paymentStatus)).toBe(true);
+            expect(Number(app.paymentAmount) || 0).toBe(0);
         }
     });
 

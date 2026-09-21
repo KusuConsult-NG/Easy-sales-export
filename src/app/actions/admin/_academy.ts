@@ -9,6 +9,7 @@ import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
+import { academyGrantFields } from "@/lib/academy-entitlement";
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -272,6 +273,21 @@ async function _getAcademyApplicationsAction(options: {
     }
 }
 
+/**
+ * The registration fields an admin grant writes, in the dotted form the adapter
+ * flattens onto serviceRegistrations.
+ *
+ *   Derived from academyGrantFields rather than spelled out again, so the two
+ *   doors in this file and the applications they touch cannot disagree about
+ *   what a grant looks like.
+ */
+function academyGrantRegistration(adminUserId: string): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(academyGrantFields(adminUserId, FieldValue.serverTimestamp()))
+            .map(([key, value]) => [`serviceRegistrations.academy.${key}`, value]),
+    );
+}
+
 async function _approveAcademyApplicationAction(
     applicationId: string
 ): Promise<ActionState> {
@@ -352,9 +368,14 @@ async function _approveAcademyApplicationAction(
         // set(merge) rather than update(): the write must land whether or not
         // the row existed a moment ago. The adapter flattens these to dotted
         // paths, so a sibling module's serviceRegistrations are not replaced.
+        //   APPROVING AN APPLICATION IS NOT A PAYMENT, and this wrote
+        //   `paymentStatus: "completed"` as though it were — with no amount, no
+        //   reference and nobody recorded as having verified anything. See
+        //   lib/academy-entitlement. The grant opens the module exactly as a
+        //   payment does; it is simply no longer counted as one.
         await userRef.set({
             "serviceRegistrations.academy.status": "approved",
-            "serviceRegistrations.academy.paymentStatus": "completed",
+            ...academyGrantRegistration(session.user.id),
             "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("academy_participant"),
             updatedAt: FieldValue.serverTimestamp(),
@@ -609,10 +630,12 @@ async function _manualAcademyEnrollmentAction(
             return { error: "User not found", success: false as const };
         }
 
+        //   Manual enrolment is a grant too — see the note in the approval
+        //   path above and lib/academy-entitlement.
         await userRef.update({
             "serviceRegistrations.academy.status": "active",
             "serviceRegistrations.academy.plan": plan,
-            "serviceRegistrations.academy.paymentStatus": "completed",
+            ...academyGrantRegistration(session.user.id),
             "serviceRegistrations.academy.enrolledAt": FieldValue.serverTimestamp(),
             // Ensure they have the academy role
             roles: FieldValue.arrayUnion("academy_participant"),
@@ -636,7 +659,7 @@ async function _manualAcademyEnrollmentAction(
                     return db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(doc.id).update({
                         status: "approved",
                         plan: plan,
-                        paymentStatus: "completed",
+                        ...academyGrantFields(session.user.id, FieldValue.serverTimestamp()),
                         reviewedAt: FieldValue.serverTimestamp(),
                         reviewedBy: session.user.id
                     });
@@ -651,7 +674,7 @@ async function _manualAcademyEnrollmentAction(
                     userId: userId,
                     status: "approved",
                     plan: plan,
-                    paymentStatus: "completed",
+                    ...academyGrantFields(session.user.id, FieldValue.serverTimestamp()),
                     source: "manual_enrollment",
                     submittedAt: FieldValue.serverTimestamp(),
                     reviewedAt: FieldValue.serverTimestamp(),

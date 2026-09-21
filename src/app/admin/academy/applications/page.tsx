@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { isAcademyEntitled } from "@/lib/academy-entitlement";
 import {
     FileText, CheckCircle, XCircle, Loader2, Filter,
     Search, Eye, BookOpen, GraduationCap, DollarSign,
@@ -144,7 +145,7 @@ function ApplicationDetailModal({
 }) {
     const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
-        status: app.paymentStatus === "completed" || app.paymentStatus === "paid" ? "completed" : "pending",
+        status: isAcademyEntitled(app.paymentStatus) ? "completed" : "pending",
         amount: app.paymentAmount || 0,
         plan: app.plan || "registration",
     });
@@ -703,8 +704,8 @@ export default function AdminAcademyApplicationsPage() {
             // Apply payment filter just like the UI
             exportApps = exportApps.filter((a: any) => {
                 if (config.payment === "all") return true;
-                if (config.payment === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
-                return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
+                if (config.payment === "completed") return isAcademyEntitled(a.paymentStatus);
+                return !isAcademyEntitled(a.paymentStatus);
             });
 
             // Apply registry filter just like the UI

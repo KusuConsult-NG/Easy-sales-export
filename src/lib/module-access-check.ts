@@ -18,6 +18,7 @@
  */
 
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
+import { isAcademyEntitled } from "@/lib/academy-entitlement";
 import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
@@ -214,11 +215,17 @@ export async function checkModuleAccess(
          *   Refusing the module to somebody who has bought a course in it would
          *   be a worse defect than the one being closed.
          */
-        const ACADEMY_SETTLED_PAYMENT_STATUSES = ["completed", "paid"];
-
-        const isAcademyPaid = (value: unknown): boolean =>
-            typeof value === "string"
-            && ACADEMY_SETTLED_PAYMENT_STATUSES.includes(value.trim().toLowerCase());
+        //   A GRANT OPENS THE MODULE TOO. The two admin doors used to write
+        //   `paymentStatus: "completed"` for a place nobody paid for, so this
+        //   gate admitted them without knowing it was doing so. They write
+        //   "waived" now — a deliberate decision, still entitling — and the
+        //   vocabulary lives in lib/academy-entitlement so this gate and the
+        //   four other readers of the field cannot drift apart again.
+        //
+        //   isAcademyEntitled, not isAcademyPaid: refusing a learner an admin
+        //   deliberately let in would be a worse defect than the one being
+        //   closed, which is the same reasoning as the enrolment note above.
+        const isAcademyPaid = (value: unknown): boolean => isAcademyEntitled(value);
 
         let academyEntitlementCache: boolean | null = null;
 

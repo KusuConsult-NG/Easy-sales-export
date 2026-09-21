@@ -1,5 +1,6 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAcademyEntitled } from '@/lib/academy-entitlement';
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetrics } from "@easy-sales/services";
@@ -232,7 +233,10 @@ export class UserMetricsService implements UserMetricsServiceContract {
         // either way: totalRegistrationRevenue sums every completed payment
         // regardless of which bucket it lands in.
         applications.forEach(app => {
-            if (app.paymentStatus === 'completed') {
+            //   A granted learner IS a student. The revenue line below is
+            //   unaffected: a grant writes paymentAmount 0, so it adds nothing
+            //   to totalRegistrationRevenue no matter how it is counted here.
+            if (isAcademyEntitled(app.paymentStatus)) {
                 totalStudents++;
                 const plan = normaliseAcademyPlan(app.plan) ?? "unknown";
                 const amount = Number(app.paymentAmount) || 0;

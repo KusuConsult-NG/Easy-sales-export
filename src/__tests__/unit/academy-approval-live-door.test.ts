@@ -93,6 +93,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { isAcademyEntitled, isAcademyPaid } from '@/lib/academy-entitlement';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { ALL_ADMIN_ROLES, hasAdminPermission } from '@/lib/admin-permissions';
@@ -190,7 +191,26 @@ describe('#277 — approving a learner with no profile row', () => {
         const { user } = await approve({ seedUser: null });
 
         expect(user.serviceRegistrations?.academy?.status).toBe('approved');
-        expect(user.serviceRegistrations?.academy?.paymentStatus).toBe('completed');
+        // Entitled, so the gate opens — see lib/academy-entitlement.
+        expect(isAcademyEntitled(user.serviceRegistrations?.academy?.paymentStatus)).toBe(true);
+    });
+
+    it('AS A GRANT, NOT AS A PAYMENT NOBODY MADE', async () => {
+        // This assertion used to read `paymentStatus === "completed"`, which is
+        // the defect it was pinning: approving an application claimed money had
+        // arrived. Nothing in this door verifies a payment — no amount, no
+        // reference, no processed_payments read — so the record now says what
+        // actually happened, and names the admin who decided it.
+        const { user } = await approve({ seedUser: null });
+        const reg = user.serviceRegistrations?.academy;
+
+        expect(reg?.paymentStatus).toBe('waived');
+        expect(isAcademyPaid(reg?.paymentStatus)).toBe(false);
+
+        expect(reg?.entitlementSource).toBe('admin_grant');
+        expect(reg?.grantedBy).toBeTruthy();
+        expect(reg?.paymentVerifiedBy).toBeNull();
+        expect(Number(reg?.paymentAmount) || 0).toBe(0);
     });
 
     it('and the created profile carries an identity, not just a role', async () => {
