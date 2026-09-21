@@ -84,7 +84,12 @@ describe('a member whose application is filed under the profile they stopped usi
 
     it('and so does academy', async () => {
         seedTheSameePersonTwice();
-        store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'app-1', { userId: OLD, status: 'approved' });
+        //   Paid, exactly as the cooperative case above is, and for the same
+        //   reason: Academy is gated on payment now. What this test is about is
+        //   whether an application filed under a SUPERSEDED profile id is
+        //   found at all — not whether it was paid for.
+        store.seed(COLLECTIONS.ACADEMY_APPLICATIONS, 'app-1',
+            { userId: OLD, status: 'approved', paymentStatus: 'completed' });
 
         expect(await access(LIVE, [], 'academy')).toBe(true);
     });

@@ -28,6 +28,8 @@ import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-progress";
+//   Academy's payment gate is for LEARNERS. See the carve-out in Layer 1.
+import { isAdmin } from "@/lib/role-utils";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
@@ -74,7 +76,44 @@ export async function checkModuleAccess(
 ): Promise<boolean> {
     // ── Layer 1: JWT check (fast, no DB) ─────────────────────────────────────
     if (hasAppAccess(jwtRoles, app)) {
-        return true;
+        /*
+         *   AND ACADEMY CANNOT USE THIS FAST PATH, which is the whole reason
+         *   the payment gate below is worth anything.
+         *
+         *   Layer 1 answers from the JWT alone and never reads the database.
+         *   The role it reads for Academy is `academy_participant` — the exact
+         *   role Layer 2.7's heal granted to anybody with an approved
+         *   application and no payment. Once that role is on the user document
+         *   it is minted into every subsequent JWT, so an unpaid learner would
+         *   be waved through here for ever and none of the gates below would
+         *   ever run. Stripping the role instead would not converge either: the
+         *   JWT is minted FROM those roles, so the role has to stop being
+         *   sufficient, not merely be deleted once.
+         *
+         *   THE COST, STATED. Academy loses the no-database path: one cached
+         *   user-document read per request (session-guard already caches the
+         *   profile for 300s), on one module of six, and only for callers the
+         *   fast path would otherwise have admitted. Every other module keeps
+         *   Layer 1 exactly as it was — the WAVE control in
+         *   an-approved-academy-place-nobody-paid-for.test.ts pins that.
+         */
+        /*
+         *   AN ADMIN IS NOT A LEARNER, and this carve-out is not a convenience.
+         *
+         *   Found by the suite rather than by me: `and an admin role reaches
+         *   every module` went red. ROLE_APP_ACCESS grants academy to `admin`,
+         *   `super_admin` AND `academy_admin`, and none of them has a
+         *   registration or a programme fee — so falling through would have put
+         *   the people who REVIEW Academy applications behind the payment gate
+         *   for the applications they review.
+         *
+         *   role-utils.isAdmin covers all seven admin roles, so a future
+         *   module admin is carved out with them rather than discovered
+         *   locked out.
+         */
+        if (app !== "academy" || isAdmin(jwtRoles)) {
+            return true;
+        }
     }
 
     // ── Layer 2: Firestore fallback (handles stale JWT after normal approval) ──
@@ -122,6 +161,115 @@ export async function checkModuleAccess(
                 return true;
             }
         }
+
+        /*
+         *   ── ACADEMY WAS OPEN TO ANYBODY AN ADMIN HAD APPROVED ───────────────
+         *
+         *   THE OWNER: "Academy is gated but it is granting permission to users
+         *   even before they make the payment, why?"
+         *
+         *   Layer 2.7 read the application and granted on `status === "active"
+         *   || status === "approved"` with no payment check anywhere — and then
+         *   PERSISTED the grant, writing `academy_participant` and
+         *   `serviceRegistrations.academy.status: "approved"` onto the user
+         *   document. That is why gating Layer 2.7 alone would have fixed
+         *   almost nothing: the two fields it writes are exactly what Layer 2
+         *   and Layer 2.5 above grant on, so everybody the defect had already
+         *   enrolled would keep the module for ever and never reach 2.7 again.
+         *
+         *   All three grant points ask this now.
+         *
+         * ── THE CARVE-OUT, AND WHY IT IS SAFE ───────────────────────────────
+         *
+         *   Layer 2.6 did this for cooperatives after MEASURING production: 77
+         *   active-and-unpaid members, 74 of them legacy, and its comment is
+         *   the warning — "a payment requirement without that carve-out would
+         *   lock the entire pre-platform membership out of their own savings to
+         *   catch two people."
+         *
+         *   I HAVE NO PRODUCTION ACCESS AND SO NO EQUIVALENT COUNT. What makes
+         *   this safe without one is that every door which can settle an Academy
+         *   payment already writes a marker this reads:
+         *
+         *       admin/_legacy.ts          paymentStatus: "completed" AND
+         *                                 _isLegacy: true, on the user
+         *                                 registration and the application
+         *       payments/service.ts       paymentStatus: "completed" on both,
+         *                                 plus a processed_payments row
+         *       academy/_ac_admin_review  paymentStatus on both — and it accepts
+         *                                 "paid" as well as "completed", which
+         *                                 is why both spellings count here
+         *
+         *   So a legacy learner is admitted twice over, and the only records
+         *   with none of these are the ones the defect minted. The
+         *   processed_payments query is the backstop for a stale field beside a
+         *   real payment, and it runs ONLY when every free check has already
+         *   failed.
+         *
+         *   ENROLMENT COUNTS AS WELL AS REGISTRATION. payment-router is explicit
+         *   that `academy_enrollment` is "the purchase of a single course" and
+         *   not a spelling of `academy_registration`. Both are money paid to
+         *   Academy, and this decides only whether the MODULE opens — which plan
+         *   a course belongs to is checkCourseAccess's question, not this one.
+         *   Refusing the module to somebody who has bought a course in it would
+         *   be a worse defect than the one being closed.
+         */
+        const ACADEMY_SETTLED_PAYMENT_STATUSES = ["completed", "paid"];
+
+        const isAcademyPaid = (value: unknown): boolean =>
+            typeof value === "string"
+            && ACADEMY_SETTLED_PAYMENT_STATUSES.includes(value.trim().toLowerCase());
+
+        let academyEntitlementCache: boolean | null = null;
+
+        /**
+         * Has this person's Academy place been paid for, or is it legacy?
+         *
+         *   Memoised, and ordered cheapest-first: two field reads and a legacy
+         *   marker settle it for everybody on the ordinary path, and the query
+         *   runs only for a record that looks unpaid — which, after this lands,
+         *   is meant to be nobody.
+         */
+        const academyPaidOnRecord = async (registration?: any): Promise<boolean> => {
+            if (isAcademyPaid(registration?.paymentStatus)) return true;
+
+            if (academyEntitlementCache !== null) return academyEntitlementCache;
+
+            const academyReg = (userData.serviceRegistrations || {}).academy;
+            const isLegacyLearner =
+                !!userData.legacyOnboardedBy
+                || userData.isLegacy === true
+                || academyReg?._isLegacy === true;
+
+            let settled = isAcademyPaid(academyReg?.paymentStatus) || isLegacyLearner;
+
+            if (!settled) {
+                try {
+                    const paid = await filterByOwner(
+                        db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId", await ownedIds())
+                        .where("type", "in", ["academy_registration", "academy_enrollment"])
+                        .where("status", "==", "completed")
+                        .limit(APPLICATION_SCAN_LIMIT)
+                        .get();
+                    settled = !paid.empty;
+                } catch (lookupErr) {
+                    //   #492's rule, and Layer 2.6 applies it for the same
+                    //   reason: a FAILED READ IS NOT A REFUSAL. If the payments
+                    //   collection is unreachable this must not revoke a paid
+                    //   learner's course mid-lesson. The existing approval
+                    //   stands and the failure is loud.
+                    logger.error(
+                        `[ModuleAccess] Academy — processed_payments lookup failed for ${userId}; `
+                        + `honouring the existing approval rather than revoking access.`,
+                        lookupErr,
+                    );
+                    settled = true;
+                }
+            }
+
+            academyEntitlementCache = settled;
+            return settled;
+        };
 
         /**
          *   #763 The status Layer 2 resolved, kept for Layer 2.5 below.
@@ -184,6 +332,17 @@ export async function checkModuleAccess(
             resolvedStatus = registration?.status;
 
             if (allValidStatuses.includes(registration?.status)) {
+                //   The status says approved; the payment is a separate
+                //   question, and for Academy it was never asked. See the rule
+                //   above — this is the grant the defect's own heal fed.
+                if (app === "academy" && !(await academyPaidOnRecord(registration))) {
+                    logger.warn(
+                        `[ModuleAccess] Layer 2 — '${app}' registration is '${registration.status}' `
+                        + `but no settled payment and no legacy marker was found (uid: ${userId}). No access.`
+                    );
+                    return false;
+                }
+
                 logger.info(
                     `[ModuleAccess] Layer 2 — serviceRegistrations confirmed '${app}' access (uid: ${userId}, status: ${registration.status}).`
                 );
@@ -240,6 +399,16 @@ export async function checkModuleAccess(
             }
 
             if (hasRole) {
+                //   `academy_participant` is the OTHER field the defect's heal
+                //   wrote, so a role alone must not re-open the module either.
+                if (app === "academy" && !(await academyPaidOnRecord())) {
+                    logger.warn(
+                        `[ModuleAccess] Layer 2.5 — '${app}' role is held (uid: ${userId}) but no `
+                        + `settled payment and no legacy marker was found. No access.`
+                    );
+                    return false;
+                }
+
                 logger.info(
                     `[ModuleAccess] Layer 2.5 — Firestore roles[] confirmed '${app}' access (uid: ${userId}, roles: ${firestoreRoles.join(", ")}).`
                 );
@@ -552,6 +721,28 @@ export async function checkModuleAccess(
             if (appDocData) {
                 const status = appDocData.status;
                 if (status === "active" || status === "approved") {
+                    /*
+                     *   THE ORIGINAL SITE OF THE DEFECT. An approved application
+                     *   was treated as sufficient, and the heal below then made
+                     *   that permanent. The application's OWN payment fields are
+                     *   free evidence here and are read first; everything else
+                     *   falls back to the shared rule above.
+                     */
+                    const entitled =
+                        isAcademyPaid(appDocData.paymentStatus)
+                        || appDocData._isLegacy === true
+                        || appDocData.isLegacy === true
+                        || await academyPaidOnRecord();
+
+                    if (!entitled) {
+                        logger.warn(
+                            `[ModuleAccess] Layer 2.7 — '${app}' application is '${status}' (uid: ${userId}) `
+                            + `but the programme fee is unpaid and the learner is not legacy. `
+                            + `No access, and no heal.`
+                        );
+                        return false;
+                    }
+
                     logger.info(
                         `[ModuleAccess] Layer 2.7 — Direct application query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
                     );
