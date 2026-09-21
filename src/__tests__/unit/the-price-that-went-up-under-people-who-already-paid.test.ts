@@ -208,12 +208,19 @@ describe("the owner asked for the discount to stay", () => {
     );
 
     it("and the current prices are untouched by this change", () => {
-        //   Pinned literally. The grandfather clause is not a licence to adjust
-        //   the live price list, and a diff that changes these should have to
-        //   change this line too.
-        expect(ACADEMY_CONFIG.plans.foundation.fee).toBe(45_000);
-        expect(ACADEMY_CONFIG.plans.standard.fee).toBe(90_000);
-        expect(ACADEMY_CONFIG.plans.elite.fee).toBe(270_000);
+        //   THE OWNER, confirming the live list in full: "these are the new
+        //   prices as discounted: ₦45,000 from 50k / ₦90,000 from 100k /
+        //   ₦270,000 from 300k".
+        //
+        //   BOTH halves of every pair are pinned, because a discount is defined
+        //   by both. Asserting only `fee` would let the struck-through figure be
+        //   edited to anything — or to equal the fee, quietly retiring the
+        //   discount the owner asked twice to keep — without a single test
+        //   noticing. The `fee < originalFee` check above cannot catch that
+        //   either; it only knows the order, not the numbers.
+        expect(ACADEMY_CONFIG.plans.foundation).toMatchObject({ fee: 45_000, originalFee: 50_000 });
+        expect(ACADEMY_CONFIG.plans.standard).toMatchObject({ fee: 90_000, originalFee: 100_000 });
+        expect(ACADEMY_CONFIG.plans.elite).toMatchObject({ fee: 270_000, originalFee: 300_000 });
     });
 });
 
