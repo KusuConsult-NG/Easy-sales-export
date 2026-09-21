@@ -60,8 +60,34 @@
  *   own message — the client bound is a courtesy, never the control.
  */
 
-/** Everything that is not a video. */
-export const DEFAULT_MAX_UPLOAD_MB = 50;
+/**
+ * Everything that is not a video — which is TWO Cloudinary endpoints, not one.
+ *
+ *   THE OWNER: "fix the image cap too."
+ *
+ *   storage-admin's cloudinaryResourceType sends a PDF or a Word document to
+ *   `raw` and everything else to `image`, and Cloudinary caps those separately
+ *   from video. On the plans where a video may be 100MB — which is the ceiling
+ *   this account was found to have — both `image` and `raw` are 10MB. Our
+ *   guard said 50, so a 20MB product photo or a scanned title deed passed
+ *   every check here, uploaded completely, and was refused at the far end, the
+ *   same way the video ceiling was.
+ *
+ *   LOWERING THIS CANNOT REFUSE ANYTHING THE BACKEND WOULD HAVE TAKEN, which
+ *   is the argument for doing it without waiting for the plan to be confirmed.
+ *   If Cloudinary's limit really is 10MB then a larger file was already
+ *   failing, only later and less clearly — after the whole transfer, with a
+ *   502 instead of a sentence. If the plan is in fact higher, the fix is
+ *   MAX_UPLOAD_SIZE_MB on the server, not an edit here, and nothing is lost in
+ *   the meantime but an early and accurate refusal.
+ *
+ *   NOT SPLIT INTO image AND raw, though Cloudinary bills them apart and their
+ *   ceilings can diverge on larger plans. They are the same number here, and a
+ *   third category whose two values are identical is a distinction nobody can
+ *   check. uploadSizeLimitBytes already takes the MIME type, so splitting it
+ *   later costs one branch.
+ */
+export const DEFAULT_MAX_UPLOAD_MB = 10;
 
 /** Video — see the note above. Tracks Cloudinary's own per-upload ceiling. */
 export const DEFAULT_MAX_VIDEO_UPLOAD_MB = 100;

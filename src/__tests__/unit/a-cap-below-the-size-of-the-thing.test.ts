@@ -101,16 +101,24 @@ describe('video is allowed more than a document', () => {
         expect(await limitFor('video/webm')).toBe(DEFAULT_MAX_VIDEO_UPLOAD_MB * MB);
     });
 
-    it('AND A DOCUMENT IS STILL 50MB, which is the part that must not move', async () => {
-        expect(await limitFor('application/pdf')).toBe(50 * MB);
-        expect(await limitFor('image/png')).toBe(50 * MB);
+    it('AND A DOCUMENT KEEPS THE ORDINARY CEILING, which is the part that must not move', async () => {
+        /*
+         *   THE INVARIANT IS THE SEPARATION, NOT THE NUMBER. This read
+         *   `toBe(50 * MB)` and went red when the image and document ceiling
+         *   moved to 10 — but nothing it protects had changed. What it exists
+         *   to catch is video's allowance leaking onto everything else, so it
+         *   asks for the ordinary constant and, below, that the two differ.
+         */
+        expect(await limitFor('application/pdf')).toBe(DEFAULT_MAX_UPLOAD_MB * MB);
+        expect(await limitFor('image/png')).toBe(DEFAULT_MAX_UPLOAD_MB * MB);
+        expect(await limitFor('image/png')).toBeLessThan(await limitFor('video/mp4'));
     });
 
     it('and a missing type gets the ordinary ceiling, not the generous one', async () => {
         //   Unknown is not video. Defaulting the other way would give every
         //   typeless upload 200MB.
-        expect(await limitFor(undefined)).toBe(50 * MB);
-        expect(await limitFor('')).toBe(50 * MB);
+        expect(await limitFor(undefined)).toBe(DEFAULT_MAX_UPLOAD_MB * MB);
+        expect(await limitFor('')).toBe(DEFAULT_MAX_UPLOAD_MB * MB);
     });
 
     it('and "video" is asked of the MIME type, never of a filename', () => {
@@ -131,7 +139,7 @@ describe('the limit is configurable, per kind', () => {
 
     it('AND IT DOES NOT MOVE THE DOCUMENT CEILING WITH IT', async () => {
         process.env.MAX_VIDEO_UPLOAD_SIZE_MB = '500';
-        expect(await limitFor('application/pdf')).toBe(50 * MB);
+        expect(await limitFor('application/pdf')).toBe(DEFAULT_MAX_UPLOAD_MB * MB);
     });
 
     it('MAX_UPLOAD_SIZE_MB still overrides the ordinary one', async () => {
@@ -206,7 +214,12 @@ describe('and the browser agrees with the server about what it will take', () =>
         //   MasterUploader cannot import storage-admin — it pulls in the logger
         //   and the file-type sniffer, which are server code — so the numbers
         //   live in a client-safe module and BOTH sides read them.
-        expect(DEFAULT_MAX_UPLOAD_MB).toBe(50);
+        //   PINNED TO CLOUDINARY'S image AND raw CEILING, like the video one
+        //   below. storage-admin sends a PDF or Word file to `raw` and
+        //   everything else to `image`, and on the plan where video is 100MB
+        //   both of those are 10MB. 50 here let a 20MB product photo or a
+        //   scanned title deed upload in full and be refused at the far end.
+        expect(DEFAULT_MAX_UPLOAD_MB).toBe(10);
         //   PINNED TO CLOUDINARY'S OWN CEILING, not to a preference. 200
         //   here let a 150MB video upload completely and be refused by the
         //   storage backend at the far end — the person waits out the whole
