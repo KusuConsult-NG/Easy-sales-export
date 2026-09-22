@@ -50,6 +50,8 @@ import { join } from 'path';
 const EDITOR_SCRIPTS = [
     'scripts/why-is-the-dashboard-slow.sql',
     'scripts/export-registration-statuses.sql',
+    'scripts/cooperative-members-who-never-paid.sql',
+    'scripts/entitlements-nobody-paid-for.sql',
 ];
 
 /** Everything that is not a leading `--` comment: the executable statement. */
@@ -167,6 +169,15 @@ describe.each(EDITOR_SCRIPTS)('#910 — %s survives the SQL Editor that has to r
             'scripts/export-registration-statuses.sql': [
                 'service_regs', 'export_onboarding_applications', 'export_participant',
             ],
+            //   The cooperative pair. One asks which MEMBER ROWS have a
+            //   settled payment behind them; the other asks which ROLE HOLDERS
+            //   do — the entitlement, which is what actually opens the module.
+            'scripts/cooperative-members-who-never-paid.sql': [
+                'cooperative_members', 'processed_payments', '_repairSource', '_roleGrantedBy',
+            ],
+            'scripts/entitlements-nobody-paid-for.sql': [
+                'cooperative_member', 'processed_payments', '_roleGrantedBy',
+            ],
         };
 
         const expected = MUST_MENTION[SCRIPT];
@@ -183,14 +194,14 @@ describe.each(EDITOR_SCRIPTS)('#910 — %s survives the SQL Editor that has to r
 });
 
 describe('#910 — and the list of editor scripts is the list', () => {
-    it('BOTH SCRIPTS ARE COVERED', () => {
+    it('EVERY EDITOR SCRIPT IS COVERED', () => {
         /*
          *   describe.each over an empty or truncated list passes every
          *   assertion above by running none of them. This is the guard on the
          *   guard, and it fails the day a third editor script is written and
          *   not added.
          */
-        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 2 });
+        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 4 });
         for (const rel of EDITOR_SCRIPTS) {
             expect({ rel, exists: readFileSync(join(process.cwd(), rel), 'utf-8').length > 0 })
                 .toEqual({ rel, exists: true });
