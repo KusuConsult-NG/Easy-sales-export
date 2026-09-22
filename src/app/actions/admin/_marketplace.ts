@@ -31,6 +31,7 @@ import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { notifyBadgeUpdated } from "@/lib/marketplace-notifications";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
+import { rolesGrantedOnSellerApproval, accountTypeOnSellerApproval } from "@/lib/marketplace-approval-roles";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -113,9 +114,14 @@ async function _approveSellerVerificationAction(
                  *   what the applicant actually asked for rather than anything
                  *   inferred at approval time.
                  */
-                roles: verificationData.accountType === "both"
-                    ? FieldValue.arrayUnion("seller", "marketplace_buyer")
-                    : FieldValue.arrayUnion("seller"),
+                //   #908 The rule moved to lib/marketplace-approval-roles, so
+                //   this door and /api/admin/marketplace/approve-seller cannot
+                //   disagree again. They already did once: #844 repaired this
+                //   line and left the route — the one the admin UI calls —
+                //   granting "seller" alone.
+                roles: FieldValue.arrayUnion(
+                    ...rolesGrantedOnSellerApproval(verificationData.accountType),
+                ),
                 // "approved", not "active".
                 //
                 // Two approval implementations write this field:
@@ -132,7 +138,7 @@ async function _approveSellerVerificationAction(
                 // admin barrel and reachable, and would have locked an approved
                 // seller out of their own dashboard.
                 "serviceRegistrations.marketplace.status": "approved",
-                "serviceRegistrations.marketplace.accountType": verificationData.accountType || "seller",
+                "serviceRegistrations.marketplace.accountType": accountTypeOnSellerApproval(verificationData.accountType),
                 "serviceRegistrations.marketplace.paymentStatus": "completed",
                 "serviceRegistrations.marketplace.approvedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.marketplace.approvedBy": session.user.id,
@@ -1174,10 +1180,10 @@ export const rejectMarketplaceUserAction = withFlexibleSafeAction("rejectMarketp
  * the dashboard displayed the size of the backlog without offering any way to
  * clear it.
  *
- * PRODUCT_INITIAL_STATUS is "active" now, so new listings are not held. This
- * exists to release the backlog that accumulated, and to give moderation a
- * mechanism at all — see lib/product-status.ts for the reasoning and for how to
- * switch to approval-before-publication.
+ * #906 PRODUCT_INITIAL_STATUS is "pending" now — the owner asked for content to
+ * be approved rather than published on the strength of the seller's own
+ * approval. So this screen is the queue new listings arrive in, not only the
+ * one that released a backlog. See lib/product-status.ts.
  */
 async function _getAdminProductsAction(options: {
     status?: string;

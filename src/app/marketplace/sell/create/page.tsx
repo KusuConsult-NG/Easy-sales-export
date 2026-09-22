@@ -27,6 +27,7 @@ import { useStorage } from "@/hooks/use-storage";
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
 import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
+import { PRODUCT_CREATED_MESSAGE } from "@/lib/product-status";
 
 const initialState = { success: false as const, error: "", data: null };
 
@@ -115,7 +116,9 @@ export default function CreateProductPage() {
 
     useEffect(() => {
         if (state.success) {
-            showToast("Product created successfully!", "success");
+            //   #906 From lib/product-status — the same sentence the other
+            //   creator shows, and it moves when the rule moves.
+            showToast(PRODUCT_CREATED_MESSAGE, "success");
             setTimeout(() => router.push("/marketplace/sell"), 2000);
         } else if ((state as { error?: string }).error) {
             showToast((state as { error?: string }).error!, "error");

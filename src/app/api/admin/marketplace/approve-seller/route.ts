@@ -6,6 +6,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
+import { rolesGrantedOnSellerApproval, accountTypeOnSellerApproval } from "@/lib/marketplace-approval-roles";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { sendSellerApprovalEmail } from "@/lib/email-notifications";
@@ -107,18 +108,36 @@ export async function POST(request: NextRequest) {
         try {
             const userRef = db.collection(COLLECTIONS.USERS).doc(verificationData.userId);
             const userSnap = await userRef.get();
+            /*
+             *   #908 WHAT THE APPLICANT ASKED FOR, not "seller" regardless.
+             *
+             *   This route never read `accountType`. #844 fixed that in the
+             *   sibling server action and this is the door the admin screen
+             *   actually calls, so a `both` applicant approved through the UI
+             *   came out with the selling role alone. See
+             *   lib/marketplace-approval-roles for the measurement.
+             *
+             *   The accountType is recorded too: /marketplace/dashboard reads
+             *   `serviceRegistrations.marketplace.accountType` FIRST to decide
+             *   which dashboard to open, and this route wrote no such field, so
+             *   that read found nothing for every seller it approved.
+             */
+            const grantedRoles = rolesGrantedOnSellerApproval(verificationData.accountType);
+            const accountType = accountTypeOnSellerApproval(verificationData.accountType);
+
             if (!userSnap.exists) {
                 await userRef.set({
                     uid: verificationData.userId,
                     email: verificationData.userEmail || verificationData.email || "",
                     fullName: verificationData.userName || "Seller",
                     createdAt: FieldValue.serverTimestamp(),
-                    roles: ["seller"],
+                    roles: grantedRoles,
                     isVerified: true,
                     sellerVerificationStatus: "approved",
                     "serviceRegistrations": {
                         "marketplace": {
                             "status": "approved",
+                            "accountType": accountType,
                             "activatedAt": FieldValue.serverTimestamp()
                         }
                     },
@@ -130,12 +149,19 @@ export async function POST(request: NextRequest) {
                     updatedAt: FieldValue.serverTimestamp(),
                     sellerVerificationStatus: "approved",
                     "serviceRegistrations.marketplace.status": "approved",
+                    "serviceRegistrations.marketplace.accountType": accountType,
                 };
 
-                if (!existingRoles.includes("seller")) {
-                    updateData.roles = FieldValue.arrayUnion("seller");
+                //   arrayUnion over the whole grant rather than a guarded
+                //   single add: the old shape skipped the write entirely when
+                //   `seller` was already held, so a re-approval could never
+                //   repair an account missing the buyer half. Union is
+                //   idempotent, so there is nothing to guard.
+                const missing = grantedRoles.filter((r) => !existingRoles.includes(r));
+                if (missing.length) {
+                    updateData.roles = FieldValue.arrayUnion(...grantedRoles);
                 }
-                
+
                 await userRef.update(updateData);
             }
         } catch (roleErr) {

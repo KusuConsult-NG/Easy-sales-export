@@ -33,23 +33,19 @@
  * So: six links pointed sellers at a form that produced a listing no buyer could
  * see and no admin could release.
  *
- * THE CHOICE MADE HERE, AND HOW TO REVERSE IT
- * -------------------------------------------
+ * THE CHOICE MADE HERE
+ * --------------------
  * Whether a marketplace moderates listings before they go live is the owner's
- * call, not a detail to infer. Both creators now read PRODUCT_INITIAL_STATUS, so
+ * call, not a detail to infer. Both creators read PRODUCT_INITIAL_STATUS, so
  * the decision is one constant in one file.
  *
- * It is set to "active" because that is the NON-BREAKING direction. The path
- * that works today (/marketplace/products/add) publishes immediately; setting
- * this to "pending" would stop those products appearing until an admin acted,
- * which would break something that currently works in order to enforce a policy
- * that was never implemented. Setting it to "active" changes nothing that works
- * and fixes what does not.
+ * It was "active" for exactly one reason, and that reason has expired: at the
+ * time nothing could release a pending product, so holding listings would have
+ * stranded them. #906 records the owner making the call the other way now that
+ * the queue exists. The full reasoning is on the constant itself.
  *
- * Moderation is still available and is now actually possible: reviewProductAction
- * suspends or rejects a live listing, and releases the pending backlog. If the
- * owner wants approval BEFORE publication, change the constant below — the
- * admin queue, the transitions and the tests are already in place for it.
+ * Moderation from the other direction is unchanged: reviewProductAction still
+ * suspends or rejects a live listing.
  *
  * TWO DECLARED STATUSES NOBODY WRITES
  * -----------------------------------
@@ -99,10 +95,77 @@ export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 /**
  * The status a newly created product gets, from EITHER creator.
  *
- * Change this one value to require approval before publication. See the note
- * above for why it is "active" today.
+ *   #906 THE OWNER HAS MADE THE CALL THE HEADER ABOVE WAS WAITING FOR.
+ *
+ *   THE OWNER: "When a user applies to any of the modules that they list
+ *   products, when they get approved as users, their content is also supposed
+ *   to be approved through the content approval tab on the admin dashboard …
+ *   All the content that are currently being displayed on marketplace and farm
+ *   nation were displayed after the user got approved and not his content being
+ *   approved."
+ *
+ *   That is an accurate description of what this constant did. There are TWO
+ *   gates in the design and marketplace only ever ran the first:
+ *
+ *       gate 1  IS THIS PERSON ALLOWED TO SELL?    lib/seller-approval.ts,
+ *               asked by both creators. Live, and working.
+ *       gate 2  MAY THIS PARTICULAR ITEM BE SHOWN?  the content-approval
+ *               console. Live for land and for export, and bypassed here.
+ *
+ *   The other two modules already do both. A Farm Nation listing is created
+ *   `pending_verification` and an export catalogue row `pending`; each waits
+ *   for a decision that writes a reviewer's id onto it. A marketplace product
+ *   was published the moment its seller was approved, so the only thing
+ *   standing between a fresh account and the shop floor was gate 1 — which is
+ *   about the PERSON, and says nothing about what they listed.
+ *
+ *   THE HEADER ABOVE ARGUED FOR "active" AND THAT ARGUMENT WAS RIGHT AT THE
+ *   TIME. Its reason was that no admin screen could release a pending product,
+ *   so holding listings would have stranded them. That reason is gone:
+ *   _getAdminProductsAction and _reviewProductAction exist, the content-approval
+ *   console lists and decides products, and #853 derived its tab set from
+ *   PRODUCT_MODERATION_STATUSES. The queue an approval needs is built.
+ *
+ *   WHAT THIS DOES NOT DO, AND MUST NOT. It does not touch a single stored row.
+ *   Everything already `active` stays visible and buyable — pulling live
+ *   inventory off a running marketplace is not a code change to make on
+ *   somebody's behalf. What it changes is only what happens NEXT: a new listing
+ *   waits for gate 2, like land and export always have.
+ *
+ *   The backlog that accumulated under the old rule is a separate question and
+ *   it is now ASKABLE rather than invisible: every decision path stamps
+ *   `approvedBy` (products, export) or `verifiedBy` (land), so live content
+ *   carrying neither is live content nobody reviewed. getContentApprovalItemsAction
+ *   reports that per item as `reviewed`, and the console shows it.
  */
-export const PRODUCT_INITIAL_STATUS: ProductStatus = "active";
+export const PRODUCT_INITIAL_STATUS: ProductStatus = "pending";
+
+/**
+ * What a seller is told when a listing is created.
+ *
+ *   #906 DERIVED FROM THE CONSTANT ABOVE, not typed out beside it.
+ *
+ *   Three screens said "Product listed successfully" / "Product created
+ *   successfully", which was true while new listings went straight to the shop
+ *   floor and is a lie the moment they do not. Copy that states a behaviour has
+ *   to move when the behaviour moves, or the seller is told their product is
+ *   live, goes looking for it, and cannot find it — the exact complaint the
+ *   header above records from the first time these two creators disagreed.
+ *
+ *   So the sentence is computed from the value rather than kept in step by
+ *   hand, and flipping PRODUCT_INITIAL_STATUS back would carry the wording back
+ *   with it.
+ */
+//   Widened deliberately: TypeScript narrows a `const` to its initialiser even
+//   through the union annotation, so comparing the constant directly is a
+//   compile error today ("no overlap") and would become one again on the other
+//   value. The whole point is that this line survives the constant changing.
+const INITIAL_STATUS: string = PRODUCT_INITIAL_STATUS;
+
+export const PRODUCT_CREATED_MESSAGE: string =
+    INITIAL_STATUS === "active"
+        ? "Product listed successfully"
+        : "Product submitted for review. It goes live once an admin approves it.";
 
 /**
  * Statuses a buyer can see a product in.

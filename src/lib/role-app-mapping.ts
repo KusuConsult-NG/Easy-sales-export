@@ -338,3 +338,29 @@ export function getPrimaryApp(rawUserRoles: UserRole[]): string {
  *   already depends on it.
  */
 export const LAND_SELLER_ROLES: readonly UserRole[] = ["farmer", "land_owner"];
+
+/**
+ * The marketplace's BUYING roles, under both spellings.
+ *
+ *   #908 THE SIDEBAR COULD SAY "SELLER ONLY" AND HAD NO WAY TO SAY THE OTHER
+ *   HALF.
+ *
+ *   THE OWNER: "did you verify that a user who signs up as a seller only sees
+ *   seller's dashboard and same applies to buyer and also if they apply as both
+ *   then they see the 2 dashboards?"
+ *
+ *   Measured: the seller dashboard is a nav entry, gated `sellerOnly`. The
+ *   BUYER dashboard is not a nav entry at all. /marketplace/buyer/dashboard is
+ *   reachable only by the redirect at /marketplace/dashboard — which sends
+ *   `accountType: "both"` to the SELLER dashboard — so somebody who applied as
+ *   both landed on one of their two dashboards and had no link to the other.
+ *
+ *   The pair is stated here, beside the Farm Nation one, for the same reason
+ *   that comment gives: this file is pure, and ModuleSidebar is a client
+ *   component that already imports from it.
+ *
+ *   BOTH SPELLINGS, because the platform grants both — #885 records
+ *   `marketplace_seller` being the missing half of the seller pair in four
+ *   places, and writing one spelling here would reproduce it on the buyer side.
+ */
+export const MARKETPLACE_BUYER_ROLES: readonly UserRole[] = ["buyer", "marketplace_buyer"];

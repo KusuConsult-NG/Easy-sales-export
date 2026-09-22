@@ -211,6 +211,8 @@ jest.mock('@/lib/supabase-db', () => {
         //   in both migration states.
         ensureEmailFilterColumn: jest.fn(async () => {}),
         __emailFilterColumnForTests: jest.requireActual('@/lib/supabase-db').__emailFilterColumnForTests,
+        // #907 — the real error formatter, so a test cannot assert against a copy.
+        __describeDbErrorForTests: jest.requireActual('@/lib/supabase-db').__describeDbErrorForTests,
 
         ...helpers,
     };

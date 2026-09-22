@@ -18,6 +18,9 @@ import {
 import { inspectionRefusal } from "@/lib/land-inspection";
 import { recordAdminAction } from "@/lib/audit-log";
 import { safeToISOString, UNKNOWN_DATE_ISO } from "@/lib/date-utils";
+//   #906 In a lib, not here: every export from a "use server" file is an
+//   endpoint. See lib/content-review-stamp for the ratchet that caught it.
+import { wasReviewed } from "@/lib/content-review-stamp";
 
 /**
  *   #690 What the member calls the thing that was decided.
@@ -46,6 +49,31 @@ export interface PendingContentItem {
     status: ApprovalStatus;
     description?: string;
     metadata?: Record<string, unknown>; // Sanitized document data
+    /**
+     *   #906 DID A HUMAN EVER DECIDE THIS ITEM, OR IS IT JUST LIVE?
+     *
+     *   THE OWNER: "All the content that are currently being displayed on
+     *   marketplace and farm nation were displayed after the user got approved
+     *   and not his content being approved."
+     *
+     *   Accurate, and until now unanswerable from this console. The approved
+     *   tab listed everything purchasable and said nothing about how it got
+     *   there — a product an admin released and a product that was never held
+     *   in the first place rendered identically.
+     *
+     *   Every decision path stamps the reviewer: approveContentAction writes
+     *   `approvedBy` on products and export and `verifiedBy` on land,
+     *   _reviewProductAction writes `reviewedBy`, and the farm-nation admin
+     *   routes write `verifiedBy`. So the absence of all of them IS the fact
+     *   the owner is describing, recorded at the time rather than inferred
+     *   later.
+     *
+     *   FALSE IS NOT AN ACCUSATION. Under the old rule (PRODUCT_INITIAL_STATUS
+     *   "active", see lib/product-status) a listing went live correctly and
+     *   with nobody reviewing it. This says which ones, so they can be worked
+     *   through — not that anything was done wrong.
+     */
+    reviewed: boolean;
 }
 
 // sanitizeForSerialization() has been replaced by the shared serializeValue() from @/lib/firestore-serialize.
@@ -101,11 +129,49 @@ export async function getContentApprovalItemsAction(
         // export catalog
         const exportStatus = status === "pending" ? "pending" : status === "approved" ? "live" : "rejected";
 
-        // 1. Marketplace Products
-        const productsQuery = db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", productStatus)
-            .limit(500);
-        const productsSnap = await productsQuery.get();
+        /*
+         *   #909 THE THREE LISTS AND THE NINE COUNTS ARE ALL STARTED HERE.
+         *
+         *   THE OWNER: "fix the slowness of the entire app".
+         *
+         *   This read products, then waited; read land, then waited; read the
+         *   export catalogue, then waited; and only then fired the nine counts
+         *   — four round-trip waves for twelve queries that share nothing. The
+         *   counts were already parallel, which is what makes the shape
+         *   recognisable: somebody parallelised the cheap part and left the
+         *   three expensive reads in series.
+         *
+         *   Same queries, same limits, same order in the rendered list — the
+         *   sort below runs over `items` after all three have landed, exactly
+         *   as it did.
+         */
+        const [productsSnap, landSnap, exportSnap, counts] = await Promise.all([
+            db.collection(COLLECTIONS.PRODUCTS)
+                .where("status", "==", productStatus)
+                .limit(500)
+                .get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS)
+                .where("status", "in", [...landStatuses])
+                .limit(500)
+                .get(),
+            db.collection(COLLECTIONS.EXPORT_CATALOG)
+                .where("status", "==", exportStatus)
+                .limit(500)
+                .get(),
+            Promise.all([
+                db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "pending").count().get(),
+                db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
+                db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "rejected").count().get(),
+                // The same sets as the list above, so the tab and its badge agree.
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
+                db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "pending").count().get(),
+                db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "live").count().get(),
+                db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "rejected").count().get(),
+            ]),
+        ]);
+
         productsSnap.forEach((doc) => {
             const data = doc.data();
             const retailPrice = data.pricingTiers?.find((t: any) => t.type === "retail")?.price || data.pricingTiers?.[0]?.price || data.price || 0;
@@ -121,15 +187,12 @@ export async function getContentApprovalItemsAction(
                 submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `Price: ₦${retailPrice.toLocaleString()} - Category: ${data.category}`,
+                reviewed: wasReviewed(data),
                 metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
 
         // 2. Land Listings
-        const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("status", "in", [...landStatuses])
-            .limit(500);
-        const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
             const data = doc.data();
             items.push({
@@ -144,15 +207,12 @@ export async function getContentApprovalItemsAction(
                 submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `${data.size} ${data.unit || 'acres'} at ${data.location?.state || data.state || 'Unknown State'}, ${data.location?.lga || data.lga || 'Unknown LGA'}`,
+                reviewed: wasReviewed(data),
                 metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
 
         // 3. Export Catalog
-        const exportQuery = db.collection(COLLECTIONS.EXPORT_CATALOG)
-            .where("status", "==", exportStatus)
-            .limit(500);
-        const exportSnap = await exportQuery.get();
         exportSnap.forEach((doc) => {
             const data = doc.data();
             items.push({
@@ -167,6 +227,7 @@ export async function getContentApprovalItemsAction(
                 submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `${data.category || "General"} - ${data.availableQuantity || 0} ${data.unit || "units"}`,
+                reviewed: wasReviewed(data),
                 metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
@@ -174,7 +235,7 @@ export async function getContentApprovalItemsAction(
         // Sort by submittedAt desc (ISO strings sort lexicographically)
         items.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
-        // Fast count aggregations across the three collections for global totals
+        //   #909 Counted in the same wave as the three lists above.
         const [
             pendingProductsCount,
             approvedProductsCount,
@@ -185,18 +246,7 @@ export async function getContentApprovalItemsAction(
             pendingExportCount,
             approvedExportCount,
             rejectedExportCount,
-        ] = await Promise.all([
-            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
-            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "rejected").count().get(),
-            // The same sets as the list above, so the tab and its badge agree.
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
-            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "live").count().get(),
-            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "rejected").count().get(),
-        ]);
+        ] = counts;
 
         const stats = {
             pending: pendingProductsCount.data().count + pendingLandCount.data().count + pendingExportCount.data().count,

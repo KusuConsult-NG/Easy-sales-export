@@ -11,7 +11,7 @@
  * release. admin-content.ts counted the pending products, so the dashboard
  * displayed the size of a backlog with no way to clear it.
  *
- * New listings are no longer held — PRODUCT_INITIAL_STATUS is "active", see
+ * #906 New listings ARE held again — PRODUCT_INITIAL_STATUS is "pending", see
  * lib/product-status.ts for that decision and how to reverse it. This page
  * releases the backlog that accumulated, and gives moderation a mechanism:
  * suspend or reject a live listing, publish a held one.

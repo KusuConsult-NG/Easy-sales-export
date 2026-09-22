@@ -135,14 +135,34 @@ describe('#858 — and the seller tools are gated on a Farm Nation role', () => 
         /*
          *   A flag nothing reads is #624's defect — "a declared rule that
          *   nothing consulted", which that finding measured at fifteen sites.
-         *   The gate is asserted next to the one it was modelled on.
+         *
+         *   #908 RUN, NOT READ. This asserted three substrings of the filter
+         *   callback, including `item.sellerOnly && !isSeller`. That proves a
+         *   line exists; it does not prove the line decides anything, and it
+         *   broke the moment the predicate was extracted — while the behaviour
+         *   it was guarding was unchanged. The predicate is exported now, so
+         *   the gate is exercised instead of quoted.
          */
-        const src = code(SIDEBAR);
+        const { navItemAllowedForRoles } = require('@/lib/nav-visibility');
+        const { LAND_SELLER_ROLES } = require('@/lib/role-app-mapping');
 
-        expect(src).toContain('item.rolesAny');
-        expect(src).toContain('return false');
-        //   The marketplace gate is untouched.
-        expect(src).toContain('item.sellerOnly && !isSeller');
+        const listLand = { name: 'List Land', rolesAny: LAND_SELLER_ROLES };
+
+        expect({
+            farmer: navItemAllowedForRoles(listLand, ['farmer']),
+            landOwner: navItemAllowedForRoles(listLand, ['land_owner']),
+            investor: navItemAllowedForRoles(listLand, ['investor']),
+            nobody: navItemAllowedForRoles(listLand, []),
+        }).toEqual({ farmer: true, landOwner: true, investor: false, nobody: false });
+
+        //   The marketplace gate, in the same call. An ungated entry is visible
+        //   to everybody — the control that stops a predicate returning false
+        //   everywhere from passing the four assertions above.
+        expect({
+            sellerOnlyForInvestor: navItemAllowedForRoles({ sellerOnly: true }, ['investor']),
+            sellerOnlyForSeller: navItemAllowedForRoles({ sellerOnly: true }, ['seller']),
+            ungated: navItemAllowedForRoles({ name: 'Escrow' }, []),
+        }).toEqual({ sellerOnlyForInvestor: false, sellerOnlyForSeller: true, ungated: true });
     });
 
     it('AND `farmer`/`investor` ARE THE ROLES ONBOARDING REALLY GRANTS', () => {

@@ -18,6 +18,7 @@ import { logger } from "@/lib/logger";
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
 import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
+import { PRODUCT_CREATED_MESSAGE } from "@/lib/product-status";
 //   The number the server actually enforces, not a second copy of it — the
 //   hardcoded "200MB" here outlived the server's 200MB by one commit.
 import { DEFAULT_MAX_VIDEO_UPLOAD_MB } from "@/lib/upload-limits";
@@ -219,7 +220,9 @@ export default function AddProductPage() {
             const data = await response.json();
 
             if (data.success) {
-                showToast("Product listed successfully!", "success");
+                //   #906 From lib/product-status, so a seller is not told a
+                //   listing is live when it is waiting for review.
+                showToast(PRODUCT_CREATED_MESSAGE, "success");
                 setTimeout(() => router.push("/marketplace/sell"), 1000);
             } else {
                 showToast(data.message || "Failed to create product", "error");

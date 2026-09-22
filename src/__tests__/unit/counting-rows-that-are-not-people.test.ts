@@ -184,9 +184,22 @@ describe('#747 — and every reported user figure goes through it', () => {
          *   getDashboardStats -> getPlatformMetrics -> this. That chain is what
          *   makes this finding a live number rather than a latent one, so the
          *   call is asserted where it happens.
+         *
+         *   #905 THE `await` IS NO LONGER ON THIS LINE, and pinning it there
+         *   was pinning the wrong thing. getPlatformMetrics now STARTS this
+         *   read and awaits it at the return, so the revenue aggregate beside
+         *   it does not queue behind a count it shares nothing with. What #747
+         *   is about is that the figure goes through countLivePeople rather
+         *   than a raw `.count()`, and that is what is asserted.
          */
-        expect(code('src/services/analytics.service.ts'))
-            .toContain('const totalUsers = await countLivePeople(db.collection(COLLECTIONS.USERS));');
+        const src = code('src/services/analytics.service.ts');
+
+        expect(src).toContain('countLivePeople(db.collection(COLLECTIONS.USERS))');
+        //   AND IT IS THE TOTAL, not some other figure that happens to call it:
+        //   the value reaches the returned `totalUsers`.
+        expect(src).toContain('totalUsers: await totalUsersPromise');
+        //   And the raw count this finding replaced has not crept back.
+        expect(src).not.toMatch(/db\.collection\(COLLECTIONS\.USERS\)\.count\(\)/);
     });
 
     it('AND THE ACTIVE FIGURE BESIDE IT, WHICH IS WHERE THE RULE CAME FROM', () => {
