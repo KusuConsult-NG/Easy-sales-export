@@ -78,169 +78,48 @@
 --  A filter written as `p.status = 'completed'` matches nothing.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-WITH payments AS (
-    SELECT p.id,
-           p.user_id,
-           p.reference,
-           p.amount,
-           p.created_at,
-           coalesce(p.raw_data->>'type', '(none)')   AS ptype,
-           coalesce(p.raw_data->>'status', '(none)') AS pstatus,
-
-           -- The mock's amount, in either unit. It always returned 5,000,000
-           -- kobo / ₦50,000 regardless of what the caller was buying, so a
-           -- ₦50,000 row on a plan that does not cost ₦50,000 is a tell.
-           coalesce(p.amount IN (50000, 5000000), false) AS mock_amount,
-
-           -- Written before the mock was removed in cc50b3b8.
-           --
-           --   coalesce'd to TRUE, not false, and the direction is the whole
-           --   point: a row with no created_at is a row whose age is unknown,
-           --   and `WHERE predates_fix` would silently drop every one of them
-           --   from the two sections that filter on it. An audit hunting for
-           --   something must not disappear the rows it cannot date — they are
-           --   shown and judged by hand instead.
-           coalesce(p.created_at < DATE '2026-09-16', true) AS predates_fix
-    FROM processed_payments p
-)
-
-SELECT * FROM (
-
--- ── 1. FABRICATED. No innocent reading of these. ───────────────────────────
-SELECT 1 AS sort,
-       'FABRICATED — reference shape is test-only' AS section,
-       ptype || '  |  ₦' || coalesce(amount::text, '?')
-           || '  |  ' || coalesce(reference, '(no reference)') AS label,
-       count(*)::bigint AS rows_found
-FROM payments
-WHERE reference = 'INVALID_REF'
-   OR reference LIKE 'E2E\_%'
-   OR reference LIKE 'TEST\_E2E\_REF\_%'
-GROUP BY 3
-
-UNION ALL
-
--- ── 2. AMBIGUOUS. T-form, which the mock and Paystack both produce. ────────
--- Split by whether the reference has Paystack's actual T-shape. A T-reference
--- that is NOT T + exactly fifteen digits was not minted by Paystack.
-SELECT 2,
-       'T-REFERENCE — check these against the Paystack dashboard',
-       CASE
-           WHEN reference ~ '^T[0-9]{15}$' AND mock_amount
-               THEN 'Paystack T-shape, but ₦50,000 exactly  <-- check first'
-           WHEN reference ~ '^T[0-9]{15}$'
-               THEN 'Paystack T-shape, amount is not the mock''s'
-           --   T + THIRTEEN digits is a JavaScript Date.now(). Section 5
-           --   proves it per row by decoding the digits and comparing them
-           --   with the row's own created_at.
-           WHEN reference ~ '^T[0-9]{13}$'
-               THEN 'T + 13 digits — a Date.now() timestamp; see section 5'
-           ELSE 'starts with T but NOT Paystack''s shape  <-- check first'
-       END,
-       count(*)::bigint
-FROM payments
-WHERE reference LIKE 'T%'
-  AND predates_fix
-  --   Section 1 already reports these as certain, and `TEST_E2E_REF_…`
-  --   also starts with T. Without this they are counted in both sections
-  --   and the same fabricated row reads as two.
-  AND reference NOT LIKE 'TEST\_E2E\_REF\_%'
-  AND reference NOT LIKE 'E2E\_%'
-  AND reference <> 'INVALID_REF'
-GROUP BY 3
-
-UNION ALL
-
--- ── 3. The amount fingerprint, independent of the reference. ───────────────
--- NODE_ENV='test' triggered the mock for ANY reference, so a run with that set
--- would leave an ordinary-looking reference behind. What it could not vary is
--- the amount.
+-- ─────────────────────────────────────────────────────────────────────────────
+--  WHY THIS IS NOW ONE UNBROKEN STATEMENT.
 --
---   THIS SECTION ACCUSES INNOCENT ROWS AND IS MEANT TO. ₦50,000 is a price
---   somebody really pays: Sanusi Ruth Adenike settled ₦50,000 against a genuine
---   card reference (y6c3who31k) and will appear here every time this is run.
---   Read it as "same amount as the mock", never as "fabricated" — sections 1
---   and 2 are where the reference shape carries evidence. What earns a second
---   look is a row whose TYPE does not cost ₦50,000, because the mock returned
---   that figure regardless of what was being bought.
-SELECT 3,
-       'EXACTLY ₦50,000 AND OLDER THAN THE FIX, BY TYPE',
-       ptype || '  (' || pstatus || ')',
-       count(*)::bigint
-FROM payments
-WHERE mock_amount AND predates_fix
-GROUP BY 3
-
-UNION ALL
-
--- ── 4. Every Academy payment row, so the audit's 20 can be eyeballed. ──────
--- These are the rows that put people in the PAID bucket on evidence stronger
--- than a field. If one of them appears in section 1 or 2, that bucket is wrong.
-SELECT 4,
-       'ACADEMY PAYMENT ROWS IN FULL',
-       coalesce(to_char(created_at, 'YYYY-MM-DD'), '(undated)')
-         || '  |  ₦' || coalesce(amount::text, '?')
-         || '  |  ' || coalesce(reference, '(no reference)')
-         || '  |  ' || pstatus,
-       count(*)::bigint
-FROM payments
-WHERE ptype IN ('academy_registration', 'academy_enrollment')
-GROUP BY 3
-
-UNION ALL
-
--- ── 5. THE T-REFERENCE THAT ENCODES ITS OWN INSERT TIME. ───────────────────
+--  THE OWNER, pasting this file into the Supabase SQL Editor:
 --
---   Section 2 can only call a T + 13 reference suspicious. This settles it.
+--      Failed to run sql query: ERROR: 42601: syntax error at or near ")"
+--      LINE 42: ) x
 --
---   tests/e2e/financial-workflow.spec.ts mints its reference as
+--  This file used to be five sections separated by blank lines, and its own
+--  header called that "correct and readable" because it was written for
+--  `psql -f`. The editor splits on blank lines: it cut the query into
+--  SEVENTEEN fragments and handed PostgreSQL one that began in the middle of
+--  a UNION and ended at `) x`. Each fragment is a syntax error on its own.
 --
---       const reference = `T${Date.now()}`;
+--  That is #910 exactly, and #910's ratchet deliberately did not cover this
+--  file -- the exclusion was argued from where the script was MEANT to run
+--  rather than from where it IS run. Production is reachable through the
+--  Supabase editor and not through psql, so the editor was always the real
+--  client. The readable layout was protecting a workflow nobody has.
 --
---   so the thirteen digits ARE the millisecond the row was created. Decode
---   them and compare with the row's own created_at: if they agree to within a
---   few minutes, the reference was minted by our own client at insert time.
+--  So the sections are now one statement with no blank line inside it, the
+--  naira sign and em dashes are gone from the literals (ASCII only, for the
+--  reason #910 records), and the file is in EDITOR_SCRIPTS with the rest.
+--  Nothing about WHAT it asks has changed -- the five sections, their
+--  filters and their labels are the same.
 --
---   PAYSTACK CANNOT PRODUCE THAT. Its T-form is fifteen digits, and no
---   reference it issues could encode the moment OUR INSERT ran. This is a
---   proof about provenance, not a guess about shape, which is why it can
---   promote a row from "check first" to fabricated without ever risking a
---   real payer — the risk that kept section 2 ambiguous in the first place.
---
---   The live sweep found two: T1783690499905 decodes to 13:34:59.905 against
---   a created_at of 13:35, and T1783698149704 to 15:42:29.704 against 15:42.
---
---   MATERIALIZED is load-bearing. Without it the planner may hoist the
---   substring cast above the regex filter and try to read a bigint out of a
---   reference that is not all digits, failing the whole sweep.
-SELECT 5,
-       'T-REFERENCE THAT ENCODES ITS OWN INSERT TIME — fabricated, not ambiguous',
-       reference
-         || '  |  ₦' || coalesce(amount::text, '?')
-         || '  |  reference says ' || to_char(minted_at, 'YYYY-MM-DD HH24:MI:SS')
-         || '  |  row says ' || coalesce(to_char(created_at, 'YYYY-MM-DD HH24:MI:SS'), '(undated)')
-         || '  |  ' || CASE
-                WHEN created_at IS NULL THEN 'undated row — compare by hand'
-                WHEN abs(extract(epoch FROM (created_at - minted_at))) <= 600
-                    THEN 'AGREE to within 10 minutes — minted by our own client'
-                ELSE 'disagree by '
-                     || round(abs(extract(epoch FROM (created_at - minted_at))) / 60)::text
-                     || ' minutes — still a Date.now() shape'
-            END,
-       count(*)::bigint
-FROM (
-    SELECT reference, amount, created_at,
-           to_timestamp(substring(reference FROM 2)::bigint / 1000.0) AT TIME ZONE 'UTC' AS minted_at
-    FROM (
-        SELECT reference, amount, created_at
-        FROM payments
-        WHERE reference ~ '^T[0-9]{13}$'
-    ) guarded
-) decoded
-GROUP BY reference, amount, created_at, minted_at
-
+--  It still runs under `psql -f` exactly as before. One statement is valid
+--  there too; only the line breaks moved.
+-- ─────────────────────────────────────────────────────────────────────────────
+with payments as (select p.id, p.user_id, p.reference, p.amount, p.created_at, coalesce(p.raw_data->>'type', '(none)') as ptype, coalesce(p.raw_data->>'status', '(none)') as pstatus, coalesce(p.amount in (50000, 5000000), false) as mock_amount, coalesce(p.created_at < date '2026-09-16', true) as predates_fix from processed_payments p)
+select * from (
+select 1 as sort, 'FABRICATED - reference shape is test-only' as section, ptype || '  |  NGN ' || coalesce(amount::text, '?') || '  |  ' || coalesce(reference, '(no reference)') as label, count(*)::bigint as rows_found from payments where reference = 'INVALID_REF' or reference like 'E2E\_%' or reference like 'TEST\_E2E\_REF\_%' group by 3
+union all
+select 2, 'T-REFERENCE - check these against the Paystack dashboard', case when reference ~ '^T[0-9]{15}$' and mock_amount then 'Paystack T-shape, but NGN 50,000 exactly  <-- check first' when reference ~ '^T[0-9]{15}$' then 'Paystack T-shape, amount is not the mock''s' when reference ~ '^T[0-9]{13}$' then 'T + 13 digits - a Date.now() timestamp; see section 5' else 'starts with T but NOT Paystack''s shape  <-- check first' end, count(*)::bigint from payments where reference like 'T%' and predates_fix and reference not like 'TEST\_E2E\_REF\_%' and reference not like 'E2E\_%' and reference <> 'INVALID_REF' group by 3
+union all
+select 3, 'EXACTLY NGN 50,000 AND OLDER THAN THE FIX, BY TYPE', ptype || '  (' || pstatus || ')', count(*)::bigint from payments where mock_amount and predates_fix group by 3
+union all
+select 4, 'ACADEMY PAYMENT ROWS IN FULL', coalesce(to_char(created_at, 'YYYY-MM-DD'), '(undated)') || '  |  NGN ' || coalesce(amount::text, '?') || '  |  ' || coalesce(reference, '(no reference)') || '  |  ' || pstatus, count(*)::bigint from payments where ptype in ('academy_registration', 'academy_enrollment') group by 3
+union all
+select 5, 'T-REFERENCE THAT ENCODES ITS OWN INSERT TIME - fabricated, not ambiguous', reference || '  |  NGN ' || coalesce(amount::text, '?') || '  |  reference says ' || to_char(minted_at, 'YYYY-MM-DD HH24:MI:SS') || '  |  row says ' || coalesce(to_char(created_at, 'YYYY-MM-DD HH24:MI:SS'), '(undated)') || '  |  ' || case when created_at is null then 'undated row - compare by hand' when abs(extract(epoch from (created_at - minted_at))) <= 600 then 'AGREE to within 10 minutes - minted by our own client' else 'disagree by ' || round(abs(extract(epoch from (created_at - minted_at))) / 60)::text || ' minutes - still a Date.now() shape' end, count(*)::bigint from (select reference, amount, created_at, to_timestamp(substring(reference from 2)::bigint / 1000.0) at time zone 'UTC' as minted_at from (select reference, amount, created_at from payments where reference ~ '^T[0-9]{13}$') guarded) decoded group by reference, amount, created_at, minted_at
 ) x
-ORDER BY sort, label;
+order by sort, label;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 --  AND THE PEOPLE BEHIND THE FABRICATED ROWS.
