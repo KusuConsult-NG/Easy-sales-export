@@ -44,6 +44,8 @@ import { sessionFileFor } from './helpers/session';
 
 const SELLER = sessionFileFor('seller');
 const BUYER = sessionFileFor('buyer');
+//   #906 The content-approval console is now part of a seller's journey.
+const ADMIN = sessionFileFor('admin');
 
 /** A 1x1 transparent PNG — the smallest thing the form will accept as an image. */
 const PIXEL = Buffer.from(
@@ -149,7 +151,31 @@ async function fillCreateForm(
 test.describe('#798 — a seller can list a product, and it is buyable', () => {
     test.use({ storageState: SELLER });
 
-    test('SELLER CREATES A PRODUCT and it appears in the catalogue', async ({ page }) => {
+    test('SELLER CREATES A PRODUCT, it WAITS for review, and an admin releases it', async ({ page, browser }) => {
+        /*
+         *   #906 THIS ASSERTED THE OLD POLICY, AND THE POLICY CHANGED.
+         *
+         *   THE OWNER: "when they get approved as users, their content is also
+         *   supposed to be approved through the content approval tab".
+         *
+         *   PRODUCT_INITIAL_STATUS is "pending" now, so the two things this
+         *   test used to assert are both false by design: the toast no longer
+         *   says "listed successfully", and the listing does not reach the
+         *   catalogue on creation. Changing the toast string alone would have
+         *   left it asserting that an unapproved product is buyable.
+         *
+         *   So it follows the WHOLE journey instead — which is a stronger test
+         *   than the one it replaces, because the property that matters has not
+         *   changed. A buyer must be able to find the product. What changed is
+         *   what has to happen first.
+         *
+         *   #912 AND THIS IS WHAT CAUGHT THE MISSING REVALIDATION. The last
+         *   step failed before `approveContentAction` learned to revalidate:
+         *   the row said active and the catalogue went on serving its cached
+         *   page. Approved, and still invisible — latent while products were
+         *   born live, live the moment the console became the door they all
+         *   pass through.
+         */
         const name = `E2E Listed Product ${Date.now()}`;
         await stubUploads(page);
 
@@ -162,15 +188,39 @@ test.describe('#798 — a seller can list a product, and it is buyable', () => {
         await expect(submit).toBeEnabled();
         await submit.click();
 
-        //   The toast the page shows on a successful write. Asserted rather
-        //   than the redirect alone, because the redirect fires on a timer and
-        //   would also fire if the write had been refused.
-        await expect(page.getByText(/listed successfully/i)).toBeVisible({ timeout: 20000 });
+        //   1. THE SELLER IS TOLD IT IS WAITING, not that it is live. Asserted
+        //   rather than the redirect alone, because the redirect fires on a
+        //   timer and would also fire if the write had been refused.
+        await expect(page.getByText(/submitted for review/i)).toBeVisible({ timeout: 20000 });
 
-        //   AND IT REACHED THE CATALOGUE. "The form said yes" is not the
-        //   property that matters — a buyer being able to find it is.
+        //   2. AND IT IS NOT IN THE CATALOGUE. The gate, driven through the
+        //   page: a unit test proves the constant, this proves the constant
+        //   reaches a buyer.
         await page.goto('/marketplace/products');
-        await expect(page.getByText(name).first()).toBeVisible({ timeout: 20000 });
+        await page.waitForLoadState('networkidle');
+        await expect(page.getByText(name)).toHaveCount(0);
+
+        //   3. AN ADMIN RELEASES IT from the content-approval console — the
+        //   tab the owner named, doing the job they described.
+        const adminContext = await browser.newContext({ storageState: ADMIN });
+        try {
+            const admin = await adminContext.newPage();
+            await admin.goto('/admin/content-approval');
+
+            const row = admin.getByText(name).first();
+            await expect(row, 'the pending product reaches the approval queue')
+                .toBeVisible({ timeout: 30000 });
+            await row.click();
+
+            await admin.getByRole('button', { name: /approve request/i }).click();
+        } finally {
+            await adminContext.close();
+        }
+
+        //   4. NOW A BUYER CAN FIND IT. The original assertion, unchanged and
+        //   in its right place — after the gate rather than instead of it.
+        await page.goto('/marketplace/products');
+        await expect(page.getByText(name).first()).toBeVisible({ timeout: 30000 });
     });
 
     test('#794 A NON-POSITIVE RETAIL PRICE IS REFUSED at the form a seller uses', async ({ page }) => {

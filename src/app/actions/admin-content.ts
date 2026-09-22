@@ -80,6 +80,63 @@ export interface PendingContentItem {
 // serializeValue is a superset: it also handles plain-object Timestamps (_seconds/_nanoseconds).
 
 /**
+ * The pages a content decision changes, per type.
+ *
+ *   #912 THE CONSOLE DECIDED, AND THE CATALOGUE KEPT SERVING THE OLD PAGE.
+ *
+ *   approveContentAction and rejectContentAction called `revalidatePath` for
+ *   NOTHING. Land had `invalidateServiceCache`, and products and export had
+ *   nothing at all — so an admin released a listing, the row changed, and the
+ *   buyer-facing page went on serving what it had cached.
+ *
+ *   THE SIBLING ALWAYS DID IT. `_reviewProductAction`, the other door onto the
+ *   same decision, revalidates three paths on every verdict. Two doors, one
+ *   decision, one of them wired.
+ *
+ *   IT WAS LATENT UNTIL #906 AND THAT IS WHY IT LANDS HERE. While
+ *   PRODUCT_INITIAL_STATUS was "active" a product was born live and this
+ *   console only ever cleared a backlog, so the missing revalidation rarely
+ *   had anything to reveal. Making the console the door EVERY listing passes
+ *   through is what turns it into "approved, and still invisible" — the exact
+ *   complaint #798's end-to-end test exists to catch, and it caught it.
+ *
+ *   Rejection revalidates the same paths: a listing pulled from sale must stop
+ *   being served just as promptly as one released starts.
+ */
+const DECISION_REVALIDATES: Record<ContentType, (id: string) => string[]> = {
+    products: (id) => [
+        "/marketplace/products",
+        "/marketplace/buyer/products",
+        `/marketplace/products/${id}`,
+        "/marketplace/seller/products",
+        "/admin/marketplace/products",
+    ],
+    land: (id) => ["/farm-nation", "/land", `/farm-nation/properties/${id}`],
+    export: (id) => ["/export", "/export/opportunities", `/export/products/${id}`],
+    //   The three ContentTypes this file does not decide. Named so the record
+    //   is exhaustive and a type added later cannot be silently forgotten.
+    certificates: () => [],
+    resources: () => [],
+    courses: () => [],
+};
+
+/** Re-render the pages a decision on this item changes. Best effort. */
+async function revalidateAfterDecision(type: ContentType, id: string): Promise<void> {
+    try {
+        const { revalidatePath } = await import("next/cache");
+        for (const path of DECISION_REVALIDATES[type]?.(id) ?? []) {
+            revalidatePath(path);
+        }
+    } catch (e) {
+        //   Never fails the decision: the row is already written, and a stale
+        //   page is a smaller problem than an approval reported as failed.
+        logger.error("[Content Approval] revalidate failed", {
+            type, id, error: e instanceof Error ? e.message : String(e),
+        });
+    }
+}
+
+/**
  * Fetches all content from various collections matching the given status.
  * Aggregates:
  * - Marketplace Products
@@ -475,6 +532,10 @@ export async function approveContentAction(
             }
         }
 
+        //   #912 And the pages that serve it are re-rendered. Without this the
+        //   row changes and the catalogue keeps serving what it cached.
+        await revalidateAfterDecision(type, id);
+
         /*
          *   #690 AND THE MEMBER IS TOLD.
          *
@@ -650,6 +711,10 @@ export async function rejectContentAction(
         if (!result.success) {
             return { success: false as const, error: result.error || "Rejection failed", data: null };
         }
+
+        //   #912 A listing pulled from sale must stop being served as promptly
+        //   as a released one starts. Same paths, same reason.
+        await revalidateAfterDecision(type, id);
 
         //   #690 AND THE MEMBER IS TOLD, WITH THE REASON — which was written
         //   onto the listing where only an admin could read it.
