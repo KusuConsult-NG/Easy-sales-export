@@ -18,6 +18,9 @@ import {
 import { inspectionRefusal } from "@/lib/land-inspection";
 import { recordAdminAction } from "@/lib/audit-log";
 import { safeToISOString, UNKNOWN_DATE_ISO } from "@/lib/date-utils";
+//   #906 In a lib, not here: every export from a "use server" file is an
+//   endpoint. See lib/content-review-stamp for the ratchet that caught it.
+import { wasReviewed } from "@/lib/content-review-stamp";
 
 /**
  *   #690 What the member calls the thing that was decided.
@@ -46,10 +49,92 @@ export interface PendingContentItem {
     status: ApprovalStatus;
     description?: string;
     metadata?: Record<string, unknown>; // Sanitized document data
+    /**
+     *   #906 DID A HUMAN EVER DECIDE THIS ITEM, OR IS IT JUST LIVE?
+     *
+     *   THE OWNER: "All the content that are currently being displayed on
+     *   marketplace and farm nation were displayed after the user got approved
+     *   and not his content being approved."
+     *
+     *   Accurate, and until now unanswerable from this console. The approved
+     *   tab listed everything purchasable and said nothing about how it got
+     *   there — a product an admin released and a product that was never held
+     *   in the first place rendered identically.
+     *
+     *   Every decision path stamps the reviewer: approveContentAction writes
+     *   `approvedBy` on products and export and `verifiedBy` on land,
+     *   _reviewProductAction writes `reviewedBy`, and the farm-nation admin
+     *   routes write `verifiedBy`. So the absence of all of them IS the fact
+     *   the owner is describing, recorded at the time rather than inferred
+     *   later.
+     *
+     *   FALSE IS NOT AN ACCUSATION. Under the old rule (PRODUCT_INITIAL_STATUS
+     *   "active", see lib/product-status) a listing went live correctly and
+     *   with nobody reviewing it. This says which ones, so they can be worked
+     *   through — not that anything was done wrong.
+     */
+    reviewed: boolean;
 }
 
 // sanitizeForSerialization() has been replaced by the shared serializeValue() from @/lib/firestore-serialize.
 // serializeValue is a superset: it also handles plain-object Timestamps (_seconds/_nanoseconds).
+
+/**
+ * The pages a content decision changes, per type.
+ *
+ *   #912 THE CONSOLE DECIDED, AND THE CATALOGUE KEPT SERVING THE OLD PAGE.
+ *
+ *   approveContentAction and rejectContentAction called `revalidatePath` for
+ *   NOTHING. Land had `invalidateServiceCache`, and products and export had
+ *   nothing at all — so an admin released a listing, the row changed, and the
+ *   buyer-facing page went on serving what it had cached.
+ *
+ *   THE SIBLING ALWAYS DID IT. `_reviewProductAction`, the other door onto the
+ *   same decision, revalidates three paths on every verdict. Two doors, one
+ *   decision, one of them wired.
+ *
+ *   IT WAS LATENT UNTIL #906 AND THAT IS WHY IT LANDS HERE. While
+ *   PRODUCT_INITIAL_STATUS was "active" a product was born live and this
+ *   console only ever cleared a backlog, so the missing revalidation rarely
+ *   had anything to reveal. Making the console the door EVERY listing passes
+ *   through is what turns it into "approved, and still invisible" — the exact
+ *   complaint #798's end-to-end test exists to catch, and it caught it.
+ *
+ *   Rejection revalidates the same paths: a listing pulled from sale must stop
+ *   being served just as promptly as one released starts.
+ */
+const DECISION_REVALIDATES: Record<ContentType, (id: string) => string[]> = {
+    products: (id) => [
+        "/marketplace/products",
+        "/marketplace/buyer/products",
+        `/marketplace/products/${id}`,
+        "/marketplace/seller/products",
+        "/admin/marketplace/products",
+    ],
+    land: (id) => ["/farm-nation", "/land", `/farm-nation/properties/${id}`],
+    export: (id) => ["/export", "/export/opportunities", `/export/products/${id}`],
+    //   The three ContentTypes this file does not decide. Named so the record
+    //   is exhaustive and a type added later cannot be silently forgotten.
+    certificates: () => [],
+    resources: () => [],
+    courses: () => [],
+};
+
+/** Re-render the pages a decision on this item changes. Best effort. */
+async function revalidateAfterDecision(type: ContentType, id: string): Promise<void> {
+    try {
+        const { revalidatePath } = await import("next/cache");
+        for (const path of DECISION_REVALIDATES[type]?.(id) ?? []) {
+            revalidatePath(path);
+        }
+    } catch (e) {
+        //   Never fails the decision: the row is already written, and a stale
+        //   page is a smaller problem than an approval reported as failed.
+        logger.error("[Content Approval] revalidate failed", {
+            type, id, error: e instanceof Error ? e.message : String(e),
+        });
+    }
+}
 
 /**
  * Fetches all content from various collections matching the given status.
@@ -101,11 +186,49 @@ export async function getContentApprovalItemsAction(
         // export catalog
         const exportStatus = status === "pending" ? "pending" : status === "approved" ? "live" : "rejected";
 
-        // 1. Marketplace Products
-        const productsQuery = db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", productStatus)
-            .limit(500);
-        const productsSnap = await productsQuery.get();
+        /*
+         *   #909 THE THREE LISTS AND THE NINE COUNTS ARE ALL STARTED HERE.
+         *
+         *   THE OWNER: "fix the slowness of the entire app".
+         *
+         *   This read products, then waited; read land, then waited; read the
+         *   export catalogue, then waited; and only then fired the nine counts
+         *   — four round-trip waves for twelve queries that share nothing. The
+         *   counts were already parallel, which is what makes the shape
+         *   recognisable: somebody parallelised the cheap part and left the
+         *   three expensive reads in series.
+         *
+         *   Same queries, same limits, same order in the rendered list — the
+         *   sort below runs over `items` after all three have landed, exactly
+         *   as it did.
+         */
+        const [productsSnap, landSnap, exportSnap, counts] = await Promise.all([
+            db.collection(COLLECTIONS.PRODUCTS)
+                .where("status", "==", productStatus)
+                .limit(500)
+                .get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS)
+                .where("status", "in", [...landStatuses])
+                .limit(500)
+                .get(),
+            db.collection(COLLECTIONS.EXPORT_CATALOG)
+                .where("status", "==", exportStatus)
+                .limit(500)
+                .get(),
+            Promise.all([
+                db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "pending").count().get(),
+                db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
+                db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "rejected").count().get(),
+                // The same sets as the list above, so the tab and its badge agree.
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
+                db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "pending").count().get(),
+                db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "live").count().get(),
+                db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "rejected").count().get(),
+            ]),
+        ]);
+
         productsSnap.forEach((doc) => {
             const data = doc.data();
             const retailPrice = data.pricingTiers?.find((t: any) => t.type === "retail")?.price || data.pricingTiers?.[0]?.price || data.price || 0;
@@ -121,15 +244,12 @@ export async function getContentApprovalItemsAction(
                 submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `Price: ₦${retailPrice.toLocaleString()} - Category: ${data.category}`,
+                reviewed: wasReviewed(data),
                 metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
 
         // 2. Land Listings
-        const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("status", "in", [...landStatuses])
-            .limit(500);
-        const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
             const data = doc.data();
             items.push({
@@ -144,15 +264,12 @@ export async function getContentApprovalItemsAction(
                 submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `${data.size} ${data.unit || 'acres'} at ${data.location?.state || data.state || 'Unknown State'}, ${data.location?.lga || data.lga || 'Unknown LGA'}`,
+                reviewed: wasReviewed(data),
                 metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
 
         // 3. Export Catalog
-        const exportQuery = db.collection(COLLECTIONS.EXPORT_CATALOG)
-            .where("status", "==", exportStatus)
-            .limit(500);
-        const exportSnap = await exportQuery.get();
         exportSnap.forEach((doc) => {
             const data = doc.data();
             items.push({
@@ -167,6 +284,7 @@ export async function getContentApprovalItemsAction(
                 submittedAt: safeToISOString(data.createdAt, UNKNOWN_DATE_ISO),
                 status: status,
                 description: `${data.category || "General"} - ${data.availableQuantity || 0} ${data.unit || "units"}`,
+                reviewed: wasReviewed(data),
                 metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
@@ -174,7 +292,7 @@ export async function getContentApprovalItemsAction(
         // Sort by submittedAt desc (ISO strings sort lexicographically)
         items.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
-        // Fast count aggregations across the three collections for global totals
+        //   #909 Counted in the same wave as the three lists above.
         const [
             pendingProductsCount,
             approvedProductsCount,
@@ -185,18 +303,7 @@ export async function getContentApprovalItemsAction(
             pendingExportCount,
             approvedExportCount,
             rejectedExportCount,
-        ] = await Promise.all([
-            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
-            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "rejected").count().get(),
-            // The same sets as the list above, so the tab and its badge agree.
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
-            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "live").count().get(),
-            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "rejected").count().get(),
-        ]);
+        ] = counts;
 
         const stats = {
             pending: pendingProductsCount.data().count + pendingLandCount.data().count + pendingExportCount.data().count,
@@ -425,6 +532,10 @@ export async function approveContentAction(
             }
         }
 
+        //   #912 And the pages that serve it are re-rendered. Without this the
+        //   row changes and the catalogue keeps serving what it cached.
+        await revalidateAfterDecision(type, id);
+
         /*
          *   #690 AND THE MEMBER IS TOLD.
          *
@@ -600,6 +711,10 @@ export async function rejectContentAction(
         if (!result.success) {
             return { success: false as const, error: result.error || "Rejection failed", data: null };
         }
+
+        //   #912 A listing pulled from sale must stop being served as promptly
+        //   as a released one starts. Same paths, same reason.
+        await revalidateAfterDecision(type, id);
 
         //   #690 AND THE MEMBER IS TOLD, WITH THE REASON — which was written
         //   onto the listing where only an admin could read it.

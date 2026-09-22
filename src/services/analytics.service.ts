@@ -226,7 +226,12 @@ export class AnalyticsService implements AnalyticsServiceContract {
          *   same file, four lines above another raw count. One of two. The rule
          *   is in lib/user-population.ts now and both read it.
          */
-        const totalUsers = await countLivePeople(db.collection(COLLECTIONS.USERS));
+        //   #905 STARTED, NOT AWAITED. This was `await countLivePeople(...)`
+        //   on its own line, and the revenue aggregate forty lines below could
+        //   not begin until it came back — two round trips in series for two
+        //   reads that share nothing. `countLivePeople` is itself three
+        //   parallel reads, so the wait was for the slowest of those.
+        const totalUsersPromise = countLivePeople(db.collection(COLLECTIONS.USERS));
 
         let totalRevenue = 0;
         let totalTransactions = 0;
@@ -301,7 +306,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
         return {
             totalRevenue,
             totalTransactions,
-            totalUsers,
+            totalUsers: await totalUsersPromise,
             revenueAvailable: revenueSource !== null,
             revenueSource,
             revenueIsPartial,
@@ -577,6 +582,136 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const thirtyDaysAgo = new Date(Date.now() - RECENT_ACTIVITY_DAYS * 24 * 60 * 60 * 1000);
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+        //   Hoisted: it depends on `options` alone, and the work below needs it.
+        const isDateFiltered = !!(options?.dateFrom || options?.dateTo);
+
+        /**
+         *   #905 SEVEN WAVES OF ROUND TRIPS, ONE AFTER ANOTHER, FOR WORK THAT
+         *   SHARED NOTHING.
+         *
+         *   THE OWNER: "fix the dashboard counts. still slow."
+         *
+         *   Every group below was already internally parallel — somebody had
+         *   done that part — and each group was WAITED OUT BEFORE THE NEXT ONE
+         *   WAS STARTED. Counted from the code as it stood:
+         *
+         *       1  activeUsers + 4 safeCounts                        5 trips
+         *       2  getPlatformMetrics + getGlobalPendingApprovals    12 trips
+         *       3  revenue by month                                   6 trips
+         *       4  user growth by month                               6 trips
+         *       5  getModuleRegistrationStats                    9 (cached)
+         *       6  recent transactions                                1 trip
+         *       7  getUserSegmentsCached                              1 trip
+         *
+         *   So the page cost SEVEN network latencies end to end, not one, and
+         *   five of those seven waves were waiting on a single query apiece.
+         *   Nothing in waves 3-7 reads anything waves 1-2 produce: the month
+         *   windows come from `lastNMonths(6)` on the line above, the
+         *   transaction filter from `options`, and the other two take no
+         *   argument at all.
+         *
+         *   THE QUERIES ARE UNTOUCHED. Same collections, same filters, same
+         *   aggregates, same per-month try/catch, same `unavailableFigures` and
+         *   `unavailableMonths` bookkeeping. What changes is only WHEN they are
+         *   started. Every figure on the dashboard is the same figure.
+         *
+         *   AND THE CONCURRENCY IS NOT A GUESS. #473 measured this exact page
+         *   against real PostgREST with 50,009 users and recorded the split:
+         *   "count-only (HEAD) 29 calls, 1,415 ms — correct and cheap", against
+         *   67 row-returning calls costing 8,795 ms and 4.6 MB. Almost
+         *   everything started here is a HEAD count. The two reads that do
+         *   return rows are bounded — `limit(15)` on the transactions, and
+         *   countLivePeople's superseded scan, which was already running in
+         *   wave 2.
+         *
+         *   `Promise.allSettled` AT THE POINT OF CREATION, not at the await, for
+         *   the three that can reject: a promise created here and awaited eight
+         *   statements later has a window in which its rejection is unhandled,
+         *   and Node treats that as a process-level event. Capturing the
+         *   settlement synchronously closes the window; the await sites re-throw
+         *   exactly what they threw before, so the error behaviour is unchanged.
+         */
+        const monthlyRevenuePromise = Promise.all(months.map(async ({ label, start, end }) => {
+            try {
+                const snap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                    .where("status", "==", "completed")
+                    .where("processedAt", ">=", start)
+                    .where("processedAt", "<=", end)
+                    .aggregate({
+                        total: AggregateField.sum("amount")
+                    })
+                    .get();
+                const total = Number(snap.data().total) || 0;
+                return { month: label, revenue: total, failed: false };
+            } catch (e) {
+                logger.error("[DashboardStats] monthly revenue aggregate failed", {
+                    month: label,
+                    error: e instanceof Error ? e.message : String(e),
+                });
+                return { month: label, revenue: 0, failed: true };
+            }
+        }));
+
+        const userGrowthPromise = Promise.all(months.map(async ({ label, start, end }) => {
+            try {
+                const snap = await db
+                    .collection(COLLECTIONS.USERS)
+                    .where("createdAt", ">=", start)
+                    .where("createdAt", "<=", end)
+                    .count()
+                    .get();
+                return { month: label, users: snap.data().count ?? 0, failed: false };
+            } catch (e) {
+                logger.error("[DashboardStats] user growth count failed", {
+                    month: label,
+                    error: e instanceof Error ? e.message : String(e),
+                });
+                return { month: label, users: 0, failed: true };
+            }
+        }));
+
+        /**
+         *   AND WAVE 2 IS STARTED HERE TOO, which is what took the page from
+         *   two rounds to one. `getPlatformMetrics` and
+         *   `getGlobalPendingApprovals` sat inside the branch below, behind the
+         *   `await` on wave 1 — eleven reads that wave 1 does not feed.
+         *
+         *   ONLY THE BRANCH THAT WILL BE READ IS STARTED. Firing both and
+         *   discarding one would also give one round, and it would cost five
+         *   extra reads on every plain load — one of them countLivePeople's
+         *   unbounded scan of superseded rows. `isDateFiltered` is known here,
+         *   so there is nothing to guess: the branch is chosen at start time
+         *   and the code below reads whichever promise exists.
+         */
+        const filteredMetricsPromise = !isDateFiltered ? null : Promise.allSettled([
+            db.collection(COLLECTIONS.USERS)
+                .where("createdAt", ">=", filterFrom)
+                .where("createdAt", "<=", filterTo)
+                .count()
+                .get(),
+            this.getPlatformMetrics(db, { dateFrom: filterFrom, dateTo: filterTo }),
+        ]);
+        const plainMetricsPromise = isDateFiltered
+            ? null
+            : Promise.allSettled([this.getPlatformMetrics(db)]);
+        const pendingApprovalsPromise = Promise.allSettled([this.getGlobalPendingApprovals(db)]);
+
+        const moduleStatsPromise = Promise.allSettled([this.getModuleRegistrationStats()]);
+        const userSegmentsPromise = Promise.allSettled([this.getUserSegmentsCached()]);
+
+        // Recent transactions — filters must come before orderBy to avoid
+        // Firestore composite index requirements on inequality fields.
+        const recentTransactionsPromise = Promise.allSettled([(async () => {
+            let txQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
+            if (isDateFiltered) {
+                txQuery = txQuery
+                    .where("processedAt", ">=", filterFrom)
+                    .where("processedAt", "<=", filterTo);
+            }
+            txQuery = txQuery.orderBy("processedAt", "desc");
+            return txQuery.limit(15).get();
+        })()]);
+
         const [
             activeUsersSnap,
             pendingEscrowsCount,
@@ -591,7 +726,6 @@ export class AnalyticsService implements AnalyticsServiceContract {
             safeCount(db.collection(COLLECTIONS.AUDIT_LOGS).where("timestamp", ">=", twentyFourHoursAgo)),
         ]);
 
-        const isDateFiltered = !!(options?.dateFrom || options?.dateTo);
 
         /**
          *   #753 EVERY HEADLINE FIGURE COLLAPSED A FAILED READ TO ZERO. ONE OF
@@ -669,14 +803,11 @@ export class AnalyticsService implements AnalyticsServiceContract {
         let revenueIsPartial = false;
 
         if (isDateFiltered) {
-            const [newUsersSnap, metricsResult, pendingRes] = await Promise.allSettled([
-                db.collection(COLLECTIONS.USERS)
-                    .where("createdAt", ">=", filterFrom)
-                    .where("createdAt", "<=", filterTo)
-                    .count()
-                    .get(),
-                this.getPlatformMetrics(db, { dateFrom: filterFrom, dateTo: filterTo }),
-                this.getGlobalPendingApprovals(db),
+            const [[newUsersSnap, metricsResult], [pendingRes]] = await Promise.all([
+                //   Non-null on this branch by construction — it is created
+                //   exactly when `isDateFiltered` is true.
+                filteredMetricsPromise!,
+                pendingApprovalsPromise,
             ]);
             totalUsers = settled("totalUsers", newUsersSnap, (v) => v.data().count ?? 0);
             if (metricsResult.status === "fulfilled") {
@@ -712,9 +843,12 @@ export class AnalyticsService implements AnalyticsServiceContract {
             //
             //   One rule: a figure that could not be read is unavailable, and
             //   the figures that WERE read are still worth showing.
-            const [metricsResult, pendingResult] = await Promise.allSettled([
-                this.getPlatformMetrics(db),
-                this.getGlobalPendingApprovals(db),
+            const [[metricsResult], [pendingResult]] = await Promise.all([
+                //   Non-null on this branch by construction: it is created
+                //   exactly when `isDateFiltered` is false, which is the
+                //   condition that reaches here.
+                plainMetricsPromise!,
+                pendingApprovalsPromise,
             ]);
             if (metricsResult.status === "fulfilled") {
                 totalUsers = metricsResult.value.totalUsers;
@@ -794,28 +928,11 @@ export class AnalyticsService implements AnalyticsServiceContract {
             //   whole months. The flag existed for precisely this and was set to
             //   the wrong value on the one path that needed it.
             const failedMonths: string[] = [];
-            const revenuePromises = months.map(async ({ label, start, end }) => {
-                try {
-                    const snap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                        .where("status", "==", "completed")
-                        .where("processedAt", ">=", start)
-                        .where("processedAt", "<=", end)
-                        .aggregate({
-                            total: AggregateField.sum("amount")
-                        })
-                        .get();
-                    const total = Number(snap.data().total) || 0;
-                    return { month: label, revenue: total, failed: false };
-                } catch (e) {
-                    logger.error("[DashboardStats] monthly revenue aggregate failed", {
-                        month: label,
-                        error: e instanceof Error ? e.message : String(e),
-                    });
-                    return { month: label, revenue: 0, failed: true };
-                }
-            });
-
-            const settled = await Promise.all(revenuePromises);
+            //   #905 Started at the top of the method. The aggregates are
+            //   unchanged — same six windows, same exactness, same per-month
+            //   failure handling — they are simply no longer the fourth thing
+            //   this method waits for in a row.
+            const settled = await monthlyRevenuePromise;
             for (const m of settled) if (m.failed) failedMonths.push(m.month);
             revenueByMonth = settled.map(({ month, revenue }) => ({ month, revenue }));
 
@@ -832,31 +949,18 @@ export class AnalyticsService implements AnalyticsServiceContract {
         //   The same shape as the revenue series above: `catch (_e)` returned
         //   `{ users: 0 }`, so a failed count drew a month in which nobody
         //   joined. No logger either — #308's class.
-        const userGrowthSettled = await Promise.all(
-            months.map(async ({ label, start, end }) => {
-                try {
-                    const snap = await db
-                        .collection(COLLECTIONS.USERS)
-                        .where("createdAt", ">=", start)
-                        .where("createdAt", "<=", end)
-                        .count()
-                        .get();
-                    return { month: label, users: snap.data().count ?? 0, failed: false };
-                } catch (e) {
-                    logger.error("[DashboardStats] user growth count failed", {
-                        month: label,
-                        error: e instanceof Error ? e.message : String(e),
-                    });
-                    return { month: label, users: 0, failed: true };
-                }
-            })
-        );
+        //   #905 The six counts are started at the top of the method now, in
+        //   the same breath as the six revenue aggregates above. They shared
+        //   nothing, and each set was waited out before the other began.
+        const userGrowthSettled = await userGrowthPromise;
         const userGrowthByMonth = userGrowthSettled.map(({ month, users }) => ({ month, users }));
         for (const m of userGrowthSettled) if (m.failed) unavailableMonths.push(m.month);
         const userGrowthIsPartial = userGrowthSettled.some((m) => m.failed);
 
-        // Module registration usage stats
-        const canonicalStats = await this.getModuleRegistrationStats();
+        // Module registration usage stats — started at the top of the method (#905).
+        const [moduleStatsResult] = await moduleStatsPromise;
+        if (moduleStatsResult.status === "rejected") throw moduleStatsResult.reason;
+        const canonicalStats = moduleStatsResult.value;
         const moduleUsage = [
             { module: "WAVE Apps", count: canonicalStats.wave },
             { module: "Briefings", count: canonicalStats.waveBriefing },
@@ -869,18 +973,14 @@ export class AnalyticsService implements AnalyticsServiceContract {
             { module: "Export Onboarding", count: canonicalStats.exportOnboarding },
         ].filter((m) => m.count > 0);
 
-        // Recent transactions — filters must come before orderBy to avoid
-        // Firestore composite index requirements on inequality fields.
+        //   The recent-transaction read itself was started at the top of the
+        //   method (#905); this is where its rows are shaped.
         const recentTransactions: AnalyticsData["recentTransactions"] = [];
         try {
-            let txQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
-            if (isDateFiltered) {
-                txQuery = txQuery
-                    .where("processedAt", ">=", filterFrom)
-                    .where("processedAt", "<=", filterTo);
-            }
-            txQuery = txQuery.orderBy("processedAt", "desc");
-            const [txSnap] = await Promise.allSettled([txQuery.limit(15).get()]);
+            //   #905 The query was BUILT AND FIRED HERE, after five earlier
+            //   waves had each been waited out. It is started at the top of the
+            //   method now; this is where its answer is read.
+            const [txSnap] = await recentTransactionsPromise;
 
             const allDocs: any[] = [];
             if (txSnap.status === "fulfilled") {
@@ -913,8 +1013,10 @@ export class AnalyticsService implements AnalyticsServiceContract {
             logger.error("Failed to fetch unified recent transactions in service:", e);
         }
 
-        // User segments
-        const userSegments = await this.getUserSegmentsCached();
+        // User segments — started at the top of the method (#905).
+        const [userSegmentsResult] = await userSegmentsPromise;
+        if (userSegmentsResult.status === "rejected") throw userSegmentsResult.reason;
+        const userSegments = userSegmentsResult.value;
 
         return {
             platformOverview: {
@@ -1401,10 +1503,85 @@ export class AnalyticsService implements AnalyticsServiceContract {
 // ─────────────────────────────────────────────────────────────────────────────
 // Cached module registration stats implementation
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   #909 ALL EIGHT MODULE FIGURES IN ONE TABLE SCAN, WHEN THE DATABASE CAN.
+ *
+ *   THE OWNER: "fix the slowness of the entire app, the main dashboard takes
+ *   more than 10 seconds to load".
+ *
+ *   The eight queries below are each an OR of a JSONB path and a roles
+ *   containment, and nothing indexes
+ *   `raw_data->'serviceRegistrations'-><module>->>'status'`. An OR cannot be
+ *   served by an index on one arm, so each is a SEQUENTIAL SCAN — and worse
+ *   than a scan, because reading through `raw_data` DETOASTS the whole ~2.5 kB
+ *   document per row to get one short string. That is 044 and 045's finding,
+ *   which this path never learned from.
+ *
+ *   MEASURED on a local PostgreSQL 16 with 42,845 rows and raw_data genuinely
+ *   in TOAST (heap 8.6 MB, TOAST 114 MB — production is 106 MB total):
+ *
+ *       one of the eight            129,642 buffers     162 ms
+ *       eight, as the page runs   ~1,037,000 buffers   ~1.3 s
+ *       migration 049, all eight        1,262 buffers      42 ms
+ *
+ *   822x less buffer traffic, and ONE round trip instead of eight. Warm. On a
+ *   cold container those million buffers are disk reads, and the production log
+ *   carries three "Starting Container" events in a single session.
+ *
+ *   IT FALLS BACK, and that is not ceremony: migration 022's nine indexes were
+ *   absent from production for months without anybody noticing, so a code
+ *   deploy landing before its migration is the normal case here, not the
+ *   exception. Absent the function, the eight queries run exactly as before —
+ *   slowly, and correctly — and the log names the file that fixes it. #473 set
+ *   this pattern for count_user_segments and the reasoning is quoted there.
+ */
+async function countModuleRegistrationsInDatabase(): Promise<Omit<ModuleRegistrationStats, "waveBriefing"> | null> {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+
+    const { data, error } = await supabaseAdmin.rpc("count_module_registrations");
+
+    if (error) {
+        logger.error(
+            "[ANALYTICS SERVICE] count_module_registrations unavailable — falling back to eight " +
+            "sequential scans of the users table, which is #909. Apply " +
+            "supabase/migrations/049_count_module_registrations.sql. Reason: " +
+            (error.message || "no message"),
+        );
+        return null;
+    }
+
+    //   Supabase returns a one-row set for a TABLE-returning function.
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+
+    return {
+        wave: Number(row.wave) || 0,
+        academy: Number(row.academy) || 0,
+        cooperatives: Number(row.cooperatives) || 0,
+        cooperativeOnboarding: Number(row.cooperative_onboarding) || 0,
+        farmNation: Number(row.farm_nation) || 0,
+        exportHub: Number(row.export_hub) || 0,
+        exportOnboarding: Number(row.export_onboarding) || 0,
+        marketplace: Number(row.marketplace) || 0,
+    };
+}
+
 const fetchModuleRegistrationStatsCached = unstable_cache(
     async (): Promise<ModuleRegistrationStats> => {
         const db = getAdminDb();
         const { supabaseAdmin } = await import("@/lib/supabase");
+
+        /*
+         *   #909 The one-scan path, and the WAVE Briefing count beside it —
+         *   that figure is a plain count of a dedicated table, has always been
+         *   cheap, and is not part of the users scan.
+         */
+        const [briefingCount, oneScan] = await Promise.all([
+            safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
+            countModuleRegistrationsInDatabase(),
+        ]);
+
+        if (oneScan) return { ...oneScan, waveBriefing: briefingCount };
 
         /*
          *   #756 — the accepted status list comes from ONE place now. It was
@@ -1420,8 +1597,9 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
         const reg = (module: string) => `raw_data->serviceRegistrations->${module}->>status.in.${ST}`;
         const anyRole = (...roles: string[]) => roles.map((r) => `roles.cs.{"${r}"}`).join(",");
 
+        //   THE FALLBACK. Reached only when 049 is not applied.
         const [
-            waveBriefing,
+            waveBriefingFallback,
             waveRes,
             academyRes,
             coopsRes,
@@ -1536,7 +1714,7 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
 
         return {
             wave: waveRes.count ?? 0,
-            waveBriefing,
+            waveBriefing: waveBriefingFallback,
             academy: academyRes.count ?? 0,
             cooperatives: coopsRes.count ?? 0,
             cooperativeOnboarding: coopOnbRes.count ?? 0,

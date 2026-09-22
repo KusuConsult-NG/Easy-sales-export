@@ -434,6 +434,28 @@ const EXPECTED = [
              "table rewritten, no row touched, every statement IF NOT EXISTS " +
              "on 022's own names, so it is a no-op wherever 022 was applied.",
     },
+    {
+        n: "049",
+        why: "count_module_registrations — the admin dashboard's module usage " +
+             "breakdown in ONE table scan. analytics.service issued EIGHT " +
+             "count queries against users, each an OR of a JSONB path and a " +
+             "roles containment; nothing indexes the JSONB path and an OR " +
+             "cannot be served by an index on one arm, so all eight were " +
+             "sequential scans that ALSO detoasted the whole of raw_data per " +
+             "row to read one short string — 044 and 045's finding, which " +
+             "this path never learned from. Measured at 42,845 rows with " +
+             "raw_data genuinely in TOAST: one of the eight 129,642 buffers " +
+             "/ 162 ms, all eight ~1,037,000 / ~1.3 s, this function 1,262 / " +
+             "42 ms. Reads 045's generated service_regs column, so no row is " +
+             "detoasted. MUST come after 045, which adds that column. The " +
+             "status lists are stated here AND in " +
+             "lib/module-registration-status.ts, held together by " +
+             "__tests__/pg/the-module-counts-agree-with-the-javascript, " +
+             "which rebuilds all eight predicates from the TypeScript and " +
+             "fails on a single disagreement. analytics.service falls back " +
+             "to the eight queries when the function is absent, so a deploy " +
+             "landing before this migration is slow rather than broken.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

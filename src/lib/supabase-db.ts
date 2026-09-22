@@ -462,10 +462,107 @@ function buildGenericRow(collection: string, id: string, data: Record<string, an
  *   "no message, code, details or hint" is a fact about the error, and an empty
  *   string looks like a truncated log line.
  */
+/**
+ *   #907 AND THEN IT SAID "no message, code, details or hint", REPEATEDLY.
+ *
+ *   THE OWNER, from the live container log:
+ *
+ *       [DashboardStats] activeUsers could not be read
+ *         {"reason":"Error: [supabase-db] count users: no message, code,
+ *          details or hint"}
+ *
+ *   #710's sentence did its job — it is not a truncated line, it is an error
+ *   that genuinely carried none of PostgREST's four fields — and having done
+ *   it, it stops. Eight of these arrived inside a three-minute window between a
+ *   container start and a container stop, which is the signature of a socket
+ *   dying underneath the request rather than of a query going wrong. That is a
+ *   guess, and it stayed a guess for days because the log could not settle it.
+ *
+ *   THE REASON IS USUALLY PRESENT AND UNREAD. supabase-js builds a
+ *   PostgrestError from the RESPONSE BODY; when the fetch itself fails there is
+ *   no body, so the four fields are empty and the real cause sits one level
+ *   down in `cause` — Node's undici puts `ECONNRESET`, `ETIMEDOUT`,
+ *   `UND_ERR_SOCKET` and the like there. Nothing looked.
+ *
+ *   So the fallback path now says what the object IS, in this order: the
+ *   error's own name, its `cause` chain, the HTTP status when the caller has
+ *   one, and finally its own enumerable keys. A log line naming ECONNRESET
+ *   ends the argument about cold starts; a log line naming 57014 ends the
+ *   argument about slow queries. Either is worth more than a correct statement
+ *   that nothing is known.
+ */
+function describeErrorCause(value: unknown, depth = 0): string {
+    if (!value || depth > 3) return '';
+    if (typeof value === 'string') return value.trim();
+
+    const e = value as { name?: unknown; message?: unknown; code?: unknown; errno?: unknown; cause?: unknown };
+    const bits = [
+        typeof e.code === 'string' && e.code.trim() ? e.code.trim() : '',
+        typeof e.errno === 'number' ? `errno ${e.errno}` : '',
+        typeof e.message === 'string' && e.message.trim() ? e.message.trim() : '',
+    ].filter(Boolean);
+
+    if (!bits.length && typeof e.name === 'string' && e.name.trim()) bits.push(e.name.trim());
+
+    const deeper = describeErrorCause(e.cause, depth + 1);
+    if (deeper) bits.push(`caused by ${deeper}`);
+
+    return bits.join(' ');
+}
+
+/**
+ *   #910 AND WHEN THE "MESSAGE" IS TEN KILOBYTES OF CLOUDFLARE HTML.
+ *
+ *   THE OWNER'S LOG, every entry for two solid minutes:
+ *
+ *       [supabase-db] query feature_toggles: <!DOCTYPE html> …
+ *       <title>supabase.co | 522: Connection timed out</title>
+ *       … Browser: Working · Cloudflare: Working · Host: Error …
+ *
+ *   supabase-js puts the RESPONSE BODY in `error.message`, and when the origin
+ *   is down that body is Cloudflare's error page — about ten kilobytes of
+ *   markup, repeated once per failed read, twice per entry because the stack
+ *   carries it too. Forty of those is most of a log window, and the one fact
+ *   that matters is in the `<title>`.
+ *
+ *   IT IS ALSO THE WHOLE DIAGNOSIS. A 522 is not a slow query and not a bug in
+ *   this adapter: Cloudflare reached the Supabase host and the host never
+ *   finished the request. Cloudflare's own page says why — "something on your
+ *   server is hogging resources" — which is what #909 measured at ~1,037,000
+ *   buffers per admin dashboard load.
+ *
+ *   So the page is reduced to its title and its error code, and the reader is
+ *   told where the failure was, rather than being handed the page to read.
+ */
+function summariseHtmlErrorPage(message: string): string | null {
+    const looksLikeHtml = /^\s*<(!DOCTYPE|html)\b/i.test(message) || message.includes('<!DOCTYPE html>');
+    if (!looksLikeHtml) return null;
+
+    const title = /<title>([^<]{1,200})<\/title>/i.exec(message)?.[1]?.trim();
+    const cfCode = /Error code (\d{3})/i.exec(message)?.[1];
+    const ray = /Cloudflare Ray ID: <strong[^>]*>([0-9a-f]{8,32})</i.exec(message)?.[1];
+
+    const bits = [
+        title || 'an HTML error page',
+        cfCode ? `(Cloudflare ${cfCode} — the database host did not finish the request; this is the ORIGIN failing, not a query)` : '',
+        ray ? `ray ${ray}` : '',
+    ].filter(Boolean);
+
+    return `${bits.join(' ')} [${message.length} bytes of HTML suppressed]`;
+}
+
 function describeDbError(
     error: { message?: string | null; code?: string | null; details?: string | null; hint?: string | null } | null | undefined,
+    response?: { status?: number | null; statusText?: string | null } | null,
 ): string {
     if (!error) return 'no error object';
+
+    //   #910 An HTML page is not a message. Summarise it before anything else,
+    //   or ten kilobytes of Cloudflare markup lands in the log forty times.
+    if (typeof error.message === 'string' && error.message.length > 200) {
+        const summary = summariseHtmlErrorPage(error.message);
+        if (summary) return summary;
+    }
 
     const parts = [error.message, error.details, error.hint]
         .map((p) => (typeof p === 'string' ? p.trim() : ''))
@@ -475,8 +572,51 @@ function describeDbError(
     if (parts.length && code) return `${code} ${parts.join(' — ')}`;
     if (parts.length) return parts.join(' — ');
     if (code) return `${code} (no message)`;
-    return 'no message, code, details or hint';
+
+    //   #907 NONE OF THE FOUR. Salvage whatever the object does carry rather
+    //   than reporting only that it carries nothing.
+    const salvaged: string[] = [];
+
+    const cause = describeErrorCause(error);
+    if (cause) salvaged.push(cause);
+
+    const status = response && typeof response.status === 'number' ? response.status : null;
+    if (status !== null) {
+        const text = response && typeof response.statusText === 'string' && response.statusText.trim()
+            ? ` ${response.statusText.trim()}`
+            : '';
+        //   status 0 is supabase-js's "the request never completed" — no HTTP
+        //   response at all, which is itself the finding.
+        salvaged.push(status === 0 ? 'no HTTP response (status 0)' : `HTTP ${status}${text}`);
+    }
+
+    if (!salvaged.length) {
+        try {
+            const keys = Object.keys(error as object);
+            if (keys.length) salvaged.push(`error keys: ${keys.join(', ')}`);
+        } catch { /* an exotic object; the sentence below still applies */ }
+    }
+
+    return salvaged.length
+        ? `no message, code, details or hint — ${salvaged.join('; ')}`
+        : 'no message, code, details or hint';
 }
+
+/**
+ *   #907 EXPORTED FOR THE TEST, and that is a change of position worth stating.
+ *
+ *   #710's suite kept its own COPY of this function, under a note explaining
+ *   why: "not exported — deliberately, it is an internal formatting detail",
+ *   with a source assertion to tie the two together. That was a reasonable
+ *   trade for fifteen lines of string joining.
+ *
+ *   It is not a reasonable trade now. The fallback path walks a `cause` chain,
+ *   reads an HTTP status and enumerates keys, and a copy of THAT is a second
+ *   implementation that can pass its own tests while the real one is wrong —
+ *   the exact shape this audit keeps finding under the name "two statements of
+ *   one rule". The formatting stays internal; the function is reachable.
+ */
+export const __describeDbErrorForTests = describeDbError;
 
 async function supabaseUpsert(
     collection: string,
@@ -2219,8 +2359,11 @@ export class SupabaseQuery {
                     query = applyFilter(query, tableName, this._collection, filter);
                 }
 
-                const { count, error } = await query;
-                if (error) throw new Error(`[supabase-db] count ${this._collection}: ${describeDbError(error)}`);
+                //   #907 The response, not only its error half: when the fetch
+                //   never completed, the status is where that fact lives.
+                const res = await query;
+                const { count, error } = res;
+                if (error) throw new Error(`[supabase-db] count ${this._collection}: ${describeDbError(error, res)}`);
                 
                 return {
                     data() {

@@ -102,8 +102,26 @@ describe('#854 — the role column reports what the account can do', () => {
          */
         const src = code(ACTION);
 
-        expect(src).toContain('verificationData.accountType === "both"');
-        expect(src).toContain('arrayUnion("seller", "marketplace_buyer")');
+        /*
+         *   #908 THE RULE MOVED, AND THAT IS THE POINT OF THIS ASSERTION.
+         *
+         *   It pinned the ternary's source. The ternary is gone because #844's
+         *   fix had landed on only ONE of the two approval doors — the server
+         *   action here, while the admin UI calls the API route, which granted
+         *   "seller" regardless. So the rule is stated once in
+         *   lib/marketplace-approval-roles and both doors ask it.
+         *
+         *   What this test is guarding is unchanged: a sweep that deleted every
+         *   mention of accountType from this file must still fail.
+         */
+        expect(src).toContain('rolesGrantedOnSellerApproval(verificationData.accountType)');
+        expect(src).toContain('accountTypeOnSellerApproval(verificationData.accountType)');
+
+        //   And the rule it delegates to really widens the grant — a helper
+        //   that returned ["seller"] for everything would pass the two
+        //   assertions above and undo the finding.
+        const { rolesGrantedOnSellerApproval } = require('@/lib/marketplace-approval-roles');
+        expect(rolesGrantedOnSellerApproval('both')).toContain('marketplace_buyer');
     });
 
     it('AND THE FILTER STILL TREATS "both" AS BOTH', () => {

@@ -39,7 +39,8 @@ import NotificationCenter from "./NotificationCenter";
 import { hasAppAccess } from "@/lib/role-app-mapping";
 import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
-import { LAND_SELLER_ROLES } from "@/lib/role-app-mapping";
+import { LAND_SELLER_ROLES, MARKETPLACE_BUYER_ROLES } from "@/lib/role-app-mapping";
+import { navItemAllowedForRoles } from "@/lib/nav-visibility";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getMyUnreadMessageCount } from "@/app/actions/my-data";
 import { usePolling } from "@/hooks/usePolling";
@@ -223,6 +224,22 @@ const MARKETPLACE_NAV: NavItem[] = [
      */
     { name: "Village Market",    href: "/marketplace/village-market", icon: Zap, sellerOnly: true },
     { name: "Escrow",            href: "/escrow",                     icon: Lock },
+    /**
+     *   #908 THE BUYER DASHBOARD WAS NOT IN THE NAVIGATION.
+     *
+     *   THE OWNER: "if they apply as both then they see the 2 dashboards?"
+     *
+     *   They did not. "Seller Dashboard" is here, gated; the buyer's own
+     *   dashboard had no entry, so the only route to it was the redirect at
+     *   /marketplace/dashboard — which sends a `both` account to the SELLER
+     *   side. One of the two dashboards, and no link to the other.
+     *
+     *   Gated the mirror of its sibling, which is what makes the three cases
+     *   the owner asked about come out right: a seller-only account sees the
+     *   seller entry, a buyer-only account sees this one, and an account
+     *   holding both roles sees both.
+     */
+    { name: "Buyer Dashboard",   href: "/marketplace/buyer/dashboard", icon: LayoutDashboard, rolesAny: MARKETPLACE_BUYER_ROLES },
     { name: "Seller Dashboard",  href: "/marketplace/seller",         icon: Store,    sellerOnly: true },
     { name: "Quote Requests",    href: "/marketplace/seller/quotes",  icon: FileText, sellerOnly: true },
     /**
@@ -471,7 +488,6 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     const userId   = session?.user?.id;
     const roles    = (session?.user?.roles as UserRole[]) || [];
     const userName = session?.user?.name || "User";
-    const isSeller = roles.includes("seller");
 
     // ── Module detection ──────────────────────────────────────────────────
     const moduleKey    = detectModuleKey(pathname || "");
@@ -495,18 +511,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     // ── Nav items ────────────────────────────────────────────────────────
     const rawNav  = getModuleNav(moduleKey);
     const navItems = rawNav.filter(item => {
-        // Role check for marketplace seller items
-        if (item.sellerOnly && !isSeller) return false;
-        //   #858 The general form. Same direction as sellerOnly above — an item
-        //   naming roles is hidden from somebody holding none of them.
-        //   Compared as plain strings: `roles` is typed UserRole[], and the
-        //   module vocabularies this gates on are the roles the onboarding
-        //   actions actually grant, not a union maintained beside them.
-        if (item.rolesAny
-            && !item.rolesAny.some((r) => (roles as readonly string[]).includes(r))) return false;
-
-        // Access check for cross-module items (like in Escrow)
-        if (item.moduleAccess && !hasAppAccess(roles, item.moduleAccess as any)) return false;
+        if (!navItemAllowedForRoles(item, roles)) return false;
 
         // Hide "Browse Courses" for paid academy plans
         if (item.href === "/academy/courses") {

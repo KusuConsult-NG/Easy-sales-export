@@ -233,7 +233,20 @@ describe('a seller is not approved before they can sell', () => {
     it('the writes it retries are idempotent', () => {
         // Why a retry is safe: a merge and an arrayUnion.
         expect(approve).toContain('{ merge: true }');
-        expect(approve).toContain('FieldValue.arrayUnion("seller")');
+        /*
+         *   #908 The union is now over the whole grant rather than the one
+         *   literal — the route reads lib/marketplace-approval-roles, because
+         *   a `both` applicant approved here came out with the selling role
+         *   alone. Still an arrayUnion, which is what idempotence rests on.
+         *
+         *   AND THE GUARD AROUND IT MATTERED TOO: the old shape skipped the
+         *   role write entirely when `seller` was already held, so a retry
+         *   could never repair an account missing the buyer half. Asserted, not
+         *   assumed — the union is reached whenever ANY granted role is absent.
+         */
+        expect(approve).toContain('FieldValue.arrayUnion(...grantedRoles)');
+        expect(approve).toContain('rolesGrantedOnSellerApproval');
+        expect(approve).toContain('grantedRoles.filter((r) => !existingRoles.includes(r))');
     });
 
     it('still does the work it exists to do', () => {

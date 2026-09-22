@@ -255,21 +255,21 @@ describe('#710 — and a database error that says nothing is not a log line', ()
      * Executed against the real helper rather than asserted on source, because
      * the property is about what it PRODUCES for each error shape.
      */
-    const describeDbError = (err: any): string => {
-        //   Re-derived from the module under test would be ideal, but it is not
-        //   exported — deliberately, it is an internal formatting detail. The
-        //   contract asserted here is the one the source implements, and the
-        //   source assertion below is what ties the two together.
-        if (!err) return 'no error object';
-        const parts = [err.message, err.details, err.hint]
-            .map((p: unknown) => (typeof p === 'string' ? p.trim() : ''))
-            .filter(Boolean);
-        const code = typeof err.code === 'string' && err.code.trim() ? `[${err.code.trim()}]` : '';
-        if (parts.length && code) return `${code} ${parts.join(' — ')}`;
-        if (parts.length) return parts.join(' — ');
-        if (code) return `[${err.code.trim()}] (no message)`;
-        return 'no message, code, details or hint';
-    };
+    /*
+     *   #907 THE REAL FUNCTION, NOT A COPY OF IT.
+     *
+     *   This block used to re-implement describeDbError here, under a note
+     *   saying the module does not export it: "deliberately, it is an internal
+     *   formatting detail", with the source assertion below tying the two
+     *   together. Fine for fifteen lines of string joining.
+     *
+     *   Not fine now. The fallback walks a `cause` chain and reads an HTTP
+     *   status, and a copy of that is a second implementation that can pass
+     *   these assertions while the shipped one is wrong. So supabase-db exports
+     *   it under a test-facing name and this reads the real thing.
+     */
+    const { __describeDbErrorForTests: describeDbError } =
+        require('@/lib/supabase-db') as { __describeDbErrorForTests: (e: any, r?: any) => string };
 
     it('A STATEMENT TIMEOUT WITH NO MESSAGE STILL NAMES ITSELF', () => {
         //   THE case from the log: message empty, code present.
@@ -296,6 +296,89 @@ describe('#710 — and a database error that says nothing is not a log line', ()
             .toBe('[42501] boom — row-level security');
     });
 
+    it('#907 — A FETCH THAT NEVER COMPLETED NAMES THE SOCKET ERROR', () => {
+        /*
+         *   THE OWNER'S LOG, eight times in a three-minute window between a
+         *   container start and a container stop:
+         *
+         *       [supabase-db] count users: no message, code, details or hint
+         *
+         *   supabase-js builds its PostgrestError from the RESPONSE BODY, and a
+         *   fetch that never completed has no body — so all four fields are
+         *   empty and the real reason sits in `cause`, where undici puts it.
+         *   Nothing looked, so "is this a slow query or a dying container" went
+         *   unanswered for days.
+         */
+        const fetchFailed: any = new Error('');
+        fetchFailed.cause = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET', errno: -104 });
+
+        const line = describeDbError(fetchFailed, { status: 0, statusText: '' });
+
+        expect(line).toContain('ECONNRESET');
+        expect(line).toContain('no HTTP response (status 0)');
+    });
+
+    it('#907 — AND AN HTTP FAILURE WITH AN EMPTY BODY NAMES ITS STATUS', () => {
+        //   The other empty-error shape: a real response, no parseable body.
+        //   A 503 from the pooler and a dead socket are different problems and
+        //   read identically before this.
+        expect(describeDbError({}, { status: 503, statusText: 'Service Unavailable' }))
+            .toBe('no message, code, details or hint — HTTP 503 Service Unavailable');
+    });
+
+    it('#907 — AND WITH NOTHING AT ALL IT STILL SAYS SO — the control', () => {
+        /*
+         *   #710's sentence survives. A formatter that only ever appends
+         *   something would be claiming knowledge it does not have, which is
+         *   the defect this whole block exists about, pointed the other way.
+         */
+        expect(describeDbError({})).toBe('no message, code, details or hint');
+        expect(describeDbError({}, null)).toBe('no message, code, details or hint');
+    });
+
+    it('#910 — TEN KILOBYTES OF CLOUDFLARE HTML BECOMES ONE LINE', () => {
+        /*
+         *   THE OWNER'S LOG, every entry for two solid minutes:
+         *
+         *       [supabase-db] query feature_toggles: <!DOCTYPE html> …
+         *         <title>supabase.co | 522: Connection timed out</title>
+         *
+         *   supabase-js puts the RESPONSE BODY in `error.message`, and when the
+         *   origin is down that body is Cloudflare's error page. Forty of those
+         *   is most of a log window, and the one fact that matters is the title.
+         */
+        const page = [
+            '<!DOCTYPE html>',
+            '<html><head><title>supabase.co | 522: Connection timed out</title></head>',
+            '<body><h1>Connection timed out<span class="code-label">Error code 522</span></h1>',
+            `<p>${'x'.repeat(9000)}</p>`,
+            '<span class="cf-footer-item">Cloudflare Ray ID: <strong class="font-semibold">a3eddc753f119a11</strong></span>',
+            '</body></html>',
+        ].join('\n');
+
+        const line = describeDbError({ message: page });
+
+        expect(line).toContain('522: Connection timed out');
+        expect(line).toContain('Cloudflare 522');
+        expect(line).toContain('a3eddc753f119a11');
+        //   AND the page itself is gone. The whole point.
+        expect(line).not.toContain('<!DOCTYPE');
+        expect(line.length).toBeLessThan(400);
+    });
+
+    it('#910 — AND A REAL POSTGREST MESSAGE IS UNTOUCHED, however long', () => {
+        /*
+         *   THE control. A formatter that suppressed anything long would throw
+         *   away the row-level-security explanations and constraint names that
+         *   are the most useful errors this adapter produces.
+         */
+        const longButReal = 'new row violates row-level security policy for table "users" — '
+            + 'x'.repeat(500);
+
+        expect(describeDbError({ message: longButReal, code: '42501' }))
+            .toBe(`[42501] ${longButReal}`);
+    });
+
     it('AND EVERY THROW IN THE ADAPTER GOES THROUGH IT', () => {
         /*
          *   The N-doors half. Eleven sites built their message the old way, and
@@ -312,7 +395,10 @@ describe('#710 — and a database error that says nothing is not a log line', ()
 
         expect(bare).toEqual([]);
         //   And the helper is really reached, so the emptiness above is not
-        //   because the sweep found nothing to look at.
-        expect(src).toContain('describeDbError(error)');
+        //   because the sweep found nothing to look at. `describeDbError(error`
+        //   rather than the closed call: #907 gave the count site a second
+        //   argument, and pinning the one-argument spelling would have made
+        //   passing the HTTP status look like a regression.
+        expect(src).toContain('describeDbError(error');
     });
 });

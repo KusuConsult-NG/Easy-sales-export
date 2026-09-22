@@ -9,7 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { uploadFileToStorage } from "@/lib/storage-admin";
 
 import { parseCurrencyStringToFloat } from "@/lib/utils";
-import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
+import { PRODUCT_INITIAL_STATUS, PRODUCT_CREATED_MESSAGE } from "@/lib/product-status";
 import { checkProductPricing } from "@/lib/product-pricing-guard";
 import { sellerIsApproved } from "@/lib/seller-approval";
 
@@ -248,7 +248,8 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            message: "Product listed successfully",
+            //   #906 From the constant, so the wording cannot outlive the rule.
+            message: PRODUCT_CREATED_MESSAGE,
             productId: productRef.id
         });
     } catch (error) {

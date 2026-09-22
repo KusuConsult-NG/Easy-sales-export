@@ -117,17 +117,40 @@ describe('#844 — a "both" applicant can buy immediately', () => {
 
 describe('#844 — and gets both roles when the admin approves', () => {
     it('APPROVAL GRANTS BOTH ROLES FOR A "both" APPLICANT', () => {
-        const src = code(APPROVAL);
+        /*
+         *   #908 RUN, NOT READ. This asserted the two source substrings of the
+         *   ternary this finding added. The ternary is gone — the rule moved to
+         *   lib/marketplace-approval-roles so that BOTH approval doors could
+         *   ask it, which is the repair #908 is about: this fix landed here and
+         *   the API route the admin UI actually calls kept granting "seller"
+         *   alone.
+         *
+         *   A source assertion could not have caught that. It pinned the
+         *   spelling in one file and said nothing about the other.
+         */
+        const { rolesGrantedOnSellerApproval } = require('@/lib/marketplace-approval-roles');
 
-        expect(src).toContain('verificationData.accountType === "both"');
-        expect(src).toContain('arrayUnion("seller", "marketplace_buyer")');
+        expect(rolesGrantedOnSellerApproval('both').sort())
+            .toEqual(['marketplace_buyer', 'seller']);
     });
 
     it('AND STILL GRANTS ONLY seller TO A PLAIN SELLER', () => {
-        //   The ternary's other arm — a seller-only approval must not quietly
-        //   start handing out buyer roles.
+        //   The other arm — a seller-only approval must not quietly start
+        //   handing out buyer roles.
+        const { rolesGrantedOnSellerApproval } = require('@/lib/marketplace-approval-roles');
+
+        expect(rolesGrantedOnSellerApproval('seller')).toEqual(['seller']);
+        expect(rolesGrantedOnSellerApproval(undefined)).toEqual(['seller']);
+    });
+
+    it('AND THIS DOOR ASKS THAT RULE RATHER THAN RESTATING IT', () => {
+        //   #908 The half that made the original fix ineffective. Both
+        //   approvers must reach the same function; one_dashboard_each covers
+        //   the route, this covers the action it was written for.
         const src = code(APPROVAL);
-        expect(src).toContain('arrayUnion("seller")');
+
+        expect(src).toContain('rolesGrantedOnSellerApproval');
+        expect(src).not.toMatch(/arrayUnion\("seller", *"marketplace_buyer"\)/);
     });
 
     it('AND THE FIELD IT BRANCHES ON IS ONE THE RECORD ACTUALLY CARRIES', () => {

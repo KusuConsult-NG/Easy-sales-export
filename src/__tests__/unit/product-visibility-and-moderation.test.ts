@@ -55,9 +55,17 @@ import {
     PRODUCT_VISIBLE_STATUSES,
     PRODUCT_APPROVABLE_FROM,
     PRODUCT_REJECTABLE_FROM,
+    PRODUCT_MODERATION_STATUSES,
     isVisibleProductStatus,
     normaliseProductStatus,
 } from '@/lib/product-status';
+
+/**
+ * The status approveContentAction writes on a product. Asserted against the
+ * real source below rather than trusted, so the ratchet cannot pass against a
+ * value nothing uses.
+ */
+const APPROVED_PRODUCT_STATUS = 'active';
 import { ProductSchema } from '@/lib/validations/marketplace';
 
 const ACTION = 'src/app/actions/marketplace/_mp_products.ts';
@@ -89,13 +97,58 @@ describe('one initial status for both creators', () => {
         }
     });
 
-    it('and the shared value is one buyers can actually see', () => {
-        // The whole defect in one assertion: "pending" is not in
-        // PRODUCT_VISIBLE_STATUSES, so a creator writing it produced a listing
-        // no reader would return. If someone changes the constant to a held
-        // status, they must also build the release path — this fails until the
-        // choice is deliberate.
-        expect(isVisibleProductStatus(PRODUCT_INITIAL_STATUS)).toBe(true);
+    it('and the shared value is EITHER visible to buyers OR releasable by an admin', () => {
+        /*
+         *   THIS ASSERTED `isVisibleProductStatus(PRODUCT_INITIAL_STATUS)`,
+         *   full stop, and its own comment said what it was really protecting:
+         *   "If someone changes the constant to a held status, they must also
+         *   build the release path — this fails until the choice is
+         *   deliberate."
+         *
+         *   #906 The owner made that choice, and the release path is built. So
+         *   the condition the comment describes is asserted directly instead of
+         *   through a proxy that only ever admitted one answer:
+         *
+         *     a held listing must be LISTED by the moderation queue, or no
+         *     administrator can find it;
+         *     it must be APPROVABLE FROM its own status, or the approve button
+         *     refuses it;
+         *     and approving must land it somewhere a buyer can see.
+         *
+         *   Still a ratchet, and a stricter one: set the constant to "archived"
+         *   — held, and absent from PRODUCT_APPROVABLE_FROM and from the
+         *   moderation queue — and this fails. The old assertion would have
+         *   failed there too, but it would equally have failed on a deliberate,
+         *   fully-built "pending", which is the case it was written to permit.
+         */
+        if (isVisibleProductStatus(PRODUCT_INITIAL_STATUS)) return;
+
+        expect({
+            listedByTheQueue: PRODUCT_MODERATION_STATUSES.includes(PRODUCT_INITIAL_STATUS),
+            approvableFromHere: PRODUCT_APPROVABLE_FROM.includes(PRODUCT_INITIAL_STATUS),
+            approvalLandsSomewhereVisible: isVisibleProductStatus(APPROVED_PRODUCT_STATUS),
+        }).toEqual({
+            listedByTheQueue: true,
+            approvableFromHere: true,
+            approvalLandsSomewhereVisible: true,
+        });
+    });
+
+    it('AND THE STATUS AN APPROVAL WRITES IS THE ONE THIS TEST CHECKED', () => {
+        /*
+         *   THE CONTROL on the assertion above, and it is not ceremony: that
+         *   test reads APPROVED_PRODUCT_STATUS, a constant declared in this
+         *   file. If admin-content.ts were changed to write something else, the
+         *   ratchet would keep passing against a value nothing uses.
+         *
+         *   So the real approval path is read from source — the products case
+         *   of approveContentAction, which is what the console's button calls.
+         */
+        const src = code('src/app/actions/admin-content.ts');
+        const productsCase = src.slice(src.indexOf('case "products"'), src.indexOf('case "land"'));
+
+        expect(productsCase.length).toBeGreaterThan(100);
+        expect(productsCase).toContain(`status: "${APPROVED_PRODUCT_STATUS}"`);
     });
 
     it('buyer-facing readers agree on what visible means', () => {
