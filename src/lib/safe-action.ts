@@ -130,6 +130,99 @@ async function captureObservabilityTrace(actionName: string, error: any, args: a
 }
 
 /**
+ * How long a server action may take before it is named in the log.
+ *
+ *   THE OWNER, THREE TIMES: "the entire app is still very slow".
+ *
+ *   Answered three times with inference, because nothing on this platform
+ *   measures a server action. The admin side was repaired from a measurement —
+ *   EXPLAIN ANALYZE on the registration rollup, 1,037,000 buffers down to
+ *   1,262 — and the user side has only ever been repaired from READING CODE,
+ *   which is how "I fixed the slowness" and "it is still slow" have both been
+ *   true at once.
+ *
+ *   Every server action on this platform already funnels through the two
+ *   wrappers below. One `Date.now()` on each side of the call they already
+ *   make turns "the app is slow" into a list of names and milliseconds, in
+ *   production, in logs the owner already reads — and costs a subtraction per
+ *   action to do it.
+ *
+ *   A THRESHOLD, NOT A LINE PER CALL. This platform runs thousands of actions
+ *   a minute; logging every one would bury the answer in the evidence. Only
+ *   the ones that are actually slow are named, so the log stays a shortlist of
+ *   what to fix rather than a trace to be sifted.
+ *
+ *   TUNABLE WITHOUT A DEPLOY, because the right threshold is not knowable from
+ *   here: SLOW_ACTION_MS on the service lowers it to catch more, or raises it
+ *   once the worst offenders are gone. `0` turns the reporting off entirely
+ *   for an operator who wants silence. Read per call, not frozen at import, so
+ *   changing it on the service takes effect on restart without a rebuild.
+ *
+ *   300ms BY DEFAULT, at the owner's instruction. 1000 was the first guess and
+ *   it was too coarse to be useful: a page that makes four actions of 400ms
+ *   each feels slow and reports nothing at all. The point of this is to find
+ *   what to fix, so it is set where it will actually name things.
+ *
+ *   ── A BLANK VALUE IS NOT A ZERO, AND THAT DISTINCTION IS THE BUG ──────────
+ *
+ *   `Number("")` is 0, and 0 means OFF. So a variable that exists on the
+ *   service WITH AN EMPTY VALUE would have switched this off silently while
+ *   looking configured — and it is set by typing into a hosting dashboard,
+ *   where an unresolved reference like ${{Svc.VAR}} leaves exactly that.
+ *
+ *   This platform has been bitten by that precise shape before: #716 is the
+ *   owner answering "[Redis] UPSTASH_REDIS_REST_URL IS NOT SET" with "this IS
+ *   set", both of them right, because the row existed and its value was blank.
+ *   lib/redis.ts now distinguishes missing from empty for that reason, and a
+ *   diagnostic that quietly reports nothing is worse than a cache that quietly
+ *   does nothing: the whole purpose of this one is to be believed when it
+ *   stays silent.
+ *
+ *   So a blank or unparseable value falls back to the default, and only a real
+ *   number set on purpose can turn the reporting off.
+ */
+const SLOW_ACTION_DEFAULT_MS = 300;
+
+const slowActionThresholdMs = (): number => {
+    const configured = process.env.SLOW_ACTION_MS?.trim();
+    if (!configured) return SLOW_ACTION_DEFAULT_MS;
+
+    const raw = Number(configured);
+    //   Negative is not a threshold anybody means; it reads as "off" the same
+    //   way 0 does rather than as "report everything".
+    return Number.isFinite(raw) ? raw : SLOW_ACTION_DEFAULT_MS;
+};
+
+/**
+ * Run `fn`, and name it in the log if it was slow.
+ *
+ *   `finally`, so an action that FAILS slowly is reported too. A failure that
+ *   takes nine seconds is the more interesting one — it is usually a timeout,
+ *   and a timeout is the thing a user actually sits through.
+ *
+ *   THE TIMING MUST NEVER CHANGE THE OUTCOME. It returns the value untouched,
+ *   rethrows untouched, and its own logging is wrapped so a broken logger
+ *   cannot turn a working action into a failed one. Instrumentation that can
+ *   break the thing it measures is worse than none.
+ */
+async function reportingHowLongItTook<T>(actionName: string, fn: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    try {
+        return await fn();
+    } finally {
+        try {
+            const elapsedMs = Date.now() - startedAt;
+            const threshold = slowActionThresholdMs();
+            if (threshold > 0 && elapsedMs >= threshold) {
+                logger.warn(`[slow-action] ${actionName} took ${elapsedMs}ms`, { actionName, elapsedMs });
+            }
+        } catch {
+            // An unreportable measurement is not a reason to fail the action.
+        }
+    }
+}
+
+/**
  * A higher-order function that wraps Server Actions to catch any unhandled exceptions
  * and return them safely as structured { success: false, error: string } objects.
  * Prevents Node.js runtime crashes and 500 Server Errors in Next.js 16.
@@ -140,7 +233,7 @@ export function withSafeAction<TArgs extends any[], TReturn>(
 ): (...args: TArgs) => Promise<ActionResponse<TReturn>> {
     return async (...args: TArgs): Promise<ActionResponse<TReturn>> => {
         try {
-            return await actionFn(...args);
+            return await reportingHowLongItTook(actionName, () => actionFn(...args));
         } catch (error: any) {
             // CRITICAL: Re-throw Next.js internal errors (redirects/not-found)
             if (error && typeof error === 'object' && 'digest' in error) {
@@ -205,7 +298,7 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
 ): (...args: TArgs) => Promise<TReturn | { success: false; error: string; data: null; meta?: any }> {
     return async (...args: TArgs): Promise<TReturn | { success: false; error: string; data: null; meta?: any }> => {
         try {
-            return await actionFn(...args);
+            return await reportingHowLongItTook(actionName, () => actionFn(...args));
         } catch (error: any) {
             // CRITICAL: Re-throw Next.js internal errors (redirects/not-found)
             if (error && typeof error === 'object' && 'digest' in error) {
