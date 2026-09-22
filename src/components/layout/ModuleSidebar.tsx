@@ -19,7 +19,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useState, useEffect, useCallback } from "react";
+import { getMyLiveRoles } from "@/app/actions/my-data";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
     LayoutDashboard, BookOpen, Video, Award, TrendingUp,
     GraduationCap, Truck, FileText, Wallet, Users, ScrollText,
@@ -227,41 +228,30 @@ const FARM_NATION_NAV: NavItem[] = [
  *   no view of the catalogue at all. Its /buyer/ path is a URL accident, not a
  *   capability.
  *
- *   AND "MY ORDERS" AND "MY QUOTES" ARE LEFT UNGATED TOO, WHICH IS NOT WHAT THE
- *   OWNER ASKED FOR, AND IS DELIBERATE. #878 forbids it, for a reason that
- *   applies here word for word:
+ *   AND "MY ORDERS" AND "MY QUOTES" ARE GATED TOO.
  *
- *       It is a LIST OF YOUR OWN THINGS. Scoped server-side by `ownerId ==
- *       session.user.id`, so to a buyer it is an empty page and to a seller it
- *       is their inventory... And `roles` there comes from useSession(), which
- *       is the JWT. #532 is the finding that a JWT goes stale: a seller who has
- *       just onboarded holds `farmer` in the users table and not yet in their
- *       token, so the screens that manage their land stayed hidden until they
- *       signed out and back in.
+ *   They were not, at first, on #878's authority: it forbids gating a list of
+ *   your own things on a claim that goes stale, because a member approved five
+ *   minutes ago still carries the old token and would lose screens they had
+ *   earned. That objection was about the MECHANISM, not the rule, and the owner
+ *   restated the rule after hearing it:
  *
- *   `roles` in this component is still the token. Gating these two would hide a
- *   newly approved buyer's own orders from them until they signed out and back
- *   in — the defect class this audit has now fixed three times (#460, #532, and
- *   the academy catalogue) — to hide two screens that are EMPTY for a seller
- *   anyway. "Hiding a screen from somebody who has used it is a worse failure
- *   than showing one that is empty", which this file says twice elsewhere.
+ *       "A buyer can only see the buyers features and the seller can only see
+ *       sellers features and when users sign up as both seller and buyer then
+ *       they can see all the features on the sidebar."
  *
- *   Shopping Cart IS gated: it is a capability rather than a record, it is what
- *   a seller-only account genuinely cannot do, and it holds nothing of theirs
- *   to be hidden from.
+ *   So the mechanism was fixed instead. This component reads roles LIVE now
+ *   (see where `roles` is derived), and #878's hazard is gone with the claim it
+ *   was about.
  *
- *   Doing the owner's rule properly means gating on a LIVE accountType read on
- *   the server and handed to this component, the way the academy catalogue now
- *   reads its plan — not on the token. That is a change to a sidebar every
- *   module mounts, so it is raised rather than slipped in here.
  */
 const MARKETPLACE_NAV: NavItem[] = [
     { name: "Browse Products",   href: "/marketplace/buyer/products", icon: Search },
     { name: "Shopping Cart",     href: "/marketplace/checkout",       icon: ShoppingCart, rolesAny: MARKETPLACE_BUYER_ROLES },
-    { name: "My Orders",         href: "/marketplace/buyer/orders",   icon: Package },
+    { name: "My Orders",         href: "/marketplace/buyer/orders",   icon: Package, rolesAny: MARKETPLACE_BUYER_ROLES },
     // Both quote lists were unreachable: nothing linked to either, and the
     // seller's RFQ notification pointed at a route that did not exist.
-    { name: "My Quotes",         href: "/marketplace/buyer/quotes",   icon: FileText },
+    { name: "My Quotes",         href: "/marketplace/buyer/quotes",   icon: FileText, rolesAny: MARKETPLACE_BUYER_ROLES },
     /*
      *   VILLAGE MARKET IS A SELLER SURFACE.
      *
@@ -537,8 +527,52 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     const [unreadMessages, setUnreadMessages] = useState(0);
 
     const userId   = session?.user?.id;
-    const roles    = (session?.user?.roles as UserRole[]) || [];
     const userName = session?.user?.name || "User";
+
+    /*
+     *   THE ROLES THIS NAV GATES ON ARE READ LIVE, NOT TAKEN FROM THE TOKEN.
+     *
+     *   THE OWNER: "A buyer can only see the buyers features and the seller can
+     *   only see sellers features and when users sign up as both seller and
+     *   buyer then they can see all the features on the sidebar."
+     *
+     *   Applying that to the BUYING entries needed this first. `session.user.roles`
+     *   is a JWT claim and auth.config.ts issues stateless tokens with an 8-hour
+     *   maxAge, so a member approved five minutes ago still carries the old one.
+     *   #878 refused to gate a list of your own things on that claim, and was
+     *   right to — gating on a stale claim hides screens from people who have
+     *   earned them until they sign out and back in.
+     *
+     *   So the claim is replaced rather than the rule abandoned. Same repair as
+     *   #460 in the academy enrolment path and #364 across fifteen API routes:
+     *   ask the document, not the token.
+     *
+     *   THE CLAIM IS THE INITIAL VALUE, not a fallback that never arrives. The
+     *   nav renders immediately from the token — which is right far more often
+     *   than not — and corrects itself when the live answer lands. An empty
+     *   array from the action means "no answer": it keeps the claim rather than
+     *   emptying the sidebar, so a failed read degrades to today's behaviour
+     *   instead of to a blank menu.
+     */
+    const claimedRoles = useMemo(
+        () => (session?.user?.roles as UserRole[]) || [],
+        [session?.user?.roles],
+    );
+    const [liveRoles, setLiveRoles] = useState<UserRole[] | null>(null);
+
+    useEffect(() => {
+        if (!userId) { setLiveRoles(null); return; }
+        let cancelled = false;
+        getMyLiveRoles()
+            .then((fresh) => {
+                if (cancelled || fresh.length === 0) return;
+                setLiveRoles(fresh as UserRole[]);
+            })
+            .catch(() => { /* keep the claim; the action logs its own failure */ });
+        return () => { cancelled = true; };
+    }, [userId]);
+
+    const roles = liveRoles ?? claimedRoles;
 
     // ── Module detection ──────────────────────────────────────────────────
     const moduleKey    = detectModuleKey(pathname || "");

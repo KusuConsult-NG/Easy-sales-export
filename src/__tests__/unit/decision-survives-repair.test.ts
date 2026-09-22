@@ -297,14 +297,29 @@ describe('the rule is one rule, not five hand-written status lists', () => {
         }
     });
 
-    it('the four repaired sites all consult it rather than their own list', () => {
+    it('the repaired sites all consult it rather than their own list', () => {
+        /*
+         *   _ac_applications.ts WAS ON THIS LIST AND IS NOT ANY MORE, and that
+         *   is a removal on purpose rather than a baseline.
+         *
+         *   It consulted the rule for exactly one thing: `previouslyDecidedAgainst`
+         *   stopped an old payment AUTO-APPROVING a reapplication from somebody
+         *   an admin had just rejected. The owner has since asked for payment to
+         *   be decoupled from approval — "yes decouple payment from auto-approval"
+         *   — so nothing auto-approves. Every application now waits for an
+         *   administrator, including that one, and the guard has no decision left
+         *   to guard.
+         *
+         *   The rule itself is unchanged and the other four still ask it. Keeping
+         *   a dead import here to satisfy a list would be the cargo-cult version
+         *   of the finding this file is about.
+         */
         const fs = require('fs');
         const path = require('path');
         for (const file of [
             'src/lib/module-access-check.ts',
             'src/app/actions/cooperative/_coop_identity.ts',
             'src/app/actions/academy/_payment.ts',
-            'src/app/actions/academy/_ac_applications.ts',
             'src/infrastructure/payments/service.ts',
         ]) {
             const src = fs.readFileSync(path.join(process.cwd(), file), 'utf8');

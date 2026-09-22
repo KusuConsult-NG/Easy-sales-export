@@ -262,21 +262,52 @@ describe('#877 #878 — an entry called "My …" shows you yours', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#878 — and a list of your own things is not hidden behind a role', () => {
-    it('THE REPORTED DEFECT: no "My …" entry carries a role gate', () => {
+    it('NO "My …" ENTRY IS GATED ON A STALE CLAIM — which is what this was about', () => {
         /*
-         *   Scoped by the session on the server, so the worst a wrong audience
-         *   sees is an empty page — and the sidebar states that rule twice in
-         *   its own comments about My Purchases and My Inquiries.
+         *   THE RULE MOVED, AND THIS IS WHY.
          *
-         *   The gate also read the JWT rather than the database (#532), so a
-         *   seller whose role had just been granted was locked out of their own
-         *   inventory until they signed in again.
+         *   #878 had two legs. The first was a MECHANISM: the gate read the JWT
+         *   rather than the database (#532), so a seller whose role had just
+         *   been granted was locked out of their own inventory until they signed
+         *   in again. The second was a JUDGEMENT: a list of your own things is
+         *   scoped by the session on the server, so the worst a wrong audience
+         *   sees is an empty page.
+         *
+         *   The owner has overruled the judgement, for marketplace, after being
+         *   shown it: "A buyer can only see the buyers features and the seller
+         *   can only see sellers features and when users sign up as both seller
+         *   and buyer then they can see all the features on the sidebar."
+         *
+         *   The MECHANISM was not overruled, and is the part that could actually
+         *   hurt somebody — so it is fixed rather than waived: ModuleSidebar
+         *   reads roles LIVE (getMyLiveRoles) and uses the claim only as the
+         *   initial value. That is what this test guards now. A gate is allowed;
+         *   a gate fed by an 8-hour-old token is not.
          */
-        const gated = navEntries().filter(MINE)
-            .filter((e) => /rolesAny|sellerOnly/.test(e.rest) && !/sellerOnly/.test(e.rest))
+        const { readFileSync } = require('fs');
+        const src = readFileSync('src/components/layout/ModuleSidebar.tsx', 'utf8');
+
+        expect(src).toContain('getMyLiveRoles');
+        expect(src).toContain('const roles = liveRoles ?? claimedRoles;');
+
+        //   And the claim is not what any gate reads directly.
+        expect(src).not.toMatch(/navItemAllowedForRoles\(item,\s*claimedRoles\)/);
+    });
+
+    it('AND FARM NATION\'S OWN LISTS STAY UNGATED, because that module cannot tell buyer from seller', () => {
+        /*
+         *   The owner's rule names MARKETPLACE. Farm Nation has ZERO occurrences
+         *   of accountType — its onboarding never asks whether you are buying or
+         *   selling land — and every approved member is granted "farmer", which
+         *   IS a seller role. There is nothing there to gate on, so gating would
+         *   hide these from everybody.
+         */
+        const farmLists = navEntries().filter(MINE)
+            .filter((e) => /farm-nation/.test(e.rest))
+            .filter((e) => /rolesAny/.test(e.rest))
             .map((e) => `${e.name} → ${e.rest.trim()}`);
 
-        expect(gated).toEqual([]);
+        expect(farmLists).toEqual([]);
     });
 
     it('AND "My Properties" SPECIFICALLY IS UNGATED', () => {

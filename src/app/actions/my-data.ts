@@ -154,6 +154,54 @@ export async function getMyDashboard(): Promise<MyDashboard> {
     };
 }
 
+/**
+ * The caller's roles, read LIVE from their document.
+ *
+ *   THE OWNER: "this is still the seller's dashboard with the buyer's features
+ *   why? ... A buyer can only see the buyers features and the seller can only
+ *   see sellers features and when users sign up as both seller and buyer then
+ *   they can see all the features on the sidebar."
+ *
+ *   The rule is theirs and it is plain. What made it hard to APPLY is that
+ *   ModuleSidebar decides from `session.user.roles` — a JWT claim, and
+ *   auth.config.ts issues stateless tokens with an 8-hour maxAge. #878 refused
+ *   to gate a list of your own things on that claim for exactly this reason,
+ *   and it was right to: a member approved five minutes ago still carries the
+ *   old token, so gating on it hides screens from people who have earned them
+ *   until they sign out and back in.
+ *
+ *   So the claim is replaced rather than the gate abandoned. This is the same
+ *   repair #460 made to the academy enrolment path and #364 made to fifteen API
+ *   routes: ask the document, not the token.
+ *
+ *   ONE FIELD, DELIBERATELY. The nav needs to know what this account may do and
+ *   nothing else, and this module's rule 2 is that each function answers one
+ *   specific question. Returning the whole user document to a client component
+ *   would hand the browser a KYC record to draw a sidebar with.
+ */
+export async function getMyLiveRoles(): Promise<string[]> {
+    const userId = await currentUserId();
+    if (!userId) return [];
+
+    try {
+        const snap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (!snap.exists) return [];
+        const roles = (snap.data() as { roles?: unknown } | undefined)?.roles;
+        return Array.isArray(roles) ? roles.filter((r): r is string => typeof r === "string") : [];
+    } catch (error) {
+        /*
+         *   AN UNREADABLE DOCUMENT FALLS BACK TO THE TOKEN, NOT TO NOTHING.
+         *
+         *   The caller treats [] as "no answer yet" and keeps using the claim.
+         *   Returning an empty list as though it were the truth would empty the
+         *   sidebar for everybody the moment a read failed — which is the
+         *   failure #878 warned about, arriving by a different route.
+         */
+        logger.error("[my-data] getMyLiveRoles failed; the caller keeps its token claim", { userId, error });
+        return [];
+    }
+}
+
 /** The three values the nav draws, and nothing else. */
 export interface MyNavSummary {
     serviceRegistrations: Record<string, any>;

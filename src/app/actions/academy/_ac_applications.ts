@@ -17,7 +17,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { normalisePhone } from "@/lib/phone";
-import { isDecidedAgainst } from "@/lib/registration-progress";
+import { isAcademyEntitled } from "@/lib/academy-entitlement";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { latestApplication } from "@/lib/latest-application";
@@ -56,7 +56,6 @@ async function _submitAcademyApplicationAction(
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
         let finalApplicationId: string = "";
-        let isPaid = false;
 
         await db.runTransaction(async (t) => {
             // Check for existing application status on the user
@@ -76,6 +75,36 @@ async function _submitAcademyApplicationAction(
             }
 
             const existingPaymentStatus = userData?.serviceRegistrations?.academy?.paymentStatus || "pending";
+
+            /**
+             *   GATE ONE: PAY BEFORE YOU APPLY.
+             *
+             *   THE OWNER: "before users can submit application on academy they
+             *   should make payment before application can be submit. the
+             *   payment screen should be the last screen before application can
+             *   be submitted."
+             *
+             *   The FORM already did this — Payment is step 5 of 5 and Submit
+             *   is `disabled={isSubmitting || paymentStatus !== "paid"}`.
+             *   Nothing HERE did. This is a "use server" export, so it is a
+             *   public endpoint anything can post to, and an unpaid submission
+             *   was accepted and written for an admin to review. A disabled
+             *   button is a courtesy to the person on the screen, not a rule.
+             *
+             *   ENTITLED, NOT PAID. isAcademyPaid alone would refuse a learner
+             *   an admin deliberately waived the fee for — academyGrantFields
+             *   writes `paymentStatus: "waived"`, a place the platform gave away
+             *   on purpose. isAcademyEntitled is the existing "paid OR granted"
+             *   question and is the one this gate asks.
+             *
+             *   A REAPPLICATION AFTER A REJECTION STILL PASSES: the fee is paid
+             *   once, so a rejected applicant reapplying still reads as paid.
+             */
+            if (!isAcademyEntitled(existingPaymentStatus)) {
+                throw new Error(
+                    "Please complete your Academy payment before submitting this application.",
+                );
+            }
             const existingPaymentAmount = userData?.serviceRegistrations?.academy?.paymentAmount || 0;
 
             // The tier the learner actually bought — not the literal "registration".
@@ -185,33 +214,41 @@ async function _submitAcademyApplicationAction(
             finalApplicationId = applicationId;
             const appRef = collectionsContext.doc(applicationId);
 
-            // A REAPPLICATION AFTER A REJECTION WENT STRAIGHT PAST THE ADMIN.
-            //
-            // `isPaid` is the auto-approval switch: a paid applicant's
-            // application is written `status: "approved"`, `reviewedBy:
-            // "system_auto_approval"`, with `academy_participant` granted. That
-            // is the intended model for a first application — paying the
-            // registration fee is what admits a learner, and no admin need
-            // review it.
-            //
-            // But the registration fee is paid ONCE, and the duplicate guard
-            // above deliberately lets a rejected applicant reapply — the
-            // rejection email invites exactly that ("Re-apply after making
-            // necessary improvements"). So the applicant an admin had just
-            // rejected submitted a new form and was auto-approved by their old
-            // payment, in the same request, with the role back. The admin who
-            // rejected them had no way to make it stick.
-            //
-            // A reapplication that follows a decision goes to the admin instead.
-            // Nothing is lost: the payment is still recorded and the admin can
-            // approve, which is the outcome auto-approval would have produced —
-            // it just cannot happen without them. Fifth instance of the shape
-            // fixed in #207, #225, #227 and #229.
-            const previouslyDecidedAgainst = isDecidedAgainst(existingStatus);
-
-            isPaid = !previouslyDecidedAgainst
-                && ["completed", "paid", "successful"].includes(existingPaymentStatus);
-
+            /**
+             *   GATE TWO: AN ADMIN DECIDES, AND PAYING IS NOT DECIDING.
+             *
+             *   THE OWNER: "yes decouple payment from auto-approval" — after
+             *   asking, separately, that courses be "accessible to users after
+             *   they paid AND approved by admin".
+             *
+             *   WHAT STOOD HERE. `isPaid` was an auto-approval switch: a paid
+             *   applicant's application was written `status: "approved"`,
+             *   `reviewedBy: "system_auto_approval"`, with `academy_participant`
+             *   granted and `isVerified` set, in the same request. Paying WAS
+             *   being admitted, and no admin saw it.
+             *
+             *   THE TWO RULES COULD NOT BOTH STAND. Gate one above makes payment
+             *   mandatory, so every application is a paid one — and under the
+             *   old switch every application would therefore have auto-approved,
+             *   which is the admin gate deleting itself. Hence the decoupling:
+             *   payment buys the right to APPLY, an administrator grants the
+             *   right to LEARN.
+             *
+             *   #207's line of fixes is SUBSUMED, not lost. It sent a
+             *   reapplication-after-rejection to the admin instead of letting an
+             *   old payment auto-approve it. Every application goes to the admin
+             *   now, so the case it guarded cannot arise, and the guard it needed
+             *   — `previouslyDecidedAgainst` — has nothing left to decide.
+             *
+             *   NOTHING IS STRANDED. _ac_admin_review's approval already grants
+             *   `academy_participant`, sets `isVerified` and writes
+             *   `serviceRegistrations.academy.status = "approved"` — checked
+             *   before this switch was removed, because removing the only door
+             *   that grants a role is how a module goes dark.
+             *
+             *   The payment is still RECORDED on the row below. What changes is
+             *   that it no longer decides.
+             */
             // Save to Firestore
             t.set(appRef, {
                 ...applicationData,
@@ -224,18 +261,18 @@ async function _submitAcademyApplicationAction(
                 },
                 userId: session.user.id,
                 applicationId,
-                status: isPaid ? "approved" : "pending",
+                status: "pending",
                 paymentStatus: existingPaymentStatus,
                 paymentAmount: existingPaymentAmount,
                 plan: existingPlan,
                 submittedAt: FieldValue.serverTimestamp(),
-                reviewedAt: isPaid ? FieldValue.serverTimestamp() : null,
-                reviewedBy: isPaid ? "system_auto_approval" : null,
+                reviewedAt: null,
+                reviewedBy: null,
                 notes: "",
             });
 
             const userUpdate: any = {
-                "serviceRegistrations.academy.status": isPaid ? "approved" : "pending",
+                "serviceRegistrations.academy.status": "pending",
                 "serviceRegistrations.academy.applicationId": applicationId,
                 "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.academy.paymentStatus": existingPaymentStatus,
@@ -254,12 +291,6 @@ async function _submitAcademyApplicationAction(
                 updatedAt: FieldValue.serverTimestamp(),
             };
 
-            if (isPaid) {
-                userUpdate["serviceRegistrations.academy.approvedAt"] = FieldValue.serverTimestamp();
-                userUpdate["roles"] = FieldValue.arrayUnion("academy_participant");
-                userUpdate["isVerified"] = true;
-            }
-
             // CRITICAL: Update user.serviceRegistrations to link application with auth
             t.update(userRef, userUpdate);
         });
@@ -275,10 +306,10 @@ async function _submitAcademyApplicationAction(
 
         try {
             await invalidateUserCache(session.user.id);
-            if (isPaid) {
-                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
-                await invalidateServiceCache(session.user.id, 'academy');
-            }
+            //   Unconditional now: the registration status is written on every
+            //   submission, so the cached copy is stale on every submission.
+            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+            await invalidateServiceCache(session.user.id, 'academy');
         } catch (err) {
             logger.error("Failed to invalidate cache after Academy application:", err);
         }
