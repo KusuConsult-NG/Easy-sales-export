@@ -8,6 +8,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { recordAdminAction } from "@/lib/audit-log";
 import { registrationProgressScore } from "@/lib/registration-progress";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { registerStatusForExportApplication } from "@/lib/export-registration-status";
 
 /**
  * The most recent application in a collection, and the date it was submitted.
@@ -277,7 +278,11 @@ export async function runServiceRegistrationRecoveryAction(
 
             if (exportApps) {
                 const exportData = exportApps.data;
-                const status = exportData.status === "pending_review" ? "pending" : exportData.status;
+                //   #911 This mapped `pending_review` to "pending" while
+                //   _ex_onboarding mapped it to "pending_approval" — two
+                //   spellings of one fact, which is how the third path came to
+                //   have none. Both are accepted statuses, so no count moves.
+                const status = registerStatusForExportApplication(exportData.status);
                 if (shouldRecover(registrations.export, status)) {
                     updates["serviceRegistrations.export.status"] = status;
                     if (exportApps.submittedAt) {

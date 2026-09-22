@@ -28,6 +28,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { exportOnboardingSchema } from "@/lib/types/export-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { latestApplication } from "@/lib/latest-application";
+import { registerStatusForExportApplication } from "@/lib/export-registration-status";
 
 export async function submitExportOnboardingAction(
     prevState: any,
@@ -347,8 +348,10 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                     //   cached profile session-guard serves for 300 seconds has to
                     //   go with it, or the heal is invisible to the person who asked.
                     await invalidateServiceCache(session.user.id, 'export');
-                } else if (appData.status) { // Normalize statuses
-                    status = appData.status === "pending_review" ? "pending_approval" : appData.status;
+                } else if (appData.status) {
+                    //   #911 One rule, shared with the legacy sync below and
+                    //   with data-recovery. The value is unchanged.
+                    status = registerStatusForExportApplication(appData.status);
                 }
             }
         }
@@ -365,7 +368,23 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
             //   #507 Copy two of four in this file, and one of three different
             //   implementations of one rule. See the header above.
             const legacyData: any = latestApplication(legacySnap.docs)?.data() ?? {};
-            const legacyStatus = legacyData?.status ?? 'pending';
+            /*
+             *   #911 THIS WROTE THE APPLICATION'S STATUS ONTO THE REGISTER
+             *   WITHOUT TRANSLATING IT.
+             *
+             *   `legacyData.status` is whatever the application row says, and
+             *   this same file CREATES those rows with `status: "pending_review"`
+             *   — a value that is not in ACTIVE_REGISTRATION_STATUSES and never
+             *   was. So a legacy-synced applicant landed on the register in the
+             *   application's vocabulary, matching neither the Export Hub count
+             *   nor the onboarding slice. They had applied and appeared in no
+             *   figure.
+             *
+             *   Two other paths already translated it — line 351 above, and
+             *   data-recovery.ts — to two DIFFERENT values. One rule now, in
+             *   lib/export-registration-status.
+             */
+            const legacyStatus = registerStatusForExportApplication(legacyData?.status);
 
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
                 {

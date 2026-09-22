@@ -34,8 +34,23 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const SCRIPT = 'scripts/why-is-the-dashboard-slow.sql';
-const source = readFileSync(join(process.cwd(), SCRIPT), 'utf-8');
+/**
+ * The scripts written to be PASTED INTO THE SUPABASE SQL EDITOR.
+ *
+ * Named explicitly rather than globbed over scripts/*.sql, and that is a
+ * judgement rather than laziness: payments-that-nobody-made.sql is a
+ * multi-section sweep meant for psql, where blank lines between sections are
+ * correct and readable. The constraint below is the editor's, so it applies to
+ * the files that go to the editor.
+ *
+ * A new one added here and not to this list is the regression this suite
+ * exists for — so the vacuity guard at the bottom checks the list is the size
+ * it claims.
+ */
+const EDITOR_SCRIPTS = [
+    'scripts/why-is-the-dashboard-slow.sql',
+    'scripts/export-registration-statuses.sql',
+];
 
 /** Everything that is not a leading `--` comment: the executable statement. */
 function statementOf(sql: string): string[] {
@@ -51,7 +66,8 @@ function statementOf(sql: string): string[] {
     return out;
 }
 
-describe('#910 — the diagnostic survives the SQL Editor that has to run it', () => {
+describe.each(EDITOR_SCRIPTS)('#910 — %s survives the SQL Editor that has to run it', (SCRIPT) => {
+    const source = readFileSync(join(process.cwd(), SCRIPT), 'utf-8');
     const statement = statementOf(source);
 
     it('THE STATEMENT CARRIES NO BLANK LINE', () => {
@@ -97,8 +113,11 @@ describe('#910 — the diagnostic survives the SQL Editor that has to run it', (
          *   editor did. Cut the whole file the way the editor cut it; the
          *   statement must land in exactly one piece.
          */
+        //   The statement's own first line, whatever it is, so this holds for
+        //   every script in the list rather than one of them.
+        const firstLine = statement[0].trim();
         const fragments = source.split(/\n\s*\n/);
-        const opening = fragments.filter((f) => f.includes('WITH required AS ('));
+        const opening = fragments.filter((f) => f.includes(firstLine));
 
         //   Exactly one fragment begins the statement …
         expect({ fragmentsOpeningTheStatement: opening.length })
@@ -115,7 +134,8 @@ describe('#910 — the diagnostic survives the SQL Editor that has to run it', (
          *   check belongs on the extracted statement, which is what `statement`
          *   above already is.
          */
-        expect({ andCarriesTheEnd: opening[0].includes('ORDER BY 1, 2;') })
+        const lastLine = statement[statement.length - 1].trim();
+        expect({ andCarriesTheEnd: opening[0].includes(lastLine) })
             .toEqual({ andCarriesTheEnd: true });
 
         const body = statement.join('\n');
@@ -126,19 +146,54 @@ describe('#910 — the diagnostic survives the SQL Editor that has to run it', (
             .toEqual({ parens: true, terminated: true });
     });
 
-    it('AND IT STILL ASKS ABOUT EVERY FAST PATH — the vacuity guard', () => {
+    it('AND IT STILL ASKS A REAL QUESTION — the vacuity guard', () => {
         /*
          *   A file trimmed until it could not be split would pass everything
-         *   above and diagnose nothing. These are the names it must check.
+         *   above and diagnose nothing. Both scripts read the same two places,
+         *   so those are the names each must mention.
          */
         const body = statement.join('\n');
 
-        for (const name of [
-            'count_module_registrations', 'count_user_segments', 'module_registration_counts',
-            'service_regs', 'idx_dc_collection_status', 'idx_users_created_at',
-            'idx_users_migrated_to', 'idx_mo_payment_reference',
-        ]) {
-            expect({ checks: name, present: body.includes(name) }).toEqual({ checks: name, present: true });
+        /*
+         *   Per script, because they ask different questions: one reads the
+         *   catalogue (pg_proc, pg_indexes) and never touches a data table;
+         *   the other reads the data and never touches the catalogue. A shared
+         *   marker list would have to be the intersection, which is nothing.
+         */
+        const MUST_MENTION: Record<string, string[]> = {
+            'scripts/why-is-the-dashboard-slow.sql': [
+                'count_module_registrations', 'service_regs', 'pg_indexes', 'pg_proc',
+            ],
+            'scripts/export-registration-statuses.sql': [
+                'service_regs', 'export_onboarding_applications', 'export_participant',
+            ],
+        };
+
+        const expected = MUST_MENTION[SCRIPT];
+        //   A script with no entry would silently check nothing.
+        expect({ script: SCRIPT, hasMarkers: Array.isArray(expected) && expected.length > 0 })
+            .toEqual({ script: SCRIPT, hasMarkers: true });
+
+        for (const name of expected) {
+            expect({ script: SCRIPT, checks: name, present: body.includes(name) })
+                .toEqual({ script: SCRIPT, checks: name, present: true });
+        }
+        expect(body.length).toBeGreaterThan(400);
+    });
+});
+
+describe('#910 — and the list of editor scripts is the list', () => {
+    it('BOTH SCRIPTS ARE COVERED', () => {
+        /*
+         *   describe.each over an empty or truncated list passes every
+         *   assertion above by running none of them. This is the guard on the
+         *   guard, and it fails the day a third editor script is written and
+         *   not added.
+         */
+        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 2 });
+        for (const rel of EDITOR_SCRIPTS) {
+            expect({ rel, exists: readFileSync(join(process.cwd(), rel), 'utf-8').length > 0 })
+                .toEqual({ rel, exists: true });
         }
     });
 });
