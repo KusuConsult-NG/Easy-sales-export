@@ -48,10 +48,33 @@
 export function rolesGrantedOnSellerApproval(accountType: unknown): string[] {
     const asked = typeof accountType === "string" ? accountType.trim().toLowerCase() : "";
 
-    //   `both` is the only value that widens the grant. "seller" and an absent
-    //   accountType both mean seller alone — this door exists to approve a
-    //   SELLER, and a buyer-only application does not arrive at it.
-    return asked === "both" ? ["seller", "marketplace_buyer"] : ["seller"];
+    /*
+     *   THE OWNER: "on marketplace buyers are still having add product button
+     *   and that is not supposed to be so."
+     *
+     *   THIS FUNCTION WAS WHY. It read: `asked === "both" ? [seller, buyer] :
+     *   ["seller"]` — so "buyer" fell into the else and was granted SELLER. The
+     *   comment that stood here defended it: "this door exists to approve a
+     *   SELLER, and a buyer-only application does not arrive at it."
+     *
+     *   It does. SELLER_VERIFICATIONS holds EVERY marketplace application
+     *   whatever the applicant asked to be — _mp_onboarding:211 reads
+     *   `vData?.accountType` off that very row precisely because it varies — and
+     *   checkModuleAccess heals from the same collection. A buyer's approved
+     *   application reaches all three readers, and this rule made every one of
+     *   them a seller.
+     *
+     *   Three cases and a default, stated rather than inferred from an else:
+     *
+     *     both     sell and buy
+     *     buyer    buy only            <- the case that was falling through
+     *     seller   sell only
+     *     absent   sell only, because rows predate the field and demoting a
+     *              live seller is a worse failure than the one being fixed
+     */
+    if (asked === "both") return ["seller", "marketplace_buyer"];
+    if (asked === "buyer") return ["marketplace_buyer"];
+    return ["seller"];
 }
 
 /** The three values the onboarding form can produce. */

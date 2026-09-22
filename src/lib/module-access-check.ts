@@ -1070,13 +1070,53 @@ export async function checkModuleAccess(
                         `[ModuleAccess] Layer 2.11 — Direct Seller Verification query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
                     );
 
+                    /*
+                     *   THE OWNER: "on marketplace buyers are still having add
+                     *   product button and that is not supposed to be so."
+                     *
+                     *   THIS IS WHERE THEY GOT THE ROLE. This backfill granted
+                     *   `seller` to ANYONE holding an approved row in
+                     *   SELLER_VERIFICATIONS, and never once looked at what
+                     *   they had applied to be. A buyer's approved application
+                     *   is such a row — the collection holds every marketplace
+                     *   application whatever its accountType, which is why
+                     *   _mp_onboarding reads `vData?.accountType` off it — so
+                     *   approving a buyer made them a seller.
+                     *
+                     *   MarketplaceProductsClient then tests
+                     *   `roles.includes("seller")` and offers "List a Product".
+                     *
+                     *   Worse than a one-off mis-grant: this is a HEAL on the
+                     *   ACCESS path, so it re-granted the role the next time the
+                     *   buyer opened the module. An admin removing it by hand
+                     *   could not make it stick.
+                     *
+                     *   Every other door already had the rule. #844 established
+                     *   it, _mp_onboarding's own heal applies it fifty lines
+                     *   into this file's sibling, and #255 gave both admin
+                     *   approval doors one shared implementation. This door was
+                     *   missed by all three, and asked no question at all.
+                     *
+                     *   rolesGrantedOnSellerApproval is that shared rule: "both"
+                     *   gets seller and buyer, a buyer-only record gets the
+                     *   buyer role, and an absent accountType keeps today's
+                     *   seller default so a legacy row is not demoted by this
+                     *   change. The accountType is recorded too — the reader at
+                     *   _mp_onboarding:211 wants it, and a heal that leaves a
+                     *   field unwritten leaves it unwritten for the next one.
+                     */
+                    const { rolesGrantedOnSellerApproval, accountTypeOnSellerApproval } =
+                        await import("./marketplace-approval-roles");
+                    const grantedRoles = rolesGrantedOnSellerApproval(verDocData?.accountType);
+
                     // Proactively backfill the USERS doc
                     const { FieldValue } = await import("./firestore-compat");
                     await db.collection(COLLECTIONS.USERS).doc(userId).set({
-                        roles: FieldValue.arrayUnion("seller"),
+                        roles: FieldValue.arrayUnion(...grantedRoles),
                         serviceRegistrations: {
                             marketplace: {
                                 status: "approved",
+                                accountType: accountTypeOnSellerApproval(verDocData?.accountType),
                                 applicationId: verRef.id,
                                 approvedAt: verDocData.approvedAt || FieldValue.serverTimestamp(),
                             }

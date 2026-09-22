@@ -5,6 +5,7 @@ import { Package, Search, Loader2, Star, MapPin, Plus, Eye, AlertCircle } from "
 import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { hasSellerRole } from "@/lib/seller-approval";
 import { getMarketplaceProductsAction } from "@/app/actions/marketplace";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import type { Product } from "@/lib/types/marketplace";
@@ -36,7 +37,18 @@ export default function MarketplaceProductsClient({ initial = null }: {
 }) {
     const takeSeed = useServerSeed(initial);
     const { data: session } = useSession();
-    const isSeller = session?.user?.roles?.includes("seller") || session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
+    /*
+     *   #885's pair, again. This read the literal "seller" and missed
+     *   `marketplace_seller`, so an approved seller carrying the other spelling
+     *   was shown "Become a Seller" on the page they sell from.
+     *
+     *   hasSellerRole is the one reader for that question and canonicalises
+     *   both spellings; the admin arms stay as they were.
+     */
+    const roles = session?.user?.roles;
+    const isSeller = hasSellerRole(roles)
+        || roles?.includes("admin")
+        || roles?.includes("super_admin");
 
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
