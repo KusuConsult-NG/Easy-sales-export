@@ -687,7 +687,25 @@ export default function CheckoutPage() {
             try {
                 const cartItems: CartItem[] = toCartItems(cart);
                 const res = await calculateDeliveryAction(cartItems, {
-                    distance,
+                    /*
+                     *   A DISTANCE WE ACTUALLY MEASURED, OR NONE AT ALL.
+                     *
+                     *   `distance` starts at 10 and is only recomputed by the
+                     *   effect above once `destinationCoords` exists. So an
+                     *   address that was never placed on the map still sent
+                     *   "10", and the server priced a ten-kilometre delivery
+                     *   from it — for a buyer who might be four hundred away.
+                     *
+                     *   destinationCoords is null exactly when nothing placed
+                     *   the address: neither the geocoder nor the state
+                     *   centroid. Sending no distance in that case is the
+                     *   honest answer, and deliveryFeeFor already handles it —
+                     *   an absent distance falls back to `freeDistanceKm`, so
+                     *   no distance surcharge is applied. That IS the "standard
+                     *   base rate" the screen promises when it cannot verify an
+                     *   address; it was simply never what the code did.
+                     */
+                    distance: destinationCoords ? distance : undefined,
                     weight,
                     isWithinCityCenter
                 });
@@ -705,7 +723,10 @@ export default function CheckoutPage() {
             }
         }
         fetchFee();
-    }, [cart, distance, weight, isWithinCityCenter, showToast]);
+        //   destinationCoords is read inside now: the quote must change when the
+        //   address becomes placed or unplaced, because that is exactly when the
+        //   distance surcharge starts or stops applying.
+    }, [cart, distance, weight, isWithinCityCenter, destinationCoords, showToast]);
 
     const subtotal = cart.reduce((sum, item) => sum + unitPriceOf(item) * item.quantity, 0);
 
@@ -771,7 +792,8 @@ export default function CheckoutPage() {
                     city: deliveryAddress.city,
                     state: deliveryAddress.state,
                     lga: deliveryAddress.lga,
-                    distance,
+                    //   Measured, or absent. See the note at the fee preview.
+                    distance: destinationCoords ? distance : undefined,
                     weight,
                     isWithinCityCenter
                 }
@@ -1108,11 +1130,46 @@ export default function CheckoutPage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            setIsAddressVerified(true);
-                                                            setDestinationCoords({ lat: 6.5244, lng: 3.3792 }); // Lagos default coordinates
-                                                            setDistance(10);
-                                                            setVerificationError(null);
-                                                            showToast("Proceeding with manual address (standard shipping rate applied).", "info");
+                                                            /*
+                                                             *   THE OWNER: "checkout on marketplace wasn't
+                                                             *   implementing the user's delivery address. it was
+                                                             *   hardcoding the address and wasn't changing it."
+                                                             *
+                                                             *   THIS BUTTON WAS THE HARDCODING. It read:
+                                                             *
+                                                             *       setDestinationCoords({ lat: 6.5244, lng: 3.3792 });
+                                                             *       setDistance(10);
+                                                             *
+                                                             *   — Lagos, and a flat ten kilometres, for every buyer
+                                                             *   who pressed it, whatever they had typed. And the
+                                                             *   screen TELLS them to press it: "If the map cannot
+                                                             *   locate your address, click the 'Use Address Anyway'
+                                                             *   option."
+                                                             *
+                                                             *   The stored street, city, state and LGA stayed
+                                                             *   correct, so the seller still shipped to the right
+                                                             *   place. What went wrong is what the buyer SAW — a map
+                                                             *   showing Lagos — and what they were CHARGED:
+                                                             *   `distance` travels to the server, which takes
+                                                             *   `location?.distance || 10` and prices delivery from
+                                                             *   it. A buyer in Maiduguri was quoted a ten-kilometre
+                                                             *   Lagos delivery.
+                                                             *
+                                                             *   fallbackToState is the rule its two siblings already
+                                                             *   use — the typed path and the saved-address path both
+                                                             *   place the buyer at their own state's centroid. This
+                                                             *   was the one door that invented a location instead.
+                                                             *   With real coordinates set, the distance effect
+                                                             *   computes the real distance from the seller's
+                                                             *   products; nothing here has to state a number.
+                                                             */
+                                                            fallbackToState(
+                                                                "We could not place this address, and your state was "
+                                                                + "not recognised either. Check the state on the "
+                                                                + "address, or continue and we will use a standard "
+                                                                + "shipping rate.",
+                                                                true,
+                                                            );
                                                         }}
                                                         className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition shrink-0"
                                                     >
