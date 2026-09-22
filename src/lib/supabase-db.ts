@@ -510,11 +510,59 @@ function describeErrorCause(value: unknown, depth = 0): string {
     return bits.join(' ');
 }
 
+/**
+ *   #910 AND WHEN THE "MESSAGE" IS TEN KILOBYTES OF CLOUDFLARE HTML.
+ *
+ *   THE OWNER'S LOG, every entry for two solid minutes:
+ *
+ *       [supabase-db] query feature_toggles: <!DOCTYPE html> …
+ *       <title>supabase.co | 522: Connection timed out</title>
+ *       … Browser: Working · Cloudflare: Working · Host: Error …
+ *
+ *   supabase-js puts the RESPONSE BODY in `error.message`, and when the origin
+ *   is down that body is Cloudflare's error page — about ten kilobytes of
+ *   markup, repeated once per failed read, twice per entry because the stack
+ *   carries it too. Forty of those is most of a log window, and the one fact
+ *   that matters is in the `<title>`.
+ *
+ *   IT IS ALSO THE WHOLE DIAGNOSIS. A 522 is not a slow query and not a bug in
+ *   this adapter: Cloudflare reached the Supabase host and the host never
+ *   finished the request. Cloudflare's own page says why — "something on your
+ *   server is hogging resources" — which is what #909 measured at ~1,037,000
+ *   buffers per admin dashboard load.
+ *
+ *   So the page is reduced to its title and its error code, and the reader is
+ *   told where the failure was, rather than being handed the page to read.
+ */
+function summariseHtmlErrorPage(message: string): string | null {
+    const looksLikeHtml = /^\s*<(!DOCTYPE|html)\b/i.test(message) || message.includes('<!DOCTYPE html>');
+    if (!looksLikeHtml) return null;
+
+    const title = /<title>([^<]{1,200})<\/title>/i.exec(message)?.[1]?.trim();
+    const cfCode = /Error code (\d{3})/i.exec(message)?.[1];
+    const ray = /Cloudflare Ray ID: <strong[^>]*>([0-9a-f]{8,32})</i.exec(message)?.[1];
+
+    const bits = [
+        title || 'an HTML error page',
+        cfCode ? `(Cloudflare ${cfCode} — the database host did not finish the request; this is the ORIGIN failing, not a query)` : '',
+        ray ? `ray ${ray}` : '',
+    ].filter(Boolean);
+
+    return `${bits.join(' ')} [${message.length} bytes of HTML suppressed]`;
+}
+
 function describeDbError(
     error: { message?: string | null; code?: string | null; details?: string | null; hint?: string | null } | null | undefined,
     response?: { status?: number | null; statusText?: string | null } | null,
 ): string {
     if (!error) return 'no error object';
+
+    //   #910 An HTML page is not a message. Summarise it before anything else,
+    //   or ten kilobytes of Cloudflare markup lands in the log forty times.
+    if (typeof error.message === 'string' && error.message.length > 200) {
+        const summary = summariseHtmlErrorPage(error.message);
+        if (summary) return summary;
+    }
 
     const parts = [error.message, error.details, error.hint]
         .map((p) => (typeof p === 'string' ? p.trim() : ''))

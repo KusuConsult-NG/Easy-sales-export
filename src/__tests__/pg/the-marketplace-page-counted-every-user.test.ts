@@ -336,6 +336,49 @@ describe('#710 — and a database error that says nothing is not a log line', ()
         expect(describeDbError({}, null)).toBe('no message, code, details or hint');
     });
 
+    it('#910 — TEN KILOBYTES OF CLOUDFLARE HTML BECOMES ONE LINE', () => {
+        /*
+         *   THE OWNER'S LOG, every entry for two solid minutes:
+         *
+         *       [supabase-db] query feature_toggles: <!DOCTYPE html> …
+         *         <title>supabase.co | 522: Connection timed out</title>
+         *
+         *   supabase-js puts the RESPONSE BODY in `error.message`, and when the
+         *   origin is down that body is Cloudflare's error page. Forty of those
+         *   is most of a log window, and the one fact that matters is the title.
+         */
+        const page = [
+            '<!DOCTYPE html>',
+            '<html><head><title>supabase.co | 522: Connection timed out</title></head>',
+            '<body><h1>Connection timed out<span class="code-label">Error code 522</span></h1>',
+            `<p>${'x'.repeat(9000)}</p>`,
+            '<span class="cf-footer-item">Cloudflare Ray ID: <strong class="font-semibold">a3eddc753f119a11</strong></span>',
+            '</body></html>',
+        ].join('\n');
+
+        const line = describeDbError({ message: page });
+
+        expect(line).toContain('522: Connection timed out');
+        expect(line).toContain('Cloudflare 522');
+        expect(line).toContain('a3eddc753f119a11');
+        //   AND the page itself is gone. The whole point.
+        expect(line).not.toContain('<!DOCTYPE');
+        expect(line.length).toBeLessThan(400);
+    });
+
+    it('#910 — AND A REAL POSTGREST MESSAGE IS UNTOUCHED, however long', () => {
+        /*
+         *   THE control. A formatter that suppressed anything long would throw
+         *   away the row-level-security explanations and constraint names that
+         *   are the most useful errors this adapter produces.
+         */
+        const longButReal = 'new row violates row-level security policy for table "users" — '
+            + 'x'.repeat(500);
+
+        expect(describeDbError({ message: longButReal, code: '42501' }))
+            .toBe(`[42501] ${longButReal}`);
+    });
+
     it('AND EVERY THROW IN THE ADAPTER GOES THROUGH IT', () => {
         /*
          *   The N-doors half. Eleven sites built their message the old way, and
