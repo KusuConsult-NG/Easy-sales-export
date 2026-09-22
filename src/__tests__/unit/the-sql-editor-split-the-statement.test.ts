@@ -52,6 +52,7 @@ const EDITOR_SCRIPTS = [
     'scripts/export-registration-statuses.sql',
     'scripts/cooperative-members-who-never-paid.sql',
     'scripts/entitlements-nobody-paid-for.sql',
+    'scripts/academy-paid-twice.sql',
 ];
 
 /** Everything that is not a leading `--` comment: the executable statement. */
@@ -178,6 +179,19 @@ describe.each(EDITOR_SCRIPTS)('#910 — %s survives the SQL Editor that has to r
             'scripts/entitlements-nobody-paid-for.sql': [
                 'cooperative_member', 'processed_payments', '_roleGrantedBy',
             ],
+            /*
+             *   The refund sweep after #258's gate refused learners who had
+             *   already paid. `distinct reference` is named because the whole
+             *   query turns on it: two ROWS can be one charge replayed by a
+             *   webhook, and refunding on a row count would hand back money
+             *   that was never taken twice. `users` is named because the
+             *   grouping is by PERSON, not by userId -- #888's split accounts
+             *   put the second charge on the sibling row, which is the case
+             *   this exists to catch.
+             */
+            'scripts/academy-paid-twice.sql': [
+                'processed_payments', 'academy_registration', 'distinct reference', 'users',
+            ],
         };
 
         const expected = MUST_MENTION[SCRIPT];
@@ -201,7 +215,7 @@ describe('#910 — and the list of editor scripts is the list', () => {
          *   guard, and it fails the day a third editor script is written and
          *   not added.
          */
-        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 4 });
+        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 5 });
         for (const rel of EDITOR_SCRIPTS) {
             expect({ rel, exists: readFileSync(join(process.cwd(), rel), 'utf-8').length > 0 })
                 .toEqual({ rel, exists: true });
