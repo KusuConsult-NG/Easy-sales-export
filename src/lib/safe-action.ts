@@ -154,12 +154,43 @@ async function captureObservabilityTrace(actionName: string, error: any, args: a
  *
  *   TUNABLE WITHOUT A DEPLOY, because the right threshold is not knowable from
  *   here: SLOW_ACTION_MS on the service lowers it to catch more, or raises it
- *   once the worst offenders are gone. `<= 0` turns the reporting off entirely
- *   for an operator who wants silence.
+ *   once the worst offenders are gone. `0` turns the reporting off entirely
+ *   for an operator who wants silence. Read per call, not frozen at import, so
+ *   changing it on the service takes effect on restart without a rebuild.
+ *
+ *   300ms BY DEFAULT, at the owner's instruction. 1000 was the first guess and
+ *   it was too coarse to be useful: a page that makes four actions of 400ms
+ *   each feels slow and reports nothing at all. The point of this is to find
+ *   what to fix, so it is set where it will actually name things.
+ *
+ *   ── A BLANK VALUE IS NOT A ZERO, AND THAT DISTINCTION IS THE BUG ──────────
+ *
+ *   `Number("")` is 0, and 0 means OFF. So a variable that exists on the
+ *   service WITH AN EMPTY VALUE would have switched this off silently while
+ *   looking configured — and it is set by typing into a hosting dashboard,
+ *   where an unresolved reference like ${{Svc.VAR}} leaves exactly that.
+ *
+ *   This platform has been bitten by that precise shape before: #716 is the
+ *   owner answering "[Redis] UPSTASH_REDIS_REST_URL IS NOT SET" with "this IS
+ *   set", both of them right, because the row existed and its value was blank.
+ *   lib/redis.ts now distinguishes missing from empty for that reason, and a
+ *   diagnostic that quietly reports nothing is worse than a cache that quietly
+ *   does nothing: the whole purpose of this one is to be believed when it
+ *   stays silent.
+ *
+ *   So a blank or unparseable value falls back to the default, and only a real
+ *   number set on purpose can turn the reporting off.
  */
+const SLOW_ACTION_DEFAULT_MS = 300;
+
 const slowActionThresholdMs = (): number => {
-    const raw = Number(process.env.SLOW_ACTION_MS);
-    return Number.isFinite(raw) ? raw : 1000;
+    const configured = process.env.SLOW_ACTION_MS?.trim();
+    if (!configured) return SLOW_ACTION_DEFAULT_MS;
+
+    const raw = Number(configured);
+    //   Negative is not a threshold anybody means; it reads as "off" the same
+    //   way 0 does rather than as "report everything".
+    return Number.isFinite(raw) ? raw : SLOW_ACTION_DEFAULT_MS;
 };
 
 /**

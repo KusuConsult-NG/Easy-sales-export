@@ -141,6 +141,83 @@ describe('a server action that takes too long says so, by name', () => {
     });
 });
 
+describe('the threshold that gets typed into a hosting dashboard', () => {
+    /*
+     *   300ms IS THE DEFAULT, at the owner's instruction, and it is asserted
+     *   rather than assumed: 1000 was the first guess and it was too coarse to
+     *   be useful. A page making four 400ms actions feels slow and, at 1000,
+     *   reports nothing at all.
+     */
+    it('DEFAULTS TO 300ms when nothing is set', async () => {
+        delete process.env.SLOW_ACTION_MS;
+        const { withSafeAction } = await subject();
+        const action = withSafeAction('defaultThreshold', async () => {
+            await sleep(330);
+            return { success: true as const, error: null, data: 1 };
+        });
+
+        await action();
+
+        expect(slowLines(warn)).toHaveLength(1);
+    });
+
+    it('and says nothing just under it', async () => {
+        delete process.env.SLOW_ACTION_MS;
+        const { withSafeAction } = await subject();
+        const action = withSafeAction('defaultThreshold', async () =>
+            ({ success: true as const, error: null, data: 1 }));
+
+        await action();
+
+        expect(slowLines(warn)).toEqual([]);
+    });
+
+    /*
+     *   THE ONE THAT WOULD HAVE BITTEN IN PRODUCTION.
+     *
+     *   `Number('')` is 0 and 0 means OFF, so a variable present on the service
+     *   with an EMPTY VALUE switched the reporting off while looking
+     *   configured. That is how a hosting dashboard leaves an unresolved
+     *   reference, and #716 is this owner answering "IS NOT SET" with "this IS
+     *   set" -- both correct, because the row existed and was blank.
+     *
+     *   A diagnostic that silently reports nothing is worse than a cache that
+     *   silently does nothing: the point of this one is to be BELIEVED when it
+     *   stays quiet.
+     */
+    it.each([['an empty value', ''], ['whitespace', '   '], ['nonsense', 'soon']])(
+        'TREATS %s AS UNSET, not as "off"',
+        async (_label, value) => {
+            process.env.SLOW_ACTION_MS = value;
+            const { withSafeAction } = await subject();
+            const action = withSafeAction('blankThreshold', async () => {
+                await sleep(330);
+                return { success: true as const, error: null, data: 1 };
+            });
+
+            await action();
+
+            //   Falls back to the 300ms default and still reports.
+            expect(slowLines(warn)).toHaveLength(1);
+        },
+    );
+
+    it('but an explicit zero really does turn it off', async () => {
+        //   Deliberate silence stays available -- only ACCIDENTAL silence is
+        //   removed.
+        process.env.SLOW_ACTION_MS = '0';
+        const { withSafeAction } = await subject();
+        const action = withSafeAction('deliberatelyOff', async () => {
+            await sleep(330);
+            return { success: true as const, error: null, data: 1 };
+        });
+
+        await action();
+
+        expect(slowLines(warn)).toEqual([]);
+    });
+});
+
 describe('the measurement cannot break what it measures', () => {
     it('HANDS BACK THE VALUE UNTOUCHED', async () => {
         process.env.SLOW_ACTION_MS = '5';
