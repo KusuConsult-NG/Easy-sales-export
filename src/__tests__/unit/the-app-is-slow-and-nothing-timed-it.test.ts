@@ -33,8 +33,18 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 jest.mock('@/app/actions/telemetry', () => ({ logTelemetryAction: jest.fn() }));
 jest.mock('@/lib/logger-server', () => ({ logObservabilityTrace: jest.fn() }));
 
-import { withSafeAction, withFlexibleSafeAction } from '@/lib/safe-action';
-import { logger } from '@/lib/logger';
+/*
+ *   LOADED DYNAMICALLY, NOT AT THE TOP — #392's rule, and its detector caught
+ *   this file.
+ *
+ *   `jest` is imported from '@jest/globals' here, so the two jest.mock calls
+ *   above do NOT hoist. A static `import ... from '@/lib/safe-action'` would
+ *   therefore pull telemetry and logger-server in BEFORE either mock was
+ *   registered, and the suite would quietly exercise the real modules while
+ *   claiming to have replaced them.
+ */
+const subject = () => import('@/lib/safe-action');
+const loggerModule = () => import('@/lib/logger');
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -47,7 +57,8 @@ const slowLines = (warn: any): string[] =>
 let warn: any;
 const originalThreshold = process.env.SLOW_ACTION_MS;
 
-beforeEach(() => {
+beforeEach(async () => {
+    const { logger } = await loggerModule();
     warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined as any);
 });
 
@@ -60,6 +71,7 @@ afterEach(() => {
 describe('a server action that takes too long says so, by name', () => {
     it('NAMES THE ACTION AND THE MILLISECONDS', async () => {
         process.env.SLOW_ACTION_MS = '5';
+        const { withSafeAction } = await subject();
         const action = withSafeAction('getMyDashboard', async () => {
             await sleep(25);
             return { success: true as const, error: null, data: 'ok' };
@@ -77,6 +89,7 @@ describe('a server action that takes too long says so, by name', () => {
 
     it('SAYS NOTHING about an action that was fast — the log must stay a shortlist', async () => {
         process.env.SLOW_ACTION_MS = '10000';
+        const { withSafeAction } = await subject();
         const action = withSafeAction('getMyWalletBalance', async () =>
             ({ success: true as const, error: null, data: 0 }));
 
@@ -87,6 +100,7 @@ describe('a server action that takes too long says so, by name', () => {
 
     it('is turned OFF by a threshold of zero, for an operator who wants silence', async () => {
         process.env.SLOW_ACTION_MS = '0';
+        const { withSafeAction } = await subject();
         const action = withSafeAction('anything', async () => {
             await sleep(20);
             return { success: true as const, error: null, data: 1 };
@@ -99,6 +113,7 @@ describe('a server action that takes too long says so, by name', () => {
 
     it('REPORTS A SLOW FAILURE TOO — the nine-second timeout is the interesting one', async () => {
         process.env.SLOW_ACTION_MS = '5';
+        const { withSafeAction } = await subject();
         const action = withSafeAction('checkoutAction', async () => {
             await sleep(25);
             throw new Error('upstream timed out');
@@ -115,6 +130,7 @@ describe('a server action that takes too long says so, by name', () => {
 
     it('covers withFlexibleSafeAction as well, which wraps the academy payment gate', async () => {
         process.env.SLOW_ACTION_MS = '5';
+        const { withFlexibleSafeAction } = await subject();
         const action = withFlexibleSafeAction('checkAcademyPaymentStatusAction', async () => {
             await sleep(25);
             return { success: true as const, error: null, data: 'paid' };
@@ -129,6 +145,7 @@ describe('the measurement cannot break what it measures', () => {
     it('HANDS BACK THE VALUE UNTOUCHED', async () => {
         process.env.SLOW_ACTION_MS = '5';
         const payload = { success: true as const, error: null, data: { deep: { value: 42 } } };
+        const { withSafeAction } = await subject();
         const action = withSafeAction('getMyDashboard', async () => { await sleep(10); return payload; });
 
         expect(await action()).toEqual(payload);
@@ -138,6 +155,7 @@ describe('the measurement cannot break what it measures', () => {
         process.env.SLOW_ACTION_MS = '5';
         warn.mockImplementation(() => { throw new Error('log sink is down'); });
 
+        const { withSafeAction } = await subject();
         const action = withSafeAction('getMyDashboard', async () => {
             await sleep(20);
             return { success: true as const, error: null, data: 'still here' };
@@ -153,6 +171,7 @@ describe('the measurement cannot break what it measures', () => {
         const redirectError: any = new Error('NEXT_REDIRECT');
         redirectError.digest = 'NEXT_REDIRECT;push;/academy/application;307;';
 
+        const { withSafeAction } = await subject();
         const action = withSafeAction('academyGate', async () => { await sleep(10); throw redirectError; });
 
         await expect(action()).rejects.toBe(redirectError);
