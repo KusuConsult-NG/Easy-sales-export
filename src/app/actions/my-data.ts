@@ -540,9 +540,32 @@ const fetchUpcomingEventsCached = unstable_cache(
         const isUpcoming = (status: string, when: Date) =>
             status !== "cancelled" && status !== "completed" && when >= new Date();
 
+        /*
+         *   NARROWED TO THE FIELDS THE MAPPERS BELOW ACTUALLY READ — #696.
+         *
+         *   Both of these are PLATFORM-WIDE scans with no filter, run to draw
+         *   three rows, behind the dashboard's eight-second poll. Every row
+         *   came back as a whole document.
+         *
+         *   That is the exact cost the 2026-08-10 performance audit measured
+         *   and named: "598 ms to scan ~1,830 rows ... the likely cause is
+         *   large JSONB being detoasted by SELECT *. SELECTING FEWER COLUMNS
+         *   IS THE FIX; indexing is not." A training event carries its agenda
+         *   and a market event its stalls; neither appears on this tile.
+         *
+         *   THE FIELD LISTS ARE THE MAPPERS' OWN. Anything read below and not
+         *   named here arrives as `undefined` and falls to its default — a
+         *   silent wrong value, not an error — so the two must be kept in step.
+         *   The fake database narrows exactly as the adapter does, so a field
+         *   dropped from either list fails the suite rather than the tile.
+         */
         const [waveSnap, marketSnap] = await Promise.all([
-            db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).get(),
-            db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).get(),
+            db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS)
+                .select("title", "description", "date", "status", "meetingLink", "instructor")
+                .get(),
+            db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS)
+                .select("title", "description", "startTime", "status", "location", "state")
+                .get(),
         ]);
 
         const wave = waveSnap.docs.map(doc => {
@@ -605,7 +628,13 @@ export async function getUpcomingEvents(max = 3): Promise<any[]> {
  */
 const fetchRecentResourcesCached = unstable_cache(
     async (max: number): Promise<any[]> => {
-        const snap = await db.collection(COLLECTIONS.WAVE_RESOURCES).get();
+        //   Narrowed on the same terms as getUpcomingEvents above — see that
+        //   header. A resource row carries its file metadata and description;
+        //   this tile shows a title and a date.
+        const snap = await db.collection(COLLECTIONS.WAVE_RESOURCES)
+            .select("title", "description", "category", "fileUrl", "fileName",
+                "fileSize", "downloads", "uploadedAt", "createdAt", "isActive")
+            .get();
 
         return snap.docs
             .map(doc => {

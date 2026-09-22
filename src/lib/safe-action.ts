@@ -130,6 +130,68 @@ async function captureObservabilityTrace(actionName: string, error: any, args: a
 }
 
 /**
+ * How long a server action may take before it is named in the log.
+ *
+ *   THE OWNER, THREE TIMES: "the entire app is still very slow".
+ *
+ *   Answered three times with inference, because nothing on this platform
+ *   measures a server action. The admin side was repaired from a measurement —
+ *   EXPLAIN ANALYZE on the registration rollup, 1,037,000 buffers down to
+ *   1,262 — and the user side has only ever been repaired from READING CODE,
+ *   which is how "I fixed the slowness" and "it is still slow" have both been
+ *   true at once.
+ *
+ *   Every server action on this platform already funnels through the two
+ *   wrappers below. One `Date.now()` on each side of the call they already
+ *   make turns "the app is slow" into a list of names and milliseconds, in
+ *   production, in logs the owner already reads — and costs a subtraction per
+ *   action to do it.
+ *
+ *   A THRESHOLD, NOT A LINE PER CALL. This platform runs thousands of actions
+ *   a minute; logging every one would bury the answer in the evidence. Only
+ *   the ones that are actually slow are named, so the log stays a shortlist of
+ *   what to fix rather than a trace to be sifted.
+ *
+ *   TUNABLE WITHOUT A DEPLOY, because the right threshold is not knowable from
+ *   here: SLOW_ACTION_MS on the service lowers it to catch more, or raises it
+ *   once the worst offenders are gone. `<= 0` turns the reporting off entirely
+ *   for an operator who wants silence.
+ */
+const slowActionThresholdMs = (): number => {
+    const raw = Number(process.env.SLOW_ACTION_MS);
+    return Number.isFinite(raw) ? raw : 1000;
+};
+
+/**
+ * Run `fn`, and name it in the log if it was slow.
+ *
+ *   `finally`, so an action that FAILS slowly is reported too. A failure that
+ *   takes nine seconds is the more interesting one — it is usually a timeout,
+ *   and a timeout is the thing a user actually sits through.
+ *
+ *   THE TIMING MUST NEVER CHANGE THE OUTCOME. It returns the value untouched,
+ *   rethrows untouched, and its own logging is wrapped so a broken logger
+ *   cannot turn a working action into a failed one. Instrumentation that can
+ *   break the thing it measures is worse than none.
+ */
+async function reportingHowLongItTook<T>(actionName: string, fn: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    try {
+        return await fn();
+    } finally {
+        try {
+            const elapsedMs = Date.now() - startedAt;
+            const threshold = slowActionThresholdMs();
+            if (threshold > 0 && elapsedMs >= threshold) {
+                logger.warn(`[slow-action] ${actionName} took ${elapsedMs}ms`, { actionName, elapsedMs });
+            }
+        } catch {
+            // An unreportable measurement is not a reason to fail the action.
+        }
+    }
+}
+
+/**
  * A higher-order function that wraps Server Actions to catch any unhandled exceptions
  * and return them safely as structured { success: false, error: string } objects.
  * Prevents Node.js runtime crashes and 500 Server Errors in Next.js 16.
@@ -140,7 +202,7 @@ export function withSafeAction<TArgs extends any[], TReturn>(
 ): (...args: TArgs) => Promise<ActionResponse<TReturn>> {
     return async (...args: TArgs): Promise<ActionResponse<TReturn>> => {
         try {
-            return await actionFn(...args);
+            return await reportingHowLongItTook(actionName, () => actionFn(...args));
         } catch (error: any) {
             // CRITICAL: Re-throw Next.js internal errors (redirects/not-found)
             if (error && typeof error === 'object' && 'digest' in error) {
@@ -205,7 +267,7 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
 ): (...args: TArgs) => Promise<TReturn | { success: false; error: string; data: null; meta?: any }> {
     return async (...args: TArgs): Promise<TReturn | { success: false; error: string; data: null; meta?: any }> => {
         try {
-            return await actionFn(...args);
+            return await reportingHowLongItTook(actionName, () => actionFn(...args));
         } catch (error: any) {
             // CRITICAL: Re-throw Next.js internal errors (redirects/not-found)
             if (error && typeof error === 'object' && 'digest' in error) {
