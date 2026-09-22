@@ -610,16 +610,21 @@ async function _onboardLegacyMemberAction(
         const serviceRegistrations: any = {};
         const now = FieldValue.serverTimestamp();
 
-        if (data.services?.marketplace || data.roles.includes("seller") || data.roles.includes("marketplace_buyer")) {
-            // Determine account type from roles
-            let accountType = "buyer";
-            if (data.roles.includes("seller")) {
-                accountType = data.roles.includes("marketplace_buyer") ? "both" : "seller";
-            }
+        /*
+         *   ONE STATEMENT OF WHAT THIS IMPORT SAYS THE MEMBER IS.
+         *
+         *   Derived here rather than inside the marketplace branch, because the
+         *   SELLER_VERIFICATIONS row written three hundred lines below needs the
+         *   SAME answer and had none — see there.
+         */
+        const marketplaceAccountType = data.roles.includes("seller")
+            ? (data.roles.includes("marketplace_buyer") ? "both" : "seller")
+            : "buyer";
 
+        if (data.services?.marketplace || data.roles.includes("seller") || data.roles.includes("marketplace_buyer")) {
             serviceRegistrations.marketplace = { 
                 status: "approved", 
-                accountType,
+                accountType: marketplaceAccountType,
                 paymentStatus: "completed",
                 onboardingCompleted: true,
                 approvedAt: now 
@@ -950,12 +955,45 @@ async function _onboardLegacyMemberAction(
 
         // Vendor Settings / Seller Profile Document
         if (data.services?.marketplace || data.roles.includes("seller")) {
-            // Mark as active/verified seller if role is present
-            const sellerStatus = data.roles.includes("seller") ? "approved" : "pending";
+            /*
+             *   THE OWNER: "Legacy members don't need to be approved since they
+             *   are added by admin."
+             *
+             *   This row was the one place that still asked. It read
+             *
+             *       const sellerStatus = data.roles.includes("seller")
+             *           ? "approved" : "pending";
+             *
+             *   so a legacy member imported by an administrator landed PENDING
+             *   on marketplace unless the spreadsheet happened to carry the
+             *   literal "seller" role — while the ACADEMY, EXPORT, WAVE and FARM
+             *   NATION rows this same import writes are all `status: "approved"`
+             *   unconditionally, and the users document it writes alongside this
+             *   one says `serviceRegistrations.marketplace.status = "approved"`
+             *   too. One import, two records, opposite answers.
+             *
+             *   The disagreement is not cosmetic: checkModuleAccess and
+             *   _mp_onboarding both read the VERIFICATION row, so an admin who
+             *   had just imported a member was shown an application waiting for
+             *   their approval — of a member they had themselves created.
+             *
+             *   An admin creating a member IS the approval. The import is the
+             *   decision; there is nobody else it could be waiting for.
+             *
+             *   AND THE accountType TRAVELS WITH IT, which is the half that
+             *   would otherwise bite. checkModuleAccess grants roles from this
+             *   row and falls back to "seller" when the field is absent — a
+             *   deliberate choice so legacy rows predating the field are not
+             *   demoted. These rows are written HERE and can carry it, so a
+             *   legacy marketplace BUYER is not handed selling rights by that
+             *   fallback.
+             */
+            const sellerStatus = "approved";
             batch.set(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(`legacy_${userRecord.uid}`), {
                 id: `legacy_${userRecord.uid}`,
                 userId: userRecord.uid,
                 status: sellerStatus,
+                accountType: marketplaceAccountType,
                 businessName: `${firstName}'s Enterprise`,
                 phone: data.phone,
                 location: {
