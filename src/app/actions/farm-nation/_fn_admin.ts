@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { rolesForFarmNationRole } from "@/lib/farm-nation-roles";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
@@ -110,6 +111,25 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
             const userDoc = await transaction.get(userRef);
 
+            /*
+             *   WHAT DID THEY APPLY TO BE?
+             *
+             *   Read before either write below, because both used to answer
+             *   "farmer" without asking. The onboarding records the choice in
+             *   three consistent places — the application row, `farmNation.role`
+             *   and `serviceRegistrations.farmNation.role` — so it is read from
+             *   the application first (the document this approval is ABOUT) and
+             *   from the user record second, for a row written before the
+             *   application carried it.
+             */
+            const appDataForRole = !appSnap.empty ? appSnap.docs[0].data() : {};
+            const existingUser = userDoc.exists ? userDoc.data() : undefined;
+            const appliedAs =
+                appDataForRole?.role
+                ?? (existingUser as any)?.serviceRegistrations?.farmNation?.role
+                ?? (existingUser as any)?.farmNation?.role;
+            const grantedRoles = rolesForFarmNationRole(appliedAs);
+
             if (!userDoc.exists) {
                 const appData = !appSnap.empty ? appSnap.docs[0].data() : {};
                 const profile = appData.profile || {};
@@ -121,7 +141,8 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
                     email: resolvedEmail!,
                     fullName: profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : "Farmer",
                     createdAt: FieldValue.serverTimestamp(),
-                    roles: ["farmer"],
+                    //   What they applied to be, not "farmer" regardless.
+                    roles: grantedRoles,
                     isVerified: true,
                 });
             }
@@ -132,7 +153,10 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
                 "serviceRegistrations.farmNation.paymentStatus": "completed",
                 "serviceRegistrations.farmNation.approvedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.farmNation.approvedBy": session.user.id,
-                roles: FieldValue.arrayUnion("farmer")
+                //   Recorded too, so the next reader does not have to find it
+                //   on the application row.
+                "serviceRegistrations.farmNation.role": appliedAs ?? null,
+                roles: FieldValue.arrayUnion(...grantedRoles)
             });
 
             // Update application

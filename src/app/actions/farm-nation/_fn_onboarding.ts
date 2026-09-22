@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { rolesForFarmNationRole } from "@/lib/farm-nation-roles";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -137,14 +138,10 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
         }
         const validatedData = validation.data;
 
-        // Prepare user roles
-        const roles: string[] = [];
-        if (validatedData.role === "buyer" || validatedData.role === "both") { 
-            roles.push("investor");
-        }
-        if (validatedData.role === "seller" || validatedData.role === "both") { 
-            roles.push("farmer");
-        }
+        //   The same rule the ADMIN APPROVAL now asks. It was stated here and
+        //   nowhere else, which is why the approval could contradict it — see
+        //   lib/farm-nation-roles for what that cost a buyer.
+        const roles: string[] = rolesForFarmNationRole(validatedData.role);
 
         // ── EXECUTE ONBOARDING IN A TRANSACTION ──────
         await db.runTransaction(async (transaction) => {

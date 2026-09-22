@@ -40,7 +40,7 @@ import NotificationCenter from "./NotificationCenter";
 import { hasAppAccess } from "@/lib/role-app-mapping";
 import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
-import { LAND_SELLER_ROLES, MARKETPLACE_BUYER_ROLES } from "@/lib/role-app-mapping";
+import { LAND_BUYER_ROLES, LAND_SELLER_ROLES, MARKETPLACE_BUYER_ROLES } from "@/lib/role-app-mapping";
 import { navItemAllowedForRoles } from "@/lib/nav-visibility";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getMyUnreadMessageCount } from "@/app/actions/my-data";
@@ -150,8 +150,8 @@ const COOPERATIVES_NAV: NavItem[] = [
  */
 const FARM_NATION_NAV: NavItem[] = [
     { name: "Properties",     href: "/farm-nation/properties",    icon: Map },
-    { name: "My Purchases",   href: "/farm-nation/my-purchases",  icon: ShoppingCart },
-    { name: "My Inquiries",   href: "/farm-nation/inquiries",     icon: MessageSquare },
+    { name: "My Purchases",   href: "/farm-nation/my-purchases",  icon: ShoppingCart, rolesAny: LAND_BUYER_ROLES },
+    { name: "My Inquiries",   href: "/farm-nation/inquiries",     icon: MessageSquare, rolesAny: LAND_BUYER_ROLES },
     /*
      *   #874 Ungated for the same reason "My Purchases" and "My Inquiries" are:
      *   one page carries BOTH sides of a negotiation, so a farmer who has been
@@ -159,7 +159,7 @@ const FARM_NATION_NAV: NavItem[] = [
      *   it, and hiding a screen from somebody who has used it is a worse failure
      *   than showing one that is empty.
      */
-    { name: "My Offers",      href: "/farm-nation/offers",        icon: Handshake },
+    { name: "My Offers",      href: "/farm-nation/offers",        icon: Handshake, rolesAny: LAND_BUYER_ROLES },
     { name: "Map View",       href: "/farm-nation/map",           icon: Map },
     /*
      *   The seller's half. Ungated these sent a buyer to a form she cannot
@@ -192,7 +192,7 @@ const FARM_NATION_NAV: NavItem[] = [
      *   they signed out and back in. That is precisely "couldn't see the
      *   properties they listed".
      */
-    { name: "My Properties",  href: "/farm-nation/my-properties", icon: Tractor },
+    { name: "My Properties",  href: "/farm-nation/my-properties", icon: Tractor, rolesAny: LAND_SELLER_ROLES },
     /*
      *   THE FORM KEEPS ITS GATE — a buyer cannot complete it — but not the
      *   narrow spelling of it. `land_owner` is a Farm Nation role everywhere
