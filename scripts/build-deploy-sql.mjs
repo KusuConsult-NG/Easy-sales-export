@@ -456,6 +456,30 @@ const EXPECTED = [
              "to the eight queries when the function is absent, so a deploy " +
              "landing before this migration is slow rather than broken.",
     },
+    {
+        n: "050",
+        why: "idx_dc_collection_user_email — the claim-by-email lookup every " +
+             "module's status check makes, which nothing indexed. MEASURED " +
+             "rather than guessed: #261's [slow-action] timing produced its " +
+             "first production log and named the whole family — " +
+             "checkCooperativeStatusAction 2,156-3,585 ms, " +
+             "checkWaveStatusAction 784-2,784 ms, checkAcademyStatusAction " +
+             "1,828 ms, checkFarmNationStatusAction 1,715 ms — and every " +
+             "module entry runs one. Each walks a claim-by-email path for " +
+             "application rows written before the member had an account, " +
+             "which carry userEmail and no userId; nine call sites do it, " +
+             "three of them in module-access-check, which every module " +
+             "layout calls. 048 indexed (collection_name, status) and " +
+             "(collection_name, userId) on document_collections and stopped " +
+             "there, so each lookup scanned its whole collection inside the " +
+             "shared table and detoasted every raw_data it passed — the " +
+             "2026-08-10 audit's measured mechanism, on the hottest user " +
+             "path. Against 20,000 seeded rows: seq scan 514 buffers / 15.6 " +
+             "ms, index scan 4 buffers / 0.03 ms. (collection_name, key) in " +
+             "that order for 041's and 048's reason. Changes no row and is " +
+             "not required for correctness, so a deploy landing before it is " +
+             "slow rather than broken.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

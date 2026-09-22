@@ -272,8 +272,31 @@ export default function WaveApplicationClient(
 
             checkApplicationStatus(isEditParam);
         }
+    /*
+     *   THE IDENTITY OF THE SESSION OBJECT, NOT THE IDENTITY OF THE USER.
+     *
+     *   MEASURED IN PRODUCTION, once [slow-action] existed to measure it:
+     *   checkWaveStatusAction ran about fourteen times in forty seconds for
+     *   one member, at 784ms to 2784ms a call.
+     *
+     *   It was keyed on the whole `session` object. SessionRefreshListener
+     *   calls next-auth's update() on EVERY path change and EVERY window
+     *   focus; update() re-mints the session, useSession() hands back a new
+     *   object, and this effect fires again. `router` and `showToast` are in
+     *   the list for no reason at all — the effect calls neither.
+     *
+     *   And the seed cannot absorb it: checkApplicationStatus opens with
+     *   takeSeed(), which is consumed on the first call by design, so every
+     *   firing after the first is a real round trip. The action itself makes
+     *   five to eight of them in series.
+     *
+     *   The three effects above this one in this same file already key on
+     *   `session?.user?.id`. This one now agrees with them, which is the only
+     *   thing that changed: the user has not changed, so there is nothing to
+     *   re-check.
+     */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [session, router, showToast]);
+    }, [session?.user?.id]);
 
     const checkApplicationStatus = async (isEditParam: boolean) => {
         //   #560 — the server walked this chain already, following the same
