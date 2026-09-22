@@ -364,3 +364,13 @@ export const LAND_SELLER_ROLES: readonly UserRole[] = ["farmer", "land_owner"];
  *   places, and writing one spelling here would reproduce it on the buyer side.
  */
 export const MARKETPLACE_BUYER_ROLES: readonly UserRole[] = ["buyer", "marketplace_buyer"];
+
+/**
+ * Farm Nation's buyer, the mirror of LAND_SELLER_ROLES above.
+ *
+ *   `investor` is what the onboarding grants an applicant who answers "buyer"
+ *   to its role step, and APP_TO_ROLES already files it under farm-nation. It
+ *   had no named constant because nothing gated on it — the buying screens were
+ *   shown to everybody.
+ */
+export const LAND_BUYER_ROLES: readonly UserRole[] = ["investor"];

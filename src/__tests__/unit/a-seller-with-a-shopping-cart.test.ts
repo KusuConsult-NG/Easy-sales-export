@@ -59,6 +59,22 @@ describe('a seller with a shopping cart', () => {
         expect(navItemAllowedForRoles(BUYER_ITEM, ['buyer'])).toBe(true);
     });
 
+    it('AND THE NAV DOES NOT DECIDE FROM THE TOKEN', async () => {
+        /*
+         *   The gate is only as good as what it reads. #878's objection was
+         *   precisely that `session.user.roles` is a JWT claim with an 8-hour
+         *   maxAge, so gating on it hides screens from a member approved five
+         *   minutes ago. If this component ever goes back to deciding from the
+         *   claim alone, the gates above become that defect.
+         */
+        const { readFileSync } = await import('fs');
+        const src = readFileSync('src/components/layout/ModuleSidebar.tsx', 'utf8');
+
+        expect(src).toContain('getMyLiveRoles');
+        //   The claim is the INITIAL value, not the decider.
+        expect(src).toContain('const roles = liveRoles ?? claimedRoles;');
+    });
+
     it('AND THE MARKETPLACE NAV ACTUALLY CARRIES THE GATES', async () => {
         //   Running the predicate proves the rule; this proves the rule is
         //   APPLIED. The nav is a client module, so the source is read rather
@@ -66,10 +82,20 @@ describe('a seller with a shopping cart', () => {
         const { readFileSync } = await import('fs');
         const src = readFileSync('src/components/layout/ModuleSidebar.tsx', 'utf8');
 
-        //   NOT "My Orders" / "My Quotes": #878 forbids gating a list of your
-        //   own things on a token that goes stale, and this file's nav comment
-        //   records why that ruling wins here. They are empty for a seller.
-        for (const entry of ['Shopping Cart', 'Buyer Dashboard']) {
+        /*
+         *   MY ORDERS AND MY QUOTES ARE BACK ON THIS LIST.
+         *
+         *   They were left off on #878's authority — it forbids gating a list of
+         *   your own things on a claim that goes stale. That objection was about
+         *   the MECHANISM, and the owner restated the rule after hearing it:
+         *   "A buyer can only see the buyers features and the seller can only
+         *   see sellers features."
+         *
+         *   So the mechanism was fixed instead: ModuleSidebar reads roles LIVE
+         *   from the document now (getMyLiveRoles), not from the 8-hour token,
+         *   and #878's hazard went with the claim it was about.
+         */
+        for (const entry of ['Shopping Cart', 'My Orders', 'My Quotes', 'Buyer Dashboard']) {
             const line = src.split('\n').find(l => l.includes(`"${entry}"`));
             //   The entry name is folded into the asserted value, so a failure
             //   names which screen is ungated rather than just "undefined".

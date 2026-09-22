@@ -109,11 +109,21 @@ function form(overrides: Record<string, unknown> = {}): any {
     };
 }
 
+/**
+ * A learner who may submit.
+ *
+ *   PAID BY DEFAULT, because payment is now the PRECONDITION for submitting at
+ *   all — the owner's "before users can submit application on academy they
+ *   should make payment". A test that is not about payment should start from a
+ *   learner who can get through the door; the ones that ARE about it pass their
+ *   own `serviceRegistrations`, which replaces this wholesale.
+ */
 function seedUser(extra: Record<string, unknown> = {}): void {
     store.seed(COLLECTIONS.USERS, LEARNER, {
         email: 'ada@example.com',
         fullName: 'Ada Obi',
         roles: ['user'],
+        serviceRegistrations: { academy: { paymentStatus: 'completed' } },
         ...extra,
     });
 }
@@ -138,7 +148,7 @@ describe('submitAcademyApplicationAction', () => {
         expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: true });
 
         const app = onlyApp();
-        expect(app).toMatchObject({ userId: LEARNER, status: 'pending', paymentStatus: 'pending' });
+        expect(app).toMatchObject({ userId: LEARNER, status: 'pending', paymentStatus: 'completed' });
         expect(reg()).toMatchObject({ status: 'pending', applicationId: app.applicationId });
         expect(app.id).toBe(app.applicationId);
     });
@@ -180,7 +190,7 @@ describe('submitAcademyApplicationAction', () => {
     it('but "pending" with NO application id is the payment step, not an application', async () => {
         // The payment verification step also sets status "pending". Treating
         // that as a submitted application locked the learner out of applying.
-        seedUser({ serviceRegistrations: { academy: { status: 'pending' } } });
+        seedUser({ serviceRegistrations: { academy: { status: 'pending', paymentStatus: 'completed' } } });
         const { submitAcademyApplicationAction } = await actions();
         expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: true });
     });
@@ -193,7 +203,17 @@ describe('submitAcademyApplicationAction', () => {
         });
     });
 
-    it('auto-approves a learner who has already paid, and grants the role', async () => {
+    /*
+     *   THE OWNER: "yes decouple payment from auto-approval", after asking that
+     *   courses be "accessible to users after they paid AND approved by admin".
+     *
+     *   Paying used to BE approval: the application was written `status:
+     *   "approved"`, `reviewedBy: "system_auto_approval"`, with
+     *   `academy_participant` granted in the same request. Two gates now —
+     *   payment buys the right to APPLY, an administrator grants the right to
+     *   LEARN — and these tests are the old ones inverted.
+     */
+    it('A PAID LEARNER IS ACCEPTED AND LEFT FOR AN ADMIN — no longer auto-approved', async () => {
         seedUser({
             roles: ['user'],
             serviceRegistrations: {
@@ -202,31 +222,60 @@ describe('submitAcademyApplicationAction', () => {
         });
 
         const { submitAcademyApplicationAction } = await actions();
-        await submitAcademyApplicationAction(form());
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: true });
 
+        //   The payment is RECORDED. It just no longer decides.
         expect(onlyApp()).toMatchObject({
-            status: 'approved', reviewedBy: 'system_auto_approval', paymentAmount: 270000,
+            status: 'pending', reviewedBy: null, reviewedAt: null, paymentAmount: 270000,
         });
-        expect(reg().status).toBe('approved');
-        expect(readUser().roles).toContain('academy_participant');
-        expect(readUser().isVerified).toBe(true);
+        expect(reg().status).toBe('pending');
+
+        //   The entitlement is the admin's to grant — _ac_admin_review does it.
+        expect(readUser().roles).not.toContain('academy_participant');
     });
 
-    it.each(['completed', 'paid', 'successful'])('treats %p as paid', async (paymentStatus) => {
+    it.each(['completed', 'paid', 'successful'])('%p LETS THEM THROUGH THE DOOR', async (paymentStatus) => {
         seedUser({ serviceRegistrations: { academy: { paymentStatus } } });
         const { submitAcademyApplicationAction } = await actions();
-        await submitAcademyApplicationAction(form());
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: true });
 
-        expect(onlyApp().status).toBe('approved');
+        //   Accepted, and waiting on a person.
+        expect(onlyApp().status).toBe('pending');
     });
 
-    it('does not grant the role to an unpaid applicant', async () => {
-        seedUser();
+    it('A WAIVED PLACE LETS THEM THROUGH TOO — a grant is a decision, not a shortfall', async () => {
+        //   academyGrantFields writes paymentStatus: "waived" when an admin opens
+        //   a place without a payment. Refusing it would punish the learner for
+        //   the platform's own generosity.
+        seedUser({ serviceRegistrations: { academy: { paymentStatus: 'waived' } } });
         const { submitAcademyApplicationAction } = await actions();
-        await submitAcademyApplicationAction(form());
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: true });
+        expect(onlyApp().status).toBe('pending');
+    });
 
+    it('AN UNPAID APPLICANT IS REFUSED, and no row is written', async () => {
+        //   THE OWNER: "before users can submit application on academy they
+        //   should make payment before application can be submit."
+        //
+        //   The form already refused — Submit is disabled until paid. This is a
+        //   "use server" export, so it is a public endpoint and the button was
+        //   the only thing saying no.
+        seedUser({ serviceRegistrations: { academy: { paymentStatus: 'pending' } } });
+        const { submitAcademyApplicationAction } = await actions();
+
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({
+            success: false, error: expect.stringMatching(/payment/i),
+        });
+        expect(store.size(APPS)).toBe(0);
         expect(readUser().roles).not.toContain('academy_participant');
-        expect(onlyApp().reviewedBy).toBeNull();
+    });
+
+    it('AND SO IS AN APPLICANT WITH NO ACADEMY REGISTRATION AT ALL', async () => {
+        seedUser({ serviceRegistrations: {} });
+        const { submitAcademyApplicationAction } = await actions();
+
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: false });
+        expect(store.size(APPS)).toBe(0);
     });
 
     it('records the TIER the learner bought, not the literal "registration"', async () => {
@@ -301,7 +350,8 @@ describe('the academy dedup guard', () => {
         // improvements". The guard then matched their OWN rejected row on phone
         // and told them the number was already taken — permanently, in a
         // message that reads as though somebody else had it.
-        seedUser({ serviceRegistrations: { academy: { status: 'rejected' } } });
+        //   They paid once; the fee is not charged again to reapply.
+        seedUser({ serviceRegistrations: { academy: { status: 'rejected', paymentStatus: 'completed' } } });
         store.seed(APPS, 'my-old-one', {
             userId: LEARNER, status: 'rejected',
             personalInfo: { phone: '08012345678', email: 'ada@example.com' },
@@ -777,30 +827,41 @@ describe('#232 — a reapplication after a decision needs an admin', () => {
         expect(await submit()).toMatchObject({ success: true });
     });
 
-    // ── and a first-time paid applicant is still admitted without an admin ───
+    /*
+     *   ── AND NOBODY IS ADMITTED WITHOUT AN ADMIN ANY MORE ────────────────
+     *
+     *   These three read "still auto-approves ..." until the owner said "yes
+     *   decouple payment from auto-approval". The cases they cover still matter
+     *   — a first-time payer, an unpaid applicant, a revision request — but the
+     *   answer to all three is now the same: accepted if paid, and pending.
+     *
+     *   #207's line of fixes is SUBSUMED rather than lost. It existed to stop an
+     *   old payment auto-approving a REAPPLICATION after a rejection. Nothing
+     *   auto-approves now, so the case it guarded cannot arise.
+     */
 
-    it('still auto-approves a paid applicant with no prior decision', async () => {
+    it('A FIRST-TIME PAYER IS ACCEPTED AND PENDING, not admitted', async () => {
         seedUser({ serviceRegistrations: { academy: PAID } });
 
         expect(await submit()).toMatchObject({ success: true });
-        expect(onlyApp().status).toBe('approved');
-        expect(reg().status).toBe('approved');
-        expect(readUser().roles).toContain('academy_participant');
-    });
-
-    it('still leaves an unpaid applicant pending, as before', async () => {
-        seedUser();
-
-        expect(await submit()).toMatchObject({ success: true });
         expect(onlyApp().status).toBe('pending');
+        expect(reg().status).toBe('pending');
         expect(readUser().roles).not.toContain('academy_participant');
     });
 
-    it('still auto-approves after a revision request, which is not a decision against', async () => {
+    it('AN UNPAID APPLICANT IS REFUSED — no longer merely left pending', async () => {
+        seedUser({ serviceRegistrations: { academy: { paymentStatus: 'pending' } } });
+
+        expect(await submit()).toMatchObject({ success: false });
+        expect(store.size(APPS)).toBe(0);
+        expect(readUser().roles).not.toContain('academy_participant');
+    });
+
+    it('A REVISION REQUEST IS NOT A DECISION AGAINST — they may resubmit, and wait', async () => {
         // revision_required means "come back with more", not "no".
         seedUser({ serviceRegistrations: { academy: { ...PAID, status: 'revision_required' } } });
 
         expect(await submit()).toMatchObject({ success: true });
-        expect(onlyApp().status).toBe('approved');
+        expect(onlyApp().status).toBe('pending');
     });
 });

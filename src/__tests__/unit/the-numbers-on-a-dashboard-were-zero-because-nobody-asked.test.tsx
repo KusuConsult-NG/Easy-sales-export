@@ -99,6 +99,10 @@ jest.mock('@/app/actions/reviews', () => ({
     updateReviewAction: jest.fn(),
 }));
 jest.mock('@/app/actions/my-data', () => ({
+    //   Kept in step with the real module's exports. A missing one is
+    //   `undefined` at the call site and the component throws — the
+    //   incomplete-mock shape jest.setup.js already names.
+    getMyLiveRoles: jest.fn(async () => []),
     getMyNotifications: (...a: any[]) => getMyNotifications(...a),
     deleteMyNotification: jest.fn(),
     markNotificationAsReadAction: jest.fn(),

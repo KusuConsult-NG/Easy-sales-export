@@ -127,6 +127,10 @@ jest.mock('@/app/actions/wave', () => ({
     withdrawEarningsAction: jest.fn(),
 }));
 jest.mock('@/app/actions/my-data', () => ({
+    //   Kept in step with the real module's exports. A missing one is
+    //   `undefined` at the call site and the component throws — the
+    //   incomplete-mock shape jest.setup.js already names.
+    getMyLiveRoles: jest.fn(async () => []),
     getMyDisputes: (...a: any[]) => getMyDisputes(...a),
 }));
 jest.mock('@/app/actions/wallet', () => ({

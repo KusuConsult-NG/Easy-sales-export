@@ -109,6 +109,10 @@ jest.mock('@/app/actions/cooperative', () => ({
     getMembershipAction: jest.fn(),
 }));
 jest.mock('@/app/actions/my-data', () => ({
+    //   Kept in step with the real module's exports. A missing one is
+    //   `undefined` at the call site and the component throws — the
+    //   incomplete-mock shape jest.setup.js already names.
+    getMyLiveRoles: jest.fn(async () => []),
     getMyWithdrawals: (...a: any[]) => getMyWithdrawals(...a),
 }));
 

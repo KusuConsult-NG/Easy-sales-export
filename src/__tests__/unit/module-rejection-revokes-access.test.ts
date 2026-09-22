@@ -314,8 +314,13 @@ describe('#210 — the ratchet', () => {
             academy: ['src/app/actions/academy/_ac_admin_review.ts'],
             'farm-nation': [
                 'src/app/actions/farm-nation/_fn_admin.ts',
-                //   Where `investor` and `farmer` are actually granted.
                 'src/app/actions/farm-nation/_fn_onboarding.ts',
+                //   Where `investor` and `farmer` are NAMED now. Both doors used
+                //   to state the mapping themselves, and they disagreed: the
+                //   onboarding read the applicant's answer, the approval wrote
+                //   `arrayUnion("farmer")` regardless. One rule in one file, and
+                //   this is that file.
+                'src/lib/farm-nation-roles.ts',
             ],
             export: ['src/app/actions/admin/_exports.ts'],
         };
@@ -323,11 +328,20 @@ describe('#210 — the ratchet', () => {
         for (const [module, files] of Object.entries(GRANT_PATHS)) {
             const sources = files.map(read).join('\n');
             for (const role of moduleGrantRoles(module as never)) {
-                //   Either spelling: arrayUnion("role") for a fixed grant, or
-                //   push("role") into a list that arrayUnion then spreads, which
-                //   is how the buyer/seller/both choice is expressed.
+                /*
+                 *   Three spellings: arrayUnion("role") for a fixed grant,
+                 *   push("role") into a list that arrayUnion then spreads, and a
+                 *   named constant a shared rule returns — which is what a
+                 *   module looks like once its doors stop restating the mapping.
+                 *
+                 *   All three are PRECISE forms, deliberately. Searching for the
+                 *   bare string would pass on a comment that merely mentions the
+                 *   role, and this ratchet exists because a role was granted
+                 *   somewhere nothing looked.
+                 */
                 const granted = sources.includes(`arrayUnion("${role}")`)
-                    || sources.includes(`push("${role}")`);
+                    || sources.includes(`push("${role}")`)
+                    || sources.includes(`= "${role}";`);
                 expect(`${module} grants ${role}: ${granted}`).toBe(`${module} grants ${role}: true`);
             }
         }

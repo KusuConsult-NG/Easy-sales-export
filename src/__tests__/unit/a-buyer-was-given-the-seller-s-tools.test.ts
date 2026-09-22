@@ -70,15 +70,30 @@ describe('#858 — the buyer gets her own screen', () => {
         expect(farmNationNav()).toContain('/farm-nation/my-purchases');
     });
 
-    it('AND IT IS NOT GATED, because a farmer may buy land too', () => {
+    it('AND IT IS GATED TO THE BUYER SIDE — the owner overruled the asymmetry', () => {
         /*
-         *   The asymmetry is deliberate and worth pinning: a SELLER tool in a
-         *   buyer's hands is a dead end, a BUYER tool in a seller's hands is
-         *   merely unused. Hiding a screen from somebody who has used it is the
-         *   worse failure.
+         *   THIS ASSERTED THE OPPOSITE, and the reasoning was: a SELLER tool in
+         *   a buyer's hands is a dead end, a BUYER tool in a seller's hands is
+         *   merely unused, so hiding a screen from somebody who has used it is
+         *   the worse failure.
+         *
+         *   THE OWNER: "A buyer can only see the buyers features and the seller
+         *   can only see sellers features and when users sign up as both seller
+         *   and buyer then they can see all the features on the sidebar."
+         *
+         *   Which answers the "a farmer may buy land too" case directly: a
+         *   farmer who also buys signs up as BOTH, and Farm Nation's onboarding
+         *   has asked that question all along — `role: z.enum(["buyer",
+         *   "seller", "both"])`. The asymmetry was a reasonable default while
+         *   nobody had decided; somebody has now.
+         *
+         *   The hazard behind the old reasoning was never the gate, it was the
+         *   STALE CLAIM the gate read — and that is fixed separately:
+         *   ModuleSidebar reads roles live from the document now, so a member
+         *   approved five minutes ago is not hidden from their own screens.
          */
-        expect(navEntry('My Purchases')).not.toContain('rolesAny');
-        expect(navEntry('My Inquiries')).not.toContain('rolesAny');
+        expect(navEntry('My Purchases')).toContain('LAND_BUYER_ROLES');
+        expect(navEntry('My Inquiries')).toContain('LAND_BUYER_ROLES');
     });
 
     it('AND THE PAGE IT POINTS AT EXISTS — not a link to nothing', () => {
@@ -117,7 +132,15 @@ describe('#858 — and the seller tools are gated on a Farm Nation role', () => 
          *   ungating it shows a buyer an empty page and shows a seller their
          *   inventory.
          */
-        expect(navEntry('My Properties')).not.toContain('rolesAny');
+        /*
+         *   GATED NOW, and the sentence above is why it safely can be: "the
+         *   token is what lags". That was the real hazard, and it is fixed —
+         *   ModuleSidebar reads roles LIVE from the document, so a seller who
+         *   has just onboarded is not locked out until re-login. With the stale
+         *   claim gone, the gate costs nothing and the owner's rule applies:
+         *   "the seller can only see sellers features".
+         */
+        expect(navEntry('My Properties')).toContain('rolesAny: LAND_SELLER_ROLES');
 
         /*
          *   And the form keeps its gate, in the spelling the rest of the
@@ -173,10 +196,46 @@ describe('#858 — and the seller tools are gated on a Farm Nation role', () => 
          *   most common false positive is a rule that reads a field nobody
          *   writes.
          */
-        const onboarding = code('src/app/actions/farm-nation/_fn_onboarding.ts');
+        /*
+         *   #908's lesson applied to this test: RUN, NOT READ. It asserted
+         *   `roles.push("farmer")` and `roles.push("investor")` as substrings of
+         *   the onboarding, which proved two lines existed. It broke the moment
+         *   both doors started sharing one rule — while the behaviour it guards
+         *   was not merely unchanged but strictly better, because the ADMIN
+         *   APPROVAL had been granting `farmer` unconditionally and now asks the
+         *   same question.
+         *
+         *   So the grant and the gate are both executed here, and compared. That
+         *   is the property that matters: every role the nav gates on is a role
+         *   somebody is actually granted.
+         */
+        const { rolesForFarmNationRole } = require('@/lib/farm-nation-roles');
+        const { LAND_SELLER_ROLES, LAND_BUYER_ROLES } = require('@/lib/role-app-mapping');
 
-        expect(onboarding).toContain('roles.push("farmer")');
-        expect(onboarding).toContain('roles.push("investor")');
+        //   What each answer grants.
+        const granted = {
+            seller: rolesForFarmNationRole('seller'),
+            buyer: rolesForFarmNationRole('buyer'),
+            both: rolesForFarmNationRole('both'),
+        };
+
+        //   A seller holds a role the SELLING entries gate on, and none of the
+        //   buying ones — and the mirror.
+        expect(LAND_SELLER_ROLES.some((r: string) => granted.seller.includes(r))).toBe(true);
+        expect(LAND_BUYER_ROLES.some((r: string) => granted.seller.includes(r))).toBe(false);
+
+        expect(LAND_BUYER_ROLES.some((r: string) => granted.buyer.includes(r))).toBe(true);
+        expect(LAND_SELLER_ROLES.some((r: string) => granted.buyer.includes(r))).toBe(false);
+
+        //   And "both" reaches both sides, which is the whole point of the
+        //   answer existing.
+        expect(LAND_SELLER_ROLES.some((r: string) => granted.both.includes(r))).toBe(true);
+        expect(LAND_BUYER_ROLES.some((r: string) => granted.both.includes(r))).toBe(true);
+
+        //   The ADMIN APPROVAL asks it too. That door used to write
+        //   `arrayUnion("farmer")` whatever the applicant had answered.
+        expect(code('src/app/actions/farm-nation/_fn_admin.ts'))
+            .toContain('rolesForFarmNationRole');
     });
 
     it('AND THE DEAD SIDEBAR IS NOT WHAT SHIPS', () => {

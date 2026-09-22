@@ -60,6 +60,10 @@ import { getMyUnreadNotificationCount } from '@/app/actions/my-data';
 import { NOTIFICATION_BADGE_WINDOW, FILTER_TAB_TYPES } from '@/lib/notification-filter';
 
 jest.mock('@/app/actions/my-data', () => ({
+    //   Kept in step with the real module's exports. A missing one is
+    //   `undefined` at the call site and the component throws — the
+    //   incomplete-mock shape jest.setup.js already names.
+    getMyLiveRoles: jest.fn(async () => []),
     getMyUnreadNotificationCount: jest.fn(),
 }));
 

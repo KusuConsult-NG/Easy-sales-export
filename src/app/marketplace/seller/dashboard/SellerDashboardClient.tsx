@@ -9,6 +9,8 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
+import { getMyLiveRoles } from "@/app/actions/my-data";
+import { MARKETPLACE_BUYER_ROLES } from "@/lib/role-app-mapping";
 import { MarketplaceErrorBoundary } from "@/components/marketplace/MarketplaceErrorBoundary";
 import { logger } from '@/lib/logger';
 import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2, Wallet, Zap, ChevronLeft } from "lucide-react";
@@ -47,6 +49,23 @@ export default function SellerDashboardClient({ initial = null }: {
         togglesRes: Awaited<ReturnType<typeof getFeatureTogglesAction>>;
     } | null;
 }) {
+    /*
+     *   Does this account actually have a buyer view to switch to? Live, for
+     *   the reason given at the button: the session claim is up to eight hours
+     *   old either way.
+     */
+    const [canBuy, setCanBuy] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        getMyLiveRoles()
+            .then((roles) => {
+                if (cancelled) return;
+                setCanBuy(MARKETPLACE_BUYER_ROLES.some((r) => roles.includes(r)));
+            })
+            .catch(() => { /* stays hidden; the action logs its own failure */ });
+        return () => { cancelled = true; };
+    }, []);
+
     const [loading, setLoading] = useState(true);
     /**
      *   #599 — THE THIRD SCREEN WITH THIS EXACT FAULT, AND THE SECOND ONE #594
@@ -196,13 +215,31 @@ export default function SellerDashboardClient({ initial = null }: {
                                 </p>
                             </div>
                         </div>
-                        <Link
-                            href="/marketplace/buyer/dashboard"
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition"
-                        >
-                            <ShoppingCart className="w-4 h-4" />
-                            Switch to Buyer View
-                        </Link>
+                        {/*
+                          *   THE OWNER: "there is still a button asking sellers
+                          *   to switch to buyer when user only signed up as a
+                          *   seller."
+                          *
+                          *   It was unconditional — every seller was offered a
+                          *   buyer dashboard, including accounts that hold no
+                          *   buyer role and would land on an empty one. Only an
+                          *   account that signed up as BOTH has a buyer view to
+                          *   switch to.
+                          *
+                          *   Read live, like the sidebar's: the session claim is
+                          *   up to eight hours old, and hiding this from someone
+                          *   who just gained the role would be the same defect
+                          *   in the other direction.
+                          */}
+                        {canBuy && (
+                            <Link
+                                href="/marketplace/buyer/dashboard"
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition"
+                            >
+                                <ShoppingCart className="w-4 h-4" />
+                                Switch to Buyer View
+                            </Link>
+                        )}
                     </div>
                 </div>
 
