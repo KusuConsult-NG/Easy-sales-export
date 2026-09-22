@@ -270,6 +270,53 @@ describe('submitAcademyApplicationAction', () => {
         expect(readUser().roles).not.toContain('academy_participant');
     });
 
+    it('A LEARNER WHOSE MONEY IS RECORDED BUT WHOSE FLAG IS NOT, GETS IN', async () => {
+        /*
+         *   THE REGRESSION THIS PINS, AND IT WAS MINE.
+         *
+         *   THE OWNER: "new users are gated and also they submit the
+         *   application without payment".
+         *
+         *   The first version of this gate asked ONE question —
+         *   isAcademyEntitled(serviceRegistrations.academy.paymentStatus) —
+         *   while the Submit button asks checkAcademyPaymentStatusAction, which
+         *   consults FIVE sources. A learner whose payment is recorded in
+         *   processed_payments but whose registration flag was never written
+         *   (the fulfilment gap this audit keeps finding) therefore saw the
+         *   button go green and was refused by the server.
+         *
+         *   Gated, after paying. The gate asks the same oracle now.
+         */
+        store.seed(COLLECTIONS.USERS, LEARNER, {
+            email: 'ada@example.com',
+            fullName: 'Ada Obi',
+            roles: ['user'],
+            //   No serviceRegistrations.academy at all — the flag never landed.
+        });
+        store.seed(COLLECTIONS.PROCESSED_PAYMENTS, 'pay-1', {
+            userId: LEARNER,
+            type: 'academy_registration',
+            status: 'completed',
+            amount: 15000,
+        });
+
+        const { submitAcademyApplicationAction } = await actions();
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: true });
+        expect(onlyApp().status).toBe('pending');
+    });
+
+    it('AND AN ALREADY-ENROLLED LEARNER IS TOLD SO, not told to pay', async () => {
+        //   Ordering. The payment verdict is read before the transaction opens,
+        //   because it issues its own reads — but applying it there would answer
+        //   "pay first" to somebody who is already in.
+        seedUser({ serviceRegistrations: { academy: { status: 'approved' } } });
+        const { submitAcademyApplicationAction } = await actions();
+
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({
+            success: false, error: expect.stringMatching(/already enrolled/i),
+        });
+    });
+
     it('AND SO IS AN APPLICANT WITH NO ACADEMY REGISTRATION AT ALL', async () => {
         seedUser({ serviceRegistrations: {} });
         const { submitAcademyApplicationAction } = await actions();

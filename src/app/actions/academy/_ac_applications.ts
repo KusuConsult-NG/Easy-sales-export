@@ -17,7 +17,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { normalisePhone } from "@/lib/phone";
-import { isAcademyEntitled } from "@/lib/academy-entitlement";
+import { checkAcademyPaymentStatusAction } from "./_payment";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { latestApplication } from "@/lib/latest-application";
@@ -57,6 +57,57 @@ async function _submitAcademyApplicationAction(
 
         let finalApplicationId: string = "";
 
+        /*
+         *   GATE ONE, ASKED OF THE SAME ORACLE THE BUTTON ASKS.
+         *
+         *   THE OWNER: "new users are gated and also they submit the
+         *   application without payment".
+         *
+         *   BOTH HALVES WERE MINE, AND BOTH CAME FROM ONE MISTAKE. The first
+         *   version of this gate read
+         *
+         *       isAcademyEntitled(serviceRegistrations.academy.paymentStatus)
+         *
+         *   which is ONE of the five sources checkAcademyPaymentStatusAction
+         *   consults to decide whether to enable Submit. The others are a real
+         *   `processed_payments` row of type academy_registration, a
+         *   `legacyOnboardedBy` marker, a prior application already marked paid,
+         *   and the payment-bypass list.
+         *
+         *   So a learner whose MONEY IS RECORDED but whose registration flag was
+         *   never written — the fulfilment gap this audit has found repeatedly —
+         *   saw the button go green and was refused here. Gated, after paying.
+         *
+         *   And the mirror: the legacy import writes
+         *   `serviceRegistrations.academy.paymentStatus = "completed"` outright,
+         *   so anyone carrying the flag without money walked straight through.
+         *   Submitted, without paying.
+         *
+         *   ONE ORACLE NOW. Not a copy of its rules — the function itself, so
+         *   the two cannot drift. #458: "two statements of one rule is the
+         *   defect, not the cure."
+         *
+         *   ASKED BEFORE THE TRANSACTION, deliberately: it performs its own
+         *   reads, and reads issued inside a transaction callback that were not
+         *   taken through `t` are not part of it.
+         */
+        const paidCheck = await checkAcademyPaymentStatusAction();
+
+        /*
+         *   THE READ HAPPENS HERE; THE REFUSAL HAPPENS BELOW, IN ORDER.
+         *
+         *   The check must run outside the transaction because it issues its own
+         *   reads. But refusing here would answer "pay first" to somebody who is
+         *   ALREADY ENROLLED, or whose previous application is still being
+         *   processed — both of which this action already has better answers
+         *   for, and both of which its own tests assert. So the verdict is
+         *   carried into the transaction and applied after those.
+         *
+         *   An unreadable answer refuses rather than admits: this gate guards
+         *   money, and failing open would re-open the hole it closes.
+         */
+        const hasPaid = paidCheck.success && paidCheck.data === "paid";
+
         await db.runTransaction(async (t) => {
             // Check for existing application status on the user
             const userDoc = await t.get(userRef);
@@ -74,37 +125,17 @@ async function _submitAcademyApplicationAction(
                 throw new Error("You are already enrolled in the Academy program.");
             }
 
-            const existingPaymentStatus = userData?.serviceRegistrations?.academy?.paymentStatus || "pending";
-
-            /**
-             *   GATE ONE: PAY BEFORE YOU APPLY.
-             *
-             *   THE OWNER: "before users can submit application on academy they
-             *   should make payment before application can be submit. the
-             *   payment screen should be the last screen before application can
-             *   be submitted."
-             *
-             *   The FORM already did this — Payment is step 5 of 5 and Submit
-             *   is `disabled={isSubmitting || paymentStatus !== "paid"}`.
-             *   Nothing HERE did. This is a "use server" export, so it is a
-             *   public endpoint anything can post to, and an unpaid submission
-             *   was accepted and written for an admin to review. A disabled
-             *   button is a courtesy to the person on the screen, not a rule.
-             *
-             *   ENTITLED, NOT PAID. isAcademyPaid alone would refuse a learner
-             *   an admin deliberately waived the fee for — academyGrantFields
-             *   writes `paymentStatus: "waived"`, a place the platform gave away
-             *   on purpose. isAcademyEntitled is the existing "paid OR granted"
-             *   question and is the one this gate asks.
-             *
-             *   A REAPPLICATION AFTER A REJECTION STILL PASSES: the fee is paid
-             *   once, so a rejected applicant reapplying still reads as paid.
-             */
-            if (!isAcademyEntitled(existingPaymentStatus)) {
+            //   GATE ONE, applied in its proper place. See the read above for
+            //   why the question is asked before this transaction opens, and
+            //   why it is the same one the Submit button asks.
+            if (!hasPaid) {
                 throw new Error(
                     "Please complete your Academy payment before submitting this application.",
                 );
             }
+
+            const existingPaymentStatus = userData?.serviceRegistrations?.academy?.paymentStatus || "pending";
+
             const existingPaymentAmount = userData?.serviceRegistrations?.academy?.paymentAmount || 0;
 
             // The tier the learner actually bought — not the literal "registration".

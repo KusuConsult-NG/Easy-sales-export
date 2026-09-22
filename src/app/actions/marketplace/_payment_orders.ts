@@ -172,7 +172,21 @@ async function _initializeOrderPaymentAction(
                 city: location?.city || "",
                 state: location?.state || "",
                 lga: location?.lga || "",
-                distance: location?.distance || 10,
+                /*
+                 *   NULL WHEN WE DID NOT MEASURE IT, not 10.
+                 *
+                 *   This read `location?.distance || 10`, so an order whose
+                 *   address the map could not place was RECORDED as a
+                 *   ten-kilometre delivery. The fee is not computed from this
+                 *   field — calculateDeliveryFee above reads the raw `location`,
+                 *   where an absent distance correctly means "no surcharge" —
+                 *   but the order row is what a dispute, a refund and a courier
+                 *   are read from, and it should not assert a distance nobody
+                 *   measured. `|| 10` also swallowed a genuine 0.
+                 */
+                distance: typeof location?.distance === "number" && Number.isFinite(location.distance)
+                    ? location.distance
+                    : null,
                 weight: location?.weight || estimateCartWeight(cartItems),
                 isWithinCityCenter: location?.isWithinCityCenter !== false
             },
