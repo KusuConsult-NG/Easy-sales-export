@@ -27,6 +27,7 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
+import { unstable_cache } from "next/cache";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
@@ -452,13 +453,45 @@ export async function getMyActiveOrderCount(): Promise<number> {
  * Platform-wide content rather than per-user, but still fetched server-side so
  * the browser needs no database access at all. Dates are ISO strings.
  */
-export async function getUpcomingEvents(max = 3): Promise<any[]> {
-    if (!(await currentUserId())) return [];
+/*
+ *   THE SAME TWO COLLECTIONS, FOR EVERY USER, EVERY EIGHT SECONDS.
+ *
+ *   Upcoming events are platform-wide — the rows do not depend on who is
+ *   asking — but this ran once per caller anyway. `getMyDashboard` calls it,
+ *   `dashboard/layout.tsx` awaits THAT on the server for every entry to
+ *   /dashboard and its six sub-pages, and `NavSummaryProvider` then re-polls
+ *   it every 8s for as long as the tab stays visible. Links to those pages
+ *   are prefetched by default (only 13 `prefetch={false}` exist in the whole
+ *   app), so the work also ran for pages nobody opened — the production log's
+ *   repeated "destination stream closed early" on `/dashboard?_rsc=` is that
+ *   render being paid for and thrown away.
+ *
+ *   Neither read carries a `.limit()`, so each costs up to
+ *   DEFAULT_QUERY_LIMIT rows fetched in 1,000-row pages — up to five
+ *   sequential round trips apiece — to render three tiles.
+ *
+ *   CACHED RATHER THAN NARROWED, deliberately. A `.limit()` with no
+ *   `orderBy` drops rows arbitrarily and could hide the genuinely next
+ *   event; ordering in the database is not safe to assume either, because
+ *   the stored date shape varies enough that `toDate` accepts three of them.
+ *   Caching changes no result — the same rows, the same filter, the same
+ *   sort, just not recomputed per caller.
+ *
+ *   REVALIDATE RATHER THAN TAGS. Six files write these collections. A tag is
+ *   correct only while every one of them remembers it, and a forgotten one
+ *   shows a stale dashboard with nothing to say so. Sixty seconds is bounded
+ *   staleness that needs no writer's cooperation: an admin's new training
+ *   event appears within a minute, which is all this tile promises.
+ *
+ *   NOT EXPORTED. This module is "use server", so every export is a server
+ *   action and a public endpoint. The cache wrapper is an implementation
+ *   detail and stays module-private.
+ */
+const fetchUpcomingEventsCached = unstable_cache(
+    async (max: number): Promise<any[]> => {
+        const isUpcoming = (status: string, when: Date) =>
+            status !== "cancelled" && status !== "completed" && when >= new Date();
 
-    const isUpcoming = (status: string, when: Date) =>
-        status !== "cancelled" && status !== "completed" && when >= new Date();
-
-    try {
         const [waveSnap, marketSnap] = await Promise.all([
             db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).get(),
             db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).get(),
@@ -496,17 +529,34 @@ export async function getUpcomingEvents(max = 3): Promise<any[]> {
             .sort((a, b) => a.date.getTime() - b.date.getTime())
             .slice(0, max)
             .map(e => ({ ...e, date: e.date.toISOString() }));
+    },
+    ["my-data", "upcoming-events"],
+    { revalidate: 60 },
+);
+
+/** The next few platform events, newest deadline first. */
+export async function getUpcomingEvents(max = 3): Promise<any[]> {
+    //   The session check stays OUT of the cached function: it reads cookies,
+    //   which a cached scope may not, and the answer is the same for everyone
+    //   who passes it.
+    if (!(await currentUserId())) return [];
+
+    try {
+        return await fetchUpcomingEventsCached(max);
     } catch (error) {
         logger.error("[my-data] getUpcomingEvents failed", { error });
         return [];
     }
 }
 
-/** Most recently uploaded active WAVE resources. */
-export async function getRecentResources(max = 3): Promise<any[]> {
-    if (!(await currentUserId())) return [];
-
-    try {
+/*
+ *   PLATFORM-WIDE, FOR THE SAME REASON getUpcomingEvents ABOVE IS. One
+ *   collection rather than two, read in full to show three rows, on the same
+ *   server-rendered layout and the same 8s poll. Cached on the same terms and
+ *   for the same reasons — see that header; this one does not restate them.
+ */
+const fetchRecentResourcesCached = unstable_cache(
+    async (max: number): Promise<any[]> => {
         const snap = await db.collection(COLLECTIONS.WAVE_RESOURCES).get();
 
         return snap.docs
@@ -529,6 +579,17 @@ export async function getRecentResources(max = 3): Promise<any[]> {
             .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())
             .slice(0, max)
             .map(r => ({ ...r, uploadedAt: r.uploadedAt.toISOString() }));
+    },
+    ["my-data", "recent-resources"],
+    { revalidate: 60 },
+);
+
+/** Most recently uploaded active WAVE resources. */
+export async function getRecentResources(max = 3): Promise<any[]> {
+    if (!(await currentUserId())) return [];
+
+    try {
+        return await fetchRecentResourcesCached(max);
     } catch (error) {
         logger.error("[my-data] getRecentResources failed", { error });
         return [];
