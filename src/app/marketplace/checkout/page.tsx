@@ -11,6 +11,7 @@ import { initializeOrderPaymentAction, calculateDeliveryAction } from "@/app/act
 import { useToast } from "@/contexts/ToastContext";
 import PhoneInput, { isValidNigerianPhone } from "@/components/ui/PhoneInput";
 import type { Product, CartItem } from "@/lib/types/marketplace";
+import { toCartItems } from "@/lib/marketplace-checkout-cart";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { getUserProfileAction } from "@/app/actions/profile";
 /**
@@ -41,6 +42,23 @@ interface LocalCartItem extends Product {
      */
     quoteId?: string;
     agreedPrice?: number;
+    /**
+     *   WHICH COLLECTION THIS LINE CAME FROM.
+     *
+     *   A village-market line is a row in FLASH_SALE_PRODUCTS, not PRODUCTS,
+     *   and `validateCartItems` picks the collection to read from this flag
+     *   alone. Add-to-cart writes it — BuyerProductsClient and
+     *   VillageMarketEventClient both set `isFlashSale: true` — but `Product`
+     *   does not declare it, so inside this file it was invisible to
+     *   TypeScript, and `CartItem.isFlashSale` is optional, so the two
+     *   `cart.map` calls below could drop it without a compile error.
+     *
+     *   They did. The server then looked a village-market id up in PRODUCTS,
+     *   found nothing, and refused the checkout with "Product not found:
+     *   <title>" — the listing existed the whole time, in the other table.
+     */
+    isFlashSale?: boolean;
+    eventId?: string;
 }
 
 /** What this line actually costs per unit: the negotiated price, or the list. */
@@ -667,18 +685,7 @@ export default function CheckoutPage() {
             if (cart.length === 0) return;
             setIsCalculatingFee(true);
             try {
-                const cartItems: CartItem[] = cart.map(item => ({
-                    id: item.id,
-                    title: item.title,
-                    sellerId: item.sellerId,
-                    price: item.pricingTiers?.[0]?.price || 0,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    selectedTier: item.pricingTiers?.[0]?.type || "retail",
-                    addedAt: new Date(),
-                    //   #873 The id only. The server reads the quote.
-                    ...(item.quoteId ? { quoteId: item.quoteId } : {}),
-                }));
+                const cartItems: CartItem[] = toCartItems(cart);
                 const res = await calculateDeliveryAction(cartItems, {
                     distance,
                     weight,
@@ -749,20 +756,7 @@ export default function CheckoutPage() {
 
         try {
             // Prepare cart items for payment
-            const cartItems: CartItem[] = cart.map(item => ({
-                id: item.id,
-                title: item.title,
-                sellerId: item.sellerId,
-                price: item.pricingTiers?.[0]?.price || 0,
-                quantity: item.quantity,
-                unit: item.unit,
-                selectedTier: item.pricingTiers?.[0]?.type || "retail",
-                addedAt: new Date(),
-                //   #873 The id only. The server reads the quote, checks it is
-                //   this buyer's, unspent and unexpired, and takes the seller's
-                //   own agreed figure off the row — nothing here sets a price.
-                ...(item.quoteId ? { quoteId: item.quoteId } : {}),
-            }));
+            const cartItems: CartItem[] = toCartItems(cart);
 
             // Initialize payment
             const result = await initializeOrderPaymentAction(
