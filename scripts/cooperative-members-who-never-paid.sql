@@ -1,0 +1,14 @@
+-- WHO IS IN cooperative_members, AND WHICH OF THEM EVER PAID.
+--
+-- THE OWNER: "a repair script messed up my data by creating cooperative members
+-- who never paid and left them as legacy members. paystack data says 1197
+-- cooperative members and the data is not in sync."
+--
+-- READ ONLY. No INSERT, UPDATE, DELETE or DDL. Run it, paste the rows back.
+--
+-- ONE STATEMENT, NO BLANK LINES, PLAIN ASCII, ON PURPOSE. The Supabase SQL
+-- Editor splits a script on blank lines and submits the fragments separately,
+-- which is how an earlier diagnostic came back as "syntax error at or near ...
+-- LINE 1": PostgreSQL had been handed a fragment, not the query. There is a
+-- ratchet over this file enforcing the shape.
+with member as (select m.id, m.user_id, coalesce(m.raw_data->>'membershipStatus', m.raw_data->>'status', m.status::text) as membership_status, coalesce(m.raw_data->>'paymentStatus', '') as payment_status, coalesce(m.raw_data->>'_repairSource', '') as repair_source, coalesce(m.raw_data->>'_roleGrantedBy', '') as role_granted_by, coalesce((m.raw_data->>'isLegacy')::boolean, false) as is_legacy, m.created_at from cooperative_members m), paid as (select distinct p.user_id from processed_payments p where coalesce(p.raw_data->>'status', '') in ('success', 'successful', 'completed', 'paid') and coalesce(p.raw_data->>'module', p.raw_data->>'purpose', '') ilike '%coop%'), classified as (select member.*, (paid.user_id is not null) as has_settled_payment from member left join paid on paid.user_id = member.user_id) select case when has_settled_payment then 'PAID - keep' when repair_source <> '' then 'CREATED BY A REPAIR SCRIPT, NEVER PAID - review' when role_granted_by <> '' then 'ROLE GRANTED BY A SCRIPT, NEVER PAID - review' when is_legacy then 'LEGACY, NEVER PAID - was a real signup, needs a decision' else 'NO PAYMENT AND NO SCRIPT MARK - review' end as verdict, repair_source, role_granted_by, is_legacy, membership_status, payment_status, count(*) as members, min(created_at) as first_seen, max(created_at) as last_seen from classified group by 1, 2, 3, 4, 5, 6 order by members desc;

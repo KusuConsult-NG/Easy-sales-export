@@ -16,6 +16,7 @@ import { logger } from "@/lib/logger";
 //   #791 A broken preview must not paint its alt text over the remove
 //   button in the same box — see components/ui/ThumbnailImage.
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+import { LocalVideoPreview } from "@/components/ui/LocalVideoPreview";
 import { ImageOff } from "lucide-react";
 import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
 import { PRODUCT_CREATED_MESSAGE } from "@/lib/product-status";
@@ -724,6 +725,12 @@ export default function AddProductPage() {
                                     </label>
                                     <div className="border-2 border-dashed border-slate-300 rounded-lg p-6">
                                         {media.video ? (
+                                            <div className="space-y-4">
+                                                {/*   The clip itself, not just its filename. */}
+                                                <LocalVideoPreview
+                                                    file={media.video}
+                                                    className="w-full max-h-64 rounded-lg bg-black"
+                                                />
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
                                                     <Video className="w-8 h-8 text-green-600" />
@@ -739,6 +746,7 @@ export default function AddProductPage() {
                                                 >
                                                     <X className="w-5 h-5 text-red-600" />
                                                 </button>
+                                            </div>
                                             </div>
                                         ) : (
                                             <label className="flex flex-col items-center cursor-pointer">

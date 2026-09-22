@@ -204,9 +204,60 @@ const FARM_NATION_NAV: NavItem[] = [
     { name: "List Land",      href: "/farm-nation/list-land",     icon: Leaf,    rolesAny: LAND_SELLER_ROLES },
 ];
 
+/*
+ *   THE OWNER: "when users sign up as sellers they can't have buyers features
+ *   on their dashboards. for users to have both sellers and buyers features
+ *   they need to sign up as both."
+ *
+ *   THE SELLER ENTRIES WERE GATED AND THE BUYER ENTRIES WERE NOT. #908 noted
+ *   that in passing — "the buyer nav is ungated" — and gated only the buyer
+ *   DASHBOARD it was adding. Shopping Cart, My Orders and My Quotes sat in
+ *   every seller's sidebar, which is the half of the owner's rule nobody had
+ *   applied: sellerOnly kept buyers off the selling screens, and nothing kept
+ *   sellers off the buying ones.
+ *
+ *   Gated the mirror of sellerOnly, so the three cases the owner names come out
+ *   right: seller-only sees the selling screens, buyer-only sees the buying
+ *   ones, and an account holding both roles — which is what signing up as
+ *   "both" grants — sees both.
+ *
+ *   BROWSE PRODUCTS IS LEFT UNGATED, deliberately and as a judgement call. It
+ *   is the shop floor, not a buying screen: a seller needs to see the market
+ *   they are listing into, and gating it would leave a seller-only account with
+ *   no view of the catalogue at all. Its /buyer/ path is a URL accident, not a
+ *   capability.
+ *
+ *   AND "MY ORDERS" AND "MY QUOTES" ARE LEFT UNGATED TOO, WHICH IS NOT WHAT THE
+ *   OWNER ASKED FOR, AND IS DELIBERATE. #878 forbids it, for a reason that
+ *   applies here word for word:
+ *
+ *       It is a LIST OF YOUR OWN THINGS. Scoped server-side by `ownerId ==
+ *       session.user.id`, so to a buyer it is an empty page and to a seller it
+ *       is their inventory... And `roles` there comes from useSession(), which
+ *       is the JWT. #532 is the finding that a JWT goes stale: a seller who has
+ *       just onboarded holds `farmer` in the users table and not yet in their
+ *       token, so the screens that manage their land stayed hidden until they
+ *       signed out and back in.
+ *
+ *   `roles` in this component is still the token. Gating these two would hide a
+ *   newly approved buyer's own orders from them until they signed out and back
+ *   in — the defect class this audit has now fixed three times (#460, #532, and
+ *   the academy catalogue) — to hide two screens that are EMPTY for a seller
+ *   anyway. "Hiding a screen from somebody who has used it is a worse failure
+ *   than showing one that is empty", which this file says twice elsewhere.
+ *
+ *   Shopping Cart IS gated: it is a capability rather than a record, it is what
+ *   a seller-only account genuinely cannot do, and it holds nothing of theirs
+ *   to be hidden from.
+ *
+ *   Doing the owner's rule properly means gating on a LIVE accountType read on
+ *   the server and handed to this component, the way the academy catalogue now
+ *   reads its plan — not on the token. That is a change to a sidebar every
+ *   module mounts, so it is raised rather than slipped in here.
+ */
 const MARKETPLACE_NAV: NavItem[] = [
     { name: "Browse Products",   href: "/marketplace/buyer/products", icon: Search },
-    { name: "Shopping Cart",     href: "/marketplace/checkout",       icon: ShoppingCart },
+    { name: "Shopping Cart",     href: "/marketplace/checkout",       icon: ShoppingCart, rolesAny: MARKETPLACE_BUYER_ROLES },
     { name: "My Orders",         href: "/marketplace/buyer/orders",   icon: Package },
     // Both quote lists were unreachable: nothing linked to either, and the
     // seller's RFQ notification pointed at a route that did not exist.

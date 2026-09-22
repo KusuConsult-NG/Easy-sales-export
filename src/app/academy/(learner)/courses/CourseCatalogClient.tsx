@@ -29,7 +29,7 @@ import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 
 
-export default function CourseCatalogClient({ initial = null }: {
+export default function CourseCatalogClient({ initial = null, standing = null }: {
     /**
      *   #547 The two RAW action results the server already fetched.
      *
@@ -40,6 +40,14 @@ export default function CourseCatalogClient({ initial = null }: {
         coursesRes: Awaited<ReturnType<typeof getCoursesAction>>;
         enrollRes: Awaited<ReturnType<typeof getEnrolledCoursesWithDetailsAction>>;
     } | null;
+    /**
+     *   The learner's plan and admin decision, read LIVE by the server page.
+     *
+     *   null when nobody is signed in, or when the read failed — see where it
+     *   is used for why the stale claim remains the fallback rather than a
+     *   blanket denial.
+     */
+    standing?: { plan: string; status: string } | null;
 }) {
     const { data: session } = useSession();
     const router = useRouter();
@@ -67,7 +75,29 @@ export default function CourseCatalogClient({ initial = null }: {
     const [sortBy, setSortBy] = useState<string>("newest");
 
     const userId = session?.user?.id;
-    const userPlan = (session?.user as any)?.serviceRegistrations?.academy?.plan || "free";
+
+    /*
+     *   THE PLAN, READ LIVE — not off the JWT.
+     *
+     *   This was `(session?.user as any)?.serviceRegistrations?.academy?.plan`,
+     *   a claim baked in at login that auth.config.ts gives an 8-hour maxAge.
+     *   A learner who paid, or whom an admin approved, kept the old claim;
+     *   checkCourseAccess default-denies an unrecognised plan, so every tiered
+     *   course said "Buy for NGN x" to somebody who had already bought it.
+     *   #460 fixed this same claim-vs-document defect in the enrolment path and
+     *   recorded that academy had been missed "in two verbatim copies" — this
+     *   is the third, and the one the learner actually looks at.
+     *
+     *   THE CLAIM IS STILL THE FALLBACK, deliberately. If the live read failed,
+     *   denying everybody would show "Buy" to every learner on the site — worse
+     *   than the bug. Falling back is no worse than today, and this is a
+     *   PRESENTATION gate: the lesson and content doors enforce entitlement
+     *   server-side on their own, so a permissive catalogue sells nothing it
+     *   should not.
+     */
+    const userPlan = standing?.plan
+        ?? (session?.user as any)?.serviceRegistrations?.academy?.plan
+        ?? "free";
 
     const plan = (userPlan as string || "free").toLowerCase();
     const isPaid = ["elite", "standard", "foundation", "advanced"].includes(plan);

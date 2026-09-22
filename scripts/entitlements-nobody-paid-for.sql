@@ -1,0 +1,18 @@
+-- WHO HOLDS A MODULE ROLE WITH NO SETTLED PAYMENT BEHIND IT.
+--
+-- THE OWNER, on one member: "cooperative_member role granted during
+-- role-synchronization" on 2026-08-10, by `membership_repair_2026_08_10`, to
+-- match a cooperative_members row that itself says status pending and
+-- paymentStatus pending. His only Paystack attempt, nrkdg0mr1c, is `abandoned`.
+--
+-- THE ROLE IS THE ENTITLEMENT. checkModuleAccess reads it, so a script that
+-- reconciled ROLES to ROWS — rather than to PAYMENTS — handed module access to
+-- people who never paid. The row was honest about being unpaid; the role is not.
+--
+-- READ ONLY. No INSERT, UPDATE, DELETE or DDL. It names people and counts them;
+-- it changes nothing. Decide what to do after reading it, not from it.
+--
+-- ONE STATEMENT, NO BLANK LINES, PLAIN ASCII, ON PURPOSE: the Supabase SQL
+-- Editor splits a script on blank lines and submits the fragments separately,
+-- which is how an earlier diagnostic came back as "syntax error ... LINE 1".
+with holder as (select u.id as user_id, coalesce(u.raw_data->>'email', '') as email, coalesce(u.raw_data->>'fullName', '') as full_name, coalesce(u.raw_data->'serviceRegistrations'->'cooperative'->>'status', u.raw_data->'serviceRegistrations'->'cooperatives'->>'status', '') as registration_status, coalesce(u.raw_data->'serviceRegistrations'->'cooperative'->>'paymentStatus', u.raw_data->'serviceRegistrations'->'cooperatives'->>'paymentStatus', '') as registration_payment, coalesce(u.raw_data->>'_roleGrantedBy', '') as role_granted_by from users u where u.raw_data->'roles' ? 'cooperative_member'), settled as (select distinct p.user_id, sum((coalesce(p.raw_data->>'amount', '0'))::numeric) as kobo_total from processed_payments p where coalesce(p.raw_data->>'status', '') in ('success', 'successful', 'completed', 'paid') and coalesce(p.raw_data->>'module', p.raw_data->>'purpose', '') ilike '%coop%' group by p.user_id) select case when settled.user_id is not null then 'PAID - legitimate' when holder.role_granted_by <> '' then 'ROLE MINTED BY A SCRIPT, NEVER PAID' when holder.registration_payment in ('completed', 'paid', 'successful') then 'REGISTRATION CLAIMS PAID BUT NO PAYSTACK ROW - reconcile' else 'NO PAYMENT ANYWHERE' end as verdict, holder.role_granted_by, holder.registration_status, holder.registration_payment, count(*) as people, round(coalesce(sum(settled.kobo_total), 0) / 100.0, 2) as naira_settled from holder left join settled on settled.user_id = holder.user_id group by 1, 2, 3, 4 order by people desc;
