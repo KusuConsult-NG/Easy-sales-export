@@ -52,6 +52,30 @@ function isRenderableSrc(value: unknown): value is string {
     const src = value.trim();
     if (src === "") return false;
     if (src.startsWith("http://") || src.startsWith("https://")) return true;
+
+    /*
+     *   A FILE THE PERSON JUST PICKED IS RENDERABLE, AND WAS BEING REFUSED.
+     *
+     *   THE OWNER: "when a user is adding a product, it doesnt show a preview
+     *   of the image or video being added, the thumbnail is blank."
+     *
+     *   `URL.createObjectURL(file)` returns `blob:https://host/<uuid>`. That is
+     *   not http:// or https:// at the start and does not begin with "/", so it
+     *   fell through both arms above and imageSrcOrNull answered null —
+     *   ThumbnailImage then drew its placeholder instead of the picture. Every
+     *   pre-upload preview in the application went blank the moment #875 moved
+     *   this rule into the shared component.
+     *
+     *   A blob: or data: URL is renderable BY CONSTRUCTION: the browser made it
+     *   from bytes it already holds, this document owns it, and there is no
+     *   network fetch and no optimiser for it to fail at. It is the one case
+     *   that needs no manifest and no host allow-list.
+     *
+     *   Both spellings, because a small preview is often read straight to a
+     *   data: URI with FileReader rather than through createObjectURL.
+     */
+    if (src.startsWith("blob:") || src.startsWith("data:")) return true;
+
     if (!src.startsWith("/") || src.startsWith("//")) return false;
 
     /*

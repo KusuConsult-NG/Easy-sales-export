@@ -34,6 +34,7 @@ export type {
 // ─── Course catalogue (_ac_catalog.ts) ───────────────────────────────────────
 export {
     getCoursesAction,
+    getMyAcademyStandingAction,
     getCourseByIdAction,
     createCourseAction,
     updateCourseAction,

@@ -5,11 +5,35 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Image as ImageIcon, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Image as ImageIcon, Loader2, Save, X } from "lucide-react";
+import { useStorage } from "@/hooks/use-storage";
+import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 
 export default function CreateCoursePage() {
     const router = useRouter();
+    const { uploadFile } = useStorage();
     const [isLoading, setIsLoading] = useState(false);
+
+    /*
+     *   THE OWNER: "the thumbnail doesn't show even after videos are added."
+     *
+     *   IT NEVER COULD. What stood here was labelled, in the source,
+     *   "Thumbnail Upload Placeholder": a styled <div> with an icon and the
+     *   words "Click to upload or drag and drop", and NO file input, no click
+     *   handler and no onChange. It looked exactly like a working drop zone and
+     *   was decoration.
+     *
+     *   So `thumbnail` left this form as "" on every course ever created here,
+     *   and the card on /admin/academy drew its placeholder — correctly, having
+     *   been given nothing. Adding videos to the course was never going to
+     *   change that: the thumbnail is its own field and nothing else writes it.
+     *
+     *   A real input now, with the local preview shown before the upload
+     *   finishes so the admin can see what they picked.
+     */
+    const [thumbFile, setThumbFile] = useState<File | null>(null);
+    const [thumbPreview, setThumbPreview] = useState<string | null>(null);
+    const [isUploadingThumb, setIsUploadingThumb] = useState(false);
     const [formData, setFormData] = useState({
         title: "",
         description: "",
@@ -24,11 +48,29 @@ export default function CreateCoursePage() {
         setIsLoading(true);
 
         try {
+            /*
+             *   Uploaded HERE rather than on selection: a course the admin
+             *   abandons should not leave an orphan asset in storage, and the
+             *   preview above is local so nothing is waiting on the network.
+             */
+            let thumbnailUrl = formData.thumbnail;
+            if (thumbFile) {
+                setIsUploadingThumb(true);
+                try {
+                    thumbnailUrl = await uploadFile(
+                        thumbFile,
+                        `academy/courses/${Date.now()}_${thumbFile.name}`,
+                    );
+                } finally {
+                    setIsUploadingThumb(false);
+                }
+            }
+
             const result = await createCourseAction({
                 title: formData.title,
                 description: formData.description,
                 instructor: formData.instructor,
-                thumbnail: formData.thumbnail,
+                thumbnail: thumbnailUrl,
                 tier: formData.tier,
                 level: "beginner",
                 duration: "4 weeks",
@@ -152,11 +194,41 @@ export default function CreateCoursePage() {
                             <label className="block text-sm font-medium text-slate-900 mb-2">
                                 Course Thumbnail
                             </label>
-                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center text-slate-500 hover:border-primary hover:bg-slate-50 transition cursor-pointer">
-                                <ImageIcon className="w-10 h-10 mb-2" />
-                                <p className="text-sm">Click to upload or drag and drop</p>
-                                <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG or GIF (max. 2MB)</p>
-                            </div>
+                            {thumbPreview ? (
+                                <div className="relative w-full h-48 rounded-xl overflow-hidden border border-slate-200">
+                                    <ThumbnailImage
+                                        src={thumbPreview}
+                                        alt="Course thumbnail"
+                                        className="object-cover"
+                                        fallback={<ImageIcon className="w-10 h-10" />}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => { setThumbFile(null); setThumbPreview(null); }}
+                                        className="absolute top-2 right-2 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full"
+                                        aria-label="Remove thumbnail"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <label className="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center text-slate-500 hover:border-primary hover:bg-slate-50 transition cursor-pointer">
+                                    <ImageIcon className="w-10 h-10 mb-2" />
+                                    <p className="text-sm">Click to upload or drag and drop</p>
+                                    <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG or GIF (max. 2MB)</p>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            setThumbFile(file);
+                                            setThumbPreview(URL.createObjectURL(file));
+                                        }}
+                                    />
+                                </label>
+                            )}
                         </div>
 
                         {/* Action Buttons */}
@@ -172,7 +244,7 @@ export default function CreateCoursePage() {
                                 disabled={isLoading}
                                 className="px-6 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                                {isLoading || isUploadingThumb ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                                 Create Course
                             </button>
                         </div>

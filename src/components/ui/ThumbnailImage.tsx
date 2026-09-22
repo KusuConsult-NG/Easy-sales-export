@@ -105,6 +105,33 @@ export function ThumbnailImage({
         return <div className={fallbackClassName} aria-hidden="true">{fallback}</div>;
     }
 
+    /*
+     *   A LOCAL PREVIEW IS NOT next/image's JOB.
+     *
+     *   blob: and data: sources are bytes this document already holds. next/image
+     *   wants a src it can route through the optimiser or at least parse as a
+     *   URL with a host, and hands back "Failed to parse src" for a blob — so
+     *   even with the guard above fixed, routing a preview through <Image>
+     *   trades a blank placeholder for a thrown render.
+     *
+     *   A plain <img> is the correct element here: nothing to optimise, no
+     *   remote host to allow-list, no layout shift to prevent because the box is
+     *   already sized by the caller's wrapper. The onError below is kept, so a
+     *   revoked object URL still falls back rather than painting its alt text —
+     *   which is the whole reason this component exists.
+     */
+    if (usable.startsWith("blob:") || usable.startsWith("data:")) {
+        return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+                src={usable}
+                alt={alt}
+                className={`absolute inset-0 h-full w-full ${className}`}
+                onError={() => setFailed(true)}
+            />
+        );
+    }
+
     return (
         <Image
             src={usable}

@@ -141,6 +141,68 @@ export const getCoursesAction = withFlexibleSafeAction("getCoursesAction", _getC
 
 
 /**
+ * The learner's academy standing, read LIVE from their document.
+ *
+ *   THE OWNER: "why are these course asking users to buy after they are
+ *   approved by admin? They are supposed to be accessible to users after they
+ *   paid and approved by admin."
+ *
+ *   Because the catalogue decided it from a TOKEN CLAIM:
+ *
+ *       const userPlan = (session?.user as any)
+ *           ?.serviceRegistrations?.academy?.plan || "free";
+ *
+ *   auth.config.ts issues stateless JWTs with an 8-hour maxAge, so that claim
+ *   is a snapshot from login. A learner who pays, or whom an admin approves,
+ *   keeps the old one — `checkCourseAccess` default-denies an unrecognised
+ *   plan, and every tiered course rendered "Buy for ₦X" at somebody who had
+ *   already paid for it.
+ *
+ *   #460 FOUND AND FIXED EXACTLY THIS, one module over, and said so: "THE
+ *   PATTERN IS ALREADY IN THIS CODEBASE. #364 swept this class out of fifteen
+ *   API routes, requireAdmin re-reads roles live... Academy was missed by all
+ *   of it, in two verbatim copies." It repaired the enrolment path. The
+ *   catalogue is the third copy, and it is the one the learner looks at.
+ *
+ *   A SEPARATE ACTION RATHER THAN WIDENING getCoursesAction: the catalogue is
+ *   for everybody, signed in or not, and is seeded by a server page that
+ *   already runs its two reads in parallel — this joins them and costs no
+ *   extra round trip to the browser.
+ *
+ *   RETURNS THE STATUS TOO. A plan is what somebody bought and a status is what
+ *   an admin decided — _ac_enrollment's words — and the owner's requirement
+ *   names both: "after they paid AND approved by admin".
+ */
+async function _getMyAcademyStandingAction(): Promise<ActionResponse<{ plan: string; status: string } | null>> {
+    try {
+        const sessionResult = await requireSession();
+        const userId = sessionResult.session?.user?.id;
+        //   Not an error: a signed-out visitor may browse the catalogue, and
+        //   null means "no standing", which reads as free below.
+        if (!userId) return { success: true as const, error: null, data: null };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (!userDoc.exists) return { success: true as const, error: null, data: null };
+
+        const academy = (userDoc.data() as any)?.serviceRegistrations?.academy ?? {};
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                plan: String(academy.plan ?? "free"),
+                status: String(academy.status ?? ""),
+            },
+        };
+    } catch (error) {
+        logger.error("[academy] getMyAcademyStandingAction failed", { error });
+        return { success: false as const, error: "Could not read your academy standing", data: null };
+    }
+}
+
+export const getMyAcademyStandingAction = withFlexibleSafeAction("getMyAcademyStandingAction", _getMyAcademyStandingAction);
+
+
+/**
  * Get course by ID — direct Firestore fetch (no module-level cache).
  * Using unstable_cache at module scope caused null to be cached at build time.
  * Per-request caching via Next.js fetch cache handles deduplication instead.
