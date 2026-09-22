@@ -37,11 +37,28 @@ import { join } from 'path';
 /**
  * The scripts written to be PASTED INTO THE SUPABASE SQL EDITOR.
  *
- * Named explicitly rather than globbed over scripts/*.sql, and that is a
- * judgement rather than laziness: payments-that-nobody-made.sql is a
- * multi-section sweep meant for psql, where blank lines between sections are
- * correct and readable. The constraint below is the editor's, so it applies to
- * the files that go to the editor.
+ * Named explicitly rather than globbed over scripts/*.sql. The constraint
+ * below is the editor's, so it applies to the files that go to the editor.
+ *
+ *   THAT LIST WAS WRONG ONCE, AND THE WAY IT WAS WRONG IS WORTH KEEPING.
+ *
+ *   payments-that-nobody-made.sql used to be excluded here, under the reason
+ *   that it "is a multi-section sweep meant for psql, where blank lines
+ *   between sections are correct and readable". Then the owner pasted it into
+ *   the Supabase SQL Editor and got
+ *
+ *       ERROR: 42601: syntax error at or near ")"   LINE 42: ) x
+ *
+ *   because the editor cut it into seventeen fragments at exactly those blank
+ *   lines. The exclusion was argued from where the script was MEANT to run
+ *   rather than from where it IS run -- and production is reachable through
+ *   the editor, not through psql. A file nobody could run was being protected
+ *   for a workflow nobody has.
+ *
+ *   It is one statement now and it is in this list. The lesson generalises: a
+ *   script that reads production belongs here unless there is a reason it can
+ *   never be pasted into the editor, and "it would be nicer as sections" is
+ *   not one.
  *
  * A new one added here and not to this list is the regression this suite
  * exists for — so the vacuity guard at the bottom checks the list is the size
@@ -53,6 +70,7 @@ const EDITOR_SCRIPTS = [
     'scripts/cooperative-members-who-never-paid.sql',
     'scripts/entitlements-nobody-paid-for.sql',
     'scripts/academy-paid-twice.sql',
+    'scripts/payments-that-nobody-made.sql',
 ];
 
 /** Everything that is not a leading `--` comment: the executable statement. */
@@ -191,6 +209,20 @@ describe.each(EDITOR_SCRIPTS)('#910 — %s survives the SQL Editor that has to r
              */
             'scripts/academy-paid-twice.sql': [
                 'processed_payments', 'academy_registration', 'distinct reference', 'users',
+                //   The third verdict. The FIRST row this query ever returned
+                //   was a fabricated E2E row labelled "refund candidate", so
+                //   the classifier that tells a minted reference from a real
+                //   one is the part most worth keeping honest.
+                'looks_fabricated',
+            ],
+            /*
+             *   The five-section fabricated-payment sweep. Each marker pins a
+             *   section that would otherwise be trimmable: the test-only
+             *   reference shapes, the mock's amount, and the decoded mint time
+             *   that turns an ambiguous T-reference into a settled one.
+             */
+            'scripts/payments-that-nobody-made.sql': [
+                'processed_payments', 'INVALID_REF', 'mock_amount', 'minted_at',
             ],
         };
 
@@ -215,7 +247,7 @@ describe('#910 — and the list of editor scripts is the list', () => {
          *   guard, and it fails the day a third editor script is written and
          *   not added.
          */
-        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 5 });
+        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 6 });
         for (const rel of EDITOR_SCRIPTS) {
             expect({ rel, exists: readFileSync(join(process.cwd(), rel), 'utf-8').length > 0 })
                 .toEqual({ rel, exists: true });
