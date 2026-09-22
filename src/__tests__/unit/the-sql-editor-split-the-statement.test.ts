@@ -191,6 +191,11 @@ describe.each(EDITOR_SCRIPTS)('#910 — %s survives the SQL Editor that has to r
              */
             'scripts/academy-paid-twice.sql': [
                 'processed_payments', 'academy_registration', 'distinct reference', 'users',
+                //   The third verdict. The FIRST row this query ever returned
+                //   was a fabricated E2E row labelled "refund candidate", so
+                //   the classifier that tells a minted reference from a real
+                //   one is the part most worth keeping honest.
+                'looks_fabricated',
             ],
         };
 

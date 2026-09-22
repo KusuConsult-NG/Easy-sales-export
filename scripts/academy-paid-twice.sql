@@ -44,6 +44,41 @@
 --  by normalised email, which is the same signal #888 detects a split by, and
 --  profile_rows reports how many took part.
 --
+-- -- THE THIRD VERDICT: A REFERENCE THAT WAS NEVER A CHARGE -------------------
+--
+--  The FIRST row this query ever returned was labelled "refund candidate" and
+--  was not a payment at all:
+--
+--      e2e.user@easysalesexport.com   2 x 50,000
+--      T1783690499905, T1783698149704   2026-07-10
+--
+--  Until cc50b3b8 (2026-09-16) verifyPaystackPayment fabricated a successful
+--  50,000 naira payment for ANY reference beginning with the letter T, and
+--  tests/e2e/financial-workflow.spec.ts sent `T${Date.now()}` with
+--  status=success. Two runs of that spec, two fabricated academy payments,
+--  written to the live ledger for keeps.
+--
+--  Counting references honestly is not enough if a reference was never a
+--  charge, so those are now named rather than offered for refund. Two marks
+--  together identify them, and neither alone would:
+--
+--    · T FOLLOWED BY EXACTLY THIRTEEN DIGITS. That is Date.now() in
+--      milliseconds. Paystack's own T-references in this database carry
+--      FIFTEEN -- T457550806738035 and others sit on real cooperative
+--      records -- so the digit count separates the two populations.
+--
+--    · THE DIGITS DECODE TO THE MOMENT THE ROW WAS WRITTEN. A locally minted
+--      reference is generated microseconds before the request that stores it;
+--      the two above land 3.0s and 3.2s from their own rows. A reference
+--      Paystack issued for a real transaction has no reason to agree with our
+--      clock to the second.
+--
+--  STILL NOT A PROOF, and it is not written as one. A T-reference is ambiguous
+--  by construction -- payments-that-nobody-made.sql says so and is right. What
+--  this does is stop the ambiguous ones being read as "refund candidate",
+--  which is the direction that costs real money to get wrong. Paystack's
+--  dashboard settles it: a reference absent there was never a charge.
+--
 -- -- WHAT IT CANNOT SETTLE ----------------------------------------------------
 --
 --  The AMOUNTS are reported from both places they are stored and neither is
@@ -59,9 +94,9 @@
 -- -----------------------------------------------------------------------------
 with academy_pay as (select p.id as payment_id, coalesce(nullif(p.raw_data->>'userId', ''), p.user_id, '') as payer_id, coalesce(nullif(p.reference, ''), p.raw_data->>'reference', '') as reference, p.amount as amount_column, p.raw_data->>'amount' as amount_raw_data, p.created_at from processed_payments p where coalesce(p.raw_data->>'type', '') = 'academy_registration' and coalesce(p.raw_data->>'status', '') in ('success', 'successful', 'completed', 'paid')),
      payer as (select a.*, coalesce(nullif(lower(btrim(u.email)), ''), 'unknown-person:' || a.payer_id) as person_key, u.email as profile_email from academy_pay a left join users u on u.id = a.payer_id),
-     windowed as (select payer.*, (created_at >= timestamptz '2026-09-22 12:12:00+00' and created_at < timestamptz '2026-09-22 14:01:00+00') as inside_regression_window from payer),
-     grouped as (select person_key, count(*) as ledger_rows, count(distinct reference) as distinct_references, count(distinct payer_id) as profile_rows, count(*) filter (where inside_regression_window) as charges_in_window, min(created_at) as first_charge, max(created_at) as last_charge, string_agg(distinct coalesce(nullif(profile_email, ''), person_key), ', ') as emails, string_agg(distinct payer_id, ', ') as profile_ids, string_agg(distinct reference, ', ') as references_to_check, string_agg(distinct coalesce(amount_column::text, 'null'), ', ') as amounts_column, string_agg(distinct coalesce(amount_raw_data, 'null'), ', ') as amounts_raw_data from windowed group by person_key)
-select case when distinct_references > 1 and charges_in_window > 0 and first_charge < timestamptz '2026-09-22 12:12:00+00' then 'PAID TWICE, SECOND CHARGE INSIDE THE REGRESSION WINDOW - refund candidate' when distinct_references > 1 and charges_in_window > 0 then 'PAID TWICE, BOTH INSIDE THE WINDOW - refund candidate, check Paystack' when distinct_references > 1 then 'PAID TWICE, OUTSIDE THE WINDOW - refund candidate, not caused by this regression' else 'ONE CHARGE RECORDED TWICE - a ledger duplicate, NOT a refund' end as verdict,
+     classified as (select payer.*, (created_at >= timestamptz '2026-09-22 12:12:00+00' and created_at < timestamptz '2026-09-22 14:01:00+00') as inside_regression_window, (reference ~ '^T[0-9]{13}$' and abs(extract(epoch from created_at - to_timestamp(substring(reference from 2)::bigint / 1000.0))) <= 600) as looks_fabricated from payer),
+     grouped as (select person_key, count(*) as ledger_rows, count(distinct reference) as distinct_references, count(distinct reference) filter (where not looks_fabricated) as real_references, count(distinct reference) filter (where looks_fabricated) as fabricated_references, count(distinct payer_id) as profile_rows, count(*) filter (where inside_regression_window and not looks_fabricated) as charges_in_window, min(created_at) filter (where not looks_fabricated) as first_real_charge, min(created_at) as first_charge, max(created_at) as last_charge, string_agg(distinct coalesce(nullif(profile_email, ''), person_key), ', ') as emails, string_agg(distinct payer_id, ', ') as profile_ids, string_agg(distinct reference, ', ') as references_to_check, string_agg(distinct coalesce(amount_column::text, 'null'), ', ') as amounts_column, string_agg(distinct coalesce(amount_raw_data, 'null'), ', ') as amounts_raw_data from classified group by person_key)
+select case when real_references > 1 and charges_in_window > 0 and first_real_charge < timestamptz '2026-09-22 12:12:00+00' then 'PAID TWICE, SECOND CHARGE INSIDE THE REGRESSION WINDOW - refund candidate' when real_references > 1 and charges_in_window > 0 then 'PAID TWICE, BOTH INSIDE THE WINDOW - refund candidate, check Paystack' when real_references > 1 then 'PAID TWICE, OUTSIDE THE WINDOW - refund candidate, not caused by this regression' when fabricated_references > 0 and real_references = 0 then 'NEVER A CHARGE - fabricated by the removed E2E mock, do NOT refund' when fabricated_references > 0 then 'ONE REAL CHARGE PLUS FABRICATED ROWS - do NOT refund, judge the real reference only' else 'ONE CHARGE RECORDED TWICE - a ledger duplicate, NOT a refund' end as verdict,
        case when profile_rows > 1 then 'SPLIT ACCOUNT - the charges are on different profile rows' else 'one profile row' end as account_shape,
-       emails, distinct_references, ledger_rows, profile_rows, charges_in_window, first_charge, last_charge, references_to_check, amounts_column, amounts_raw_data, profile_ids
-from grouped where ledger_rows > 1 order by distinct_references desc, charges_in_window desc, last_charge desc;
+       emails, real_references, fabricated_references, distinct_references, ledger_rows, profile_rows, charges_in_window, first_charge, last_charge, references_to_check, amounts_column, amounts_raw_data, profile_ids
+from grouped where ledger_rows > 1 order by real_references desc, charges_in_window desc, last_charge desc;
