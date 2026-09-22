@@ -3,6 +3,7 @@ import { OFFLINE_CHECKOUT_METHODS } from "@/lib/offline-checkout";
 import { PRODUCT_CATEGORY_ALIASES } from "@/lib/product-search";
 import { nationalIdField } from '@/lib/kyc-validators';
 import { PRODUCT_STATUSES } from "@/lib/product-status";
+import { SELLER_CATEGORIES } from "@/lib/seller-category";
 
 /**
  * Marketplace Zod Schemas
@@ -154,7 +155,33 @@ export const ProductSchema = z.object({
     reviewCount: z.number().default(0),
     sellerName: z.string().default("Easy Sales Seller"),
     sellerVerified: z.boolean().default(false),
-    sellerCategory: z.enum(["wholesale", "retail"]).default("retail"),
+    /*
+     *   THE OWNER'S LOG, three times for one product:
+     *
+     *       [serializeProduct] document did not satisfy its schema; healing
+     *       {"issues":["sellerCategory: invalid_value"]}
+     *
+     *   THIS ENUM WAS `["wholesale", "retail"]` AND THE VOCABULARY HAS THREE
+     *   VALUES. lib/seller-category declares SELLER_CATEGORIES as
+     *   ["wholesale", "retail", "both"], the marketplace application asks for
+     *   all three, and `sellerCategoryMatches` exists precisely because "both"
+     *   belongs to each of the other two. A seller who sells both therefore had
+     *   every product fail its own schema.
+     *
+     *   AND THE HEALING IS NOT COSMETIC. The lenient schema fills the field from
+     *   its default, so the product is read back as "retail" — which drops that
+     *   seller out of the wholesale queries seller-category names:
+     *
+     *       sms-broadcast.ts      q.where("sellerCategory", "==", "wholesale")
+     *
+     *   A wholesale-and-retail seller silently stopped being wholesale on read.
+     *
+     *   DERIVED FROM THE CONSTANT, not restated. Two hand-maintained copies of
+     *   one vocabulary is what produced this, and it is the third time today
+     *   that "both" fell out of a two-value set — marketplace roles and Farm
+     *   Nation roles were the other two.
+     */
+    sellerCategory: z.enum(SELLER_CATEGORIES).default("retail"),
     createdAt: dateSchema,
     updatedAt: dateSchema,
     _version: z.number().default(0),
