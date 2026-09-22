@@ -458,7 +458,7 @@ const EXPECTED = [
     },
     {
         n: "050",
-        why: "idx_dc_collection_user_email — the claim-by-email lookup every " +
+        why: "idx_dc_collection_email — the claim-by-email lookup every " +
              "module's status check makes, which nothing indexed. MEASURED " +
              "rather than guessed: #261's [slow-action] timing produced its " +
              "first production log and named the whole family — " +

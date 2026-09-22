@@ -8035,7 +8035,7 @@ $grant$;
 
 -- ============================================================================
 -- 050 — 050_document_collections_user_email_index.sql
--- idx_dc_collection_user_email — the claim-by-email lookup every module's status check makes, which nothing indexed. MEASURED rather than guessed: #261's [slow-action] timing produced its first production log and named the whole family — checkCooperativeStatusAction 2,156-3,585 ms, checkWaveStatusAction 784-2,784 ms, checkAcademyStatusAction 1,828 ms, checkFarmNationStatusAction 1,715 ms — and every module entry runs one. Each walks a claim-by-email path for application rows written before the member had an account, which carry userEmail and no userId; nine call sites do it, three of them in module-access-check, which every module layout calls. 048 indexed (collection_name, status) and (collection_name, userId) on document_collections and stopped there, so each lookup scanned its whole collection inside the shared table and detoasted every raw_data it passed — the 2026-08-10 audit's measured mechanism, on the hottest user path. Against 20,000 seeded rows: seq scan 514 buffers / 15.6 ms, index scan 4 buffers / 0.03 ms. (collection_name, key) in that order for 041's and 048's reason. Changes no row and is not required for correctness, so a deploy landing before it is slow rather than broken.
+-- idx_dc_collection_email — the claim-by-email lookup every module's status check makes, which nothing indexed. MEASURED rather than guessed: #261's [slow-action] timing produced its first production log and named the whole family — checkCooperativeStatusAction 2,156-3,585 ms, checkWaveStatusAction 784-2,784 ms, checkAcademyStatusAction 1,828 ms, checkFarmNationStatusAction 1,715 ms — and every module entry runs one. Each walks a claim-by-email path for application rows written before the member had an account, which carry userEmail and no userId; nine call sites do it, three of them in module-access-check, which every module layout calls. 048 indexed (collection_name, status) and (collection_name, userId) on document_collections and stopped there, so each lookup scanned its whole collection inside the shared table and detoasted every raw_data it passed — the 2026-08-10 audit's measured mechanism, on the hottest user path. Against 20,000 seeded rows: seq scan 514 buffers / 15.6 ms, index scan 4 buffers / 0.03 ms. (collection_name, key) in that order for 041's and 048's reason. Changes no row and is not required for correctness, so a deploy landing before it is slow rather than broken.
 -- ============================================================================
 
 -- ============================================================================
@@ -8079,6 +8079,28 @@ $grant$;
 -- so deploying ahead of this migration is safe, and applying it changes no
 -- row.
 --
+-- THE NAME IS NOT idx_dc_collection_user_email, AND THAT IS NOT COSMETIC.
+--
+-- It was, and CI caught it. 048's control drops idx_dc_collection_user and
+-- asserts the plan no longer names it; with collection_name as its leading
+-- column this index is what the planner falls back to, so the plan read
+--
+--     Bitmap Index Scan on idx_dc_collection_user_email
+--
+-- and `not.toContain('idx_dc_collection_user')` failed on a SUBSTRING that was
+-- never meant to match.
+--
+-- The false failure was the harmless half. 048's positive assertion is
+-- `toContain('idx_dc_collection_user')`, which that name ALSO satisfies -- so
+-- a planner choosing this index would have made 048's main ratchet pass for
+-- the wrong reason, and the index it exists to prove would no longer have been
+-- proven by it. A name that can silently satisfy another index's test is a
+-- vacuous test waiting to happen, which is the class this audit keeps finding.
+--
+-- Renamed at the source rather than loosening someone else's control. Any
+-- future index on this table wanting `user` in its name should check it is not
+-- a prefix of, or prefixed by, an existing one.
+--
 -- HOW TO APPLY
 -- ------------
 -- Paste into the Supabase SQL Editor, or let it arrive in the consolidated
@@ -8091,7 +8113,7 @@ $grant$;
 -- Do not queue behind an open transaction and take every writer down with us.
 SET lock_timeout = '5s';
 
-CREATE INDEX IF NOT EXISTS idx_dc_collection_user_email
+CREATE INDEX IF NOT EXISTS idx_dc_collection_email
     ON public.document_collections (collection_name, (raw_data->>'userEmail'));
 
 RESET lock_timeout;

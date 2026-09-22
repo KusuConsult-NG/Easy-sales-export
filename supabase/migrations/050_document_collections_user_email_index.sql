@@ -39,6 +39,28 @@
 -- so deploying ahead of this migration is safe, and applying it changes no
 -- row.
 --
+-- THE NAME IS NOT idx_dc_collection_user_email, AND THAT IS NOT COSMETIC.
+--
+-- It was, and CI caught it. 048's control drops idx_dc_collection_user and
+-- asserts the plan no longer names it; with collection_name as its leading
+-- column this index is what the planner falls back to, so the plan read
+--
+--     Bitmap Index Scan on idx_dc_collection_user_email
+--
+-- and `not.toContain('idx_dc_collection_user')` failed on a SUBSTRING that was
+-- never meant to match.
+--
+-- The false failure was the harmless half. 048's positive assertion is
+-- `toContain('idx_dc_collection_user')`, which that name ALSO satisfies -- so
+-- a planner choosing this index would have made 048's main ratchet pass for
+-- the wrong reason, and the index it exists to prove would no longer have been
+-- proven by it. A name that can silently satisfy another index's test is a
+-- vacuous test waiting to happen, which is the class this audit keeps finding.
+--
+-- Renamed at the source rather than loosening someone else's control. Any
+-- future index on this table wanting `user` in its name should check it is not
+-- a prefix of, or prefixed by, an existing one.
+--
 -- HOW TO APPLY
 -- ------------
 -- Paste into the Supabase SQL Editor, or let it arrive in the consolidated
@@ -51,7 +73,7 @@
 -- Do not queue behind an open transaction and take every writer down with us.
 SET lock_timeout = '5s';
 
-CREATE INDEX IF NOT EXISTS idx_dc_collection_user_email
+CREATE INDEX IF NOT EXISTS idx_dc_collection_email
     ON public.document_collections (collection_name, (raw_data->>'userEmail'));
 
 RESET lock_timeout;
