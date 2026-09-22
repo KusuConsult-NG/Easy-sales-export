@@ -52,6 +52,8 @@
  *   resolve to us.
  */
 
+import { cache } from "react";
+
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -69,7 +71,7 @@ import {
  * account — no duplicates, nothing pointing at it — exactly two, both returning
  * at most the row itself.
  */
-export async function ownedProfileIds(liveId: string): Promise<string[]> {
+async function ownedProfileIdsUncached(liveId: string): Promise<string[]> {
     try {
         const owned = await resolveOwnedUserIds(
             liveId, db.collection(COLLECTIONS.USERS) as unknown as UserQueryCollection,
@@ -180,7 +182,7 @@ export async function isOwnedBySession(rowOwnerId: unknown, liveId: string): Pro
  * fails — never null for a non-empty input, so a comparison can never start
  * passing because a resolution quietly returned nothing.
  */
-export async function liveProfileId(storedId: unknown): Promise<string> {
+async function liveProfileIdUncached(storedId: unknown): Promise<string> {
     if (typeof storedId !== "string" || storedId.trim() === "") return "";
 
     try {
@@ -234,9 +236,52 @@ export function filterByOwnerInArray<Q extends Filterable>(
  *   ONE EXTRA KEYED READ over `ownedProfileIds`, and only that: a live id
  *   resolves to itself on the first hop.
  */
-export async function ownedProfileIdsFor(anyId: string): Promise<string[]> {
-    return ownedProfileIds(await liveProfileId(anyId));
+async function ownedProfileIdsForUncached(anyId: string): Promise<string[]> {
+    return ownedProfileIdsUncached(await liveProfileIdUncached(anyId));
 }
+
+/**
+ * ── RESOLVED ONCE PER REQUEST, NOT ONCE PER READ ────────────────────────────
+ *
+ *   THE OWNER: "this app has gone back to being super slow. all the tabs loads
+ *   very slow."
+ *
+ *   #904's fix is right and stays. What it did not carry was a cost model.
+ *   `ownedProfileIdsFor` is called at 116 sites and `liveProfileId` at 44
+ *   more, and each call is TWO indexed lookups against `users` — 42,845 rows,
+ *   106 MB. For one signed-in person, inside one page render, every one of
+ *   those returns THE SAME ANSWER.
+ *
+ *   A screen that reads four owner-scoped collections therefore paid for a
+ *   dozen `users` queries to learn one fact it had already learned. Nothing in
+ *   the codebase memoised anything: a search for React's `cache` across
+ *   src/ returned zero uses.
+ *
+ *   `cache()` is per-REQUEST, which is exactly the lifetime this fact has.
+ *   Two profiles merging mid-render is not a thing that happens, and the next
+ *   request resolves afresh — so this cannot serve a stale identity to a later
+ *   page the way a module-level Map would.
+ *
+ *   OUTSIDE A REQUEST IT IS A NO-OP, which is why the maintenance scripts and
+ *   the suites are unaffected: React gives an un-scoped caller its own cache
+ *   per call, so each one still reads.
+ *
+ *   The uncached forms stay callable inside this module so the resolution
+ *   chain does not memoise itself twice over.
+ */
+//   ANNOTATED, because cache() erodes the inferred return type and every
+//   caller that maps over the result then trips noImplicitAny.
+export const ownedProfileIdsFor: (anyId: string) => Promise<string[]> =
+    cache(ownedProfileIdsForUncached);
+
+/**
+ * The same treatment for the two the chain is built from, because both are
+ * public and both are called directly — `liveProfileId` at 44 sites of its own.
+ */
+export const ownedProfileIds: (liveId: string) => Promise<string[]> =
+    cache(ownedProfileIdsUncached);
+export const liveProfileId: (storedId: unknown) => Promise<string> =
+    cache(liveProfileIdUncached);
 
 /**
  * Is the caller either party to this row?
