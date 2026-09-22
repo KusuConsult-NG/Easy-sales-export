@@ -169,12 +169,16 @@ test.describe('#798 — a seller can list a product, and it is buyable', () => {
          *   changed. A buyer must be able to find the product. What changed is
          *   what has to happen first.
          *
-         *   #912 AND THIS IS WHAT CAUGHT THE MISSING REVALIDATION. The last
-         *   step failed before `approveContentAction` learned to revalidate:
-         *   the row said active and the catalogue went on serving its cached
-         *   page. Approved, and still invisible — latent while products were
-         *   born live, live the moment the console became the door they all
-         *   pass through.
+         *   AND STEP 4 FAILED ON ITS FIRST RUN FOR A REASON IN THIS FILE, not
+         *   in the application: the approval never happened. See the dialog
+         *   note below. `/marketplace/products` is force-dynamic, so no cache
+         *   was ever between the row and the buyer — the row simply had not
+         *   changed.
+         *
+         *   (#912's revalidation is still right and stays: the sibling door
+         *   has always revalidated, and a deployment that is not force-dynamic
+         *   needs it. It is not what this test was failing on, and saying so
+         *   is cheaper than a wrong story about a passing test.)
          */
         const name = `E2E Listed Product ${Date.now()}`;
         await stubUploads(page);
@@ -205,6 +209,21 @@ test.describe('#798 — a seller can list a product, and it is buyable', () => {
         const adminContext = await browser.newContext({ storageState: ADMIN });
         try {
             const admin = await adminContext.newPage();
+
+            /*
+             *   handleApprove OPENS A NATIVE confirm(), and Playwright
+             *   auto-DISMISSES an unhandled dialog. Dismissing returns false,
+             *   so the handler returns before calling approveContentAction —
+             *   the click succeeds, the button looks pressed, and nothing is
+             *   approved.
+             *
+             *   That is what the first run of this test hit: steps 1 to 3 all
+             *   passed and step 4 failed, because step 3 had silently done
+             *   nothing. Registered before the navigation so no dialog can
+             *   arrive unhandled.
+             */
+            admin.on('dialog', (dialog) => dialog.accept());
+
             await admin.goto('/admin/content-approval');
 
             const row = admin.getByText(name).first();
@@ -213,6 +232,15 @@ test.describe('#798 — a seller can list a product, and it is buyable', () => {
             await row.click();
 
             await admin.getByRole('button', { name: /approve request/i }).click();
+
+            /*
+             *   AND WAIT FOR IT TO HAVE HAPPENED. Closing the context aborts an
+             *   in-flight server action, so clicking and closing races the
+             *   write. The toast is the page's own confirmation that
+             *   approveContentAction returned success.
+             */
+            await expect(admin.getByText(/approved successfully/i), 'the approval completed')
+                .toBeVisible({ timeout: 30000 });
         } finally {
             await adminContext.close();
         }
