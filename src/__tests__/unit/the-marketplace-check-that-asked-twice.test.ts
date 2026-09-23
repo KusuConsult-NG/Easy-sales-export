@@ -34,6 +34,9 @@
  *
  *       before   11 reads
  *       after     7 reads
+ *       and 6 once the gate's own copy of the user row joined the request
+ *       memo too — two of those seven were the same row, read by two callers
+ *       that did not know each other existed.
  *
  *   The extra two come from the identity search being paid ONCE instead of
  *   twice: #265 moved checkModuleAccess onto `ownedProfileIds`, and this action
@@ -77,8 +80,14 @@ jest.mock('@/lib/rate-limiter', () => ({
 const UID = 'shopper-1';
 const EMAIL = 'shopper@example.test';
 
-/** Today's cost of drawing /marketplace/onboarding for a first-time visitor. */
-const READS_ALLOWED_PER_PAGE = 7;
+/**
+ * Today's cost of drawing /marketplace/onboarding for a first-time visitor.
+ *
+ * It was 11, then 7. SIX since the gate's own row read joined the request memo
+ * — two of the seven were the same row, read by two callers that did not know
+ * each other existed. Raising it is a decision, not a detail.
+ */
+const READS_ALLOWED_PER_PAGE = 6;
 
 let store: FakeDbHandle;
 
@@ -99,7 +108,7 @@ beforeEach(() => {
 const statusAction = () => import('@/app/actions/marketplace/_mp_onboarding');
 
 describe('what /marketplace/onboarding costs a first-time visitor', () => {
-    it('DOES NOT GROW — seven reads is the ceiling, down from eleven', async () => {
+    it('DOES NOT GROW — six reads is the ceiling, down from eleven', async () => {
         const { checkModuleAccess } = await import('@/lib/module-access-check');
         const { checkMarketplaceStatusAction } = await statusAction();
         store.reads.length = 0;

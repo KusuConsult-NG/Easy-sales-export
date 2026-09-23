@@ -35,6 +35,7 @@ import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-applicat
 import { claimableByEmail } from "@/lib/claimable-application";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 
@@ -145,11 +146,37 @@ export async function checkModuleAccess(
          *   nothing. Past it, the resolution is two indexed queries per
          *   supersession level and is shared by every layer that follows.
          */
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        /*
+         *   AND THROUGH THE REQUEST MEMO, WHICH IS WHAT IT WAS BUILT FOR.
+         *
+         *   lib/current-user-doc's own header names this read as one of the
+         *   four copies of the same row it counted on a single WAVE page draw
+         *   — "the layout's checkModuleAccess (twice: once directly, once
+         *   inside the identity walk it need not have taken), the module's
+         *   status action, and the sidebar's live-roles read". The walk was
+         *   dealt with below; this is the direct one, and it was still a bare
+         *   `.doc(id).get()` on the gate that every module layout runs on
+         *   every page of every module.
+         *
+         *   Measured with #261's read meter, /farm-nation/onboarding:
+         *   EIGHT reads, of which two were this row. Seven now.
+         *
+         *   SAFE ACROSS THE HEALS BELOW. All six of them call
+         *   `invalidateServiceCache` straight after writing, and that drops
+         *   the memo (`forgetUserDoc`) before it touches Redis — so a reader
+         *   later in the same request cannot be served the copy taken before
+         *   the grant. That is #692's rule, and it is why the memo could be
+         *   introduced here at all.
+         *
+         *   SAME HANDLE, NOT A WIDER ONE. `getAdminDb()` in this file returns
+         *   `supabaseDb`, which is exactly what current-user-doc reads
+         *   through. Nothing about what this gate may see changes.
+         */
+        const userDoc = await readUserDocOnce(userId);
 
         if (!userDoc.exists) return false;
 
-        const userData = userDoc.data()!;
+        const userData = userDoc.data!;
 
         /*
          *   AND THE FORWARD HALF OF THAT RESOLUTION IS THE ROW ABOVE.

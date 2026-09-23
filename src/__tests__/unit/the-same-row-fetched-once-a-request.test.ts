@@ -98,10 +98,14 @@ const ROLES = ['general_user'];
 /**
  * Today's cost of drawing /wave/application for an unapproved applicant.
  *
- * It was 14. Raising it is a decision, not a detail: it is one more HTTP call
- * to PostgREST on every view of the slowest screen on the platform.
+ * It was 14, then 9. Raising it is a decision, not a detail: it is one more
+ * HTTP call to PostgREST on every view of the slowest screen on the platform.
+ *
+ * 8 since the gate's own row read joined the request memo — see the note on
+ * "fetches the caller's user row ONCE" below for why the reason it had been
+ * held out turned out to be about a name rather than a handle.
  */
-const READS_ALLOWED_PER_WAVE_PAGE = 9;
+const READS_ALLOWED_PER_WAVE_PAGE = 8;
 
 let store: FakeDbHandle;
 
@@ -153,20 +157,35 @@ describe('the database cost of drawing one WAVE page', () => {
         expect(store.reads.length).toBeLessThanOrEqual(READS_ALLOWED_PER_WAVE_PAGE);
     });
 
-    it('fetches the caller\'s user row TWICE, not four times', async () => {
+    it('fetches the caller\'s user row ONCE, not four times', async () => {
         await drawOneWavePage();
 
         const ownRow = store.reads.filter(
             (r) => r.collection === COLLECTIONS.USERS && r.id === UID,
         );
 
-        //   TWO, AND NOT ONE, ON PURPOSE. checkModuleAccess keeps its own read:
-        //   it goes through getAdminDb() and it writes the row it reads, and a
-        //   memo shared between a privileged client and an ordinary one is a
-        //   question nobody should have to answer at a gate. It is the layout's
-        //   first call anyway, so it would be the entry's author rather than
-        //   its beneficiary. The other three callers now share one read.
-        expect(ownRow.length).toBe(2);
+        /*
+         *   ONE. THIS SAID TWO, AND THE REASON IT GAVE WAS WRONG.
+         *
+         *   "checkModuleAccess keeps its own read: it goes through
+         *   getAdminDb() ... a memo shared between a privileged client and an
+         *   ordinary one is a question nobody should have to answer at a
+         *   gate." That is a statement about a NAME. `getAdminDb()` in
+         *   lib/supabase-db is `return supabaseDb;` — the very object
+         *   lib/current-user-doc reads through. There is no second handle and
+         *   there never was, so there was no privilege question to decline.
+         *
+         *   The other half of that note was real: the gate WRITES the row it
+         *   reads. All six of those heals call `invalidateServiceCache`, which
+         *   calls `forgetUserDoc` before it touches Redis — so the memo cannot
+         *   outlive the grant. Both halves of that are pinned, by a test that
+         *   loads the REAL invalidation module rather than the suite-wide stub
+         *   and by a ratchet on the six write sites.
+         *
+         *   ALL FOUR CALLERS SHARE ONE READ NOW, which is what this file's
+         *   title claims and what its subject module was built to do.
+         */
+        expect(ownRow.length).toBe(1);
     });
 
     it('asks the applications collection only what it has not already asked', async () => {
