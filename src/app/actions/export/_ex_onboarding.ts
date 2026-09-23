@@ -32,6 +32,8 @@ import { registerStatusForExportApplication } from "@/lib/export-registration-st
 import { readUserDocOnce } from "@/lib/current-user-doc";
 import { claimableByEmail } from "@/lib/claimable-application";
 import { applicationsTypedTo, forgetApplicationReads } from "@/lib/application-request-reads";
+import { startedEarly } from "@/lib/started-early";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 export async function submitExportOnboardingAction(
     prevState: any,
@@ -226,7 +228,7 @@ export async function submitExportOnboardingAction(
 // Check Export Application Status Action
 // ============================================
 
-export async function checkExportStatusAction(): Promise<string | null> { try {
+async function _checkExportStatusAction(): Promise<string | null> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
@@ -237,6 +239,47 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
         const userData = userDoc.data;
 
         let status = userData?.serviceRegistrations?.export?.status;
+
+        /*
+         *   THE BY-ADDRESS SWEEP GOES OUT WITH THE OWNER-SCOPED QUERY.
+         *
+         *   THE OWNER: "fix the export one next."
+         *
+         *   Measured with lib/testing/read-depth, which counts how DEEP the
+         *   chain of reads goes rather than how many there are — because read
+         *   count is not what latency is made of:
+         *
+         *       nothing filed        5 reads, depth 4
+         *       approved on the row  1 read,  depth 1
+         *       a filed application  4 reads, depth 3
+         *
+         *   #273 already removed a read from this path. What is left on the
+         *   longest one is a CHAIN: the owner-scoped query, and then the
+         *   by-address sweep if it came back empty — a round trip spent
+         *   learning whether to spend the next.
+         *
+         *   PREFETCHED ONLY WHERE IT COULD RUN. The sweep is reachable only
+         *   with no applicationId on the row (the branch above it wins
+         *   otherwise) and an address to sweep by, and submitting an
+         *   application writes BOTH the status and the applicationId — so an
+         *   applicant pays nothing extra and the approved account never gets
+         *   here at all. The one record that pays is an application with
+         *   nothing on the user row, which is what the claiming branch exists
+         *   to repair.
+         *
+         *   THE CLAIM RULE DOES NOT MOVE. claimableByEmail still decides, in
+         *   the same place, on the same rows: issuing a query is not adopting
+         *   what it returns, and the two defects in this file's header are
+         *   exactly what happens when that distinction slips.
+         */
+        const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
+        const byEmailSoon = (
+            status !== "approved"
+            && !userData?.serviceRegistrations?.export?.applicationId
+            && userEmail
+        )
+            ? startedEarly(applicationsTypedTo(COLLECTIONS.EXPORT_APPLICATIONS, "userEmail", userEmail))
+            : null;
 
         /*
          *   WHAT THE LEGACY FALLBACK AT THE BOTTOM CAN STILL FIND.
@@ -341,8 +384,7 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                  * module-access-check reads. Only an unclaimed application can be
                  * claimed.
                  */
-                const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
-                if (userEmail) {
+                if (userEmail && byEmailSoon) {
                     /*
                      *   THE SHARED RULE, AND THE SHARED READ.
                      *
@@ -360,8 +402,8 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                      *   the query identical to the gate's — so the gate above
                      *   and this action pay for it once between them.
                      */
-                    const emailQuery = await applicationsTypedTo(
-                        COLLECTIONS.EXPORT_APPLICATIONS, "userEmail", userEmail);
+                    //   Already in the air since the wave above.
+                    const emailQuery = await byEmailSoon();
 
                     const { claimable: unclaimed } = claimableByEmail(emailQuery.docs);
 
@@ -459,6 +501,42 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
     } catch (error) { logger.error("Error checking export status:", error);
         return null;
     }
+}
+
+/**
+ * THE ONE MODULE CHECK NOTHING WAS TIMING.
+ *
+ *   The owner's slowness investigation runs entirely off the `[slow-action]`
+ *   lines, and Export never appeared in one. Not because it was fast: because
+ *   this was a bare exported function, while checkWaveStatusAction,
+ *   checkAcademyStatusAction, checkCooperativeStatusAction,
+ *   checkFarmNationStatusAction and checkMarketplaceStatusAction all go
+ *   through withFlexibleSafeAction and are therefore measured. Five of six
+ *   modules could be seen and the sixth could not, which reads as "Export is
+ *   fine" and means "nobody looked".
+ *
+ *   THE CONTRACT IS UNCHANGED, deliberately. The wrapper's error envelope is
+ *   unreachable — the inner function catches everything and answers `null` —
+ *   so mapping it back to `null` costs nothing and spares three call sites a
+ *   union they have no use for. `export/onboarding/page.tsx` still gets a bare
+ *   string or null, exactly as its own comment says it expects.
+ */
+export async function checkExportStatusAction(): Promise<string | null> {
+    /*
+     *   THE WRAPPER IS CONSTRUCTED HERE RATHER THAN HOISTED, deliberately.
+     *
+     *   action-auth-per-function walks every exported action for a call to
+     *   requireSession, following `withFlexibleSafeAction("x", _x)` to the
+     *   implementation it wraps. Hoisting that call into a module-level const
+     *   adds a hop it does not follow, and the ratchet reported this action as
+     *   reaching no authorisation guard — correctly, in the sense that the
+     *   guard had become harder to see. The shape below is the one the
+     *   analyser already understands, and the closure costs nothing worth
+     *   measuring beside the round trips it is here to time.
+     */
+    const result = await withFlexibleSafeAction(
+        "checkExportStatusAction", _checkExportStatusAction)();
+    return typeof result === "string" ? result : null;
 }
 
 
