@@ -26,6 +26,8 @@ import { logger } from "@/lib/logger";
  * fails if a fourth appears.
  */
 
+import { isImageKitConfigured } from "@/lib/imagekit";
+
 /** Cloudinary is usable only with all three credentials. */
 export function isCloudinaryConfigured(): boolean {
     return !!(
@@ -33,6 +35,11 @@ export function isCloudinaryConfigured(): boolean {
         process.env.CLOUDINARY_API_KEY &&
         process.env.CLOUDINARY_API_SECRET
     );
+}
+
+/** Remote cloud storage is configured if ImageKit or Cloudinary is set. */
+export function isRemoteStorageConfigured(): boolean {
+    return isImageKitConfigured() || isCloudinaryConfigured();
 }
 
 /**
@@ -67,7 +74,7 @@ export function isLocalStack(): boolean {
  * — that combination is why this needed widening.
  */
 export function shouldUseLocalDiskStorage(): boolean {
-    if (isCloudinaryConfigured()) return false;
+    if (isRemoteStorageConfigured()) return false;
     return process.env.NODE_ENV !== "production" || isLocalStack();
 }
 

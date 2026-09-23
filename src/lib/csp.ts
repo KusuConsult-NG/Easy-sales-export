@@ -53,6 +53,8 @@ const CONNECT_HOSTS = [
     "https://securetoken.googleapis.com",
     "https://api.paystack.co",
     "https://api.cloudinary.com",
+    "https://upload.imagekit.io",
+    "https://ik.imagekit.io",
     "wss://*.firebaseio.com",
     "https://firebasestorage.googleapis.com",
     "https://storage.googleapis.com",
@@ -69,10 +71,11 @@ const FRAME_HOSTS = [
     "https://docs.google.com",
     "https://*.jit.si",
     //   The Academy lesson page embeds its course DOCUMENT and SPREADSHEET in
-    //   iframes — the PDF straight from Cloudinary, the spreadsheet through
+    //   iframes — the PDF straight from Cloudinary/ImageKit, the spreadsheet through
     //   Office's viewer. Neither host was listed, so both panes were blank for
     //   the same reason the video would not play. See MEDIA_HOSTS below.
     "https://res.cloudinary.com",
+    "https://ik.imagekit.io",
     "https://view.officeapps.live.com",
 ];
 
@@ -109,6 +112,7 @@ const FRAME_HOSTS = [
 const MEDIA_HOSTS = [
     //   Where this platform actually stores things.
     "https://res.cloudinary.com",
+    "https://ik.imagekit.io",
     //   Kept: harmless if unused, and a bucket may yet be provisioned. They are
     //   not the reason this directive exists any more, which is the point.
     "https://firebasestorage.googleapis.com",

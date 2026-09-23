@@ -1,6 +1,7 @@
 import { logger } from "@/lib/logger";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 import { defaultLimitMbFor, isVideoType } from "@/lib/upload-limits";
+import { isImageKitConfigured, uploadToImageKit } from "@/lib/imagekit";
 
 /**
  * Server-side file upload.
@@ -234,8 +235,8 @@ export async function uploadFileToStorage(
     // The rule is now shared: see src/lib/storage-backend.ts.
     const useLocalDisk = shouldUseLocalDiskStorage();
 
-    if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) {
-        logger.error('[storage-admin] Cloudinary credentials are not configured');
+    if (!useLocalDisk && !isImageKitConfigured() && (!cloudName || !apiKey || !apiSecret)) {
+        logger.error('[storage-admin] Storage credentials (ImageKit / Cloudinary) are not configured');
         throw new Error('Upload service is not configured. Please contact support.');
     }
 
@@ -332,6 +333,18 @@ export async function uploadFileToStorage(
     // rather than from the caller.
     if (useLocalDisk) {
         return writeToLocalDisk(publicId, buffer);
+    }
+
+    if (isImageKitConfigured()) {
+        const uploadResult = await uploadToImageKit({
+            buffer,
+            fileName: `${safeName}-${timestamp}${extension}`,
+            folder: safeFolder,
+            mimeType: detectedMime,
+            useUniqueFileName: false,
+        });
+        logger.info(`[storage-admin] File uploaded to ImageKit: ${uploadResult.url}`);
+        return uploadResult.url;
     }
 
     // Signed upload — parameters must be sorted alphabetically before hashing.

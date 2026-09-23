@@ -80,39 +80,44 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // The host check is necessary and was not sufficient.
-            //
-            // res.cloudinary.com is Cloudinary's SHARED delivery domain: every
-            // Cloudinary customer serves from it, under
-            // /<cloud_name>/<resource>. So allowing the hostname allowed any
-            // file hosted by anyone on Cloudinary, not files belonging to this
-            // platform — a check that reads like a restriction and is close to
-            // none.
-            //
-            // The cloud name is pinned as well now, so the URL has to name THIS
-            // account.
             const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-            if (!cloudName) {
-                logger.error("[certificates/upload] NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME is not set");
-                return NextResponse.json(
-                    { success: false, error: "Upload service is not configured" },
-                    { status: 500 }
-                );
-            }
+            const imageKitId = process.env.IMAGEKIT_ID || "Easysales";
 
             try {
                 const parsedUrl = new URL(fileUrl);
                 const hostname = parsedUrl.hostname.toLowerCase();
-                const hostAllowed = hostname === "res.cloudinary.com" || hostname.endsWith(".res.cloudinary.com");
-                // Path is /<cloud_name>/<type>/<delivery>/... — the first
-                // segment is the account.
-                const firstSegment = parsedUrl.pathname.split("/").filter(Boolean)[0];
+                const isCloudinary = hostname === "res.cloudinary.com" || hostname.endsWith(".res.cloudinary.com");
+                const isImageKit = hostname === "ik.imagekit.io" || hostname.endsWith(".imagekit.io");
 
-                if (!hostAllowed || firstSegment !== cloudName) {
+                if (!isCloudinary && !isImageKit) {
                     return NextResponse.json(
                         { success: false, error: "Unauthorized file hosting domain" },
                         { status: 400 }
                     );
+                }
+
+                const firstSegment = parsedUrl.pathname.split("/").filter(Boolean)[0];
+
+                if (isCloudinary) {
+                    if (!cloudName) {
+                        return NextResponse.json(
+                            { success: false, error: "Unauthorized file hosting domain" },
+                            { status: 400 }
+                        );
+                    }
+                    if (firstSegment !== cloudName) {
+                        return NextResponse.json(
+                            { success: false, error: "Unauthorized file hosting domain" },
+                            { status: 400 }
+                        );
+                    }
+                } else if (isImageKit) {
+                    if (firstSegment !== imageKitId) {
+                        return NextResponse.json(
+                            { success: false, error: "Unauthorized file hosting domain" },
+                            { status: 400 }
+                        );
+                    }
                 }
             } catch (e) {
                 return NextResponse.json(
