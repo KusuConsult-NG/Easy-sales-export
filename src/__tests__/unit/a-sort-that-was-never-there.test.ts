@@ -122,7 +122,7 @@ describe('#786 — the sort itself', () => {
         //   file is trivially satisfied by a sort that silently does nothing,
         //   which is precisely what was there.
         expect(sortIsInMemory('name')).toBe(true);
-        expect([...IN_MEMORY_SORTS]).toEqual(['gender', 'name']);
+        expect([...IN_MEMORY_SORTS]).toEqual(['gender', 'name', 'state']);
     });
 
     it('orders by the name the admin actually reads, both ways', () => {

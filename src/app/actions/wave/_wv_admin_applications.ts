@@ -571,7 +571,7 @@ async function _getStandardWaveApplicationsAction(options: {
      *   there was no name sort to be broken — an admin looking for a way to
      *   order 480 applications by the name in the first column had none.
      */
-    sortBy?: "createdAt" | "gender" | "name";
+    sortBy?: "createdAt" | "gender" | "name" | "state";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { logger } from '@/lib/logger';
 import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save, FileText, Loader2, AlertTriangle } from "lucide-react";
@@ -61,7 +62,7 @@ export default function CooperativeMembersPage() {
     const [lgaFilter, setLgaFilter] = useState("");
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [registryFilter, setRegistryFilter] = useState<"all" | "legacy" | "regular">("all");
-    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first" | "gender-asc" | "gender-desc">("date-desc");
+    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first" | "gender-asc" | "gender-desc" | "state-asc" | "state-desc">("date-desc");
 
     const {
         data: applications,
@@ -82,10 +83,10 @@ export default function CooperativeMembersPage() {
         fetchAction: async (opts) => {
             const mappedSortBy = sortBy.startsWith("gender")
                 ? "gender"
-                : "createdAt";
-            const mappedSortOrder = sortBy.endsWith("-asc") || sortBy === "gender-asc"
-                ? "asc"
-                : "desc";
+                : sortBy.startsWith("state")
+                    ? "state"
+                    : "createdAt";
+            const mappedSortOrder = sortBy.endsWith("-asc") ? "asc" : "desc";
             return getStandardCooperativeMembersAction({
                 status: (opts.status as any) || "all",
                 paymentStatus: (opts.payment as any) || "all",
@@ -218,6 +219,14 @@ export default function CooperativeMembersPage() {
             const ga = a.user?.gender || a.data?.gender || "";
             const gb = b.user?.gender || b.data?.gender || "";
             return gb.localeCompare(ga);
+        }
+        if (sortBy === "state-asc" || sortBy === "state-desc") {
+            //   Blank and "Unknown" file last in both directions — see
+            //   lib/admin-row-sort for why that is not a detail.
+            const sa = adminSortKey(a.user?.state ?? a.data?.stateOfOrigin);
+            const sb = adminSortKey(b.user?.state ?? b.data?.stateOfOrigin);
+            if (!sa !== !sb) return sa ? -1 : 1;
+            return sortBy === "state-asc" ? sa.localeCompare(sb) : sb.localeCompare(sa);
         }
         return 0;
     });
@@ -534,6 +543,8 @@ export default function CooperativeMembersPage() {
                             <option value="name-desc">Name (Z-A)</option>
                             <option value="gender-asc">Gender (A-Z)</option>
                             <option value="gender-desc">Gender (Z-A)</option>
+                            <option value="state-asc">State (A-Z)</option>
+                            <option value="state-desc">State (Z-A)</option>
                             <option value="legacy-first">Legacy First</option>
                             <option value="regular-first">Regular First</option>
                         </select>

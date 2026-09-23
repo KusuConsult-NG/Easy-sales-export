@@ -1,6 +1,7 @@
 "use server";
 
 import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
@@ -29,7 +30,7 @@ async function _getAcademyApplicationsAction(options: {
     search?: string;
     statusFilter?: "pending" | "under_review" | "approved" | "rejected" | "all";
     lastDocId?: string;
-    sortBy?: "createdAt" | "gender";
+    sortBy?: "createdAt" | "gender" | "state";
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
@@ -46,7 +47,7 @@ async function _getAcademyApplicationsAction(options: {
             }
         }
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || options.sortBy === "gender";
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.sortBy === "gender" || options.sortBy === "state");
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
 
         let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
@@ -173,11 +174,15 @@ async function _getAcademyApplicationsAction(options: {
         });
 
         // Sort in memory
-        if (options.sortBy === "gender") {
+        if ((options.sortBy === "gender" || options.sortBy === "state")) {
             const order = options.sortOrder || "desc";
+            const byState = options.sortBy === "state";
             applications.sort((a, b) => {
-                const ga = (a.user?.gender || "").toLowerCase();
-                const gb = (b.user?.gender || "").toLowerCase();
+                //   STATE collapses "Unknown" to blank and files blanks last;
+                //   GENDER is left exactly as it was — see lib/admin-row-sort.
+                const ga = byState ? adminSortKey(a.user?.state) : (a.user?.gender || "").toLowerCase();
+                const gb = byState ? adminSortKey(b.user?.state) : (b.user?.gender || "").toLowerCase();
+                if (byState && !ga !== !gb) return ga ? -1 : 1;
                 if (ga === gb) {
                     return new Date(b.submittedAt as string).getTime() - new Date(a.submittedAt as string).getTime();
                 }

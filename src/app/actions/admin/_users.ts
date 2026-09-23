@@ -1,6 +1,7 @@
 "use server";
 
 import { ZodError } from "zod";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import crypto from 'crypto';
@@ -419,7 +420,7 @@ interface GetUsersOptions {
     toDate?: string;    // ISO date string – createdAt <= toDate
     sortOrder?: "asc" | "desc"; // Sort direction
     modules?: string;   // 'all' | 'multi' | specific module slug ('academy', 'marketplace', etc.)
-    sortBy?: "createdAt" | "gender"; // Sort field
+    sortBy?: "createdAt" | "gender" | "state"; // Sort field
     gender?: "male" | "female" | "all"; // Filter by gender
 }
 
@@ -771,7 +772,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         const needsDeepScan = Boolean(
             options.search || hasUnindexedFilter || options.fromDate || options.toDate
             || (options.role && options.role !== "all")
-            || options.sortBy === "gender"
+            || (options.sortBy === "gender" || options.sortBy === "state")
             || (options.gender && options.gender !== "all")
             || (options.modules && options.modules !== "all")
             || (options.status && options.status !== "all"),
@@ -1236,10 +1237,16 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         }
 
         // Sort in-memory
-        if (options.sortBy === "gender") {
+        if ((options.sortBy === "gender" || options.sortBy === "state")) {
+            const byState = options.sortBy === "state";
             filteredUsers.sort((a, b) => {
-                const aGender = String(a.gender || "").toLowerCase().trim();
-                const bGender = String(b.gender || "").toLowerCase().trim();
+                //   STATE collapses "Unknown" to blank and files blanks last;
+                //   GENDER is left exactly as it was — see lib/admin-row-sort.
+                const aGender = byState
+                    ? adminSortKey(a.state) : String(a.gender || "").toLowerCase().trim();
+                const bGender = byState
+                    ? adminSortKey(b.state) : String(b.gender || "").toLowerCase().trim();
+                if (byState && !aGender !== !bGender) return aGender ? -1 : 1;
                 if (aGender === bGender) {
                     // secondary sort by createdAt desc
                     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;

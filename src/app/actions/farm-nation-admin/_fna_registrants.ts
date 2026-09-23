@@ -1,6 +1,7 @@
 "use server";
 
 import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
@@ -188,7 +189,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
     status?: "pending" | "approved" | "rejected" | "under_review" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-    sortBy?: "createdAt" | "gender";
+    sortBy?: "createdAt" | "gender" | "state";
     dateFrom?: string;
     dateTo?: string; 
 } = {}): Promise<ActionResponse<any>> {
@@ -214,7 +215,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
         const maySeeBankDetails = await mayRevealMemberPii("finance:resolve_disputes");
 
-        const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
+        const useMemoryPagination = (options.sortBy === "gender" || options.sortBy === "state") || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const applicationsSortDirection = options.sortOrder || "desc";
 
@@ -433,10 +434,18 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         });
 
         // Sort by Gender in-memory if requested
-        if (options.sortBy === "gender") {
+        if ((options.sortBy === "gender" || options.sortBy === "state")) {
+            const byState = options.sortBy === "state";
             finalApplications.sort((a: any, b: any) => {
-                const ga = (a.user?.gender || a.data?.gender || "").toLowerCase();
-                const gb = (b.user?.gender || b.data?.gender || "").toLowerCase();
+                //   STATE collapses "Unknown" to blank and files blanks last;
+                //   GENDER is left exactly as it was — see lib/admin-row-sort.
+                const ga = byState
+                    ? adminSortKey(a.user?.state ?? a.data?.stateOfOrigin)
+                    : (a.user?.gender || a.data?.gender || "").toLowerCase();
+                const gb = byState
+                    ? adminSortKey(b.user?.state ?? b.data?.stateOfOrigin)
+                    : (b.user?.gender || b.data?.gender || "").toLowerCase();
+                if (byState && !ga !== !gb) return ga ? -1 : 1;
                 if (applicationsSortDirection === "asc") {
                     return ga.localeCompare(gb);
                 } else {

@@ -352,6 +352,7 @@ export default function AdminWaveApplicationsPage() {
                           */}
                         <option value="name">Sort by Name</option>
                         <option value="gender">Sort by Gender</option>
+                        <option value="state">Sort by State</option>
                     </select>
                     <div className="w-px h-6 bg-slate-200"></div>
                     <select

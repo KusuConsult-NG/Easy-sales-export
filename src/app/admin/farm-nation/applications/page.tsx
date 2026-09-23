@@ -128,7 +128,7 @@ export default function FarmNationApplicationsPage() {
                 limit: params.limit || 20,
                 lastDocId: params.lastDocId,
                 sortOrder: params.sortOrder as "asc" | "desc",
-                sortBy: params.sortBy as "createdAt" | "gender",
+                sortBy: params.sortBy as "createdAt" | "gender" | "state",
                 dateFrom: dateRange.from || undefined,
                 dateTo: dateRange.to || undefined,
             });
@@ -495,6 +495,7 @@ export default function FarmNationApplicationsPage() {
                         >
                             <option value="createdAt">Sort by Date</option>
                             <option value="gender">Sort by Gender</option>
+                            <option value="state">Sort by State</option>
                         </select>
                         <select
                             value={filters.sortOrder || "desc"}
