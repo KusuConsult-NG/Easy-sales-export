@@ -23,6 +23,7 @@ import {
 } from "@/lib/cooperative-member-lookup";
 import { latestApplication } from "@/lib/latest-application";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { startedEarly } from "@/lib/started-early";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { readUserDocOnce } from "@/lib/current-user-doc";
 
@@ -268,12 +269,59 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
          *   guard. If anything it is reached less often, because a row filed
          *   under the member's other profile is now found before it.
          */
+        /*
+         *   THREE LOOKUPS, ONE WAVE.
+         *
+         *   THE OWNER: "fix the cooperative status one next."
+         *
+         *       checkCooperativeStatusAction took 1496ms / 1691ms / 1848ms / 2596ms
+         *
+         *   #275 and #276 took this action from fourteen reads to seven, and it
+         *   was still taking seconds. Measured with a fake database that makes
+         *   every read take a tick: SEVEN READS IN SIX WAVES. The reads were
+         *   already few; the action simply waited for them one at a time, and
+         *   six serial hops at a few hundred milliseconds each is the figure in
+         *   the log.
+         *
+         *   Below this point nothing depends on anything else. Once the owned
+         *   ids are known, the membership lookup, the by-address query and the
+         *   Paystack check can all be in the air together — they are three
+         *   different questions about the same person, not a chain.
+         *
+         *   THE CLAIM GATE DOES NOT MOVE. Issuing a query is not reading a row
+         *   into an answer: `mayClaimMembershipByEmail` still stands between
+         *   the by-address result and any use of it, exactly where it was and
+         *   with the same arguments. What changes is when the bytes arrive.
+         *
+         *   WHAT IT COSTS. A member whose row is found no longer skips the
+         *   other two queries, so that case reads seven where it read five.
+         *   They are concurrent, so it waits for none of them — and this is the
+         *   trade the measurement asks for: `document_collections` is 36 MB and
+         *   executes in microseconds, so a round trip is almost entirely
+         *   waiting. Buying a wave with a read is the right way round here.
+         */
+        const ownedIds = isLiveUserRow(session.user.id, userData ?? null)
+            ? await ownedProfileIds(session.user.id)
+            : await ownedProfileIdsFor(session.user.id);
+
         //   THE ROW IS ALREADY IN HAND, so the forward hop of the identity
         //   resolution does not need to read it again — see the note on
         //   findCooperativeMemberRowForPerson.
-        const memberRow = await findCooperativeMemberRowForPerson(
+        const memberRowSoon = startedEarly(findCooperativeMemberRowForPerson(
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id, userData ?? null,
-        );
+        ));
+        const byEmailSoon = session.user.email
+            ? startedEarly(membersByEmailOnce(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.email))
+            : null;
+        const paymentsSoon = startedEarly(filterByOwner(
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId", ownedIds)
+            .where("type", "==", "cooperative_membership_registration")
+            .where("status", "==", "completed")
+            .limit(1)
+            .get());
+
+        const memberRow = await memberRowSoon();
 
         if (memberRow) {
             memberDocData = memberRow.data;
@@ -294,8 +342,9 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                  *   unchanged and still decides whether the row may be read at
                  *   all.
                  */
-                const emailQuery = await membersByEmailOnce(
-                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.email);
+                //   Already in the air since the wave above; this is where it
+                //   is read, and the claim gate below is untouched.
+                const emailQuery = await byEmailSoon!();
                 const latestByEmail = latestApplication(emailQuery.docs);
                 if (latestByEmail) {
                     // Same rule as the reader above: this branch feeds a healing
@@ -420,17 +469,9 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         // If no profile status was found above, check the source of truth for payments.
         // This handles cases where a user just paid but the background sync hasn't
         // finished updating the member/user documents.
-        //   Same entry point as the gate and the lookup above, so the
-        //   backward identity search is paid once for the whole request.
-        const payerIds = isLiveUserRow(session.user.id, userData ?? null)
-            ? await ownedProfileIds(session.user.id)
-            : await ownedProfileIdsFor(session.user.id);
-        const paymentsSnap = await filterByOwner(
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId", payerIds)
-            .where("type", "==", "cooperative_membership_registration")
-            .where("status", "==", "completed")
-            .limit(1)
-            .get();
+        //   Issued in the wave above, alongside the membership lookup: the
+        //   two ask different questions and neither needs the other's answer.
+        const paymentsSnap = await paymentsSoon();
 
         if (!paymentsSnap.empty) {
             logger.info(`[checkCooperativeStatus] Auth-Paid status detected for user ${session.user.id}`);

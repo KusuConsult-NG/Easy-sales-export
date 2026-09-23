@@ -244,14 +244,49 @@ export async function findCooperativeMemberRowForPerson(
         : await ownedProfileIdsFor(userId);
     const ids = owned.length ? owned : [userId];
 
-    //   ONE QUERY FOR EVERY PROFILE, not one per profile — and it is the query
-    //   the gate already ran, so the request pays for it once. The precedence
-    //   below is exactly what the per-id loop had: a row KEYED by an id beats
-    //   a row merely carrying it, and an earlier owned id beats a later one.
-    const byOwner = await membersOwnedByOnce(membersCollection, ids);
+    /*
+     *   ONE QUERY FOR EVERY PROFILE, not one per profile — and it is the query
+     *   the gate already ran, so the request pays for it once. The precedence
+     *   below is exactly what the per-id loop had: a row KEYED by an id beats
+     *   a row merely carrying it, and an earlier owned id beats a later one.
+     *
+     * ── AND ONE ROUND TRIP, NOT ONE PER PROFILE ─────────────────────────────
+     *
+     *   THE OWNER: "fix the cooperative status one next."
+     *
+     *       checkCooperativeStatusAction took 1496ms / 1691ms / 1848ms / 2596ms
+     *
+     *   #275 and #276 took that action from fourteen reads to seven and it was
+     *   still taking seconds, because READ COUNT IS NOT WHAT LATENCY IS MADE
+     *   OF. Measured with a fake database that makes every read take a tick:
+     *   SEVEN READS IN SIX WAVES — the action waited for them almost one at a
+     *   time, and six serial hops at a few hundred milliseconds each is the
+     *   figure in the log.
+     *
+     *   Two of those waves were here. The owner-scoped query was awaited, and
+     *   then the loop awaited a keyed read PER PROFILE inside it. None of them
+     *   depends on any other: the ids are known before the first one is
+     *   issued.
+     *
+     *   Issued together, resolved together, and the precedence loop then runs
+     *   over values that are already in hand — SO THE ANSWER IS THE SAME ROW
+     *   IT ALWAYS WAS. Only the waiting changes.
+     *
+     *   For the ordinary single-profile account the read COUNT is unchanged:
+     *   one query and one keyed read either way. A person with superseded
+     *   profiles now has every keyed read issued rather than stopping at the
+     *   first hit — the memo means a second caller pays nothing for them, and
+     *   a duplicate group is exactly the case where an extra concurrent read
+     *   beats another serial hop.
+     */
+    const [byOwner, keyed] = await Promise.all([
+        membersOwnedByOnce(membersCollection, ids),
+        Promise.all(ids.map((id) => memberDocOnce(membersCollection, id))),
+    ]);
 
-    for (const id of ids) {
-        const byId = await memberDocOnce(membersCollection, id);
+    for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        const byId = keyed[i];
         if (byId.exists) {
             return { id: byId.id ?? id, data: byId.data() ?? {} };
         }
