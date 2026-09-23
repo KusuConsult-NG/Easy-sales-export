@@ -23,7 +23,8 @@ import { MarketplaceOnboardingSchema } from "@/lib/validations/marketplace";
 import { missingApplicationFields, type MarketplaceApplication } from "@/lib/marketplace-application";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { toMillis } from "@/lib/firestore-serialize";
-import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { isLiveUserRow } from "@/lib/user-identity";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -42,13 +43,51 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
         let status = userData?.serviceRegistrations?.marketplace?.status;
         let accountType = userData?.serviceRegistrations?.marketplace?.accountType;
 
+        /*
+         *   Set only when the `status !== "approved"` branch below actually
+         *   runs. FALSE means "not asked", which is why FALLBACK 3 tests it
+         *   explicitly rather than trusting a default.
+         */
+        let ownerScopedVerificationsWereEmpty = false;
+
         // ── AUTHORITATIVE CHECK: Check real verification record ──────
         if (status !== "approved") {
             let verDoc: any = null;
+            /*
+             *   THE FORWARD HALF OF THIS RESOLUTION IS THE ROW ABOVE.
+             *
+             *   `ownedProfileIdsFor` is `liveProfileId` composed with
+             *   `ownedProfileIds`, and its own header says the forward walk
+             *   costs "ONE EXTRA KEYED READ ... a live id resolves to itself on
+             *   the first hop". That hop reads `users/<id>` — which is
+             *   `userData`, read a few lines above.
+             *
+             *   Measured with #261's read meter: a visitor to
+             *   /marketplace/onboarding with no registration cost SEVEN reads,
+             *   and this was the second of them.
+             *
+             *   AND IT COST A SECOND IDENTITY SEARCH PER PAGE. #265 moved
+             *   checkModuleAccess onto `ownedProfileIds`; the two are separate
+             *   cache() entry points over the same work, so a gate calling one
+             *   and this action calling the other paid for the two-query search
+             *   TWICE on every marketplace page. Same entry point now, so the
+             *   request pays once.
+             *
+             *   THE WALK IS KEPT FOR THE ROW THAT NEEDS IT, exactly as in
+             *   checkModuleAccess: a session minted before an admin settled a
+             *   duplicate carries an id that has since been superseded.
+             */
+            const ownedIds = isLiveUserRow(session.user.id, userData ?? null)
+                ? await ownedProfileIds(session.user.id)
+                : await ownedProfileIdsFor(session.user.id);
+
             const verSnap = await filterByOwner(
-                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId",
-                await ownedProfileIdsFor(session.user.id))
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS), "userId", ownedIds)
                 .get();
+
+            //   Whether the owner-scoped query above found nothing, which
+            //   FALLBACK 3 at the bottom needs to know — see the note there.
+            ownerScopedVerificationsWereEmpty = verSnap.empty;
 
             if (!verSnap.empty) {
                 const sortedDocs = verSnap.docs.sort((a, b) => {
@@ -177,6 +216,26 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
                 }
             );
 
+
+            /*
+             *   #692 THE BACKFILL MUST CLEAR THE PROFILE IT JUST CORRECTED.
+             *
+             *   session-guard answers from CacheKeys.userProfile for 300
+             *   seconds. This writes `serviceRegistrations.marketplace.status`
+             *   and then every other reader keeps seeing the copy taken BEFORE
+             *   the write — which is how a heal appears not to have run, to the
+             *   very person who asked the platform to look again.
+             *
+             *   The approved heal above this has carried that fix since #885.
+             *   The three legacy backfills did not: one control on one door out
+             *   of four, which is the shape this audit keeps finding.
+             */
+            try {
+                const { invalidateServiceCache } = await import("@/lib/cache-invalidation");
+                await invalidateServiceCache(session.user.id, "marketplace");
+            } catch (cacheErr) {
+                logger.warn("[checkMarketplaceStatus] cache invalidation after backfill failed (non-fatal):", cacheErr as Error);
+            }
             logger.info(`[checkMarketplaceStatus] Backfilled legacy marketplace status '${legacyStatus}' for user ${session.user.id}`);
             return { error: null, success: true as const, data: { status: legacyStatus, accountType: legacyAccountType } };
         }
@@ -193,10 +252,47 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
                     _version: FieldValue.increment(1)
                 }
             );
+
+            /*
+             *   #692 THE BACKFILL MUST CLEAR THE PROFILE IT JUST CORRECTED.
+             *
+             *   session-guard answers from CacheKeys.userProfile for 300
+             *   seconds. This writes `serviceRegistrations.marketplace.status`
+             *   and then every other reader keeps seeing the copy taken BEFORE
+             *   the write — which is how a heal appears not to have run, to the
+             *   very person who asked the platform to look again.
+             *
+             *   The approved heal above this has carried that fix since #885.
+             *   See the note on the first legacy backfill above.
+             */
+            try {
+                const { invalidateServiceCache } = await import("@/lib/cache-invalidation");
+                await invalidateServiceCache(session.user.id, "marketplace");
+            } catch (cacheErr) {
+                logger.warn("[checkMarketplaceStatus] cache invalidation after backfill failed (non-fatal):", cacheErr as Error);
+            }
             return { error: null, success: true as const, data: { status: legacyStatus, accountType: derivedAccountType } };
         }
 
-        // ── FALLBACK 3: Check seller_verifications collection
+        /*
+         *   ── FALLBACK 3: Check seller_verifications collection ─────────────
+         *
+         *   NOT ASKED WHEN THE ANSWER IS ALREADY KNOWN. This queries
+         *   `userId == <live id>` on a collection the block above has already
+         *   queried on `userId IN <every id this person owns>` — a STRICT
+         *   SUPERSET, since ownedProfileIds always carries the live id first
+         *   and falls back to `[liveId]` when it cannot resolve. An empty
+         *   superset means an empty subset, and asking is a round trip spent
+         *   to be told so.
+         *
+         *   This is the seventh of the seven reads the meter counted, on the
+         *   path a first-time visitor to /marketplace/onboarding takes — which
+         *   is the commonest visitor that screen has.
+         */
+        if (ownerScopedVerificationsWereEmpty) {
+            return { error: null, success: true as const, data: null };
+        }
+
         const verificationSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
             .where('userId', '==', session.user.id)
             .get();
@@ -220,6 +316,25 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
                 }
             );
 
+
+            /*
+             *   #692 THE BACKFILL MUST CLEAR THE PROFILE IT JUST CORRECTED.
+             *
+             *   session-guard answers from CacheKeys.userProfile for 300
+             *   seconds. This writes `serviceRegistrations.marketplace.status`
+             *   and then every other reader keeps seeing the copy taken BEFORE
+             *   the write — which is how a heal appears not to have run, to the
+             *   very person who asked the platform to look again.
+             *
+             *   The approved heal above this has carried that fix since #885.
+             *   See the note on the first legacy backfill above.
+             */
+            try {
+                const { invalidateServiceCache } = await import("@/lib/cache-invalidation");
+                await invalidateServiceCache(session.user.id, "marketplace");
+            } catch (cacheErr) {
+                logger.warn("[checkMarketplaceStatus] cache invalidation after backfill failed (non-fatal):", cacheErr as Error);
+            }
             logger.info(`[checkMarketplaceStatus] Backfilled from seller_verifications status '${vStatus}' for user ${session.user.id}`);
             return { error: null, success: true as const, data: { status: vStatus, accountType: vAccountType } };
         }
