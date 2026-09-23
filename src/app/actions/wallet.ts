@@ -20,6 +20,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isOwnedBySession, ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { strandedWalletRows, totalWalletBalance } from "@/lib/wallet-lookup";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
@@ -179,7 +180,36 @@ async function _getWalletAction(): Promise<ActionResponse<Wallet & {
     const { session } = sessionResult;
     const userId = session.user.id;
 
-    const wallet = await _getOrCreateWallet(userId);
+    /*
+     *   THREE READS THAT NEED NOTHING FROM EACH OTHER.
+     *
+     *   THE OWNER: "fix the wallet one next."
+     *
+     *       [slow-action] getWalletAction took 2475ms
+     *
+     *   Measured with lib/testing/read-depth, which counts how DEEP the chain
+     *   of reads goes rather than how many there are:
+     *
+     *       the wallet already exists   5 reads, depth 4
+     *       no wallet yet               10 reads, depth 8
+     *
+     *   The second is a first-ever visit and mints the row; the first is what
+     *   everybody else pays, every time. Four of those five reads were a
+     *   chain purely because they were written in a column: the wallet row,
+     *   the identity search, the transaction sweep, and the user row for the
+     *   bank details. ONLY THE SWEEP DEPENDS ON ANYTHING — it needs the owned
+     *   ids. The other three each need the caller's id and nothing else.
+     *
+     *   AND THE USER ROW NOW GOES THROUGH THE REQUEST MEMO. This was the one
+     *   hot action still reading it with a bare `.doc(userId).get()`, so a
+     *   dashboard that already had the row in hand read it again here. Every
+     *   other module check shares it — see lib/current-user-doc.
+     */
+    const [wallet, ownedIds, userDoc] = await Promise.all([
+        _getOrCreateWallet(userId),
+        ownedProfileIds(userId),
+        readUserDocOnce(userId),
+    ]);
 
     // Fetch aggregate stats over all transactions
     //
@@ -207,7 +237,7 @@ async function _getWalletAction(): Promise<ActionResponse<Wallet & {
     //   than the list beside it is a page disagreeing with itself — the
     //   export portfolio finding, on the other money screen.
     const txnsSnap = await filterByOwner(
-        db.collection(TXN_COLLECTION), "userId", await ownedProfileIds(userId),
+        db.collection(TXN_COLLECTION), "userId", ownedIds,
     )
         .all()
         .get();
@@ -235,8 +265,8 @@ async function _getWalletAction(): Promise<ActionResponse<Wallet & {
     });
 
     // Fetch user default bank details from profile
-    const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-    const userData = userDoc.exists ? userDoc.data() : null;
+    //   Read in the wave above, through the request memo.
+    const userData = userDoc.data;
     let bankDetails = null;
 
     if (userData) {
