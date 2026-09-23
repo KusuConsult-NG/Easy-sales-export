@@ -3,6 +3,7 @@ import { AggregateField, FieldPath } from "@/lib/firestore-compat";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { rpcUnavailableAdvice } from "@/lib/rpc-unavailable";
 import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
@@ -386,12 +387,16 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         const { data, error } = await supabaseAdmin.rpc("count_user_segments");
         if (error) {
-            console.error(
-                "[ANALYTICS SERVICE] count_user_segments unavailable — falling back to reading " +
-                "the whole users table, which is slow and was #473. Apply " +
-                "supabase/migrations/029_user_segment_counts.sql. Reason:",
-                error.message,
-            );
+            //   #716's rule, on this message: name the state actually found.
+            //   The old wording said "Apply supabase/migrations/029" whatever
+            //   the reason, including a timeout — which sends the operator to
+            //   a file that is already applied. See lib/rpc-unavailable.
+            console.error(rpcUnavailableAdvice({
+                fn: "count_user_segments",
+                migration: "supabase/migrations/029_user_segment_counts.sql",
+                fallback: "reading the whole users table instead, which is slow and was #473.",
+                error,
+            }));
             return null;
         }
 
@@ -1541,12 +1546,14 @@ async function countModuleRegistrationsInDatabase(): Promise<Omit<ModuleRegistra
     const { data, error } = await supabaseAdmin.rpc("count_module_registrations");
 
     if (error) {
-        logger.error(
-            "[ANALYTICS SERVICE] count_module_registrations unavailable — falling back to eight " +
-            "sequential scans of the users table, which is #909. Apply " +
-            "supabase/migrations/049_count_module_registrations.sql. Reason: " +
-            (error.message || "no message"),
-        );
+        //   As above — the wording that sent the owner to 049 while 049 was
+        //   already applied and the function was merely timing out.
+        logger.error(rpcUnavailableAdvice({
+            fn: "count_module_registrations",
+            migration: "supabase/migrations/049_count_module_registrations.sql",
+            fallback: "falling back to eight sequential scans of the users table, which is #909.",
+            error,
+        }));
         return null;
     }
 

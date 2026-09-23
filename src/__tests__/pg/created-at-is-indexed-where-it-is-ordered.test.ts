@@ -373,9 +373,34 @@ dbDescribe('#469 — the migration can be applied by the route this project has'
 
         expect(failed).toBeNull();
 
+        /*
+         *   ASKED OF THE DEFINITION, NOT THE NAME — and #051 is why.
+         *
+         *   This read `indexname like '%_created_at'`, which is a proxy: it
+         *   assumes every index whose NAME ends that way is one of 027's eight
+         *   column indexes, and nothing else will ever be named that way.
+         *
+         *   051 added `idx_users_raw_created_at` — a btree on the JSON KEY
+         *   `raw_data->>'createdAt'`, which is a different index answering a
+         *   different query. Its name ends in `_created_at`, so `users`
+         *   appeared TWICE in this list and the count below read 9 for 8.
+         *
+         *   #263 recorded the neighbouring hazard — a name that CONTAINS an
+         *   existing one — and the author of 051 checked for exactly that and
+         *   found none. The hazard that actually bit is the other direction: a
+         *   name that matches a PATTERN some other test greps for. A name
+         *   cannot be audited against every LIKE in the suite, so the fix is
+         *   here, in the question.
+         *
+         *   `btree (created_at` matches only an index on the COLUMN, which is
+         *   what 027 creates and what this test has always been about. It is
+         *   narrower than the name match, not looser: an expression index can
+         *   no longer satisfy it, and neither can a future
+         *   `something_created_at` on an unrelated expression.
+         */
         const { rows } = await client!.query(
             `select tablename from pg_indexes
-             where schemaname='public' and indexname like '%_created_at'
+             where schemaname='public' and indexdef like '%btree (created_at%'
                and tablename = any($1)`,
             [DEDICATED],
         );
@@ -400,9 +425,10 @@ dbDescribe('#469 — the migration can be applied by the route this project has'
         // an improvement if running it again finishes the job.
         for (let i = 0; i < 2; i += 1) await client!.query(readFileSync(SQL_027, 'utf-8'));
 
+        //   By definition rather than by name — see the note above.
         const { rows } = await client!.query(
             `select count(*)::int as n from pg_indexes
-             where schemaname='public' and indexname like '%_created_at'
+             where schemaname='public' and indexdef like '%btree (created_at%'
                and tablename = any($1)`,
             [DEDICATED],
         );
