@@ -1,5 +1,10 @@
 import { logger } from "@/lib/logger";
-import { roundTripsSoFar, roundTripsSince } from "@/lib/round-trip-meter";
+import {
+    newRoundTripScope,
+    runInRoundTripScope,
+    scopeTally,
+    measuredMs,
+} from "@/lib/round-trip-meter";
 import { logTelemetryAction } from "@/app/actions/telemetry";
 import { logObservabilityTrace } from "@/lib/logger-server";
 import { redactPii } from "@/lib/admin-pii";
@@ -221,35 +226,55 @@ async function reportingHowLongItTook<T>(actionName: string, fn: () => Promise<T
      *       IS IT SLOW BECAUSE IT ASKS TOO MANY TIMES,
      *       OR BECAUSE EACH ASK COSTS TOO MUCH?
      *
-     *   The tally is REQUEST-scoped and this reports per ACTION, so it is
-     *   taken as a delta around the call. See lib/round-trip-meter for what
-     *   one entry means and why a concurrent pair of actions splits oddly.
+     *   EACH ACTION GETS ITS OWN SCOPE. The first version kept one
+     *   REQUEST-scoped tally and subtracted around the call, so two actions
+     *   running at once each measured the other's reads — and the log said
+     *   3,806ms of database inside 3,235ms of wall clock. AsyncLocalStorage
+     *   follows the async call tree, so nothing is subtracted and nothing
+     *   interleaves. See lib/round-trip-meter for both defects and what one
+     *   entry of each kind means.
      */
-    const readsBefore = roundTripsSoFar();
+    const scope = newRoundTripScope();
     try {
-        return await fn();
+        return await runInRoundTripScope(scope, fn);
     } finally {
         try {
             const elapsedMs = Date.now() - startedAt;
             const threshold = slowActionThresholdMs();
             if (threshold > 0 && elapsedMs >= threshold) {
-                const db = roundTripsSince(readsBefore);
-                //   `appMs` is everything that was NOT waiting on the
-                //   database: rendering, session work, Redis, and any time
-                //   this container spent queueing. If it dominates, more
-                //   read-count work is the wrong answer.
-                const appMs = Math.max(0, elapsedMs - db.dbMs);
+                const t = scopeTally(scope);
+                const { db, cache, http } = t.byKind;
+                /*
+                 *   `unmeasuredMs`, NOT `appMs`, and the rename is the point.
+                 *
+                 *   The first version called this "elsewhere", which reads as
+                 *   this container doing work. It was usually a network nobody
+                 *   had instrumented — and the line that gave the game away
+                 *   was an action reporting 1,848ms with ZERO reads, all of it
+                 *   an Upstash round trip inside requireSession.
+                 *
+                 *   Redis and the outbound calls a page waits on are counted
+                 *   now. What is left is genuinely not measured, and saying so
+                 *   is the difference between a number and a guess.
+                 */
+                const unmeasuredMs = Math.max(0, elapsedMs - measuredMs(t));
+                const parts = [`${db.calls} reads ${db.ms}ms (slowest ${db.slowestMs}ms)`];
+                if (cache.calls > 0) parts.push(`${cache.calls} cache ${cache.ms}ms`);
+                if (http.calls > 0) parts.push(`${http.calls} http ${http.ms}ms`);
+                parts.push(`${unmeasuredMs}ms unmeasured`);
                 logger.warn(
-                    `[slow-action] ${actionName} took ${elapsedMs}ms `
-                    + `— ${db.reads} reads, ${db.dbMs}ms in the database `
-                    + `(slowest ${db.slowestMs}ms), ${appMs}ms elsewhere`,
+                    `[slow-action] ${actionName} took ${elapsedMs}ms — ${parts.join(", ")}`,
                     {
                         actionName,
                         elapsedMs,
-                        reads: db.reads,
-                        dbMs: db.dbMs,
+                        reads: db.calls,
+                        dbMs: db.ms,
                         slowestReadMs: db.slowestMs,
-                        appMs,
+                        cacheCalls: cache.calls,
+                        cacheMs: cache.ms,
+                        httpCalls: http.calls,
+                        httpMs: http.ms,
+                        unmeasuredMs,
                     },
                 );
             }
