@@ -36,6 +36,7 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 import { FIELD_TO_COLUMN, NATIVE_COLUMNS } from '@/lib/supabase-table-map';
+import { DELIBERATELY_ABSENT, EXPECTED_INDEXES } from '@/lib/migration-manifest';
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
 
@@ -109,6 +110,27 @@ describe('the indexes 022 could not deploy', () => {
         );
 
         expect(stranded).toEqual([]);
+    });
+
+    it('AND THE MIGRATION AUDIT KNOWS NOT TO ASK FOR THEM', () => {
+        /*
+         *   PRODUCTION FOUND THIS, on the audit's first real run: it reported
+         *   both of these as missing indexes. They are not missing. They were
+         *   never meant to exist, for the reason asserted just below.
+         *
+         *   lib/migration-manifest is parsed from the migration files, so it
+         *   can see that 022 declares them and cannot see that 048 overruled
+         *   it. The two lists are pinned to each other here, because they are
+         *   one decision written down twice: rescue one of these later and
+         *   BOTH have to change, or the audit goes back to crying wolf.
+         */
+        const names = DELIBERATELY_ABSENT.map((o) => o.name).sort();
+
+        expect(names).toEqual(Object.keys(UNREACHABLE).sort());
+        //   And the audit asks the database for neither.
+        for (const name of names) {
+            expect(EXPECTED_INDEXES).not.toContain(name);
+        }
     });
 
     it('and the six that ARE rescued are rescued by 048, under 022\'s own names', () => {

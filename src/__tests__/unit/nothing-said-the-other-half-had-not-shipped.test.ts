@@ -83,6 +83,67 @@ describe('the manifest is what the migrations actually create', () => {
         expect(names.length).toBeGreaterThan(50);
     });
 
+    it('DOES NOT ASK FOR WHAT A LATER MIGRATION OVERRULED', async () => {
+        /*
+         *   FOUND BY THIS CHECK'S FIRST RUN AGAINST PRODUCTION, and it is the
+         *   defect this file exists to stop: the audit reported two indexes
+         *   missing that are not missing.
+         *
+         *   022 declares nine expression indexes with CONCURRENTLY, which the
+         *   Supabase SQL Editor cannot run, so 048 re-declared them in the
+         *   plain form — SIX of them. It left idx_cm_user_id and
+         *   idx_cm_membership_status out on purpose, because supabase-db
+         *   resolves a filter field through FIELD_TO_COLUMN before it falls
+         *   back to the JSONB path, and cooperative_members maps both names to
+         *   native columns. Nothing can ever reach those two indexes, and an
+         *   unreachable index is maintained on every write to a table on the
+         *   cooperative signup path.
+         *
+         *   The manifest is PARSED FROM THE FILES. It can see that 022
+         *   declares them; it cannot see that 048 overruled it. So the audit
+         *   asked production for two indexes production was right not to have.
+         *
+         *   A check that cries wolf is a check that stops being read.
+         */
+        const { EXPECTED_INDEXES, DELIBERATELY_ABSENT } = await import('@/lib/migration-manifest');
+
+        expect(DELIBERATELY_ABSENT.map((o) => o.name).sort()).toEqual([
+            'idx_cm_membership_status',
+            'idx_cm_user_id',
+        ]);
+        for (const { name } of DELIBERATELY_ABSENT) {
+            expect(EXPECTED_INDEXES).not.toContain(name);
+        }
+    });
+
+    it('but the RATCHET still knows about them, or the list rots the other way', async () => {
+        /*
+         *   THE EXEMPTION MUST NOT HIDE FROM THE PARSER. If an overruled
+         *   object were simply dropped from EXPECTED_SCHEMA_OBJECTS, the
+         *   file-versus-manifest comparison would fail — and the obvious way
+         *   to make it pass is to stop parsing that migration, which is how
+         *   this whole list would quietly stop describing the directory.
+         *
+         *   So they stay in the parsed set and are subtracted only from what
+         *   the audit asks the database for. Every name here is one a
+         *   migration really declares: a typo parked in this list would be
+         *   an exemption for nothing.
+         */
+        const { EXPECTED_SCHEMA_OBJECTS, DELIBERATELY_ABSENT } =
+            await import('@/lib/migration-manifest');
+
+        for (const absent of DELIBERATELY_ABSENT) {
+            const declared = EXPECTED_SCHEMA_OBJECTS.find((o) => o.name === absent.name);
+            expect(declared).toBeDefined();
+            expect(declared!.kind).toBe(absent.kind);
+            //   And it names BOTH migrations: the one that declares it and the
+            //   one that decided against it. Either alone is half a reason.
+            expect(declared!.migration).toBe(absent.declaredBy);
+            expect(absent.overruledBy).toMatch(/^\d{3}_.+\.sql$/);
+            expect(absent.why.length).toBeGreaterThan(80);
+        }
+    });
+
     it('IGNORES DDL INSIDE A BLOCK COMMENT, including a nested one', async () => {
         /*
          *   THE CASE THE FIRST VERSION MISSED, and the reason this fixture is
@@ -153,6 +214,15 @@ describe('three answers, because "could not look" is not "fine"', () => {
         expect(result.verdict).toBe('in-sync');
         expect(result.missing).toEqual([]);
         expect(result.applyThese).toEqual([]);
+
+        //   AND IT COUNTED WHAT IT ASKED FOR. Reporting the parsed total here
+        //   would overstate the check by the objects 048 overruled, which is
+        //   the same mistake one sentence further along.
+        const { EXPECTED_INDEXES, EXPECTED_FUNCTIONS, EXPECTED_SCHEMA_OBJECTS, DELIBERATELY_ABSENT } =
+            await import('@/lib/migration-manifest');
+        expect(result.expected).toBe(EXPECTED_INDEXES.length + EXPECTED_FUNCTIONS.length);
+        expect(result.expected).toBe(EXPECTED_SCHEMA_OBJECTS.length - DELIBERATELY_ABSENT.length);
+        expect(result.detail).toContain(String(result.expected));
     });
 
     it('BEHIND, naming the objects AND the files to apply, oldest first', async () => {
