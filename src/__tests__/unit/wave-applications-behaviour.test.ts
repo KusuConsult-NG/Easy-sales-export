@@ -496,15 +496,64 @@ describe('submitMultiStepWaveApplicationAction', () => {
         expect(applications()).toHaveLength(1);
     });
 
-    it('tells the admins a new application arrived', async () => {
+    it('tells the admins a new application arrived — AFTER she has her answer', async () => {
+        /*
+         *   `submitMultiStepWaveApplicationAction took 8145ms` was the slowest
+         *   line on the platform, and every second of it was spent after the
+         *   transaction had committed: a Resend round trip, a query for every
+         *   admin, a notification row per admin, a push per admin. None of it
+         *   changes the application id being returned.
+         *
+         *   So the notification still happens — asserted here — but the
+         *   applicant no longer waits for it. flushAfterResponses is what a
+         *   test uses in place of the response that would have triggered it;
+         *   see lib/after-response.
+         */
         seedUser();
         const { submitMultiStepWaveApplicationAction } = await actions();
         await submitMultiStepWaveApplicationAction(form());
+
+        const { flushAfterResponses } = await import('@/lib/after-response');
+        await flushAfterResponses();
 
         expect(notifyAdmins).toHaveBeenCalledTimes(1);
         expect((notifyAdmins.mock.calls[0] as any[])[0]).toMatchObject({
             type: 'wave', link: '/admin/wave',
         });
+    });
+
+    it('DOES NOT MAKE HER WAIT FOR IT — the answer comes back before the admins are told', async () => {
+        /*
+         *   The defect stated as an ORDERING, which is what it is.
+         *
+         *   Under the old code the action could not return until notifyAdmins
+         *   resolved, so `action-returned` landed after `notify-end`. That is
+         *   the 8,145ms: a Resend round trip, a query for every admin, a
+         *   notification row per admin and a push per admin, all of it after
+         *   the transaction had already committed and none of it changing the
+         *   application id being handed back.
+         */
+        seedUser();
+        const order: string[] = [];
+        notifyAdmins.mockImplementation(async () => {
+            order.push('notify-start');
+            await new Promise((r) => setTimeout(r, 50));
+            order.push('notify-end');
+        });
+
+        const { submitMultiStepWaveApplicationAction } = await actions();
+        const res: any = await submitMultiStepWaveApplicationAction(form());
+        order.push('action-returned');
+
+        //   Saved, and answered, with the fan-out still in flight.
+        expect(res).toMatchObject({ success: true });
+        expect(applications()).toHaveLength(1);
+
+        const { flushAfterResponses } = await import('@/lib/after-response');
+        await flushAfterResponses();
+
+        expect(order).toContain('notify-end');
+        expect(order.indexOf('action-returned')).toBeLessThan(order.indexOf('notify-end'));
     });
 
     it('still succeeds when the notification fails — it is not the applicant\'s problem', async () => {
@@ -514,6 +563,11 @@ describe('submitMultiStepWaveApplicationAction', () => {
         const { submitMultiStepWaveApplicationAction } = await actions();
         expect(await submitMultiStepWaveApplicationAction(form())).toMatchObject({ success: true });
         expect(applications()).toHaveLength(1);
+
+        //   And the failure is swallowed by the deferral, not by the action:
+        //   flushing must not reject.
+        const { flushAfterResponses } = await import('@/lib/after-response');
+        await expect(flushAfterResponses()).resolves.toBeUndefined();
     });
 });
 

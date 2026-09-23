@@ -24,6 +24,7 @@ import { toMillis } from "@/lib/firestore-serialize";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { nationalIdField, requiredNationalIdField, optionalVotersCardField } from '@/lib/kyc-validators';
 import { latestApplication } from "@/lib/latest-application";
+import { afterResponse } from "@/lib/after-response";
 
 //   #788 The programme's name comes from one constant. Before #774
 //   this screen spelled it out, and the owner has now corrected that
@@ -470,7 +471,9 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
             });
         });
 
-        createAdminAuditLog({
+        //   Was a promise dropped on the floor with a .catch(). Same intent,
+        //   but nothing tracked it — see lib/after-response.
+        afterResponse("wave-application-audit", () => createAdminAuditLog({
             action: "user_update",
             userId: session.user.id,
             targetId: applicationId,
@@ -505,14 +508,37 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
             metadata: {
                 ageVerification: "passed: 18 or over",
             }
-        }).catch(err => logger.error("Deferred audit log failed (WAVE):", err));
+        }));
 
-        try {
-            const applicantEmail = session.user.email || validatedData.email;
-            const adminEmail = process.env.ADMIN_EMAIL || 'admin@easysalesexport.com';
-            const applicantName = `${validatedData.firstName} ${validatedData.surname}`;
+        /*
+         *   EVERYTHING BELOW HAPPENS AFTER SHE HAS HER ANSWER.
+         *
+         *   `submitMultiStepWaveApplicationAction took 8145ms` was the slowest
+         *   line on the platform, and by this point the transaction has
+         *   COMMITTED: the application row is written and the user record is
+         *   updated. What the applicant was waiting for was a Resend round
+         *   trip, a query for every admin, a notification row per admin and a
+         *   push per admin — none of which changes the application id that is
+         *   about to be returned to her.
+         *
+         *   Fifty fields, her NIN and her BVN, then eight seconds of spinner,
+         *   is how somebody comes to press Submit twice.
+         *
+         *   The values are read out HERE rather than inside the callback:
+         *   `session` and `validatedData` are captured deliberately, so the
+         *   deferred work cannot observe anything that changed after the
+         *   response.
+         */
+        //   NOT the `applicantEmail` computed further up: that one is
+        //   lowercased and trimmed for the duplicate query. This is the
+        //   address to write to, and it is the expression this block always
+        //   used.
+        const notificationEmail = session.user.email || validatedData.email;
+        const applicantName = `${validatedData.firstName} ${validatedData.surname}`;
+        const applicantState = validatedData.stateOfResidence;
 
-            if (applicantEmail) {
+        afterResponse("wave-application-notifications", async () => {
+            if (notificationEmail) {
                 /**
                  * #394. This was `await resend.emails.send({...})` with the
                  * result thrown away. Resend RETURNS its errors rather than
@@ -523,7 +549,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                  */
                 const { error: sendError } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || 'RH-WAVE 774 <info@easysalesexport.com>',
-                    to: applicantEmail,
+                    to: notificationEmail,
                     subject: 'Your WAVE Application Has Been Received — RH-WAVE 774',
                     message: html`
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
@@ -552,14 +578,25 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
             await notifyAdmins({
                 type: "wave",
                 title: "New WAVE Application",
-                message: `New WAVE application submitted by ${applicantName} (ID: ${applicationId}, State: ${validatedData.stateOfResidence}).`,
+                message: `New WAVE application submitted by ${applicantName} (ID: ${applicationId}, State: ${applicantState}).`,
                 link: "/admin/wave",
                 linkText: "Review Application"
             });
-        } catch (emailError) {
-            logger.error("WAVE application admin notification failed (non-blocking):", emailError);
-        }
+        });
 
+        /*
+         *   AWAITED, AND IT IS THE ONE THAT MUST BE.
+         *
+         *   The client calls checkWaveStatusAction about a second after this
+         *   returns — it is the next line in the owner's log both times this
+         *   action ran — and that read goes through requireSession, which
+         *   reads the very cache entry being cleared here. #692 is this
+         *   platform's record of a correction that was invisible to its own
+         *   reader; deferring this would be the same mistake with a timer on
+         *   it.
+         *
+         *   Defer what NOTIFIES, await what the answer is READ FROM.
+         */
         try {
             await invalidateUserCache(session.user.id);
         } catch (err) {
