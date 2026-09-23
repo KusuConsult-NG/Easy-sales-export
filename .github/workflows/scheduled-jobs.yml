@@ -113,6 +113,10 @@ on:
     # #702 — daily, well clear of the other jobs. The repair is idempotent and
     # fills only blank rows, so a run that finds nothing is the steady state.
     - cron: '37 5 * * *'     # backfill-missing-emails — daily
+    # The tenth. Daily, early, clear of the others: it asks the database one
+    # question and a red run means a human has a migration to paste. See
+    # api/cron/migration-audit for why this one is allowed to fail the job.
+    - cron: '9 6 * * *'      # migration-audit — daily
   workflow_dispatch:
     inputs:
       job:
@@ -129,6 +133,7 @@ on:
           - release-stale-reservations
           - age-notifications
           - backfill-missing-emails
+          - migration-audit
 
 # The offsets (:17, :43) keep these off the top of the hour, when GitHub's
 # scheduler is most contended and delays are longest.
@@ -221,6 +226,7 @@ jobs:
             '23 * * * *')   echo "path=release-stale-reservations" >> "$GITHUB_OUTPUT" ;;
             '13 4 * * *')   echo "path=age-notifications"    >> "$GITHUB_OUTPUT" ;;
             '37 5 * * *')   echo "path=backfill-missing-emails" >> "$GITHUB_OUTPUT" ;;
+            '9 6 * * *')    echo "path=migration-audit" >> "$GITHUB_OUTPUT" ;;
             *)              echo "path=${{ inputs.job }}"   >> "$GITHUB_OUTPUT" ;;
           esac
 
