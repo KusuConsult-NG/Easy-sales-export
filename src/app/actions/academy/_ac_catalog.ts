@@ -15,6 +15,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, CourseModule } from "@/lib/types/academy-actions";
 import { retirementPatch, isRetired } from "@/lib/record-retirement";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 
 /**
  * Get all courses
@@ -181,10 +182,11 @@ async function _getMyAcademyStandingAction(): Promise<ActionResponse<{ plan: str
         //   null means "no standing", which reads as free below.
         if (!userId) return { success: true as const, error: null, data: null };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        //   Same row the layout's gates just read — see lib/current-user-doc.
+        const userDoc = await readUserDocOnce(userId);
         if (!userDoc.exists) return { success: true as const, error: null, data: null };
 
-        const academy = (userDoc.data() as any)?.serviceRegistrations?.academy ?? {};
+        const academy = (userDoc.data as any)?.serviceRegistrations?.academy ?? {};
         return {
             success: true as const,
             error: null,

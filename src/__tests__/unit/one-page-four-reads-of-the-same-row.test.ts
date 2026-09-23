@@ -29,15 +29,21 @@
  *   target. A change that makes it three should pass; a fifth reader must
  *   argue for itself here. The number is allowed to fall and not to rise.
  *
- *   WHY IT IS NOT SIMPLY DEDUPLICATED HERE. A request-scoped memo is the
- *   obvious repair and the Next.js docs for this version prescribe it (a DAL
- *   memoised with React's `cache`). It is not safe to drop in blind:
- *   checkModuleAccess WRITES the user row — it grants roles — and React's
- *   cache has no invalidation, so a memo populated before that write would
- *   serve a stale document to the payment gate immediately after it. That is
- *   #258's shape exactly: a gate answering from the wrong source, on money.
- *   The cost is recorded here first so the repair can be judged against a
- *   number instead of an impression.
+ *   THE REPAIR EXISTS NOW, AND THIS FILE STILL MEASURES FOUR. That is not a
+ *   contradiction, it is what this file is for.
+ *
+ *   lib/current-user-doc is the request-scoped memo the Next.js docs for this
+ *   version prescribe (a DAL memoised with React's `cache`), and it is wired
+ *   into three of the four callers below. But React's `cache()` is a
+ *   PASS-THROUGH outside a request scope, and jest is outside a request scope —
+ *   so what this suite measures is the platform WITHOUT any request
+ *   memoisation, which is exactly the baseline worth keeping. It is the number
+ *   these gates cost when the memo cannot help them, and it must not grow.
+ *
+ *   the-same-row-fetched-once-a-request.test.ts measures the other number: it
+ *   installs a real per-request memoiser and counts what a deployed request
+ *   actually pays. Read the two together — this one is the floor under the
+ *   repair, that one is the repair.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';

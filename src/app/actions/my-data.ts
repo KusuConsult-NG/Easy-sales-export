@@ -34,6 +34,7 @@ import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize
 import { toDate } from "@/lib/date-utils";
 import { isActiveOrderStatus } from "@/lib/order-status";
 import { logger } from "@/lib/logger";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 import { NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
 import { countUnreadNotifications } from "@/lib/unread-notification-count";
 import { isOnTheList } from "@/lib/notification-ageing";
@@ -184,9 +185,12 @@ export async function getMyLiveRoles(): Promise<string[]> {
     if (!userId) return [];
 
     try {
-        const snap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        //   Through the request memo: the sidebar, the module gate and the
+        //   status action all want this same row, and measured together they
+        //   were fetching it four times to draw one page.
+        const snap = await readUserDocOnce(userId);
         if (!snap.exists) return [];
-        const roles = (snap.data() as { roles?: unknown } | undefined)?.roles;
+        const roles = (snap.data as { roles?: unknown } | null)?.roles;
         return Array.isArray(roles) ? roles.filter((r): r is string => typeof r === "string") : [];
     } catch (error) {
         /*
