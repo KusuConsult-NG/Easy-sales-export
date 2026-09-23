@@ -50,10 +50,28 @@ import { stripComments } from '@/lib/testing/strip-comments';
  * appear in this list or not claim by email at all.
  */
 const CLAIM_SITES = [
-    { module: 'WAVE', file: 'src/app/actions/wave/_wv_membership.ts' },
-    { module: 'Export', file: 'src/app/actions/export/_ex_onboarding.ts' },
-    { module: 'Farm Nation', file: 'src/app/actions/farm-nation/_fn_onboarding.ts' },
+    { module: 'WAVE', file: 'src/app/actions/wave/_wv_membership.ts', rule: 'inline' },
+    { module: 'Export', file: 'src/app/actions/export/_ex_onboarding.ts', rule: 'shared' },
+    { module: 'Farm Nation', file: 'src/app/actions/farm-nation/_fn_onboarding.ts', rule: 'inline' },
 ] as const;
+
+/*
+ *   `rule` RECORDS WHICH OF TWO SPELLINGS A SITE USES, NOT A CHOICE IT MAY MAKE.
+ *
+ *   'inline' is the hand-rolled `.docs.find(d => !d.data()?.userId)` these
+ *   three all carried. 'shared' is lib/claimable-application, the same rule
+ *   imported — which the gate, Academy and now Export use, and which
+ *   additionally reports how many matches belong to other accounts.
+ *
+ *   Export moved because its inline copy bounded the query at `.limit(5)`
+ *   while the gate above it scans APPLICATION_SCAN_LIMIT, so the two
+ *   disagreed about an applicant whose first five matches were claimed: the
+ *   gate let them in and the action said they had not applied.
+ *
+ *   A site must satisfy one column or the other — never neither, and the
+ *   forbidden shapes below apply to both. WAVE and Farm Nation should follow,
+ *   and when they do this table is how it is noticed.
+ */
 
 const read = (file: string) =>
     stripComments(readFileSync(path.join(process.cwd(), file), 'utf8'));
@@ -71,24 +89,33 @@ function allActionSources(): Array<{ file: string; code: string }> {
 }
 
 describe('the by-email application claim', () => {
-    it.each(CLAIM_SITES)('$module queries userEmail and nothing else', ({ file }) => {
+    it.each(CLAIM_SITES)('$module queries userEmail and nothing else', ({ file, rule }) => {
         const code = read(file);
 
-        expect(code).toContain('"userEmail", "=="');
+        expect(code).toContain(rule === 'shared'
+            //   The field is passed to the shared reader instead of written
+            //   into a where() here — same field, one query.
+            ? '"userEmail", userEmail)'
+            : '"userEmail", "=="');
         // The fallback fields. `email` alone would over-match, so the assertion
         // is on the WHERE clause specifically.
         expect(code).not.toContain('"profile.email", "=="');
         expect(code).not.toMatch(/\.where\(\s*["']email["']\s*,\s*["']==["']/);
     });
 
-    it.each(CLAIM_SITES)('$module claims only an UNCLAIMED application', ({ file }) => {
+    it.each(CLAIM_SITES)('$module claims only an UNCLAIMED application', ({ file, rule }) => {
         const code = read(file);
 
         // The narrowing: pick the row with no userId, rather than picking the
         // first row and then testing its userId before writing.
-        expect(code).toMatch(/\.docs\.find\(\s*\w+\s*=>\s*!\w+\.data\(\)\?\.userId\s*\)/);
-        // And the old shape is gone: docs[0] taken unconditionally.
+        if (rule === 'shared') {
+            expect(code).toContain('claimableByEmail(');
+        } else {
+            expect(code).toMatch(/\.docs\.find\(\s*\w+\s*=>\s*!\w+\.data\(\)\?\.userId\s*\)/);
+        }
+        // And the old shape is gone, on both: docs[0] taken unconditionally.
         expect(code).not.toMatch(/appDoc\s*=\s*emailQuery\.docs\[0\]/);
+        expect(code).not.toMatch(/=\s*emailQuery\.docs\[0\]/);
     });
 
     it.each(CLAIM_SITES)('$module says so when it declines to claim', ({ file }) => {

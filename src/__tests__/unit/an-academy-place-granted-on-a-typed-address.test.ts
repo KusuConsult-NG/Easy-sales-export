@@ -278,15 +278,15 @@ describe('the memo is dropped by the claim that changes its answer', () => {
             personalInfo: { email: EMAIL },
             submittedAt: '2026-01-01T00:00:00.000Z',
         });
-        const { academyApplicationsOwnedBy } = await import('@/lib/academy-request-reads');
+        const { applicationsOwnedBy } = await import('@/lib/application-request-reads');
         const { checkAcademyStatusAction } = await academyActions();
 
-        const before = await academyApplicationsOwnedBy(UID);
+        const before = await applicationsOwnedBy(COLLECTIONS.ACADEMY_APPLICATIONS, UID);
         expect(before.empty).toBe(true);
 
         await checkAcademyStatusAction();
 
-        const after = await academyApplicationsOwnedBy(UID);
+        const after = await applicationsOwnedBy(COLLECTIONS.ACADEMY_APPLICATIONS, UID);
         expect(after.empty).toBe(false);
     });
 
@@ -294,14 +294,14 @@ describe('the memo is dropped by the claim that changes its answer', () => {
         //   These feed a payment wall and a module gate. A remembered rejection
         //   turns one transient error into "has not paid" for every later
         //   caller instead of just the unlucky one.
-        const { completedAcademyRegistrationFor } = await import('@/lib/academy-request-reads');
+        const { completedPaymentFor } = await import('@/lib/application-request-reads');
         const { supabaseDb } = await import('@/lib/supabase-db');
 
         const real = supabaseDb.collection;
         (supabaseDb as any).collection = () => { throw new Error('PostgREST said no'); };
-        await expect(completedAcademyRegistrationFor(UID)).rejects.toThrow('PostgREST said no');
+        await expect(completedPaymentFor(UID, 'academy_registration')).rejects.toThrow('PostgREST said no');
         (supabaseDb as any).collection = real;
 
-        await expect(completedAcademyRegistrationFor(UID)).resolves.toMatchObject({ empty: true });
+        await expect(completedPaymentFor(UID, 'academy_registration')).resolves.toMatchObject({ empty: true });
     });
 });

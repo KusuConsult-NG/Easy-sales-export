@@ -20,11 +20,11 @@ import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { readUserDocOnce } from "@/lib/current-user-doc";
 import { claimableByEmail } from "@/lib/claimable-application";
 import {
-    academyApplicationsOwnedBy,
-    academyApplicationsTypedTo,
-    completedAcademyRegistrationFor,
-    forgetAcademyReads,
-} from "@/lib/academy-request-reads";
+    applicationsOwnedBy,
+    applicationsTypedTo,
+    completedPaymentFor,
+    forgetApplicationReads,
+} from "@/lib/application-request-reads";
 
 /**
  * Check Academy application status for current user
@@ -50,8 +50,8 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         if (currentStatus !== "approved") {
             let appDoc: any = null;
             //   SHARED WITH THE PAYMENT CHECK running beside it — identical
-            //   query, one round trip. See lib/academy-request-reads.
-            const appSnap = await academyApplicationsOwnedBy(session.user.id);
+            //   query, one round trip. See lib/application-request-reads.
+            const appSnap = await applicationsOwnedBy(COLLECTIONS.ACADEMY_APPLICATIONS, session.user.id);
 
             if (!appSnap.empty) {
                 //   #507 An eleventh copy, in a file the ratchet's AFFECTED
@@ -97,14 +97,14 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
                  *   ONLY AN UNCLAIMED APPLICATION CAN BE CLAIMED. Same rule,
                  *   same helper, same wording in the log as the other four.
                  */
-                const typed = await academyApplicationsTypedTo(userData.email);
+                const typed = await applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", userData.email);
                 const { claimable, ownedByOthers } = claimableByEmail(typed.docs);
 
                 if (claimable) {
                     appDoc = claimable;
                     await (claimable as any).ref.update({ userId: session.user.id });
                     //   The owner-scoped query would answer differently now.
-                    forgetAcademyReads();
+                    forgetApplicationReads();
                 } else if (ownedByOthers > 0) {
                     logger.warn(
                         `[checkAcademyStatus] ${ownedByOthers} Academy application(s) match `
@@ -139,7 +139,7 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
 
         // ── FINAL FALLBACK: Check for any payment records ──────────────
         //   SHARED WITH THE PAYMENT CHECK — identical query, one round trip.
-        const paymentsSnap = await completedAcademyRegistrationFor(session.user.id);
+        const paymentsSnap = await completedPaymentFor(session.user.id, "academy_registration");
 
         if (!paymentsSnap.empty) {
             return { error: null, success: true as const, data: "payment_completed" };

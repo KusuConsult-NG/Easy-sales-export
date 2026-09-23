@@ -168,9 +168,9 @@ describe('the identity it matches on', () => {
         //   request-scoped reader. The property is unchanged and the ratchet
         //   is narrower: one place to keep correct instead of three to keep
         //   agreeing.
-        const shared = code('src/lib/academy-request-reads.ts');
+        const shared = code('src/lib/application-request-reads.ts');
 
-        expect(shared).toContain('.where("personalInfo.email", "==", normalized)');
+        expect(shared).toContain('.where(field, "==", normalized)');
         expect(shared).toContain('email.toLowerCase().trim()');
     });
 
@@ -181,7 +181,7 @@ describe('the identity it matches on', () => {
     ])('%s (%s) is the reader that needed it', (rel: string) => {
         // Each of these reads the lowercased form through the shared reader.
         // The write above is what makes them able to find the row at all.
-        expect(code(rel)).toContain('academyApplicationsTypedTo(');
+        expect(code(rel)).toContain('applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email"');
     });
 
     it('matches the phone in both the typed and the E.164 form', () => {

@@ -36,7 +36,7 @@ import { claimableByEmail } from "@/lib/claimable-application";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { readUserDocOnce } from "@/lib/current-user-doc";
-import { academyApplicationsTypedTo, forgetAcademyReads } from "@/lib/academy-request-reads";
+import { applicationsTypedTo, forgetApplicationReads } from "@/lib/application-request-reads";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 
@@ -810,8 +810,8 @@ export async function checkModuleAccess(
                  */
                 //   SHARED WITH THE TWO ACADEMY ACTIONS. Identical query,
                 //   identical bound, and on /academy/application all three ran
-                //   it in the same request — see lib/academy-request-reads.
-                const emailQuery = await academyApplicationsTypedTo(userData.email);
+                //   it in the same request — see lib/application-request-reads.
+                const emailQuery = await applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", userData.email);
 
                 const { claimable, ownedByOthers } = claimableByEmail(emailQuery.docs);
 
@@ -867,7 +867,7 @@ export async function checkModuleAccess(
                         //   A claim changes what the owner-scoped query would
                         //   answer, so no later reader in this request may be
                         //   served the set taken before it.
-                        forgetAcademyReads();
+                        forgetApplicationReads();
                         logger.info(`[ModuleAccess] Healed application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
                     }
 
@@ -962,6 +962,12 @@ export async function checkModuleAccess(
                     }
                     if (Object.keys(updates).length > 0 && appRef) {
                         await appRef.update(updates);
+                        //   A claim changes what the owner-scoped query would
+                        //   answer — see the note on the Academy heal above.
+                        //   Every heal here drops the memos, not only the ones
+                        //   whose module reads through them today: the next
+                        //   module to adopt them must not inherit a stale set.
+                        forgetApplicationReads();
                         logger.info(`[ModuleAccess] Healed WAVE application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
                     }
 
@@ -1023,10 +1029,12 @@ export async function checkModuleAccess(
                  *   rather than narrowed. One fewer round trip on this path as
                  *   a side effect, which is not why it went.
                  */
-                const emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                    .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(APPLICATION_SCAN_LIMIT)
-                    .get();
+                //   SHARED WITH checkExportStatusAction, which the screen
+                //   behind this gate runs in the same request — identical
+                //   query, identical bound, one round trip. See
+                //   lib/application-request-reads.
+                const emailQuery = await applicationsTypedTo(
+                    COLLECTIONS.EXPORT_APPLICATIONS, "userEmail", userData.email);
 
                 const { claimable, ownedByOthers } = claimableByEmail(emailQuery.docs);
 
@@ -1056,6 +1064,12 @@ export async function checkModuleAccess(
                     }
                     if (Object.keys(updates).length > 0 && appRef) {
                         await appRef.update(updates);
+                        //   A claim changes what the owner-scoped query would
+                        //   answer — see the note on the Academy heal above.
+                        //   Every heal here drops the memos, not only the ones
+                        //   whose module reads through them today: the next
+                        //   module to adopt them must not inherit a stale set.
+                        forgetApplicationReads();
                         logger.info(`[ModuleAccess] Healed Export application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
                     }
 
@@ -1150,6 +1164,12 @@ export async function checkModuleAccess(
                     }
                     if (Object.keys(updates).length > 0 && appRef) {
                         await appRef.update(updates);
+                        //   A claim changes what the owner-scoped query would
+                        //   answer — see the note on the Academy heal above.
+                        //   Every heal here drops the memos, not only the ones
+                        //   whose module reads through them today: the next
+                        //   module to adopt them must not inherit a stale set.
+                        forgetApplicationReads();
                         logger.info(`[ModuleAccess] Healed Farm Nation application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
                     }
 
