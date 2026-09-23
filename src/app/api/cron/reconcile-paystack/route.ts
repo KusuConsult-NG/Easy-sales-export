@@ -8,6 +8,7 @@ import { paystackBaseUrl } from "@/lib/paystack-host";
 import { eachPaystackSuccess } from "@/lib/paystack-sweep";
 import { logger } from "@/lib/logger";
 import { refuseUnauthorisedCron } from "@/lib/cron-auth";
+import { mapWithConcurrency } from "@/lib/bounded-concurrency";
 
 /**
  * Automated Paystack ↔ Firebase Reconciliation
@@ -96,10 +97,40 @@ export async function GET(request: NextRequest) {
 
         results.paystackTotal = allPaystackTransactions.length;
 
-        // ── 2. Fetch Firebase processedPayments references ───────────────────────
+        /*
+         * ── 2. Fetch Firebase processedPayments references ───────────────────
+         *
+         *   .all(), NOT .get(), AND THE SIBLING JOB ALREADY LEARNED THIS.
+         *
+         *   reconcile-fulfilment's own comment records it verbatim: "a plain
+         *   .get() stops at DEFAULT_QUERY_LIMIT (5,000) and returns a short
+         *   result that looks complete". That fix was never ported here, and
+         *   this set is the more dangerous of the two to truncate.
+         *
+         *   THIS SET IS WHAT STOPS A PAYMENT BEING HEALED TWICE. Every
+         *   reference it does not contain is treated as missing from the
+         *   platform and sent to dispatchPaystackPayment — which has no
+         *   idempotency guard of its own; the processors validate the AMOUNT,
+         *   not whether the reference was already fulfilled. So a truncated
+         *   read does not merely under-report: it re-fulfils every completed
+         *   payment past the cap, every six hours, for as long as the ledger
+         *   stays above 5,000 rows.
+         *
+         *   It also explains the cost. Each of those false positives costs a
+         *   sequential Paystack verify, which is what makes this job long
+         *   enough to hold the container while users wait behind it.
+         *
+         *   .all() carries the adapter's UNBOUNDED_CEILING and reports reaching
+         *   it as an error rather than a short answer, so the failure mode
+         *   becomes loud instead of silent. .select() narrows the payload to
+         *   the three fields the mapper below actually reads, rather than
+         *   detoasting every raw_data in the ledger to collect one string.
+         */
         const paymentsSnapshot = await db
             .collection("processedPayments")
             .where("status", "==", "completed")
+            .select("reference", "paystackReference", "ref")
+            .all()
             .get();
 
         const firebaseRefs = new Set<string>();
@@ -118,19 +149,64 @@ export async function GET(request: NextRequest) {
         //   counted what it could not route as healed. See payment-router.
         const { dispatchPaystackPayment } = await import("@/infrastructure/payments/payment-router");
 
-        for (const tx of allPaystackTransactions) {
-            if (!firebaseRefs.has(tx.reference)) {
-                // Fetch complete metadata from Paystack API to correctly route payment
+        /*
+         *   THE VERIFY CALLS RUN TOGETHER; THE HEALING STILL RUNS ONE AT A TIME.
+         *
+         *   This loop used to `await fetch` Paystack once per missing
+         *   reference, in series, inside the request handler that serves users.
+         *   Each call is allowed ten seconds, so N missing references is N
+         *   sequential round trips — and while they run, inbound requests queue
+         *   behind them on the same container. That is the burst of
+         *   `Error: aborted / ECONNRESET` in the production log: clients giving
+         *   up, their disconnect events draining together the moment this job
+         *   finally returns.
+         *
+         *   ONLY THE READ-ONLY HALF IS PARALLELISED, and that is the whole
+         *   care in this change. Verifying a transaction is a pure GET and
+         *   reorderable; dispatchPaystackPayment WRITES — it credits wallets,
+         *   grants roles and records payments. Two heals for the same person
+         *   running at once is a race this job has never had, and a
+         *   reconciliation job is the last place to introduce one. So the
+         *   verifies are fetched with bounded concurrency, then the healing
+         *   walks the results in the original order, serially, exactly as
+         *   before.
+         *
+         *   SIX AT A TIME, deliberately modest: the point is to stop holding
+         *   the container for N x 10s, not to hammer Paystack, whose rate limit
+         *   is theirs to enforce and not ours to discover in production.
+         */
+        const VERIFY_CONCURRENCY = 6;
+
+        const missing = allPaystackTransactions.filter((tx) => !firebaseRefs.has(tx.reference));
+
+        const verified = await mapWithConcurrency(missing, VERIFY_CONCURRENCY, async (tx) => {
+            try {
+                const txDetailRes = await fetch(
+                    `${paystackBaseUrl()}/transaction/verify/${tx.reference}`,
+                    {
+                        headers: { Authorization: `Bearer ${secretKey}` },
+                        signal: AbortSignal.timeout(10000),
+                    }
+                );
+                if (!txDetailRes.ok) return { tx, detail: null as any, error: null as unknown };
+                return { tx, detail: await txDetailRes.json(), error: null as unknown };
+            } catch (fetchErr) {
+                //   Returned rather than thrown: one unreachable verify must
+                //   not abandon the other N-1, which a rejection inside
+                //   mapWithConcurrency would do.
+                return { tx, detail: null as any, error: fetchErr };
+            }
+        });
+
+        for (const { tx, detail: prefetched, error: fetchError } of verified) {
+            //   Every entry in `verified` is already a missing reference — the
+            //   filter above did the work the old `if (!firebaseRefs.has(...))`
+            //   did here, once, instead of per iteration.
+            {
                 try {
-                    const txDetailRes = await fetch(
-                        `${paystackBaseUrl()}/transaction/verify/${tx.reference}`,
-                        {
-                            headers: { Authorization: `Bearer ${secretKey}` },
-                            signal: AbortSignal.timeout(10000),
-                        }
-                    );
-                    if (txDetailRes.ok) {
-                        const detail = await txDetailRes.json();
+                    if (fetchError) throw fetchError;
+                    if (prefetched) {
+                        const detail = prefetched;
                         if (detail.status && detail.data?.status === "success") {
                             const data = detail.data;
                             const amountPaidv = data.amount / 100;
