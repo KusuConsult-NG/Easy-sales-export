@@ -3,7 +3,7 @@ import { AggregateField, FieldPath } from "@/lib/firestore-compat";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { rpcUnavailableAdvice } from "@/lib/rpc-unavailable";
+import { rpcUnavailableAdvice, whyRpcUnavailable, type RpcUnavailableCause } from "@/lib/rpc-unavailable";
 import { UNKNOWN_DATE_ISO, dateRangeEnd, dateRangeStart } from "@/lib/date-utils";
 import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 import { RECENT_ACTIVITY_DAYS } from "@/lib/recent-activity";
@@ -1540,7 +1540,11 @@ export class AnalyticsService implements AnalyticsServiceContract {
  *   slowly, and correctly — and the log names the file that fixes it. #473 set
  *   this pattern for count_user_segments and the reasoning is quoted there.
  */
-async function countModuleRegistrationsInDatabase(): Promise<Omit<ModuleRegistrationStats, "waveBriefing"> | null> {
+async function countModuleRegistrationsInDatabase(): Promise<{
+    counts: Omit<ModuleRegistrationStats, "waveBriefing" | "unavailableFigures"> | null;
+    /** Why it could not be used, when it could not. See lib/rpc-unavailable. */
+    cause: RpcUnavailableCause | null;
+}> {
     const { supabaseAdmin } = await import("@/lib/supabase");
 
     const { data, error } = await supabaseAdmin.rpc("count_module_registrations");
@@ -1548,30 +1552,43 @@ async function countModuleRegistrationsInDatabase(): Promise<Omit<ModuleRegistra
     if (error) {
         //   As above — the wording that sent the owner to 049 while 049 was
         //   already applied and the function was merely timing out.
+        const cause = whyRpcUnavailable(error);
         logger.error(rpcUnavailableAdvice({
             fn: "count_module_registrations",
             migration: "supabase/migrations/049_count_module_registrations.sql",
-            fallback: "falling back to eight sequential scans of the users table, which is #909.",
+            fallback: cause === "timed-out"
+                ? "and the eight-scan fallback is NOT being attempted — see getModuleRegistrationStats."
+                : "falling back to eight sequential scans of the users table, which is #909.",
             error,
         }));
-        return null;
+        return { counts: null, cause };
     }
 
     //   Supabase returns a one-row set for a TABLE-returning function.
     const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return null;
+    //   No error and no row is not a timeout; the fallback is the right answer.
+    if (!row) return { counts: null, cause: "unknown" };
 
     return {
-        wave: Number(row.wave) || 0,
-        academy: Number(row.academy) || 0,
-        cooperatives: Number(row.cooperatives) || 0,
-        cooperativeOnboarding: Number(row.cooperative_onboarding) || 0,
-        farmNation: Number(row.farm_nation) || 0,
-        exportHub: Number(row.export_hub) || 0,
-        exportOnboarding: Number(row.export_onboarding) || 0,
-        marketplace: Number(row.marketplace) || 0,
+        counts: {
+            wave: Number(row.wave) || 0,
+            academy: Number(row.academy) || 0,
+            cooperatives: Number(row.cooperatives) || 0,
+            cooperativeOnboarding: Number(row.cooperative_onboarding) || 0,
+            farmNation: Number(row.farm_nation) || 0,
+            exportHub: Number(row.export_hub) || 0,
+            exportOnboarding: Number(row.export_onboarding) || 0,
+            marketplace: Number(row.marketplace) || 0,
+        },
+        cause: null,
     };
 }
+
+/** Every figure this rollup reports, for the case where none of them could be read. */
+const MODULE_FIGURES = [
+    "wave", "academy", "cooperatives", "cooperativeOnboarding",
+    "farmNation", "exportHub", "exportOnboarding", "marketplace",
+] as const;
 
 const fetchModuleRegistrationStatsCached = unstable_cache(
     async (): Promise<ModuleRegistrationStats> => {
@@ -1588,7 +1605,41 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
             countModuleRegistrationsInDatabase(),
         ]);
 
-        if (oneScan) return { ...oneScan, waveBriefing: briefingCount };
+        if (oneScan.counts) return { ...oneScan.counts, waveBriefing: briefingCount };
+
+        /*
+         *   A TIMEOUT DOES NOT FALL BACK, BECAUSE THE FALLBACK IS STRICTLY
+         *   MORE EXPENSIVE THAN THE THING THAT JUST TIMED OUT.
+         *
+         *   The comment on the block below says "Reached only when 049 is not
+         *   applied", and the owner's production log disproves it: 049 IS
+         *   applied and the function timed out. So the eight queries ran — and
+         *   every one of them filters `raw_data->serviceRegistrations->…`,
+         *   the WIDE column, where the function reads the narrow generated
+         *   `service_regs` that 045 added precisely so no row need be
+         *   detoasted. Eight scans of the fat column cannot succeed where one
+         *   scan of the thin one did not.
+         *
+         *   AND THEY FAILED INTO ZEROS. Every figure below ends `?? 0`, so a
+         *   timed-out count reached the dashboard as the number nought, on a
+         *   screen whose own header says "a bar of zero and a bar that could
+         *   not be drawn look identical, and only one of them is a fact about
+         *   the business". That is the whole of the owner's report that the
+         *   dashboard counts were false: not stale, not rounded — invented.
+         *
+         *   So a timeout says so and stops. `missing` still falls through,
+         *   because that is the case the fallback was written for and a deploy
+         *   landing ahead of its migration is, as 049's header says, the
+         *   normal case here.
+         */
+        if (oneScan.cause === "timed-out") {
+            return {
+                wave: 0, academy: 0, cooperatives: 0, cooperativeOnboarding: 0,
+                farmNation: 0, exportHub: 0, exportOnboarding: 0, marketplace: 0,
+                waveBriefing: briefingCount,
+                unavailableFigures: [...MODULE_FIGURES],
+            };
+        }
 
         /*
          *   #756 — the accepted status list comes from ONE place now. It was
@@ -1719,16 +1770,44 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
                 .or(`${reg('marketplace')},${anyRole('seller', 'marketplace_seller', 'buyer', 'marketplace_buyer')}`)
         ]);
 
+        /*
+         *   `?? 0` WAS HERE, ON ALL EIGHT. A query that errored — which is
+         *   what a timeout looks like from the client — has a null count, and
+         *   null became nought, and nought went to the screen as a fact about
+         *   the business. The figure still reads 0 so every existing caller
+         *   keeps a number to render, but its NAME is carried alongside so the
+         *   screen can say "Unavailable" instead, exactly as the platform
+         *   overview's tiles already do.
+         */
+        const unavailableFigures: string[] = [];
+        //   THE SHARED READER, not a third copy of its bookkeeping. #753 lifted
+        //   figureReader to module scope so both methods share ONE definition,
+        //   and its own ratchet counts the sites — a new `unavailableFigures.push`
+        //   here would have been the pattern that lifting was meant to end.
+        const settled = figureReader(unavailableFigures, "ModuleRegistrations");
+        //   PostgREST answers `{ count, error }` rather than a settled promise,
+        //   so the two failure shapes it has — an error, or no count at all —
+        //   are mapped onto the one the reader already understands.
+        const read = (name: string, res: { count: number | null; error: unknown }): number =>
+            settled(
+                name,
+                res.error || res.count === null || res.count === undefined
+                    ? { status: "rejected", reason: res.error ?? "no count returned" }
+                    : { status: "fulfilled", value: res.count },
+                (v) => v,
+            );
+
         return {
-            wave: waveRes.count ?? 0,
+            wave: read("wave", waveRes),
             waveBriefing: waveBriefingFallback,
-            academy: academyRes.count ?? 0,
-            cooperatives: coopsRes.count ?? 0,
-            cooperativeOnboarding: coopOnbRes.count ?? 0,
-            farmNation: farmNationRes.count ?? 0,
-            exportHub: exportHubRes.count ?? 0,
-            exportOnboarding: exportOnbRes.count ?? 0,
-            marketplace: marketplaceRes.count ?? 0
+            academy: read("academy", academyRes),
+            cooperatives: read("cooperatives", coopsRes),
+            cooperativeOnboarding: read("cooperativeOnboarding", coopOnbRes),
+            farmNation: read("farmNation", farmNationRes),
+            exportHub: read("exportHub", exportHubRes),
+            exportOnboarding: read("exportOnboarding", exportOnbRes),
+            marketplace: read("marketplace", marketplaceRes),
+            unavailableFigures,
         };
     },
     ["module-registration-stats-service"],
