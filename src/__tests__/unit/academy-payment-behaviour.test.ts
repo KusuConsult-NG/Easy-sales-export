@@ -516,9 +516,21 @@ describe('checkAcademyPaymentStatusAction', () => {
         // This is one of the three lookups that made the application email
         // lowercasing load-bearing: an applicant who typed a capital was
         // invisible to it.
+        //
+        //   THE ROW IS UNCLAIMED NOW, AND THAT IS THE POINT OF THE FIXTURE.
+        //   It used to carry `userId: 'a-different-record'` — somebody else's
+        //   application — and assert that it answered "paid" for this learner.
+        //   That is #888 defect 2, pinned as though it were the contract, on
+        //   the same screen as the test three below this one ("never reports
+        //   'paid' from another learner's completed payment") which states the
+        //   opposite for payments.
+        //
+        //   An UNCLAIMED application is what the email route exists for: a
+        //   learner whose application predates their account. The lowercasing
+        //   is still what makes it reachable, which is all this test was for.
         seedUser({ email: 'Ada@Example.com' });
         store.seed(APPS, 'app-1', {
-            userId: 'a-different-record', paymentStatus: 'completed',
+            paymentStatus: 'completed',
             personalInfo: { email: 'ada@example.com' },
         });
 

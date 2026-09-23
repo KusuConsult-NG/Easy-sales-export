@@ -17,6 +17,14 @@ import { isRetired } from "@/lib/record-retirement";
 import { latestApplication } from "@/lib/latest-application";
 import { formatShortDateOrDash } from "@/lib/date-utils";
 import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
+import { readUserDocOnce } from "@/lib/current-user-doc";
+import { claimableByEmail } from "@/lib/claimable-application";
+import {
+    academyApplicationsOwnedBy,
+    academyApplicationsTypedTo,
+    completedAcademyRegistrationFor,
+    forgetAcademyReads,
+} from "@/lib/academy-request-reads";
 
 /**
  * Check Academy application status for current user
@@ -29,8 +37,11 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
 
         // ── PRIMARY: Check central user document for service registration ──
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        //   THROUGH THE REQUEST MEMO. /academy/application runs this action and
+        //   checkAcademyPaymentStatusAction in one Promise.all, and both wanted
+        //   this row. One read between them now — see lib/current-user-doc.
+        const userDoc = await readUserDocOnce(session.user.id);
+        const userData = userDoc.data;
 
         let currentStatus = userData?.serviceRegistrations?.academy?.status;
 
@@ -38,10 +49,9 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         // If status is not approved, check the source of truth for applications.
         if (currentStatus !== "approved") {
             let appDoc: any = null;
-            const appSnap = await filterByOwner(
-                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId",
-                await ownedProfileIds(session.user.id),
-            ).get();
+            //   SHARED WITH THE PAYMENT CHECK running beside it — identical
+            //   query, one round trip. See lib/academy-request-reads.
+            const appSnap = await academyApplicationsOwnedBy(session.user.id);
 
             if (!appSnap.empty) {
                 //   #507 An eleventh copy, in a file the ratchet's AFFECTED
@@ -62,17 +72,45 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
                     }
                 }
             } else if (userData?.email) {
-                const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                    .where("personalInfo.email", "==", userData.email.toLowerCase())
-                    .limit(1)
-                    .get();
-                if (!emailQuery.empty) {
-                    appDoc = emailQuery.docs[0];
-                    // Self-healing: backfill userId on application doc if missing
-                    const appData = appDoc.data()!;
-                    if (!appData.userId) {
-                        await appDoc.ref.update({ userId: session.user.id });
-                    }
+                /*
+                 *   #888 DEFECT 2, ON THE FIFTH DOOR — AND THIS ONE PERSISTS IT.
+                 *
+                 *   lib/claimable-application's header lists the doors that ask
+                 *   this correctly: WAVE, Export, Farm Nation, and the gate.
+                 *   This was not among them. It read `emailQuery.docs[0]`
+                 *   whatever its `userId`, and the `!appData.userId` test
+                 *   guarded only the backfill WRITE — which is defect 2 stated
+                 *   word for word in that header.
+                 *
+                 *   AND THE BRANCH BELOW WRITES THE VERDICT DOWN. An `approved`
+                 *   application promotes `currentStatus` AND writes
+                 *   `serviceRegistrations.academy.status: "approved"` onto the
+                 *   caller's own user row, which Layers 2 and 2.5 of
+                 *   checkModuleAccess then grant on "for ever without ever
+                 *   reaching this code again". So a learner whose address
+                 *   somebody else typed into an application form was admitted
+                 *   to the Academy, permanently, on a field nobody
+                 *   authenticated as. Reproduced against the fake db before
+                 *   this change: status "approved", payment "paid", the
+                 *   application still owned by the other account.
+                 *
+                 *   ONLY AN UNCLAIMED APPLICATION CAN BE CLAIMED. Same rule,
+                 *   same helper, same wording in the log as the other four.
+                 */
+                const typed = await academyApplicationsTypedTo(userData.email);
+                const { claimable, ownedByOthers } = claimableByEmail(typed.docs);
+
+                if (claimable) {
+                    appDoc = claimable;
+                    await (claimable as any).ref.update({ userId: session.user.id });
+                    //   The owner-scoped query would answer differently now.
+                    forgetAcademyReads();
+                } else if (ownedByOthers > 0) {
+                    logger.warn(
+                        `[checkAcademyStatus] ${ownedByOthers} Academy application(s) match `
+                        + `${userData.email} but every one already belongs to another account; `
+                        + `none claimed (uid: ${session.user.id}).`
+                    );
                 }
             }
 
@@ -100,14 +138,8 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         }
 
         // ── FINAL FALLBACK: Check for any payment records ──────────────
-        const paymentsSnap = await filterByOwner(
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
-            await ownedProfileIds(session.user.id),
-        )
-            .where("type", "==", "academy_registration")
-            .where("status", "==", "completed")
-            .limit(1)
-            .get();
+        //   SHARED WITH THE PAYMENT CHECK — identical query, one round trip.
+        const paymentsSnap = await completedAcademyRegistrationFor(session.user.id);
 
         if (!paymentsSnap.empty) {
             return { error: null, success: true as const, data: "payment_completed" };

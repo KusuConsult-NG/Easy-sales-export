@@ -36,6 +36,7 @@ import { claimableByEmail } from "@/lib/claimable-application";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { readUserDocOnce } from "@/lib/current-user-doc";
+import { academyApplicationsTypedTo, forgetAcademyReads } from "@/lib/academy-request-reads";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 
@@ -807,10 +808,10 @@ export async function checkModuleAccess(
                  *   Layer 2.7 also requires the programme fee on top of this
                  *   (#258), so a match alone has never been enough here.
                  */
-                const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                    .where("personalInfo.email", "==", userData.email.toLowerCase())
-                    .limit(APPLICATION_SCAN_LIMIT)
-                    .get();
+                //   SHARED WITH THE TWO ACADEMY ACTIONS. Identical query,
+                //   identical bound, and on /academy/application all three ran
+                //   it in the same request — see lib/academy-request-reads.
+                const emailQuery = await academyApplicationsTypedTo(userData.email);
 
                 const { claimable, ownedByOthers } = claimableByEmail(emailQuery.docs);
 
@@ -863,6 +864,10 @@ export async function checkModuleAccess(
                     if (Object.keys(updates).length > 0 && appRef) {
                         const { FieldValue } = await import("./firestore-compat");
                         await appRef.update(updates);
+                        //   A claim changes what the owner-scoped query would
+                        //   answer, so no later reader in this request may be
+                        //   served the set taken before it.
+                        forgetAcademyReads();
                         logger.info(`[ModuleAccess] Healed application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
                     }
 
