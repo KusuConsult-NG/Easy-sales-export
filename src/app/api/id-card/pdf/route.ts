@@ -21,6 +21,7 @@ import { logger } from "@/lib/logger";
 import { jsPDF } from "jspdf";
 import { brandLogoWatermarkSvg } from "@/lib/brand-logo";
 import { CREDENTIAL_BRAND } from "@/lib/credential-brand";
+import { getImageKitId } from "@/lib/imagekit";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 // CR80 card: 86mm × 54mm at 264 dpi → 893×561px. Round to 900×567 for clean scaling.
@@ -100,7 +101,7 @@ function isAllowedPhotoUrl(raw: string): boolean {
         }
 
         if (isImageKit) {
-            const imageKitId = process.env.IMAGEKIT_ID || "Easysales";
+            const imageKitId = getImageKitId();
             return firstSegment === imageKitId;
         }
 

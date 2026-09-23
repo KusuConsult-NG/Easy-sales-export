@@ -134,26 +134,34 @@ export async function uploadToImageKit(options: ImageKitUploadOptions): Promise<
     };
 }
 
-/**
- * Deletes a file from ImageKit by fileId.
+/*
+ *   #675 THERE IS NO DELETE HERE, AND THAT IS THE POINT.
+ *
+ *   A `deleteFromImageKit(fileId)` stood here — a DELETE to
+ *   api.imagekit.io/v1/files/<id> — added with the migration and called by
+ *   nothing but its own test.
+ *
+ *   The owner's standing instruction for this codebase, verbatim:
+ *
+ *       "you can't delete or destroy anything on cloudinary or anything that
+ *        was wrongly programmed rather fix the errors and ensure all data are
+ *        safe."
+ *
+ *   #292 settled the same question again when erasure needed an answer:
+ *   "nothing is to be deleted, on Cloudinary or anywhere else" — which is why
+ *   lib/user-erasure copies the asset references into a retention record
+ *   instead of purging the files, and why lib/module-application-erasure does
+ *   the same for the module rows.
+ *
+ *   nothing-destroys-an-uploaded-asset.test.ts exists to keep that true, and
+ *   it did not catch this one: every pattern in it named CLOUDINARY, so an
+ *   ImageKit delete walked straight past a guard written for exactly this.
+ *   Its own header warned about the shape — "the rule held because nobody had
+ *   written such a call yet, which is a different thing from the rule being
+ *   enforced". That sweep is vendor-agnostic now.
+ *
+ *   IT IS NOT A BAN ON THE FEATURE, and that test says how to lift it: the
+ *   allowed call goes in its list with a reason, and the retention rule is
+ *   extended to cover it. What is refused is the capability arriving without
+ *   anybody deciding.
  */
-export async function deleteFromImageKit(fileId: string): Promise<boolean> {
-    const privateKey = process.env.IMAGEKIT_PRIVATE_KEY;
-    if (!privateKey) {
-        logger.warn("[imagekit] Cannot delete: IMAGEKIT_PRIVATE_KEY is not configured.");
-        return false;
-    }
-
-    const authHeader = "Basic " + Buffer.from(privateKey + ":").toString("base64");
-
-    try {
-        const res = await fetch(`https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}`, {
-            method: "DELETE",
-            headers: { Authorization: authHeader },
-        });
-        return res.status === 204 || res.status === 200;
-    } catch (err: any) {
-        logger.error("[imagekit] Delete file error", { fileId, error: err?.message });
-        return false;
-    }
-}
