@@ -101,7 +101,10 @@ function isAllowedPhotoUrl(raw: string): boolean {
         }
 
         if (isImageKit) {
+            //   FAILS CLOSED when nothing configures the account, exactly as
+            //   the Cloudinary branch beside this one does. See lib/imagekit.
             const imageKitId = getImageKitId();
+            if (!imageKitId) return false;
             return firstSegment === imageKitId;
         }
 

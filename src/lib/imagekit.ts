@@ -38,21 +38,46 @@ export function getImageKitEndpoint(): string {
 }
 
 /**
- * Returns the ImageKit account ID/directory prefix (e.g. "Easysales").
+ * The ImageKit account this deployment is CONFIGURED for — or null when
+ * nothing configures one.
+ *
+ *   NULL RATHER THAN A GUESS, AND THE GUESS WAS THE DEFECT.
+ *
+ *   This returned the literal "Easysales" when neither IMAGEKIT_ID nor an
+ *   endpoint was set, and three security gates used it to decide whether an
+ *   ImageKit URL belongs to this platform — proxy-image, certificates/upload
+ *   and id-card/pdf. So an unconfigured deployment trusted URLs under
+ *   ik.imagekit.io/Easysales on the strength of a string in this file.
+ *
+ *   The CLOUDINARY branch beside each of those three has always failed closed:
+ *   "Fails closed rather than treating an unset variable as a match for
+ *   whatever the first path segment happens to be." The two halves of one
+ *   decision disagreed, and only the newer half guessed.
+ *
+ *   FAILING CLOSED COSTS NOTHING THAT WAS WORKING. If the account is not
+ *   literally Easysales and nothing is configured, those gates ALREADY reject
+ *   every real URL — the guess does not rescue that case, it just makes it
+ *   silent. With the endpoint set, which the Dockerfile passes as a build arg,
+ *   the answer is derived and nothing changes.
+ *
+ *   THE ENDPOINT IS READ FROM THE ENVIRONMENT HERE, not through
+ *   `getImageKitEndpoint()`, because that helper defaults to an Easysales URL
+ *   — deriving from it would reintroduce the same guess one step removed.
  */
-export function getImageKitId(): string {
-    if (process.env.IMAGEKIT_ID) {
-        return process.env.IMAGEKIT_ID.trim();
-    }
-    const endpoint = getImageKitEndpoint();
+export function getImageKitId(): string | null {
+    const explicit = process.env.IMAGEKIT_ID?.trim();
+    if (explicit) return explicit;
+
+    const endpoint = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
+        || process.env.IMAGEKIT_URL_ENDPOINT;
+    if (!endpoint) return null;
+
     try {
-        const parsed = new URL(endpoint);
-        const segment = parsed.pathname.split("/").filter(Boolean)[0];
-        if (segment) return segment;
+        const segment = new URL(endpoint).pathname.split("/").filter(Boolean)[0];
+        return segment || null;
     } catch {
-        // fallback
+        return null;
     }
-    return "Easysales";
 }
 
 /**

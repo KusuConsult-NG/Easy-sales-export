@@ -32,16 +32,55 @@ describe('ImageKit storage integration', () => {
 
     it('resolves the URL endpoint and ID with defaults', () => {
         delete process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT;
+        delete process.env.IMAGEKIT_URL_ENDPOINT;
         delete process.env.IMAGEKIT_ID;
 
         expect(getImageKitEndpoint()).toBe('https://ik.imagekit.io/Easysales');
-        expect(getImageKitId()).toBe('Easysales');
+
+        /*
+         *   NULL, AND THIS TEST USED TO SAY "Easysales".
+         *
+         *   The endpoint keeps a default because it BUILDS urls. The account
+         *   id is read by three security gates to decide whether an ImageKit
+         *   url belongs to this platform, and a guess there is a gate trusting
+         *   a string in a source file. The Cloudinary branch beside each of
+         *   those three has always failed closed on an unset variable; this is
+         *   the other half of the same decision agreeing with it.
+         *
+         *   Nothing that worked stops working: with the account unconfigured
+         *   and not literally Easysales, those gates already rejected every
+         *   real url — the guess only made it silent.
+         */
+        expect(getImageKitId()).toBeNull();
 
         process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT = 'https://ik.imagekit.io/CustomEndpoint';
-        process.env.IMAGEKIT_ID = 'CustomEndpoint';
 
+        //   DERIVED FROM THE ENDPOINT ALONE, with no IMAGEKIT_ID set — which
+        //   is the deployed shape, since the Dockerfile passes the endpoint as
+        //   a build arg and passes IMAGEKIT_ID nowhere.
         expect(getImageKitEndpoint()).toBe('https://ik.imagekit.io/CustomEndpoint');
         expect(getImageKitId()).toBe('CustomEndpoint');
+
+        //   And an explicit id still wins over the endpoint.
+        process.env.IMAGEKIT_ID = 'ExplicitAccount';
+        expect(getImageKitId()).toBe('ExplicitAccount');
+    });
+
+    it('AND THE THREE GATES REFUSE WHEN THE ACCOUNT IS UNKNOWN', () => {
+        //   The reason the null matters. Each of these reads getImageKitId()
+        //   and must not treat "we do not know" as "it is ours".
+        const { readFileSync } = require('fs') as typeof import('fs');
+        const { join } = require('path') as typeof import('path');
+
+        for (const rel of [
+            'src/app/api/proxy-image/route.ts',
+            'src/app/api/id-card/pdf/route.ts',
+            'src/app/api/certificates/upload/route.ts',
+        ]) {
+            const code = readFileSync(join(process.cwd(), rel), 'utf8');
+            expect(code).toContain('getImageKitId()');
+            expect(code).toMatch(/if \(!imageKitId\)|!imageKitId \|\|/);
+        }
     });
 
     it('uploads a file buffer to ImageKit API', async () => {

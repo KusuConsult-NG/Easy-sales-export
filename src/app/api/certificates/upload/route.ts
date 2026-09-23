@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
             }
 
             const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+            //   FAILS CLOSED when nothing configures the account, exactly as
+            //   the Cloudinary branch below does for an unset cloud name.
+            //   See lib/imagekit.
             const imageKitId = getImageKitId();
 
             try {
@@ -113,7 +116,7 @@ export async function POST(request: NextRequest) {
                         );
                     }
                 } else if (isImageKit) {
-                    if (firstSegment !== imageKitId) {
+                    if (!imageKitId || firstSegment !== imageKitId) {
                         return NextResponse.json(
                             { success: false, error: "Unauthorized file hosting domain" },
                             { status: 400 }
