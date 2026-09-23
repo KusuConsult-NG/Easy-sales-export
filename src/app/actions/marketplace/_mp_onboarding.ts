@@ -25,6 +25,7 @@ import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { toMillis } from "@/lib/firestore-serialize";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -37,8 +38,13 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
         if (!sessionResult.session) return { success: false as const, data: null, error: "Unauthorized" };
         const { session } = sessionResult;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        //   THROUGH THE REQUEST MEMO. #270 took this page from eleven reads
+        //   to seven and left two of the seven as the SAME ROW: the layout's
+        //   gate read it, and so did this. Both read it through
+        //   lib/current-user-doc now, which is the module that exists to
+        //   count that read once.
+        const userDoc = await readUserDocOnce(session.user.id);
+        const userData = userDoc.data;
 
         let status = userData?.serviceRegistrations?.marketplace?.status;
         let accountType = userData?.serviceRegistrations?.marketplace?.accountType;

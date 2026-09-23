@@ -18,7 +18,9 @@ import { requiredNationalIdField } from "@/lib/kyc-validators";
 import { hashData } from "@/lib/security";
 import { kycReadableField } from "@/lib/kyc-identity-store";
 import { latestApplication } from "@/lib/latest-application";
-import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { isLiveUserRow } from "@/lib/user-identity";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 
 /**
  * Submit Farm Nation Onboarding
@@ -269,8 +271,11 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        //   THROUGH THE REQUEST MEMO, as WAVE's copy of this check already is.
+        //   Whatever else in the same request wants this row — the app shell,
+        //   a gate, the sidebar's live-roles read — reads it once between them.
+        const userDoc = await readUserDocOnce(session.user.id);
+        const userData = userDoc.data;
 
         let status = userData?.serviceRegistrations?.farmNation?.status;
 
@@ -279,17 +284,41 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
         if (status !== "approved") { 
             let appDoc: any = null;
             let appSnap;
+            /*
+             *   THE FORWARD HALF OF THIS RESOLUTION IS THE ROW ABOVE.
+             *
+             *   `ownedProfileIdsFor` is `liveProfileId` composed with
+             *   `ownedProfileIds`, and its own header says the forward walk
+             *   costs "ONE EXTRA KEYED READ ... a live id resolves to itself on
+             *   the first hop". That hop reads `users/<id>` — which is
+             *   `userData`, read four lines above.
+             *
+             *   Measured with #261's read meter: a member with no application
+             *   cost SIX reads on /farm-nation/onboarding, and this was the
+             *   second of them.
+             *
+             *   THE WALK IS KEPT FOR THE ROW THAT NEEDS IT, exactly as in
+             *   checkModuleAccess and _mp_onboarding: a session minted before
+             *   an admin settled a duplicate carries an id that has since been
+             *   superseded, and that member's application is filed under the id
+             *   that lost.
+             *
+             *   HOISTED OUT OF THE try, because the catch below re-ran the
+             *   identical call. Both arms want the same answer and the second
+             *   one is not a different question.
+             */
+            const ownedIds = isLiveUserRow(session.user.id, userData ?? null)
+                ? await ownedProfileIds(session.user.id)
+                : await ownedProfileIdsFor(session.user.id);
             try {
                 appSnap = await filterByOwner(
-                    db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId",
-                    await ownedProfileIdsFor(session.user.id))
+                    db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId", ownedIds)
                     .get();
             } catch (e: any) {
                 if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                     logger.warn("Missing index for checkFarmNationStatusAction, falling back to memory sort");
                     appSnap = await filterByOwner(
-                        db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId",
-                        await ownedProfileIdsFor(session.user.id))
+                        db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS), "userId", ownedIds)
                         .get();
                 } else {
                     throw e;
