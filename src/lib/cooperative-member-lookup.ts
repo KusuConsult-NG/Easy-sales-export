@@ -27,7 +27,8 @@
  * balance must not claim anything at all.
  */
 
-import { ownedProfileIdsFor, isSamePerson } from "@/lib/owned-profile-ids";
+import { ownedProfileIds, ownedProfileIdsFor, isSamePerson } from "@/lib/owned-profile-ids";
+import { isLiveUserRow, type UserRow } from "@/lib/user-identity";
 import type { CooperativeTier } from "@/lib/cooperative-tiers";
 
 /** The shape both loan doors need back: which row, and what is on it. */
@@ -91,13 +92,38 @@ export async function findCooperativeMemberRow(
  *   so this costs a member with a single profile exactly what the walk above
  *   already cost them.
  */
+/**
+ * As above, for every profile this person owns.
+ *
+ * `liveRow` IS THE CALLER'S OWN USER ROW, WHEN THE CALLER HOLDS IT.
+ *
+ *   `ownedProfileIdsFor` is `liveProfileId` composed with `ownedProfileIds`,
+ *   and its own header says the forward walk costs "ONE EXTRA KEYED READ ...
+ *   a live id resolves to itself on the first hop". That hop reads
+ *   `users/<userId>` — which _checkCooperativeStatusAction had already
+ *   fetched, and which the module gate had fetched before that.
+ *
+ *   Measured with #261's read meter: one draw of a cooperatives member page
+ *   cost FOURTEEN reads, THREE of them that same row.
+ *
+ *   THE PARAMETER IS OPTIONAL BECAUSE THE WALK IS STILL RIGHT FOR MOST
+ *   CALLERS. `membershipRefForPayment` and `cooperativeTierForPerson` are
+ *   handed an id that may not be the caller's own — a membership id out of
+ *   payment metadata, an admin looking at somebody else — and for those the
+ *   forward resolution is the whole point. Omitting the row keeps today's
+ *   behaviour exactly; passing `null` does too, since a row that is missing
+ *   cannot say it is live.
+ */
 export async function findCooperativeMemberRowForPerson(
     membersCollection: any,
     userId: string,
+    liveRow?: UserRow | null,
 ): Promise<CooperativeMemberRow | null> {
     if (!userId) return null;
 
-    const owned = await ownedProfileIdsFor(userId);
+    const owned = isLiveUserRow(userId, liveRow ?? null)
+        ? await ownedProfileIds(userId)
+        : await ownedProfileIdsFor(userId);
     for (const id of owned.length ? owned : [userId]) {
         const row = await findCooperativeMemberRow(membersCollection, id);
         if (row) return row;

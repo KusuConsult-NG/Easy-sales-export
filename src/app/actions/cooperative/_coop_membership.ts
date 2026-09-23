@@ -17,7 +17,9 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { registrationProgressScore } from "@/lib/registration-progress";
 import { findCooperativeMemberRowForPerson } from "@/lib/cooperative-member-lookup";
-import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { isLiveUserRow } from "@/lib/user-identity";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 
 /** How many members one directory read will return. */
 const DIRECTORY_ROW_CAP = 2000;
@@ -208,8 +210,12 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         }
 
         // ── PRIMARY: Check central user document for service registration ──
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        //   THROUGH THE REQUEST MEMO. The module gate above this read the same
+        //   row moments ago, and so did the member lookup below — three copies
+        //   of one row on one page draw. One read between them now; see
+        //   lib/current-user-doc.
+        const userDoc = await readUserDocOnce(session.user.id);
+        const userData = userDoc.data;
 
         // Support both key variants:
         //  - 'cooperatives' (plural) — written by registerCooperativeMemberAction post-V2
@@ -257,8 +263,11 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
          *   guard. If anything it is reached less often, because a row filed
          *   under the member's other profile is now found before it.
          */
+        //   THE ROW IS ALREADY IN HAND, so the forward hop of the identity
+        //   resolution does not need to read it again — see the note on
+        //   findCooperativeMemberRowForPerson.
         const memberRow = await findCooperativeMemberRowForPerson(
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id, userData ?? null,
         );
 
         if (memberRow) {
@@ -388,9 +397,13 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         // If no profile status was found above, check the source of truth for payments.
         // This handles cases where a user just paid but the background sync hasn't
         // finished updating the member/user documents.
+        //   Same entry point as the gate and the lookup above, so the
+        //   backward identity search is paid once for the whole request.
+        const payerIds = isLiveUserRow(session.user.id, userData ?? null)
+            ? await ownedProfileIds(session.user.id)
+            : await ownedProfileIdsFor(session.user.id);
         const paymentsSnap = await filterByOwner(
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
-            await ownedProfileIdsFor(session.user.id))
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId", payerIds)
             .where("type", "==", "cooperative_membership_registration")
             .where("status", "==", "completed")
             .limit(1)
