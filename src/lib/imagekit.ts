@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { measure } from "@/lib/round-trip-meter";
 
 export interface ImageKitUploadResult {
     url: string;
@@ -116,14 +117,19 @@ export async function uploadToImageKit(options: ImageKitUploadOptions): Promise<
 
     logger.info(`[imagekit] Uploading ${fileName} (${buffer.length} bytes) to folder: ${folder || "/"}`);
 
-    const response = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
+    //   MEASURED. `submitMultiStepWaveApplicationAction took 8145ms — 0
+    //   reads` is the slowest line in the owner's log and none of it was the
+    //   database. An upload is not a round trip in the sense a `.get()` is —
+    //   it is bytes, and it scales with the file — so it is counted as http
+    //   rather than folded in with the reads.
+    const response = await measure("http", () => fetch("https://upload.imagekit.io/api/v1/files/upload", {
         method: "POST",
         headers: {
             Authorization: authHeader,
         },
         body: formData,
         cache: "no-store",
-    });
+    }));
 
     if (!response.ok) {
         const errText = await response.text();

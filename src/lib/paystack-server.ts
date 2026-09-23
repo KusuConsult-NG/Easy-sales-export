@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { measure } from "@/lib/round-trip-meter";
 import { paystackBaseUrl } from "@/lib/paystack-host";
 
 /**
@@ -125,7 +126,9 @@ export async function verifyPaystackPayment(
             const secretKey = process.env.PAYSTACK_SECRET_KEY;
             if (!secretKey) throw new Error("Payment service not configured");
 
-            const response = await fetch(
+            //   MEASURED. `checkAcademyPaymentStatusAction took 1879ms — 0
+            //   reads` was this call, reported as time spent "elsewhere".
+            const response = await measure("http", () => fetch(
                 `${PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
                 {
                     method: 'GET',
@@ -135,7 +138,7 @@ export async function verifyPaystackPayment(
                     },
                     signal: AbortSignal.timeout(5000),
                 }
-            );
+            ));
 
             if (!response.ok) {
                 throw new Error(`Paystack API error: ${response.statusText}`);
@@ -311,7 +314,10 @@ export async function initializePaystackPayment(
                 finalEmail = `${identifier}@easysalesexport.com`.replace(/[^a-zA-Z0-9@._+-]/g, '');
             }
 
-            const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
+            //   MEASURED. `initiateAcademyPaymentAction took 2309ms — 0
+            //   reads` and `initiateCooperativePaymentAction took 2644ms — 0
+            //   reads` were both this call.
+            const response = await measure("http", async () => fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${secretKey}`,
@@ -325,7 +331,7 @@ export async function initializePaystackPayment(
                     callback_url: callbackUrl || (metadata.callback_url as string) || `${await resolveDefaultBase()}/cooperatives/verify-payment`,
                 }),
                 signal: AbortSignal.timeout(5000),
-            });
+            }));
 
             if (!response.ok) {
                 let errorMsg = `Paystack API error: ${response.statusText}`;

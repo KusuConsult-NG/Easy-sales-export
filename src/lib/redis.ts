@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { measure } from '@/lib/round-trip-meter';
 import {
     getFallbackCache,
     setFallbackCache,
@@ -233,7 +234,17 @@ export async function getCached<T>(key: string): Promise<T | null> {
     if (!isRedisConfigured) return getFallbackCache<T>(key);
 
     try {
-        const value = await redis.get<T>(key);
+        /*
+         *   MEASURED, because this is a NETWORK and the meter used to be blind
+         *   to it. requireSession() runs at the top of every server action and,
+         *   on a hit, touches no database at all — so the log carried
+         *   "checkCooperativeStatusAction took 1848ms — 0 reads, 0ms in the
+         *   database" and the remainder was filed as time spent "elsewhere".
+         *   It was this call. The in-memory fallback above is NOT measured:
+         *   it is not a round trip and counting it would dilute the figure
+         *   this exists to expose.
+         */
+        const value = await measure("cache", () => redis.get<T>(key));
         return value;
     } catch (error) {
         console.error('[Redis] Get error:', error);
@@ -248,7 +259,7 @@ export async function setCache(key: string, value: any, ttlSeconds: number): Pro
     if (!isRedisConfigured) return setFallbackCache(key, value, ttlSeconds);
 
     try {
-        await redis.setex(key, ttlSeconds, value);
+        await measure("cache", () => redis.setex(key, ttlSeconds, value));
         return true;
     } catch (error) {
         console.error('[Redis] Set error:', error);
@@ -265,7 +276,7 @@ export async function deleteCache(key: string): Promise<boolean> {
     if (!isRedisConfigured) return deleteFallbackCache(key);
 
     try {
-        await redis.del(key);
+        await measure("cache", () => redis.del(key));
         return true;
     } catch (error) {
         console.error('[Redis] Delete error:', error);

@@ -289,6 +289,12 @@ describe('#459 — the callers that were caching into nothing', () => {
         const redis = source('src/lib/redis.ts');
 
         expect(redis).toContain('if (!isRedisConfigured) return getFallbackCache');
-        expect(redis).toContain('await redis.get<T>(key)');
+        //   The real call is now wrapped in the round-trip meter's measure(),
+        //   because Upstash is a NETWORK and the slow-action line was blind to
+        //   it — requireSession() asks it at the top of every action. The
+        //   assertion is the same one: the configured path really does reach
+        //   redis.get. The in-memory fallback is deliberately NOT measured; it
+        //   is not a round trip.
+        expect(redis).toContain('measure("cache", () => redis.get<T>(key))');
     });
 });
