@@ -197,9 +197,18 @@ describe('the status reader is the one that granted a role', () => {
         expect(status).toContain('mayClaimMembershipByEmail(');
 
         const guard = status.indexOf('mayClaimMembershipByEmail(');
-        const adopt = status.indexOf('memberDocData = emailQuery.docs[0].data();');
+        //   `emailQuery.docs[0]` until the shared reader landed: this branch
+        //   bounded its query at LIMIT 1 and took whatever came back, where
+        //   the GATE bounds at APPLICATION_SCAN_LIMIT and takes the latest.
+        //   Two answers to one question, and a shape that could not share the
+        //   gate's round trip. Same bound and same choice now — the ordering
+        //   this test exists for is unchanged.
+        const adopt = status.indexOf('memberDocData = latestByEmail.data();');
 
+        expect(adopt).toBeGreaterThan(-1);
         expect(adopt).toBeGreaterThan(guard);
+        //   And the old shape is gone, not merely renamed around.
+        expect(status).not.toContain('emailQuery.docs[0]');
     });
 
     it('and so does the membership reader, in the same file', () => {

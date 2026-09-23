@@ -21,6 +21,12 @@ import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import { isAcademyEntitled } from "@/lib/academy-entitlement";
 import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
+import {
+    memberDocOnce,
+    membersOwnedByOnce,
+    membersByEmailOnce,
+    forgetCooperativeMemberReads,
+} from "@/lib/cooperative-member-lookup";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -496,10 +502,11 @@ export async function checkModuleAccess(
         // Handles legacy/bulk-imported cooperative members whose user documents
         // were never updated/backfilled, and whose roles/serviceRegistrations are empty.
         if (app === "cooperatives") {
-            const memberQuery = await filterByOwner(
-                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), "userId", await ownedIds())
-                .limit(APPLICATION_SCAN_LIMIT)
-                .get();
+            //   SHARED WITH THE STATUS ACTION behind this gate — identical
+            //   query, identical bound, one round trip per request. See
+            //   lib/cooperative-member-lookup.
+            const memberQuery = await membersOwnedByOnce(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), await ownedIds());
 
             let memberDocData: any = null;
             let memberRef: any = null;
@@ -513,7 +520,10 @@ export async function checkModuleAccess(
                 memberDocData = latestMember?.data();
                 memberRef = latestMember?.ref;
             } else {
-                const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+                //   SHARED, as above — this was the one identical read of
+                //   the three, and the status action makes it too.
+                const memberDoc = await memberDocOnce(
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId);
                 if (memberDoc.exists) {
                     memberDocData = memberDoc.data();
                     memberRef = memberDoc.ref;
@@ -544,10 +554,9 @@ export async function checkModuleAccess(
                      *   this person's, or a completed registration payment
                      *   ties it to their money.
                      */
-                    const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                        .where("email", "==", userData.email.toLowerCase())
-                        .limit(APPLICATION_SCAN_LIMIT)
-                        .get();
+                    //   SHARED, as above.
+                    const emailQuery = await membersByEmailOnce(
+                        db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userData.email);
                     if (!emailQuery.empty) {
                         const latestByEmail = latestApplication(emailQuery.docs);
                         memberDocData = latestByEmail?.data();
@@ -729,6 +738,9 @@ export async function checkModuleAccess(
                     if (isHealable && memberRef && mayWriteToRow) {
                         try {
                             // Update membership status to active
+                            //   A heal changes what every reader above
+                            //   would answer — see forgetCooperativeMemberReads.
+                            forgetCooperativeMemberReads();
                             await memberRef.update({
                                 membershipStatus: "active",
                                 updatedAt: FieldValue.serverTimestamp()
@@ -758,6 +770,8 @@ export async function checkModuleAccess(
                         //   documents included — so it needs the claim gate
                         //   above, which a row found by id or userId field
                         //   passes trivially.
+                        //   As above.
+                        forgetCooperativeMemberReads();
                         await memberRef.update({ userId });
                         logger.info(`[ModuleAccess] Healed membership ${memberRef.id} with userId ${userId}`);
                     }
