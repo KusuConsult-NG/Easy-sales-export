@@ -29,6 +29,12 @@ import { paidButNotFulfilled } from "@/lib/paid-but-not-fulfilled";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { readUserDocOnce } from "@/lib/current-user-doc";
+import { claimableByEmail } from "@/lib/claimable-application";
+import {
+    academyApplicationsOwnedBy,
+    academyApplicationsTypedTo,
+    completedAcademyRegistrationFor,
+} from "@/lib/academy-request-reads";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -977,8 +983,13 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         }
 
         //   The module layout's gate read this same row moments ago. One read
-        //   per request now; see lib/current-user-doc for why this reader may
-        //   use the memo and checkModuleAccess deliberately may not.
+        //   per request now; see lib/current-user-doc.
+        //
+        //   THIS NOTE USED TO END "...and checkModuleAccess deliberately may
+        //   not". That reservation was about `getAdminDb()` sounding like a
+        //   second, privileged handle. It is not one — lib/supabase-db's
+        //   `getAdminDb()` is `return supabaseDb;`, the very object this module
+        //   reads through — so the gate reads through the memo too now.
         const userDoc = await readUserDocOnce(session.user.id);
         const userData = userDoc.data;
 
@@ -993,24 +1004,17 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         //   AN AUTHORITATIVE CHECK HAS TO SEE EVERY PROFILE, or it is not
         //   authoritative. A learner who paid before their profile was
         //   superseded reads as never having paid, and is asked to pay again.
-        const paymentsSnap = await filterByOwner(
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS), "userId",
-            await ownedProfileIds(session.user.id),
-        )
-            .where("type", "==", "academy_registration")
-            .where("status", "==", "completed")
-            .limit(1)
-            .get();
+        //   SHARED WITH checkAcademyStatusAction, which /academy/application
+        //   runs beside this one — identical query, one round trip.
+        const paymentsSnap = await completedAcademyRegistrationFor(session.user.id);
 
         if (!paymentsSnap.empty) {
             return { error: null, success: true as const, data: "paid" };
         }
 
         // ── AUTHORITATIVE FALLBACK 2: Application Payment Status ─────────
-        const appSnap = await filterByOwner(
-            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS), "userId",
-            await ownedProfileIds(session.user.id),
-        ).get();
+        //   SHARED, as above.
+        const appSnap = await academyApplicationsOwnedBy(session.user.id);
 
         if (!appSnap.empty) {
             const hasPaidApp = appSnap.docs.some(doc => isAcademyEntitled(doc.data().paymentStatus));
@@ -1018,11 +1022,19 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
                 return { error: null, success: true as const, data: "paid" };
             }
         } else if (userData?.email) {
-            const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("personalInfo.email", "==", userData.email.toLowerCase())
-                .limit(1)
-                .get();
-            if (!emailQuery.empty && isAcademyEntitled(emailQuery.docs[0].data().paymentStatus)) {
+            /*
+             *   #888 DEFECT 2, ON THE SIXTH DOOR. This read
+             *   `emailQuery.docs[0]` whatever its `userId`, so SOMEBODY ELSE'S
+             *   paid application answered "paid" for this learner — and this
+             *   answer is what academy/(learner)/layout.tsx uses to decide
+             *   whether to force the payment flow. Reproduced before the fix.
+             *
+             *   Only a row nobody owns may be read. Same helper as the other
+             *   five doors — see lib/claimable-application.
+             */
+            const typed = await academyApplicationsTypedTo(userData.email);
+            const { claimable } = claimableByEmail(typed.docs);
+            if (claimable && isAcademyEntitled(claimable.data()?.paymentStatus)) {
                 return { error: null, success: true as const, data: "paid" };
             }
         }

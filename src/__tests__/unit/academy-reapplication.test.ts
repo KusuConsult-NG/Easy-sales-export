@@ -161,14 +161,27 @@ describe('the identity it matches on', () => {
         expect(override).toBeGreaterThan(spread);
     });
 
+    it('and the ONE query that reads it lowercases before asking', () => {
+        //   THIS USED TO CHECK THREE COPIES OF THE QUERY, one in each reader.
+        //   There is one now — the three readers ran it against the same
+        //   collection in the same request, so it moved to a shared
+        //   request-scoped reader. The property is unchanged and the ratchet
+        //   is narrower: one place to keep correct instead of three to keep
+        //   agreeing.
+        const shared = code('src/lib/academy-request-reads.ts');
+
+        expect(shared).toContain('.where("personalInfo.email", "==", normalized)');
+        expect(shared).toContain('email.toLowerCase().trim()');
+    });
+
     it.each([
         ['src/app/actions/academy/_ac_enrollment.ts', 'checkAcademyStatusAction'],
         ['src/app/actions/academy/_payment.ts', 'checkAcademyPaymentStatusAction'],
         ['src/lib/module-access-check.ts', 'Layer 2.7 — the academy access grant'],
     ])('%s (%s) is the reader that needed it', (rel: string) => {
-        // Each of these queries the lowercased form. The write above is what
-        // makes them able to find the row at all.
-        expect(code(rel)).toContain('.where("personalInfo.email", "==", userData.email.toLowerCase())');
+        // Each of these reads the lowercased form through the shared reader.
+        // The write above is what makes them able to find the row at all.
+        expect(code(rel)).toContain('academyApplicationsTypedTo(');
     });
 
     it('matches the phone in both the typed and the E.164 form', () => {
