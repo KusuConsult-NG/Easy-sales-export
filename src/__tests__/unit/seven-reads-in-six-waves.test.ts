@@ -22,12 +22,12 @@
  *   optimised twice and still wait six times.
  *
  *   Measured by making every read in the fake database take a real tick and
- *   counting WAVES — a wave begins whenever a read starts with none already in
+ *   counting WAVES — a generation begins whenever a read starts with none already in
  *   flight:
  *
- *       nothing filed              7 reads,  6 waves  →  7 reads, 3 waves
- *       a member row, no status    5 reads,  4 waves  →  7 reads, 3 waves
- *       an active member           1 read,   1 wave   →  unchanged
+ *       nothing filed              7 reads,  depth 6  →  7 reads, depth 3
+ *       a member row, no status    5 reads,  depth 4  →  7 reads, depth 3
+ *       an active member           1 read,   depth 1  →  unchanged
  *
  *   The active member — the common case, and the only one on the fast path —
  *   is untouched at a single read.
@@ -52,6 +52,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
+import { measureReadDepth } from '@/lib/testing/read-depth';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
 /*
@@ -89,38 +90,9 @@ const EMAIL = 'member@example.test';
  * READS is the ceiling this audit has always tracked. WAVES is the new one,
  * and it is the one the owner's log was measuring all along.
  */
-const CEILING = { reads: 7, waves: 3 };
+const CEILING = { reads: 7, depth: 3 };
 
 let store: FakeDbHandle;
-
-/**
- * Make every read take a tick, and count the waves.
- *
- *   The fake database answers from memory, so nothing in it is concurrent by
- *   default and a serial chain is indistinguishable from a parallel one. A
- *   real delay makes the difference observable: a wave begins whenever a read
- *   starts with none already in flight, so N reads issued together are one
- *   wave and N issued in sequence are N.
- */
-function measureWaves(): { waves: number; reads: number } {
-    const g = global as any;
-    const inner = g.mockFirestoreGet.getMockImplementation();
-    let inFlight = 0;
-    const state = { waves: 0, reads: 0 };
-
-    g.mockFirestoreGet.mockImplementation((...args: any[]) => {
-        if (inFlight === 0) state.waves += 1;
-        inFlight += 1;
-        state.reads += 1;
-        const result = inner(...args);
-        return new Promise((resolve) => setTimeout(() => {
-            inFlight -= 1;
-            resolve(result);
-        }, 5));
-    });
-
-    return state;
-}
 
 beforeEach(() => {
     jest.resetModules();
@@ -139,32 +111,29 @@ beforeEach(() => {
 const coop = () => import('@/app/actions/cooperative/_coop_membership');
 
 describe('what the cooperatives check actually waits for', () => {
-    it('THE MEASUREMENT ITSELF WORKS — serial reads count as separate waves', async () => {
+    it('THE MEASUREMENT ITSELF WORKS — a chain measures deep, a batch measures shallow', async () => {
         /*
          *   THE CONTROL, and this file is worthless without it. If the harness
          *   could not tell a chain from a batch, every ceiling below would
          *   pass on any implementation at all — which is precisely how a
          *   read-count suite can be green while an action waits six times.
          */
-        const { checkCooperativeStatusAction } = await coop();
-        void checkCooperativeStatusAction;
-        const seen = measureWaves();
         const g = global as any;
 
-        //   Three reads in a chain.
+        const serial = measureReadDepth();
         await g.mockFirestoreGet();
         await g.mockFirestoreGet();
         await g.mockFirestoreGet();
-        expect({ reads: seen.reads, waves: seen.waves }).toEqual({ reads: 3, waves: 3 });
+        expect({ reads: serial.reads, depth: serial.depth }).toEqual({ reads: 3, depth: 3 });
 
-        //   Three more together.
+        const together = measureReadDepth();
         await Promise.all([g.mockFirestoreGet(), g.mockFirestoreGet(), g.mockFirestoreGet()]);
-        expect({ reads: seen.reads, waves: seen.waves }).toEqual({ reads: 6, waves: 4 });
+        expect({ reads: together.reads, depth: together.depth }).toEqual({ reads: 3, depth: 1 });
     });
 
     it('A MEMBER WITH NOTHING FILED WAITS THREE TIMES, not six', async () => {
         const { checkCooperativeStatusAction } = await coop();
-        const seen = measureWaves();
+        const seen = measureReadDepth();
 
         const result = await checkCooperativeStatusAction();
 
@@ -172,23 +141,23 @@ describe('what the cooperatives check actually waits for', () => {
         //   (withFlexibleSafeAction hands this action's value straight back.)
         expect(result).toBeNull();
         expect(seen.reads).toBeLessThanOrEqual(CEILING.reads);
-        expect(seen.waves).toBeLessThanOrEqual(CEILING.waves);
+        expect(seen.depth).toBeLessThanOrEqual(CEILING.depth);
     });
 
     it('AND SO DOES A MEMBER WHOSE ROW IS FOUND — seven reads, three waits', async () => {
-        //   This is the case that pays two extra reads for the saved waves.
+        //   This is the case that pays two extra reads for the saved round trips.
         //   It waits for neither of them, which is the whole trade.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, UID, {
             userId: UID, userEmail: EMAIL, membershipStatus: 'pending', onboardingCompleted: false,
         });
         const { checkCooperativeStatusAction } = await coop();
-        const seen = measureWaves();
+        const seen = measureReadDepth();
 
         const result = await checkCooperativeStatusAction();
 
         expect(result).toBe('pending');
         expect(seen.reads).toBeLessThanOrEqual(CEILING.reads);
-        expect(seen.waves).toBeLessThanOrEqual(CEILING.waves);
+        expect(seen.depth).toBeLessThanOrEqual(CEILING.depth);
     });
 
     it('THE ACTIVE MEMBER STILL PAYS FOR ONE READ AND ONE WAIT', async () => {
@@ -204,12 +173,12 @@ describe('what the cooperatives check actually waits for', () => {
             serviceRegistrations: { cooperatives: { status: 'active' } },
         });
         const { checkCooperativeStatusAction } = await coop();
-        const seen = measureWaves();
+        const seen = measureReadDepth();
 
         const result = await checkCooperativeStatusAction();
 
         expect(result).toBe('approved');
-        expect({ reads: seen.reads, waves: seen.waves }).toEqual({ reads: 1, waves: 1 });
+        expect({ reads: seen.reads, depth: seen.depth }).toEqual({ reads: 1, depth: 1 });
     });
 
     it('and a SUPERSEDED PROFILE costs one more wait, which is the identity walk and not the lookup', async () => {
@@ -234,12 +203,12 @@ describe('what the cooperatives check actually waits for', () => {
             userId: 'old-profile', userEmail: EMAIL, membershipStatus: 'pending',
         });
         const { checkCooperativeStatusAction } = await coop();
-        const seen = measureWaves();
+        const seen = measureReadDepth();
 
         await checkCooperativeStatusAction();
 
         //   One more wave than the single-profile case, and only one: the
         //   extra hop of the walk. Not one per profile.
-        expect(seen.waves).toBeLessThanOrEqual(CEILING.waves + 1);
+        expect(seen.depth).toBeLessThanOrEqual(CEILING.depth + 1);
     });
 });

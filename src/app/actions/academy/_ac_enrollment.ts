@@ -19,6 +19,7 @@ import { formatShortDateOrDash } from "@/lib/date-utils";
 import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { readUserDocOnce } from "@/lib/current-user-doc";
 import { claimableByEmail } from "@/lib/claimable-application";
+import { startedEarly } from "@/lib/started-early";
 import {
     applicationsOwnedBy,
     applicationsTypedTo,
@@ -43,11 +44,69 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         const userDoc = await readUserDocOnce(session.user.id);
         const userData = userDoc.data;
 
-        let currentStatus = userData?.serviceRegistrations?.academy?.status;
+        const academyReg = userData?.serviceRegistrations?.academy;
+        let currentStatus = academyReg?.status;
+
+        /*
+         *   THE PAYMENT RECORD, ISSUED HERE AND READ AT THE BOTTOM.
+         *
+         *   Reaching the final fallback at all requires the row to have carried
+         *   NO academy status — any status returns before it — so the condition
+         *   for needing this read is known now, from a row already in hand. An
+         *   approved learner never issues it, and neither does anyone whose
+         *   registration says anything at all.
+         */
+        const paymentsSoon = !currentStatus
+            ? startedEarly(completedPaymentFor(session.user.id, "academy_registration"))
+            : null;
 
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for applications.
         if (currentStatus !== "approved") {
+            /*
+             *   THE FALLBACKS GO OUT WITH THE PRIMARY, NOT AFTER IT.
+             *
+             *   THE OWNER: "fix the academy status one next."
+             *
+             *       checkAcademyStatusAction took 1433ms ... 3235ms
+             *
+             *   Measured the way #283 measured the cooperative one — every read
+             *   in the fake database made to take a tick, counting WAVES rather
+             *   than reads, because READ COUNT IS NOT WHAT LATENCY IS MADE OF:
+             *
+             *       nothing filed        6 reads, 5 waves
+             *       an approved learner  1 read,  1 wave
+             *
+             *   Six reads was already tight — #272 and #273 shared three of them
+             *   with the payment check running beside this. The cost is that the
+             *   three lookups below were a CHAIN: the owner-scoped query, then
+             *   the by-address sweep if that was empty, then the payment record
+             *   if that was empty too. Each one waits a full round trip to learn
+             *   whether the next is needed.
+             *
+             *   PREFETCHED ONLY WHERE THEY COULD ACTUALLY RUN, and the user row
+             *   already in hand says exactly that:
+             *
+             *     - the by-address sweep is reachable only with no
+             *       applicationId on the row (the branch above it wins
+             *       otherwise) and an address to sweep by;
+             *     - the payment record is reachable only with no academy status
+             *       on the row, since any status returns before it.
+             *
+             *   So a learner who has applied pays for nothing extra, the
+             *   approved learner never reaches this block at all, and the one
+             *   with nothing filed — the one waiting longest — waits three
+             *   times instead of five.
+             *
+             *   NOTHING BELOW IS DECIDED EARLIER. claimableByEmail still rules
+             *   on the sweep's rows, in the same place, with the same argument:
+             *   issuing a query is not claiming what it returns. #888's defect 2
+             *   was that very distinction going the other way.
+             */
+            const byEmailSoon = (!academyReg?.applicationId && userData?.email)
+                ? startedEarly(applicationsTypedTo(
+                    COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", userData.email))
+                : null;
             let appDoc: any = null;
             //   SHARED WITH THE PAYMENT CHECK running beside it — identical
             //   query, one round trip. See lib/application-request-reads.
@@ -97,7 +156,9 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
                  *   ONLY AN UNCLAIMED APPLICATION CAN BE CLAIMED. Same rule,
                  *   same helper, same wording in the log as the other four.
                  */
-                const typed = await applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", userData.email);
+                //   Already in the air since the wave above; the claim rule
+                //   below is untouched.
+                const typed = await byEmailSoon!();
                 const { claimable, ownedByOthers } = claimableByEmail(typed.docs);
 
                 if (claimable) {
@@ -138,8 +199,14 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         }
 
         // ── FINAL FALLBACK: Check for any payment records ──────────────
-        //   SHARED WITH THE PAYMENT CHECK — identical query, one round trip.
-        const paymentsSnap = await completedPaymentFor(session.user.id, "academy_registration");
+        //   SHARED WITH THE PAYMENT CHECK — identical query, one round trip —
+        //   and issued in the wave above, since reaching here at all requires
+        //   the row to have carried no academy status.
+        const paymentsSnap = paymentsSoon
+            ? await paymentsSoon()
+            //   Unreachable while the guard above matches the return below, and
+            //   a read rather than a wrong answer if they ever drift apart.
+            : await completedPaymentFor(session.user.id, "academy_registration");
 
         if (!paymentsSnap.empty) {
             return { error: null, success: true as const, data: "payment_completed" };
