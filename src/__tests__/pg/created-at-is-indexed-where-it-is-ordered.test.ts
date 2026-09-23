@@ -130,8 +130,23 @@ const seedProbeRows = async () => {
          select $1 || '-' || g,
                 $1 || '-' || g || '@example.com',
                 now() - (g || ' minutes')::interval,
-                jsonb_build_object('fullName', 'Probe ' || g)
-           from generate_series(1, $2::int) g`,
+                jsonb_build_object(
+                    'fullName', 'Probe ' || g,
+                    /*
+                     *   THE JSON KEY AS WELL AS THE COLUMN, and on a FIXED
+                     *   base date rather than now(), because #051's assertions
+                     *   below name a literal range. The two are deliberately
+                     *   different values: the column descends by minute so the
+                     *   ORDER BY test above still reads cleanly, and the key
+                     *   spreads over 300 days so a one-month predicate selects
+                     *   a slice worth indexing rather than all of it or none.
+                     */
+                    'createdAt', to_char(
+                        timestamp '2026-01-01' + ((g % 300) || ' days')::interval,
+                        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                )
+           from generate_series(1, $2::int) g
+         on conflict (id) do nothing`,
         [TAG, PROBE_ROWS],
     );
     await client!.query('analyze public.users');
@@ -234,6 +249,80 @@ dbDescribe('#467 — every dedicated table can be ordered by created_at cheaply'
         );
 
         expect(JSON.stringify(rows[0]['QUERY PLAN'])).toContain('"Node Type":"Sort"');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+dbDescribe('#051 — and the chart that filtered the OTHER createdAt', () => {
+    /**
+     *   THE INDEX ABOVE EXISTED, WAS USED, AND WAS IRRELEVANT TO THE QUERY
+     *   THAT TIMED OUT.
+     *
+     *   The owner's production log, six of these on one admin dashboard:
+     *
+     *       [DashboardStats] user growth count failed {"month":"Sept 26",
+     *         "error":"[supabase-db] count users: ... HTTP 500"}
+     *       ... canceling statement due to statement timeout
+     *
+     *   analytics.service asks `.where("createdAt", ">=", start)`. `createdAt`
+     *   is in neither FIELD_TO_COLUMN['users'] nor NATIVE_COLUMNS['users'] —
+     *   which lists the snake_case `created_at` — so supabase-db's router
+     *   falls through to applyJsonbFilter and emits `raw_data->>'createdAt'`.
+     *
+     *   A btree on the COLUMN cannot serve a predicate on the JSON KEY. One
+     *   underscore and one capital letter between an index scan and a scan of
+     *   the whole table.
+     *
+     *   THIS IS THE PAIR OF ASSERTIONS THAT WOULD HAVE CAUGHT IT: the suite
+     *   above proves 027's index is used for the ORDER BY, and stopped there.
+     *   Nothing asked whether the FILTER the dashboard actually issues could
+     *   use anything at all.
+     */
+    it('THE FILTER THE DASHBOARD ISSUES USES AN INDEX', async () => {
+        //   Seeded for #673's reason — see the header. The question is only
+        //   meaningful about a table with rows in it.
+        await seedProbeRows();
+
+        const { rows } = await client!.query(
+            `explain (analyze, format json)
+             select count(*) from users
+              where raw_data->>'createdAt' >= $1
+                and raw_data->>'createdAt' <= $2`,
+            ['2026-01-01T00:00:00.000Z', '2026-01-31T23:59:59.999Z'],
+        );
+        const plan = JSON.stringify(rows[0]['QUERY PLAN']);
+
+        expect(plan).toContain('idx_users_raw_created_at');
+        expect(plan).not.toContain('"Node Type":"Seq Scan"');
+    });
+
+    it('AND 027\'S COLUMN INDEX IS NOT WHAT ANSWERS IT', async () => {
+        /*
+         *   THE CONTROL THAT MAKES THE ASSERTION ABOVE MEAN SOMETHING.
+         *
+         *   `idx_users_raw_created_at` does not CONTAIN `idx_users_created_at`
+         *   as a substring — deliberately, and 050's header says why: a name
+         *   that contains another makes one test's `toContain` pass for the
+         *   wrong reason and another's `not.toContain` fail for no reason,
+         *   which cost a CI cycle on #263.
+         *
+         *   So this control is only meaningful BECAUSE of the name. Rename the
+         *   new index to idx_users_created_at_json and this assertion starts
+         *   failing on a correct plan.
+         */
+        expect('idx_users_raw_created_at').not.toContain('idx_users_created_at');
+
+        await seedProbeRows();
+
+        const { rows } = await client!.query(
+            `explain (analyze, format json)
+             select count(*) from users where raw_data->>'createdAt' >= $1`,
+            ['2026-10-01T00:00:00.000Z'],
+        );
+
+        //   Not "some index was used" — the column index cannot serve a JSON
+        //   key and must not appear in this plan.
+        expect(JSON.stringify(rows[0]['QUERY PLAN'])).not.toContain('idx_users_created_at"');
     });
 });
 
