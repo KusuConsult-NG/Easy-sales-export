@@ -36,6 +36,7 @@ export {
     FIELD_TO_COLUMN,
 } from './supabase-table-map';
 
+import { recordRoundTrip } from "@/lib/round-trip-meter";
 import {
     DEDICATED_TABLE_MAP,
     NATIVE_COLUMNS,
@@ -1680,7 +1681,26 @@ export class SupabaseDocumentReference {
         return new SupabaseCollectionReference(this._collection);
     }
 
+    /*
+     *   TIMED. Nothing in production has ever counted a database round trip —
+     *   lib/testing/fake-db's meter runs under jest and nowhere else — so
+     *   "is the page slow because it asks too many times, or because each ask
+     *   costs too much" could only be guessed at. See lib/round-trip-meter.
+     *
+     *   The measurement cannot change the outcome: the value is returned
+     *   untouched, a throw propagates untouched, and the recorder swallows its
+     *   own errors.
+     */
     async get(): Promise<SupabaseDocumentSnapshot> {
+        const startedAt = Date.now();
+        try {
+            return await this._getTimed();
+        } finally {
+            recordRoundTrip(Date.now() - startedAt);
+        }
+    }
+
+    private async _getTimed(): Promise<SupabaseDocumentSnapshot> {
         const tableName = getTableName(this._collection);
         let raw: Record<string, any> | null = null;
 
@@ -2613,7 +2633,24 @@ export class SupabaseQuery {
         return { query, tableName, isDedicated, plan };
     }
 
+    /*
+     *   TIMED — see the note on SupabaseDocumentReference.get() above.
+     *
+     *   ONE ENTRY, even though the loop below fetches 1,000-row pages: it is
+     *   one thing the caller asked for, which is the unit every "reads" figure
+     *   in this audit uses. It does mean a big scan's time covers several HTTP
+     *   calls, so `slowestMs` on an unbounded query is a scan and not a hop.
+     */
     async get(): Promise<SupabaseQuerySnapshot> {
+        const startedAt = Date.now();
+        try {
+            return await this._getTimed();
+        } finally {
+            recordRoundTrip(Date.now() - startedAt);
+        }
+    }
+
+    private async _getTimed(): Promise<SupabaseQuerySnapshot> {
         //   #480 Settle whether users.email_normalised exists before the filter
         //   is built, so the same call cannot answer differently depending on
         //   whether a background probe has landed yet. Once per process.
