@@ -36,6 +36,7 @@ const uploadLimiter = rateLimit(rateLimitConfig.fileUpload);
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
+import { getImageKitId } from "@/lib/imagekit";
 
 /**
  * POST - Upload certificate
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
             }
 
             const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-            const imageKitId = process.env.IMAGEKIT_ID || "Easysales";
+            const imageKitId = getImageKitId();
 
             try {
                 const parsedUrl = new URL(fileUrl);

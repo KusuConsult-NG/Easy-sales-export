@@ -302,11 +302,37 @@ async function uploadHandler(request: NextRequest) {
         }
 
         if (isImageKitConfigured()) {
+            /*
+             *   THE SAME LAYOUT THE OTHER TWO BACKENDS USE.
+             *
+             *   `publicId` three lines above — the path Cloudinary and the
+             *   local disk both store at — is
+             *   `${safeFolderName}/${userId}/${safeDocType}-...`. This branch
+             *   passed `safeFolderName` alone, so every user's uploads landed
+             *   in ONE directory instead of one each.
+             *
+             *   That is not only untidy. `useUniqueFileName: false` turns off
+             *   ImageKit's own collision protection and the timestamp here is
+             *   in SECONDS, so two DIFFERENT people uploading the same
+             *   documentType in the same second resolved to one name — and
+             *   whichever landed second is the one that survives. The user
+             *   segment is what made that impossible on the other two
+             *   backends, and it is restored rather than the name being made
+             *   unique, so all three lay their files out the same way.
+             *
+             *   Within ONE user the deterministic name is deliberate and
+             *   unchanged: Cloudinary signs a fixed public_id here too, so a
+             *   re-upload of the same document replaces the old one on every
+             *   backend alike.
+             *
+             *   uploadDocumentAction already did this (`documents/${userId}`).
+             *   This route is the copy that did not.
+             */
             const fileName = `${safeDocType}-${timestamp}${extension}`;
             const uploadResult = await uploadToImageKit({
                 buffer,
                 fileName,
-                folder: safeFolderName,
+                folder: `${safeFolderName}/${userId}`,
                 mimeType: detectedType,
                 useUniqueFileName: false,
             });

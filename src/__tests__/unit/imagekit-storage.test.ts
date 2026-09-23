@@ -8,7 +8,6 @@ import {
     getImageKitEndpoint,
     getImageKitId,
     uploadToImageKit,
-    deleteFromImageKit,
 } from '@/lib/imagekit';
 
 describe('ImageKit storage integration', () => {
@@ -96,20 +95,16 @@ describe('ImageKit storage integration', () => {
         global.fetch = globalFetch;
     });
 
-    it('deletes a file by fileId', async () => {
-        process.env.IMAGEKIT_PRIVATE_KEY = 'private_dummy_key';
-
-        const mockResponse = {
-            ok: true,
-            status: 204,
-        };
-
-        const globalFetch = global.fetch;
-        global.fetch = jest.fn<typeof fetch>().mockResolvedValue(mockResponse as any);
-
-        const result = await deleteFromImageKit('ik_file_123');
-        expect(result).toBe(true);
-
-        global.fetch = globalFetch;
-    });
+    /*
+     *   #675 THE DELETE TEST WENT WITH THE DELETE.
+     *
+     *   `deleteFromImageKit` is gone from lib/imagekit — see the note at the
+     *   foot of that file. A test that exercises a capability is a reason to
+     *   keep the capability, and this one covered a DELETE to
+     *   api.imagekit.io/v1/files/<id> that nothing in the application called
+     *   and that the owner's standing rule forbids.
+     *
+     *   What keeps it gone is nothing-destroys-an-uploaded-asset.test.ts,
+     *   whose sweep now names the ACT rather than the vendor.
+     */
 });

@@ -97,6 +97,28 @@ const DESTRUCTIVE = [
     //   The REST API, which is how this project talks to Cloudinary today.
     { name: 'a REST call to /destroy', pattern: /api\.cloudinary\.com\/[^"'`]*\/destroy/ },
     { name: 'a REST call to /resources (deletable)', pattern: /api\.cloudinary\.com\/[^"'`]*\/resources/ },
+    /*
+     *   IMAGEKIT, AND WHY THIS LIST NAMES AN ACT RATHER THAN A VENDOR NOW.
+     *
+     *   Every pattern above names Cloudinary. The ImageKit migration added a
+     *   `deleteFromImageKit(fileId)` — a DELETE to api.imagekit.io/v1/files/<id>
+     *   — and this sweep, which exists for precisely that, reported clean.
+     *
+     *   The header above had already described the failure mode in the
+     *   abstract: "the rule held because nobody had written such a call yet,
+     *   which is a different thing from the rule being enforced". What it did
+     *   not anticipate is the rule being enforced against ONE STORE while the
+     *   platform grew a second.
+     */
+    //   The SDK, should it ever be installed.
+    { name: 'imagekit deleteFile', pattern: /\bdeleteFile\s*\(/ },
+    { name: 'imagekit bulkDeleteFiles', pattern: /\bbulkDeleteFiles\s*\(/ },
+    { name: 'imagekit purgeCache', pattern: /\bpurgeCache\s*\(/ },
+    //   The REST API. api.imagekit.io is the MANAGEMENT host — deletion,
+    //   listing, updating — and nothing in this application has business
+    //   reaching it. Uploads go to upload.imagekit.io, delivery to
+    //   ik.imagekit.io, and neither is matched here.
+    { name: 'a REST call to the imagekit management API', pattern: /api\.imagekit\.io/ },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,6 +136,41 @@ describe('#675 — nothing in this application destroys an uploaded asset', () =
          */
         expect(FILES.length).toBeGreaterThan(500);
         expect(FILES.some((f) => f.endsWith(join('src', 'app', 'actions', 'upload.ts')))).toBe(true);
+    });
+
+    it('AND IT CAN SEE AN IMAGEKIT CALL WHEN THERE IS ONE', () => {
+        /*
+         *   The same control as the Cloudinary one below, for the store this
+         *   platform actually writes to now. Without it the ImageKit patterns
+         *   added above would be four assertions that cannot fail — which is
+         *   the state this whole file exists to refuse.
+         */
+        const uploaders = FILES.filter((f) => /upload\.imagekit\.io/.test(body(f)));
+
+        expect(uploaders.length).toBeGreaterThan(0);
+        expect(uploaders.map((f) => relative(ROOT, f))).toContain(join('src', 'lib', 'imagekit.ts'));
+    });
+
+    it('AND THE ONLY IMAGEKIT ENDPOINT REACHED IS THE UPLOAD ONE', () => {
+        /*
+         *   The catch-all, as for Cloudinary below: whatever this application
+         *   asks ImageKit to do is visible here, and adding a second endpoint
+         *   is a decision somebody has to write down.
+         *
+         *   ik.imagekit.io — the DELIVERY host — is deliberately not counted.
+         *   It appears in CSP, next.config and three URL allow-lists, none of
+         *   which is a call to anything.
+         */
+        const endpoints = new Set<string>();
+        for (const file of FILES) {
+            for (const m of body(file).matchAll(/(?:api|upload)\.imagekit\.io\/[^"'`\s)]*/g)) {
+                endpoints.add(m[0]);
+            }
+        }
+
+        expect([...endpoints]).toEqual([
+            'upload.imagekit.io/api/v1/files/upload',
+        ]);
     });
 
     it('AND IT CAN SEE A CLOUDINARY CALL WHEN THERE IS ONE', () => {
@@ -170,6 +227,10 @@ describe('#675 — nothing in this application destroys an uploaded asset', () =
         const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
 
         expect(Object.keys(deps)).not.toContain('cloudinary');
+        //   And the same for the store that replaced it. `imagekit.deleteFile`
+        //   is one import away the moment the package is present.
+        expect(Object.keys(deps)).not.toContain('imagekit');
+        expect(Object.keys(deps)).not.toContain('imagekitio-react');
     });
 });
 

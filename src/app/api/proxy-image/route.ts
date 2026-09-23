@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { getImageKitId } from "@/lib/imagekit";
 
 const ALLOWED_HOSTS = [
     "res.cloudinary.com",
@@ -69,7 +70,7 @@ function isAllowedUrl(raw: string): boolean {
         }
 
         if (isImageKit) {
-            const imageKitId = process.env.IMAGEKIT_ID || "Easysales";
+            const imageKitId = getImageKitId();
             return firstSegment === imageKitId;
         }
 
