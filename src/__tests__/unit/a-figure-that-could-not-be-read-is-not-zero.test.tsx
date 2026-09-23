@@ -350,9 +350,24 @@ describe('#753 — and the service is what names them', () => {
          */
         expect({ viaHelper, viaPush }).toEqual({ viaHelper: 16, viaPush: 2 });
 
-        //   And the one definition really is one. Two `figureReader(…)` call
-        //   sites — one per method — plus the declaration itself.
-        expect([...src.matchAll(/figureReader\(/g)]).toHaveLength(3);
+        /*
+         *   And the one definition really is one: the declaration plus its call
+         *   sites, THREE now rather than two.
+         *
+         *   The third is getModuleRegistrationStats' eight-scan fallback, where
+         *   every figure ended `?? 0` — so a count that TIMED OUT reached the
+         *   dashboard as nought, and eight modules were reported empty as fact.
+         *   That is the same defect #753 is about, found in a method #753 did
+         *   not reach; it uses this reader rather than a third copy of the
+         *   bookkeeping, which is what lifting the helper was for.
+         *
+         *   viaHelper stays 16: those eight go through a small adapter rather
+         *   than `= settled(…)` directly, because PostgREST answers
+         *   `{ count, error }` and not a settled promise. They have their own
+         *   guard — see eight-timeouts-became-eight-zeros, which fails if any
+         *   of the eight goes back to `?? 0`.
+         */
+        expect([...src.matchAll(/figureReader\(/g)]).toHaveLength(4);
         expect([...src.matchAll(/into\.push\(/g)]).toHaveLength(1);
     });
 

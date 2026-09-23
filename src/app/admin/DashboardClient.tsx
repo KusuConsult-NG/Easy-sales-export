@@ -626,6 +626,26 @@ export default function AdminDashboardPage() {
                                     <div className="p-8 text-center text-slate-500 text-sm flex items-center justify-center h-full" role="status">
                                         Registration breakdown unavailable — the account total could not be read.
                                     </div>
+                                ) : (moduleStats.unavailableFigures?.length ?? 0) > 0 ? (
+                                    /*
+                                     *   THE SAME RULE, ONE FIGURE DOWN. The
+                                     *   branch above holds the chart back when
+                                     *   the TOTAL could not be read; this one
+                                     *   does it when a SLICE could not.
+                                     *
+                                     *   A module whose count timed out arrived
+                                     *   here as 0 until now, and a pie draws a
+                                     *   zero slice and a slice nobody could
+                                     *   measure identically — while the ones
+                                     *   that WERE read get a larger share of
+                                     *   the circle to make up the difference.
+                                     *   So the wrong number is not even
+                                     *   confined to the module that failed.
+                                     */
+                                    <div className="p-8 text-center text-slate-500 text-sm flex items-center justify-center h-full" role="status">
+                                        Registration breakdown unavailable — {moduleStats.unavailableFigures!.length} of
+                                        the module counts could not be read. Retry shortly.
+                                    </div>
                                 ) : (
                                     <RegistrationPieChart
                                         stats={moduleStats}

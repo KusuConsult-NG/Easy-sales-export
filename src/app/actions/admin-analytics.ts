@@ -51,6 +51,21 @@ export interface ModuleRegistrationStats {
     exportHub: number;
     exportOnboarding: number;
     marketplace: number;
+    /**
+     * The figures above that could NOT be read, by name.
+     *
+     *   THE SAME CHANNEL platformOverview already uses, and for the reason
+     *   DashboardClient states about that one: "a bar of zero and a bar that
+     *   could not be drawn look identical on a chart, and only one of them is
+     *   a fact about the business."
+     *
+     *   Every number above used to end `?? 0`, so a count that TIMED OUT
+     *   reached the screen as nought — eight modules reported as empty, as
+     *   fact. ABSENT means no claim was made (an older payload, a cached
+     *   response), `[]` means everything was read, so callers must test
+     *   MEMBERSHIP and never emptiness.
+     */
+    unavailableFigures?: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
