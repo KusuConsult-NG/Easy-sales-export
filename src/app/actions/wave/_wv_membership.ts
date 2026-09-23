@@ -16,6 +16,7 @@ import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { toMillis } from "@/lib/firestore-serialize";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { latestApplication } from "@/lib/latest-application";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 
 /**
  * Check WAVE application status for current user
@@ -27,13 +28,34 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        //   THROUGH THE REQUEST MEMO. The layout's gate, this status check and
+        //   the sidebar's live-roles read all want this same row — see
+        //   lib/current-user-doc for what that cost, measured.
+        const userDoc = await readUserDocOnce(session.user.id);
+        const userData = userDoc.data;
         const registration = userData?.serviceRegistrations?.wave;
 
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for WAVE applications.
         let status = registration?.status;
+        /*
+         *   WHAT THE LEGACY FALLBACK AT THE BOTTOM CAN STILL FIND.
+         *
+         *   It re-asks `userId == <live id>` on a collection this function has
+         *   already queried on `userId IN <every id this person owns>` — a
+         *   STRICT SUPERSET, since ownedProfileIds always carries the live id
+         *   first and falls back to `[liveId]` when it cannot resolve. If the
+         *   superset came back empty and nothing was claimed since, the subset
+         *   is empty too, and asking is a round trip spent to be told so.
+         *
+         *   It is not simply deleted: the email branch below CLAIMS an
+         *   unowned application by writing `userId` onto it, so the fallback
+         *   can legitimately see a row the first query could not. These two
+         *   flags say which of those happened, and only the provably-empty
+         *   case skips.
+         */
+        let ownerQueryWasEmpty = false;
+        let foundAnApplication = false;
         if (status !== "approved") {
             let appDoc: any = null;
             //   EVERY PROFILE THIS PERSON OWNS. A member who applied, was
@@ -44,6 +66,8 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                 db.collection(COLLECTIONS.WAVE_APPLICATIONS), "userId",
                 await ownedProfileIds(session.user.id),
             ).get();
+
+            ownerQueryWasEmpty = appSnap.empty;
 
             if (!appSnap.empty) {
                 /**
@@ -125,6 +149,8 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                 }
             }
 
+            foundAnApplication = appDoc !== null;
+
             if (appDoc) {
                 const appData = appDoc.data()!;
                 if (appData.status === "approved") {
@@ -149,6 +175,14 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
         }
 
         // ── FALLBACK: Legacy Sync ──────
+        //   NOT ASKED WHEN THE ANSWER IS ALREADY KNOWN — see the note where
+        //   these flags are declared. This is the FIRST-TIME APPLICANT's path,
+        //   which is both the commonest one on this screen and the one the
+        //   owner's [slow-action] log shows at 1.7-3.6s.
+        if (ownerQueryWasEmpty && !foundAnApplication) {
+            return { error: null, success: true as const, data: { status: null } };
+        }
+
         const legacySnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
             .where('userId', '==', session.user.id)
             .get();

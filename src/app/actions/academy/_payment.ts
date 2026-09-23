@@ -28,6 +28,7 @@ import { isAmountAtLeast } from "@/lib/amount";
 import { paidButNotFulfilled } from "@/lib/paid-but-not-fulfilled";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
+import { readUserDocOnce } from "@/lib/current-user-doc";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -967,12 +968,19 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
 
         // Payment bypass — see src/lib/payment-bypass.ts for who and why.
         if (isPaymentBypassAccount(session.user.email)) {
+            //   THIS WRITES THE USER ROW, and its own invalidation drops the
+            //   request memo along with the 300-second profile cache — see
+            //   invalidateUserCache. Nothing in this request answers from a copy
+            //   taken before it.
             await autoProvisionZereAcademy(session.user.id, session.user.email);
             return { error: null, success: true as const, data: "paid" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        //   The module layout's gate read this same row moments ago. One read
+        //   per request now; see lib/current-user-doc for why this reader may
+        //   use the memo and checkModuleAccess deliberately may not.
+        const userDoc = await readUserDocOnce(session.user.id);
+        const userData = userDoc.data;
 
         //   isAcademyEntitled, not === "completed": an admin grant is recorded
         //   as "waived" now, and a learner an admin let in must not be sent to

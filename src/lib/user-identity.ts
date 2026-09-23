@@ -117,6 +117,36 @@ export function supersedingPointer(id: string, pointer: unknown): string | null 
 }
 
 /**
+ * Is `row` the live profile for `id` — is there nothing that supersedes it?
+ *
+ *   FOR A CALLER THAT ALREADY HOLDS THE ROW, so it need not pay to read it
+ *   again. `resolveActiveUserId` opens by reading `users/<id>` and asking this
+ *   exact question of the row it gets back; a caller that has just read that
+ *   same document can answer it for free.
+ *
+ *   `checkModuleAccess` is the case. It reads the caller's user document and
+ *   then, one branch later, called `ownedProfileIdsFor` — which composes the
+ *   FORWARD walk with the backward one and so re-read the very row it was
+ *   handed a moment earlier. One keyed read, on the gate every module layout
+ *   runs, on every page of every module.
+ *
+ *   THE RULE IS NOT COPIED, it is shared. `pointerOf` honours `_migratedTo`
+ *   AND `supabaseAuthId`, and #804's header is explicit that flattening that
+ *   difference silently changes what three modules mean by "superseded". A
+ *   caller reimplementing the test from the two field names is exactly how
+ *   that happens.
+ *
+ *   A MISSING ROW IS NOT LIVE, deliberately. The honest answer for a row we
+ *   cannot see is "do not know", and the caller this exists for treats "do not
+ *   know" by taking the full walk — which is what it does today. So the
+ *   unknown case degrades to current behaviour rather than to a shortcut.
+ */
+export function isLiveUserRow(id: string, row: UserRow | null): boolean {
+    if (!row) return false;
+    return supersedingPointer(id, pointerOf(row)) === null;
+}
+
+/**
  * Walk `_migratedTo` from `startId` to the live row.
  *
  * `readRow` is supplied by the caller because the six readers reach two

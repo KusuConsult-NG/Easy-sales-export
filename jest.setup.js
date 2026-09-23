@@ -220,10 +220,28 @@ jest.mock('@/lib/supabase-db', () => {
 
 // Mock Cache Invalidation
 global.mockInvalidateUserCache = jest.fn(() => Promise.resolve());
+//
+// DROPPING THE REQUEST MEMO IS PART OF WHAT THESE CALLS DO, so the stub does it
+// too. lib/current-user-doc memoises the caller's user document for the life of
+// one request, and the invariant that makes that safe is that every writer of
+// the row clears it — through exactly these functions. A stub that cleared
+// nothing would let the whole suite pass while a gate answered from a document
+// its own write had already superseded, which is #258's shape and the one thing
+// that memo must never do. The real module is asserted directly in
+// src/__tests__/unit/the-same-row-fetched-once-a-request.test.ts; this keeps the
+// 900-odd suites that reach it through a caller honest about the same rule.
+//
+// Required lazily: the factory may not close over an import, and the memo has
+// to be the one the module registry holds at CALL time.
 jest.mock('@/lib/cache-invalidation', () => ({
-    invalidateUserCache: (userId) => global.mockInvalidateUserCache(userId),
+    invalidateUserCache: (userId) => {
+        require('@/lib/current-user-doc').forgetUserDoc(userId);
+        return global.mockInvalidateUserCache(userId);
+    },
     invalidateAdminGlobalStats: jest.fn(),
-    invalidateServiceCache: jest.fn(),
+    invalidateServiceCache: jest.fn((userId) => {
+        require('@/lib/current-user-doc').forgetUserDoc(userId);
+    }),
 }));
 
 // Mock Audit Log

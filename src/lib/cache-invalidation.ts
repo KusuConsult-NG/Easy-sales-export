@@ -1,5 +1,6 @@
 import { deleteCache, CacheKeys } from './redis';
 import { revalidateTag, revalidatePath } from 'next/cache';
+import { forgetUserDoc } from './current-user-doc';
 
 export { deleteCache };
 
@@ -62,6 +63,26 @@ function safeRevalidateTag(tag: string) {
  */
 export async function invalidateUserCache(userId: string): Promise<void> {
     try {
+        /*
+         *   THE SAME ROW HAS TWO CACHED LIFETIMES, AND BOTH ARE CLEARED HERE.
+         *
+         *   `CacheKeys.userProfile` is the 300-second one session-guard serves
+         *   from. lib/current-user-doc is the other: a REQUEST-scoped memo that
+         *   stops one page render fetching the caller's user document four
+         *   times over, which #261's read meter measured it doing.
+         *
+         *   A writer that cleared only the long one would leave a document this
+         *   request has already corrected being served, from memory, to every
+         *   gate that runs after it — for the rest of that render. That is
+         *   shorter-lived than #692's five minutes and exactly as wrong, and it
+         *   is #258's shape: a gate answering from a document that was true a
+         *   moment ago.
+         *
+         *   SYNCHRONOUS AND FIRST, so it happens even when a delete below
+         *   fails, and a no-op outside a request scope.
+         */
+        forgetUserDoc(userId);
+
         await Promise.all([
             deleteCache(CacheKeys.userProfile(userId)),
             deleteCache(CacheKeys.userPermissions(userId)),
@@ -87,6 +108,9 @@ export async function invalidateUserCache(userId: string): Promise<void> {
  */
 export async function invalidateSellerCache(userId: string): Promise<void> {
     try {
+        //   Both lifetimes — see invalidateUserCache.
+        forgetUserDoc(userId);
+
         await Promise.all([
             deleteCache(`seller:status:${userId}`),
             deleteCache(CacheKeys.userProfile(userId)), // Also clear profile
@@ -110,6 +134,9 @@ export async function invalidateSellerCache(userId: string): Promise<void> {
  */
 export async function invalidateCooperativeCache(userId: string, cooperativeId?: string): Promise<void> {
     try {
+        //   Both lifetimes — see invalidateUserCache.
+        forgetUserDoc(userId);
+
         const keysToDelete: string[] = [
             `cooperative:member:${userId}`,
             CacheKeys.userProfile(userId),
@@ -140,6 +167,10 @@ export async function invalidateCooperativeCache(userId: string, cooperativeId?:
  */
 export async function invalidateServiceCache(userId: string, service?: string): Promise<void> {
     try {
+        //   Both lifetimes — see invalidateUserCache. This is the one the
+        //   module gates call after every grant they write.
+        forgetUserDoc(userId);
+
         // Always clear user profile (contains serviceRegistrations)
         await deleteCache(CacheKeys.userProfile(userId));
 

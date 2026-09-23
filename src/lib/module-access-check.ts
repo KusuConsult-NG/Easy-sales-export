@@ -32,7 +32,8 @@ import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-
 //   Academy's payment gate is for LEARNERS. See the carve-out in Layer 1.
 import { isAdmin } from "@/lib/role-utils";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
-import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { isLiveUserRow } from "@/lib/user-identity";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 
@@ -143,17 +144,56 @@ export async function checkModuleAccess(
          *   nothing. Past it, the resolution is two indexed queries per
          *   supersession level and is shared by every layer that follows.
          */
-        let ownedIdsCache: string[] | null = null;
-        const ownedIds = async (): Promise<string[]> => {
-            if (ownedIdsCache === null) ownedIdsCache = await ownedProfileIdsFor(userId);
-            return ownedIdsCache;
-        };
-
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) return false;
 
         const userData = userDoc.data()!;
+
+        /*
+         *   AND THE FORWARD HALF OF THAT RESOLUTION IS THE ROW ABOVE.
+         *
+         *   THE OWNER, a fourth time: "the app is still not fast, still taking
+         *   so long to load the pages." Measured with #261's read meter rather
+         *   than read off the source, one WAVE page draw costs ELEVEN
+         *   sequential round trips through its gates before the page fetches
+         *   anything of its own — and this was one of them.
+         *
+         *   `ownedProfileIdsFor` is `liveProfileId` composed with
+         *   `ownedProfileIds`: the FORWARD walk, then the backward search. Its
+         *   own header says so — "ONE EXTRA KEYED READ over ownedProfileIds,
+         *   and only that: a live id resolves to itself on the first hop."
+         *
+         *   That first hop reads `users/<userId>`. Which is the document
+         *   sitting in `userData`, read on the line above, on the gate that
+         *   every module layout runs on every page of every module.
+         *
+         *   SO IT IS ANSWERED FROM THE ROW WE HOLD, not asked again — and the
+         *   rule is imported rather than rewritten here, because `pointerOf`
+         *   honours `_migratedTo` AND `supabaseAuthId` and #804's header is
+         *   explicit about what copying that test out does.
+         *
+         *   THE OTHER BRANCH IS KEPT, AND IT IS NOT DEAD. Every caller today
+         *   passes `session.user.id`, which #490 makes live at sign-in — but a
+         *   session minted BEFORE an admin settles a duplicate carries an id
+         *   that has since been superseded. Narrowing a GATE on the strength of
+         *   "no caller does that" is how a member who paid gets told they have
+         *   not applied. The walk still runs for exactly that row, and only for
+         *   it.
+         *
+         *   STILL LAZY, AND STILL AT MOST ONCE. Layer 1 returns above this for
+         *   the 99% its comment describes, and the branches below that never
+         *   need the ids still pay nothing.
+         */
+        let ownedIdsCache: string[] | null = null;
+        const ownedIds = async (): Promise<string[]> => {
+            if (ownedIdsCache === null) {
+                ownedIdsCache = isLiveUserRow(userId, userData)
+                    ? await ownedProfileIds(userId)
+                    : await ownedProfileIdsFor(userId);
+            }
+            return ownedIdsCache;
+        };
 
         // Payment bypass — see src/lib/payment-bypass.ts for who and why.
         if (isPaymentBypassAccount(userData.email)) {
