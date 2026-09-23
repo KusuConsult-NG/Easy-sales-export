@@ -181,7 +181,14 @@ describe('the identity it matches on', () => {
     ])('%s (%s) is the reader that needed it', (rel: string) => {
         // Each of these reads the lowercased form through the shared reader.
         // The write above is what makes them able to find the row at all.
-        expect(code(rel)).toContain('applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email"');
+        //
+        //   WHITESPACE-INSENSITIVE, because the property is WHICH READER ASKS
+        //   WHICH QUESTION and not how the call happens to be wrapped. This
+        //   failed once on a change that only moved the call onto two lines —
+        //   a ratchet that breaks on formatting trains people to edit the
+        //   ratchet, which is how one stops describing the code.
+        const dense = code(rel).replace(/\s+/g, '');
+        expect(dense).toContain('applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS,"personalInfo.email"');
     });
 
     it('matches the phone in both the typed and the E.164 form', () => {
