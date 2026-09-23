@@ -125,11 +125,78 @@ export const EXPECTED_SCHEMA_OBJECTS: readonly SchemaObject[] = [
     { name: "idx_wallets_created_at", kind: "index", migration: "027_dedicated_table_created_at_indexes.sql" },
 ] as const;
 
+/**
+ * Declared by a migration, and deliberately NOT on any database.
+ *
+ *   FOUND BY THIS CHECK'S FIRST RUN AGAINST PRODUCTION, which is the good
+ *   news and the bad news in one. The audit reported two indexes missing.
+ *   They are not missing. A later migration decided, with measurements in its
+ *   header, that they should never exist — and the list above is PARSED FROM
+ *   THE MIGRATION FILES, which can see that 022 declares an index and cannot
+ *   see that 048 overruled it.
+ *
+ *   A check that cries wolf is a check that stops being read. #702's route
+ *   answers 200 on a condition no run can change for the same reason, and
+ *   build-deploy-sql's EXCLUDED list exists for exactly this distinction:
+ *   "so that 'not in EXPECTED' can mean 'somebody forgot' rather than 'it is
+ *   handled elsewhere'."
+ *
+ *   THE AUDIT DOES NOT ASK FOR THESE. The ratchet still does — they stay in
+ *   EXPECTED_SCHEMA_OBJECTS, because the parser must keep matching the files
+ *   byte for byte, and an omission that hides from the ratchet is how this
+ *   list would rot in the other direction.
+ */
+export interface AbsentByDesign {
+    name: string;
+    kind: "index" | "function";
+    /** The migration that declares it. */
+    declaredBy: string;
+    /** The migration that decided against it. */
+    overruledBy: string;
+    why: string;
+}
+
+export const DELIBERATELY_ABSENT: readonly AbsentByDesign[] = [
+    {
+        name: "idx_cm_membership_status",
+        kind: "index",
+        declaredBy: "022_jsonb_expression_indexes.sql",
+        overruledBy: "048_the_indexes_022_could_not_deploy.sql",
+        why: "NOTHING CAN EVER REACH IT. supabase-db resolves a filter field "
+           + "through FIELD_TO_COLUMN before it falls back to the JSONB path, and "
+           + "cooperative_members maps membershipStatus -> status, so the adapter "
+           + "emits `status = $1` and never `raw_data->>'membershipStatus' = $1`. "
+           + "An index nobody can use is not free: it is maintained on every "
+           + "INSERT and UPDATE to a table on the cooperative signup path.",
+    },
+    {
+        name: "idx_cm_user_id",
+        kind: "index",
+        declaredBy: "022_jsonb_expression_indexes.sql",
+        overruledBy: "048_the_indexes_022_could_not_deploy.sql",
+        why: "The same rule on the same table: cooperative_members maps "
+           + "userId -> user_id, so the adapter emits `user_id = $1`. The only "
+           + "raw SQL against this table anywhere reads raw_data->>'email', in a "
+           + "diagnostic script.",
+    },
+];
+
+const ABSENT_BY_DESIGN = new Set(DELIBERATELY_ABSENT.map((o) => o.name));
+
+/*
+ *   WHAT THE AUDIT ASKS THE DATABASE FOR: everything the migrations declare,
+ *   MINUS what a later migration decided against. Both halves are derived, so
+ *   neither can be forgotten when the other changes.
+ */
 export const EXPECTED_INDEXES: readonly string[] =
-    EXPECTED_SCHEMA_OBJECTS.filter((o) => o.kind === "index").map((o) => o.name);
+    EXPECTED_SCHEMA_OBJECTS
+        .filter((o) => o.kind === "index" && !ABSENT_BY_DESIGN.has(o.name))
+        .map((o) => o.name);
 
 export const EXPECTED_FUNCTIONS: readonly string[] =
-    EXPECTED_SCHEMA_OBJECTS.filter((o) => o.kind === "function").map((o) => o.name);
+    EXPECTED_SCHEMA_OBJECTS
+        .filter((o) => o.kind === "function" && !ABSENT_BY_DESIGN.has(o.name))
+        .map((o) => o.name);
 
 /** Which migration file to apply for a missing object. */
 export function migrationFor(name: string): string | null {

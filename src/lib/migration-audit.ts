@@ -6,7 +6,6 @@ import { whyRpcUnavailable, type RpcUnavailableCause } from "@/lib/rpc-unavailab
 import {
     EXPECTED_INDEXES,
     EXPECTED_FUNCTIONS,
-    EXPECTED_SCHEMA_OBJECTS,
     migrationFor,
 } from "@/lib/migration-manifest";
 
@@ -60,7 +59,13 @@ const AUDIT_FN = "missing_schema_objects";
 const AUDIT_MIGRATION = "052_missing_schema_objects.sql";
 
 export async function auditMigrations(): Promise<MigrationAudit> {
-    const expected = EXPECTED_SCHEMA_OBJECTS.length;
+    /*
+     *   WHAT IS ASKED FOR, not what the migrations declare. The two differ by
+     *   the objects a later migration overruled — see DELIBERATELY_ABSENT in
+     *   lib/migration-manifest, and the production run that found the
+     *   difference the hard way.
+     */
+    const expected = EXPECTED_INDEXES.length + EXPECTED_FUNCTIONS.length;
 
     let data: Array<{ object_name: string; object_kind: string }> | null = null;
     let error: { code?: string | null; message?: string | null } | null = null;
