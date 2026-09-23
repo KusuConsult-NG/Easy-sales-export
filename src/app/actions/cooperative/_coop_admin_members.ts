@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { requireSession } from "@/lib/session-guard";
@@ -794,7 +795,7 @@ export async function getStandardCooperativeMembersAction(
         state?: string;
         lga?: string;
         registry?: "all" | "legacy" | "regular";
-        sortBy?: "createdAt" | "gender";
+        sortBy?: "createdAt" | "gender" | "state";
         sortOrder?: "asc" | "desc";
     } = {}
 ): Promise<PaginatedAdminResponse<any>> {
@@ -829,7 +830,7 @@ export async function getStandardCooperativeMembersAction(
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
-        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all") || options.sortBy === "gender";
+        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all") || (options.sortBy === "gender" || options.sortBy === "state");
         const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
         const adminScope = await getAdminScope(session.user.id, liveRoles);
@@ -1058,7 +1059,7 @@ export async function getStandardCooperativeMembersAction(
             : (_hasMore ? nextCursor : undefined);
 
         let standardForms: any[] = [];
-        if (options.sortBy === "gender") {
+        if ((options.sortBy === "gender" || options.sortBy === "state")) {
             const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
             const userMap = new Map<string, any>();
             const userPromises = [];
@@ -1188,9 +1189,13 @@ export async function getStandardCooperativeMembersAction(
             //   Record rather than a literal, and an object spread of a
             //   Record drops its index signature — so `data.createdAt`,
             //   which is read here, stops resolving.
+            const byState = options.sortBy === "state";
             mapped.sort((a: any, b: any) => {
-                const ga = (a.user?.gender || "").toLowerCase();
-                const gb = (b.user?.gender || "").toLowerCase();
+                //   STATE collapses "Unknown" to blank and files blanks last;
+                //   GENDER is left exactly as it was — see lib/admin-row-sort.
+                const ga = byState ? adminSortKey(a.user?.state) : (a.user?.gender || "").toLowerCase();
+                const gb = byState ? adminSortKey(b.user?.state) : (b.user?.gender || "").toLowerCase();
+                if (byState && !ga !== !gb) return ga ? -1 : 1;
                 if (ga === gb) {
                     const aTime = a.data?.createdAt?.seconds ? a.data.createdAt.seconds * 1000 : new Date(a.data?.createdAt || 0).getTime();
                     const bTime = b.data?.createdAt?.seconds ? b.data.createdAt.seconds * 1000 : new Date(b.data?.createdAt || 0).getTime();

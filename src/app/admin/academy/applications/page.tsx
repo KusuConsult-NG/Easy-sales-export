@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { isAcademyEntitled } from "@/lib/academy-entitlement";
 import {
     FileText, CheckCircle, XCircle, Loader2, Filter,
@@ -385,7 +386,7 @@ export default function AdminAcademyApplicationsPage() {
     const [paymentFilter, setPaymentFilter] = useState<"all" | "completed" | "pending">("all");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [registryFilter, setRegistryFilter] = useState<"all" | "legacy" | "regular">("all");
-    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first" | "gender-asc" | "gender-desc">("date-desc");
+    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first" | "gender-asc" | "gender-desc" | "state-asc" | "state-desc">("date-desc");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
@@ -635,6 +636,14 @@ export default function AdminAcademyApplicationsPage() {
             const ga = a.gender || "";
             const gb = b.gender || "";
             return gb.localeCompare(ga);
+        }
+        if (sortBy === "state-asc" || sortBy === "state-desc") {
+            //   "Unknown" is what this list writes when it has no answer, and
+            //   it is not a state beginning with U — see lib/admin-row-sort.
+            const sa = adminSortKey(a.stateOfOrigin);
+            const sb = adminSortKey(b.stateOfOrigin);
+            if (!sa !== !sb) return sa ? -1 : 1;
+            return sortBy === "state-asc" ? sa.localeCompare(sb) : sb.localeCompare(sa);
         }
         return 0;
     });
@@ -887,6 +896,8 @@ export default function AdminAcademyApplicationsPage() {
                         <option value="name-desc">Name (Z-A)</option>
                         <option value="gender-asc">Gender (A-Z)</option>
                         <option value="gender-desc">Gender (Z-A)</option>
+                        <option value="state-asc">State (A-Z)</option>
+                        <option value="state-desc">State (Z-A)</option>
                         <option value="legacy-first">Legacy First</option>
                         <option value="regular-first">Regular First</option>
                     </select>

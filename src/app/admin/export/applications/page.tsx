@@ -434,6 +434,7 @@ export default function AdminExportApplicationsPage() {
                     >
                         <option value="createdAt">Sort by Date</option>
                         <option value="gender">Sort by Gender</option>
+                        <option value="state">Sort by State</option>
                     </select>
                     <select
                         value={filters.sortOrder || "desc"}

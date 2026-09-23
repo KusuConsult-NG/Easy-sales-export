@@ -40,7 +40,35 @@
  * precisely what happened to gender, whose sort the approved tab returns a
  * hundred lines before ever reaching.
  */
-export const IN_MEMORY_SORTS = ["gender", "name"] as const;
+export const IN_MEMORY_SORTS = ["gender", "name", "state"] as const;
+
+/**
+ * The values these lists write when they do not know the answer.
+ *
+ *   EVERY MODULE'S MAPPER WRITES A WORD, NOT A BLANK. `state:
+ *   mergedData.stateOfOrigin || "Unknown"` appears in the academy, export,
+ *   farm-nation and cooperative readers; /admin/users writes "" instead, and
+ *   #754's header is the record of how many members have their real details
+ *   under `serviceRegistrations.<module>` rather than on the user row.
+ *
+ *   A sort that treats "Unknown" as a value files those rows between Taraba
+ *   and Yobe, which is the one place an admin looking for Yobe will not think
+ *   to look. They are not a state beginning with U; they are the end of the
+ *   list, exactly as a blank is.
+ */
+const NOT_A_VALUE = new Set(["", "unknown", "n/a", "na", "none", "null", "undefined", "-"]);
+
+/**
+ * The sort key for a value, with every "we do not know" collapsed to blank.
+ *
+ * Exported because each module reader keeps its own tie-break — `submittedAt`
+ * here, `createdAt` there — so they cannot all call `sortResolvedRows`, but the
+ * rule about what counts as an answer must not be written seven times.
+ */
+export function adminSortKey(value: unknown): string {
+    const text = String(value ?? "").trim().toLowerCase();
+    return NOT_A_VALUE.has(text) ? "" : text;
+}
 
 export function sortIsInMemory(sortBy: string | undefined): boolean {
     return (IN_MEMORY_SORTS as readonly string[]).includes(sortBy ?? "");
@@ -61,7 +89,8 @@ function rowCreatedMs(row: any): number {
  * same name would otherwise swap places between two loads of the same page,
  * which an admin reads as the data changing underneath them.
  *
- * A BLANK KEY SORTS LAST IN BOTH DIRECTIONS. "" compares before every letter,
+ * A BLANK KEY SORTS LAST IN BOTH DIRECTIONS, and on the STATE sort "Unknown"
+ * counts as blank — see NOT_A_VALUE. "" compares before every letter,
  * so ascending would otherwise open on a block of rows whose name could not be
  * resolved — the least useful page of a list somebody opened in order to find a
  * name. Unknown is not a value at the start of the alphabet; it is the end of
@@ -75,10 +104,22 @@ export function sortResolvedRows(
     if (!sortIsInMemory(sortBy)) return;
 
     const dir = sortOrder === "asc" ? 1 : -1;
-    const keyOf = (r: any) =>
-        String((sortBy === "name" ? r?.user?.name : r?.user?.gender) ?? "")
+    /*
+     *   `user.state` sits beside `user.name` and `user.gender` in every one of
+     *   these mappers, which is why a third sort costs a line here rather than
+     *   a new shape. The blank-last rule below is what makes it usable at all —
+     *   see NOT_A_VALUE.
+     */
+    const keyOf = (r: any) => {
+        if (sortBy === "state") return adminSortKey(r?.user?.state);
+        //   NAME AND GENDER ARE LEFT EXACTLY AS THEY WERE. Collapsing
+        //   "Unknown" to blank would improve them too and nobody asked for it;
+        //   changing a sort an admin already relies on, inside a change that
+        //   adds a different one, is how a feature becomes a regression report.
+        return String((sortBy === "name" ? r?.user?.name : r?.user?.gender) ?? "")
             .trim()
             .toLowerCase();
+    };
 
     rows.sort((a, b) => {
         const ka = keyOf(a);

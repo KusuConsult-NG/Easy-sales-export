@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { html } from "@/lib/utils";
 import { ZodError } from "zod";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
@@ -629,7 +630,7 @@ async function _getStandardExportApplicationsAction(options: {
     lastDocId?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-    sortBy?: "createdAt" | "gender";
+    sortBy?: "createdAt" | "gender" | "state";
     sortOrder?: "asc" | "desc";
 } = {}): Promise<ActionResponse<any[]>> {
     try {
@@ -662,7 +663,7 @@ async function _getStandardExportApplicationsAction(options: {
         //   #535 The LIVE roles, not the token's — see lib/member-pii-visibility.
         const maySeeApplicantPii = await mayRevealMemberPii("export:approve_applications");
 
-        const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
+        const useMemoryPagination = (options.sortBy === "gender" || options.sortBy === "state") || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
 
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
@@ -837,7 +838,7 @@ async function _getStandardExportApplicationsAction(options: {
             : nextCursor;
 
         let standardForms: any[] = [];
-        if (options.sortBy === "gender") {
+        if ((options.sortBy === "gender" || options.sortBy === "state")) {
             const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
             const userMap = new Map<string, any>();
             const userPromises = [];
@@ -906,9 +907,13 @@ async function _getStandardExportApplicationsAction(options: {
 
             // Sort by gender
             const order = options.sortOrder || "desc";
+            const byState = options.sortBy === "state";
             mapped.sort((a, b) => {
-                const ga = (a.user?.gender || "").toLowerCase();
-                const gb = (b.user?.gender || "").toLowerCase();
+                //   STATE collapses "Unknown" to blank and files blanks last;
+                //   GENDER is left exactly as it was — see lib/admin-row-sort.
+                const ga = byState ? adminSortKey(a.user?.state) : (a.user?.gender || "").toLowerCase();
+                const gb = byState ? adminSortKey(b.user?.state) : (b.user?.gender || "").toLowerCase();
+                if (byState && !ga !== !gb) return ga ? -1 : 1;
                 return order === "asc" ? ga.localeCompare(gb) : gb.localeCompare(ga);
             });
 

@@ -480,6 +480,29 @@ const EXPECTED = [
              "not required for correctness, so a deploy landing before it is " +
              "slow rather than broken.",
     },
+    {
+        n: "051",
+        why: "idx_users_raw_created_at — the admin dashboard's user-growth " +
+             "chart, six month buckets at once, every one of which timed out " +
+             "in production: '[DashboardStats] user growth count failed ... " +
+             "canceling statement due to statement timeout'. 027 already put " +
+             "(created_at DESC) on this table, and it CANNOT serve this " +
+             "query: `createdAt` is in neither FIELD_TO_COLUMN['users'] nor " +
+             "NATIVE_COLUMNS['users'], so supabase-db emits " +
+             "raw_data->>'createdAt' and a btree on the column cannot answer " +
+             "a predicate on the JSON key. Mapping the field to the column " +
+             "instead would be the WRONG fix: _mapRow reads " +
+             "raw_data?.createdAt ?? created_at, so the key is authoritative " +
+             "and the chart would silently bucket by a different value from " +
+             "the one each row displays. Measured on 40,000 seeded users in " +
+             "a 107 MB table (production is 42,845 / 106 MB): seq scan " +
+             "10,000 buffers / 20.9 ms, bitmap index 1,115 buffers / 2.6 ms, " +
+             "and the planner's estimate for the bucket went from rows=200 " +
+             "to rows=4,065 against an actual 3,996 — an expression index " +
+             "carries statistics a bare JSONB expression does not. Changes " +
+             "no row and is not required for correctness, so a deploy " +
+             "landing before it is slow rather than broken.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

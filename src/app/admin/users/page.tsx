@@ -606,6 +606,7 @@ export default function AdminUsersPage() {
                             >
                                 <option value="createdAt">Sort by Date Joined</option>
                                 <option value="gender">Sort by Gender</option>
+                                <option value="state">Sort by State</option>
                             </select>
 
                             {/* Quick: Gender Filter */}

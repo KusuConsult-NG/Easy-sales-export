@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { adminSortKey } from "@/lib/admin-row-sort";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
@@ -182,7 +183,7 @@ async function _getStandardAcademyApplicationsAction(options: {
     status?: "pending" | "approved" | "rejected" | "under_review" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-    sortBy?: "createdAt" | "gender";
+    sortBy?: "createdAt" | "gender" | "state";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
     paymentStatus?: "completed" | "pending" | "all";
@@ -212,7 +213,7 @@ async function _getStandardAcademyApplicationsAction(options: {
         //   #535 The LIVE roles, not the token's — see lib/bank-details-visibility.
         const maySeeBankDetails = await mayRevealMemberPii("academy:approve_applications");
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all") || options.sortBy === "gender";
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all") || (options.sortBy === "gender" || options.sortBy === "state");
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         
@@ -416,7 +417,7 @@ async function _getStandardAcademyApplicationsAction(options: {
 
         // 2. Hydrate User Data for active page slice only
         let standardForms: any[] = [];
-        if (options.sortBy === "gender") {
+        if ((options.sortBy === "gender" || options.sortBy === "state")) {
             const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
             const userMap = new Map<string, any>();
             const userPromises = [];
@@ -521,9 +522,13 @@ async function _getStandardAcademyApplicationsAction(options: {
 
             // Sort by gender in-memory
             const order = options.sortOrder || "desc";
+            const byState = options.sortBy === "state";
             mapped.sort((a, b) => {
-                const ga = (a.user?.gender || "").toLowerCase();
-                const gb = (b.user?.gender || "").toLowerCase();
+                //   STATE collapses "Unknown" to blank and files blanks last;
+                //   GENDER is left exactly as it was — see lib/admin-row-sort.
+                const ga = byState ? adminSortKey(a.user?.state) : (a.user?.gender || "").toLowerCase();
+                const gb = byState ? adminSortKey(b.user?.state) : (b.user?.gender || "").toLowerCase();
+                if (byState && !ga !== !gb) return ga ? -1 : 1;
                 if (ga === gb) {
                     const aTime = a.submittedAt?.seconds ? a.submittedAt.seconds * 1000 : new Date(a.submittedAt || 0).getTime();
                     const bTime = b.submittedAt?.seconds ? b.submittedAt.seconds * 1000 : new Date(b.submittedAt || 0).getTime();
