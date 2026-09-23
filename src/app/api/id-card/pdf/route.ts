@@ -84,14 +84,27 @@ function isAllowedPhotoUrl(raw: string): boolean {
         const parsed = new URL(raw);
         if (parsed.protocol !== "https:") return false;
 
-        const hostAllowed = parsed.hostname === "res.cloudinary.com"
+        const isCloudinary = parsed.hostname === "res.cloudinary.com"
             || parsed.hostname.endsWith(".cloudinary.com");
-        if (!hostAllowed) return false;
+        const isImageKit = parsed.hostname === "ik.imagekit.io"
+            || parsed.hostname.endsWith(".imagekit.io");
 
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-        if (!cloudName) return false;
+        if (!isCloudinary && !isImageKit) return false;
 
-        return parsed.pathname.split("/").filter(Boolean)[0] === cloudName;
+        const firstSegment = parsed.pathname.split("/").filter(Boolean)[0];
+
+        if (isCloudinary) {
+            const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+            if (!cloudName) return false;
+            return firstSegment === cloudName;
+        }
+
+        if (isImageKit) {
+            const imageKitId = process.env.IMAGEKIT_ID || "Easysales";
+            return firstSegment === imageKitId;
+        }
+
+        return false;
     } catch {
         return false;
     }

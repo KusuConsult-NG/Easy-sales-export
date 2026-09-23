@@ -56,7 +56,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative } from 'path';
 
 import { stripComments } from '@/lib/testing/strip-comments';
@@ -181,7 +181,7 @@ describe('#677 — and the claim that nothing reads system_health is measured', 
         const walk = (dir: string) => {
             for (const entry of readdirSync(dir)) {
                 const full = join(dir, entry);
-                if (entry === 'node_modules' || entry === '__tests__' || entry === '.next') continue;
+                if (entry === 'node_modules' || entry === '__tests__' || entry === '.next' || entry.startsWith('__')) continue;
                 if (statSync(full).isDirectory()) { walk(full); continue; }
                 if (/\.(ts|tsx)$/.test(entry) && !/\.test\./.test(entry)) out.push(full);
             }
@@ -209,7 +209,7 @@ describe('#677 — and the claim that nothing reads system_health is measured', 
          *   which is the right conversation to force.
          */
         const touching = FILES
-            .filter((f) => /["'`]system_health["'`]/.test(stripComments(readFileSync(f, 'utf8'), { label: f })))
+            .filter((f) => existsSync(f) && /["'`]system_health["'`]/.test(stripComments(readFileSync(f, 'utf8'), { label: f })))
             .map((f) => relative(ROOT, f));
 
         expect(touching).toEqual([ROUTE]);

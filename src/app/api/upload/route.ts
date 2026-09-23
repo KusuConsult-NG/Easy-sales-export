@@ -7,6 +7,7 @@ import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
 import { assertAllowedFileType, cloudinaryResourceType, detectFileType, extensionForType, uploadSizeLimitBytes } from "@/lib/storage-admin";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
+import { isImageKitConfigured, uploadToImageKit } from "@/lib/imagekit";
 
 /**
  * What this route accepts, by CONTENT.
@@ -180,8 +181,8 @@ async function uploadHandler(request: NextRequest) {
         // message rather than as "uploads are switched off".
         const useLocalDisk = shouldUseLocalDiskStorage();
 
-        if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) {
-            logger.error("Upload failed: Cloudinary environment variables not configured");
+        if (!useLocalDisk && !isImageKitConfigured() && (!cloudName || !apiKey || !apiSecret)) {
+            logger.error("Upload failed: Storage environment variables (ImageKit / Cloudinary) not configured");
             return NextResponse.json(
                 { success: false, error: "Upload service is temporarily unavailable. Please try again later or contact support." },
                 { status: 503 }
@@ -297,6 +298,24 @@ async function uploadHandler(request: NextRequest) {
                 url,
                 filename: file.name,
                 path: publicId,
+            });
+        }
+
+        if (isImageKitConfigured()) {
+            const fileName = `${safeDocType}-${timestamp}${extension}`;
+            const uploadResult = await uploadToImageKit({
+                buffer,
+                fileName,
+                folder: safeFolderName,
+                mimeType: detectedType,
+                useUniqueFileName: false,
+            });
+            logger.info(`File uploaded to ImageKit: ${uploadResult.url}`);
+            return NextResponse.json({
+                success: true,
+                url: uploadResult.url,
+                filename: file.name,
+                path: uploadResult.filePath,
             });
         }
 

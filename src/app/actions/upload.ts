@@ -20,6 +20,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 import { detectFileType } from "@/lib/storage-admin";
+import { isImageKitConfigured, uploadToImageKit } from "@/lib/imagekit";
 
 // Keyed by the buffer's REAL content type (from detectFileType), not the
 // client-supplied `mimeType` form field this action used to trust outright.
@@ -104,7 +105,7 @@ export async function uploadDocumentAction(
         // missed, so the loan wizard's document step still 503'd.
         const useLocalDisk = shouldUseLocalDiskStorage();
 
-        if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) { logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
+        if (!useLocalDisk && !isImageKitConfigured() && (!cloudName || !apiKey || !apiSecret)) { logger.error("[uploadDocumentAction] Storage environment variables (ImageKit / Cloudinary) not configured");
             return { success: false as const, error: "Upload service is temporarily unavailable. Please try again later or contact support."};
         }
 
@@ -141,6 +142,18 @@ export async function uploadDocumentAction(
             const localUrl = await writeToLocalDisk(publicId, buffer);
             logger.info(`[uploadDocumentAction] Wrote to local disk (no Cloudinary configured): ${localUrl}`);
             return { error: null, success: true as const, url: localUrl, data: null };
+        }
+
+        if (isImageKitConfigured()) {
+            const uploadResult = await uploadToImageKit({
+                buffer,
+                fileName: `${safeName}-${timestamp}${extension}`,
+                folder: `documents/${userId}`,
+                mimeType: detectedType,
+                useUniqueFileName: false,
+            });
+            logger.info(`[uploadDocumentAction] Uploaded to ImageKit: ${documentType} for user ${userId}`);
+            return { error: null, success: true as const, url: uploadResult.url, data: null };
         }
 
         const crypto = await import("crypto");

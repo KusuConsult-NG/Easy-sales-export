@@ -198,6 +198,7 @@ const WHAT_BREAKS: Record<string, string> = {
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_KEY: 'every upload fails — marketplace media, certificates, export documents',
     CLOUDINARY_API_SECRET: 'every upload fails — marketplace media, certificates, export documents',
+    IMAGEKIT_PRIVATE_KEY: 'every upload fails — marketplace media, certificates, export documents',
 };
 
 /**
@@ -425,7 +426,21 @@ export function validateEnv(): EnvValidationResult {
 
     // Check production-required vars
     if (isProduction) {
+        const imageKitConfigured = Boolean(
+            process.env.IMAGEKIT_PRIVATE_KEY &&
+            (process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY || process.env.IMAGEKIT_PUBLIC_KEY) &&
+            (process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || process.env.IMAGEKIT_URL_ENDPOINT)
+        );
+
         for (const envVar of PRODUCTION_REQUIRED_ENV_VARS) {
+            // When ImageKit is configured, Cloudinary keys are not required for uploads
+            if (imageKitConfigured && (
+                envVar === 'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME' ||
+                envVar === 'CLOUDINARY_API_KEY' ||
+                envVar === 'CLOUDINARY_API_SECRET'
+            )) {
+                continue;
+            }
             if (!process.env[envVar]) {
                 missing.push(envVar);
             }

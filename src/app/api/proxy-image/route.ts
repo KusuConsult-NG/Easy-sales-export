@@ -15,6 +15,7 @@ import { requireSession } from "@/lib/session-guard";
 const ALLOWED_HOSTS = [
     "res.cloudinary.com",
     "cloudinary.com",
+    "ik.imagekit.io",
 ];
 
 /**
@@ -52,13 +53,27 @@ function isAllowedUrl(raw: string): boolean {
         );
         if (!hostAllowed) return false;
 
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-        // Fails closed rather than treating an unset variable as a match for
-        // whatever the first path segment happens to be.
-        if (!cloudName) return false;
+        const isCloudinary = parsed.hostname === "res.cloudinary.com"
+            || parsed.hostname.endsWith(".cloudinary.com");
+        const isImageKit = parsed.hostname === "ik.imagekit.io"
+            || parsed.hostname.endsWith(".imagekit.io");
 
         const firstSegment = parsed.pathname.split("/").filter(Boolean)[0];
-        return firstSegment === cloudName;
+
+        if (isCloudinary) {
+            const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+            // Fails closed rather than treating an unset variable as a match for
+            // whatever the first path segment happens to be.
+            if (!cloudName) return false;
+            return firstSegment === cloudName;
+        }
+
+        if (isImageKit) {
+            const imageKitId = process.env.IMAGEKIT_ID || "Easysales";
+            return firstSegment === imageKitId;
+        }
+
+        return false;
     } catch {
         return false;
     }
