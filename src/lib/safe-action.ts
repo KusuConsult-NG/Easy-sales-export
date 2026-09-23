@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { roundTripsSoFar, roundTripsSince } from "@/lib/round-trip-meter";
 import { logTelemetryAction } from "@/app/actions/telemetry";
 import { logObservabilityTrace } from "@/lib/logger-server";
 import { redactPii } from "@/lib/admin-pii";
@@ -207,6 +208,24 @@ const slowActionThresholdMs = (): number => {
  */
 async function reportingHowLongItTook<T>(actionName: string, fn: () => Promise<T>): Promise<T> {
     const startedAt = Date.now();
+    /*
+     *   WHAT THE ELAPSED NUMBER NEVER SAID.
+     *
+     *   This line has reported "took 1840ms" since #261 and could not say why.
+     *   The owner, after seven merged read-count fixes: "i noticed the app is
+     *   still slow. did you fix get to production or you dont know how to fix
+     *   it?" — and the honest answer was that this audit counted READS and
+     *   never measured TIME, so the one question that decides what to do next
+     *   could only be inferred:
+     *
+     *       IS IT SLOW BECAUSE IT ASKS TOO MANY TIMES,
+     *       OR BECAUSE EACH ASK COSTS TOO MUCH?
+     *
+     *   The tally is REQUEST-scoped and this reports per ACTION, so it is
+     *   taken as a delta around the call. See lib/round-trip-meter for what
+     *   one entry means and why a concurrent pair of actions splits oddly.
+     */
+    const readsBefore = roundTripsSoFar();
     try {
         return await fn();
     } finally {
@@ -214,7 +233,25 @@ async function reportingHowLongItTook<T>(actionName: string, fn: () => Promise<T
             const elapsedMs = Date.now() - startedAt;
             const threshold = slowActionThresholdMs();
             if (threshold > 0 && elapsedMs >= threshold) {
-                logger.warn(`[slow-action] ${actionName} took ${elapsedMs}ms`, { actionName, elapsedMs });
+                const db = roundTripsSince(readsBefore);
+                //   `appMs` is everything that was NOT waiting on the
+                //   database: rendering, session work, Redis, and any time
+                //   this container spent queueing. If it dominates, more
+                //   read-count work is the wrong answer.
+                const appMs = Math.max(0, elapsedMs - db.dbMs);
+                logger.warn(
+                    `[slow-action] ${actionName} took ${elapsedMs}ms `
+                    + `— ${db.reads} reads, ${db.dbMs}ms in the database `
+                    + `(slowest ${db.slowestMs}ms), ${appMs}ms elsewhere`,
+                    {
+                        actionName,
+                        elapsedMs,
+                        reads: db.reads,
+                        dbMs: db.dbMs,
+                        slowestReadMs: db.slowestMs,
+                        appMs,
+                    },
+                );
             }
         } catch {
             // An unreportable measurement is not a reason to fail the action.
