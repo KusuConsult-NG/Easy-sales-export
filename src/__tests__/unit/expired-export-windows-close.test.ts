@@ -419,6 +419,11 @@ describe('#196 — the premise, re-measured', () => {
             'backfill-missing-emails',
             'close-export-windows',
             'gdpr-purge',
+            //   The tenth. Nothing applied this repository's migrations
+            //   to production, so 050 and 051 sat unapplied for a day while the
+            //   screen 051 repairs read "could not be read". A deliberate edit,
+            //   as this list intends.
+            'migration-audit',
             'process-email-queue',
             'reconcile-fulfilment',
             'reconcile-paystack',

@@ -503,6 +503,29 @@ const EXPECTED = [
              "no row and is not required for correctness, so a deploy " +
              "landing before it is slow rather than broken.",
     },
+    {
+        n: "052",
+        why: "missing_schema_objects — the function that answers 'is the " +
+             "schema this code was written against the schema it is running " +
+             "against?', which nothing could answer. The day it was written: " +
+             "a `count users` fix merged at midday, the admin dashboard " +
+             "reading 'Total Users — could not be read' all afternoon, and " +
+             "the reason being that the fix had two halves. The app half " +
+             "shipped; the other half was 051, one CREATE INDEX, and nothing " +
+             "applies these migrations to production — not the Dockerfile, " +
+             "not deploy-production.yml, not a start script. CI runs them " +
+             "against a throwaway cluster, so every suite was green against a " +
+             "database that had all of them while the real one was missing " +
+             "two. Takes the names lib/migration-manifest expects and " +
+             "returns the ones pg_indexes and pg_proc do not have; " +
+             "api/cron/migration-audit answers 503 while any are missing, " +
+             "naming the files to paste. Reads catalogs only, writes " +
+             "nothing, and MUST come last of the additive steps so that its " +
+             "own first run reports on a database the rest of this file has " +
+             "already brought up to date. Its absence is the most " +
+             "informative answer it has: the audit reports cannot-tell and " +
+             "names this file.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
