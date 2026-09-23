@@ -16,7 +16,12 @@ import { registerCooperativeMemberAction } from "./_coop_registration";
 import { isAdmin } from "@/lib/admin-permissions";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { registrationProgressScore } from "@/lib/registration-progress";
-import { findCooperativeMemberRowForPerson } from "@/lib/cooperative-member-lookup";
+import {
+    findCooperativeMemberRowForPerson,
+    membersByEmailOnce,
+    forgetCooperativeMemberReads,
+} from "@/lib/cooperative-member-lookup";
+import { latestApplication } from "@/lib/latest-application";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { readUserDocOnce } from "@/lib/current-user-doc";
@@ -275,23 +280,36 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id);
         } else {
             if (session.user.email) {
-                const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                    .where("email", "==", session.user.email.toLowerCase())
-                    .limit(1)
-                    .get();
-                if (!emailQuery.empty) {
+                /*
+                 *   THE SAME QUESTION THE GATE ASKED, ASKED THE SAME WAY.
+                 *
+                 *   This bounded the query at `.limit(1)` and took whatever
+                 *   row came back; the gate above bounds it at
+                 *   APPLICATION_SCAN_LIMIT and takes the LATEST. So with more
+                 *   than one membership at an address the two could land on
+                 *   different rows — and a shape the gate does not issue
+                 *   cannot share the gate's round trip either.
+                 *
+                 *   Same bound, same choice, one read. The claim gate below is
+                 *   unchanged and still decides whether the row may be read at
+                 *   all.
+                 */
+                const emailQuery = await membersByEmailOnce(
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.email);
+                const latestByEmail = latestApplication(emailQuery.docs);
+                if (latestByEmail) {
                     // Same rule as the reader above: this branch feeds a healing
                     // path that writes the cooperative_member ROLE onto the user
                     // document, so adopting a stranger's membership here granted
                     // module access as well as visibility.
                     const mayClaim = await mayClaimMembershipByEmail(
                         db,
-                        { data: emailQuery.docs[0].data(), id: emailQuery.docs[0].id },
+                        { data: latestByEmail.data(), id: latestByEmail.id },
                         session.user.id,
                     );
                     if (mayClaim) {
-                        memberDocData = emailQuery.docs[0].data();
-                        memberRef = emailQuery.docs[0].ref;
+                        memberDocData = latestByEmail.data();
+                        memberRef = (latestByEmail as any).ref;
                     }
                 }
             }
@@ -306,6 +324,9 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
 
             // Heal the membership document with the userId if missing
             if (!memberDocData.userId && memberRef) {
+                //   A heal changes what the shared readers would answer —
+                //   see forgetCooperativeMemberReads.
+                forgetCooperativeMemberReads();
                 await memberRef.update({ userId: session.user.id });
                 logger.info(`[checkCooperativeStatus] Healed membership ${memberRef.id} with userId ${session.user.id}`);
             }
@@ -368,6 +389,8 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             if (memberDocData.onboardingCompleted && (derivedStatus === 'pending' || derivedStatus === 'under_review')) {
                 if (memberDocData.paymentStatus === 'completed') {
                     // Payment confirmed — heal immediately, no admin needed
+                    //   As above.
+                    forgetCooperativeMemberReads();
                     await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRef.id).update({
                         membershipStatus: 'active',
                         updatedAt: FieldValue.serverTimestamp(),

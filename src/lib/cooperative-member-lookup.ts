@@ -29,7 +29,120 @@
 
 import { ownedProfileIds, ownedProfileIdsFor, isSamePerson } from "@/lib/owned-profile-ids";
 import { isLiveUserRow, type UserRow } from "@/lib/user-identity";
+import { cache } from "react";
+
+import { filterByOwner } from "@/lib/owned-profile-ids";
+import { APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 import type { CooperativeTier } from "@/lib/cooperative-tiers";
+
+/**
+ * The cooperative_members reads one page draw makes more than once, made once.
+ *
+ *   THE OWNER: "fix the remaining three cooperative reads next."
+ *
+ *   #275 took a cooperatives page draw from FOURTEEN reads to ten and stopped
+ *   there, with a note naming what was left and why it needed its own change:
+ *   three reads of this collection that the module gate and the status action
+ *   each made, where only ONE was an identical query. These are the other two.
+ *
+ *       cooperative_members:doc     `.doc(userId)` — identical, memoised
+ *       cooperative_members:query   `userId IN <owned>` vs `userId == <id>`
+ *       cooperative_members:query   the two email queries, at different bounds
+ *
+ *   THE SECOND AND THIRD ARE NOT MEMO PROBLEMS, THEY ARE SHAPE PROBLEMS. Two
+ *   callers asking the same question in two different ways cannot share an
+ *   answer, so the shapes are made one — and in both cases the shape kept is
+ *   the GATE's, because the gate is the one that decides module access and
+ *   its bound is the one this codebase already reasoned about
+ *   (APPLICATION_SCAN_LIMIT).
+ *
+ *   The per-id `userId == <id> LIMIT 1` loop is gone. It issued one query PER
+ *   OWNED PROFILE; the owner-scoped query asks for all of them at once and is
+ *   the query the gate already ran. Precedence is unchanged — see the loop in
+ *   findCooperativeMemberRowForPerson, which still prefers a row keyed by an
+ *   id over a row merely carrying it, and an earlier owned id over a later
+ *   one.
+ *
+ * ── AND THE WRITES ──────────────────────────────────────────────────────────
+ *
+ *   Both the gate and the status action HEAL this collection — a missing
+ *   `userId`, a membershipStatus that payment has overtaken. Every one of
+ *   those calls `forgetCooperativeMemberReads`, or a reader later in the same
+ *   request would be handed the rows as they were before the heal. That is
+ *   #692 in a third collection, and the reason #275 would not do this as a
+ *   footnote.
+ */
+
+type Snap = { empty: boolean; docs: any[] };
+//   `any` deliberately: callers take `.ref` off this snapshot to heal the row
+//   it names, and narrowing the type here would hide that from them.
+type DocSnap = any;
+
+const requestScope = cache((): Map<string, Promise<any>> => new Map());
+
+function once<T>(key: string, read: () => Promise<T>): Promise<T> {
+    const scope = requestScope();
+
+    const inFlight = scope.get(key) as Promise<T> | undefined;
+    if (inFlight) return inFlight;
+
+    /*
+     *   `read()` MAY THROW BEFORE IT RETURNS A PROMISE — `.doc(id)` and
+     *   `filterByOwner` are ordinary calls, and a bad argument or a handle
+     *   that is not there throws where it stands. Without this wrapper that
+     *   throw escapes synchronously, so one caller gets an exception and the
+     *   next gets a promise for the same question. Callers should not have to
+     *   handle a read two ways.
+     */
+    const started = (async () => read())();
+
+    //   A FAILED READ MUST NOT BE REMEMBERED — see lib/current-user-doc. This
+    //   feeds a module gate, so a remembered rejection turns one transient
+    //   error into "not a member" for every later caller in the request.
+    void started.catch(() => { scope.delete(key); });
+
+    scope.set(key, started);
+    return started;
+}
+
+/** The member row keyed by `id`, read once per request. */
+export function memberDocOnce(membersCollection: any, id: string): Promise<DocSnap> {
+    return once(`doc:${id}`, () => membersCollection.doc(id).get());
+}
+
+/** Every member row filed under any of `ownedIds`, read once per request. */
+export function membersOwnedByOnce(membersCollection: any, ownedIds: string[]): Promise<Snap> {
+    const key = `owned:${[...ownedIds].sort().join(",")}`;
+    return once(key, () => filterByOwner(membersCollection, "userId", ownedIds)
+        .limit(APPLICATION_SCAN_LIMIT)
+        .get());
+}
+
+/**
+ * Member rows carrying `email`, read once per request.
+ *
+ * A candidate set, never an answer: `email` on an imported membership is not a
+ * field anybody authenticated as, so the caller that would CLAIM one puts it
+ * through `mayClaimMembershipByEmail` first.
+ */
+export function membersByEmailOnce(membersCollection: any, email: string): Promise<Snap> {
+    const normalized = email.toLowerCase().trim();
+    return once(`email:${normalized}`, () => membersCollection
+        .where("email", "==", normalized)
+        .limit(APPLICATION_SCAN_LIMIT)
+        .get());
+}
+
+/**
+ * Drop this request's memos of this collection.
+ *
+ * For a caller that has just HEALED a row — written `userId` onto it, or moved
+ * its membershipStatus — where a later reader in the same request would
+ * otherwise be served the set taken before the write.
+ */
+export function forgetCooperativeMemberReads(): void {
+    requestScope().clear();
+}
 
 /** The shape both loan doors need back: which row, and what is on it. */
 export interface CooperativeMemberRow {
@@ -50,15 +163,20 @@ export async function findCooperativeMemberRow(
 ): Promise<CooperativeMemberRow | null> {
     if (!userId) return null;
 
-    const byId = await membersCollection.doc(userId).get();
+    const byId = await memberDocOnce(membersCollection, userId);
     if (byId.exists) {
         return { id: byId.id ?? userId, data: byId.data() ?? {} };
     }
 
-    const byField = await membersCollection.where("userId", "==", userId).limit(1).get();
-    if (!byField.empty) {
-        const doc = byField.docs[0];
-        return { id: doc.id, data: doc.data() ?? {} };
+    //   THE OWNER-SCOPED QUERY, NARROWED IN MEMORY. This asked
+    //   `userId == <id> LIMIT 1` — one query per owned profile, and a shape
+    //   the gate above never issues. It asks the gate's question now and
+    //   filters, so the two share one round trip; `find` keeps the same
+    //   "first match wins" that LIMIT 1 had.
+    const byOwner = await membersOwnedByOnce(membersCollection, [userId]);
+    const match = byOwner.docs.find((d: any) => d.data()?.userId === userId);
+    if (match) {
+        return { id: match.id, data: match.data() ?? {} };
     }
 
     return null;
@@ -124,9 +242,23 @@ export async function findCooperativeMemberRowForPerson(
     const owned = isLiveUserRow(userId, liveRow ?? null)
         ? await ownedProfileIds(userId)
         : await ownedProfileIdsFor(userId);
-    for (const id of owned.length ? owned : [userId]) {
-        const row = await findCooperativeMemberRow(membersCollection, id);
-        if (row) return row;
+    const ids = owned.length ? owned : [userId];
+
+    //   ONE QUERY FOR EVERY PROFILE, not one per profile — and it is the query
+    //   the gate already ran, so the request pays for it once. The precedence
+    //   below is exactly what the per-id loop had: a row KEYED by an id beats
+    //   a row merely carrying it, and an earlier owned id beats a later one.
+    const byOwner = await membersOwnedByOnce(membersCollection, ids);
+
+    for (const id of ids) {
+        const byId = await memberDocOnce(membersCollection, id);
+        if (byId.exists) {
+            return { id: byId.id ?? id, data: byId.data() ?? {} };
+        }
+        const match = byOwner.docs.find((d: any) => d.data()?.userId === id);
+        if (match) {
+            return { id: match.id, data: match.data() ?? {} };
+        }
     }
     return null;
 }

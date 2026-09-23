@@ -298,11 +298,26 @@ describe('#345 — the ratchet: no loan door takes its savings from the caller',
         // Matching a membership on a free-text email is a CLAIM — #36. A
         // balance read must not perform one, or the fix to one hole opens
         // another.
-        const lookup = source('src/lib/cooperative-member-lookup.ts');
+        //
+        //   PER FUNCTION, NOT PER FILE. The module also holds the shared
+        //   request-scoped readers the walk is built on, and one of them IS an
+        //   email query — `membersByEmailOnce`, for the two callers that
+        //   already matched on email and were issuing it twice. It is a
+        //   candidate set that both of them still put through
+        //   mayClaimMembershipByEmail. What this test is about is the walk a
+        //   BALANCE READ performs, so it reads the walk.
+        const whole = source('src/lib/cooperative-member-lookup.ts');
+        const start = whole.indexOf('export async function findCooperativeMemberRow(');
+        const end = whole.indexOf('export async function membershipRefForPayment(');
+        expect(start).toBeGreaterThan(-1);
+        expect(end).toBeGreaterThan(start);
+        const lookup = whole.slice(start, end);
 
         expect(lookup).not.toContain('email');
-        expect(lookup).toContain('.doc(userId)');
-        expect(lookup).toContain('where("userId", "==", userId)');
+        //   Both keys, in order. The spellings changed when these reads became
+        //   shareable with the module gate; the walk did not.
+        expect(lookup).toContain('memberDocOnce(membersCollection');
+        expect(lookup).toMatch(/\.data\(\)\?\.userId === /);
     });
 });
 

@@ -245,7 +245,12 @@ describe('#488 — the forensic scan reads like the application, and still only 
         //   findCooperativeMemberRow takes no heal option and performs no
         //   write, which is why it is the right helper for a scan. Asserted so
         //   a future "helpful" repair inside the scan has to come past this.
-        const lookup = code('src/lib/cooperative-member-lookup.ts');
+        //
+        //   PER FUNCTION, NOT PER FILE, since the module gained a
+        //   request-scoped memo whose `scope.set(key, …)` is a Map write and
+        //   matched the file-wide pattern. Scoping it also makes the assertion
+        //   say what it means: THESE FUNCTIONS do not write.
+        const lookup = lookupFunctions();
 
         expect(lookup).not.toMatch(/\.update\(|\.set\(/);
     });
@@ -262,12 +267,40 @@ describe('#488 — the forensic scan reads like the application, and still only 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * The two functions the doors call, without the module around them.
+ *
+ * The assertions below are about what THE WALK does, and the module also holds
+ * the request-scoped readers that walk is built on. Reading the whole file
+ * made "this does not write" true of a Map and "this never says email" false
+ * because a sibling reader does.
+ */
+function lookupFunctions(): string {
+    const whole = code('src/lib/cooperative-member-lookup.ts');
+    const start = whole.indexOf('export async function findCooperativeMemberRow(');
+    const end = whole.indexOf('export async function membershipRefForPayment(');
+
+    //   A slice that found nothing would make every assertion below vacuous.
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    return whole.slice(start, end);
+}
+
 describe('#488 — the shared rule itself still does what the doors now trust it for', () => {
     it('IT WALKS BOTH KEYS — document id, then the userId field', () => {
-        const lookup = code('src/lib/cooperative-member-lookup.ts');
+        //   Both keys, and in that order. The spelling changed when the reads
+        //   became shareable with the module gate: the keyed read goes through
+        //   `memberDocOnce`, and the per-id `where("userId","==",id) LIMIT 1`
+        //   — a shape the gate never issued — became the gate's own
+        //   owner-scoped query, narrowed in memory. The WALK is unchanged and
+        //   its precedence is pinned behaviourally in
+        //   the-slowest-check-on-the-platform.test.ts.
+        const lookup = lookupFunctions();
 
-        expect(lookup).toContain('.doc(userId).get()');
-        expect(lookup).toContain('.where("userId", "==", userId)');
+        expect(lookup).toContain('memberDocOnce(membersCollection');
+        expect(lookup).toContain('membersOwnedByOnce(membersCollection');
+        expect(lookup).toMatch(/\.data\(\)\?\.userId === /);
     });
 
     it('AND RETURNS THE DOCUMENT ID, which is what a write needs', () => {
@@ -277,7 +310,7 @@ describe('#488 — the shared rule itself still does what the doors now trust it
         const lookup = code('src/lib/cooperative-member-lookup.ts');
 
         expect(lookup).toMatch(/id:\s*byId\.id/);
-        expect(lookup).toMatch(/id:\s*doc\.id/);
+        expect(lookup).toMatch(/id:\s*match\.id/);
     });
 
     it('and it still refuses to claim a row on an email match', () => {
@@ -285,7 +318,14 @@ describe('#488 — the shared rule itself still does what the doors now trust it
         //   on a free-text email is a CLAIM — that is how one account takes
         //   over another's savings — and belongs behind
         //   mayClaimMembershipByEmail, not inside a balance read.
-        const lookup = code('src/lib/cooperative-member-lookup.ts');
+        //   PER FUNCTION, as above. The module now also exports
+        //   `membersByEmailOnce`, a shared READER for the two callers that
+        //   already matched on email — the gate and the status action — so
+        //   they stop issuing it twice. It is a candidate set, not an answer,
+        //   and both callers still put it through mayClaimMembershipByEmail.
+        //   What must never happen is THESE functions reaching an email row,
+        //   because the doors treat their result as already proven.
+        const lookup = lookupFunctions();
 
         expect(lookup).not.toContain('"email"');
     });

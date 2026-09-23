@@ -174,7 +174,12 @@ describe('and the member walk is the shared one everywhere', () => {
 
         const matchers = execSync(
             `grep -rl 'COLLECTIONS.COOPERATIVE_MEMBERS' src --include=*.ts --include=*.tsx `
-            + `| xargs grep -l 'where("email", "=="' || true`,
+            //   BOTH SPELLINGS. The gate and the status action issued this
+            //   query inline until they began sharing one read of it, and a
+            //   scan that knew only the literal stopped seeing the biggest
+            //   door on the list the day it was tidied. Any future caller of
+            //   the shared reader is caught here as well.
+            + `| xargs grep -l -e 'where("email", "=="' -e 'membersByEmailOnce(' || true`,
             { encoding: 'utf8' },
         ).trim().split('\n').filter(Boolean)
             .filter((f: string) => !f.includes('__tests__'));
@@ -208,7 +213,12 @@ describe('and the member walk is the shared one everywhere', () => {
         const { execSync } = require('child_process');
         const matchers = execSync(
             `grep -rl 'COLLECTIONS.COOPERATIVE_MEMBERS' src --include=*.ts --include=*.tsx `
-            + `| xargs grep -l 'where("email", "=="' || true`,
+            //   BOTH SPELLINGS. The gate and the status action issued this
+            //   query inline until they began sharing one read of it, and a
+            //   scan that knew only the literal stopped seeing the biggest
+            //   door on the list the day it was tidied. Any future caller of
+            //   the shared reader is caught here as well.
+            + `| xargs grep -l -e 'where("email", "=="' -e 'membersByEmailOnce(' || true`,
             { encoding: 'utf8' },
         ).trim().split('\n').filter(Boolean)
             .filter((f: string) => !f.includes('__tests__'));
