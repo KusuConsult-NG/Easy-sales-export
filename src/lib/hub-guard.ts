@@ -146,7 +146,70 @@ export async function requireHubRegistration() {
                 if (userData?.requiresPasswordChange) {
                     redirectTo = "/auth/reset-legacy-password";
                 } else {
-                    console.warn(`[HubGuard] Redirecting user ${sessionResult.session.user.id} - Profile is incomplete.`);
+                    /*
+                     *   "PROFILE IS INCOMPLETE" IS NOT THE WHOLE TRUTH FOR A
+                     *   SPLIT ACCOUNT, AND THAT IS THE CASE THAT STRANDS PEOPLE.
+                     *
+                     *   The owner's log, one member over nine minutes:
+                     *
+                     *     SPLIT ACCOUNT (#888): 2 profile rows share <address>.
+                     *       Signed in as bffe635d… ; the other row(s) —
+                     *       KzQmr40lYtSR9CIIWTU8ca8KBKv1 — are not consulted
+                     *     [HubGuard] Redirecting user bffe635d… - Profile is
+                     *       incomplete.                              (x5)
+                     *
+                     *   Those two ids are a Supabase UUID and a Firebase uid:
+                     *   a migration that never linked the rows with
+                     *   `_migratedTo`. #542 taught this guard to WALK that
+                     *   pointer, and a split account is precisely the shape
+                     *   where there is no pointer to walk — so the walk
+                     *   correctly stops on the signed-in row, correctly finds
+                     *   no `profileComplete`, and says so.
+                     *
+                     *   THE LINE IS TRUE AND UNACTIONABLE. The member's
+                     *   finished profile may be sitting on the row nobody
+                     *   consulted, and the operator can only learn that by
+                     *   correlating with a sign-in line from minutes earlier.
+                     *   Same class as #716 and lib/rpc-unavailable: a message
+                     *   that cannot tell two states apart reports the one that
+                     *   reads as a fact.
+                     *
+                     *   WHAT THIS DELIBERATELY DOES NOT DO IS LET THEM IN.
+                     *   #888 refuses that in as many words — "unioning roles
+                     *   across rows would grant whatever the most privileged
+                     *   duplicate holds, a privilege decision about real
+                     *   accounts, made unattended" — and reconciliation is a
+                     *   person's job at /admin/forensics/duplicates. This makes
+                     *   the condition visible so they know to, which is what
+                     *   #888 says the detection is for.
+                     *
+                     *   COST: one indexed lookup (idx_users_email, migration
+                     *   036), ONLY on the path that is already terminal — this
+                     *   request ends in a redirect either way. The admitted
+                     *   path above returns without paying it.
+                     */
+                    const uid = sessionResult.session.user.id;
+                    let siblings: string[] = [];
+                    try {
+                        const address = String(userData?.email ?? sessionResult.session.user.email ?? "");
+                        if (address) {
+                            const { findProfilesByEmail } = await import("@/lib/profile-lookup");
+                            const { rows } = await findProfilesByEmail(address);
+                            siblings = rows.map((r) => r.id).filter((id) => id !== uid);
+                        }
+                    } catch {
+                        //   A diagnostic must never decide the redirect. The
+                        //   member is going to /hub/register either way.
+                    }
+
+                    console.warn(
+                        siblings.length > 0
+                            ? `[HubGuard] Redirecting user ${uid} - profile is incomplete ON THE ROW THAT `
+                              + `SIGNED IN, and this is a SPLIT ACCOUNT (#888): ${siblings.length} other row(s) `
+                              + `share this address — ${siblings.join(", ")}. A finished profile on one of those `
+                              + `is not read here, deliberately. Reconcile at /admin/forensics/duplicates.`
+                            : `[HubGuard] Redirecting user ${uid} - Profile is incomplete.`,
+                    );
                     shouldRedirect = true;
                 }
             }

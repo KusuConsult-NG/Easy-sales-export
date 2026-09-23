@@ -348,3 +348,112 @@ describe('#366 — the sixteen layouts this guards', () => {
         }
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#888 — and it says WHY, when the reason is a split account', () => {
+    /**
+     *   THE OWNER: "fix the hubguard loop for bffe635d".
+     *
+     *   Their log, one member across nine minutes:
+     *
+     *     SPLIT ACCOUNT (#888): 2 profile rows share <address>. Signed in as
+     *       bffe635d-… ; the other row(s) — KzQmr40lYtSR9CIIWTU8ca8KBKv1 —
+     *       are not consulted
+     *     [HubGuard] Redirecting user bffe635d-… - Profile is incomplete.  (x5)
+     *
+     *   A Supabase UUID and a Firebase uid: a migration that never linked the
+     *   two rows with `_migratedTo`. #542 taught this guard to WALK that
+     *   pointer, and a split is exactly the shape with no pointer to walk — so
+     *   the walk correctly stops on the signed-in row and correctly finds no
+     *   `profileComplete`.
+     *
+     *   IT IS NOT AN INFINITE REDIRECT. /hub/register forwards to /profile,
+     *   and /profile is not behind this guard. It is a person who cannot get
+     *   anywhere, which the log could not explain: the line is true and
+     *   unactionable, because the finished profile may be on the row nobody
+     *   read and the operator can only learn that by correlating with a
+     *   sign-in line from minutes earlier.
+     *
+     *   LETTING THEM IN IS REFUSED, and not by me: #888 says unioning across
+     *   rows "would grant whatever the most privileged duplicate holds — a
+     *   privilege decision about real accounts, made unattended". The rows are
+     *   reconciled by a person. This makes the condition visible so they know
+     *   to, which is what #888 says the detection is for.
+     */
+    const warnings: string[] = [];
+    let warnSpy: any;
+
+    beforeEach(() => {
+        warnings.length = 0;
+        warnSpy = jest.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+            warnings.push(args.map(String).join(' '));
+        });
+    });
+
+    afterEach(() => warnSpy?.mockRestore());
+
+    const asSplitAccount = () => {
+        //   Two rows, one address. The signed-in one is the thin migration row;
+        //   the finished profile is on the sibling, which is never consulted.
+        store.seed('users', 'member-1', { email: 'shared@example.com' });
+        store.seed('users', 'legacy-firebase-uid', {
+            email: 'shared@example.com', profileComplete: true, phone: '08030000000',
+        });
+        (global as any).mockRequireSession.mockResolvedValue({
+            session: { user: { id: 'member-1', roles: ['general_user'], email: 'shared@example.com' } },
+            error: null,
+        });
+    };
+
+    it('NAMES THE SPLIT AND THE ROW IT DID NOT READ', async () => {
+        asSplitAccount();
+
+        expect(await outcome()).toEqual({ redirectedTo: '/hub/register' });
+
+        const line = warnings.find((w) => w.includes('[HubGuard]')) ?? '';
+        expect(line).toContain('SPLIT ACCOUNT');
+        expect(line).toContain('legacy-firebase-uid');
+        expect(line).toContain('/admin/forensics/duplicates');
+    });
+
+    it('STILL REDIRECTS — the diagnostic does not decide who gets in', async () => {
+        /*
+         *   The load-bearing restraint. A finished profile sits on the sibling
+         *   row in this fixture, and it must NOT admit them: #888 refuses that
+         *   decision unattended, and a guard that quietly started honouring an
+         *   email match would be the widening this codebase keeps finding.
+         */
+        asSplitAccount();
+
+        expect(await outcome()).toEqual({ redirectedTo: '/hub/register' });
+    });
+
+    it('and an ordinary incomplete profile keeps the plain wording', async () => {
+        //   One row, no sibling. The new branch must not relabel every
+        //   incomplete account as a split.
+        store.seed('users', 'member-1', { email: 'member-1@example.com' });
+
+        expect(await outcome()).toEqual({ redirectedTo: '/hub/register' });
+
+        const line = warnings.find((w) => w.includes('[HubGuard]')) ?? '';
+        expect(line).toContain('Profile is incomplete');
+        expect(line).not.toContain('SPLIT ACCOUNT');
+    });
+
+    it('AND AN ADMITTED MEMBER NEVER PAYS FOR THE LOOKUP', async () => {
+        /*
+         *   The cost assertion. This guard wraps sixteen layouts, so a query
+         *   added to its hot path is a query on every page of every module.
+         *   The email lookup sits AFTER the admitted return, on a request that
+         *   was already ending in a redirect.
+         */
+        store.seed('users', 'member-1', { profileComplete: true, email: 'member-1@example.com' });
+        store.reads.length = 0;
+
+        expect(await outcome()).toEqual({ returned: true });
+
+        const emailQueries = store.reads.filter((r) => r.collection === 'users' && r.id === null);
+        expect({ emailQueriesOnTheAdmittedPath: emailQueries.length })
+            .toEqual({ emailQueriesOnTheAdmittedPath: 0 });
+    });
+});
