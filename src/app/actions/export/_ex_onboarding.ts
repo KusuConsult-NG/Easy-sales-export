@@ -29,6 +29,9 @@ import { exportOnboardingSchema } from "@/lib/types/export-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { latestApplication } from "@/lib/latest-application";
 import { registerStatusForExportApplication } from "@/lib/export-registration-status";
+import { readUserDocOnce } from "@/lib/current-user-doc";
+import { claimableByEmail } from "@/lib/claimable-application";
+import { applicationsTypedTo, forgetApplicationReads } from "@/lib/application-request-reads";
 
 export async function submitExportOnboardingAction(
     prevState: any,
@@ -227,10 +230,32 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        //   THROUGH THE REQUEST MEMO, as WAVE, Academy, Farm Nation and the
+        //   module gate already are. Whatever else in the same request wants
+        //   this row reads it once between them — see lib/current-user-doc.
+        const userDoc = await readUserDocOnce(session.user.id);
+        const userData = userDoc.data;
 
         let status = userData?.serviceRegistrations?.export?.status;
+
+        /*
+         *   WHAT THE LEGACY FALLBACK AT THE BOTTOM CAN STILL FIND.
+         *
+         *   It re-asks `userId == <live id>` on a collection this function has
+         *   already queried on `userId IN <every id this person owns>` — a
+         *   STRICT SUPERSET, since ownedProfileIds always carries the live id
+         *   first and falls back to `[liveId]` when it cannot resolve. If the
+         *   superset came back empty and nothing was claimed since, the subset
+         *   is empty too, and asking is a round trip spent to be told so.
+         *
+         *   It is not simply deleted: the applicationId and email branches
+         *   below CLAIM an application by writing `userId` onto it, so the
+         *   fallback can legitimately see a row the first query could not.
+         *   These two flags say which of those happened, and only the
+         *   provably-empty case skips. Same shape, same names, as WAVE's copy.
+         */
+        let ownerQueryWasEmpty = false;
+        let foundAnApplication = false;
 
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for Export applications.
@@ -244,6 +269,8 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
             const applicantIds = await ownedProfileIds(session.user.id);
             const appSnap = await filterByOwner(
                 db.collection(COLLECTIONS.EXPORT_APPLICATIONS), "userId", applicantIds).get();
+
+            ownerQueryWasEmpty = appSnap.empty;
 
             if (!appSnap.empty) {
                 /**
@@ -316,16 +343,33 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                  */
                 const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
                 if (userEmail) {
-                    const emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                        .where("userEmail", "==", userEmail)
-                        .limit(5)
-                        .get();
+                    /*
+                     *   THE SHARED RULE, AND THE SHARED READ.
+                     *
+                     *   This hand-rolled `.find(d => !d.data()?.userId)` was
+                     *   the right rule — defect 2 closed — written out rather
+                     *   than imported, and it differed from the gate in one
+                     *   way that mattered: `.limit(5)` against the gate's
+                     *   APPLICATION_SCAN_LIMIT. So an applicant whose first
+                     *   five matches were all claimed was found by the gate,
+                     *   which let them in, and NOT by this action, which told
+                     *   them they had not applied. Two answers to one
+                     *   question, from two copies of one rule.
+                     *
+                     *   Same bound and the same helper now, which also makes
+                     *   the query identical to the gate's — so the gate above
+                     *   and this action pay for it once between them.
+                     */
+                    const emailQuery = await applicationsTypedTo(
+                        COLLECTIONS.EXPORT_APPLICATIONS, "userEmail", userEmail);
 
-                    const unclaimed = emailQuery.docs.find(d => !d.data()?.userId);
+                    const { claimable: unclaimed } = claimableByEmail(emailQuery.docs);
 
                     if (unclaimed) {
                         appDoc = unclaimed;
-                        await unclaimed.ref.update({ userId: session.user.id });
+                        await (unclaimed as any).ref.update({ userId: session.user.id });
+                        //   The owner-scoped query would answer differently now.
+                        forgetApplicationReads();
                     } else if (!emailQuery.empty) {
                         logger.warn(
                             `[checkExportStatus] ${emailQuery.docs.length} application(s) match ` +
@@ -354,9 +398,19 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                     status = registerStatusForExportApplication(appData.status);
                 }
             }
+
+            foundAnApplication = appDoc !== null;
         }
 
         if (status) { return status;
+        }
+
+        //   NOT ASKED WHEN THE ANSWER IS ALREADY KNOWN — see the note on the
+        //   flags above. This was the sixth of the six reads the meter counted
+        //   on the path an applicant with nothing filed takes, which is the
+        //   commonest visitor this screen has.
+        if (ownerQueryWasEmpty && !foundAnApplication) {
+            return null;
         }
 
         // ── FALLBACK: Legacy Sync ──────

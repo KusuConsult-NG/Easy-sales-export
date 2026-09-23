@@ -31,10 +31,10 @@ import { ownedProfileIds, filterByOwner } from "@/lib/owned-profile-ids";
 import { readUserDocOnce } from "@/lib/current-user-doc";
 import { claimableByEmail } from "@/lib/claimable-application";
 import {
-    academyApplicationsOwnedBy,
-    academyApplicationsTypedTo,
-    completedAcademyRegistrationFor,
-} from "@/lib/academy-request-reads";
+    applicationsOwnedBy,
+    applicationsTypedTo,
+    completedPaymentFor,
+} from "@/lib/application-request-reads";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -1006,7 +1006,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         //   superseded reads as never having paid, and is asked to pay again.
         //   SHARED WITH checkAcademyStatusAction, which /academy/application
         //   runs beside this one — identical query, one round trip.
-        const paymentsSnap = await completedAcademyRegistrationFor(session.user.id);
+        const paymentsSnap = await completedPaymentFor(session.user.id, "academy_registration");
 
         if (!paymentsSnap.empty) {
             return { error: null, success: true as const, data: "paid" };
@@ -1014,7 +1014,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
 
         // ── AUTHORITATIVE FALLBACK 2: Application Payment Status ─────────
         //   SHARED, as above.
-        const appSnap = await academyApplicationsOwnedBy(session.user.id);
+        const appSnap = await applicationsOwnedBy(COLLECTIONS.ACADEMY_APPLICATIONS, session.user.id);
 
         if (!appSnap.empty) {
             const hasPaidApp = appSnap.docs.some(doc => isAcademyEntitled(doc.data().paymentStatus));
@@ -1032,7 +1032,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
              *   Only a row nobody owns may be read. Same helper as the other
              *   five doors — see lib/claimable-application.
              */
-            const typed = await academyApplicationsTypedTo(userData.email);
+            const typed = await applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", userData.email);
             const { claimable } = claimableByEmail(typed.docs);
             if (claimable && isAcademyEntitled(claimable.data()?.paymentStatus)) {
                 return { error: null, success: true as const, data: "paid" };
