@@ -520,9 +520,24 @@ describe('Layer 2.8 — an approved WAVE application', () => {
         expect(user?.serviceRegistrations?.wave?.status).toBe('approved');
     });
 
-    it('found by userEmail, and failing that by email', async () => {
-        // WAVE records the address under two different names depending on which
-        // form wrote it. Both are tried, in order.
+    it('found by userEmail — but NOT by the `email` the applicant typed', async () => {
+        /*
+         *   THIS TEST USED TO ASSERT THE OPPOSITE OF ITS SECOND HALF, and its
+         *   comment explained why: "WAVE records the address under two
+         *   different names depending on which form wrote it. Both are tried,
+         *   in order."
+         *
+         *   They are not the same kind of address. `userEmail` is written from
+         *   session.user.email at submission (_wv_applications.ts) and is the
+         *   address the account authenticated as. `email` is the OPTIONAL field
+         *   on the application form, spread onto the document from
+         *   validatedData — so an applicant who typed somebody else's address
+         *   and was approved handed that person this module, and the gate wrote
+         *   the role to make it permanent.
+         *
+         *   _checkWaveStatusAction was narrowed against exactly this and the
+         *   gate was not. See lib/claimable-application.
+         */
         store.seed(COLLECTIONS.USERS, UID, { email: 'wave@example.com' });
         store.seed(COLLECTIONS.WAVE_APPLICATIONS, 'w-1',
             { status: 'approved', userEmail: 'wave@example.com' });
@@ -532,7 +547,7 @@ describe('Layer 2.8 — an approved WAVE application', () => {
         store.seed(COLLECTIONS.USERS, UID, { email: 'wave@example.com' });
         store.seed(COLLECTIONS.WAVE_APPLICATIONS, 'w-2',
             { status: 'approved', email: 'wave@example.com' });
-        expect(await access(UID, [], 'wave')).toBe(true);
+        expect(await access(UID, [], 'wave')).toBe(false);
     });
 
     it('and a rejected application does not', async () => {
@@ -549,10 +564,22 @@ describe('Layer 2.9 — an approved export application', () => {
         expect(await access(UID, [], 'export')).toBe(true);
     });
 
-    it('found by the nested profile email', async () => {
+    it('NOT found by the nested profile email, which arrives from an import', async () => {
+        //   As with WAVE's `email` above: `profile.email` carries no guarantee
+        //   that anybody authenticated as it. `userEmail` does, and Export
+        //   writes it on every application (_ex_onboarding.ts:160).
         store.seed(COLLECTIONS.USERS, UID, { email: 'exporter@example.com' });
         store.seed(COLLECTIONS.EXPORT_APPLICATIONS, 'e-2',
             { status: 'approved', profile: { email: 'exporter@example.com' } });
+        expect(await access(UID, [], 'export')).toBe(false);
+    });
+
+    it('but IS found by userEmail when nobody owns it', async () => {
+        //   The narrowing above must not become a deletion — the legacy route
+        //   this fallback exists for still works.
+        store.seed(COLLECTIONS.USERS, UID, { email: 'exporter@example.com' });
+        store.seed(COLLECTIONS.EXPORT_APPLICATIONS, 'e-3',
+            { status: 'approved', userEmail: 'exporter@example.com' });
         expect(await access(UID, [], 'export')).toBe(true);
     });
 });

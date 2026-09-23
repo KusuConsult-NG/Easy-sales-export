@@ -32,6 +32,7 @@ import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-
 //   Academy's payment gate is for LEARNERS. See the carve-out in Layer 1.
 import { isAdmin } from "@/lib/role-utils";
 import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
+import { claimableByEmail } from "@/lib/claimable-application";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
@@ -754,14 +755,47 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
+                /*
+                 *   HALF THE RULE HERE, AND THE HALF THAT IS MISSING IS MISSING
+                 *   FROM THE DATA, NOT FROM THE CHECK.
+                 *
+                 *   The other three application layers drop their typed-address
+                 *   query and keep `userEmail`, which is written from
+                 *   `session.user.email` at submission. AN ACADEMY APPLICATION
+                 *   HAS NO SUCH FIELD — nothing under src/app/actions/academy
+                 *   writes `userEmail` at all — so `personalInfo.email`, typed
+                 *   on the form, is the only address on the row. Deleting this
+                 *   query would not narrow the rule; it would delete the
+                 *   email route outright and lock out every learner whose
+                 *   application predates their account.
+                 *
+                 *   SO DEFECT 2 IS CLOSED AND DEFECT 1 CANNOT BE, and closing
+                 *   defect 2 is what shuts the exploit anyway: every
+                 *   application submitted through this platform is written by a
+                 *   signed-in user and therefore carries a `userId`, so a typed
+                 *   address on a REAL application can no longer be read by the
+                 *   person whose address was typed. What remains reachable is a
+                 *   row nobody owns — an import — which no applicant wrote.
+                 *
+                 *   Layer 2.7 also requires the programme fee on top of this
+                 *   (#258), so a match alone has never been enough here.
+                 */
                 const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                     .where("personalInfo.email", "==", userData.email.toLowerCase())
                     .limit(APPLICATION_SCAN_LIMIT)
                     .get();
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+
+                const { claimable, ownedByOthers } = claimableByEmail(emailQuery.docs);
+
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = (claimable as any).ref;
+                } else if (ownedByOthers > 0) {
+                    logger.warn(
+                        `[ModuleAccess] Layer 2.7 — ${ownedByOthers} Academy application(s) match `
+                        + `${userData.email} but every one already belongs to another account; `
+                        + `none claimed (uid: ${userId}).`
+                    );
                 }
             }
 
@@ -853,20 +887,32 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
-                let emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                /*
+                 *   ONLY `userEmail`, AND ONLY IF NOBODY OWNS IT. The rule and
+                 *   the two defects it closes are in lib/claimable-application;
+                 *   the three status actions have carried it for a while and
+                 *   this gate had not.
+                 *
+                 *   The "email" query that used to follow this one is gone
+                 *   rather than narrowed. One fewer round trip on this path as
+                 *   a side effect, which is not why it went.
+                 */
+                const emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
                     .limit(APPLICATION_SCAN_LIMIT)
                     .get();
-                if (emailQuery.empty) {
-                    emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                        .where("email", "==", userData.email.toLowerCase())
-                        .limit(APPLICATION_SCAN_LIMIT)
-                        .get();
-                }
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+
+                const { claimable, ownedByOthers } = claimableByEmail(emailQuery.docs);
+
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = (claimable as any).ref;
+                } else if (ownedByOthers > 0) {
+                    logger.warn(
+                        `[ModuleAccess] Layer 2.8 — ${ownedByOthers} WAVE application(s) match `
+                        + `${userData.email} but every one already belongs to another account; `
+                        + `none claimed (uid: ${userId}).`
+                    );
                 }
             }
 
@@ -935,20 +981,32 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
-                let emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                /*
+                 *   ONLY `userEmail`, AND ONLY IF NOBODY OWNS IT. The rule and
+                 *   the two defects it closes are in lib/claimable-application;
+                 *   the three status actions have carried it for a while and
+                 *   this gate had not.
+                 *
+                 *   The "profile.email" query that used to follow this one is gone
+                 *   rather than narrowed. One fewer round trip on this path as
+                 *   a side effect, which is not why it went.
+                 */
+                const emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
                     .limit(APPLICATION_SCAN_LIMIT)
                     .get();
-                if (emailQuery.empty) {
-                    emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                        .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(APPLICATION_SCAN_LIMIT)
-                        .get();
-                }
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+
+                const { claimable, ownedByOthers } = claimableByEmail(emailQuery.docs);
+
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = (claimable as any).ref;
+                } else if (ownedByOthers > 0) {
+                    logger.warn(
+                        `[ModuleAccess] Layer 2.9 — ${ownedByOthers} Export application(s) match `
+                        + `${userData.email} but every one already belongs to another account; `
+                        + `none claimed (uid: ${userId}).`
+                    );
                 }
             }
 
@@ -1017,20 +1075,32 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
-                let emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                /*
+                 *   ONLY `userEmail`, AND ONLY IF NOBODY OWNS IT. The rule and
+                 *   the two defects it closes are in lib/claimable-application;
+                 *   the three status actions have carried it for a while and
+                 *   this gate had not.
+                 *
+                 *   The "profile.email" query that used to follow this one is gone
+                 *   rather than narrowed. One fewer round trip on this path as
+                 *   a side effect, which is not why it went.
+                 */
+                const emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
                     .limit(APPLICATION_SCAN_LIMIT)
                     .get();
-                if (emailQuery.empty) {
-                    emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                        .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(APPLICATION_SCAN_LIMIT)
-                        .get();
-                }
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+
+                const { claimable, ownedByOthers } = claimableByEmail(emailQuery.docs);
+
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = (claimable as any).ref;
+                } else if (ownedByOthers > 0) {
+                    logger.warn(
+                        `[ModuleAccess] Layer 2.10 — ${ownedByOthers} Farm Nation application(s) match `
+                        + `${userData.email} but every one already belongs to another account; `
+                        + `none claimed (uid: ${userId}).`
+                    );
                 }
             }
 

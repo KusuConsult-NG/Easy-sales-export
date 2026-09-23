@@ -71,6 +71,7 @@ const EDITOR_SCRIPTS = [
     'scripts/entitlements-nobody-paid-for.sql',
     'scripts/academy-paid-twice.sql',
     'scripts/payments-that-nobody-made.sql',
+    'scripts/applications-claimed-by-a-typed-address.sql',
 ];
 
 /** Everything that is not a leading `--` comment: the executable statement. */
@@ -224,6 +225,21 @@ describe.each(EDITOR_SCRIPTS)('#910 — %s survives the SQL Editor that has to r
             'scripts/payments-that-nobody-made.sql': [
                 'processed_payments', 'INVALID_REF', 'mock_amount', 'minted_at',
             ],
+            /*
+             *   The cost and the exposure of narrowing the module gate's
+             *   email fallback. Each marker pins a part that carries the
+             *   whole answer: the THREE typed address fields it is measuring
+             *   (`email`, `profile.email`, `personalInfo.email`), the
+             *   authenticated one they were compared against, and the two
+             *   verdicts the reader is being asked to weigh against each
+             *   other. Drop any one and the query still runs and still says
+             *   less than it claims to.
+             */
+            'scripts/applications-claimed-by-a-typed-address.sql': [
+                'userEmail', "'{profile,email}'", "'{personalInfo,email}'",
+                'ANOTHER ACCOUNT COULD READ THIS ONE', 'LOSES THE EMAIL ROUTE',
+                'academy_applications',
+            ],
         };
 
         const expected = MUST_MENTION[SCRIPT];
@@ -247,7 +263,7 @@ describe('#910 — and the list of editor scripts is the list', () => {
          *   guard, and it fails the day a third editor script is written and
          *   not added.
          */
-        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 6 });
+        expect({ covered: EDITOR_SCRIPTS.length }).toEqual({ covered: 7 });
         for (const rel of EDITOR_SCRIPTS) {
             expect({ rel, exists: readFileSync(join(process.cwd(), rel), 'utf-8').length > 0 })
                 .toEqual({ rel, exists: true });
