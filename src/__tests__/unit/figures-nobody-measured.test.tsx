@@ -103,8 +103,11 @@ describe('the marketplace landing page counts what it shows', () => {
         const src = code(LANDING);
 
         expect(src).toContain('getMarketplaceStatsAction()');
-        expect(src).toContain('stats.productsCount.toLocaleString()');
-        expect(src).toContain('stats.tradersCount.toLocaleString()');
+        //   Through numberOrZero, which #598 requires AT THE CALL — a guard
+        //   where `stats` is built is a guard the next person editing this
+        //   line will not see.
+        expect(src).toContain('numberOrZero(stats.productsCount).toLocaleString()');
+        expect(src).toContain('numberOrZero(stats.tradersCount).toLocaleString()');
     });
 
     it('and the seller tile says what the query actually counted', () => {

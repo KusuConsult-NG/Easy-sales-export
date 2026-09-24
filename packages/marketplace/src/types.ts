@@ -269,6 +269,24 @@ export interface Order {
 
     // Tracking
     trackingNumber?: string;
+    /**
+     * How the goods are travelling, as the seller said when marking shipped.
+     *
+     *   Only a CARRIER shipment has a `trackingNumber`. A self delivery — a
+     *   bike, a bus park, the seller's own van — has a person and a phone
+     *   instead, which is what most of what moves here actually has. Before
+     *   this existed, an empty tracking field made the server invent a
+     *   `TRK-…` number and notify the buyer with it. See lib/shipment-record.
+     */
+    shipment?: {
+        method: "carrier" | "self_delivery";
+        carrier?: string;
+        trackingNumber?: string;
+        courierName?: string;
+        courierPhone?: string;
+    };
+    /** When the seller marked it shipped — the buyer's timeline reads this. */
+    shippedAt?: unknown;
     estimatedDeliveryDate?: FieldValue | Timestamp | Date;
     deliveredAt?: FieldValue | Timestamp | Date;
 

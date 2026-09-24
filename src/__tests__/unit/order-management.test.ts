@@ -21,6 +21,15 @@ jest.mock('@/lib/marketplace-notifications', () => ({
     notifyOrderDelivered: jest.fn(async () => undefined),
 }));
 
+/**
+ *   MARKING AN ORDER SHIPPED NOW SAYS HOW IT IS TRAVELLING.
+ *
+ *   These calls passed a status and, at most, a tracking number — and leaving
+ *   that number out made the SERVER invent one (`TRK-…-482`, from
+ *   MockLogisticsProvider) and notify the buyer with it. The seller says
+ *   instead: a carrier and its number, or a person and a phone. See
+ *   lib/shipment-record, and a-parcel-that-never-moved.test.ts for the rule.
+ */
 describe('updateOrderStatusAction Unit Tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -56,7 +65,7 @@ describe('updateOrderStatusAction Unit Tests', () => {
             data: () => mockOrderData,
         }));
 
-        const result = await updateOrderStatusAction("order-1", "shipped");
+        const result = await updateOrderStatusAction("order-1", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-1" });
 
         expect(result.success).toBe(true);
         expect(result.data?.message).toContain("Order status updated successfully");
@@ -92,7 +101,7 @@ describe('updateOrderStatusAction Unit Tests', () => {
             data: () => mockOrderData,
         }));
 
-        const result = await updateOrderStatusAction("order-2", "shipped");
+        const result = await updateOrderStatusAction("order-2", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-2" });
 
         expect(result.success).toBe(true);
         expect(result.data?.message).toContain("Order status updated successfully");
@@ -124,7 +133,7 @@ describe('updateOrderStatusAction Unit Tests', () => {
             data: () => mockOrderData,
         }));
 
-        const result = await updateOrderStatusAction("order-3", "shipped");
+        const result = await updateOrderStatusAction("order-3", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-3" });
 
         expect(result.success).toBe(false);
         expect(result.error).toContain("Not authorized to update this order");
@@ -161,7 +170,7 @@ describe('updateOrderStatusAction Unit Tests', () => {
             data: () => mockOrderData,
         }));
 
-        const result = await updateOrderStatusAction("order-4", "shipped");
+        const result = await updateOrderStatusAction("order-4", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-4" });
 
         expect(result.success).toBe(true);
         expect(result.data?.message).toContain("Order status updated successfully");
@@ -200,7 +209,7 @@ describe('updateOrderStatusAction Unit Tests', () => {
         // Reset the mock call counts
         (global as any).mockFirestoreUpdate.mockClear();
 
-        const result = await updateOrderStatusAction("order-5", "shipped");
+        const result = await updateOrderStatusAction("order-5", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-5" });
 
         expect(result.success).toBe(true);
         // Asserted on the direct-write spy rather than the transaction one:
@@ -261,7 +270,7 @@ describe('updateOrderStatusAction Unit Tests', () => {
             exists: true, data: () => mockOrderData, docs: [], empty: true,
         }));
 
-        const result = await updateOrderStatusAction("order-391", "shipped", "TRK-999");
+        const result = await updateOrderStatusAction("order-391", "shipped", "TRK-999", { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-999" });
 
         expect(result.success).toBe(true);
         expect(notifyOrderShipped).toHaveBeenCalledWith(
@@ -291,7 +300,7 @@ describe('updateOrderStatusAction Unit Tests', () => {
             exists: true, data: () => mockOrderData, docs: [], empty: true,
         }));
 
-        const result = await updateOrderStatusAction("order-391b", "shipped", "TRK-1");
+        const result = await updateOrderStatusAction("order-391b", "shipped", "TRK-1", { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-1" });
         expect(result.success).toBe(true);
     });
 

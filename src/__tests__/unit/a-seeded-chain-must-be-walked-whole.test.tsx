@@ -151,12 +151,20 @@ describe('#559 — the seller order chain, both links or neither', () => {
         expect(o.getTrackingUpdatesAction).not.toHaveBeenCalled();
     });
 
-    it('AND AN ORDER WITH NO TRACKING NUMBER NEVER ASKS FOR TRACKING', async () => {
-        //   The condition that keeps the server from doing work the browser
-        //   would not have done either.
+    it('AND A SEEDED TIMELINE IS NOT ASKED FOR TWICE', async () => {
+        /*
+         *   This was "an order with no TRACKING NUMBER never asks for
+         *   tracking" — true while the timeline came from a mock carrier keyed
+         *   on a waybill. The events are the ORDER'S own now (placed, paid,
+         *   shipped, delivered), so every order has a history, including one
+         *   going by bike with no number at all. See lib/shipment-record.
+         *
+         *   What the chain still guarantees is unchanged and is what this now
+         *   states: a seeded screen does not re-ask.
+         */
         await renderOrder({
             orderResult: { success: true, error: null, data: { order: order() } },
-            trackingResult: null,
+            trackingResult: { success: true, error: null, data: { events: [], shipment: null, providerName: null } },
         });
 
         expect(await screen.findByText(/EX-1001/i)).toBeInTheDocument();
@@ -170,13 +178,15 @@ describe('#559 — the seller order chain, both links or neither', () => {
             success: true, error: null, data: { order: order({ trackingNumber: 'TRK-9' }) },
         });
         o.getTrackingUpdatesAction.mockResolvedValue({
-            success: true, error: null, data: { updates: [] },
+            success: true, error: null, data: { events: [], shipment: null, providerName: null },
         });
 
         await renderOrder(null);
 
         await waitFor(() => expect(o.getOrderByIdForSellerAction).toHaveBeenCalledWith('ord-1'));
-        await waitFor(() => expect(o.getTrackingUpdatesAction).toHaveBeenCalledWith('TRK-9'));
+        //   Keyed on the ORDER, not on a waybill — the timeline is the order's
+        //   own events, so an order with no tracking number still has one.
+        await waitFor(() => expect(o.getTrackingUpdatesAction).toHaveBeenCalledWith('ord-1'));
         expect(await screen.findByText(/EX-1001/i)).toBeInTheDocument();
     });
 

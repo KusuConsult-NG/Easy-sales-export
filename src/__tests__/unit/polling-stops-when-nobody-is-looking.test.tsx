@@ -319,7 +319,11 @@ describe('#538 — no poller goes back to a bare setInterval', () => {
         'src/components/ui/ImageSlider.tsx',
         'src/components/features/HeroSlider.tsx',
         'src/components/hub/HubHero.tsx',
-        'src/components/hub/PlatformStats.tsx',
+        //   components/hub/PlatformStats was here: its timer animated four
+        //   invented counters up to 15,420 / 1,247 / 3,856 / 8,932. The
+        //   component is deleted — the numbers were made up — so the
+        //   exemption goes with it. This list is asserted to name only files
+        //   that exist, which is what caught the stale entry.
         'src/components/CountdownTimer.tsx',
         'src/components/auth/SessionActivityTracker.tsx',
         'src/components/DeploymentWatcher.tsx',

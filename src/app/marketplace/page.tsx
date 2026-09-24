@@ -136,17 +136,23 @@ export default async function MarketplaceLandingPage() {
                     explicit that a rating with no reviews behind it is not a
                     rating. The two that remain are database counts.
                 */}
+                {/*
+                    numberOrZero AT THE CALL, not only where `stats` is built.
+                    #598's rule is about the expression a screen actually
+                    evaluates: a guard three hundred lines away is a guard the
+                    next person to touch this line will not see.
+                */}
                 {stats && (
                     <div className="grid grid-cols-2 gap-3 md:gap-6 mb-12 md:mb-16 max-w-3xl mx-auto">
                         <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                             <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
-                                {stats.productsCount.toLocaleString()}
+                                {numberOrZero(stats.productsCount).toLocaleString()}
                             </div>
                             <div className="text-xs md:text-base text-slate-600 font-medium">Products Listed</div>
                         </div>
                         <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                             <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
-                                {stats.tradersCount.toLocaleString()}
+                                {numberOrZero(stats.tradersCount).toLocaleString()}
                             </div>
                             <div className="text-xs md:text-base text-slate-600 font-medium">Verified Sellers</div>
                         </div>

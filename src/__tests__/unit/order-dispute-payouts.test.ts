@@ -154,7 +154,12 @@ describe('_updateOrderStatusAction — cancellation restock', () => {
 
     it('leaves non-cancel transitions alone', async () => {
         const { updateOrderStatusAction } = await import('@/app/actions/order-management');
-        await updateOrderStatusAction('order-1', 'shipped');
+        //   Marking shipped now says HOW — a carrier and its number, or a
+        //   person and a phone. An empty tracking field used to make the
+        //   server invent `TRK-…`; see lib/shipment-record.
+        await updateOrderStatusAction('order-1', 'shipped', undefined, {
+            method: 'carrier', carrier: 'GIG Logistics', trackingNumber: 'GIG889321',
+        });
 
         expect(mockClaimFromAny).not.toHaveBeenCalled();
         expect((global as any).mockFirestoreUpdate).toHaveBeenCalled();

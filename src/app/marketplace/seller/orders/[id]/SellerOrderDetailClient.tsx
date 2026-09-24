@@ -15,7 +15,8 @@ import {
 import { getOrderByIdForSellerAction } from "@/app/actions/order-management";
 import { updateOrderStatusAction, getTrackingUpdatesAction } from "@/app/actions/order-management";
 import { SELLER_AWAITING_AUTO_RELEASE, SELLER_COMPLETED_NOT_RELEASED } from "@/lib/escrow-release-copy";
-import type { TrackingUpdate } from "@/lib/logistics";
+import ShipmentFields from "@/components/marketplace/ShipmentFields";
+import type { ShipmentRecord } from "@/lib/shipment-record";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
@@ -40,6 +41,14 @@ export type SellerOrderSeed = {
     trackingResult: Awaited<ReturnType<typeof getTrackingUpdatesAction>> | null;
 };
 
+/** A real thing that happened to this order, with the moment it happened. */
+interface OrderEvent {
+    status: string;
+    label: string;
+    at: string;
+    note?: string;
+}
+
 export default function SellerOrderDetailClient(
     { initial = null }: { initial?: SellerOrderSeed | null },
 ) {
@@ -63,8 +72,34 @@ export default function SellerOrderDetailClient(
     );
     const [updating, setUpdating] = useState(false);
     const [copied, setCopied] = useState(false);
+    /*
+     *   HOW THE GOODS ARE TRAVELLING, said by the person sending them.
+     *
+     *     THE OWNER: "tracking should be realtime. when purchases are made how
+     *     will seller notify buyers that goods are shipped?"
+     *
+     *   Pressing Mark as Shipped has always notified the buyer the moment it
+     *   is pressed — that part was real. What was not: leaving this field
+     *   empty made the SERVER invent `TRK-…-482` and send the buyer that. Most
+     *   of what moves here moves by bike or bus park and has no waybill, so
+     *   the honest answer is a second shape rather than a required field. See
+     *   lib/shipment-record.
+     */
+    const [shipMethod, setShipMethod] = useState<"carrier" | "self_delivery">(
+        seededOrder?.shipment?.method === "self_delivery" ? "self_delivery" : "carrier",
+    );
+    const [carrier, setCarrier] = useState(seededOrder?.shipment?.carrier || "");
     const [trackingNumber, setTrackingNumber] = useState(seededOrder?.trackingNumber || "");
-    const [trackingUpdates, setTrackingUpdates] = useState<TrackingUpdate[]>([]);
+    const [courierName, setCourierName] = useState(seededOrder?.shipment?.courierName || "");
+    const [courierPhone, setCourierPhone] = useState(seededOrder?.shipment?.courierPhone || "");
+    /*
+     *   THE ORDER'S OWN EVENTS, not a carrier's imagined ones.
+     *
+     *   This held TrackingUpdate[] from MockLogisticsProvider: a journey
+     *   through "Sorting Facility" and "Regional Transit Hub" built out of
+     *   this order's dates. See lib/logistics for the whole finding.
+     */
+    const [orderEvents, setOrderEvents] = useState<OrderEvent[]>([]);
     const [loadingTracking, setLoadingTracking] = useState(false);
 
     useEffect(() => {
@@ -82,16 +117,17 @@ export default function SellerOrderDetailClient(
     }, [id, takeOrder]);
 
     useEffect(() => {
-        if (!order?.trackingNumber) return;
+        if (!order?.id) return;
+        setLoadingTracking(true);
         const seeded = takeTracking();
-        if (!seeded) setLoadingTracking(true);
-        (seeded ? Promise.resolve(seeded) : getTrackingUpdatesAction(order.trackingNumber)).then((res) => {
-            if (res.success && res.data?.updates) {
-                setTrackingUpdates(res.data.updates as any);
+        (seeded ? Promise.resolve(seeded) : getTrackingUpdatesAction(order.id)).then((res: any) => {
+            if (res.success && res.data?.events) {
+                setOrderEvents(res.data.events as OrderEvent[]);
             }
             setLoadingTracking(false);
         });
-    }, [order?.trackingNumber, takeTracking]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [order?.id]);
 
     const copyOrderId = () => {
         navigator.clipboard.writeText(id as string);
@@ -103,10 +139,20 @@ export default function SellerOrderDetailClient(
         if (!order) return;
         setUpdating(true);
         try {
-            const result = await updateOrderStatusAction(order.id, newStatus, trackingNumber || undefined);
+            const shipment = newStatus === "shipped"
+                ? (shipMethod === "carrier"
+                    ? { method: "carrier" as const, carrier, trackingNumber }
+                    : { method: "self_delivery" as const, courierName, courierPhone })
+                : undefined;
+            const result = await updateOrderStatusAction(order.id, newStatus, trackingNumber || undefined, shipment);
             if (result.success) {
                 showToast(result.data?.message || `Order status updated to ${newStatus.replace(/_/g, " ")}`, "success");
-                setOrder(prev => prev ? { ...prev, status: newStatus, trackingNumber: trackingNumber || prev.trackingNumber } : prev);
+                setOrder(prev => prev ? {
+                    ...prev,
+                    status: newStatus,
+                    trackingNumber: shipment?.method === "carrier" ? shipment.trackingNumber : prev.trackingNumber,
+                    ...(shipment ? { shipment } : {}),
+                } : prev);
             } else {
                 showToast(result.error || "Failed to update status", "error");
             }
@@ -195,49 +241,60 @@ export default function SellerOrderDetailClient(
                 {(order.status === "payment_received" || order.status === "processing") && (
                     <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
                         <p className="font-semibold text-orange-900 mb-1">⏳ Action Required — Awaiting Fulfillment</p>
-                        <p className="text-sm text-orange-700 mb-4">Pack and ship the items, then enter a tracking number and mark as shipped.</p>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <input
-                                type="text"
-                                value={trackingNumber}
-                                onChange={e => setTrackingNumber(e.target.value)}
-                                placeholder="Tracking number (optional)"
-                                className="flex-1 px-4 py-2.5 border border-orange-300 rounded-lg bg-white text-slate-900 text-sm focus:ring-2 focus:ring-orange-400 focus:border-transparent"
-                            />
-                            <button
-                                onClick={() => handleStatusUpdate("shipped")}
-                                disabled={updating}
-                                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg font-semibold text-sm hover:bg-green-700 disabled:opacity-50 transition-all"
-                            >
-                                {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
-                                Mark as Shipped
-                            </button>
-                        </div>
+                        <p className="text-sm text-orange-700 mb-4">
+                            Pack and ship the items, then tell the buyer how it is coming. They are
+                            notified the moment you mark it shipped.
+                        </p>
+                        <ShipmentFields
+                            method={shipMethod} onMethod={setShipMethod}
+                            carrier={carrier} onCarrier={setCarrier}
+                            trackingNumber={trackingNumber} onTrackingNumber={setTrackingNumber}
+                            courierName={courierName} onCourierName={setCourierName}
+                            courierPhone={courierPhone} onCourierPhone={setCourierPhone}
+                            accent="orange"
+                        />
+                        <button
+                            onClick={() => handleStatusUpdate("shipped")}
+                            disabled={updating}
+                            className="mt-3 flex items-center justify-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg font-semibold text-sm hover:bg-green-700 disabled:opacity-50 transition-all"
+                        >
+                            {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                            Mark as Shipped
+                        </button>
                     </div>
                 )}
 
                 {order.status === "shipped" && (
                     <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                         <p className="font-semibold text-blue-900 mb-1">🚚 Order Shipped</p>
+                        {/*
+                            "Tracking: N/A" was what a buyer saw whenever the
+                            seller had no waybill — or, worse, an invented
+                            TRK- number when the server filled it in for them.
+                            A self delivery says who is carrying it instead.
+                        */}
                         <p className="text-sm text-blue-700 mb-4">
-                            Tracking: <span className="font-mono font-semibold">{order.trackingNumber || "N/A"}</span>
+                            {order.shipment?.method === "self_delivery"
+                                ? <>Delivered by <span className="font-semibold">{order.shipment.courierName}</span> — {order.shipment.courierPhone}</>
+                                : order.trackingNumber
+                                    ? <>{order.shipment?.carrier ? `${order.shipment.carrier} — ` : ""}tracking <span className="font-mono font-semibold">{order.trackingNumber}</span></>
+                                    : <>No delivery details recorded yet.</>}
                         </p>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <input
-                                type="text"
-                                value={trackingNumber}
-                                onChange={e => setTrackingNumber(e.target.value)}
-                                placeholder="Update tracking number"
-                                className="flex-1 px-4 py-2.5 border border-blue-300 rounded-lg bg-white text-slate-900 text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                            />
-                            <button
-                                onClick={() => handleStatusUpdate("shipped")}
-                                disabled={updating}
-                                className="px-5 py-2.5 border-2 border-blue-600 text-blue-600 rounded-lg font-semibold text-sm hover:bg-blue-50 disabled:opacity-50 transition-all"
-                            >
-                                Update Tracking
-                            </button>
-                        </div>
+                        <ShipmentFields
+                            method={shipMethod} onMethod={setShipMethod}
+                            carrier={carrier} onCarrier={setCarrier}
+                            trackingNumber={trackingNumber} onTrackingNumber={setTrackingNumber}
+                            courierName={courierName} onCourierName={setCourierName}
+                            courierPhone={courierPhone} onCourierPhone={setCourierPhone}
+                            accent="blue"
+                        />
+                        <button
+                            onClick={() => handleStatusUpdate("shipped")}
+                            disabled={updating}
+                            className="mt-3 px-5 py-2.5 border-2 border-blue-600 text-blue-600 rounded-lg font-semibold text-sm hover:bg-blue-50 disabled:opacity-50 transition-all"
+                        >
+                            Update Delivery Details
+                        </button>
                     </div>
                 )}
 
@@ -295,12 +352,12 @@ export default function SellerOrderDetailClient(
                         {loadingTracking ? (
                             <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
                                 <Loader2 className="w-4 h-4 animate-spin text-green-600" />
-                                <span>Fetching latest logistics updates...</span>
+                                <span>Loading this order&apos;s history…</span>
                             </div>
-                        ) : trackingUpdates.length > 0 ? (
+                        ) : orderEvents.length > 0 ? (
                             <div className="relative pl-6 border-l-2 border-slate-200 space-y-6 ml-3 mt-4">
-                                {trackingUpdates.map((update, idx) => {
-                                    const isLatest = idx === trackingUpdates.length - 1;
+                                {orderEvents.map((update, idx) => {
+                                    const isLatest = idx === orderEvents.length - 1;
                                     return (
                                         <div key={idx} className="relative">
                                             {/* Dot indicator */}
@@ -313,10 +370,10 @@ export default function SellerOrderDetailClient(
                                             <div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                                     <span className={`font-semibold text-sm ${isLatest ? "text-green-700 text-base" : "text-slate-800"}`}>
-                                                        {update.location}
+                                                        {update.label}
                                                     </span>
                                                     <span className="text-xs text-slate-400 font-mono">
-                                                        {formatDateTime(update.timestamp)}
+                                                        {formatDateTime(update.at)}
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-0.5 capitalize font-semibold">{humanise(update.status)}</p>

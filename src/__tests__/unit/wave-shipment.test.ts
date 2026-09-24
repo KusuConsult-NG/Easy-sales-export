@@ -111,18 +111,30 @@ describe('WAVE Shipments Action Unit Tests', () => {
         expect(result.error).toContain("Member not found");
     });
 
-    it('should create WAVE shipment successfully and auto-generate tracking if not provided', async () => {
+    it('creates the shipment, and DOES NOT INVENT A TRACKING NUMBER', async () => {
+        /*
+         *   This was "auto-generate tracking if not provided", asserting the
+         *   number contained "TRK-". What it pinned was
+         *   MockLogisticsProvider.createShipment returning
+         *   `TRK-${Date.now()}-${Math.floor(Math.random() * 1000)}` for a WAVE
+         *   member — a consignment number no carrier had issued.
+         *
+         *     THE OWNER: "tracking should be realtime."
+         *
+         *   A shipment with no waybill is recorded as having none, and the
+         *   member is told who has their goods instead. See
+         *   lib/shipment-record.
+         */
         const result = await createWaveShipmentAction({
             memberId: "member-id",
             productName: "WAVE Inputs Pack",
             destination: "Abuja",
-            carrier: "MockLogistics"
+            carrier: "Self delivery"
         });
 
         expect(result.success).toBe(true);
         expect(result.data?.id).toBeDefined();
-        expect(result.data?.trackingNumber).toBeDefined();
-        expect(result.data?.trackingNumber).toContain("TRK-");
+        expect(result.data?.trackingNumber).toBeUndefined();
     });
 
     it('should fetch all shipments for admin', async () => {

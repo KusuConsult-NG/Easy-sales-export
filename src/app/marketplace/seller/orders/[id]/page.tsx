@@ -37,15 +37,22 @@ export default async function SellerOrderDetailPage({
         "seller order", await getOrderByIdForSellerAction(id).catch(() => null),
     );
 
-    const trackingNumber = orderResult?.success
-        ? orderResult.data?.order?.trackingNumber
-        : undefined;
+    /*
+     *   KEYED ON THE ORDER, not on a tracking number.
+     *
+     *   This seeded the timeline only when the order HAD a tracking number,
+     *   because the mock provider built its journey from one. The events are
+     *   the order's own now — placed, paid, shipped, delivered — so every
+     *   order has a history, including one travelling by bike with no waybill
+     *   at all. See lib/shipment-record.
+     */
+    const orderId = orderResult?.success ? orderResult.data?.order?.id : undefined;
 
-    const trackingResult = trackingNumber
-        ? rawSeed("order tracking", await getTrackingUpdatesAction(trackingNumber).catch(() => null))
+    const trackingResult = orderId
+        ? rawSeed("order tracking", await getTrackingUpdatesAction(orderId).catch(() => null))
         : null;
 
-    const complete = orderResult !== null && (!trackingNumber || trackingResult !== null);
+    const complete = orderResult !== null && (!orderId || trackingResult !== null);
 
     return (
         <SellerOrderDetailClient
