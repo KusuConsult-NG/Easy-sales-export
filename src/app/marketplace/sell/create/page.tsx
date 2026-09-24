@@ -103,6 +103,58 @@ export default function CreateProductPage() {
     const titleOptions = getTitleOptions(category);
     const hasCategoryTitles = titleOptions.length > 0;
     const titleSelectValue = !title ? "" : (titleOptions.includes(title) ? title : "Other");
+
+    /**
+     * The words the seller has put in the title field, wherever they are.
+     *
+     * A category with presets shows a menu: `title` is then either a pick from
+     * it or the sentinel "Other", with the seller's own words in `customTitle`.
+     * A category without presets shows a plain text box bound to `title`. One
+     * product name, two places it can be sitting.
+     */
+    const enteredTitle = hasCategoryTitles
+        ? (titleSelectValue === "Other" ? customTitle : title)
+        : title;
+
+    /**
+     * Changing the category must not unname the product.
+     *
+     *   THE OWNER: "when users enter a product name and select category in
+     *   marketplace, it will clear the name the user entered."
+     *
+     * The title field is the FIRST thing this form asks for and the category
+     * is two fields below it, so the order that lost the work is the order the
+     * form itself sets out. This handler was:
+     *
+     *     setCategory(e.target.value); setTitle(""); setCustomTitle("");
+     *
+     * — unconditional, whatever had been typed.
+     *
+     * It was guarding something real. A title picked from the old category's
+     * menu is not on the new category's menu, and leaving it selected submits
+     * a name the new category does not offer. But a name is the seller's
+     * words, not a property of the category, so it MOVES rather than dying:
+     * into the free-text box, which is the field that carries name="title"
+     * whenever the menu has nothing matching.
+     */
+    function changeCategory(next: string): void {
+        const options = getTitleOptions(next);
+        const named = enteredTitle;
+
+        setCategory(next);
+
+        if (options.length === 0 || options.includes(named)) {
+            //   A free-text category, or a menu that still offers this name:
+            //   either way the words belong in `title`.
+            setTitle(named);
+            setCustomTitle("");
+        } else {
+            //   The new menu does not offer it. "Other" is the sentinel that
+            //   reveals the custom box; the words go in the box.
+            setTitle(named ? "Other" : "");
+            setCustomTitle(named);
+        }
+    }
     const unitSelectValue = !unit ? "" : (PRODUCT_UNITS.includes(unit) ? unit : "other units");
     const { uploadFile, uploadState } = useStorage();
     const [isUploadingClient, setIsUploadingClient] = useState(false);
@@ -323,11 +375,7 @@ export default function CreateProductPage() {
                                     <select
                                         name="category"
                                         value={category}
-                                        onChange={(e) => {
-                                            setCategory(e.target.value);
-                                            setTitle("");
-                                            setCustomTitle("");
-                                        }}
+                                        onChange={(e) => changeCategory(e.target.value)}
                                         required
                                         className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >

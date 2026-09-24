@@ -36,26 +36,13 @@ import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
 //   disagreed with both — see lib/product-categories.
 const productCategories = PRODUCT_CATEGORY_OPTIONS;
 
-const CATEGORY_TITLES: Record<string, string[]> = {
-    grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
-    cereal: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
-    tuber: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
-    root: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
-    fruit: ["Mango", "Orange", "Pineapple", "Banana", "Plantain", "Watermelon", "Pawpaw", "Lemon", "Lime"],
-    vegetable: ["Tomatoes", "Pepper (Rodo)", "Pepper (Tatashe)", "Onions", "Cabbage", "Carrot", "Pumpkin Leaves (Ugu)", "Spinach"],
-    spice: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
-    herb: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
-    seasoning: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
-    nut: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
-    seed: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
-    processed: ["Garri (White)", "Garri (Yellow)", "Elubo (Yam Flour)", "Palm Oil", "Groundnut Oil", "Bean Flour"],
-    livestock: ["Live Goat", "Live Sheep", "Live Ram", "Live Cow", "Pork", "Beef"],
-    poultry: ["Day Old Chicks", "Broilers", "Cockerels", "Layers", "Chicken Eggs", "Turkey"],
-    fishery: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
-    sea_food: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
-    beverage: ["Cocoa Powder", "Tea Leaves", "Coffee Beans", "Fruit Juice"],
-    dairy: ["Fresh Milk", "Local Cheese (Wara)", "Yogurt", "Butter"],
-};
+/*
+ *   CATEGORY_TITLES and getTitleOptions used to live here. They belong to the
+ *   CREATE form, which offers a menu of preset titles per category; this screen
+ *   has only ever rendered a plain text box for the title. All the table did
+ *   here was decide whether to hide the product's real name behind the
+ *   sentinel "Other" — see the load effect below for what that cost.
+ */
 
 const PRODUCT_UNITS = [
     "Kwanu",
@@ -69,16 +56,6 @@ const PRODUCT_UNITS = [
     "big carton",
     "other units"
 ];
-
-function getTitleOptions(categoryValue: string): string[] {
-    const norm = (categoryValue || "").toLowerCase();
-    for (const key of Object.keys(CATEGORY_TITLES)) {
-        if (norm.includes(key)) {
-            return CATEGORY_TITLES[key];
-        }
-    }
-    return [];
-}
 
 const nigerianStates = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
@@ -110,6 +87,17 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
 
     // Loading & Detail State
     const [loadingProduct, setLoadingProduct] = useState(true);
+    /**
+     * Did the product come back?
+     *
+     * The guard below used to ask `!title` — which is the same question only
+     * for as long as the title box is never empty. It is empty the moment a
+     * seller selects the name and deletes it to retype it, and the form was
+     * replaced mid-edit by "Error Loading Product", taking every other change
+     * with it. Whether the product LOADED and what the seller has typed since
+     * are two different facts.
+     */
+    const [loaded, setLoaded] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [isUploadingClient, setIsUploadingClient] = useState(false);
     const [error, setError] = useState("");
@@ -119,11 +107,7 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
     const [description, setDescription] = useState("");
     const [category, setCategory] = useState("");
     const [unit, setUnit] = useState("");
-    const [customTitle, setCustomTitle] = useState("");
     const [customUnit, setCustomUnit] = useState("");
-
-    const titleOptions = getTitleOptions(category);
-    const hasCategoryTitles = titleOptions.length > 0;
     const [retailPrice, setRetailPrice] = useState<string>("");
     const [availableQuantity, setAvailableQuantity] = useState<number>(0);
     const [minimumOrderQuantity, setMinimumOrderQuantity] = useState<number>(1);
@@ -157,15 +141,27 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
                 const result = takeSeed() ?? await getProductByIdAction(productId);
                 if (result.success && result.data) {
                     const prod = result.data;
+                    setLoaded(true);
                     
-                    // Pre-fill states
-                    const titleOpts = getTitleOptions(prod.category);
-                    if (titleOpts.length > 0 && !titleOpts.includes(prod.title)) {
-                        setTitle("Other");
-                        setCustomTitle(prod.title);
-                    } else {
-                        setTitle(prod.title);
-                    }
+                    /*
+                     *   THE PRODUCT'S NAME, in the box that shows the name.
+                     *
+                     *   This used to read the create form's preset list for
+                     *   the product's category and, if the title was not one
+                     *   of the presets, set the title to the literal word
+                     *   "Other" and stash the real name in state that nothing
+                     *   on this screen renders. So a seller opening
+                     *   "Premium Yellow Maize" for editing saw a product
+                     *   called "Other", with no way to read or correct its
+                     *   name — and one category change later the save wrote
+                     *   "Other" as the title, because the branch that put the
+                     *   real name back needed the old category's presets to
+                     *   still be there.
+                     *
+                     *   There is no menu on this screen, so there is nothing
+                     *   for a sentinel to stand in for.
+                     */
+                    setTitle(prod.title);
                     setDescription(prod.description);
                     setCategory(prod.category);
                     if (prod.unit && !PRODUCT_UNITS.includes(prod.unit)) {
@@ -269,13 +265,12 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
             // 3. Combine existing URLs and new uploaded URLs
             const finalImageUrls = [...existingCloudinaryUrls, ...uploadedUrls];
 
-            const finalTitle = (hasCategoryTitles && title === "Other") ? customTitle : title;
             const finalUnit = (unit === "other units") ? customUnit : unit;
 
             // 4. Construct FormData
             const submitFormData = new FormData();
             submitFormData.append("productId", productId);
-            submitFormData.append("title", finalTitle);
+            submitFormData.append("title", title);
             submitFormData.append("description", description);
             submitFormData.append("category", category);
             submitFormData.append("unit", finalUnit);
@@ -334,7 +329,7 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
         );
     }
 
-    if (error || !title) {
+    if (error || !loaded) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
                 <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
@@ -462,11 +457,7 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
                                     <select
                                         required
                                         value={category}
-                                        onChange={(e) => {
-                                            setCategory(e.target.value);
-                                            setTitle("");
-                                            setCustomTitle("");
-                                        }}
+                                        onChange={(e) => setCategory(e.target.value)}
                                         className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
                                     >
                                         <option value="">Select Category</option>
