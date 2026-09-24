@@ -164,8 +164,12 @@ describe('the bypass, recorded on the route path', () => {
     it('the live onboarding screens use these routes, not the actions', () => {
         // Why covering the route path matters: this is the path a real user
         // goes through.
+        //   onboarding/BankAccountVerification was the second caller. It has
+        //   stopped asking for a BVN at all — the export wizard collected one
+        //   twice, and that was the copy nothing enforced and nothing stored;
+        //   see lib/export-identity. WAVE's financial step still posts here,
+        //   so the route is still a live path and this finding still bites.
         for (const file of [
-            'src/components/onboarding/BankAccountVerification.tsx',
             'src/app/wave/application/steps/FinancialStep.tsx',
         ]) {
             expect(source(file)).toContain("'/api/kyc/verify-bvn'");
@@ -174,8 +178,8 @@ describe('the bypass, recorded on the route path', () => {
 
     it('and set bvnVerified from the answer', () => {
         // So the constant returned above is what marks the user verified.
-        expect(source('src/components/onboarding/BankAccountVerification.tsx'))
-            .toContain('bvnVerified: true');
+        expect(source('src/app/wave/application/steps/FinancialStep.tsx'))
+            .toMatch(/bvnVerified/);
     });
 });
 

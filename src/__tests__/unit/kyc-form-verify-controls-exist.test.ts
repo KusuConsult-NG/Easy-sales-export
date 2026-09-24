@@ -89,7 +89,6 @@ describe('#349 — a saved NUMBER is no longer a saved verification', () => {
         // Vacuity guard: #285's half must survive this one.
         expect(code).toContain("initialData?.ninVerified ? 'verified' : 'idle'");
         expect(code).toContain("initialData?.bvnVerified ? 'verified' : 'idle'");
-        expect(code).toContain("initialData?.votersCardVerified ? 'verified' : 'idle'");
     });
 
     it('nothing else in the file infers a verification from a number', () => {
@@ -103,11 +102,13 @@ describe('#349 — a saved NUMBER is no longer a saved verification', () => {
         expect(offenders).toEqual([]);
     });
 
-    it('and only the three verify handlers set them true at all', () => {
+    it('and only the verify handlers set them true at all', () => {
+        //   Three of these when the voter's card was on the form; two since
+        //   lib/export-identity took it off. The ratchet above is what stops a
+        //   new one appearing without this branch.
         for (const [handler, field] of [
             ['handleVerifyBVN', 'bvnVerified'],
             ['handleVerifyNIN', 'ninVerified'],
-            ['handleVerifyVotersCard', 'votersCardVerified'],
         ] as const) {
             const body = code.slice(code.indexOf(`async function ${handler}`));
             expect(body.slice(0, 1600)).toContain(`${field}: true`);
@@ -121,21 +122,29 @@ describe('#349 — the verify controls are actually on the screen', () => {
     const code = source(FORM);
 
     it('EVERY VERIFY HANDLER IS REACHED FROM A CONTROL', () => {
-        // THE second test. All three were unreachable.
-        for (const handler of ['handleVerifyNIN', 'handleVerifyBVN', 'handleVerifyVotersCard']) {
+        // THE second test. All three were unreachable. (The third, the
+        // voter's card, has since been removed from this form altogether —
+        // see lib/export-identity. Stated as "every handler in the file" so
+        // the property survives a field leaving OR arriving.)
+        const handlers = [...code.matchAll(/async function (handleVerify\w+)/g)].map((m) => m[1]);
+
+        expect(handlers.length).toBeGreaterThan(0);
+        for (const handler of handlers) {
             expect(code).toMatch(new RegExp(`onClick=\\{${handler}\\}`));
         }
+        expect(handlers).toEqual(['handleVerifyBVN', 'handleVerifyNIN']);
     });
 
     it('through IdInput’s `suffix`, which exists for exactly this', () => {
-        expect(code.match(/suffix=\{/g) ?? []).toHaveLength(3);
+        //   One per identity field on the form — three when the voter's card
+        //   was here, two now.
+        expect(code.match(/suffix=\{/g) ?? []).toHaveLength(2);
         expect(source(ID_INPUT)).toContain('suffix');
     });
 
     it('and the badge that was written for it finally renders', () => {
         expect(code).toMatch(/<VerifyBadge state=\{ninState\} \/>/);
         expect(code).toMatch(/<VerifyBadge state=\{bvnState\} \/>/);
-        expect(code).toMatch(/<VerifyBadge state=\{votersCardState\} \/>/);
     });
 
     it('THE CONFIRMATION CHECKBOXES EXIST, or the button refuses every time', () => {
@@ -150,9 +159,18 @@ describe('#349 — the verify controls are actually on the screen', () => {
         expect(code).toContain('if (!bvnConfirmed) {');
     });
 
-    it('the voters-card error finally has somewhere to render', () => {
-        // setVotersCardError was written by the handler and shown by nothing.
-        expect(code).toContain('error={votersCardError}');
+    it('and every error state has somewhere to render', () => {
+        //   setVotersCardError was written by its handler and shown by
+        //   nothing, which is what this test caught. The field is gone (see
+        //   lib/export-identity); the property is stated for whatever error
+        //   states the file declares, so a new one cannot be written into the
+        //   void the way that one was.
+        const errors = [...code.matchAll(/const \[(\w+Error), set\w+Error\]/g)].map((m) => m[1]);
+
+        expect(errors).toEqual(['bvnError', 'ninError']);
+        for (const name of errors) {
+            expect(code).toContain(`error={${name}}`);
+        }
     });
 
     it('RECORDED, NOT FIXED: the verify actions are the QoreID stub', () => {
@@ -182,25 +200,37 @@ describe('#349 — the export step saves its draft like every other step', () =>
     });
 
     it('the gate it protects is still exactly as strict', () => {
-        // Vacuity guard: the point of removing the initialiser defect is that
-        // THIS check can now fire.
-        expect(code).toContain("!kycData.ninVerified");
-        expect(code).toContain("!kycData.bvnVerified");
+        //   Vacuity guard: the point of removing the initialiser defect is
+        //   that THIS check can now fire. The inline
+        //   `kycData.nin && !kycData.ninVerified` pair has since moved into
+        //   lib/export-identity, which the step, the submit guard and the
+        //   server schema share — and which requires the numbers to be THERE,
+        //   not merely verified if somebody typed one. Stricter, not looser.
+        expect(code).toContain('missingExportIdentity(kycData)');
+        expect(code).toMatch(/missingIdentity\.length > 0[\s\S]{0,120}return;/);
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#349 — the Voter’s Card survives the schema', () => {
-    it('THE SCHEMA KEEPS votersCard, WHICH IT USED TO STRIP', () => {
-        // Zod drops unknown keys. The form collects a Voter's Card number and
-        // offers to verify it; nin/bvn/cacNumber were the only keys listed, so
-        // the number and its verification were dropped between the step and the
-        // record.
+describe('#349 — the schema carries what the form collects', () => {
+    it('AND THE VOTER’S CARD IS NO LONGER EITHER', () => {
+        //   THE ORIGINAL FINDING: Zod drops unknown keys, the form collected a
+        //   Voter's Card, and nin/bvn/cacNumber were the only keys listed — so
+        //   the number and its verification were dropped between the step and
+        //   the record. It was fixed by DECLARING them.
+        //
+        //   The form no longer asks (lib/export-identity), so the right answer
+        //   flipped: a key declared for a field nobody fills is dead weight
+        //   that reads as a collected value. What the finding really says is
+        //   that the schema and the form must agree, and this is that
+        //   statement in the direction it now points.
         const schema = source(SCHEMA);
         const kycBlock = schema.slice(schema.indexOf('kycData: z.object({'));
+        const form = source(FORM);
 
-        expect(kycBlock.slice(0, 700)).toContain('votersCard:');
-        expect(kycBlock.slice(0, 700)).toContain('votersCardVerified:');
+        expect(kycBlock).not.toContain('votersCard:');
+        expect(kycBlock).not.toContain('votersCardVerified:');
+        expect(form).not.toContain("Voter's Card Number");
     });
 
     it('and the verification flags the step gates on survive it too', () => {
@@ -211,7 +241,15 @@ describe('#349 — the Voter’s Card survives the schema', () => {
         expect(kycBlock.slice(0, 700)).toContain('bvnVerified:');
     });
 
-    it('the form really does collect a Voter’s Card, so this is not speculative', () => {
-        expect(source(FORM)).toContain("Voter's Card Number (PVC / VIN)");
+    it('and the keys the form DOES fill are all still declared', () => {
+        //   The vacuity guard on the assertion above: "not there" passes on an
+        //   empty schema too. These are the fields #773 rescued from the same
+        //   strip, and they must survive a removal aimed at a different one.
+        const schema = source(SCHEMA);
+        const kycBlock = schema.slice(schema.indexOf('kycData: z.object({'));
+
+        for (const key of ['nin:', 'bvn:', 'ninVerified:', 'bvnVerified:', 'dateOfBirth:', 'idType:', 'idNumber:']) {
+            expect(kycBlock).toContain(key);
+        }
     });
 });

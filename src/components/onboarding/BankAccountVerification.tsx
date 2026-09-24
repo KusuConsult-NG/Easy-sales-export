@@ -9,18 +9,16 @@ interface BankAccountVerificationProps {
     initialData?: Partial<BankAccountData>;
 }
 
+/**
+ * A settlement account, and nothing else.
+ *
+ * `bvn`, `bvnVerified` and `bvnCheckedByProvider` were declared here and
+ * emitted on every callback. They named the second BVN field — see the note
+ * where it used to render — and the server schema stripped all three, so they
+ * described a value that reached no record. The BVN belongs to the identity
+ * step; this one resolves a bank account.
+ */
 export interface BankAccountData {
-    bvn?: string;
-    bvnVerified?: boolean;
-    /**
-     * Whether an automated provider actually checked the BVN — #522.
-     *
-     * `bvnVerified` is deliberately unchanged (lib/identity-verification.ts
-     * argues why the stored boolean stays), so this is what distinguishes an
-     * ID a provider confirmed from one a member typed in. False on this
-     * platform today: #485 parked the provider.
-     */
-    bvnCheckedByProvider?: boolean;
     bankName: string;
     accountNumber: string;
     accountName: string;
@@ -37,16 +35,11 @@ interface Bank {
 }
 
 export function BankAccountVerification({ onVerified, initialData }: BankAccountVerificationProps) {
-    const [bvn, setBvn] = useState(initialData?.bvn || "");
-    const [verifyingBvn, setVerifyingBvn] = useState(false);
-    const [bvnVerified, setBvnVerified] = useState(initialData?.bvnVerified || false);
     //   #522. Whether an automated check actually ran, which on this platform
     //   is never — #485 parked the provider and the route answers
     //   `checked: false`. Both callers of that route ignored it and rendered
     //   success; this records the difference so the screen can tell a member
     //   what really happened.
-    const [bvnChecked, setBvnChecked] = useState(false);
-    const [bvnError, setBvnError] = useState("");
 
     const [bankName, setBankName] = useState(initialData?.bankName || "");
     const [accountNumber, setAccountNumber] = useState(initialData?.accountNumber || "");
@@ -73,8 +66,6 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                 if (initialData.accountNumber) setAccountNumber(initialData.accountNumber);
                 if (initialData.accountName) setAccountName(initialData.accountName);
                 if (initialData.verified !== undefined) setVerified(initialData.verified);
-                if (initialData.bvn) setBvn(initialData.bvn);
-                if (initialData.bvnVerified !== undefined) setBvnVerified(initialData.bvnVerified);
                 setIsInitialized(true);
             }
         }
@@ -125,11 +116,9 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                 // the applicant's guess and must not reach a payout record.
                 accountName: verified ? accountName : "",
                 verified,
-                bvn: bvn || undefined,
-                bvnVerified: bvnVerified || undefined
             });
         }
-    }, [bankName, accountNumber, accountName, verified, bvn, bvnVerified, banks]);
+    }, [bankName, accountNumber, accountName, verified, banks]);
 
     async function loadBankList() {
         setLoadingBanks(true);
@@ -169,8 +158,10 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             /**
              *   #284 THE SECOND COPY OF THE SAME STUB.
              *
-             *        This component verifies a BVN through /api/kyc/verify-bvn,
-             *        which made it LOOK like the verified one of the pair — and
+             *        This component used to verify a BVN through
+             *        /api/kyc/verify-bvn (since removed — see the note where
+             *        that field rendered), which made it LOOK like the
+             *        verified one of the pair — and
              *        the account-name resolution beside it was the same
              *        simulation as components/shared/BankAccountVerification:
              *
@@ -250,71 +241,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             accountNumber,
             accountName: "",
             verified: false,
-            bvn: bvn || undefined,
-            bvnVerified: bvnVerified || undefined
         });
-    };
-
-    async function handleVerifyBvn() {
-        if (!bvn || bvn.length !== 11) {
-            setBvnError("Please enter a valid 11-digit BVN");
-            return;
-        }
-
-        // We need a first name and last name to verify the BVN against.
-        // Assuming the Bank verification is done first, we can use the account Name. Or vice-versa.
-        // If they do Bank Verification first, we have `accountName`.
-        if (!verified || !accountName) {
-            setBvnError("Please verify your bank account first so we can match the names.");
-            return;
-        }
-
-        const nameParts = accountName.split(' ');
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts[nameParts.length - 1] || '';
-
-        setVerifyingBvn(true);
-        setBvnError("");
-
-        try {
-            const response = await fetch('/api/kyc/verify-bvn', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    bvn: bvn,
-                    firstName: firstName,
-                    lastName: lastName
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success && result.isMatch) {
-                setBvnVerified(true);
-                setBvnChecked(result.checked === true);
-                setBvnError("");
-
-                // Update parent with the recorded BVN. The flag itself is
-                // deliberately unchanged — see lib/identity-verification.ts —
-                // and travels with whether anything actually checked it.
-                onVerified({
-                    bvn: bvn,
-                    bvnVerified: true,
-                    bvnCheckedByProvider: result.checked === true,
-                    bankName,
-                    accountNumber,
-                    accountName: accountName,
-                    verified: true,
-                });
-            } else {
-                setBvnVerified(false);
-                setBvnError(result.error || result.details || "Verification failed");
-            }
-        } catch (error) {
-            setBvnError("An unexpected error occurred during verification");
-        } finally {
-            setVerifyingBvn(false);
-        }
     };
 
     return (
@@ -476,9 +403,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                                 Account Verified
                             </p>
                             <p className="text-sm text-green-700">
-                                {bvnVerified
-                                    ? "Bank account & BVN both verified ✓"
-                                    : "Your bank account has been successfully verified"}
+                                Your bank account has been successfully verified
                             </p>
                         </div>
                     </div>
@@ -491,74 +416,31 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                     </button>
                 </div>
             )}
-            {/* BVN Verification (Only shown after successful bank verification) */}
-            {verified && (
-                <div className="mt-8 pt-6 border-t border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4">Identity Verification</h3>
-                    <label className="block text-sm font-medium text-slate-900 mb-2">
-                        Bank Verification Number (BVN) <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={bvn}
-                            onChange={(e) => {
-                                setBvn(e.target.value.replace(/\D/g, "").slice(0, 11));
-                                setBvnVerified(false);
-                                setBvnError("");
-                            }}
-                            disabled={bvnVerified}
-                            placeholder="11-digit BVN"
-                            maxLength={11}
-                            className={`flex-1 px-4 py-2.5 bg-white border rounded-lg focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500 ${bvnVerified ? "border-green-500 focus:ring-green-500" : "border-slate-300 focus:ring-orange-500 focus:border-transparent"} disabled:opacity-50`}
-                        />
-                        <button
-                            onClick={handleVerifyBvn}
-                            disabled={verifyingBvn || !bvn || bvn.length !== 11 || bvnVerified}
-                            className="px-6 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium min-w-[120px]"
-                        >
-                            {verifyingBvn ? (
-                                <><Loader2 className="w-5 h-5 animate-spin" /> Verifying</>
-                            ) : bvnVerified ? (
-                                <><CheckCircle className="w-5 h-5 text-green-600" /> Verified</>
-                            ) : (
-                                "Verify BVN"
-                            )}
-                        </button>
-                    </div>
-                    {bvnError && (
-                        <div className="flex items-start gap-2 mt-2 text-red-600">
-                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                            <span className="text-sm">{bvnError}</span>
-                        </div>
-                    )}
-                    {bvnVerified && (
-                        <div className="flex items-center justify-between mt-2">
-                            {/*
-                              *   #522. "Verified against account name successfully"
-                              *   was shown for an ID nothing had checked — the
-                              *   route answers `checked: false` because #485
-                              *   parked the provider, and this component ignored
-                              *   it. The claim now matches what happened.
-                              */}
-                            <div className={`flex items-center gap-2 ${bvnChecked ? "text-green-600" : "text-slate-600"}`}>
-                                <CheckCircle className="w-4 h-4 shrink-0" />
-                                <span className="text-sm font-medium">
-                                    {bvnChecked
-                                        ? "BVN Verified against account name successfully"
-                                        : "BVN recorded — our team will confirm it during review"}
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => { setBvnVerified(false); setBvn(""); setBvnError(""); }}
-                                className="text-xs text-slate-500 underline hover:text-slate-700 ml-2"
-                            >
-                                Edit BVN
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
+            {/*
+                THE SECOND BVN FIELD STOOD HERE, and it is gone.
+
+                  THE OWNER: "BVN is required 2 times instead of once."
+
+                The export wizard asked for the same eleven digits twice — on
+                the identity step and again here — and neither field knew about
+                the other. This was the weaker of the two despite the red
+                asterisk:
+
+                  ·  IT DID NOT BLOCK. BankAccountStep's guard reads
+                     `!bankData || !bankData.verified`, which is the ACCOUNT's
+                     flag. Nothing ever checked the BVN.
+                  ·  NOTHING CHECKED IT EITHER. #522 records that the route
+                     answers `checked: false` because #485 parked the provider,
+                     so the screen said "our team will confirm it during
+                     review".
+                  ·  AND THE TEAM NEVER SAW IT. `exportOnboardingSchema.bank`
+                     declares four keys and Zod strips the rest, so `bvn`,
+                     `bvnVerified` and `bvnCheckedByProvider` never reached the
+                     record at all.
+
+                The BVN is asked once, on the identity step, where it is stored
+                and where lib/export-identity can require it.
+            */}
         </div>
     );
 }

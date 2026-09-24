@@ -163,8 +163,12 @@ export function toExportOnboardingPayload(
             bvn: str(kyc.bvn),
             ninVerified: bool(kyc.ninVerified),
             bvnVerified: bool(kyc.bvnVerified),
-            votersCard: str(kyc.votersCard),
-            votersCardVerified: bool(kyc.votersCardVerified),
+            //   The voter's card used to travel here. #349 added it because
+            //   Zod was stripping it — collected by the form, dropped before
+            //   the record. The form no longer collects one (see
+            //   lib/export-identity), so sending it would re-create the strip
+            //   this mapper exists to prevent: a key on the wire that the
+            //   schema does not declare.
             dateOfBirth: str(kyc.dateOfBirth),
             otherNames: str(kyc.otherNames),
             city: str(kyc.city),

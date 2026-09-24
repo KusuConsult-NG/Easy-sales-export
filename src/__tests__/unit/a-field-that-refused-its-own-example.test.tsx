@@ -68,9 +68,19 @@ const code = (rel: string) => read(rel)
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
 
-/** Every screen that asks for a Voter Identification Number. */
+/**
+ * Every screen that asks for a Voter Identification Number.
+ *
+ *   onboarding/KYCForm.tsx was the second of the two. It no longer asks —
+ *   export onboarding does not collect a voter's card at all now, see
+ *   lib/export-identity — so the ceiling it imposed cannot be wrong on a
+ *   field it does not have. WAVE's civic step still asks, because voter
+ *   registration is what that step is about, and the finding lives on there.
+ *
+ *   Guarded below rather than simply shortened: a list of one that silently
+ *   became a list of none is how a scanner stops scanning.
+ */
 const VIN_FIELDS = [
-    'src/components/onboarding/KYCForm.tsx',
     'src/app/wave/application/steps/CivicStatusStep.tsx',
 ];
 
@@ -78,6 +88,20 @@ const VIN_FIELDS = [
 const PLACEHOLDER = '90F5B123456789012345';
 
 describe('#628 — the field accepts the number it asks for', () => {
+    it('THERE IS STILL A FIELD TO CHECK — the scanner has not emptied', () => {
+        //   Every assertion below is `it.each(VIN_FIELDS)`, which passes
+        //   vacuously on an empty list. KYCForm left this list when the
+        //   voter's card was removed from export onboarding; if the last entry
+        //   ever goes the same way, this says so instead of going quiet.
+        expect(VIN_FIELDS.length).toBeGreaterThan(0);
+    });
+
+    it('and the form that dropped the field really has dropped it', () => {
+        //   The other half: KYCForm is off the list because it stopped asking,
+        //   not because somebody wanted the assertion to pass.
+        expect(code('src/components/onboarding/KYCForm.tsx')).not.toContain(PLACEHOLDER);
+    });
+
     it('THE PLACEHOLDER REALLY IS TWENTY CHARACTERS — the premise, checked', () => {
         //   The whole finding rests on this count. Asserted rather than trusted,
         //   because a miscount here would make everything below theatre.

@@ -188,41 +188,67 @@ describe('#525 — the rule, and why it had to be a new one', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#525 — the form has the guard AND the control for it', () => {
+describe('#525 — the guard and the control come as a pair', () => {
     const form = () => stripComments(
         readFileSync(join(process.cwd(), 'src/components/onboarding/KYCForm.tsx'), 'utf-8'),
         { label: 'KYCForm.tsx' },
     );
 
-    it('THE CONFIRM CHECKBOX IS RENDERED, NOT JUST CHECKED', () => {
-        //   #349's exact defect: setNinConfirmed and setBvnConfirmed existed
-        //   with nothing rendering them, so the handlers "would have refused
-        //   every time". Adding the guard without the control would have
-        //   reproduced it on the field this finding is about.
-        const src = form();
+    /*
+     *   THE VOTER'S CARD THIS FINDING IS ABOUT HAS LEFT THIS FORM.
+     *
+     *   #525 gave it the confirm guard the other two documents had, and #349's
+     *   lesson — that a guard without its control refuses every time — is why
+     *   the checkbox came with it. Export onboarding no longer collects a
+     *   voter's card at all (see lib/export-identity), so the instance is
+     *   gone.
+     *
+     *   The SHAPE is what was worth keeping, and it is stated here as a
+     *   property over whatever documents the form has: every `if (!xConfirmed)`
+     *   must have a checkbox that sets it, and every field must clear it when
+     *   the number is edited. A document added later joins the pattern; one
+     *   removed cannot leave half of itself behind.
+     */
+    function confirmGuards(src: string): string[] {
+        return [...src.matchAll(/if \(!(\w+Confirmed)\)/g)].map((m) => m[1]);
+    }
 
-        expect(src).toContain('if (!votersCardConfirmed)');
-        expect(src).toContain('setVotersCardConfirmed(e.target.checked)');
-        expect(src).toContain('checked={votersCardConfirmed}');
+    it('THERE ARE GUARDS TO CHECK — the scanner has not emptied', () => {
+        expect(confirmGuards(form()).length).toBeGreaterThan(0);
     });
 
-    it('AND EDITING THE NUMBER CLEARS IT, LIKE THE OTHER TWO', () => {
+    it('EVERY GUARD HAS A CONTROL THAT SETS IT', () => {
         const src = form();
-        const clearBlock = src.slice(src.indexOf("if (field === 'votersCard')"));
 
-        expect(clearBlock.slice(0, 240)).toContain('setVotersCardConfirmed(false)');
-    });
-
-    it('and the client checks the format before spending a round trip', () => {
-        expect(form()).toContain('looksLikeFakeVotersCard(votersCard)');
-    });
-
-    it('and all three documents now have the same three guards', () => {
-        //   The shape, not just this instance: a fourth document added to this
-        //   form should read like the three above it.
-        const src = form();
-        for (const guard of ['bvnConfirmed', 'ninConfirmed', 'votersCardConfirmed']) {
-            expect(src).toContain(`if (!${guard})`);
+        for (const guard of confirmGuards(src)) {
+            const setter = `set${guard[0].toUpperCase()}${guard.slice(1)}`;
+            expect(src).toContain(`${setter}(e.target.checked)`);
+            expect(src).toContain(`checked={${guard}}`);
         }
+    });
+
+    it('AND EDITING THE NUMBER CLEARS IT', () => {
+        const src = form();
+
+        for (const guard of confirmGuards(src)) {
+            const setter = `set${guard[0].toUpperCase()}${guard.slice(1)}`;
+            expect(src).toContain(`${setter}(false)`);
+        }
+    });
+
+    it('and the two that remain are the two the form asks for', () => {
+        //   Named, so the property above cannot pass on a form that has
+        //   quietly stopped asking for an identity document altogether.
+        expect(confirmGuards(form()).sort()).toEqual(['bvnConfirmed', 'ninConfirmed']);
+    });
+
+    it('the voter-card format rule still exists for the screen that uses it', () => {
+        //   `looksLikeFakeVotersCard` was checked here before the round trip.
+        //   WAVE's civic step still asks for a VIN and still applies it, via
+        //   optionalVotersCardField — the rule outlives this form.
+        expect(stripComments(
+            readFileSync(join(process.cwd(), 'src/lib/kyc-validators.ts'), 'utf-8'),
+            { label: 'kyc-validators.ts' },
+        )).toContain('looksLikeFakeVotersCard');
     });
 });

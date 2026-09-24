@@ -14,6 +14,7 @@ import { KYCForm, KYCData } from '@/components/onboarding/KYCForm';
 import { DocumentUpload } from '@/components/onboarding/DocumentUpload';
 import { useToast } from '@/contexts/ToastContext';
 import { saveKYCProfileAction } from '@/app/actions/kyc';
+import { missingExportIdentity } from '@/lib/export-identity';
 
 interface KYCVerificationStepProps {
     onNext: (data: any) => void;
@@ -69,15 +70,21 @@ export function KYCVerificationStep({
             return;
         }
 
-        // Require NIN verification only if NIN is entered
-        if (kycData.nin && kycData.nin.trim() !== '' && !kycData.ninVerified) {
-            showToast('Please verify your NIN before continuing', 'error');
-            return;
-        }
-
-        // Require BVN verification only if BVN is entered
-        if (kycData.bvn && kycData.bvn.trim() !== '' && !kycData.bvnVerified) {
-            showToast('Please verify your BVN before continuing', 'error');
+        /*
+         *   BOTH DOCUMENTS, VERIFIED — the shared rule, not a third opinion.
+         *
+         *     THE OWNER: "mandate NIN and BVN."
+         *
+         *   What stood here was "Require NIN verification only if NIN is
+         *   entered", and the same for BVN, so an applicant who entered
+         *   neither walked straight past. The submit guard and the server
+         *   schema said the same thing in their own words; all three now apply
+         *   lib/export-identity, so this button cannot be laxer or stricter
+         *   than the door behind it.
+         */
+        const missingIdentity = missingExportIdentity(kycData);
+        if (missingIdentity.length > 0) {
+            showToast(missingIdentity[0].message, 'error');
             return;
         }
 
