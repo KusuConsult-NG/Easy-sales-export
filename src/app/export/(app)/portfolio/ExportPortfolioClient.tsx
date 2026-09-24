@@ -15,6 +15,9 @@ import { toast } from "sonner";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 import { numberOrZero } from "@/lib/numbers";
 import { formatShortDateOrDash } from "@/lib/date-utils";
+//   One rule for capital, return and profit — see lib/export-returns for the
+//   four different answers this page and its neighbours used to give.
+import { investmentProfit, roiPercent } from "@/lib/export-returns";
 
 interface Investment {
     id: string;
@@ -69,14 +72,19 @@ export default function ExportPortfolioClient({ initial = null }: {
             const result = takeSeedStats() ?? await getUserExportStatsAction();
             if (result.success && result.data) {
                 const totalVal = result.data.totalInvested;
+                //   The GROSS expected back — capital and profit together,
+                //   which is what `expectedReturn` holds on every row.
                 const totalRet = result.data.totalReturns + result.data.pendingReturns;
-                // Simple aggregate ROI
-                const avgRoi = totalVal > 0 ? Math.round(((totalRet - totalVal) / totalVal) * 100) : 0;
 
                 setStats({
                     totalValue: totalVal,
-                    totalReturns: result.data.totalReturns + result.data.pendingReturns, // Show all expected returns
-                    roi: avgRoi
+                    //   The GAIN, which is what the tile's "+" and its green
+                    //   claim. It printed the gross, so a ₦100,000 portfolio
+                    //   expecting ₦120,000 back read "+₦120,000".
+                    totalReturns: investmentProfit(totalVal, totalRet),
+                    //   Same function as each row below, so the tile and the
+                    //   table cannot disagree the way they did.
+                    roi: roiPercent(totalVal, totalRet)
                 });
             }
         }
@@ -100,7 +108,13 @@ export default function ExportPortfolioClient({ initial = null }: {
             if (result.success && result.data) {
                 const mappedInvestments = result.data.map((inv: any) => ({
                     ...inv,
-                    roi: inv.amount > 0 ? Math.round((inv.expectedReturn / inv.amount) * 100) : 0 // Calculate ROI dynamically
+                    //   This was `expectedReturn / amount`, which is the return
+                    //   MULTIPLE — 120 where the answer is 20 — printed under a
+                    //   column headed ROI, one table below a tile that had it
+                    //   right. See lib/export-returns.
+                    roi: roiPercent(inv.amount, inv.expectedReturn),
+                    //   And the gain, for the column whose "+" claims one.
+                    profit: investmentProfit(inv.amount, inv.expectedReturn),
                 }));
 
                 if (reset) {
@@ -167,7 +181,13 @@ export default function ExportPortfolioClient({ initial = null }: {
                     <div className="bg-white rounded-xl p-6 border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
                             <div className="text-sm text-slate-600">
-                                Total Returns
+                                {/*
+                                    "Total Returns" over a "+" and a green
+                                    number, showing the GROSS. Both the sign and
+                                    the colour say gain, so the words say gain
+                                    too and the value is the gain.
+                                  */}
+                                Expected Profit
                             </div>
                             <TrendingUp className="w-5 h-5 text-green-600" />
                         </div>
@@ -207,7 +227,7 @@ export default function ExportPortfolioClient({ initial = null }: {
                                         Investment
                                     </th>
                                     <th className="text-left p-4 text-sm font-semibold text-slate-900">
-                                        Expected Returns
+                                        Expected Profit
                                     </th>
                                     <th className="text-left p-4 text-sm font-semibold text-slate-900">
                                         ROI
@@ -254,7 +274,7 @@ export default function ExportPortfolioClient({ initial = null }: {
                                             ₦{numberOrZero(investment.amount).toLocaleString()}
                                         </td>
                                         <td className="p-4 text-green-600 font-medium">
-                                            +₦{numberOrZero(investment.expectedReturn).toLocaleString()}
+                                            +₦{numberOrZero((investment as any).profit).toLocaleString()}
                                         </td>
                                         <td className="p-4">
                                             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">

@@ -7,6 +7,9 @@ import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { getExportRequestByIdAction, updateExportWindowAction } from "@/app/actions/export";
 import type { ExportWindow } from "@/lib/types/firestore";
+//   The ROI box writes the rate the payout honours, not only the label — see
+//   lib/export-window-status.
+import { exportWindowRoiPercent, DEFAULT_EXPORT_ROI_PERCENT } from "@/lib/export-window-status";
 
 export default function EditExportWindowPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -69,8 +72,30 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
 
     async function handleSave() {
         setSaving(true);
+
+        /*
+         *   THE ROI BOX NOW SETS THE RATE THAT IS PAID.
+         *
+         *   It wrote `roi`, a STRING, and the two fulfilment paths and the
+         *   escrow-release cron all pay `amount * exportWindowReturnMultiplier`,
+         *   which reads `returnMultiplier` and ignores that string entirely —
+         *   deliberately, because no money path has ever consulted it. So an
+         *   admin could type 25% here, the member's window page would advertise
+         *   25%, and the payout would transfer 20%.
+         *
+         *   Written together, from one number, so the advertised rate and the
+         *   paid rate cannot differ. A window edited before this keeps whatever
+         *   it had: nothing is back-filled, and a window with no multiplier goes
+         *   on paying the platform default, exactly as it does today.
+         */
+        const roiPercent = exportWindowRoiPercent(windowData.roi);
+
         const updateData = {
             ...windowData,
+            //   Normalised to the single figure the multiplier is built from,
+            //   so the box cannot keep saying "15-20%" while the rate is 20.
+            roi: `${roiPercent}%`,
+            returnMultiplier: 1 + roiPercent / 100,
             timeline,
             documents,
             specifications: specs,
@@ -173,9 +198,22 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                     type="text"
                                     value={windowData.roi || ""}
                                     onChange={e => updateField("roi", e.target.value)}
-                                    placeholder="e.g. 15-25%"
+                                    placeholder={`e.g. ${DEFAULT_EXPORT_ROI_PERCENT}%`}
                                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                                 />
+                                {/*
+                                    The placeholder used to read "e.g. 15-25%",
+                                    inviting a RANGE — and a range is not a rate
+                                    anything can pay. exportWindowRoiPercent
+                                    refuses one rather than silently taking its
+                                    low end, so a range here saves as the
+                                    platform default. Said on the screen, since
+                                    the save is what the member is paid.
+                                  */}
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                    One figure, not a range. Investors are paid this rate;
+                                    anything else saves as {DEFAULT_EXPORT_ROI_PERCENT}%.
+                                </p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Min Investment (₦)</label>

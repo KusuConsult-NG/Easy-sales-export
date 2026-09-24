@@ -1,7 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { exportWindowHasExpired } from "@/lib/export-window-status";
+import { exportWindowHasExpired, exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { COLLECTIONS, type ExportWindow } from "@/lib/types/firestore";
@@ -130,7 +130,23 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     openDate: (data.startDate as unknown as Timestamp)?.toDate ? (data.startDate as unknown as Timestamp).toDate().toISOString() : new Date(data.startDate || Date.now()).toISOString(),
                     closeDate: (data.endDate as unknown as Timestamp)?.toDate ? (data.endDate as unknown as Timestamp).toDate().toISOString() : new Date(data.endDate || Date.now()).toISOString(),
                     minInvestment: data.amount,
-                    projectedROI: data.roi,
+                    /*
+                     *   THE RATE THAT WILL BE PAID, not a label nobody wrote.
+                     *
+                     *   This was `data.roi` — a display STRING that the money
+                     *   paths deliberately ignore, and that nothing wrote onto
+                     *   a window until the admin edit screen started to. So the
+                     *   investment card showed a blank beside the words
+                     *   "Projected ROI" on every window, or, once an admin
+                     *   typed one, a figure the escrow-release cron would not
+                     *   honour: it pays `amount * exportWindowReturnMultiplier`.
+                     *
+                     *   Derived from the multiplier, so the quote and the payout
+                     *   are the same number by construction. See
+                     *   lib/export-window-status for why the multiplier is the
+                     *   money and the string is not.
+                     */
+                    projectedROI: `${Math.round((exportWindowReturnMultiplier(data as any) - 1) * 100)}%`,
                     status: data.status === "active" ? "Opening Soon" : "Open",
                     // #352 floored: totalSpots has no writer, so this was
                     // 0 - spotsFilled — a NEGATIVE spot count on every window
@@ -238,7 +254,9 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 openDate: (data.startDate as unknown as Timestamp)?.toDate ? (data.startDate as unknown as Timestamp).toDate().toISOString() : new Date(data.startDate || Date.now()).toISOString(),
                 closeDate: (data.endDate as unknown as Timestamp)?.toDate ? (data.endDate as unknown as Timestamp).toDate().toISOString() : new Date(data.endDate || Date.now()).toISOString(),
                 minInvestment: data.amount,
-                projectedROI: data.roi,
+                //   The rate that will be paid — see the note on the listing
+                //   mapper above.
+                projectedROI: `${Math.round((exportWindowReturnMultiplier(data as any) - 1) * 100)}%`,
                 status: data.status === "active" ? "Opening Soon" : "Open",
                 // #352 see the list above — floored for the same reason.
                 spotsLeft: Math.max(0, (Number(data.totalSpots) || 0) - (Number(data.spotsFilled) || 0)),
