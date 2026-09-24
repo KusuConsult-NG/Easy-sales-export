@@ -26,6 +26,7 @@ import { toMillis } from "@/lib/firestore-serialize";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { readUserDocOnce } from "@/lib/current-user-doc";
+import { startedEarly } from "@/lib/started-early";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -48,6 +49,48 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
 
         let status = userData?.serviceRegistrations?.marketplace?.status;
         let accountType = userData?.serviceRegistrations?.marketplace?.accountType;
+
+        /*
+         *   THE LEGACY ROW GOES OUT WITH THE USER ROW, NOT AFTER EVERYTHING.
+         *
+         *       [slow-action] checkMarketplaceStatusAction took 2324ms
+         *
+         *   #270 took this page from eleven reads to seven and then to five,
+         *   and it was still taking seconds, because a read count cannot see
+         *   the shape this was in. Measured with lib/testing/read-depth, a
+         *   first-time visitor to /marketplace/onboarding — the commonest
+         *   visitor that screen has — paid FIVE READS IN FOUR GENERATIONS:
+         *
+         *       1. the user row
+         *       2. the identity walk                  needs the caller's id
+         *       3. the owner-scoped verifications     needs the OWNED IDS
+         *       4. this legacy query                  needs NOTHING
+         *
+         *   Step 4 asks `marketplace_sellers` for `userId == <the caller>`. It
+         *   depends on the session and on nothing else in the chain, and it sat
+         *   at the end of it — a round trip spent waiting for answers it never
+         *   reads. Issued here it shares a generation with the walk, and the
+         *   visitor waits three times instead of four.
+         *
+         *   THE GUARD IS `!status`, WHICH IS EXACTLY WHEN THE FALLBACK IS
+         *   REACHABLE. Nothing below ever clears `status`, so a row that
+         *   carries one — approved or pending — returns before the fallback and
+         *   never issues this at all. That keeps the approved seller at the one
+         *   read they pay today.
+         *
+         *   WHAT IT COSTS, STATED: an account with no registration on its row
+         *   but a seller_verifications record reads five where it read four.
+         *   It waits for none of them — its depth is unchanged at three — and
+         *   it is the repair population these heals exist for, not the common
+         *   path. Buying a generation with a concurrent read is the right way
+         *   round here, as it was in #283.
+         */
+        const readLegacySellerRow = () => db.collection(COLLECTIONS.MARKETPLACE_SELLERS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        const legacySellerSoon = !status ? startedEarly(readLegacySellerRow()) : null;
 
         /*
          *   Set only when the `status !== "approved"` branch below actually
@@ -203,10 +246,16 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
         }
 
         // ── FALLBACK: Returning user whose marketplace data predates V2 schema ──
-        const legacySellerSnap = await db.collection(COLLECTIONS.MARKETPLACE_SELLERS)
-            .where('userId', '==', session.user.id)
-            .limit(1)
-            .get();
+        /*
+         *   Already in the air since before the verification block — see the
+         *   note above. The `??` arm is the same query, not a second one, and
+         *   it is a safety net rather than a path: reaching here means `status`
+         *   was falsy after the block, nothing above clears it, so it was falsy
+         *   at the guard too and the prefetch was issued. It is kept so that a
+         *   future branch which does clear `status` cannot silently turn this
+         *   into a read of nothing.
+         */
+        const legacySellerSnap = await (legacySellerSoon ?? readLegacySellerRow)();
 
         if (!legacySellerSnap.empty) { const legacyData = legacySellerSnap.docs[0].data();
             const legacyStatus = legacyData?.status ?? 'pending';
