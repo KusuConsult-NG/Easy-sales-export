@@ -11,6 +11,9 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { PRODUCT_INITIAL_STATUS, PRODUCT_CREATED_MESSAGE } from "@/lib/product-status";
 import { checkProductPricing } from "@/lib/product-pricing-guard";
+//   One listing per submission — the id comes from the form, not the clock.
+//   The same rule the server action runs; see lib/product-submission.
+import { productDocumentId, hasSubmissionId, SUBMISSION_ID_FIELD } from "@/lib/product-submission";
 import { sellerIsApproved } from "@/lib/seller-approval";
 
 /**
@@ -154,7 +157,33 @@ export async function POST(request: NextRequest) {
         }
 
         // ✅ FIXED: Upload images to Firebase Storage (was placeholder stub, now supports pre-uploaded URLs)
-        const productId = `product_${userId}_${Date.now()}`;
+        //   #907 ONE LISTING PER SUBMISSION. This was
+        //   `product_${userId}_${Date.now()}` here too, so this door produced
+        //   duplicate rows for one submission in exactly the same way.
+        const submissionId = formData.get(SUBMISSION_ID_FIELD);
+        const productId = productDocumentId(userId, submissionId);
+
+        /*
+         *   The replay check runs BEFORE the uploads below, not just before the
+         *   write. Those loops push each image to storage under
+         *   `products/${userId}/${productId}/...`, so a duplicate delivery that
+         *   only checked at the end would still have re-uploaded every photo and
+         *   the video — paid-for bytes, for a listing already made.
+         */
+        if (hasSubmissionId(submissionId)) {
+            const existing = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
+            if (existing.exists) {
+                logger.info("Duplicate product submission ignored", { userId, productId });
+                return NextResponse.json({
+                    success: true,
+                    //   #906 The same constant the real create returns. A
+                    //   replay that answered in its own words would tell one of
+                    //   two identical submissions something different.
+                    message: PRODUCT_CREATED_MESSAGE,
+                    productId,
+                });
+            }
+        }
         const images: string[] = [];
         let videoUrl = "";
 

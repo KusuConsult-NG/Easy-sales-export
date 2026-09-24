@@ -18,6 +18,30 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
+import { isOnOffer, retailPriceOf, discountPercent } from "@/lib/price-reduction";
+
+/**
+ * Is this listing currently a hot deal, and by how much?
+ *
+ *   THE OWNER: "when users edit product it never appears on hot deal why?"
+ *
+ *   The cut was being recorded and the buyer's Flash Sales tab was showing it.
+ *   What a SELLER could see was nothing: this page prints one price, and the
+ *   only thing on their dashboard labelled "Flash sales hub" is Village
+ *   Market, which lists EVENTS. So the one person who needs to know whether
+ *   their reduction took effect had no screen that said so, and the honest
+ *   conclusion from where they were standing was that it had not.
+ *
+ *   Computed from the shared rule, so this page expires an offer on exactly
+ *   the same day the buyer's does. A stored flag here would be a fourth place
+ *   for the answer to drift — see lib/price-reduction.
+ */
+function sellerOffer(product: Product): { onOffer: boolean; percent: number } {
+    const retail = retailPriceOf(product.pricingTiers);
+    return isOnOffer(product, retail)
+        ? { onOffer: true, percent: discountPercent(product, retail) }
+        : { onOffer: false, percent: 0 };
+}
 
 export default function SellerProductsClient(
     { initial = null }: { initial?: Awaited<ReturnType<typeof getSellerProductsAction>> | null },
@@ -273,6 +297,7 @@ export default function SellerProductsClient(
 
                                     const statusConfig = getStatusConfig(displayStatus);
                                     const retailPrice = product.pricingTiers?.find(t => t.type === "retail")?.price || product.pricingTiers?.[0]?.price || 0;
+                                    const offer = sellerOffer(product);
 
                                     return (
                                         <tr key={product.id} className="hover:bg-slate-50">
@@ -294,6 +319,11 @@ export default function SellerProductsClient(
                                             </td>
                                             <td className="px-6 py-4 font-semibold text-slate-900">
                                                 {formatCurrency(retailPrice)}/{product.unit}
+                                                {offer.onOffer && (
+                                                    <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-extrabold rounded-md whitespace-nowrap">
+                                                        {offer.percent > 0 ? `${offer.percent}% OFF · HOT DEAL` : "HOT DEAL"}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`font-semibold ${product.availableQuantity === 0 ? 'text-red-600' :
@@ -365,6 +395,7 @@ export default function SellerProductsClient(
 
                             const statusConfig = getStatusConfig(displayStatus);
                             const retailPrice = product.pricingTiers?.find(t => t.type === "retail")?.price || product.pricingTiers?.[0]?.price || 0;
+                            const offer = sellerOffer(product);
 
                             return (
                                 <div key={product.id} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
@@ -381,6 +412,11 @@ export default function SellerProductsClient(
                                         <div className="bg-slate-50 p-3 rounded-lg">
                                             <span className="text-slate-500 block text-xs mb-1">Price</span>
                                             <span className="font-bold text-slate-900">{formatCurrency(retailPrice)}<span className="text-slate-500 font-normal">/{product.unit}</span></span>
+                                            {offer.onOffer && (
+                                                <span className="mt-1 inline-block px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-extrabold rounded-md whitespace-nowrap">
+                                                    {offer.percent > 0 ? `${offer.percent}% OFF · HOT DEAL` : "HOT DEAL"}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="bg-slate-50 p-3 rounded-lg">
                                             <span className="text-slate-500 block text-xs mb-1">Stock</span>

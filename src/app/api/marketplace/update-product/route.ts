@@ -11,6 +11,9 @@ import { FieldValue } from "@/lib/firestore-compat";
 //   #794 One rule for what a product may be priced at, shared with the other
 //   three product doors — see lib/product-pricing-guard.
 import { checkProductPricing, type PricingCheck } from "@/lib/product-pricing-guard";
+//   #867 The same reduction rule the server action runs, so the two update
+//   doors cannot disagree about whether a price cut is a hot deal.
+import { priceReductionPatch, retailPriceOf } from "@/lib/price-reduction";
 /**
  * Fields a seller may change on their own product.
  *
@@ -172,8 +175,41 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        /*
+         *   #867 A CUT MADE THROUGH THIS DOOR IS A HOT DEAL TOO.
+         *
+         *   THE OWNER: "when users edit product it never appears on hot deal
+         *   why?"
+         *
+         *   `pricingTiers` is on the editable list above, so this route can
+         *   lower a price — and it recorded nothing when it did, while
+         *   _updateProductAction one file over recorded the reduction. Two
+         *   writers disagreeing about a product field is the shape this
+         *   codebase has repaired repeatedly (the status defect, the
+         *   certifications defect); the difference here is that the disagreement
+         *   is invisible, because the loser writes NOTHING rather than something
+         *   wrong.
+         *
+         *   COMPARED AGAINST THE STORED ROW. The deny-list above blocks
+         *   `originalPrice` and `flashPrice` precisely so a client cannot
+         *   "present an invented discount against an invented original price" —
+         *   so the previous price is read from the document, never from the
+         *   request. That refusal stands; this is what makes it affordable.
+         *
+         *   Only when the patch carries a price. A partial update that does not
+         *   mention `pricingTiers` leaves any existing offer exactly as it is,
+         *   rather than clearing it against a price it never set.
+         */
+        const reduction = Array.isArray(patch.pricingTiers)
+            ? priceReductionPatch(
+                retailPriceOf(productDoc.data()?.pricingTiers),
+                retailPriceOf(patch.pricingTiers),
+            )
+            : null;
+
         await productRef.update({
             ...patch,
+            ...(reduction ?? {}),
             updatedAt: FieldValue.serverTimestamp(),
         });
 

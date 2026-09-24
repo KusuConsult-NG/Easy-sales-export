@@ -15,6 +15,9 @@ import { ProductSchema } from "@/lib/validations/marketplace";
 //   routes — see lib/product-pricing-guard.
 import { checkProductPricing } from "@/lib/product-pricing-guard";
 import { priceReductionPatch, retailPriceOf } from "@/lib/price-reduction";
+//   One listing per submission — the id comes from the form, not the clock.
+//   See lib/product-submission for why both creators share the rule.
+import { productDocumentId, hasSubmissionId, SUBMISSION_ID_FIELD } from "@/lib/product-submission";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
@@ -147,7 +150,11 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             });
         }
 
-        const productId = `product_${userId}_${Date.now()}`;
+        //   #907 ONE LISTING PER SUBMISSION. This was
+        //   `product_${userId}_${Date.now()}`, so the same listing delivered
+        //   twice got two ids and became two rows. See lib/product-submission.
+        const submissionId = formData.get(SUBMISSION_ID_FIELD);
+        const productId = productDocumentId(userId, submissionId);
         const rawData = { 
             id: productId,
             sellerId: userId,
@@ -238,6 +245,26 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
 
         // Create product
         const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
+
+        /*
+         *   A SECOND DELIVERY IS A REPLAY, NOT AN OVERWRITE.
+         *
+         *   Reported as success, because from the seller's side it IS the
+         *   success of the listing they submitted — failing here would tell
+         *   somebody their product was rejected while it sits in the queue.
+         *
+         *   Never a write. A submission id the seller still holds would
+         *   otherwise reset a suspended or archived listing to a fresh pending
+         *   one, which is the moderation escape hatch #906 closed from the
+         *   other side.
+         */
+        if (hasSubmissionId(submissionId)) {
+            const existing = await productRef.get();
+            if (existing.exists) {
+                logger.info("Duplicate product submission ignored", { userId, productId });
+                return { error: null, success: true as const, data: { productId } };
+            }
+        }
 
         const productData: any = { 
             id: productId,

@@ -15,6 +15,7 @@ import { formatCurrency } from "@/lib/utils";
 import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 import { firstImageSrc, renderableImages } from "@/lib/first-image";
 import { isSellableProductStatus } from "@/lib/product-status";
+import { isOnOffer, retailPriceOf, discountPercent } from "@/lib/price-reduction";
 
 //   #791 A broken thumbnail must not paint its alt text over the
 //   badges in the same box — see components/ui/ThumbnailImage.
@@ -151,6 +152,30 @@ export default function ProductDetailClient({ initial = null }: {
 
     const isFS = (product as any).isFlashSale === true;
 
+    /*
+     *   THE OWNER: "when users edit product it never appears on hot deal why?"
+     *
+     *   Half the answer was here. #867 made a seller's price cut into a hot
+     *   deal and wired the buyer's Flash Sales TAB to show it — a card reading
+     *   "20% OFF · Hot Deal", with the old price struck through. Tapping that
+     *   card landed on THIS page, which knew only about `isFlashSale`: one
+     *   green number, no strike-through, no percentage, badge "In Stock".
+     *
+     *   So the offer survived the write, survived the schema, survived the
+     *   list, and died at the only screen a buyer reaches by acting on it. A
+     *   discount the product page will not corroborate is worse than no
+     *   discount — it reads as a card that lied.
+     *
+     *   THE SHARED RULE, not a fourth copy of the arithmetic. Village Market's
+     *   flash price and an ordinary reduction are different things and stay
+     *   different: `isFS` is a row from FLASH_SALE_PRODUCTS with its own
+     *   `flashPrice`, while this is computed from the product's own stored
+     *   previous price and expires by itself. See lib/price-reduction.
+     */
+    const retail = retailPriceOf(product.pricingTiers);
+    const isDeal = !isFS && isOnOffer(product, retail);
+    const dealPercent = isDeal ? discountPercent(product, retail) : 0;
+
     /**
      *   #647 THIS PAGE OFFERED "ADD TO CART" ON A LISTING THAT HAD BEEN PULLED.
      *
@@ -220,6 +245,7 @@ export default function ProductDetailClient({ initial = null }: {
     // Determine badge based on product attributes
     let badge = "In Stock";
     if (isFS) badge = "Flash Sale Deal";
+    else if (isDeal) badge = dealPercent > 0 ? `${dealPercent}% OFF · Hot Deal` : "Hot Deal";
     else if (product.exportReady) badge = "Export Ready";
     else if (product.bulkAvailable) badge = "Bulk Available";
 
@@ -355,6 +381,26 @@ export default function ProductDetailClient({ initial = null }: {
                                         </span>
                                     </div>
                                     <span className="text-xs text-red-600 font-bold mt-1">Village Market Flash Sale Price</span>
+                                </div>
+                            ) : isDeal ? (
+                                <div className="mb-6 flex flex-col">
+                                    <div className="flex items-baseline gap-3 flex-wrap">
+                                        <span className="text-5xl font-bold text-red-600">
+                                            {priceDisplay}
+                                            <span className="text-xl font-normal text-slate-500 ml-2">/{product.unit}</span>
+                                        </span>
+                                        <span className="text-2xl text-slate-400 line-through">
+                                            {formatCurrency(Number((product as any).previousPrice ?? 0))}
+                                        </span>
+                                        {dealPercent > 0 && (
+                                            <span className="px-2.5 py-1 bg-red-100 text-red-700 text-sm font-extrabold rounded-lg shadow-sm">
+                                                {dealPercent}% OFF
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className="text-xs text-red-600 font-bold mt-1">
+                                        Hot Deal — the seller reduced this price
+                                    </span>
                                 </div>
                             ) : (
                                 <div className="text-5xl font-bold text-green-600 mb-6">

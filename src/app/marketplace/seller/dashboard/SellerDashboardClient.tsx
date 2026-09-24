@@ -9,8 +9,6 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import { getMyLiveRoles } from "@/app/actions/my-data";
-import { MARKETPLACE_BUYER_ROLES } from "@/lib/role-app-mapping";
 import { MarketplaceErrorBoundary } from "@/components/marketplace/MarketplaceErrorBoundary";
 import { logger } from '@/lib/logger';
 import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2, Wallet, Zap, ChevronLeft } from "lucide-react";
@@ -49,23 +47,6 @@ export default function SellerDashboardClient({ initial = null }: {
         togglesRes: Awaited<ReturnType<typeof getFeatureTogglesAction>>;
     } | null;
 }) {
-    /*
-     *   Does this account actually have a buyer view to switch to? Live, for
-     *   the reason given at the button: the session claim is up to eight hours
-     *   old either way.
-     */
-    const [canBuy, setCanBuy] = useState(false);
-    useEffect(() => {
-        let cancelled = false;
-        getMyLiveRoles()
-            .then((roles) => {
-                if (cancelled) return;
-                setCanBuy(MARKETPLACE_BUYER_ROLES.some((r) => roles.includes(r)));
-            })
-            .catch(() => { /* stays hidden; the action logs its own failure */ });
-        return () => { cancelled = true; };
-    }, []);
-
     const [loading, setLoading] = useState(true);
     /**
      *   #599 — THE THIRD SCREEN WITH THIS EXACT FAULT, AND THE SECOND ONE #594
@@ -216,30 +197,31 @@ export default function SellerDashboardClient({ initial = null }: {
                             </div>
                         </div>
                         {/*
-                          *   THE OWNER: "there is still a button asking sellers
-                          *   to switch to buyer when user only signed up as a
-                          *   seller."
-                          *
-                          *   It was unconditional — every seller was offered a
-                          *   buyer dashboard, including accounts that hold no
-                          *   buyer role and would land on an empty one. Only an
-                          *   account that signed up as BOTH has a buyer view to
-                          *   switch to.
-                          *
-                          *   Read live, like the sidebar's: the session claim is
-                          *   up to eight hours old, and hiding this from someone
-                          *   who just gained the role would be the same defect
-                          *   in the other direction.
-                          */}
-                        {canBuy && (
-                            <Link
-                                href="/marketplace/buyer/dashboard"
-                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition"
-                            >
-                                <ShoppingCart className="w-4 h-4" />
-                                Switch to Buyer View
-                            </Link>
-                        )}
+                            "Switch to Buyer View" used to sit here.
+
+                              THE OWNER: "A buyer should be a buyer and a seller
+                              should be a seller." — and, on this pair of
+                              buttons: "say if it should go too."
+
+                            It was unconditional first, offered to sellers who
+                            hold no buyer role at all; gating it on a live role
+                            read fixed the wrong half. The remaining question
+                            was never who may click it but whether a dashboard
+                            should advertise the other role's dashboard, and the
+                            answer is the same one that removed the button on
+                            the buyer's side: it should not. An account that
+                            holds both roles still reaches either dashboard from
+                            the nav, which is where every other destination
+                            lives.
+
+                            Its live-role read went with it. `canBuy` existed
+                            only to decide whether to draw this link, so with
+                            the link gone the round trip to getMyLiveRoles was
+                            a request every seller dashboard made to answer a
+                            question nobody asks any more. Nothing about what
+                            this account MAY do changed — the nav and the
+                            server guards decide that, as they always did.
+                        */}
                     </div>
                 </div>
 
@@ -342,7 +324,18 @@ export default function SellerDashboardClient({ initial = null }: {
                         >
                             <Zap className="w-7 h-7 mb-2" />
                             <h3 className="text-sm font-bold mb-0.5">Village Market</h3>
-                            <p className="text-xs text-orange-100">Flash sales hub</p>
+                            {/*
+                              *   "Flash sales hub" was a promise this link does
+                              *   not keep. It opens the Village Market seller
+                              *   hub, which lists timed community EVENTS — a
+                              *   seller who cut a product's price and came here
+                              *   to check it had taken effect found "No Active
+                              *   Events" and reasonably concluded nothing had
+                              *   happened. An ordinary reduction shows on the
+                              *   seller's own product list and in the buyer's
+                              *   Flash Sales tab; it never comes here.
+                              */}
+                            <p className="text-xs text-orange-100">Timed community events</p>
                         </Link>
 
                         <Link

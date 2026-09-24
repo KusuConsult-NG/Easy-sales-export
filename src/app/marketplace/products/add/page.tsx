@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+//   #907 One id per submission, so a listing delivered twice is one product.
+//   See lib/product-submission for the whole finding.
+import { useSubmissionId } from "@/hooks/useSubmissionId";
+import { SUBMISSION_ID_FIELD } from "@/lib/product-submission";
 import { useRouter } from "next/navigation";
 import {
     Package, DollarSign, Award, Video,
@@ -73,6 +77,7 @@ export default function AddProductPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { uploadFile, uploadState } = useStorage();
 
+    const submissionId = useSubmissionId();
     const [formData, setFormData] = useState({
         name: "",
         category: "",
@@ -213,6 +218,11 @@ export default function AddProductPage() {
                 submitData.append("video", uploadedVideo);
             }
 
+            //   #907 The same id on every delivery of this submission, so a
+            //   retry addresses the product the first attempt made rather than
+            //   making a second one.
+            submitData.append(SUBMISSION_ID_FIELD, submissionId.current());
+
             const response = await fetch("/api/marketplace/create-product", {
                 method: "POST",
                 body: submitData,
@@ -221,6 +231,10 @@ export default function AddProductPage() {
             const data = await response.json();
 
             if (data.success) {
+                //   The listing is made, so the NEXT one submitted from this
+                //   page is a different listing and must not be read as a
+                //   replay of this one.
+                submissionId.reset();
                 //   #906 From lib/product-status, so a seller is not told a
                 //   listing is live when it is waiting for review.
                 showToast(PRODUCT_CREATED_MESSAGE, "success");
