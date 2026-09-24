@@ -3,40 +3,41 @@
  */
 
 /**
- *   THE OWNER: "fix the wave one next."
+ *   THE LAST MODULE ON THE INLINE COPY.
  *
- *       checkWaveStatusAction took 937ms  1179ms  1308ms  1313ms  1322ms
- *                                1335ms  1342ms  1435ms  1492ms  1665ms
- *                                1703ms  1991ms  2155ms  2567ms
+ *   email-claim-is-narrowed-everywhere has carried a table of the three doors
+ *   that grew the same "let a returning applicant claim her own application"
+ *   rule by hand. #273 moved Export onto the shared one, #287 moved WAVE, and
+ *   both left the same line behind: "Farm Nation is still on the inline copy,
+ *   and when it follows this table is how it is noticed." This is Farm Nation
+ *   following. The table now reads `shared` three times.
  *
- *   Fourteen lines in one session — the most frequent module check in the
- *   owner's log. Measured with lib/testing/read-depth: 5 reads, depth 4. Few
- *   reads, waited for almost one at a time.
- *
- *   AND THE DEPTH WORK FOUND A DEFECT SITTING IN THE SAME FOUR LINES.
- *
- * ── AN APPLICANT PAST HER FIFTH MATCH WAS TOLD SHE HAD NOT APPLIED ──────────
+ * ── A FARMER PAST HER FIFTH MATCH WAS TOLD SHE HAD NOT APPLIED ──────────────
  *
  *   The by-address claim bounded its query at `.limit(5)`. The gate above it —
- *   module-access-check Layer 2.8 — scans APPLICATION_SCAN_LIMIT (25) and
- *   rules with claimableByEmail. So for a woman whose first five WAVE
- *   applications at her address all belonged to other accounts:
+ *   module-access-check Layer 2.10 — scans APPLICATION_SCAN_LIMIT (25) and
+ *   rules with claimableByEmail.
+ *
+ *   A BOUNDED QUERY WITH NO orderBy RETURNS THE LOWEST IDS. SupabaseQuery
+ *   appends `query.order('id')` when nothing else orders, so `.limit(5)` is not
+ *   "five arbitrary rows", it is the five whose document ids sort first — and
+ *   an application filed later has no reason to sort early. So for a farmer
+ *   whose five lowest-id matches at her address all belonged to other accounts:
  *
  *       the GATE found her unclaimed application and let her into the module
  *       this ACTION did not, and answered `status: null`
  *
  *   Reproduced against the fake database before the change — six claimed
- *   matches and one unclaimed:
+ *   matches sorting ahead of hers, and one of hers:
  *
  *       before   status = null      her application: still unowned
  *       after    status = "pending" her application: claimed by her
  *
- *   Two answers to one question, from two copies of one rule. #273 fixed
- *   exactly this in Export, and email-claim-is-narrowed-everywhere wrote down
- *   what was left: "WAVE and Farm Nation should follow, and when they do this
- *   table is how it is noticed." This is WAVE following.
- *
- *   FARM NATION IS STILL ON THE INLINE COPY.
+ *   THE IDS IN THE FIXTURE ARE THE FIXTURE. The first draft of the WAVE suite
+ *   next door named her row `hers` and the others `theirs-0..5` — and `hers`
+ *   sorts first, so she was inside the first five however many preceded her.
+ *   Every test passed with the old bound restored. That fixture has been
+ *   corrected too, and this one was written knowing it.
  *
  * ── AND THE WAITING ─────────────────────────────────────────────────────────
  *
@@ -50,8 +51,8 @@
  *   approved member never reaches the block.
  *
  *   ISSUING THE QUERY IS NOT ADOPTING WHAT IT RETURNS. claimableByEmail still
- *   decides, in the same place, on the same rows — which is defect 2 in this
- *   file's own header, and the reason it is asserted below rather than
+ *   decides, in the same place, on the same rows — which is defect 2 in the
+ *   action's own header, and the reason it is asserted below rather than
  *   assumed.
  */
 
@@ -86,16 +87,17 @@ jest.mock('@/lib/rate-limiter', () => ({
     createRateLimitResponse: jest.fn(),
 }));
 
-const UID = 'applicant-1';
-const EMAIL = 'applicant@example.test';
-const APPS = COLLECTIONS.WAVE_APPLICATIONS;
+const UID = 'farmer-1';
+const EMAIL = 'farmer@example.test';
+const APPS = COLLECTIONS.FARM_NATION_APPLICATIONS;
+
 /**
  * Her application's document id, chosen to sort LAST among the fixture's rows.
- * See seedClaimedMatchesThenHers — an unordered query returns lowest-id first.
+ * An unordered query returns lowest-id first — see this file's header.
  */
 const HERS = 'app-zz-hers';
 
-/** Today's cost of the WAVE check an applicant actually waits on. */
+/** Today's cost of the Farm Nation check an applicant actually waits on. */
 const CEILING = { reads: 5, depth: 3 };
 
 let store: FakeDbHandle;
@@ -114,23 +116,12 @@ beforeEach(() => {
     }));
 });
 
-const wave = () => import('@/app/actions/wave/_wv_membership');
+const farmNation = () => import('@/app/actions/farm-nation/_fn_onboarding');
 
-describe('an applicant past her fifth match at the same address', () => {
+describe('a farmer past her fifth match at the same address', () => {
     /**
-     * `claimedBefore` applications at her address, all owned by other
-     * accounts, and then one of hers.
-     *
-     *   THE IDS ARE THE FIXTURE. A bounded query with no orderBy returns the
-     *   LOWEST IDS: the adapter appends `query.order('id')` when nothing else
-     *   orders, fake-db copies that, and the whole point of this file is which
-     *   rows a `.limit(5)` would have dropped.
-     *
-     *   The first version of this named her row `hers` and the others
-     *   `theirs-0..5` — and `hers` sorts first, so she was inside the first
-     *   five however many preceded her. Every test below passed with the old
-     *   bound restored. `app-0..app-N` then `app-zz-hers` puts her last, where
-     *   the defect lives.
+     * `claimedBefore` applications at her address, all owned by other accounts
+     * and all sorting AHEAD of hers, and then one of hers.
      */
     function seedClaimedMatchesThenHers(claimedBefore: number): void {
         for (let i = 0; i < claimedBefore; i++) {
@@ -150,17 +141,17 @@ describe('an applicant past her fifth match at the same address', () => {
 
     it('IS FOUND — six claimed matches ahead of hers, which `.limit(5)` could not see', async () => {
         /*
-         *   The defect, stated as the user experience it produced: she had
-         *   applied, the gate let her into the module, and this action told
-         *   her she had not. Before the change this returned status null and
-         *   left her application unowned.
+         *   The defect stated as the experience it produced: she had applied,
+         *   the gate let her into the module, and this action told her she had
+         *   not. Before the change this returned null and left her application
+         *   unowned.
          */
         seedClaimedMatchesThenHers(6);
-        const { checkWaveStatusAction } = await wave();
+        const { checkFarmNationStatusAction } = await farmNation();
 
-        const result: any = await checkWaveStatusAction();
+        const result: any = await checkFarmNationStatusAction();
 
-        expect(result.data.status).toBe('pending');
+        expect(result.data).toBe('pending');
         expect((store.get(APPS, HERS) as any)?.userId).toBe(UID);
     });
 
@@ -168,20 +159,21 @@ describe('an applicant past her fifth match at the same address', () => {
         //   The case that always worked, kept so the fix is shown to be a
         //   widening rather than a change of behaviour.
         seedClaimedMatchesThenHers(4);
-        const { checkWaveStatusAction } = await wave();
+        const { checkFarmNationStatusAction } = await farmNation();
 
-        const result: any = await checkWaveStatusAction();
+        const result: any = await checkFarmNationStatusAction();
 
-        expect(result.data.status).toBe('pending');
+        expect(result.data).toBe('pending');
         expect((store.get(APPS, HERS) as any)?.userId).toBe(UID);
     });
 
     it('BUT STILL REFUSES an application that already belongs to somebody else', async () => {
         /*
-         *   Defect 2 from this file's own header. The block below the claim
+         *   Defect 2 from the action's own header. The block below the claim
          *   promotes an `approved` application's status onto the caller AND
          *   writes it to their user record, which module-access-check reads —
-         *   so adopting a stranger's row would hand over her enrolment.
+         *   so adopting a stranger's row would hand over their membership,
+         *   and the roles that come with it.
          *
          *   Widening the bound must not widen WHAT MAY BE CLAIMED.
          */
@@ -191,11 +183,11 @@ describe('an applicant past her fifth match at the same address', () => {
             status: 'approved',
             createdAt: new Date().toISOString(),
         });
-        const { checkWaveStatusAction } = await wave();
+        const { checkFarmNationStatusAction } = await farmNation();
 
-        const result: any = await checkWaveStatusAction();
+        const result: any = await checkFarmNationStatusAction();
 
-        expect(result.data.status).not.toBe('approved');
+        expect(result.data).not.toBe('approved');
         expect((store.get(APPS, 'theirs') as any)?.userId).toBe('somebody-else');
     });
 
@@ -208,17 +200,43 @@ describe('an applicant past her fifth match at the same address', () => {
             userId: 'somebody-else', userEmail: EMAIL, status: 'approved',
             createdAt: new Date().toISOString(),
         });
-        const { checkWaveStatusAction } = await wave();
+        const { checkFarmNationStatusAction } = await farmNation();
 
-        await checkWaveStatusAction();
+        await checkFarmNationStatusAction();
 
         const said = warn.mock.calls.map((c: any[]) => String(c[0])).join(' | ');
         expect(said).toContain('already belongs to another account');
         warn.mockRestore();
     });
+
+    it('CLAIMS THE NEWEST unclaimed row, not the lowest-id one', async () => {
+        /*
+         *   The shared rule ranks with latestApplication; the inline
+         *   `docs.find(...)` took whichever unclaimed row the query happened to
+         *   return first, which after `order('id')` is the lowest id. A farmer
+         *   who resubmitted has two unclaimed rows, and the one worth reading
+         *   is the resubmission.
+         */
+        store.seed(APPS, 'app-a-first', {
+            userEmail: EMAIL, status: 'rejected',
+            createdAt: new Date(2020, 0, 1).toISOString(),
+            submittedAt: new Date(2020, 0, 1).toISOString(),
+        });
+        store.seed(APPS, 'app-b-resubmitted', {
+            userEmail: EMAIL, status: 'pending',
+            createdAt: new Date(2024, 0, 1).toISOString(),
+            submittedAt: new Date(2024, 0, 1).toISOString(),
+        });
+        const { checkFarmNationStatusAction } = await farmNation();
+
+        const result: any = await checkFarmNationStatusAction();
+
+        expect(result.data).toBe('pending');
+        expect((store.get(APPS, 'app-b-resubmitted') as any)?.userId).toBe(UID);
+    });
 });
 
-describe('what the WAVE check actually waits for', () => {
+describe('what the Farm Nation check actually waits for', () => {
     it('THE INSTRUMENT WORKS — a chain measures deep, a batch measures shallow', async () => {
         //   THE CONTROL. Without it every ceiling below passes on anything.
         const g = global as any;
@@ -234,47 +252,47 @@ describe('what the WAVE check actually waits for', () => {
         expect({ reads: together.reads, depth: together.depth }).toEqual({ reads: 3, depth: 1 });
     });
 
-    it('AN APPLICANT WITH NOTHING FILED WAITS THREE TIMES, not four', async () => {
-        const { checkWaveStatusAction } = await wave();
+    it('A FARMER WITH NOTHING FILED WAITS THREE TIMES, not four', async () => {
+        const { checkFarmNationStatusAction } = await farmNation();
         const seen = measureReadDepth();
 
-        const result: any = await checkWaveStatusAction();
+        const result: any = await checkFarmNationStatusAction();
 
-        expect(result.data.status).toBeNull();
+        expect(result.data).toBeNull();
         expect(seen.reads).toBeLessThanOrEqual(CEILING.reads);
         expect(seen.depth).toBeLessThanOrEqual(CEILING.depth);
     });
 
     it('THE APPROVED MEMBER STILL PAYS FOR ONE READ AND ONE WAIT', async () => {
         store.seed(COLLECTIONS.USERS, UID, {
-            uid: UID, email: EMAIL, roles: ['general_user'],
+            uid: UID, email: EMAIL, roles: ['general_user', 'farmer'],
             isVerified: true, profileComplete: true,
-            serviceRegistrations: { wave: { status: 'approved' } },
+            serviceRegistrations: { farmNation: { status: 'approved' } },
         });
-        const { checkWaveStatusAction } = await wave();
+        const { checkFarmNationStatusAction } = await farmNation();
         const seen = measureReadDepth();
 
-        const result: any = await checkWaveStatusAction();
+        const result: any = await checkFarmNationStatusAction();
 
-        expect(result.data.status).toBe('approved');
+        expect(result.data).toBe('approved');
         expect({ reads: seen.reads, depth: seen.depth }).toEqual({ reads: 1, depth: 1 });
     });
 
-    it('AND AN APPLICANT WHO HAS FILED PAYS NOTHING EXTRA', async () => {
+    it('AND A FARMER WHO HAS FILED PAYS NOTHING EXTRA', async () => {
         //   Submitting writes both the status and the applicationId, so this
         //   account trips neither prefetch guard.
         store.seed(COLLECTIONS.USERS, UID, {
             uid: UID, email: EMAIL, roles: ['general_user'],
             isVerified: true, profileComplete: true,
-            serviceRegistrations: { wave: { status: 'pending', applicationId: 'a1' } },
+            serviceRegistrations: { farmNation: { status: 'pending', applicationId: 'a1' } },
         });
         store.seed(APPS, 'a1', { userId: UID, status: 'pending', createdAt: new Date().toISOString() });
-        const { checkWaveStatusAction } = await wave();
+        const { checkFarmNationStatusAction } = await farmNation();
         const seen = measureReadDepth();
 
-        const result: any = await checkWaveStatusAction();
+        const result: any = await checkFarmNationStatusAction();
 
-        expect(result.data.status).toBe('pending');
+        expect(result.data).toBe('pending');
         expect(seen.reads).toBeLessThanOrEqual(4);
         expect(seen.depth).toBeLessThanOrEqual(CEILING.depth);
     });
@@ -283,19 +301,47 @@ describe('what the WAVE check actually waits for', () => {
         store.seed(COLLECTIONS.USERS, UID, {
             uid: UID, email: EMAIL, roles: ['general_user'],
             isVerified: true, profileComplete: true,
-            serviceRegistrations: { wave: { applicationId: 'named' } },
+            serviceRegistrations: { farmNation: { applicationId: 'named' } },
         });
         store.seed(APPS, 'named', {
             userEmail: EMAIL, status: 'under_review', createdAt: new Date().toISOString(),
         });
-        const { checkWaveStatusAction } = await wave();
+        const { checkFarmNationStatusAction } = await farmNation();
 
-        const result: any = await checkWaveStatusAction();
+        const result: any = await checkFarmNationStatusAction();
 
-        expect(result.data.status).toBe('under_review');
+        expect(result.data).toBe('under_review');
         //   One query against the collection — the owner-scoped one. A
         //   prefetched sweep would make it two.
         const queries = store.reads.filter((r: any) => r.collection === APPS && !r.id);
         expect(queries).toHaveLength(1);
+    });
+
+    it('BUT AN applicationId THAT NAMES NOTHING STILL SWEEPS', async () => {
+        /*
+         *   Farm Nation's branch is shaped differently from WAVE's: the named
+         *   read and the sweep are not mutually exclusive, the sweep runs
+         *   whenever the named document turned out not to exist. So the
+         *   prefetch guard (`no applicationId`) is narrower than the branch,
+         *   and the fallback inside it is what keeps this row reachable.
+         *
+         *   A registration pointing at a deleted application is exactly the
+         *   stranded state the claiming branch exists to repair, so losing it
+         *   would be losing the repair.
+         */
+        store.seed(COLLECTIONS.USERS, UID, {
+            uid: UID, email: EMAIL, roles: ['general_user'],
+            isVerified: true, profileComplete: true,
+            serviceRegistrations: { farmNation: { applicationId: 'gone' } },
+        });
+        store.seed(APPS, HERS, {
+            userEmail: EMAIL, status: 'pending', createdAt: new Date().toISOString(),
+        });
+        const { checkFarmNationStatusAction } = await farmNation();
+
+        const result: any = await checkFarmNationStatusAction();
+
+        expect(result.data).toBe('pending');
+        expect((store.get(APPS, HERS) as any)?.userId).toBe(UID);
     });
 });

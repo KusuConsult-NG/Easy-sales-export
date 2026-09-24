@@ -21,6 +21,9 @@ import { latestApplication } from "@/lib/latest-application";
 import { ownedProfileIds, ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { readUserDocOnce } from "@/lib/current-user-doc";
+import { applicationsTypedTo, forgetApplicationReads } from "@/lib/application-request-reads";
+import { claimableByEmail } from "@/lib/claimable-application";
+import { startedEarly } from "@/lib/started-early";
 
 /**
  * Submit Farm Nation Onboarding
@@ -279,6 +282,34 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
 
         let status = userData?.serviceRegistrations?.farmNation?.status;
 
+        /*
+         *   THE BY-ADDRESS SWEEP GOES OUT WITH THE OWNER-SCOPED QUERY.
+         *
+         *   Measured with lib/testing/read-depth: 5 reads, depth 4 for a farmer
+         *   with nothing filed. The reads were already few — #271 saw to that —
+         *   and the action waited for them almost one at a time. The sweep was
+         *   the last link: a round trip spent learning whether to spend the
+         *   next.
+         *
+         *   Reachable only with no applicationId on the registration and an
+         *   address to sweep by, and submitting writes both (the batch in
+         *   _submitFarmNationOnboardingAction), so an applicant pays nothing
+         *   extra and an approved member never reaches the block at all.
+         *
+         *   THE CLAIM RULE DOES NOT MOVE: claimableByEmail still decides,
+         *   below, on the same rows. Issuing a query is not adopting what it
+         *   returns, which is defect 2 in the header further down.
+         */
+        const registration = userData?.serviceRegistrations?.farmNation;
+        const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
+        const byEmailSoon = (
+            status !== "approved"
+            && !registration?.applicationId
+            && userEmail
+        )
+            ? startedEarly(applicationsTypedTo(COLLECTIONS.FARM_NATION_APPLICATIONS, "userEmail", userEmail))
+            : null;
+
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for Farm Nation applications.
         if (status !== "approved") { 
@@ -372,21 +403,50 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
                      * module-access-check reads. Only an unclaimed application
                      * can be claimed.
                      */
-                    const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
                     if (userEmail) {
-                        const emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                            .where("userEmail", "==", userEmail)
-                            .limit(5)
-                            .get();
+                        /*
+                         *   THE SHARED RULE, AND THE SHARED BOUND — the last of
+                         *   the three doors, and this one was a real
+                         *   disagreement rather than a tidy-up.
+                         *
+                         *   This bounded the query at `.limit(5)`. The gate
+                         *   above it — module-access-check Layer 2.10 — scans
+                         *   APPLICATION_SCAN_LIMIT and rules with
+                         *   claimableByEmail. A bounded query with no orderBy
+                         *   returns the LOWEST IDS (the adapter appends
+                         *   `query.order('id')`), so for a farmer whose first
+                         *   five matches at her address all belonged to other
+                         *   accounts:
+                         *
+                         *       the GATE found her application and let her in
+                         *       this ACTION did not, and answered null
+                         *
+                         *   #273 fixed exactly this in Export and #287 in WAVE.
+                         *   email-claim-is-narrowed-everywhere named Farm Nation
+                         *   as the last one still on the inline copy; this is
+                         *   Farm Nation following, and that table now has none.
+                         *
+                         *   Already in the air since before the owner-scoped
+                         *   query, unless an applicationId sent us down the
+                         *   named branch and it turned out to name nothing —
+                         *   rare, and memoised either way, so the fallback is
+                         *   the same read rather than a second one.
+                         */
+                        const emailQuery = byEmailSoon
+                            ? await byEmailSoon()
+                            : await applicationsTypedTo(
+                                COLLECTIONS.FARM_NATION_APPLICATIONS, "userEmail", userEmail);
 
-                        const unclaimed = emailQuery.docs.find(d => !d.data()?.userId);
+                        const { claimable: unclaimed, ownedByOthers } = claimableByEmail(emailQuery.docs);
 
                         if (unclaimed) {
                             appDoc = unclaimed;
-                            await unclaimed.ref.update({ userId: session.user.id });
-                        } else if (!emailQuery.empty) {
+                            await (unclaimed as any).ref.update({ userId: session.user.id });
+                            //   The owner-scoped query would answer differently now.
+                            forgetApplicationReads();
+                        } else if (ownedByOthers > 0) {
                             logger.warn(
-                                `[checkFarmNationStatus] ${emailQuery.docs.length} application(s) match ` +
+                                `[checkFarmNationStatus] ${ownedByOthers} application(s) match ` +
                                 `${userEmail} but every one already belongs to another account; none claimed.`
                             );
                         }
