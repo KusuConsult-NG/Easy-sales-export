@@ -283,7 +283,15 @@ describe('a legacy application can only be claimed if it is unclaimed', () => {
         const src = code(MEMBERSHIP);
 
         expect(src).not.toContain('.where("email", "==", userEmail)');
-        expect(src).toContain('.where("userEmail", "==", userEmail)');
+        //   THE FIELD IS THE SAME; THE QUERY MOVED. It goes through the shared
+        //   reader now, which bounds at APPLICATION_SCAN_LIMIT rather than the
+        //   `.limit(5)` this file used to carry — the gate above it always
+        //   scanned the larger bound, so an applicant past her fifth match was
+        //   admitted by the gate and told by this action she had not applied.
+        //   The address is still the AUTHENTICATED one, which is what this
+        //   test exists to hold.
+        expect(src).toContain('applicationsTypedTo(COLLECTIONS.WAVE_APPLICATIONS, "userEmail", userEmail)');
+        expect(src).toContain('const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim()');
     });
 
     it('skips applications that already belong to another account', () => {
@@ -291,7 +299,11 @@ describe('a legacy application can only be claimed if it is unclaimed', () => {
         // and its status promoted either way.
         const src = code(MEMBERSHIP);
 
-        expect(src).toContain('const unclaimed = emailQuery.docs.find(d => !d.data()?.userId)');
+        //   The same rule, imported rather than written out — and it reports
+        //   how many matches belong to other accounts, which the inline copy
+        //   could not.
+        expect(src).toContain('claimableByEmail(emailQuery.docs)');
+        expect(src).toContain('const { claimable: unclaimed, ownedByOthers }');
         expect(src).toContain('appDoc = unclaimed;');
     });
 
@@ -305,6 +317,6 @@ describe('a legacy application can only be claimed if it is unclaimed', () => {
         // file exist. Claiming yours by signing in with the matching address has
         // to keep working.
         const src = code(MEMBERSHIP);
-        expect(src).toContain('await unclaimed.ref.update({ userId: session.user.id })');
+        expect(src).toContain('await (unclaimed as any).ref.update({ userId: session.user.id })');
     });
 });
