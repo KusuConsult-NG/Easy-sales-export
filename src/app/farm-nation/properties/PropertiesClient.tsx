@@ -7,6 +7,9 @@ import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2, 
 import Image from "next/image";
 import Link from "next/link";
 import { searchLandListingsAction, type LandListing } from "@/app/actions/land-listings";
+//   One vocabulary for what kind of land this is, and one name for the query
+//   parameter carrying it — see lib/land-categories.
+import { LAND_CATEGORIES, LAND_CATEGORY_PARAM } from "@/lib/land-categories";
 import { isOnOffer, discountPercent } from "@/lib/price-reduction";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -23,7 +26,9 @@ function PropertiesContent({ initial }: { initial: any | null }) {
     // State for filters
     const [searchTerm, setSearchTerm] = useState("");
     const [filters, setFilters] = useState({
-        propertyType: searchParams.get("type") || "",
+        //   The landing page's category tiles link with this exact parameter
+        //   now. They used to write `?category=`, which nothing read.
+        propertyType: searchParams.get(LAND_CATEGORY_PARAM) || "",
         location: searchParams.get("location") || "",
         priceRange: "",
         listingType: searchParams.get("listingType") || "",
@@ -205,12 +210,11 @@ function PropertiesContent({ initial }: { initial: any | null }) {
                             className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
                         >
                             <option value="">All Types</option>
-                            <option value="farmland">Farmland</option>
-                            <option value="ranch">Ranch (Livestock)</option>
-                            <option value="orchard">Orchard</option>
-                            <option value="aquaculture">Aquaculture</option>
-                            <option value="forest">Forest Land</option>
-                            <option value="mixed">Mixed Use</option>
+                            {LAND_CATEGORIES.map((category) => (
+                                <option key={category.value} value={category.value}>
+                                    {category.label}
+                                </option>
+                            ))}
                         </select>
 
                         {/* Listing Type Filter */}

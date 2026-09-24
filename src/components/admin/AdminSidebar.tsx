@@ -153,6 +153,25 @@ const NAV_ITEMS = [
      */
     { label: "Export Bookings", href: "/admin/export/bookings", icon: Container, section: "modules", permission: "export:approve_applications" as AdminPermission },
     { label: "Export Catalog", href: "/admin/export/catalog", icon: Package, section: "modules", permission: "export:approve_applications" as AdminPermission },
+    /**
+     *   THE WAY IN FOR THE SCREEN THAT MAKES AN OPPORTUNITY.
+     *
+     *   THE OWNER: "when opportunities are listed on export window, it doesn't
+     *   show for the users."
+     *
+     *   They never were listed. `createExportWindowAction` in
+     *   actions/export-aggregation.ts is the ONLY function that writes an
+     *   aggregation window with status "open" — which is what
+     *   getActiveExportWindowsAction asks for, and what all three member
+     *   screens read — and nothing in the application called it. The reader
+     *   worked, the booking flow under it worked, and there was no door that
+     *   made the thing they were reading.
+     *
+     *   The catalog above is a different collection for a different screen
+     *   (export_catalog, read by /export/buyer), which is why listing through
+     *   it produced nothing here.
+     */
+    { label: "Export Opportunities", href: "/admin/export/opportunities", icon: Container, section: "modules", permission: "export:approve_applications" as AdminPermission },
     { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules", featureToggle: "farm_nation_purchases" },
     { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules", permission: "academy:manage_courses" as AdminPermission, featureToggle: "academy_courses" },
     // ── Finance & Settings ───────────────────────────────────────────────────

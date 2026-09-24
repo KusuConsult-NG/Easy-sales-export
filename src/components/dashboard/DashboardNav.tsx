@@ -199,7 +199,32 @@ export default function DashboardNav() {
     const NavContent = () => (
         <div className="flex flex-col h-full">
             <div className="px-5 py-5 border-b border-slate-700/50">
-                <Link href="/dashboard" className="flex items-center gap-3">
+                {/*
+                  *   PREFETCH OFF, the same as ModuleSidebar and AdminSidebar.
+                  *
+                  *   THE OWNER'S LOG: bursts of "The destination stream closed
+                  *   early" on `/dashboard?_rsc=`.
+                  *
+                  *   This nav is PERSISTENT — every link in it is in the
+                  *   viewport from the moment a dashboard page opens, so Next's
+                  *   viewport prefetch fires for all of them at once and none
+                  *   of it carries any signal about what the person intends to
+                  *   open. Each one is an RSC render of a dynamic route, and
+                  *   `dashboard/layout.tsx` runs the hub guard and
+                  *   getMyDashboard() before it can answer. A low-priority
+                  *   prefetch that is then cancelled leaves exactly the aborted
+                  *   stream in that log.
+                  *
+                  *   The other two persistent sidebars in this application were
+                  *   given `prefetch={false}` for this reason and this one was
+                  *   missed — it is the dashboard's own nav, so its links are
+                  *   the ones pointing at the route the bursts name.
+                  *
+                  *   A navigation costs its own render now instead of arriving
+                  *   warm. That is one render when somebody clicks, against
+                  *   thirteen whenever anybody looks.
+                  */}
+                <Link prefetch={false} href="/dashboard" className="flex items-center gap-3">
                     <div className="relative w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 shrink-0">
                         <Image 
                             src="/images/logo.jpg" 
@@ -238,6 +263,10 @@ export default function DashboardNav() {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                //   Six module dashboards, each one heavy and
+                                //   dynamic. Prefetching all of them on sight
+                                //   was the most expensive part of this nav.
+                                prefetch={false}
                                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-300 mb-0.5"
                                 onClick={() => setMobileOpen(false)}
                             >
@@ -259,6 +288,7 @@ export default function DashboardNav() {
                         <Link
                             key={item.href}
                             href={item.href}
+                            prefetch={false}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group mb-0.5 ${
                                 active
                                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
@@ -309,7 +339,7 @@ export default function DashboardNav() {
             </aside>
 
             <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-900 border-b border-slate-700/50 px-4 py-3 flex items-center justify-between">
-                <Link href="/dashboard" className="flex items-center gap-2">
+                <Link prefetch={false} href="/dashboard" className="flex items-center gap-2">
                     <div className="relative w-8 h-8 bg-white rounded-md flex items-center justify-center p-0.5 shrink-0">
                         <Image 
                             src="/images/logo.jpg" 
@@ -345,6 +375,7 @@ export default function DashboardNav() {
                     */}
                     <Link
                         href="/dashboard/notifications"
+                        prefetch={false}
                         aria-label="Notifications"
                         className="relative p-1.5 text-slate-400 hover:text-white transition-colors"
                     >
@@ -357,6 +388,7 @@ export default function DashboardNav() {
                     </Link>
                     <Link
                         href="/messages"
+                        prefetch={false}
                         aria-label="Messages"
                         className="relative p-1.5 text-slate-400 hover:text-white transition-colors"
                     >

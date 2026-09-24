@@ -142,8 +142,43 @@ function formTagAt(src: string, at: number): { tag: string; end: number } {
  *   `countryCode`), and the MFA field is caught by `token` anyway. Narrowing a
  *   detector to avoid a false positive is how the first version got it wrong;
  *   the answer is a name that means a secret in any spelling, not a looser one.
+ *
+ *   AND ON THE FOURTH, IN THE OTHER DIRECTION. Dropping the boundary entirely
+ *   left every alternative matching mid-word, and one of them is three letters
+ *   long:
+ *
+ *       value={draft.slotPrice}          sl·otP·rice   →  "otp"
+ *
+ *   A field for the naira-per-kilogram price of an export slot, reported as a
+ *   one-time passcode submitted in a URL. A false positive in a ratchet is not
+ *   a harmless one: it is fixed either by renaming a domain term to appease the
+ *   test, or by the test being switched off.
+ *
+ *   SO THE RULE IS A SEGMENT, NOT A SUBSTRING. A secret word counts where an
+ *   identifier segment begins — at the start, after a non-letter, or at a
+ *   camelCase hump — which is what "the same word in any spelling" was always
+ *   reaching for:
+ *
+ *       {otpCode}     otp after `{`          → matched
+ *       {mfaToken}    mfa after `{`, Token   → matched
+ *       {formToken}   Token at the hump      → matched
+ *       {slotPrice}   otp mid-segment        → NOT matched
+ *
+ *   The case-insensitive flag is gone from this half and the humps are spelled
+ *   out, because `/i` cannot tell `otp` from `otP`, which is the whole
+ *   distinction being drawn.
  */
-const CREDENTIAL_INPUT = /["']password["']|value=\{[^}]*(password|secret|otp|totp|mfa|token)/i;
+const CREDENTIAL_INPUT = new RegExp(
+    [
+        //   The literal, including the show/hide ternary's `: "password"`.
+        String.raw`["']password["']`,
+        //   A value bound to a name that means a secret, by segment.
+        String.raw`value=\{[^}]*(?:`
+            + String.raw`(?<![A-Za-z])(?:password|secret|otp|totp|mfa|token)`
+            + String.raw`|(?:Password|Secret|Otp|OTP|Totp|TOTP|Mfa|MFA|Token)`
+            + String.raw`)`,
+    ].join("|"),
+);
 
 interface FormSite { where: string; line: number; tag: string; carriesCredential: boolean }
 
@@ -239,6 +274,59 @@ describe('#698 — no form may submit a credential in the query string', () => {
     });
 });
 
+/**
+ * The detector's own rule, pinned — because it has been wrong three times.
+ *
+ * Twice too narrow (one spelling of `type="password"`, then a word boundary
+ * that cannot see inside `mfaToken`) and once too wide (`otp` matching in the
+ * middle of `slotPrice`). Each version passed the sweep above; what tells them
+ * apart is a fixture, so there is one.
+ */
+describe('and what counts as a credential field', () => {
+    const carries = (body: string) => CREDENTIAL_INPUT.test(body);
+
+    it('A SECRET AT THE START OF A SEGMENT IS ONE', () => {
+        for (const value of [
+            'value={otpCode}', 'value={mfaToken}', 'value={secret}',
+            'value={form.password}', 'value={totp}',
+        ]) {
+            expect({ value, credential: carries(value) }).toEqual({ value, credential: true });
+        }
+    });
+
+    it('AND SO IS ONE AT A camelCase HUMP — the miss that cost a pass', () => {
+        //   `\btoken` could not see this, which is why the boundary was
+        //   dropped and the over-match below was let in.
+        for (const value of ['value={mfaToken}', 'value={formToken}', 'value={newPassword}']) {
+            expect({ value, credential: carries(value) }).toEqual({ value, credential: true });
+        }
+    });
+
+    it('AND THE SHOW/HIDE TERNARY IS ONE', () => {
+        expect(carries('type={showNew ? "text" : "password"}')).toBe(true);
+    });
+
+    it('BUT A SECRET WORD BURIED MID-SEGMENT IS NOT', () => {
+        /*
+         *   THE false positive. `slotPrice` is the naira-per-kilogram figure an
+         *   export booking is multiplied by — sl·otP·rice — and the sweep
+         *   called it a one-time passcode submitted in a URL.
+         */
+        for (const value of [
+            //   The hump is what saves this one: `otP` is not `otp` once the
+            //   case-insensitive flag is gone.
+            'value={draft.slotPrice}', 'value={depotPrice}',
+            //   And this one has no hump — d·e·p·otp·h·o·n·e, all lowercase —
+            //   so only the segment lookbehind keeps it out. Two different
+            //   guards, one fixture each, or a mutation survives.
+            'value={depotphone}', 'value={hotpot}',
+            'value={barcode}', 'value={countryCode}', 'value={user.email}',
+        ]) {
+            expect({ value, credential: carries(value) }).toEqual({ value, credential: false });
+        }
+    });
+});
+
 /*
  * ── MUTATION TESTING ────────────────────────────────────────────────────────
  *
@@ -249,6 +337,9 @@ describe('#698 — no form may submit a credential in the query string', () => {
  *     submitsSafely says every form is safe                           KILLED
  *     the detector stops finding any credential form                  KILLED
  *     a plain string action counts as safe                            KILLED
+ *     the segment lookbehind dropped, so `otp` matches in `depotphone` KILLED
+ *     the camelCase humps dropped, so `formToken` stops matching      KILLED
+ *     the /i flag restored, so `otP` in `slotPrice` matches again     KILLED
  *
  *     CONTROL — SHOULD SURVIVE
  *     reword the header                                            SURVIVED ✓
@@ -260,4 +351,9 @@ describe('#698 — no form may submit a credential in the query string', () => {
  *   forms known to need repair, rather than by trusting a green test: the second
  *   version passed the exposure assertion perfectly well while being blind to
  *   one of the four forms this finding is about.
+ *
+ *   AND A THIRD TIME, THE OTHER WAY. Dropping `\b` altogether left every
+ *   alternative matching mid-word, and an admin form's `value={draft.slotPrice}`
+ *   was reported as a one-time passcode in a URL. The fixture block above exists
+ *   because that version, too, passed every assertion in this file.
  */
