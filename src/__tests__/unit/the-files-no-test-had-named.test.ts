@@ -158,8 +158,17 @@ describe('how much of the application no test has named', () => {
          *
          *   plus `details: error.message` on onboarding/complete and a
          *   six-of-anything token check on auth/mfa/enable.
+         *
+         *   Then 106 → 103, on the libraries and services: land-inspection,
+         *   form-validation and communications.service. Two more findings —
+         *   `inspectionRefusal` decides whether a land approval may proceed and
+         *   its existing suite checks only that the six doors MENTION it, never
+         *   calling it; and the broadcast service asked for one of the two
+         *   spellings of the seller and buyer roles, so an admin mailing
+         *   "sellers" reached the older spelling and nobody else, with a
+         *   plausible count in the log.
          */
-        expect(ledgerVerdict(unreached().length, 106)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 103)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
