@@ -50,7 +50,7 @@ import { stripComments } from '@/lib/testing/strip-comments';
  * appear in this list or not claim by email at all.
  */
 const CLAIM_SITES = [
-    { module: 'WAVE', file: 'src/app/actions/wave/_wv_membership.ts', rule: 'inline' },
+    { module: 'WAVE', file: 'src/app/actions/wave/_wv_membership.ts', rule: 'shared' },
     { module: 'Export', file: 'src/app/actions/export/_ex_onboarding.ts', rule: 'shared' },
     { module: 'Farm Nation', file: 'src/app/actions/farm-nation/_fn_onboarding.ts', rule: 'inline' },
 ] as const;
@@ -68,9 +68,15 @@ const CLAIM_SITES = [
  *   disagreed about an applicant whose first five matches were claimed: the
  *   gate let them in and the action said they had not applied.
  *
+ *   WAVE followed, for the same reason and with the same disagreement: its
+ *   inline copy bounded at `.limit(5)` while the gate's Layer 2.8 scans
+ *   APPLICATION_SCAN_LIMIT, so an applicant whose first five matches were all
+ *   claimed was admitted by the gate and told by this action that she had not
+ *   applied.
+ *
  *   A site must satisfy one column or the other — never neither, and the
- *   forbidden shapes below apply to both. WAVE and Farm Nation should follow,
- *   and when they do this table is how it is noticed.
+ *   forbidden shapes below apply to both. FARM NATION IS THE LAST ONE LEFT on
+ *   the inline copy, and when it follows this table is how it is noticed.
  */
 
 const read = (file: string) =>

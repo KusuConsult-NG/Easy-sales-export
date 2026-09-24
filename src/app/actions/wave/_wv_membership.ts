@@ -17,6 +17,9 @@ import { toMillis } from "@/lib/firestore-serialize";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { latestApplication } from "@/lib/latest-application";
 import { readUserDocOnce } from "@/lib/current-user-doc";
+import { claimableByEmail } from "@/lib/claimable-application";
+import { applicationsTypedTo, forgetApplicationReads } from "@/lib/application-request-reads";
+import { startedEarly } from "@/lib/started-early";
 
 /**
  * Check WAVE application status for current user
@@ -56,6 +59,37 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
          */
         let ownerQueryWasEmpty = false;
         let foundAnApplication = false;
+
+        /*
+         *   THE BY-ADDRESS SWEEP GOES OUT WITH THE OWNER-SCOPED QUERY.
+         *
+         *   THE OWNER: "fix the wave one next."
+         *
+         *       checkWaveStatusAction took 937ms ... 2567ms
+         *
+         *   Measured with lib/testing/read-depth: 5 reads, depth 4. The reads
+         *   were already few; the action waited for them almost one at a time,
+         *   which is what the figure in the log is made of.
+         *
+         *   The sweep is reachable only with no applicationId on the
+         *   registration (the branch above it wins otherwise) and an address
+         *   to sweep by, so prefetching it costs an applicant nothing —
+         *   submitting writes both — and the approved member never reaches
+         *   this block at all.
+         *
+         *   THE CLAIM RULE DOES NOT MOVE: claimableByEmail still decides,
+         *   below, on the same rows. Issuing a query is not adopting what it
+         *   returns, which is defect 2 in this file's own header.
+         */
+        const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
+        const byEmailSoon = (
+            status !== "approved"
+            && !registration?.applicationId
+            && userEmail
+        )
+            ? startedEarly(applicationsTypedTo(COLLECTIONS.WAVE_APPLICATIONS, "userEmail", userEmail))
+            : null;
+
         if (status !== "approved") {
             let appDoc: any = null;
             //   EVERY PROFILE THIS PERSON OWNS. A member who applied, was
@@ -128,21 +162,40 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                  * still promoted onto the caller. Only an unclaimed application can
                  * be claimed.
                  */
-                const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
-                if (userEmail) {
-                    const emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                        .where("userEmail", "==", userEmail)
-                        .limit(5)
-                        .get();
+                if (userEmail && byEmailSoon) {
+                    /*
+                     *   THE SHARED RULE, AND THE SHARED BOUND — and this one
+                     *   was a real disagreement, not a tidy-up.
+                     *
+                     *   This bounded the query at `.limit(5)`. The gate above
+                     *   it — module-access-check Layer 2.8 — scans
+                     *   APPLICATION_SCAN_LIMIT and rules with
+                     *   claimableByEmail. So an applicant whose first five
+                     *   matches were all claimed was found by the GATE, which
+                     *   let her in, and NOT by this action, which told her she
+                     *   had not applied. Two answers to one question, from two
+                     *   copies of one rule.
+                     *
+                     *   #273 fixed exactly this in Export and
+                     *   email-claim-is-narrowed-everywhere wrote down what was
+                     *   left: "WAVE and Farm Nation should follow, and when
+                     *   they do this table is how it is noticed." This is WAVE
+                     *   following. Farm Nation is still on the inline copy.
+                     *
+                     *   Already in the air since the wave above.
+                     */
+                    const emailQuery = await byEmailSoon();
 
-                    const unclaimed = emailQuery.docs.find(d => !d.data()?.userId);
+                    const { claimable: unclaimed, ownedByOthers } = claimableByEmail(emailQuery.docs);
 
                     if (unclaimed) {
                         appDoc = unclaimed;
-                        await unclaimed.ref.update({ userId: session.user.id });
-                    } else if (!emailQuery.empty) {
+                        await (unclaimed as any).ref.update({ userId: session.user.id });
+                        //   The owner-scoped query would answer differently now.
+                        forgetApplicationReads();
+                    } else if (ownedByOthers > 0) {
                         logger.warn(
-                            `[checkWaveStatus] ${emailQuery.docs.length} application(s) match ` +
+                            `[checkWaveStatus] ${ownedByOthers} application(s) match ` +
                             `${userEmail} but every one already belongs to another account; none claimed.`
                         );
                     }
