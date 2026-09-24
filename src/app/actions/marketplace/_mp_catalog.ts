@@ -10,7 +10,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
 import { serializeDocs, serializeProduct } from "@/lib/firestore-serialize";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
-import { hydrateSellerTrust, resolveSellerTrust, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+import { hydrateSellerTrust, resolveSellerTrust, withoutSellerBadge, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 import {
     PRODUCT_SEARCH_SCAN_LIMIT,
     filterProductsByQuery,
@@ -400,9 +400,24 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
             });
         }
 
-        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+        /**
+         * No badge here, and therefore no second round trip.
+         *
+         * This was `hydrateSellerTrust(products, readSeller)` — one user read
+         * per unique seller, issued only after the product query came back,
+         * because the seller ids are not known before that. Three cards, and
+         * the action waited through two generations of round trips instead of
+         * one.
+         *
+         * Neither screen that calls this renders a shield. marketplace/page.tsx
+         * shows `product.sellerName` beside the rating; the buyer dashboard
+         * maps it to `seller` and shows that. The badge was resolved live,
+         * correctly, and then discarded. See lib/seller-trust.ts for why the
+         * flag is now set false rather than passed through.
+         */
+        const forDisplay = withoutSellerBadge(products as any[]);
 
-        return { error: null, success: true as const, data: { products: withTrust } };
+        return { error: null, success: true as const, data: { products: forDisplay } };
     } catch (error) {
         logger.error("Get recommended products error:", {
             error: error instanceof Error ? error.message : String(error)
