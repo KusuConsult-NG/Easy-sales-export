@@ -42,15 +42,26 @@ test.describe('User Onboarding Journey', () => {
         //   Status select was added above it — so `.first()` resolved to the
         //   new control and the test spent sixty seconds looking for "Lagos"
         //   among its three options. A positional locator on a form is a test
-        //   that breaks the next time anybody adds a field, which is not what
-        //   it is here to detect.
-        await page.fill('input[placeholder="Enter your business or farm name"]', 'Test Buyer Business');
-        // Business type defaults to 'individual', which is correct, so no need to click.
-        await page.selectOption('#businessStatus', 'registered');
+        //   that breaks the next time anybody adds OR REMOVES a field, and
+        //   this step now shows a different set to a person than to a
+        //   business.
+        //
+        //   THIS JOURNEY IS AN INDIVIDUAL BUYER, so it no longer fills a
+        //   business name or a business status — the step does not ask a
+        //   person buying food to describe a business it has no reason to
+        //   think exists. See lib/marketplace-application::describesABusiness.
+        //
+        //   Asserted rather than assumed: if those fields come back for this
+        //   applicant, the count below fails here instead of the fill timing
+        //   out sixty seconds later, which is how this line last broke.
+        await expect(page.locator('input[placeholder="Enter your business or farm name"]')).toHaveCount(0);
+        await expect(page.locator('#businessStatus')).toHaveCount(0);
+
+        // Business type defaults to 'individual', which is what this journey is.
         await page.fill('input[placeholder="08012345678"]', testPhone);
         await page.selectOption('#state', 'Lagos');
         await page.selectOption('#lga', 'Ikeja');
-        await page.fill('textarea[placeholder="Enter your complete business address"]', '123 Test Street, Ikeja');
+        await page.fill('textarea[placeholder="Where should your orders be delivered?"]', '123 Test Street, Ikeja');
         await page.click('button:has-text("Continue")');
 
         // 6. Step 3: Product Interests
