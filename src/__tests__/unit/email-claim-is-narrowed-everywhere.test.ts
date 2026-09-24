@@ -52,7 +52,7 @@ import { stripComments } from '@/lib/testing/strip-comments';
 const CLAIM_SITES = [
     { module: 'WAVE', file: 'src/app/actions/wave/_wv_membership.ts', rule: 'shared' },
     { module: 'Export', file: 'src/app/actions/export/_ex_onboarding.ts', rule: 'shared' },
-    { module: 'Farm Nation', file: 'src/app/actions/farm-nation/_fn_onboarding.ts', rule: 'inline' },
+    { module: 'Farm Nation', file: 'src/app/actions/farm-nation/_fn_onboarding.ts', rule: 'shared' },
 ] as const;
 
 /*
@@ -74,9 +74,18 @@ const CLAIM_SITES = [
  *   claimed was admitted by the gate and told by this action that she had not
  *   applied.
  *
+ *   Farm Nation followed last, with the same disagreement against its gate's
+ *   Layer 2.10, and with one thing the first two did not show: A BOUNDED QUERY
+ *   WITH NO orderBy RETURNS THE LOWEST IDS. SupabaseQuery appends
+ *   `query.order('id')` when nothing else orders, so `.limit(5)` was never
+ *   "five arbitrary matches" — it was the five whose ids sort first, and a
+ *   later application has no reason to be among them.
+ *
  *   A site must satisfy one column or the other — never neither, and the
- *   forbidden shapes below apply to both. FARM NATION IS THE LAST ONE LEFT on
- *   the inline copy, and when it follows this table is how it is noticed.
+ *   forbidden shapes below apply to both. NO SITE IS ON THE INLINE COPY NOW,
+ *   and the 'inline' column is kept rather than deleted because a new module
+ *   arrives carrying it, not the shared rule: this table is how that is
+ *   noticed.
  */
 
 const read = (file: string) =>
