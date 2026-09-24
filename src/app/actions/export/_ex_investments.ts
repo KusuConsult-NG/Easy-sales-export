@@ -311,9 +311,38 @@ export async function investInExportAction(
             return { success: false as const, error: investable.message };
         }
 
-        // Validate Minimum Investment (assuming 'amount' in window is unit price or min investment)
-        const minInvestment = exportData?.amount || 50000; // Default fallback
-        if (!isAmountAtLeast(amount, minInvestment)) { return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
+        /*
+         *   A MINIMUM THE WINDOW NEVER STATED.
+         *
+         *     THE OWNER: "the analytics is returning mock data… i need them
+         *     removed."
+         *
+         *   This read `exportData?.amount || 50000` — with the comment
+         *   "Default fallback" and, above it, "assuming 'amount' in window is
+         *   unit price or min investment". A window with no `amount`, or with
+         *   an amount of zero, was given a ₦50,000 minimum invented here, and
+         *   the investor was then told "Minimum investment is ₦50,000" as
+         *   though the window had said so.
+         *
+         *   FAILS CLOSED INSTEAD. A window that has not stated its terms is
+         *   not ready to take somebody's money, and the same direction #346
+         *   chose for the settlement account: refuse and say so, rather than
+         *   record a number nobody set. Logged, because the fix is an admin
+         *   editing the window, and nothing would otherwise tell them.
+         */
+        const statedMinimum = Number(exportData?.amount);
+        if (!Number.isFinite(statedMinimum) || statedMinimum <= 0) {
+            logger.error("[export investment] window has no minimum investment set", {
+                exportId,
+                amount: exportData?.amount,
+            });
+            return {
+                success: false as const,
+                error: "This export window has not set a minimum investment yet. Please try again later — our team has been notified.",
+            };
+        }
+
+        if (!isAmountAtLeast(amount, statedMinimum)) { return { success: false as const, error: `Minimum investment is ₦${statedMinimum.toLocaleString()}` };
         }
 
         /**
