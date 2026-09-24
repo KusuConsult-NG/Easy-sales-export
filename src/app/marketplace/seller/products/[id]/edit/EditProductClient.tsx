@@ -24,6 +24,9 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { useStorage } from "@/hooks/use-storage";
 import type { Product } from "@/lib/types/marketplace";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+//   "Unknown" is what the server writes when nobody asked, not a market the
+//   seller named — see lib/product-location.
+import { storedNearestMarket, NEAREST_MARKET_LABEL, NEAREST_MARKET_HINT } from "@/lib/product-location";
 
 //   #791 A broken preview must not paint its alt text over the remove
 //   button in the same box — see components/ui/ThumbnailImage.
@@ -178,7 +181,16 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
                     // Location
                     setState(prod.location?.state || "");
                     setLga(prod.location?.lga || "");
-                    setNearestMarket(prod.location?.nearestMarket || "");
+                    /*
+                     *   THE MANUFACTURED VALUE IS BLANKED, not shown.
+                     *
+                     *   /marketplace/sell/create never asked for this, and both
+                     *   creators write "Unknown" when the form did not carry
+                     *   it. Printing that back into a box marked with an
+                     *   asterisk told the seller they had answered a question
+                     *   they were never asked, with a word that is not a market.
+                     */
+                    setNearestMarket(storedNearestMarket(prod.location?.nearestMarket));
                     setDeliveryMethod(prod.deliveryMethod || "both");
                     setEstimatedDeliveryDays(prod.estimatedDeliveryDays?.toString() || "");
 
@@ -739,14 +751,23 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Nearest Market *
+                                        {NEAREST_MARKET_LABEL}
+                                        {/*
+                                          *   NO LONGER REQUIRED. A listing
+                                          *   without a nearest market has been
+                                          *   legal since the first one was
+                                          *   written, and demanding one HERE
+                                          *   alone is what left those listings
+                                          *   unsaveable. The create form asks
+                                          *   for it now; neither form demands it.
+                                          */}
+                                        <span className="text-slate-400 font-normal"> (optional)</span>
                                     </label>
                                     <input
                                         type="text"
-                                        required
                                         value={nearestMarket}
                                         onChange={(e) => setNearestMarket(e.target.value)}
-                                        placeholder="e.g., Mile 12 Market"
+                                        placeholder={NEAREST_MARKET_HINT}
                                         className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
                                     />
                                 </div>

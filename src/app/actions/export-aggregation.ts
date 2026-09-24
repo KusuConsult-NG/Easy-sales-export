@@ -62,7 +62,18 @@ export async function createExportWindowAction(data: { title: string;
     startDate: string;
     endDate: string;
     destination: string;
-    adminId: string; }) { try {
+    /**
+     * IGNORED, and optional so a caller is not asked to supply it.
+     *
+     * It was written as `createdBy` and as the audit log's userId while
+     * requireAdmin() had just returned the real actor — so one admin could
+     * create a window attributed to another, and the audit entry would
+     * corroborate it. The value is taken from the session below.
+     *
+     * Kept in the type rather than deleted because a caller that still passes
+     * it should compile and be ignored, not fail.
+     */
+    adminId?: string; }) { try {
         const sessionResult = await requireAdmin("export:approve_applications");
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 

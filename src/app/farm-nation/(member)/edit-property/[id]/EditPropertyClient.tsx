@@ -12,6 +12,7 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { useToast } from "@/contexts/ToastContext";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { leaseTermRefusal, readLeaseTerm } from "@/lib/lease-term";
+import { LAND_CATEGORIES } from "@/lib/land-categories";
 
 interface EditPropertyPageProps {
     params: Promise<{ id: string }>;
@@ -81,12 +82,23 @@ export default function EditPropertyClient(props: {
 
     const lgasForState = formData.state ? (NIGERIAN_LOCATIONS[formData.state] ?? []) : [];
 
-    const propertyTypes = [
-        { value: "farmland", label: "Farmland", icon: "🌾" },
-        { value: "ranch", label: "Ranch", icon: "🐄" },
-        { value: "commercial_farm", label: "Commercial Farm", icon: "🏭" },
-        { value: "agricultural_land", label: "Agricultural Land", icon: "🌻" }
-    ];
+    /*
+     *   THIS LIST DISAGREED WITH EVERY OTHER SCREEN, and it is the writer.
+     *
+     *   `commercial_farm` and `agricultural_land` are offered nowhere else —
+     *   not by the listing form that creates a parcel, not by the browse
+     *   filter, not by the map. So a seller editing their own listing could set
+     *   a category that made it unfindable in both places a buyer looks, while
+     *   the form told them nothing. Two of the four it did offer were also
+     *   missing: forest, mixed, orchard and aquaculture could be chosen at
+     *   listing time and then silently lost on the first edit.
+     *
+     *   The shared six now. NOTHING STORED CHANGES — a row already carrying one
+     *   of the retired values keeps it and still renders a readable name
+     *   through landCategoryLabel; it simply cannot be chosen again. See
+     *   lib/land-categories.
+     */
+    const propertyTypes = LAND_CATEGORIES;
 
     useEffect(() => {
         async function loadProperty() {

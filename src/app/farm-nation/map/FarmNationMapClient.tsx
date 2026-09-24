@@ -9,6 +9,7 @@ import { Filter, Grid, MapIcon, Search } from "lucide-react";
 import Image from "next/image";
 import { isPurchasable } from "@/lib/land-listing-status";
 import { firstImageSrc } from "@/lib/first-image";
+import { LAND_CATEGORIES } from "@/lib/land-categories";
 
 // Dynamically import map component to avoid SSR issues
 const MapView = dynamic(() => import("@/components/farm-nation/MapView"), {
@@ -72,14 +73,9 @@ export default function FarmNationMapClient(
 
     const [searchQuery, setSearchQuery] = useState("");
 
-    const landCategories = [
-        { value: "farmland", label: "Farmland", icon: "🌾" },
-        { value: "ranch", label: "Ranch/Pasture", icon: "🐄" },
-        { value: "forest", label: "Forest Land", icon: "🌲" },
-        { value: "mixed", label: "Mixed-Use", icon: "🌻" },
-        { value: "orchard", label: "Orchard", icon: "🍊" },
-        { value: "aquaculture", label: "Aquaculture", icon: "🐟" }
-    ];
+    //   The shared list — see lib/land-categories for the five copies this
+    //   replaces and the one of them that disagreed.
+    const landCategories = LAND_CATEGORIES;
 
     const nigerianStates = [
         "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",

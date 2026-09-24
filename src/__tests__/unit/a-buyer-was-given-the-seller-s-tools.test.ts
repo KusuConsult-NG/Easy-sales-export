@@ -286,12 +286,24 @@ describe('#858 — and the seller tools are gated on a Farm Nation role', () => 
  *   of clicking it was the seller guard turning them away. It was never a
  *   permission and never granted one; it advertised a door that is not theirs.
  *
- *   The seller dashboard's mirror image of it is NOT this: that one is wrapped
- *   in `canBuy`, a live role read, so it appears only for somebody who actually
- *   holds both. This pins the difference, so the unconditional one cannot come
- *   back as "the other screen has one".
+ *   THE SELLER'S MIRROR IMAGE IS GONE TOO, and this block used to pin the
+ *   opposite. It was wrapped in `canBuy` — a live role read — so it appeared
+ *   only for an account that genuinely held both, and on that ground it was
+ *   kept and pinned here as a control. Put to the owner as the one open
+ *   question on the pair ("say if it should go too"), the answer was the rule
+ *   they had already given twice: a buyer is a buyer and a seller is a seller.
+ *
+ *   The gate was never the point. Who MAY click it is decided by the server
+ *   guards and is unchanged; what a dashboard should ADVERTISE is a different
+ *   question, and the answer is the same on both sides. An account holding
+ *   both roles reaches either dashboard from the nav, where every other
+ *   destination lives.
+ *
+ *   Its live-role read went with it — `canBuy` existed only to draw that link,
+ *   so keeping it would have been a round trip on every seller dashboard load
+ *   to answer a question nobody asks.
  */
-describe('a buyer is not offered the seller dashboard', () => {
+describe('neither dashboard advertises the other', () => {
     const BUYER_DASH = 'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx';
     const SELLER_DASH = 'src/app/marketplace/seller/dashboard/SellerDashboardClient.tsx';
 
@@ -310,12 +322,43 @@ describe('a buyer is not offered the seller dashboard', () => {
         expect(read(BUYER_DASH)).not.toMatch(/Switch to Seller/i);
     });
 
-    it("the seller's own link back is kept, because it is role-gated (control)", () => {
-        //   Vacuity guard. If this ever becomes unconditional it is the same
-        //   defect facing the other way, and deleting it outright would strand
-        //   somebody who genuinely holds both roles.
+    it('AND THE SELLER DASHBOARD DOES NOT LINK TO THE BUYER DASHBOARD EITHER', () => {
+        //   The symmetry is the rule. Asserted on the comment-stripped source,
+        //   so the note explaining the removal cannot satisfy the assertion.
+        expect(read(SELLER_DASH)).not.toContain('/marketplace/buyer/dashboard');
+    });
+
+    it('and says nothing about switching either', () => {
+        expect(read(SELLER_DASH)).not.toMatch(/Switch to Buyer/i);
+    });
+
+    it('AND THE LIVE-ROLE READ THAT ONLY FED IT IS GONE', () => {
+        //   A request every seller dashboard made to decide whether to draw a
+        //   link that no longer exists.
         const src = read(SELLER_DASH);
-        expect(src).toContain('/marketplace/buyer/dashboard');
-        expect(src).toContain('{canBuy && (');
+        expect(src).not.toContain('canBuy');
+        expect(src).not.toContain('getMyLiveRoles');
+    });
+
+    it('BOTH DASHBOARDS STILL EXIST AND ARE REACHABLE (vacuity guard)', () => {
+        /*
+         *   The assertions above are all "not present", and every one of them
+         *   would pass if the two screens were deleted. What replaced the
+         *   buttons is the nav, so the nav is what has to carry both.
+         */
+        for (const rel of [BUYER_DASH, SELLER_DASH]) {
+            expect({ rel, exists: readFileSync(join(process.cwd(), rel), 'utf-8').length > 0 })
+                .toEqual({ rel, exists: true });
+        }
+        const nav = readFileSync(join(process.cwd(), 'src/components/layout/ModuleSidebar.tsx'), 'utf-8');
+        expect(nav).toMatch(/name: "Buyer Dashboard",\s+href: "\/marketplace\/buyer\/dashboard"/);
+        //   The seller entry points at /marketplace/seller, which is a page
+        //   whose whole body is a redirect. Following it is the difference
+        //   between "the nav has a link" and "the nav reaches the screen" —
+        //   the first assertion I wrote here matched a literal and failed,
+        //   which is what a vacuity guard is for.
+        expect(nav).toMatch(/name: "Seller Dashboard",\s+href: "\/marketplace\/seller"/);
+        const sellerRoot = readFileSync(join(process.cwd(), 'src/app/marketplace/seller/page.tsx'), 'utf-8');
+        expect(sellerRoot).toContain('router.replace("/marketplace/seller/dashboard")');
     });
 });

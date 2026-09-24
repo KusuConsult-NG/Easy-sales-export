@@ -1,6 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+//   #907 One id per submission, so a listing delivered twice is one product.
+//   See lib/product-submission for the whole finding.
+import { useSubmissionId } from "@/hooks/useSubmissionId";
+import { SUBMISSION_ID_FIELD } from "@/lib/product-submission";
+//   The field the edit screen demanded and this one never asked for. Both use
+//   the same words now — see lib/product-location.
+import { NEAREST_MARKET_LABEL, NEAREST_MARKET_HINT } from "@/lib/product-location";
 import { useActionState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -158,6 +165,7 @@ export default function CreateProductPage() {
     const unitSelectValue = !unit ? "" : (PRODUCT_UNITS.includes(unit) ? unit : "other units");
     const { uploadFile, uploadState } = useStorage();
     const [isUploadingClient, setIsUploadingClient] = useState(false);
+    const submissionId = useSubmissionId();
 
     const submitting = isPending || isUploadingClient;
 
@@ -168,6 +176,10 @@ export default function CreateProductPage() {
 
     useEffect(() => {
         if (state.success) {
+            //   The listing is made, so the NEXT one submitted from this page
+            //   is a different listing and must not be read as a replay of
+            //   this one.
+            submissionId.reset();
             //   #906 From lib/product-status — the same sentence the other
             //   creator shows, and it moves when the rule moves.
             showToast(PRODUCT_CREATED_MESSAGE, "success");
@@ -175,7 +187,7 @@ export default function CreateProductPage() {
         } else if ((state as { error?: string }).error) {
             showToast((state as { error?: string }).error!, "error");
         }
-    }, [state, showToast, router]);
+    }, [state, showToast, router, submissionId]);
 
     function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const files = e.target.files;
@@ -217,6 +229,11 @@ export default function CreateProductPage() {
             uploadedUrls.forEach(({ url }, index) => {
                 submitFormData.append(`productImages_${index}`, url);
             });
+
+            //   #907 The same id on every delivery of this submission, so a
+            //   retry addresses the product the first attempt made rather than
+            //   making a second one.
+            submitFormData.append(SUBMISSION_ID_FIELD, submissionId.current());
 
             formAction(submitFormData);
         } catch (error) {
@@ -643,6 +660,35 @@ export default function CreateProductPage() {
                                         className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
+                            </div>
+
+                            {/*
+                              *   THE FIELD THIS FORM NEVER ASKED FOR.
+                              *
+                              *   Both creators write `nearestMarket` and this
+                              *   section did not collect it, so every listing
+                              *   made here was stored as "Unknown" — and the
+                              *   seller met the field for the first time on the
+                              *   edit screen, already filled in with that word
+                              *   and carrying an asterisk.
+                              *
+                              *   Asked here, demanded nowhere. See
+                              *   lib/product-location.
+                              */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    {NEAREST_MARKET_LABEL}
+                                    <span className="text-gray-400 font-normal"> (optional)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="nearestMarket"
+                                    placeholder={NEAREST_MARKET_HINT}
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Where buyers can collect from, if you have one.
+                                </p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

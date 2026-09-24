@@ -33,6 +33,7 @@ const LocationPicker = dynamic(() => import("@/components/farm-nation/LocationPi
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
 import { leaseTermRefusal } from "@/lib/lease-term";
+import { LAND_CATEGORIES } from "@/lib/land-categories";
 
 type LandCategory = "farmland" | "ranch" | "forest" | "mixed" | "orchard" | "aquaculture";
 
@@ -219,14 +220,11 @@ export default function ListLandPage() {
         });
     };
 
-    const landCategories = [
-        { value: "farmland", label: "Farmland (Crop Cultivation)", icon: "🌾" },
-        { value: "ranch", label: "Ranch/Pasture (Livestock)", icon: "🐄" },
-        { value: "forest", label: "Forest Land (Timber/Conservation)", icon: "🌲" },
-        { value: "mixed", label: "Mixed-Use Agricultural", icon: "🌻" },
-        { value: "orchard", label: "Orchard/Plantation", icon: "🍊" },
-        { value: "aquaculture", label: "Aquaculture/Fish Farm", icon: "🐟" }
-    ];
+    //   The shared list, with the long names this form uses because it is where
+    //   somebody chooses for the first time. See lib/land-categories.
+    const landCategories = LAND_CATEGORIES.map(
+        (category) => ({ value: category.value, label: category.detail, icon: category.icon }),
+    );
 
     /**
      *   #857 THE STATES CAME FROM A LIST TYPED INTO THIS FILE, AND THE LGA CAME

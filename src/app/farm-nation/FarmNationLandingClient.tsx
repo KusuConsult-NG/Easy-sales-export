@@ -9,6 +9,23 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { checkFarmNationStatusAction } from "@/app/actions/farm-nation";
 import { searchLandListingsAction } from "@/app/actions/land-listings";
+/*
+ *   THE SIX TILES BELOW USED TO CARRY A VOCABULARY OF THEIR OWN — Arable Land,
+ *   Leasing Options, Poultry Farms, Fish Farms, Greenhouses, Mixed-Use — which
+ *   appeared in no other file and matched no stored value. They linked with
+ *   `?category=`, which the browse screen does not read, so all six opened the
+ *   same unfiltered list; and they counted with a key derived from the display
+ *   name, which never matched, so all six printed "Browse" instead of a figure.
+ *
+ *   Each tile is a `<Link>`, and Next prefetches a Link that enters the
+ *   viewport. /farm-nation/properties is force-dynamic and runs the listing
+ *   search on every render, so six tiles plus the browse link were SEVEN
+ *   identical queries in the second this grid scrolled into view. That is the
+ *   seven-a-second the owner saw. See lib/land-categories.
+ */
+import {
+    LAND_CATEGORIES, landBrowseHref, landCategoriesOf,
+} from "@/lib/land-categories";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { isPurchasable } from "@/lib/land-listing-status";
 import { firstImageSrc } from "@/lib/first-image";
@@ -18,14 +35,6 @@ import ListLoadFailed from "@/components/common/ListLoadFailed";
 //   badges in the same box — see components/ui/ThumbnailImage.
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 
-const categories = [
-    { name: "Arable Land", icon: "🌾" },
-    { name: "Leasing Options", icon: "📋" },
-    { name: "Poultry Farms", icon: "🐔" },
-    { name: "Fish Farms", icon: "🐟" },
-    { name: "Greenhouses", icon: "🏡" },
-    { name: "Mixed-Use", icon: "🌻" },
-];
 
 export default function FarmNationLandingClient({ initial = null }: {
     /**
@@ -67,11 +76,20 @@ export default function FarmNationLandingClient({ initial = null }: {
                     setFeaturedProperties(result.data.listings.slice(0, 3));
                     setTotalCount(result.data.listings.length);
 
-                    // Count properties by type/category
+                    /*
+                     *   Counted per stored value, through the shared reader.
+                     *
+                     *   This was `p.category || p.propertyType || "other"` used
+                     *   directly as an object key — so a row whose category is
+                     *   an ARRAY (what the edit form writes) counted under
+                     *   "farmland,orchard", a bucket no tile reads, and a
+                     *   parcel offered two ways was counted under neither.
+                     */
                     const counts: Record<string, number> = {};
                     result.data.listings.forEach((p: any) => {
-                        const type = p.category || p.propertyType || "other";
-                        counts[type] = (counts[type] || 0) + 1;
+                        for (const value of landCategoriesOf(p)) {
+                            counts[value] = (counts[value] || 0) + 1;
+                        }
                     });
                     setCategoryCounts(counts);
                     setLoadFailed(false);
@@ -159,17 +177,19 @@ export default function FarmNationLandingClient({ initial = null }: {
                     Farm Categories
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-12">
-                    {categories.map((category) => {
-                        const key = category.name.toLowerCase().replace(/\s+/g, "_");
-                        const count = categoryCounts[key] ?? categoryCounts[category.name] ?? null;
+                    {LAND_CATEGORIES.map((category) => {
+                        //   Keyed on the STORED value, which is what the counts
+                        //   below are built from. The old key was the display
+                        //   name slugged, and matched nothing.
+                        const count = categoryCounts[category.value] ?? null;
                         return (
                             <Link
-                                key={category.name}
-                                href={`/farm-nation/properties?category=${encodeURIComponent(category.name)}`}
+                                key={category.value}
+                                href={landBrowseHref(category.value)}
                                 className="bg-white rounded-xl p-6 elevation-2 hover-lift text-center cursor-pointer block"
                             >
                                 <div className="text-4xl mb-3">{category.icon}</div>
-                                <h4 className="font-bold text-slate-900 text-sm mb-1">{category.name}</h4>
+                                <h4 className="font-bold text-slate-900 text-sm mb-1">{category.label}</h4>
                                 <p className="text-xs text-teal-600 font-semibold">
                                     {loading ? "..." : count !== null ? `${count}+` : "Browse"}
                                 </p>
