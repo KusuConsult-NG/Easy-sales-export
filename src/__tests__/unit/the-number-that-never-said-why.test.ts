@@ -403,16 +403,37 @@ describe('every network a page waits on is actually wired up', () => {
         return readFileSync(join(process.cwd(), rel), 'utf8');
     };
 
-    it('THE DOCUMENT READ AND THE QUERY, and nothing in between', () => {
+    it('THE DOCUMENT READ, THE QUERY, THE COUNT AND THE AGGREGATE — all four', () => {
+        /*
+         *   THIS RATCHET EARNED ITS KEEP, and it went from two to four.
+         *
+         *   #281 wired `SupabaseDocumentReference.get` and `SupabaseQuery.get`
+         *   and pinned the number at two — correctly, because those were the
+         *   only two then. `count()` and `aggregate()` return their OWN inline
+         *   objects with their own `get`, so they were never wrapped, and:
+         *
+         *       [slow-action] getMarketplaceStatsAction took 554ms — 0 reads,
+         *                     554ms unmeasured
+         *
+         *   That action makes two counts. 138 `.count()` call sites and 10
+         *   `.aggregate()` sites went unseen, the admin dashboard among them.
+         *
+         *   FOUR IS NOW THE WHOLE SET. A fifth read path appearing in this
+         *   adapter unwrapped is exactly what this assertion exists to catch,
+         *   so the number stays pinned rather than widened to "at least".
+         */
         const adapter = read('src/lib/supabase-db.ts');
 
         const timed = [...adapter.matchAll(/^\s*recordRoundTrip\(Date\.now\(\) - startedAt\);/gm)];
-        const entryPoints = [...adapter.matchAll(/^\s*private async _getTimed\(\)/gm)];
+        const entryPoints = [...adapter.matchAll(
+            /^\s*private async _(getTimed|countTimed|aggregateTimed)\(/gm)];
 
-        expect({ timed: timed.length }).toEqual({ timed: 2 });
-        expect({ entryPoints: entryPoints.length }).toEqual({ entryPoints: 2 });
-        //   In a `finally`, so a read that FAILS slowly is counted too.
+        expect({ timed: timed.length }).toEqual({ timed: 4 });
+        expect({ entryPoints: entryPoints.length }).toEqual({ entryPoints: 4 });
+        //   In a `finally`, so a read that FAILS slowly is counted too — on
+        //   every one of the four, not just the two that had it.
         expect(adapter).toContain('} finally {\n            recordRoundTrip(');
+        expect(adapter).toContain('} finally {\n                    recordRoundTrip(');
     });
 
     it('REDIS, the network every single action pays for', () => {
