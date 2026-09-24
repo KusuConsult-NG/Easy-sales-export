@@ -501,6 +501,10 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
             case 2:
                 return (
                     <BusinessProfileStep
+                        //   The step asks a buyer who is an individual for a
+                        //   person's details and a business for a business's.
+                        //   See describesABusiness in lib/marketplace-application.
+                        accountType={formData.accountType}
                         data={{
                             businessName: formData.businessName || "",
                             businessType: formData.businessType || DEFAULT_BUSINESS_TYPE,

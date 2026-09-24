@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { restoredStepId } from "@/lib/draft-step";
+import { missingExportIdentity } from "@/lib/export-identity";
 import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { staleSubmitAdvice } from "@/lib/stale-deployment-recovery";
@@ -309,17 +310,21 @@ export default function ExportOnboardingClient(
                     bvn: z.string().optional(),
                     ninVerified: z.boolean().optional(),
                     bvnVerified: z.boolean().optional(),
-                }, { message: "Identity verification details are required." }).refine(data => {
-                    if (data.nin && data.nin.trim() !== '' && !data.ninVerified) {
-                        return false;
+                }, { message: "Identity verification details are required." }).superRefine((data, ctx) => {
+                    /*
+                     *   THE SHARED RULE. This refine read "required if details
+                     *   are entered" — so a draft restored past the KYC step
+                     *   with nothing in it submitted clean. See
+                     *   lib/export-identity; the step's button and the server
+                     *   schema apply the same object.
+                     */
+                    for (const entry of missingExportIdentity(data)) {
+                        ctx.addIssue({
+                            code: z.ZodIssueCode.custom,
+                            message: entry.message,
+                            path: [entry.field],
+                        });
                     }
-                    if (data.bvn && data.bvn.trim() !== '' && !data.bvnVerified) {
-                        return false;
-                    }
-                    return true;
-                }, {
-                    message: "Identity / BVN verification is required if details are entered.",
-                    path: ["ninVerified"]
                 })
             }, { message: "KYC verification details are required." }),
             bank: z.object({

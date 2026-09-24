@@ -3,7 +3,6 @@
 import HubNavigation from "@/components/hub/HubNavigation";
 import HubHero from "@/components/hub/HubHero";
 import ModuleCard from "@/components/hub/ModuleCard";
-import PlatformStats from "@/components/hub/PlatformStats";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -125,7 +124,25 @@ export default function HubPage() {
             )}
 
             {/* Platform Statistics */}
-            <PlatformStats />
+            {/*
+                components/hub/PlatformStats STOOD HERE, and it is deleted.
+
+                  THE OWNER: "i need them removed."
+
+                "Our Growing Community", with four counters that COUNTED UP
+                over two seconds to look like they were being fetched:
+
+                    15,420  Registered Users
+                     1,247  Active Exports
+                     3,856  Marketplace Products
+                     8,932  Courses Completed
+
+                and a badge underneath reading "Growing 25% month-over-month".
+                The component had no fetch in it at all — the numbers were a
+                literal array, and the animation was the only thing about them
+                that was real. The whole component was those five figures, so
+                there is nothing left of it once they go.
+            */}
 
             {/* Modules Showcase */}
             <section className="py-20">
@@ -190,32 +207,30 @@ export default function HubPage() {
                                 <ArrowRight className="w-5 h-5" />
                             </Link>
                         </div>
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
-                                <div className="text-4xl font-bold text-primary mb-2">15,420+</div>
-                                <div className="text-sm font-semibold text-slate-600">
-                                    Registered Users
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
-                                <div className="text-4xl font-bold text-primary mb-2">₦2.5B+</div>
-                                <div className="text-sm font-semibold text-slate-600">
-                                    Total Exports
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
-                                <div className="text-4xl font-bold text-primary mb-2">24</div>
-                                <div className="text-sm font-semibold text-slate-600">
-                                    States Covered
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
-                                <div className="text-4xl font-bold text-primary mb-2">98%</div>
-                                <div className="text-sm font-semibold text-slate-600">
-                                    Success Rate
-                                </div>
-                            </div>
-                        </div>
+                        {/*
+                            FOUR NUMBERS NOBODY MEASURED STOOD HERE.
+
+                              THE OWNER: "the analytics is returning mock data…
+                              i need them removed."
+
+                                  15,420+   Registered Users
+                                  ₦2.5B+    Total Exports
+                                  24        States Covered
+                                  98%       Success Rate
+
+                            All four were literals in the JSX. Not a stale
+                            cache and not a rounded estimate — nothing in this
+                            repository computes total export value or a success
+                            rate, and this page never asked anything for a user
+                            count it could have had.
+
+                            Removed rather than zeroed. Two of them (users,
+                            products) ARE countable and the marketplace landing
+                            page now shows its own two from a real query; making
+                            a platform-wide count public is a disclosure
+                            decision, so it is not taken here.
+                        */}
+
                     </div>
                 </div>
             </section>

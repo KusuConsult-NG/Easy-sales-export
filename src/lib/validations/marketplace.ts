@@ -344,6 +344,24 @@ export const OrderSchema = z.object({
     buyerName: z.string().optional(),
     buyerEmail: z.string().optional(),
     trackingNumber: z.string().optional(),
+    /**
+     * How the goods are travelling, as the seller said when marking shipped.
+     *
+     *   #443's rule: a screen may not read a field this schema would strip.
+     *   Both order detail screens branch on `shipment.method` — a carrier with
+     *   its number, or a person with a phone — so it has to survive
+     *   validation. See lib/shipment-record for why a self delivery is one of
+     *   the two shapes rather than an empty tracking field.
+     */
+    shipment: z.object({
+        method: z.enum(["carrier", "self_delivery"]),
+        carrier: z.string().optional(),
+        trackingNumber: z.string().optional(),
+        courierName: z.string().optional(),
+        courierPhone: z.string().optional(),
+    }).optional(),
+    /** When the seller marked it shipped — the buyer's timeline reads this. */
+    shippedAt: z.any().optional(),
     estimatedDeliveryDate: dateSchema.optional(),
     reviewSubmitted: z.boolean().default(false),
     sellerAmountPaid: z.number().optional(),

@@ -8,12 +8,10 @@
 
 import { useState } from 'react';
 import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
-import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
+import { verifyBVNAction, verifyNINAction } from '@/app/actions/kyc';
 import {
     isObviouslyFakeId,
     fakeIdErrorMessage,
-    looksLikeFakeVotersCard,
-    VOTERS_CARD_ERROR_MESSAGE,
 } from '@/lib/kyc-validators';
 import { IdInput } from '@/components/ui/IdInput';
 import PhoneInput from '@/components/ui/PhoneInput';
@@ -30,11 +28,9 @@ export interface KYCData {
     phoneNumber: string;
     bvn?: string;
     nin?: string;
-    votersCard?: string;
     bvnVerified?: boolean;
     ninVerified?: boolean;
-    votersCardVerified?: boolean;
-    idType?: 'nin' | 'drivers_license' | 'international_passport' | 'voters_card';
+    idType?: 'nin' | 'drivers_license' | 'international_passport';
     idNumber?: string;
 }
 
@@ -58,7 +54,6 @@ const ID_TYPES = [
     { value: 'nin', label: 'NIN (National Identity Number)' },
     { value: 'drivers_license', label: "Driver's License" },
     { value: 'international_passport', label: 'International Passport' },
-    { value: 'voters_card', label: "Voter's Card" },
 ];
 
 function VerifyBadge({ state, message }: { state: VerifyState; message?: string }) {
@@ -109,16 +104,11 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     // always read the verified FLAG; these two now match it.
     const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvnVerified ? 'verified' : 'idle');
     const [ninState, setNinState] = useState<VerifyState>(initialData?.ninVerified ? 'verified' : 'idle');
-    const [votersCardState, setVotersCardState] = useState<VerifyState>(initialData?.votersCardVerified ? 'verified' : 'idle');
     const [bvnError, setBvnError] = useState<string>('');
     const [ninError, setNinError] = useState<string>('');
-    const [votersCardError, setVotersCardError] = useState<string>('');
     // Confirmation checkbox — user must explicitly confirm digits are correct
     const [ninConfirmed, setNinConfirmed] = useState(false);
     const [bvnConfirmed, setBvnConfirmed] = useState(false);
-    //   #525. The third document now has the confirm guard the other two
-    //   have had since #285.
-    const [votersCardConfirmed, setVotersCardConfirmed] = useState(false);
 
     function handleChange(field: keyof KYCData, value: string | boolean) {
         const updated = { ...formData, [field]: value };
@@ -164,12 +154,6 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             setNinError('');
             setNinConfirmed(false);
             updated.ninVerified = false;
-        }
-        if (field === 'votersCard') {
-            setVotersCardState('idle');
-            setVotersCardError('');
-            setVotersCardConfirmed(false);
-            updated.votersCardVerified = false;
         }
         setFormData(updated);
         onDataChange(updated);
@@ -263,57 +247,6 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         } catch (error) {
             setNinState('error');
             setNinError('Network error or server timeout. Please try again later.');
-        }
-    };
-
-    async function handleVerifyVotersCard() {
-        const { votersCard, firstName, lastName } = formData;
-        if (!votersCard) {
-            setVotersCardError("Enter your Voter's Card Number before verifying.");
-            return;
-        }
-        if (!firstName || !lastName) {
-            setVotersCardError("Enter your first name and last name before verifying Voter's Card.");
-            return;
-        }
-        //   #525 THE THIRD DOCUMENT HAD NEITHER GUARD THE OTHER TWO HAVE.
-        //
-        //   handleVerifyBVN and handleVerifyNIN each check a length, require the
-        //   member to confirm their digits, and call isObviouslyFakeId. This
-        //   asked only whether the field was empty — and the server did the
-        //   same, then wrote votersCardVerified: true. The confirm guard is here
-        //   for the reason #285 gave it to the other two: it is what makes the
-        //   member look at what they typed.
-        if (!votersCardConfirmed) {
-            setVotersCardError("Please confirm that your Voter's Card number is correct before verifying.");
-            return;
-        }
-        if (looksLikeFakeVotersCard(votersCard)) {
-            setVotersCardError(VOTERS_CARD_ERROR_MESSAGE);
-            return;
-        }
-
-        setVotersCardState('loading');
-        setVotersCardError('');
-
-        try {
-            const result = await verifyVotersCardAction({ votersCardNumber: votersCard, firstName, lastName });
-
-            if (result.success && result.data?.isMatch) {
-                setVotersCardState('verified');
-                const updated = { ...formData, votersCardVerified: true };
-                setFormData(updated);
-                onDataChange(updated);
-            } else if (result.success && !result.data?.isMatch) {
-                setVotersCardState('mismatch');
-                setVotersCardError(result.error || "Name mismatch. Please check the name on your Voter's Card record.");
-            } else {
-                setVotersCardState('error');
-                setVotersCardError(result.error || "Voter's Card verification failed. Please try again.");
-            }
-        } catch (error) {
-            setVotersCardState('error');
-            setVotersCardError('Network error or server timeout. Please try again later.');
         }
     };
 
@@ -462,8 +395,19 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             {/* ── NIN — live verification ─────────────────────────────────── */}
             <div>
                 <IdInput
+                    /*
+                        REQUIRED NOW, both of these.
+
+                          THE OWNER: "mandate NIN and BVN."
+
+                        `optional` here drew an "(Optional)" chip beside the
+                        label, and it was the truth: no door refused an
+                        application without one. See lib/export-identity, which
+                        is the rule this step, the submit guard and the server
+                        schema now share.
+                    */
                     label="NIN (National Identity Number)"
-                    optional
+                    required
                     value={formData.nin || ''}
                     onChange={(v) => handleChange('nin', v)}
                     digitsOnly
@@ -473,8 +417,9 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     error={ninError}
                     hint="Dial *346# to retrieve your NIN. Your name must match your NIN record exactly."
                     accentColor="orange"
-                    /* #349 THE VERIFY BUTTON. handleVerifyNIN, handleVerifyBVN,
-                       handleVerifyVotersCard and the VerifyBadge component were
+                    /* #349 THE VERIFY BUTTON. handleVerifyNIN, handleVerifyBVN
+                       and the VerifyBadge component were (with the voter-card
+                       handler that used to sit beside them, since removed)
                        all UNREACHABLE: IdInput takes a `suffix` for exactly
                        this ("a Verify button or status badge", its own doc) and
                        no call site passed one, and there was no <button> in the
@@ -519,81 +464,32 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 )}
             </div>
 
-            {/* ── Voter's Card — collect number only, no verification required ── */}
-            <div className="pt-4 border-t border-slate-100">
-{/*
-                 *   #628 NO maxLength. It was 19, and the placeholder
-                 *   beside it — 90F5B123456789012345 — is TWENTY
-                 *   characters, so THE FIELD COULD NOT ACCEPT ITS OWN
-                 *   EXAMPLE. With showCount on, a member with a
-                 *   twenty-character VIN watched the counter stop at 19/19
-                 *   with a digit of their card still in hand.
-                 *
-                 *   kyc-validators had already reasoned this out and
-                 *   decided AGAINST a ceiling: "the platform does not agree
-                 *   with itself about how long a voter's card is, there is
-                 *   no live database to settle it, and a rule that refuses
-                 *   a real member is worse than the defect it fixes." Its
-                 *   own note even says "the form truncates its own
-                 *   example". The validator was fixed; these two inputs
-                 *   kept the ceiling anyway — one of N doors.
-                 *
-                 *   Junk is still refused, by the rule that owns the
-                 *   question: a floor of nine, alphanumeric only, and no
-                 *   single character repeated. showCount goes with the
-                 *   cap, because a count toward a limit we have decided not
-                 *   to set is a number with no meaning.
-                 */}
-                <IdInput
-                    label="Voter's Card Number (PVC / VIN)"
-                    value={formData.votersCard || ''}
-                    onChange={(v) => handleChange('votersCard', v)}
-                    placeholder="e.g. 90F5B123456789012345"
-                    hint="The Voter Identification Number (VIN) as printed on your Permanent Voter Card."
-                    accentColor="orange"
-                    error={votersCardError}
-                    suffix={
-                        votersCardState === 'verified'
-                            ? <VerifyBadge state={votersCardState} />
-                            : (
-                                <button
-                                    type="button"
-                                    onClick={handleVerifyVotersCard}
-                                    disabled={votersCardState === 'loading'}
-                                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                >
-                                    {votersCardState === 'loading' ? 'Verifying…' : 'Verify'}
-                                </button>
-                            )
-                    }
-                />
-                {/* #525 THE CONFIRMATION CHECKBOX, WHICH THE OTHER TWO HAVE.
-                    #349 found that setNinConfirmed and setBvnConfirmed existed
-                    with nothing rendering them, so their handlers "would have
-                    refused every time" — three halves of one control and none of
-                    them on screen. Adding the guard to handleVerifyVotersCard
-                    without this would have reproduced exactly that, on the field
-                    I am supposed to be fixing. handleChange clears it when the
-                    number is edited, like the other two. */}
-                {votersCardState !== 'verified' && (
-                    <label className="mt-2 flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={votersCardConfirmed}
-                            onChange={(e) => setVotersCardConfirmed(e.target.checked)}
-                            className="mt-0.5 w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                        />
-                        <span>I confirm the Voter&apos;s Card number above is correct.</span>
-                    </label>
-                )}
-            </div>
+            {/*
+                THE VOTER'S CARD WAS COLLECTED HERE, and it is gone.
 
-            {/* ── BVN — live verification (optional, shown when includeBVN=true) ── */}
+                  THE OWNER: "remove voter's card on export window onboarding."
+
+                A third identity field, weaker than the two beside it: its
+                Verify button called an action that checks the FORMAT and
+                writes `votersCardVerificationMethod: 'self_declared'`, because
+                there is no live VIN database to ask. See lib/export-identity
+                for the whole decision, and for why nothing is deleted from any
+                member's record — WAVE still collects a VIN on its own step,
+                where voter registration is the actual subject.
+            */}
+
+            {/*
+                ── BVN — live verification ────────────────────────────────
+
+                THE ONLY PLACE IT IS ASKED. The bank step used to ask for it a
+                second time, behind a red asterisk that blocked nothing and
+                into a key the server schema strips. See lib/export-identity.
+            */}
             {includeBVN && (
                 <div>
                     <IdInput
                         label="BVN (Bank Verification Number)"
-                        optional
+                        required
                         value={formData.bvn || ''}
                         onChange={(v) => handleChange('bvn', v)}
                         digitsOnly

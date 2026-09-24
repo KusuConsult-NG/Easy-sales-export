@@ -180,10 +180,17 @@ describe('#284 — the export onboarding component, the copy I first cleared', (
         expect(src).toMatch(/!response\.ok\s*\|\|\s*!data\?\.success\s*\|\|\s*!data\?\.accountName/);
     });
 
-    it('and its BVN check, which was always real, is still there', () => {
-        // Vacuity guard: this component did verify something. Replacing the
-        // account-name path must not have removed the part that worked.
-        expect(src).toContain('/api/kyc/verify-bvn');
+    it('and the account check it is FOR is still a real one', () => {
+        //   Vacuity guard: this component did verify something. Replacing the
+        //   account-name path must not have removed the part that worked.
+        //
+        //   It used to be the BVN check that stood for that, via
+        //   /api/kyc/verify-bvn. That field has gone — the export wizard asked
+        //   for a BVN twice, and this was the copy that blocked nothing and
+        //   reached no record; see lib/export-identity. What this component is
+        //   for is resolving a settlement account, so that is what is pinned.
+        expect(src).toContain('/api/kyc/verify-bank-account');
+        expect(src).not.toContain('SIMULATED');
     });
 });
 

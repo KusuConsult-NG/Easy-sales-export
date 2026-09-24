@@ -282,7 +282,13 @@ describe('#485 — and the gates keep the value they have today', () => {
         //   above would still pass and the reason for it would be gone.
         const step = code('src/app/export/onboarding/steps/KYCVerificationStep.tsx');
 
-        expect(step).toMatch(/kycData\.bvn[\s\S]{0,120}!kycData\.bvnVerified/);
+        //   The inline `kycData.bvn && !kycData.bvnVerified` pair moved into
+        //   lib/export-identity, which the step, the submit guard and the
+        //   server schema all apply — and which now requires the BVN to be
+        //   THERE, not merely verified if one was typed. The gate did not go
+        //   away; it got stricter and stopped being three opinions.
+        expect(step).toContain('missingExportIdentity(kycData)');
+        expect(code('src/lib/export-identity.ts')).toContain('bvnVerified');
     });
 
     it('and the overall KYC status still reads the booleans, not the strings', () => {

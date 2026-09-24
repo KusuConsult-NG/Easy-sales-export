@@ -56,6 +56,8 @@ import {
     resolveSellerTrust,
     newestVerification,
     hydrateSellerTrust,
+    withoutSellerBadge,
+    storedSellerName,
     SELLER_NAME_FALLBACK,
 } from '@/lib/seller-trust';
 
@@ -245,65 +247,65 @@ describe('hydrating a list', () => {
  * So: find every function that queries the products collection for display, and
  * require each to resolve the badge. A new reader fails until it does.
  */
-describe('every product reader resolves the badge', () => {
-    const READER_FILES = [
-        'src/app/actions/marketplace/_buyer.ts',
-        'src/app/actions/marketplace/_mp_catalog.ts',
-        'src/app/actions/village-market.ts',
-        'src/app/api/marketplace/products/route.ts',
-    ];
+const READER_FILES = [
+    'src/app/actions/marketplace/_buyer.ts',
+    'src/app/actions/marketplace/_mp_catalog.ts',
+    'src/app/actions/village-market.ts',
+    'src/app/api/marketplace/products/route.ts',
+];
 
-    /**
-     * Function bodies in a file that query PRODUCTS or FLASH_SALE_PRODUCTS for
-     * display, keyed by name.
-     *
-     * A `.count()` aggregation is not a display read — it returns a number, and
-     * there is nothing to attach a badge to.
-     */
-    function readersIn(rel: string): Array<{ name: string; body: string }> {
-        const src = code(rel);
-        const out: Array<{ name: string; body: string }> = [];
+/**
+ * Function bodies in a file that query PRODUCTS or FLASH_SALE_PRODUCTS for
+ * display, keyed by name.
+ *
+ * A `.count()` aggregation is not a display read — it returns a number, and
+ * there is nothing to attach a badge to.
+ */
+function readersIn(rel: string): Array<{ name: string; body: string }> {
+    const src = code(rel);
+    const out: Array<{ name: string; body: string }> = [];
 
-        const fnPattern = /(?:async function|export async function)\s+(\w+)/g;
-        const starts: Array<{ name: string; at: number }> = [];
-        for (const m of src.matchAll(fnPattern)) {
-            starts.push({ name: m[1], at: m.index ?? 0 });
-        }
-
-        starts.forEach((s, i) => {
-            const body = src.slice(s.at, i + 1 < starts.length ? starts[i + 1].at : src.length);
-            const queriesProducts =
-                /COLLECTIONS\.(PRODUCTS|FLASH_SALE_PRODUCTS)/.test(body) &&
-                !/\.count\(\)/.test(body);
-            // Writers and stock adjusters are not display reads.
-            const isWrite = /\.(set|add)\(|\.update\(\s*\{/.test(body);
-
-            // Must return something Product-SHAPED.
-            //
-            // `\bProduct\b` does not match "FlashSaleProduct" — there is no word
-            // boundary before "Product" in it — and that distinction is the
-            // point. getVillageMarketEventAction returns raw FlashSaleProduct
-            // rows, which carry no sellerName or sellerVerified for anything to
-            // resolve, and its page renders no seller at all. Requiring it to
-            // hydrate would be N reads for a field nobody displays.
-            //
-            // If such a row is ever mapped into Product shape, that happens in
-            // the CALLER — which is where `sellerVerified: true` was hardcoded,
-            // and those mappers now read the value through instead.
-            // A fixed prefix, not "up to the first brace": these signatures are
-            // `Promise<ActionResponse<{ products: Product[] }>>`, so the first
-            // `{` lands INSIDE the return type and cutting there hid the word
-            // `Product` from the test — which reported one reader instead of
-            // seven and would have passed the real assertion vacuously.
-            const signature = body.slice(0, 400);
-            const returnsProducts = /\bProduct\b/.test(signature);
-
-            if (queriesProducts && !isWrite && returnsProducts) out.push({ name: s.name, body });
-        });
-
-        return out;
+    const fnPattern = /(?:async function|export async function)\s+(\w+)/g;
+    const starts: Array<{ name: string; at: number }> = [];
+    for (const m of src.matchAll(fnPattern)) {
+        starts.push({ name: m[1], at: m.index ?? 0 });
     }
 
+    starts.forEach((s, i) => {
+        const body = src.slice(s.at, i + 1 < starts.length ? starts[i + 1].at : src.length);
+        const queriesProducts =
+            /COLLECTIONS\.(PRODUCTS|FLASH_SALE_PRODUCTS)/.test(body) &&
+            !/\.count\(\)/.test(body);
+        // Writers and stock adjusters are not display reads.
+        const isWrite = /\.(set|add)\(|\.update\(\s*\{/.test(body);
+
+        // Must return something Product-SHAPED.
+        //
+        // `\bProduct\b` does not match "FlashSaleProduct" — there is no word
+        // boundary before "Product" in it — and that distinction is the
+        // point. getVillageMarketEventAction returns raw FlashSaleProduct
+        // rows, which carry no sellerName or sellerVerified for anything to
+        // resolve, and its page renders no seller at all. Requiring it to
+        // hydrate would be N reads for a field nobody displays.
+        //
+        // If such a row is ever mapped into Product shape, that happens in
+        // the CALLER — which is where `sellerVerified: true` was hardcoded,
+        // and those mappers now read the value through instead.
+        // A fixed prefix, not "up to the first brace": these signatures are
+        // `Promise<ActionResponse<{ products: Product[] }>>`, so the first
+        // `{` lands INSIDE the return type and cutting there hid the word
+        // `Product` from the test — which reported one reader instead of
+        // seven and would have passed the real assertion vacuously.
+        const signature = body.slice(0, 400);
+        const returnsProducts = /\bProduct\b/.test(signature);
+
+        if (queriesProducts && !isWrite && returnsProducts) out.push({ name: s.name, body });
+    });
+
+    return out;
+}
+
+describe('every product reader resolves the badge', () => {
     it('finds readers to check (sanity)', () => {
         const total = READER_FILES.flatMap(readersIn).length;
         // If the parser stops finding functions, every assertion below passes
@@ -318,7 +320,12 @@ describe('every product reader resolves the badge', () => {
             for (const { name, body } of readersIn(rel)) {
                 const resolves =
                     body.includes('hydrateSellerTrust(') || body.includes('resolveSellerTrust(');
-                if (!resolves) offenders.push(`${rel} :: ${name}`);
+                // The third answer is not "resolve it", it is "do not show it"
+                // — and it still has to be said out loud. A reader that neither
+                // resolves the badge nor strips it is serving the snapshot,
+                // which is the one thing none of them may do.
+                const strips = body.includes('withoutSellerBadge(');
+                if (!resolves && !strips) offenders.push(`${rel} :: ${name}`);
             }
         }
 
@@ -329,11 +336,114 @@ describe('every product reader resolves the badge', () => {
                 offenders.map((o) => `  ${o}`).join('\n') +
                 `\n\nGranting the badge does not reach these, and revoking it does not\n` +
                 `remove it. Call hydrateSellerTrust (lists) or resolveSellerTrust (one\n` +
-                `product) before returning. See lib/seller-trust.ts.\n`
+                `product) before returning — or withoutSellerBadge, if this reader\n` +
+                `feeds a screen that shows no badge and the round trip is not worth\n` +
+                `paying. See lib/seller-trust.ts.\n`
             );
         }
 
         expect(offenders).toEqual([]);
+    });
+});
+
+/**
+ * ONE READER SHOWS NO BADGE — AND SAYS SO
+ * ---------------------------------------
+ * `hydrateSellerTrust` cannot be started early: the seller ids only exist once
+ * the product query has come back, so it is a whole second generation of round
+ * trips. On the recommended strip that generation was buying a field neither of
+ * the two screens rendering it has ever displayed — marketplace/page.tsx shows
+ * the seller's name beside the rating, the buyer dashboard maps it to `seller`,
+ * and no shield appears on either.
+ *
+ * So the strip stops resolving the badge. The risk that creates is precise, and
+ * these tests are about that risk and nothing else: a reader that merely STOPS
+ * resolving starts serving the create-time snapshot, which is defect 1 above,
+ * and would be a badge surviving its own revocation on a public landing page.
+ * `withoutSellerBadge` exists so that "not shown" is written down as false
+ * rather than left to whatever the row says.
+ *
+ * The exemption is a ratchet, not a note: exactly one reader may strip, it is
+ * named here, and every other reader still has to resolve.
+ */
+describe('the one reader that shows no badge', () => {
+    it('sets the flag false instead of passing the stored one through', () => {
+        // The stored `true` here is the snapshot — a badge granted when the
+        // product was created and revoked since. Passing it through is the
+        // whole defect; this is the line that stops it.
+        const out = withoutSellerBadge([
+            { sellerId: 's1', sellerName: 'Ada Farms', sellerVerified: true } as any,
+        ]);
+
+        expect(out[0]).toMatchObject({ sellerName: 'Ada Farms', sellerVerified: false });
+    });
+
+    it('keeps the stored name, because a name is not a claim', () => {
+        expect(storedSellerName('Ada Farms')).toBe('Ada Farms');
+    });
+
+    it('unless the stored name IS the claim', () => {
+        // Rows written before lib/seller-trust.ts existed carry the old
+        // fallbacks. Live hydration overwrote them; a reader that does not
+        // hydrate would print the word "Verified" under a card showing no
+        // badge at all.
+        for (const stored of ['Verified Seller', 'verified seller', '  Verified Seller  ', 'Unknown Seller']) {
+            expect(storedSellerName(stored)).toBe(SELLER_NAME_FALLBACK);
+        }
+        for (const empty of ['', '   ', undefined, null, 42]) {
+            expect(storedSellerName(empty as any)).toBe(SELLER_NAME_FALLBACK);
+        }
+    });
+
+    it('takes no reader, so there is no read it could make', () => {
+        // The point of it. hydrateSellerTrust needs a `readUser`; this needs
+        // nothing, which is what "one generation instead of two" means.
+        expect(withoutSellerBadge.length).toBe(1);
+        expect(hydrateSellerTrust.length).toBe(2);
+    });
+
+    it('is used by exactly one product reader, and it is the recommended strip', () => {
+        const strippers = READER_FILES.flatMap((rel) =>
+            readersIn(rel)
+                .filter(({ body }) => body.includes('withoutSellerBadge('))
+                .map(({ name }) => `${rel} :: ${name}`),
+        );
+
+        expect(strippers).toEqual([
+            'src/app/actions/marketplace/_mp_catalog.ts :: _getRecommendedProductsAction',
+        ]);
+    });
+
+    it('and every screen a buyer judges a seller on still reads it live', () => {
+        // The other half of the decision. Dropping the badge from three cards
+        // on a landing page is not dropping the badge.
+        const bodyOf = (rel: string, name: string) =>
+            readersIn(rel).find((r) => r.name === name)?.body ?? '';
+
+        const live: Array<[string, string]> = [
+            ['src/app/actions/marketplace/_mp_catalog.ts', '_getMarketplaceProductsAction'],
+            ['src/app/actions/marketplace/_mp_catalog.ts', '_getProductByIdAction'],
+            ['src/app/actions/marketplace/_mp_catalog.ts', '_getRelatedProductsAction'],
+            ['src/app/actions/marketplace/_mp_catalog.ts', '_searchProductsAction'],
+        ];
+
+        for (const [rel, name] of live) {
+            const body = bodyOf(rel, name);
+            // Vacuity guard: a renamed function would give '' and match nothing.
+            expect({ name, found: body.length > 0 }).toEqual({ name, found: true });
+            expect(body).toMatch(/hydrateSellerTrust\(|resolveSellerTrust\(/);
+        }
+    });
+
+    it('neither screen that shows the strip renders a shield', () => {
+        // If one of them grows a badge, this exemption stops being true and
+        // this test is where that gets noticed.
+        for (const rel of [
+            'src/app/marketplace/page.tsx',
+            'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx',
+        ]) {
+            expect(code(rel)).not.toMatch(/sellerVerified|isVerifiedBadge/);
+        }
     });
 });
 

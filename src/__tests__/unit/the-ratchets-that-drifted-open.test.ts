@@ -167,7 +167,15 @@ describe('#743 — and every population ledger is on it', () => {
         //   ledger's did below: the sweep REPORTED the improvement instead of
         //   absorbing it, and the number had to be lowered by hand in both
         //   places it is written down.
-        expect(cra).toContain("ledgerVerdict(n('D4'), 39)");
+        //
+        //   39 → 38 when the second BVN field went from export onboarding,
+        //   taking its POST to /api/kyc/verify-bvn with it — the wizard asked
+        //   for the same eleven digits twice, and that copy blocked nothing
+        //   and reached no record. See lib/export-identity. Reported, not
+        //   absorbed, and moved by hand here as well: the whole point of
+        //   writing the number down twice is that a sweep cannot quietly
+        //   widen its own ceiling.
+        expect(cra).toContain("ledgerVerdict(n('D4'), 38)");
         //   44 → 43 when #804 converted admin/settings/logs, then 43 → 41 when
         //   checkout's delivery address lost its two Google geocoder wrappers —
         //   each of which logged to the console and fell through to the state

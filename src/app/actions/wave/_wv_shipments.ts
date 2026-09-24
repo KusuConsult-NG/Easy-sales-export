@@ -162,7 +162,39 @@ async function _syncShipmentWithCarrierAction(shipmentId: string): Promise<Actio
             return { success: false as const, error: "No tracking number explicitly linked", data: null };
         }
 
+        /*
+         *   THE CARRIER SYNC WROTE A JOURNEY NOBODY TOOK — INTO THE DATABASE.
+         *
+         *     THE OWNER: "tracking should be realtime."
+         *
+         *   This asked the logistics provider for updates on the waybill and
+         *   merged them into `shipment.updates`, then set the shipment's own
+         *   STATUS from the last of them. The only provider was
+         *   MockLogisticsProvider, whose trackShipment builds a timeline
+         *   through "WAVE Warehouse" and "Regional Distribution Center" out of
+         *   the shipment's own dates.
+         *
+         *   So this did not merely display a fabrication, as the marketplace
+         *   tracking panel did — it PERSISTED one, and the invented events
+         *   then drove the status a member was shown. Re-running it wrote them
+         *   again under a fresh `lastSyncedAt`, which is what a working sync
+         *   looks like from the outside.
+         *
+         *   There is no carrier integration on this platform. Until there is
+         *   (see lib/logistics — the interface is kept for exactly that day),
+         *   a sync has nothing to ask, and saying so is the whole of the
+         *   honest behaviour. The member keeps every update an admin really
+         *   recorded; nothing is deleted.
+         */
         const provider = getLogisticsProvider();
+        if (!provider) {
+            return {
+                success: false as const,
+                error: "No carrier is connected yet, so there is nothing to sync. Updates on this shipment are the ones recorded by our team.",
+                data: null,
+            };
+        }
+
         const updates = await provider.trackShipment(shipmentData.trackingNumber);
 
         if (updates.length > 0) {

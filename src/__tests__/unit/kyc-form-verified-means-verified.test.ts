@@ -91,12 +91,18 @@ function handleChangeBody(): string {
 describe('#285 — editing a field clears its verification', () => {
     const body = handleChangeBody();
 
-    it('BVN AND NIN RESET TO idle, LIKE THE VOTERS CARD ALWAYS DID', () => {
+    it('BVN AND NIN RESET TO idle, AS THE VOTERS CARD ALWAYS DID', () => {
         // Was: `setBvnState(value ? 'verified' : 'idle')`.
+        //
+        //   The voter's card was the field that had this RIGHT, and it is the
+        //   one that has since been removed from the form — see
+        //   lib/export-identity. Its behaviour is the standard the other two
+        //   were held to, so the finding survives it; what cannot survive is
+        //   an assertion on a handler branch that no longer exists.
         expect(body).not.toMatch(/set(Bvn|Nin)State\(value \?/);
         expect(body).toMatch(/setBvnState\('idle'\)/);
         expect(body).toMatch(/setNinState\('idle'\)/);
-        expect(body).toMatch(/setVotersCardState\('idle'\)/);
+        expect(body).not.toMatch(/votersCard/);
     });
 
     it('AND CLEAR THE VERIFIED FLAG RATHER THAN SETTING IT FROM THE VALUE', () => {
@@ -105,7 +111,6 @@ describe('#285 — editing a field clears its verification', () => {
         expect(body).not.toMatch(/updated\.(bvn|nin)Verified = !!value/);
         expect(body).toMatch(/updated\.bvnVerified = false/);
         expect(body).toMatch(/updated\.ninVerified = false/);
-        expect(body).toMatch(/updated\.votersCardVerified = false/);
     });
 
     it('and no longer tick the confirmation box for the member', () => {
@@ -116,15 +121,18 @@ describe('#285 — editing a field clears its verification', () => {
         expect(body).toMatch(/setNinConfirmed\(false\)/);
     });
 
-    it('all three fields are handled the same way, which is the point', () => {
-        // The finding was one function treating three identical cases two
-        // different ways. Stated as a property so a fourth field added later
-        // has to join the pattern.
+    it('every field is handled the same way, which is the point', () => {
+        // The finding was one function treating identical cases two different
+        // ways. Stated as a property so a field added later has to join the
+        // pattern — and as a COUNT, so removing a field cannot quietly leave
+        // one of them behind. Three when the voter's card was here, two now
+        // that lib/export-identity has taken it out.
         const resets = (body.match(/State\('idle'\)/g) ?? []).length;
         const cleared = (body.match(/Verified = false/g) ?? []).length;
+        const fields = (body.match(/if \(field === '/g) ?? []).length;
 
-        expect(resets).toBe(3);
-        expect(cleared).toBe(3);
+        expect({ resets, cleared }).toEqual({ resets: fields, cleared: fields });
+        expect(fields).toBe(2);
     });
 });
 
@@ -136,7 +144,6 @@ describe('#285 — reopening the form shows what was actually verified', () => {
 
         expect(src).toContain("initialData?.bvnVerified ? 'verified' : 'idle'");
         expect(src).toContain("initialData?.ninVerified ? 'verified' : 'idle'");
-        expect(src).toContain("initialData?.votersCardVerified ? 'verified' : 'idle'");
         expect(src).not.toMatch(/initialData\?\.(bvn|nin) \? 'verified'/);
     });
 });
@@ -148,7 +155,10 @@ describe('#285 — only a real check may set the flag', () => {
     for (const [handler, action, flag] of [
         ['handleVerifyBVN', 'verifyBVNAction', 'bvnVerified'],
         ['handleVerifyNIN', 'verifyNINAction', 'ninVerified'],
-        ['handleVerifyVotersCard', 'verifyVotersCardAction', 'votersCardVerified'],
+        //   handleVerifyVotersCard was the third. The field is gone from this
+        //   form — see lib/export-identity — and the rule it demonstrated is
+        //   still enforced on the two that remain, and by the ratchet below on
+        //   any that are added.
     ] as const) {
         it(`${handler} sets ${flag} only behind ${action} and isMatch`, () => {
             const start = src.indexOf(`function ${handler}`);
@@ -174,7 +184,6 @@ describe('#285 — only a real check may set the flag', () => {
                 const lastHandler = Math.max(
                     upto.lastIndexOf('function handleVerifyBVN'),
                     upto.lastIndexOf('function handleVerifyNIN'),
-                    upto.lastIndexOf('function handleVerifyVotersCard'),
                 );
                 const lastOther = upto.lastIndexOf('function handleChange');
                 return lastHandler < lastOther;
@@ -188,13 +197,20 @@ describe('#285 — only a real check may set the flag', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#285 — the gate the form was disarming', () => {
     it('KYCVerificationStep STILL REFUSES AN UNVERIFIED BVN OR NIN', () => {
-        // Unchanged and pinned. The check was always right; what was wrong is
-        // that it could never fire. If somebody removes it because "it never
-        // triggers", this says why it did not.
+        // The check was always right; what was wrong is that it could never
+        // fire. If somebody removes it because "it never triggers", this says
+        // why it did not.
+        //
+        //   It has since moved into lib/export-identity, which the step, the
+        //   submit guard and the server schema all apply — and which now also
+        //   requires the two numbers to be THERE, not merely verified if
+        //   present. The inline `kycData.nin && !kycData.ninVerified` pair is
+        //   what that replaced, so this asserts the rule is reached rather
+        //   than the shape of the old expression.
         const src = codeOnly(STEP);
 
-        expect(src).toMatch(/kycData\.nin[\s\S]{0,80}!kycData\.ninVerified/);
-        expect(src).toMatch(/kycData\.bvn[\s\S]{0,80}!kycData\.bvnVerified/);
+        expect(src).toContain('missingExportIdentity(kycData)');
+        expect(src).toMatch(/missingIdentity\.length > 0[\s\S]{0,120}return;/);
     });
 
     it('and it is still this form the step renders', () => {

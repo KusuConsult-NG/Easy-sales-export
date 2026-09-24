@@ -142,7 +142,12 @@ function exportApplicationForm(): FormData {
         firstName: 'Ada', lastName: 'Obi', otherName: '', phone: '08012345678',
         email: `${USER}@e.com`, state: 'Lagos', lga: 'Ikeja', address: '12 Broad Street, Ikeja',
     }));
-    fd.append('kycData', JSON.stringify({ nin: NIN, bvn: BVN }));
+    //   Both verified: export onboarding requires a NIN and a BVN, each one
+    //   actually checked rather than merely typed. See lib/export-identity.
+    fd.append('kycData', JSON.stringify({
+        nin: NIN, ninVerified: true,
+        bvn: BVN, bvnVerified: true,
+    }));
     fd.append('bank', JSON.stringify({
         accountNumber: '0123456789', bankName: 'GTBank', accountName: 'Ada Obi', bankCode: '058',
     }));

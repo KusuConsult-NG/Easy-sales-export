@@ -8,7 +8,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2, Zap, ChevronLeft } from "lucide-react";
+import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2, ChevronLeft } from "lucide-react";
 import { logger } from '@/lib/logger';
 import { MarketplaceErrorBoundary } from "@/components/marketplace/MarketplaceErrorBoundary";
 import Link from "next/link";
@@ -177,13 +177,23 @@ export default function BuyerDashboardClient({ initial = null }: {
                                 </p>
                             </div>
                         </div>
-                        <Link
-                            href="/marketplace/seller/dashboard"
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition"
-                        >
-                            <Zap className="w-4 h-4" />
-                            Switch to Seller View
-                        </Link>
+                        {/*
+                            "Switch to Seller View" used to sit here, on every
+                            buyer's dashboard, linking straight to the seller
+                            dashboard.
+
+                              THE OWNER: "A buyer should be a buyer and a seller
+                              should be a seller."
+
+                            It was unconditional — shown to people with no
+                            seller registration at all — so the commonest
+                            outcome of clicking it was being bounced by the
+                            seller guard. It is not a permission and never
+                            granted one; it only advertised a door that is not
+                            theirs. Someone who is both applies through
+                            marketplace onboarding, and reaches the seller
+                            dashboard from the nav like any other seller.
+                        */}
                     </div>
                 </div>
 

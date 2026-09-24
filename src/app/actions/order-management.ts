@@ -16,10 +16,16 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { serializeDoc, serializeDocs, serializeOrder, serializeOrders } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, serializeOrder, serializeOrders, toMillis } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { waveCommission } from "@/lib/wave-commission";
 import { getLogisticsProvider } from "@/lib/logistics";
+import {
+    missingShipmentFields,
+    normaliseShipment,
+    describeShipment,
+    type ShipmentRecord,
+} from "@/lib/shipment-record";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
 import { hasReservedStock } from "@/lib/order-status";
@@ -102,7 +108,12 @@ async function _updateOrderStatusAction(
     orderId: string,
     newStatus: OrderStatus,
     trackingNumber?: string
-) { let sessionResult;
+,
+    /**
+     * How the goods are travelling — required when marking an order shipped.
+     * See lib/shipment-record; the seller picks a carrier or a self delivery.
+     */
+    shipment?: unknown) { let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -111,21 +122,13 @@ async function _updateOrderStatusAction(
         const userId = session.user.id;
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
+        //   The shipment the seller described is validated AFTER the
+        //   authorisation check below, not here. Asked first, an unauthorised
+        //   caller was answered "Say how this order is being delivered" —
+        //   which is both the wrong refusal and a hint that the order exists
+        //   and is theirs to ship.
+        let shipmentRecord: ShipmentRecord | null = null;
         let finalTrackingNumber = trackingNumber;
-        if (newStatus === "shipped" && !finalTrackingNumber) {
-            const orderDoc = await orderRef.get();
-            if (orderDoc.exists) {
-                const orderData = orderDoc.data() as Order;
-                const provider = getLogisticsProvider();
-                const shipment = await provider.createShipment({
-                    orderId,
-                    sellerId: orderData.sellerId || (Array.isArray(orderData.sellerIds) ? orderData.sellerIds[0] : undefined),
-                    buyerId: orderData.buyerId,
-                    destination: orderData.deliveryAddress?.city || "Destination",
-                });
-                finalTrackingNumber = shipment.trackingNumber;
-            }
-        }
 
         // Query associated escrow transactions if the status becomes delivered
         let escrowDocs: any[] = [];
@@ -164,6 +167,42 @@ async function _updateOrderStatusAction(
                 throw new Error("Not authorized to update this order");
             }
 
+            /*
+             *   A TRACKING NUMBER WAS INVENTED WHEN THE SELLER HAD NONE.
+             *
+             *     THE OWNER: "tracking should be realtime."
+             *
+             *   What stood here: if the status is "shipped" and no number was
+             *   typed, ask the logistics provider for one. The only provider was
+             *   MockLogisticsProvider, and its answer was
+             *   `TRK-${Date.now()}-${Math.floor(Math.random() * 1000)}` — so the
+             *   buyer was notified of a consignment number no carrier had ever
+             *   issued, indistinguishable from a real one.
+             *
+             *   The seller now says how the goods are travelling, and that is what
+             *   is stored and shown. See lib/shipment-record for the two shapes
+             *   and why a self delivery is one of them.
+             */
+            if (newStatus === "shipped") {
+                shipmentRecord = normaliseShipment(shipment);
+                if (!shipmentRecord) {
+                    //   THROWN, not returned, because this sits inside the
+                    //   block whose errors the outer catch turns into a
+                    //   refusal — the same way the authorisation guard three
+                    //   lines above reports itself. A `return` here would be
+                    //   returning from the wrong function.
+                    const missing = missingShipmentFields(shipment);
+                    throw new Error(missing[0]?.message ?? "Say how this order is being delivered.");
+                }
+            }
+
+            //   Only a CARRIER shipment has one. A self delivery has a person and
+            //   a phone instead, and leaving this undefined is what stops the
+            //   buyer's screen printing an empty "Tracking:" line.
+            finalTrackingNumber = shipmentRecord?.method === "carrier"
+                ? shipmentRecord.trackingNumber
+                : trackingNumber;
+
             // #389 SECURITY. This was one flat list —
             //
             //     ["processing", "shipped", "delivered", "cancelled"]
@@ -193,6 +232,9 @@ async function _updateOrderStatusAction(
             }
 
             if (finalTrackingNumber) updateData.trackingNumber = finalTrackingNumber;
+            //   What the seller said, stored whole, because the buyer's panel
+            //   branches on its method and a half-record would render blank.
+            if (shipmentRecord) updateData.shipment = shipmentRecord;
             /**
              *   #493 THIS WROTE A PROMISE TO THE MINUTE.
              *
@@ -204,6 +246,10 @@ async function _updateOrderStatusAction(
              */
             if (newStatus === "shipped") {
                 updateData.estimatedDeliveryDate = estimatedDeliveryFrom();
+                //   The moment the seller said so. Without it the buyer's
+                //   timeline has no shipped event to show, which is how the
+                //   invented journey came to be filling that space.
+                updateData.shippedAt = FieldValue.serverTimestamp();
             }
             if (newStatus === "delivered") {
                 updateData.deliveredAt = FieldValue.serverTimestamp();
@@ -784,24 +830,101 @@ export const getOrderByIdForSellerAction = getOrderDetailsAction;
 /**
  * Get tracking updates for a shipment
  */
-async function _getTrackingUpdatesAction(trackingNumber: string) {
+async function _getTrackingUpdatesAction(orderId: string) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
+        const { session } = sessionResult;
 
-        if (!trackingNumber) {
-            return { success: false as const, error: "Tracking number is required", data: null };
+        if (!orderId) {
+            return { success: false as const, error: "Order id is required", data: null };
         }
 
-        const provider = getLogisticsProvider();
-        const updates = await provider.trackShipment(trackingNumber);
+        const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
+        if (!orderDoc.exists) {
+            return { success: false as const, error: "Order not found", data: null };
+        }
+        const order = orderDoc.data() as Order & { shipment?: ShipmentRecord };
 
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        const serializedUpdates = serializeValue(updates);
+        /*
+         *   SCOPED TO THE TWO PEOPLE THE ORDER IS BETWEEN.
+         *
+         *   This used to take a TRACKING NUMBER and hand back a timeline for
+         *   it, with no check that the caller had anything to do with the
+         *   order — the mock made one up from the number, so there was nothing
+         *   to leak. Reading the real order means saying who may read it.
+         */
+        const viewerId = session.user.id;
+        const sellers: string[] = Array.isArray(order.sellerIds)
+            ? order.sellerIds
+            : (order.sellerId ? [order.sellerId] : []);
+        /*
+         *   THE TWO PEOPLE THE ORDER IS BETWEEN, and nobody else.
+         *
+         *   My first version added an admin branch reading
+         *   `hasAdminPermission(session.user.roles, …)` — roles off the SESSION
+         *   TOKEN. #532's ratchet refused it, and was right to: #356 recorded
+         *   that class as a security defect, because a revoked admin keeps
+         *   whatever the token says for as many hours as it has left.
+         *
+         *   Converting it to a live role read would have been the other answer,
+         *   but nobody asked for admins to read a member's parcel timeline —
+         *   I added it speculatively, and the admin order screens have their
+         *   own readers. So the branch is gone rather than converted.
+         */
+        const mayRead = order.buyerId === viewerId || sellers.includes(viewerId);
+        if (!mayRead) {
+            return { success: false as const, error: "Order not found", data: null };
+        }
 
-        return { error: null, success: true as const, data: { updates: serializedUpdates, providerName: provider.name } };
+        /*
+         *   THE ORDER'S OWN EVENTS, which are the only ones that happened.
+         *
+         *   What stood here asked MockLogisticsProvider for a journey through
+         *   "Sorting Facility" and "Regional Transit Hub", timestamped from
+         *   this order's own dates, and the buyer's page drew it as carrier
+         *   scans. Nothing ever left a warehouse.
+         *
+         *   These four are recorded by this action and by checkout as they
+         *   happen, so each carries the real moment it was written. A stage
+         *   that has not happened is absent rather than pending — an empty
+         *   timeline entry is the same claim as an invented one.
+         */
+        const at = (value: unknown): string | null => {
+            const ms = toMillis(value);
+            return ms > 0 ? new Date(ms).toISOString() : null;
+        };
+
+        const events: Array<{ status: string; label: string; at: string; note?: string }> = [];
+        const push = (status: string, label: string, when: string | null, note?: string) => {
+            if (when) events.push({ status, label, at: when, ...(note ? { note } : {}) });
+        };
+
+        push("placed", "Order placed", at(order.createdAt));
+        push("paid", "Payment received", at((order as { paidAt?: unknown }).paidAt));
+        push(
+            "shipped",
+            "Shipped by the seller",
+            at((order as { shippedAt?: unknown }).shippedAt),
+            describeShipment(order.shipment) || undefined,
+        );
+        push("delivered", "Delivered", at((order as { deliveredAt?: unknown }).deliveredAt));
+
+        events.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+
+        return {
+            error: null,
+            success: true as const,
+            data: {
+                events,
+                shipment: order.shipment ?? null,
+                //   Null until a carrier is wired — see lib/logistics. The
+                //   screen says "no carrier tracking" rather than drawing one.
+                providerName: getLogisticsProvider()?.name ?? null,
+            },
+        };
     } catch (error) {
-        logger.error("Get tracking updates error:", { trackingNumber, error });
+        logger.error("Get tracking updates error:", { orderId, error });
         return { success: false as const, error: "Failed to fetch tracking updates", data: null };
     }
 }

@@ -81,6 +81,8 @@ jest.mock('next/cache', () => ({
     unstable_cache: (fn: unknown) => fn,
 }));
 
+//   The provider mock is kept so this suite still pins that the action does
+//   NOT reach for it — a removed mock would pass by accident.
 jest.mock('@/lib/logistics', () => ({
     getLogisticsProvider: () => ({
         createShipment: async () => ({ trackingNumber: 'TRK-GENERATED-1' }),
@@ -236,9 +238,20 @@ describe('#510 — the order reference identifies one shipment', () => {
         });
     });
 
-    it('and a tracking number is generated when none is supplied', async () => {
-        await create();
-        expect(rows()[0].trackingNumber).toBe('TRK-GENERATED-1');
+    it('AND NO TRACKING NUMBER IS INVENTED WHEN NONE IS SUPPLIED', () => {
+        //   This asserted the opposite, and what it was pinning was
+        //   MockLogisticsProvider.createShipment returning
+        //   `TRK-${Date.now()}-${Math.floor(Math.random() * 1000)}` — a
+        //   consignment number given to a WAVE member that no carrier had
+        //   ever issued.
+        //
+        //     THE OWNER: "tracking should be realtime."
+        //
+        //   A shipment with no waybill is recorded as having none. See
+        //   lib/shipment-record and a-parcel-that-never-moved.test.ts.
+        return create().then(() => {
+            expect(rows()[0].trackingNumber).toBeUndefined();
+        });
     });
 
     it('and a supplied tracking number is kept', async () => {

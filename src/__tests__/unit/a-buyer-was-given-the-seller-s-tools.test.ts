@@ -274,3 +274,48 @@ describe('#858 — and the seller tools are gated on a Farm Nation role', () => 
         expect(renderers).toEqual([]);
     });
 });
+
+/**
+ *   THE OWNER: "I still have switch to seller button on the buyers dashboard
+ *   which i clearly said you should remove that button. A buyer should be a
+ *   buyer and a seller should be a seller."
+ *
+ *   The buyer dashboard's header carried an UNCONDITIONAL link to
+ *   /marketplace/seller/dashboard — shown to every buyer, including the ones
+ *   with no seller registration of any kind, for whom the only possible outcome
+ *   of clicking it was the seller guard turning them away. It was never a
+ *   permission and never granted one; it advertised a door that is not theirs.
+ *
+ *   The seller dashboard's mirror image of it is NOT this: that one is wrapped
+ *   in `canBuy`, a live role read, so it appears only for somebody who actually
+ *   holds both. This pins the difference, so the unconditional one cannot come
+ *   back as "the other screen has one".
+ */
+describe('a buyer is not offered the seller dashboard', () => {
+    const BUYER_DASH = 'src/app/marketplace/buyer/dashboard/BuyerDashboardClient.tsx';
+    const SELLER_DASH = 'src/app/marketplace/seller/dashboard/SellerDashboardClient.tsx';
+
+    const read = (rel: string) =>
+        readFileSync(join(process.cwd(), rel), 'utf-8')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .split('\n')
+            .filter((l) => !l.trim().startsWith('//'))
+            .join('\n');
+
+    it('THE BUYER DASHBOARD DOES NOT LINK TO THE SELLER DASHBOARD', () => {
+        expect(read(BUYER_DASH)).not.toContain('/marketplace/seller/dashboard');
+    });
+
+    it('and says nothing about switching', () => {
+        expect(read(BUYER_DASH)).not.toMatch(/Switch to Seller/i);
+    });
+
+    it("the seller's own link back is kept, because it is role-gated (control)", () => {
+        //   Vacuity guard. If this ever becomes unconditional it is the same
+        //   defect facing the other way, and deleting it outright would strand
+        //   somebody who genuinely holds both roles.
+        const src = read(SELLER_DASH);
+        expect(src).toContain('/marketplace/buyer/dashboard');
+        expect(src).toContain('{canBuy && (');
+    });
+});

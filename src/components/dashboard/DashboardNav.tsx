@@ -321,14 +321,52 @@ export default function DashboardNav() {
                     </div>
                 </Link>
                 <div className="flex items-center gap-3">
-                    {(unreadCount > 0 || unreadMessages > 0) && (
-                        <div className="relative">
-                            <Bell className="w-5 h-5 text-slate-400" />
+                    {/*
+                        THE BELL WAS NOT A LINK.
+                        ---------------------------------------------------
+                          THE OWNER: "when users click on the notification
+                          Icon on the general dashboard, it doesnt redirect
+                          to the notification content rather it takes them
+                          to the dashboard again."
+
+                        On a phone this bar IS the dashboard's navigation,
+                        and the bell in it was a bare <div>: an icon and a
+                        count, no href and no handler. Tapping it did
+                        nothing at all, and the only thing next to it that
+                        does respond is the logo — which goes to
+                        /dashboard. The desktop sidebar has always had a
+                        working Notifications row; the phone had a bell
+                        that was a picture of one.
+
+                        It also counted two different things at once
+                        (unread notifications PLUS unread messages), so the
+                        number could be entirely about messages. One icon
+                        per destination, each counting its own.
+                    */}
+                    <Link
+                        href="/dashboard/notifications"
+                        aria-label="Notifications"
+                        className="relative p-1.5 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <Bell className="w-5 h-5" />
+                        {unreadCount > 0 && (
                             <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                                {Math.min(unreadCount + unreadMessages, 9)}
+                                {Math.min(unreadCount, 9)}
                             </span>
-                        </div>
-                    )}
+                        )}
+                    </Link>
+                    <Link
+                        href="/messages"
+                        aria-label="Messages"
+                        className="relative p-1.5 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <MessageCircle className="w-5 h-5" />
+                        {unreadMessages > 0 && (
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                                {Math.min(unreadMessages, 9)}
+                            </span>
+                        )}
+                    </Link>
                     <button
                         onClick={() => setMobileOpen(!mobileOpen)}
                         className="p-1.5 text-slate-400 hover:text-white transition-colors"

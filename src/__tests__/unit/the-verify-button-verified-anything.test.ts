@@ -189,25 +189,39 @@ describe('#522 — the screens say what actually happened', () => {
         expect(src).toMatch(/showToast\(\s*result\.checked/);
     });
 
-    it('AND NEITHER DOES THE SHARED BANK COMPONENT', () => {
+    it('AND THE BANK COMPONENT MAKES NO CLAIM AT ALL NOW', () => {
+        /*
+         *   The other caller this finding named. It carried the same wording
+         *   beside a BVN field, and that field has gone: export onboarding
+         *   asked for the same eleven digits twice, and this was the copy that
+         *   blocked nothing (the step's guard reads the ACCOUNT's flag) and
+         *   reached no record (the server schema declares four bank keys and
+         *   Zod strips the rest). See lib/export-identity.
+         *
+         *   A screen that no longer claims anything cannot claim it wrongly —
+         *   but "no claim" has to be asserted, or this passes on a screen that
+         *   quietly went back to claiming.
+         */
         const src = code(COMPONENT);
 
-        expect(src).toContain('setBvnChecked(result.checked === true)');
-        expect(src).toContain('bvnCheckedByProvider: result.checked === true');
-        expect(src).toMatch(/our team will confirm it during review/);
+        expect(src).not.toContain('BVN Verified against account name successfully');
+        expect(src).not.toContain('bvnCheckedByProvider');
+        expect(src).not.toContain('/api/kyc/verify-bvn');
     });
 
     it('and the success wording still exists for the day a provider is wired', () => {
-        //   The control. Deleting the claim outright would satisfy the two
+        //   The control. Deleting the claim outright would satisfy the
         //   assertions above and leave nothing to say when a check does run.
+        //   WAVE's financial step is where it lives now, and it is the caller
+        //   that still posts to the route.
         expect(code(STEP)).toContain('BVN verified successfully');
-        expect(code(COMPONENT)).toContain('BVN Verified against account name successfully');
+        expect(code(STEP)).toContain("'/api/kyc/verify-bvn'");
     });
 
     it('and bvnVerified is still written, deliberately', () => {
         //   #485 kept isMatch true because the callers gate progress on it and
         //   onboarding cannot stop. Changing that here would be a different
         //   decision wearing this finding's clothes.
-        expect(code(COMPONENT)).toContain('bvnVerified: true');
+        expect(code(STEP)).toMatch(/bvnVerified/);
     });
 });

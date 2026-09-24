@@ -36,12 +36,35 @@ export default async function MarketplaceLandingPage() {
         // Products will remain empty array, component will handle gracefully
     }
 
-    const stats = { productsCount: 5000, tradersCount: 12000 };
+    /**
+     * THE FIGURES ON THIS PAGE ARE MEASURED, OR THEY ARE NOT SHOWN.
+     *
+     *   THE OWNER: "the analytics is returning mock data… i need them
+     *   removed."
+     *
+     * This read:
+     *
+     *     const stats = { productsCount: 5000, tradersCount: 12000 };
+     *     …
+     *     stats.productsCount = statsRes.data.productsCount || 5000;
+     *
+     * so the PUBLIC landing page of the marketplace announced five thousand
+     * products and twelve thousand traders whenever the count failed — and,
+     * because of the `||`, whenever the real count was genuinely ZERO. The
+     * numbers were not a cache or an estimate; nothing had ever measured them.
+     *
+     * `null` until measured. The tiles below render only when there is
+     * something to put in them: a zero here is a claim too ("no products"),
+     * but it is a claim the database actually made, which is the difference.
+     */
+    let stats: { productsCount: number; tradersCount: number } | null = null;
     try {
         const statsRes = await getMarketplaceStatsAction();
         if (statsRes.success && statsRes.data) {
-            stats.productsCount = statsRes.data.productsCount || 5000;
-            stats.tradersCount = statsRes.data.tradersCount || 12000;
+            stats = {
+                productsCount: numberOrZero(statsRes.data.productsCount),
+                tradersCount: numberOrZero(statsRes.data.tradersCount),
+            };
         }
     } catch (error) {
         logger.error("Failed to fetch stats:", error);
@@ -98,28 +121,43 @@ export default async function MarketplaceLandingPage() {
 
             {/* Stats Section */}
             <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-16 relative z-10">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-12 md:mb-16">
-                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
-                            {numberOrZero(stats.productsCount).toLocaleString()}+
+                {/*
+                    TWO TILES, NOT FOUR.
+
+                    "₦2.5B+ Total Traded" and "4.7/5 Seller Rating" were
+                    hardcoded strings. Not a stale cache, not a rounded
+                    estimate — no code anywhere computed either of them, and
+                    nothing on this page ever asked. A figure about money and a
+                    figure about sellers' service, both announced to the public
+                    and both invented.
+
+                    They are gone rather than zeroed: the platform has no
+                    measure of total value traded, and lib/product-rating is
+                    explicit that a rating with no reviews behind it is not a
+                    rating. The two that remain are database counts.
+                */}
+                {/*
+                    numberOrZero AT THE CALL, not only where `stats` is built.
+                    #598's rule is about the expression a screen actually
+                    evaluates: a guard three hundred lines away is a guard the
+                    next person to touch this line will not see.
+                */}
+                {stats && (
+                    <div className="grid grid-cols-2 gap-3 md:gap-6 mb-12 md:mb-16 max-w-3xl mx-auto">
+                        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                            <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
+                                {numberOrZero(stats.productsCount).toLocaleString()}
+                            </div>
+                            <div className="text-xs md:text-base text-slate-600 font-medium">Products Listed</div>
                         </div>
-                        <div className="text-xs md:text-base text-slate-600 font-medium">Products Listed</div>
-                    </div>
-                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
-                            {numberOrZero(stats.tradersCount).toLocaleString()}+
+                        <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                            <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
+                                {numberOrZero(stats.tradersCount).toLocaleString()}
+                            </div>
+                            <div className="text-xs md:text-base text-slate-600 font-medium">Verified Sellers</div>
                         </div>
-                        <div className="text-xs md:text-base text-slate-600 font-medium">Active Traders</div>
                     </div>
-                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">₦2.5B+</div>
-                        <div className="text-xs md:text-base text-slate-600 font-medium">Total Traded</div>
-                    </div>
-                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">4.7/5</div>
-                        <div className="text-xs md:text-base text-slate-600 font-medium">Seller Rating</div>
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Featured Products */}

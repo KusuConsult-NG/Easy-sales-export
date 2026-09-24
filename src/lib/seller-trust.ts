@@ -160,3 +160,62 @@ export async function hydrateSellerTrust<T extends { sellerId?: string; sellerNa
         };
     });
 }
+
+/**
+ * Names that are not names.
+ *
+ * Two of the four old fallbacks are claims rather than labels: a seller with no
+ * business name was *called* "Verified Seller" in the name field, independently
+ * of any badge, and "Unknown Seller" says the row could not be read. Both were
+ * written into product documents before this module existed, so they are still
+ * sitting in rows created back then — which only matters for a reader that
+ * shows a product's stored name without reading the seller.
+ */
+const NOT_A_NAME = new Set(["", "verified seller", "unknown seller"]);
+
+/**
+ * A product's stored seller name, made safe to show without a seller read.
+ *
+ * `hydrateSellerTrust` never needed this: it replaces the stored name with the
+ * live one. A reader that deliberately does not read the seller does need it,
+ * or a row written in 2024 puts the word "Verified" under a card that is
+ * showing no badge at all.
+ */
+export function storedSellerName(name: unknown): string {
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    return NOT_A_NAME.has(trimmed.toLowerCase()) ? SELLER_NAME_FALLBACK : trimmed;
+}
+
+/**
+ * Show these products with NO badge, and read no seller to decide it.
+ *
+ * WHY A SECOND ANSWER EXISTS
+ * --------------------------
+ * `hydrateSellerTrust` is one round trip per unique seller, and it happens
+ * after the products come back — the seller ids are not known until then, so it
+ * cannot be started earlier. It is a second generation of latency, whatever the
+ * read count says.
+ *
+ * On the screens where a buyer is judging a seller — the product detail page,
+ * search results, the buyer catalogue — that round trip is the badge being
+ * true, and it stays.
+ *
+ * On the three-card "recommended" strip on the marketplace landing page and the
+ * buyer dashboard, neither card has ever rendered a shield: both render the
+ * seller's NAME and nothing else. The round trip was buying a field no screen
+ * displayed. Dropping the badge there is a product decision about where the
+ * badge earns its latency, and this is what it means in code.
+ *
+ * `sellerVerified: false` is set EXPLICITLY, not left to the product's own
+ * field. The stored value is the create-time snapshot — the thing this whole
+ * module exists because of — so a reader that stops resolving the badge must
+ * also stop serving the snapshot, or a revoked seller keeps a badge here that
+ * every other screen has taken away. Absent, not stale.
+ */
+export function withoutSellerBadge<T extends { sellerName?: string }>(products: T[]): T[] {
+    return products.map((p) => ({
+        ...p,
+        sellerName: storedSellerName(p.sellerName),
+        sellerVerified: false,
+    }));
+}

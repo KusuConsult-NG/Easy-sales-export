@@ -534,6 +534,33 @@ async function _submitMarketplaceOnboardingAction(
         }
 
         /**
+         * What to file this application under.
+         *
+         *   A buyer who is an individual has no business name — the rule above
+         *   no longer demands one, which is the whole point of that change —
+         *   and `businessName` is the field every reader of this application
+         *   shows: the admin review queue lists it, the verification record
+         *   carries it, the canonical profile stores it as the business's name.
+         *   Left empty they would each show a blank row for a real person who
+         *   really applied.
+         *
+         *   So an applicant with no business is filed under their OWN name,
+         *   read from their user document rather than taken from the request.
+         *   `businessType: "individual"` sits beside it and says which it is,
+         *   so nothing here claims a company that does not exist.
+         */
+        const applicantName = (() => {
+            const text = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+            const given = text(formData.get("businessName"));
+            if (given) return given;
+
+            const u = (userDoc.data() ?? {}) as Record<string, unknown>;
+            const full = text(u.fullName)
+                || [text(u.firstName), text(u.lastName)].filter(Boolean).join(" ");
+            return full || text(session.user.name) || text(u.email);
+        })();
+
+        /**
          *   #346 SECURITY: THE SELLER'S PAYOUT ACCOUNT NAME WAS WHATEVER THE
          *        REQUEST SAID IT WAS.
          *
@@ -709,7 +736,7 @@ async function _submitMarketplaceOnboardingAction(
             id: verificationId,
             userId,
             status: "pending",
-            businessName: formData.get("businessName"),
+            businessName: applicantName,
             businessType: formData.get("businessType"),
             phone: formData.get("phone"),
             location,
@@ -790,7 +817,7 @@ async function _submitMarketplaceOnboardingAction(
                 phone: formData.get("phone") as string,
                 email: userDoc.data()?.email || "",
                 business: {
-                    name: formData.get("businessName") as string,
+                    name: applicantName,
                     type: formData.get("businessType") as string,
                     //   The owner's "business status" — see
                     //   lib/marketplace-application. It is what tells a reviewer

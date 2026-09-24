@@ -53,14 +53,19 @@ async function _createWaveShipmentAction(data: {
 
         let finalTrackingNumber = trackingNumber;
         if (!finalTrackingNumber) {
-            const provider = getLogisticsProvider();
-            const shipment = await provider.createShipment({
-                memberId,
-                memberName,
-                productName,
-                destination,
-            });
-            finalTrackingNumber = shipment.trackingNumber;
+            /*
+             *   A TRACKING NUMBER WAS INVENTED HERE TOO.
+             *
+             *     THE OWNER: "tracking should be realtime."
+             *
+             *   MockLogisticsProvider.createShipment returned
+             *   `TRK-${Date.now()}-${Math.floor(Math.random() * 1000)}`, so an
+             *   admin creating a WAVE shipment without a waybill gave the
+             *   member a number no carrier could answer for. See
+             *   lib/shipment-record — a shipment with no carrier number is
+             *   recorded as exactly that, not dressed as one.
+             */
+            finalTrackingNumber = undefined;
         }
 
         const shipmentId = `WSH-${Date.now()}-${Math.floor(Math.random() * 1000)}`;

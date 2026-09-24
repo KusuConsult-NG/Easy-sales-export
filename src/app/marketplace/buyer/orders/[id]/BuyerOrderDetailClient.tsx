@@ -24,6 +24,14 @@ import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { formatDeliveryEstimate } from "@/lib/delivery-estimate";
 import { humanise } from "@/lib/humanise";
 
+/** A real thing that happened to this order, with the moment it happened. */
+interface OrderEvent {
+    status: string;
+    label: string;
+    at: string;
+    note?: string;
+}
+
 export default function BuyerOrderDetailClient({ initial = null }: {
     /**
      *   #554 The order the server already fetched.
@@ -42,7 +50,14 @@ export default function BuyerOrderDetailClient({ initial = null }: {
     const [error, setError] = useState<string | null>(null);
     const [confirming, setConfirming] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [trackingUpdates, setTrackingUpdates] = useState<TrackingUpdate[]>([]);
+    /*
+     *   THE ORDER'S OWN EVENTS, not a carrier's imagined ones.
+     *
+     *   This held TrackingUpdate[] from MockLogisticsProvider: a journey
+     *   through "Sorting Facility" and "Regional Transit Hub" built out of
+     *   this order's dates. See lib/logistics for the whole finding.
+     */
+    const [orderEvents, setOrderEvents] = useState<OrderEvent[]>([]);
     const [loadingTracking, setLoadingTracking] = useState(false);
 
     useEffect(() => {
@@ -62,15 +77,17 @@ export default function BuyerOrderDetailClient({ initial = null }: {
     }, [id, initial]);
 
     useEffect(() => {
-        if (!order?.trackingNumber) return;
+        if (!order?.id) return;
         setLoadingTracking(true);
-        getTrackingUpdatesAction(order.trackingNumber).then((res) => {
-            if (res.success && res.data?.updates) {
-                setTrackingUpdates(res.data.updates as any);
+        const seeded = null;
+        (seeded ? Promise.resolve(seeded) : getTrackingUpdatesAction(order.id)).then((res: any) => {
+            if (res.success && res.data?.events) {
+                setOrderEvents(res.data.events as OrderEvent[]);
             }
             setLoadingTracking(false);
         });
-    }, [order?.trackingNumber]);
+     
+    }, [order?.id]);
 
     const copyOrderId = () => {
         navigator.clipboard.writeText(id as string);
@@ -277,12 +294,12 @@ export default function BuyerOrderDetailClient({ initial = null }: {
                         {loadingTracking ? (
                             <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
                                 <Loader2 className="w-4 h-4 animate-spin text-green-600" />
-                                <span>Fetching latest logistics updates...</span>
+                                <span>Loading this order&apos;s history…</span>
                             </div>
-                        ) : trackingUpdates.length > 0 ? (
+                        ) : orderEvents.length > 0 ? (
                             <div className="relative pl-6 border-l-2 border-slate-200 space-y-6 ml-3 mt-4">
-                                {trackingUpdates.map((update, idx) => {
-                                    const isLatest = idx === trackingUpdates.length - 1;
+                                {orderEvents.map((update, idx) => {
+                                    const isLatest = idx === orderEvents.length - 1;
                                     return (
                                         <div key={idx} className="relative">
                                             {/* Dot indicator */}
@@ -295,10 +312,10 @@ export default function BuyerOrderDetailClient({ initial = null }: {
                                             <div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                                     <span className={`font-semibold text-sm ${isLatest ? "text-green-700 text-base" : "text-slate-800"}`}>
-                                                        {update.location}
+                                                        {update.label}
                                                     </span>
                                                     <span className="text-xs text-slate-400 font-mono">
-                                                        {formatDateTime(update.timestamp)}
+                                                        {formatDateTime(update.at)}
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-0.5 capitalize font-semibold">{humanise(update.status)}</p>

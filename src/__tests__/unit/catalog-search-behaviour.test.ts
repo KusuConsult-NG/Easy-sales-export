@@ -32,6 +32,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
+import { SELLER_NAME_FALLBACK } from '@/lib/seller-trust';
 import {
     PRODUCT_SEARCH_SCAN_LIMIT,
     matchesProductQuery,
@@ -394,11 +395,42 @@ describe('getRecommendedProductsAction', () => {
         expect(res).toMatchObject({ success: true, data: { products: [] } });
     });
 
-    it('reads the seller badge live here too', async () => {
+    it('shows no badge — and reads no seller to decide that', async () => {
+        // The strip renders a name and a rating, never a shield. Resolving the
+        // badge here was a second generation of round trips buying a field
+        // neither screen displays. See lib/seller-trust.ts.
+        seedProducts(['A'], { sellerVerified: true, sellerName: 'Ada Farms' });
+        store.seed(USERS, SELLER, { name: 'Ada Farms', isVerifiedBadge: true });
+        store.reads.length = 0;
+
+        const res = await recommended(1);
+
+        // Not the stored `true`: absent, not stale. A seller whose badge was
+        // revoked must not keep it on the landing page.
+        expect(res.data.products[0].sellerVerified).toBe(false);
+        expect(res.data.products[0].sellerName).toBe('Ada Farms');
+        expect(store.reads.filter((r) => r.collection === USERS)).toEqual([]);
+    });
+
+    it('and the stored name does not smuggle the claim back in', async () => {
+        // A row written before the name fallbacks were unified says the seller
+        // is "Verified Seller" in the name field itself.
+        seedProducts(['A'], { sellerName: 'Verified Seller' });
+
+        expect((await recommended(1)).data.products[0].sellerName).toBe(SELLER_NAME_FALLBACK);
+    });
+
+    it('while product detail still pays for the live badge (control)', async () => {
+        // The assertion above is only worth anything if a USERS read is
+        // something this harness would have seen.
         seedProducts(['A'], { sellerVerified: true });
         store.seed(USERS, SELLER, { name: 'Ada Farms', isVerifiedBadge: false });
+        store.reads.length = 0;
 
-        expect((await recommended(1)).data.products[0].sellerVerified).toBe(false);
+        const res = (await (await catalog()).getProductByIdAction('p0')) as any;
+
+        expect(res.data.sellerVerified).toBe(false);
+        expect(store.reads.filter((r) => r.collection === USERS)).toHaveLength(1);
     });
 });
 

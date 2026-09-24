@@ -98,7 +98,17 @@ function submission(overrides: Record<string, unknown> = {}): FormData {
             phone: '08031111111', state: 'Lagos', lga: 'Ikeja',
             address: '1 Market Road, Ikeja',
         },
-        kycData: { nin: '22107458391', bvn: '', cacNumber: 'RC123456' },
+        /*
+         *   BOTH DOCUMENTS, BOTH VERIFIED. This fixture carried a NIN, an
+         *   EMPTY BVN and neither verification flag — and was accepted, which
+         *   is exactly the hole lib/export-identity closes. See the block at
+         *   the end of this file for the rule itself.
+         */
+        kycData: {
+            nin: '22107458391', ninVerified: true,
+            bvn: '22455667788', bvnVerified: true,
+            cacNumber: 'RC123456',
+        },
         // #346 bankCode is what the server re-resolves on; accountName is
         // the applicant's claim and is not what gets recorded.
         bank: { accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi', bankCode: '057' },
@@ -286,6 +296,65 @@ describe('the submission validates before it writes', () => {
             expect(result.error).toMatch(label);
         }
         expect(applications()).toHaveLength(0);
+    });
+
+    it('DEMANDING A NIN AND A BVN, BOTH VERIFIED', async () => {
+        /*
+         *   THE OWNER: "mandate NIN and BVN."
+         *
+         *   Every one of these was accepted before, including the last: the
+         *   server schema's nationalIdField is `.optional()`, so "checked"
+         *   meant "checked if you typed one". An export application could be
+         *   filed and approved with no identity at all, and export pays
+         *   people. See lib/export-identity, which the step and the submit
+         *   guard apply too.
+         */
+        const { submitExportOnboardingAction } = await actions();
+
+        const refusals: Array<[Record<string, unknown>, RegExp]> = [
+            [{ nin: '', bvn: '22455667788', bvnVerified: true }, /NIN is required/i],
+            [{ nin: '22107458391', ninVerified: true, bvn: '' }, /BVN is required/i],
+            [{ nin: '22107458391', bvn: '22455667788', bvnVerified: true }, /verify your NIN/i],
+            [{ nin: '22107458391', ninVerified: true, bvn: '22455667788' }, /verify your BVN/i],
+            //   Refused by nationalIdField's own rule, which runs before the
+            //   mandate does — so the wording is the one #501 wrote, not
+            //   lib/export-identity's. Both say the same thing; the point is
+            //   that junk does not get through either door.
+            [{ nin: '11111111111', ninVerified: true, bvn: '22455667788', bvnVerified: true }, /invalid or a placeholder/i],
+            [{ nin: '2210745839', ninVerified: true, bvn: '22455667788', bvnVerified: true }, /exactly 11 digits/i],
+        ];
+
+        for (const [kycData, message] of refusals) {
+            const result = await submitExportOnboardingAction(null, submission({ kycData }));
+
+            expect(result.success).toBe(false);
+            expect(result.error).toMatch(message);
+        }
+        expect(applications()).toHaveLength(0);
+    });
+
+    it('and the voter\'s card is no longer part of a submission', async () => {
+        /*
+         *   #349 declared `votersCard` on the schema BECAUSE Zod was stripping
+         *   it — the form collected it and the record never got it. The form
+         *   no longer asks (see lib/export-identity), so a payload still
+         *   carrying one is simply not describing anything this wizard
+         *   collects. It must not be a REFUSAL — an old draft in somebody's
+         *   browser still has to go through.
+         */
+        const { submitExportOnboardingAction } = await actions();
+
+        const result = await submitExportOnboardingAction(null, submission({
+            kycData: {
+                nin: '22107458391', ninVerified: true,
+                bvn: '22455667788', bvnVerified: true,
+                votersCard: '90F5B123456789012345', votersCardVerified: true,
+            },
+        }));
+
+        expect(result.success).toBe(true);
+        const [[, app]] = applications();
+        expect((app.kycData as any)?.votersCard).toBeUndefined();
     });
 
     it('refusing a bank account that is not ten digits', async () => {

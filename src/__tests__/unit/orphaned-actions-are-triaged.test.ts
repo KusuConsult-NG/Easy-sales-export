@@ -48,7 +48,7 @@
  *   reachable by any authenticated owner the whole time. "No button" is not a
  *   guard, and an orphan is not automatically harmless.
  *
- *   THE QUEUE IS CLOSED: 70 TRIAGED, 0 PENDING — #404, #866
+ *   THE QUEUE IS CLOSED: 71 TRIAGED, 0 PENDING — #404, #866
  *   ---------------------------------------------------
  *   It ran at 45 (wrong), then 69 with 28 pending, then 25. #404 read the last
  *   25 one at a time and every one carries a verdict now.
@@ -314,6 +314,39 @@ const TRIAGED: Record<string, string> = {
         + 'The live door is submitLandListingAction, which /farm-nation/list-land uses and which goes '
         + 'straight to pending_verification',
     submitLandInquiryAction: '#340 already recorded — public by design, no UI, deliberately not built there',
+
+    /*
+     *   UNREACHED AS OF THE VOTER'S-CARD REMOVAL, and triaged rather than
+     *   deleted.
+     *
+     *     THE OWNER: "remove voter's card on export window onboarding."
+     *
+     *   onboarding/KYCForm was its only caller, and export onboarding no
+     *   longer collects a voter's card at all — see lib/export-identity. That
+     *   makes this an action with no door.
+     *
+     *   KEPT, for three reasons that the three-way question actually answers:
+     *
+     *     IS IT WRONG?  No. #285 gave it the confirm guard and the isMatch
+     *     branch the other two have, #525 gave it the format check, and it
+     *     writes `votersCardVerificationMethod: 'self_declared'` rather than
+     *     claiming a check nobody performed.
+     *
+     *     IS IT A HAZARD IF WIRED?  It is session-guarded and writes only to
+     *     the CALLER'S OWN user document, and what it writes is explicitly
+     *     labelled self-declared. The honest read is that it is weak, not
+     *     dangerous — which is why the export form stopped asking.
+     *
+     *     IS IT MERELY UNWIRED?  Yes, and plausibly not for long: WAVE
+     *     collects a VIN on its own step (CivicStatusStep) and does not verify
+     *     it at all today. This is the verification that step would use.
+     *
+     *   Deleting it would also strand the fields already on real user records
+     *   (`kyc.votersCard`, `kyc.votersCardVerified`) with no code that
+     *   understands them.
+     */
+    verifyVotersCardAction: 'the voter\'s card left export onboarding; session-guarded, self-only, writes '
+        + 'self_declared. Kept for WAVE\'s civic step, which collects a VIN and verifies nothing',
 };
 
 /**
@@ -390,7 +423,12 @@ describe('#399 — the queue is closed and pinned', () => {
         //   /api/upload, so the action is unreached by design. Triaged above
         //   rather than deleted — see the entry for why the implementation
         //   stays.
-        expect(unreached().length).toBe(70);
+        //   70 → 71: verifyVotersCardAction lost its only caller when the
+        //   voter's card was taken off export onboarding — see
+        //   lib/export-identity. An action arriving in this queue is meant to
+        //   be a deliberate event, and this one is: it is triaged above with
+        //   the three-way question answered, not waved through.
+        expect(unreached().length).toBe(71);
     });
 
     it('and the queue is CLOSED — every unreached action carries a verdict', () => {

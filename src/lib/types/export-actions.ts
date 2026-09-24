@@ -22,6 +22,7 @@
 import { z } from "zod";
 import type { ExportWindow } from "@/lib/types/firestore";
 import { nationalIdField } from '@/lib/kyc-validators';
+import { missingExportIdentity } from '@/lib/export-identity';
 
 export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
 
@@ -95,18 +96,25 @@ export const exportOnboardingSchema = z.object({
         address: z.string().min(5, "Address is required"),
     }),
     kycData: z.object({
-        //   #501 Export onboarding had no check on either field at all.
+        /*
+         *   #501 Export onboarding had no check on either field at all, and
+         *   nationalIdField is `.optional()` — a format rule that applies only
+         *   when a value is present. So "checked" still meant "if you typed
+         *   one". The superRefine below is what makes them REQUIRED, and it is
+         *   the same object the step's button and the submit guard apply. See
+         *   lib/export-identity.
+         */
         nin: nationalIdField('NIN'),
         bvn: nationalIdField('BVN'),
         cacNumber: z.string().optional().or(z.literal("")),
-        /**
-         * #349 KYCForm collects a Voter's Card number and offers to verify it.
-         * Zod strips unknown keys, so the number and its verification were
-         * dropped between the step and the record — collected, validated, and
-         * never stored.
+        /*
+         *   #349 declared `votersCard` and `votersCardVerified` here because
+         *   KYCForm collected them and Zod was silently stripping both. The
+         *   form no longer asks — see lib/export-identity — so there is
+         *   nothing arriving for them to carry. Values already stored on
+         *   `kyc.votersCard` are untouched; this schema only governs what a
+         *   NEW submission may bring.
          */
-        votersCard: z.string().optional().or(z.literal("")),
-        votersCardVerified: z.boolean().optional(),
         ninVerified: z.boolean().optional(),
         bvnVerified: z.boolean().optional(),
         /**
@@ -132,6 +140,11 @@ export const exportOnboardingSchema = z.object({
         city: z.string().optional().or(z.literal("")),
         idType: z.string().optional().or(z.literal("")),
         idNumber: z.string().optional().or(z.literal("")),
+    }).superRefine((data, ctx) => {
+        //   THE MANDATE, on the door a request cannot go round.
+        for (const entry of missingExportIdentity(data)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: entry.message, path: [entry.field] });
+        }
     }),
     /**
      *   #773 THE FIRST STEP OF THE WIZARD WAS STORED NOWHERE.

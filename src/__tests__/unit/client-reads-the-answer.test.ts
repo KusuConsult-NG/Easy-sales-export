@@ -217,7 +217,13 @@ describe('a server answer must not be silently discarded', () => {
         //   status, so a 500 and a 404 both printed "this certificate ID does
         //   not exist in our records" at whoever was checking a graduate's CV.
         //   Recorded here rather than absorbed, which is this ledger's point.
-        expect(ledgerVerdict(n('D4'), 39)).toBe(LEDGER_HELD);
+        //
+        //   39 -> 38: the second BVN field went, and its POST to
+        //   /api/kyc/verify-bvn with it. Export onboarding asked for the same
+        //   eleven digits twice; that copy blocked nothing and reached no
+        //   record — see lib/export-identity. Lowered rather than left, or the
+        //   difference becomes room for one new instance nothing would notice.
+        expect(ledgerVerdict(n('D4'), 38)).toBe(LEDGER_HELD);
     });
 
     it('D5 — a catch that swallows the failure', () => {
