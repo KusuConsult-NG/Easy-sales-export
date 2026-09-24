@@ -2361,9 +2361,44 @@ export class SupabaseQuery {
         return q;
     }
 
+    /*
+     *   COUNTED, LIKE EVERY OTHER ROUND TRIP.
+     *
+     *       [slow-action] getMarketplaceStatsAction took 554ms — 0 reads 0ms,
+     *                     554ms unmeasured
+     *
+     *   Four times in one log, always about half a second, always entirely
+     *   unmeasured. The action makes TWO count queries and the meter saw
+     *   neither: #281 wrapped `SupabaseDocumentReference.get` and
+     *   `SupabaseQuery.get`, and `count()` and `aggregate()` return their own
+     *   inline objects with their own `get`, which those wrappers never
+     *   touched.
+     *
+     *   138 `.count()` call sites and 10 `.aggregate()` sites went through
+     *   here unseen — the admin dashboard is built almost entirely out of
+     *   them, so its timings reported 0 reads too. A meter with a hole that
+     *   size does not say "this is fast", it says "nobody looked", which is
+     *   the same mistake the Export check made visible in #285.
+     *
+     *   The measurement cannot change the outcome: the value is returned
+     *   untouched, a throw propagates untouched, and the recorder swallows its
+     *   own errors. One entry per call the caller made, which is the unit
+     *   every "reads" figure in this audit uses.
+     */
     count(): { get(): Promise<{ data(): { count: number } }> } {
         return {
             get: async (): Promise<{ data(): { count: number } }> => {
+                const startedAt = Date.now();
+                try {
+                    return await this._countTimed();
+                } finally {
+                    recordRoundTrip(Date.now() - startedAt);
+                }
+            }
+        };
+    }
+
+    private async _countTimed(): Promise<{ data(): { count: number } }> {
                 const tableName = getTableName(this._collection);
                 let query = supabaseAdmin.from(tableName).select('*', { count: 'exact', head: true });
 
@@ -2390,13 +2425,23 @@ export class SupabaseQuery {
                         return { count: count ?? 0 };
                     }
                 };
+    }
+
+    /** Counted for the same reason `count()` is — see the note there. */
+    aggregate(spec: Record<string, any>): { get(): Promise<{ data(): Record<string, number> }> } {
+        return {
+            get: async (): Promise<{ data(): Record<string, number> }> => {
+                const startedAt = Date.now();
+                try {
+                    return await this._aggregateTimed(spec);
+                } finally {
+                    recordRoundTrip(Date.now() - startedAt);
+                }
             }
         };
     }
 
-    aggregate(spec: Record<string, any>): { get(): Promise<{ data(): Record<string, number> }> } {
-        return {
-            get: async (): Promise<{ data(): Record<string, number> }> => {
+    private async _aggregateTimed(spec: Record<string, any>): Promise<{ data(): Record<string, number> }> {
                 const tableName = getTableName(this._collection);
 
                 const fields = Object.values(spec)
@@ -2469,8 +2514,6 @@ export class SupabaseQuery {
                         return sums;
                     }
                 };
-            }
-        };
     }
 
 
