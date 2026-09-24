@@ -140,14 +140,38 @@ describe('how much of the application no test has named', () => {
          *   wave-resource-access gated admins on the session token beside a
          *   database row it was already reading.
          *
-         *   Then 116 → 113, taking the HTTP entry points next because they are
-         *   the part of this application the internet reaches directly:
-         *   api/wallet/verify, api/marketplace/seller-status and
-         *   api/cooperative/fixed-savings. The wallet route was reflecting an
-         *   uncaught exception's own message into a redirect URL, from an
-         *   endpoint that needs no session.
+         *   Then 116 → 106, which finishes the HTTP entry points: EVERY route
+         *   file under src/app/api is now named by a test. They went first
+         *   because they are the part of this application the internet reaches
+         *   directly, and four of the ten held defects —
+         *
+         *     wallet/verify              reflected an uncaught exception's own
+         *                                message into a redirect URL, from an
+         *                                endpoint that needs no session
+         *     notifications/subscribe    saved the push token with update(),
+         *                                a no-op on a missing row, and
+         *                                answered `{ success: true }` anyway
+         *     admin/finance/paystack-balance   gated the company's live bank
+         *                                balance on the session token
+         *     admin/finance/recovery-emails    gated batch emails to members
+         *                                about money owed them on the same
+         *
+         *   plus `details: error.message` on onboarding/complete and a
+         *   six-of-anything token check on auth/mfa/enable.
          */
-        expect(ledgerVerdict(unreached().length, 113)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 106)).toBe(LEDGER_HELD);
+    });
+
+    it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
+        /*
+         *   The whole of src/app/api, which is the part of this application
+         *   the internet can reach without going through a page. #436's
+         *   finding was that all 121 route files had been outside the coverage
+         *   denominator entirely; this says no route is outside the audit's
+         *   reach either, and a new unnamed one fails here rather than waiting
+         *   for the ledger above to notice a count.
+         */
+        expect(unreached().filter((f) => f.startsWith('src/app/api/'))).toEqual([]);
     });
 
     it('AND THE MONEY AND IDENTITY RULES ARE OFF IT', () => {

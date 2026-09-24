@@ -408,6 +408,13 @@ describe('#375 — every gate names its permission, and the exception is stated'
         //   could otherwise file "passed" on land nobody inspected and let the
         //   approval through behind it.
         'src/app/api/admin/farm-nation/record-inspection/route.ts': ['farm_nation:verify_applications'],
+        //   Both added by the sweep of the files no test had named. They were
+        //   gating on `session.user.roles` — #356's class — and what they guard
+        //   is why they were converted rather than recorded: one reads the
+        //   company's live Paystack balance, the other sends members batched
+        //   email about money owed them on the platform's own template.
+        'src/app/api/admin/finance/paystack-balance/route.ts': ['finance:read'],
+        'src/app/api/admin/finance/recovery-emails/route.ts': ['finance:reconcile'],
         // #381's pair: the money knobs — fees, order bounds, USD→NGN and the
         // WAVE commission. Read is separate from update because seeing what
         // the platform charges is not the same right as changing it.
@@ -560,7 +567,11 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // inspector and approving the land.
         // 70 → 71: the cooperative identity backfill — the 715 members who were
         // active, paid and unnamed.
-        expect(callSites().length).toBe(73);
+        // 73 → 75: the two finance routes, converted while sweeping the files
+        // no test had named. The count is raised rather than the map loosened,
+        // for the reason above: a gate added and forgotten in the EXPECTED map
+        // has to fail here.
+        expect(callSites().length).toBe(75);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

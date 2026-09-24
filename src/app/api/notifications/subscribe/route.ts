@@ -26,10 +26,27 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+    /*
+     *   `set(..., { merge: true })`, NOT `update()`.
+     *
+     *   The adapter's own warning names this exact case: "update() on missing
+     *   document — no rows will be affected. Use set(data, { merge: true }) if
+     *   the document may not exist yet." It keeps the write a no-op rather than
+     *   throwing, deliberately, so the caller is told nothing.
+     *
+     *   A signed-in member CAN be without a USERS row — /api/onboarding/complete
+     *   handles precisely that case three routes over, creating the document
+     *   when it finds none. For them this returned `{ success: true }` and
+     *   saved no token, so the browser believed it had subscribed to push
+     *   notifications and none would ever arrive. Reported success over a write
+     *   that did not happen is the shape this audit keeps finding.
+     *
+     *   Merging rather than setting, so nothing else on the row is disturbed.
+     */
+    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
         fcmToken: token,
         fcmTokenUpdatedAt: FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
 
     return NextResponse.json({ success: true });
 }
@@ -44,6 +61,10 @@ export async function DELETE(_req: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    //   `update()` here is right, unlike the POST above: a member with no row
+    //   has no token stored, so a no-op IS the correct outcome of asking for it
+    //   to be removed. Creating a row in order to delete a field from it would
+    //   be the odd behaviour.
     await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
         fcmToken: FieldValue.delete(),
         fcmTokenUpdatedAt: FieldValue.serverTimestamp(),

@@ -46,9 +46,15 @@ export async function POST(request: NextRequest) {
             message: "Onboarding marked complete",
         });
     } catch (error: any) {
+        /*
+         *   `details: error.message` used to ride along in the body — whatever
+         *   threw, handed to the caller. The same disclosure as the wallet
+         *   verify route's redirect, in an HTTP response instead of a URL. The
+         *   detail belongs in the log, where somebody can act on it.
+         */
         logger.error("Onboarding completion error:", error);
         return NextResponse.json(
-            { success: false, error: "Failed to mark complete", details: error.message },
+            { success: false, error: "Failed to mark complete" },
             { status: 500 }
         );
     }
