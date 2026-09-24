@@ -66,6 +66,15 @@
  * importing payment-router from a verify path drags the whole processor graph
  * into a server action's module tree. The constant below is asserted against
  * both writers by test, so the two cannot drift.
+ *
+ *   THAT SENTENCE WAS NOT TRUE WHEN IT WAS WRITTEN. No test imported this
+ *   module at all — the suite named after this finding is a source-shape
+ *   classifier that feeds snippets to a matcher and never calls
+ *   `lostClaimWasFulfilled`. Found by counting which shipping files no test
+ *   mentions; this was one of them. The check now exists, in
+ *   a-rule-whose-header-said-it-was-tested.test.ts, which asserts the list
+ *   against payment-router's exported constant and against wallet-ledger's
+ *   literal.
  */
 export const NON_FULFILMENT_CLAIM_STATUSES: readonly string[] = [
     "unhandled_type",
