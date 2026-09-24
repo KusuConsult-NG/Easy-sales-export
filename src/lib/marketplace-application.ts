@@ -152,6 +152,36 @@ export interface MissingField {
 
 const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
+/**
+ * Is there a business here to describe?
+ *
+ *   THE OWNER: "in marketplace, the buyer can be an individual so the form for
+ *   onboarding has to change… when a buyer select a company, business status
+ *   should show; if its an individual then it can continue with the flow, but
+ *   if its business it should take business information."
+ *
+ * Step 2 asked every applicant for a Business/Farm Name and a registration
+ * status. Most buyers on this platform are people buying food — they have no
+ * business name to give and no registration to declare — so the form demanded
+ * two answers that do not exist and refused to continue without them. The only
+ * way through was to invent a business.
+ *
+ * A SELLER ALWAYS DESCRIBES ONE, whatever they call themselves: they trade
+ * under a name that appears on every listing they publish, they are reviewed
+ * against a CAC certificate, and they are paid into an account. So this is not
+ * "individual means no business questions" — it is "a buyer who is an
+ * individual is a person, and a person has a name, not a trading name".
+ *
+ * An applicant who has not chosen a type yet is treated as describing one. The
+ * businessType rule below refuses them anyway, and the safe direction for a
+ * field that decides what a reviewer is shown is to ask rather than to skip.
+ */
+export function describesABusiness(data: MarketplaceApplication): boolean {
+    const accountType = text(data.accountType);
+    if (accountType === "seller" || accountType === "both") return true;
+    return text(data.businessType) !== "individual";
+}
+
 const filled = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
 
 /**
@@ -185,13 +215,19 @@ export function missingApplicationFields(data: MarketplaceApplication): MissingF
     }
 
     // ── Step 2 — business profile ────────────────────────────────────────────
-    if (text(data.businessName).length < 2) {
+    //
+    //   The business half of this step is asked only of an applicant who has a
+    //   business — see describesABusiness. The contact half is asked of
+    //   everybody: a buyer still has to be reachable and deliverable to.
+    const hasBusiness = describesABusiness(data);
+
+    if (hasBusiness && text(data.businessName).length < 2) {
         miss("businessName", 2, "Business/Farm name is required.");
     }
     if (!(BUSINESS_TYPES as readonly string[]).includes(text(data.businessType))) {
         miss("businessType", 2, "Please select a business type.");
     }
-    if (!isBusinessStatus(data.businessStatus)) {
+    if (hasBusiness && !isBusinessStatus(data.businessStatus)) {
         miss("businessStatus", 2, "Please select your business registration status.");
     }
     if (!text(data.phone)) {
@@ -201,7 +237,9 @@ export function missingApplicationFields(data: MarketplaceApplication): MissingF
     const location = data.location ?? {};
     if (!text(location.state)) miss("state", 2, "State is required.");
     if (!text(location.lga)) miss("lga", 2, "LGA is required.");
-    if (!text(location.address)) miss("address", 2, "Business address is required.");
+    if (!text(location.address)) {
+        miss("address", 2, hasBusiness ? "Business address is required." : "Delivery address is required.");
+    }
 
     // ── Step 3 — product interests ───────────────────────────────────────────
     if (buys && !filled(data.buyerInterests)) {

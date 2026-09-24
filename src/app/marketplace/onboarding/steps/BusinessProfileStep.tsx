@@ -12,6 +12,7 @@ import {
     BUSINESS_STATUSES,
     DEFAULT_BUSINESS_TYPE,
     businessStatusLabel,
+    describesABusiness,
     missingForStep,
     type BusinessStatus,
 } from "@/lib/marketplace-application";
@@ -38,6 +39,15 @@ interface BusinessProfileData {
 
 interface BusinessProfileStepProps {
     data: BusinessProfileData;
+    /**
+     * Who is filling this in.
+     *
+     * The step used to ask the same seven questions of everybody, because it
+     * could not tell a trader from a shopper. Two of them — the business name
+     * and the registration status — only have answers if there is a business.
+     * See describesABusiness in lib/marketplace-application.
+     */
+    accountType?: "buyer" | "seller" | "both";
     onChange: (data: Partial<BusinessProfileData>) => void;
     onNext: () => void;
     onBack: () => void;
@@ -45,12 +55,22 @@ interface BusinessProfileStepProps {
 
 
 
-export default function BusinessProfileStep({ data, onChange, onNext, onBack }: BusinessProfileStepProps) {
+export default function BusinessProfileStep({ data, accountType, onChange, onNext, onBack }: BusinessProfileStepProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     //   What the row below draws as selected when nothing has been chosen —
     //   shared, because the submission has to say the same thing. See
     //   lib/marketplace-application.
     const businessType = data?.businessType || DEFAULT_BUSINESS_TYPE;
+
+    /**
+     * Whether to ask the business half of this step at all.
+     *
+     * Through the SHARED rule, not a second reading of the same condition —
+     * a screen that hides a field the rule still requires refuses to continue
+     * with nothing on it to correct, which is the failure DEFAULT_BUSINESS_TYPE
+     * was added to stop.
+     */
+    const hasBusiness = describesABusiness({ accountType, businessType });
 
     /*
      *   THE SAME RULE THE SUBMIT GUARD AND THE SERVER USE.
@@ -65,7 +85,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
      *   in an older format.
      */
     const validate = () => {
-        const newErrors = missingForStep(2, { ...data, businessType });
+        const newErrors = missingForStep(2, { ...data, accountType, businessType });
 
         const phone = data?.phone || "";
         if (phone.trim() && !/^0\d{10}$/.test(phone.replace(/\s/g, ""))) {
@@ -87,32 +107,21 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
             {/* Header */}
             <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-slate-900 mb-3">
-                    Business Profile
+                    {hasBusiness ? "Business Profile" : "Your Details"}
                 </h2>
                 <p className="text-lg text-slate-600">
-                    Tell us about your business or farm
+                    {hasBusiness
+                        ? "Tell us about your business or farm"
+                        : "Tell us how to reach you and where your orders should go"}
                 </p>
             </div>
 
             <div className="space-y-6">
-                {/* Business Name */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Business/Farm Name *
-                    </label>
-                    <input
-                        type="text"
-                        value={data?.businessName || ""}
-                        onChange={(e) => onChange({ businessName: e.target.value })}
-                        placeholder="Enter your business or farm name"
-                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.businessName ? "border-red-500" : "border-slate-300"
-                            } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
-                    />
-                    {errors.businessName && (
-                        <p className="mt-1 text-sm text-red-600">{errors.businessName}</p>
-                    )}
-                </div>
-
+                {/*
+                    THE TYPE COMES FIRST, because it decides what else is asked.
+                    It used to sit between the two fields it governs, which is
+                    the order of a form that governs nothing.
+                */}
                 {/* Business Type */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
@@ -147,35 +156,75 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                     )}
                 </div>
 
-                {/* Business Status */}
-                <div>
-                    <label
-                        htmlFor="businessStatus"
-                        className="block text-sm font-semibold text-slate-900 mb-2"
-                    >
-                        Business Status *
-                    </label>
-                    <select
-                        id="businessStatus"
-                        value={data?.businessStatus || ""}
-                        onChange={(e) => onChange({ businessStatus: e.target.value as BusinessStatus })}
-                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.businessStatus ? "border-red-500" : "border-slate-300"
-                            } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
-                    >
-                        <option value="">Select business status</option>
-                        {BUSINESS_STATUSES.map((value) => (
-                            <option key={value} value={value}>
-                                {businessStatusLabel(value)}
-                            </option>
-                        ))}
-                    </select>
-                    <p className="mt-2 text-sm text-slate-600">
-                        Tells our reviewers whether to expect a registration certificate on the next step.
-                    </p>
-                    {errors.businessStatus && (
-                        <p className="mt-1 text-sm text-red-600">{errors.businessStatus}</p>
-                    )}
-                </div>
+
+                {/*
+                    ASKED ONLY OF AN APPLICANT WHO HAS A BUSINESS.
+
+                      THE OWNER: "the buyer can be an individual… if its an
+                      individual then it can continue with the flow, but if its
+                      business it should take business information."
+
+                    A person buying food has no Business/Farm Name and no
+                    registration status, and this step refused to continue
+                    without both — so the only way past it was to invent a
+                    business. A SELLER still answers them whatever they call
+                    themselves: the name is on every listing they publish and
+                    the status is what tells a reviewer whether to expect a CAC
+                    certificate. See lib/marketplace-application, which is the
+                    same rule the submit guard and the server apply — hiding a
+                    field the rule still required would refuse to continue with
+                    nothing on screen to correct.
+                */}
+                {hasBusiness && (
+                    <>
+                    {/* Business Name */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                            Business/Farm Name *
+                        </label>
+                        <input
+                            type="text"
+                            value={data?.businessName || ""}
+                            onChange={(e) => onChange({ businessName: e.target.value })}
+                            placeholder="Enter your business or farm name"
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.businessName ? "border-red-500" : "border-slate-300"
+                                } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                        />
+                        {errors.businessName && (
+                            <p className="mt-1 text-sm text-red-600">{errors.businessName}</p>
+                        )}
+                    </div>
+                    {/* Business Status */}
+                    <div>
+                        <label
+                            htmlFor="businessStatus"
+                            className="block text-sm font-semibold text-slate-900 mb-2"
+                        >
+                            Business Status *
+                        </label>
+                        <select
+                            id="businessStatus"
+                            value={data?.businessStatus || ""}
+                            onChange={(e) => onChange({ businessStatus: e.target.value as BusinessStatus })}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.businessStatus ? "border-red-500" : "border-slate-300"
+                                } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                        >
+                            <option value="">Select business status</option>
+                            {BUSINESS_STATUSES.map((value) => (
+                                <option key={value} value={value}>
+                                    {businessStatusLabel(value)}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="mt-2 text-sm text-slate-600">
+                            Tells our reviewers whether to expect a registration certificate on the next step.
+                        </p>
+                        {errors.businessStatus && (
+                            <p className="mt-1 text-sm text-red-600">{errors.businessStatus}</p>
+                        )}
+                    </div>
+                    </>
+                )}
 
                 {/* Phone Number */}
                 <div>
@@ -245,12 +294,12 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                 {/* Address */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Business Address *
+                        {hasBusiness ? "Business Address" : "Delivery Address"} *
                     </label>
                     <textarea
                         value={data?.location?.address || ""}
                         onChange={(e) => onChange({ location: { ...(data?.location || {}), address: e.target.value } as any })}
-                        placeholder="Enter your complete business address"
+                        placeholder={hasBusiness ? "Enter your complete business address" : "Where should your orders be delivered?"}
                         rows={3}
                         className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.address ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
