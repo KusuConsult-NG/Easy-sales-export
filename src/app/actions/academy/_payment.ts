@@ -35,6 +35,7 @@ import {
     applicationsTypedTo,
     completedPaymentFor,
 } from "@/lib/application-request-reads";
+import { startedEarly } from "@/lib/started-early";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -1000,6 +1001,64 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
             return { error: null, success: true as const, data: "paid" };
         }
 
+        /*
+         *   THE THREE FALLBACKS GO OUT TOGETHER.
+         *
+         *       [slow-action] checkAcademyPaymentStatusAction took 1879ms
+         *
+         *   THE LAST HOT ACTION NOTHING HAD MEASURED, and the deepest on the
+         *   platform when it finally was. With lib/testing/read-depth, a
+         *   learner who has not paid and has not applied:
+         *
+         *       SIX READS IN FIVE GENERATIONS
+         *
+         *       1. the user row              needs the caller's id
+         *       2. the identity walk         needs the caller's id
+         *       3. the payment record        needs the OWNED IDS from 2
+         *       4. the owned applications    needs the OWNED IDS from 2
+         *       5. the by-address sweep      needs an address, and nothing else
+         *
+         *   The last two were a chain only in the source: they are questions
+         *   about one person that need nothing from the payment record, and
+         *   each waited a round trip to learn whether the next was needed.
+         *
+         *   THE PAYMENT RECORD IS NOT PREFETCHED, because prefetching it buys
+         *   nothing. It is the first thing read after the user row either way,
+         *   so issuing it early moves it into the generation it was already in
+         *   — measured, by a mutant that made it lazy and changed no figure in
+         *   this file's suite. A line that looks load-bearing and is not is
+         *   worse than no line.
+         *
+         *   WHY THE PREFETCH IS CHEAPER THAN IT LOOKS. All three go through
+         *   lib/application-request-reads, which memoises the PROMISE, and
+         *   checkAcademyStatusAction asks for the same three beside this action
+         *   in /academy/application's Promise.all (#272, #284). Issued here they
+         *   are the same round trips that page already makes, joined rather
+         *   than repeated.
+         *
+         *   WHAT IT COSTS, STATED. A learner whose entitlement is proved by the
+         *   payment record alone reads six where they read four: the two later
+         *   questions are asked and their answers thrown away. They wait for
+         *   neither — the depth is unchanged — and on /academy/application both
+         *   were being asked anyway. The guards below spare the rest: an
+         *   entitled row returns above this without issuing anything, and a
+         *   learner whose row names an application skips the sweep.
+         */
+        const academyReg = userData?.serviceRegistrations?.academy;
+        const learnerEmail = userData?.email;
+
+        const ownedAppsSoon = startedEarly(
+            applicationsOwnedBy(COLLECTIONS.ACADEMY_APPLICATIONS, session.user.id));
+        /*
+         *   REACHED ONLY WHEN THE OWNER-SCOPED QUERY COMES BACK EMPTY, and a
+         *   row that names an application is the cheap sign that it will not.
+         *   Same guard #284 uses on the same collection one file over.
+         */
+        const typedSoon = (!academyReg?.applicationId && learnerEmail)
+            ? startedEarly(applicationsTypedTo(
+                COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", learnerEmail))
+            : null;
+
         // ── AUTHORITATIVE FALLBACK 1: Processed Payments ─────────────────
         //   AN AUTHORITATIVE CHECK HAS TO SEE EVERY PROFILE, or it is not
         //   authoritative. A learner who paid before their profile was
@@ -1014,7 +1073,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
 
         // ── AUTHORITATIVE FALLBACK 2: Application Payment Status ─────────
         //   SHARED, as above.
-        const appSnap = await applicationsOwnedBy(COLLECTIONS.ACADEMY_APPLICATIONS, session.user.id);
+        const appSnap = await ownedAppsSoon();
 
         if (!appSnap.empty) {
             const hasPaidApp = appSnap.docs.some(doc => isAcademyEntitled(doc.data().paymentStatus));
@@ -1032,7 +1091,10 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
              *   Only a row nobody owns may be read. Same helper as the other
              *   five doors — see lib/claimable-application.
              */
-            const typed = await applicationsTypedTo(COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", userData.email);
+            const typed = typedSoon
+                ? await typedSoon()
+                : await applicationsTypedTo(
+                    COLLECTIONS.ACADEMY_APPLICATIONS, "personalInfo.email", userData.email);
             const { claimable } = claimableByEmail(typed.docs);
             if (claimable && isAcademyEntitled(claimable.data()?.paymentStatus)) {
                 return { error: null, success: true as const, data: "paid" };
