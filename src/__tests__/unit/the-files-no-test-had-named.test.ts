@@ -139,8 +139,15 @@ describe('how much of the application no test has named', () => {
          *   constant against both writers and none did, and
          *   wave-resource-access gated admins on the session token beside a
          *   database row it was already reading.
+         *
+         *   Then 116 → 113, taking the HTTP entry points next because they are
+         *   the part of this application the internet reaches directly:
+         *   api/wallet/verify, api/marketplace/seller-status and
+         *   api/cooperative/fixed-savings. The wallet route was reflecting an
+         *   uncaught exception's own message into a redirect URL, from an
+         *   endpoint that needs no session.
          */
-        expect(ledgerVerdict(unreached().length, 116)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 113)).toBe(LEDGER_HELD);
     });
 
     it('AND THE MONEY AND IDENTITY RULES ARE OFF IT', () => {
