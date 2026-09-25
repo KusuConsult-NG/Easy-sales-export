@@ -64,15 +64,55 @@ export function isSafeInternalPath(value: string | null | undefined): value is s
 }
 
 /**
- * The path if it is safe, otherwise the fallback.
+ * The path if it is safe, otherwise the fallback — and the fallback is checked too.
  *
  * The fallback is required rather than defaulted: every caller already has a
  * destination in mind for the ordinary case, and a silent default is how a
  * redirect ends up somewhere nobody chose.
+ *
+ *   #917 IT TRUSTED ITS OWN SECOND ARGUMENT.
+ *
+ *   This was `isSafeInternalPath(value) ? … : fallback`, so the fallback went
+ *   back to the caller unexamined. The whole point of the function is that a
+ *   redirect destination has been through the rule; on the refusal path — the one
+ *   that runs when somebody is attacking it — nothing had.
+ *
+ *   MEASURED before calling it live: all four call sites pass a safe literal or
+ *   the empty sentinel today, so there is no open redirect to exploit. But
+ *   LoginForm's fallback is `defaultCallbackUrl`, a PROP — /auth/login/admin
+ *   passes "/admin" and the default is "/dashboard". A prop is the one kind of
+ *   argument a future caller supplies without reading this function, and
+ *   `<LoginForm defaultCallbackUrl="https://elsewhere.example" />` would have
+ *   turned the guard into a pass-through for exactly the value it exists to
+ *   refuse. The safety of every redirect rested on four callers each remembering
+ *   a rule the guard was capable of enforcing.
+ *
+ *   THE EMPTY STRING STAYS ALLOWED, deliberately. ModuleRegisterPage passes ""
+ *   and says why: "it is what lets the server action choose the module's own
+ *   onboarding page rather than a module root." It is a documented "no
+ *   destination" sentinel rather than a path, `isSafeInternalPath("")` is false
+ *   for the right reason, and coercing it to "/" would change that page's
+ *   behaviour. So it is permitted by name, not by accident.
+ *
+ *   Anything else unsafe fails closed to "/" and says so. "/" is the one
+ *   destination that cannot be an attack: it is this origin's own root.
  */
 export function safeInternalPath(
     value: string | null | undefined,
     fallback: string,
 ): string {
-    return isSafeInternalPath(value) ? value!.replace(LEADING_STRIPPED, "") : fallback;
+    if (isSafeInternalPath(value)) return value!.replace(LEADING_STRIPPED, "");
+
+    //   The documented sentinel, and only it.
+    if (fallback === "") return fallback;
+
+    if (isSafeInternalPath(fallback)) return fallback.replace(LEADING_STRIPPED, "");
+
+    //   No logger import: this module has none, and safe-redirect is reached from
+    //   client components where a types-and-rules module should not drag one in
+    //   (#911's lesson). `no-console` allows warn.
+    console.warn(
+        `[safeInternalPath] refused an unsafe fallback ${JSON.stringify(fallback)} — redirecting to "/"`,
+    );
+    return "/";
 }

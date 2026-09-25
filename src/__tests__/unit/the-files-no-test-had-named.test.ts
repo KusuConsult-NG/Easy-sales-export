@@ -396,8 +396,19 @@ describe('how much of the application no test has named', () => {
          *   The retention is defensible and is left exactly as the owner set it.
          *   Telling the data subject the opposite of it is not, and that is the
          *   half this fixes — the wording, not the behaviour.
+         *
+         *   Then 65 → 63, on the two login doors — app/auth/login/page and
+         *   login/admin/page. Both are four-line wrappers and the thing worth
+         *   checking was not in them but in what the second one passes down.
+         *   #917: safeInternalPath returned its FALLBACK unexamined, and
+         *   LoginForm's fallback is a prop — so `<LoginForm
+         *   defaultCallbackUrl="https://elsewhere.example" />` would have made the
+         *   guard hand back the value it exists to refuse, on the login screen.
+         *   No live open redirect (all four fallbacks are safe literals or the
+         *   documented empty sentinel); the guard enforces it now instead of
+         *   trusting four callers to remember.
          */
-        expect(ledgerVerdict(unreached().length, 65)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 63)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
