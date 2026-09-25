@@ -1,5 +1,43 @@
 "use client";
 
+/**
+ * Choosing which side of Farm Nation you are on.
+ *
+ *   #931 TWO OF ITS TWELVE PROMISES NAMED FEATURES THAT EXIST NOWHERE.
+ *
+ *   Swept against the whole tree: "Pricing analytics tools" and "Priority
+ *   support" appear in this file and in no other, and neither has an
+ *   implementation — src/app and src/lib hold no price-analytics of any kind
+ *   and no support tiering. They are read at the moment somebody chooses, on
+ *   the screen that asks them to choose, which is where a promise costs the
+ *   most.
+ *
+ *   The other ten were checked too, and stand: escrow (my-purchases, list-land),
+ *   verification (admin/farm-nation/land-verification), inquiries, offers
+ *   (#874's one page for both sides), the Portfolio Value tile on the member
+ *   dashboard, and no listing cap anywhere in createLandListingAction. Each is
+ *   named against its file in the suite, so a bullet added later fails until
+ *   somebody says where it lives.
+ *
+ *   AND "You can change this later" HAD NO DOOR. The role is stored at
+ *   serviceRegistrations.farmNation.role and the only screen that can rewrite
+ *   it is this wizard behind `?edit=true`, linked from the PENDING page alone —
+ *   which an approved member never sees, because Farm Nation grants her roles at
+ *   submit and sends her to the dashboard (#790). Worse, that path is
+ *   `resubmitFarmNationApplicationAction`, which writes `status: "pending"`: a
+ *   plain "edit your details" link would put an approved member back in the
+ *   review queue. So the sentence says what is actually true instead, and the
+ *   missing role-change door is recorded rather than improvised.
+ *
+ *   WHAT THE CHOICE ACTUALLY DECIDES, measured: rolesForFarmNationRole grants
+ *   `investor` for a buyer and `farmer` for a seller, and the land-listing door
+ *   asks hasAppAccess(roles, "farm-nation") — which either role satisfies. So
+ *   neither answer shuts anybody out of listing or buying; what it changes is
+ *   the roles on the account and the admin broadcast segment she falls into.
+ *   That is worth saying plainly rather than implying a lock-in that is not
+ *   there.
+ */
+
 import { useState } from "react";
 import { ShoppingBag, Home as HomeIcon, User, CheckCircle } from "lucide-react";
 
@@ -39,9 +77,11 @@ export default function RoleSelectionStep({ onNext, onChange, initialData }: Rol
             description: "I have land to sell or lease",
             icon: HomeIcon,
             features: [
+                //   #931 Each of these names something in the tree — see the
+                //   suite, which pins the bullet to the file that implements it.
                 "List unlimited properties",
                 "Reach thousands of buyers",
-                "Pricing analytics tools",
+                "Inquiries and offers on your listings, in one place",
                 "Professional property verification",
             ],
         },
@@ -54,7 +94,9 @@ export default function RoleSelectionStep({ onNext, onChange, initialData }: Rol
                 "Full buyer & seller access",
                 "Portfolio management",
                 "Investment tracking",
-                "Priority support",
+                //   #931 was "Priority support", which does not exist: the
+                //   platform has one support address and no tiering.
+                "Offers you make and receive, on one screen",
             ],
         },
     ];
@@ -66,7 +108,10 @@ export default function RoleSelectionStep({ onNext, onChange, initialData }: Rol
                     How do you want to use Farm Nation?
                 </h2>
                 <p className="text-slate-600">
-                    Choose the option that best describes your goals. You can change this later.
+                    Choose the option that best describes your goals. It sets up your
+                    dashboard and the roles on your account &mdash; neither answer closes
+                    off listing land or buying it, so this is not a decision you can get
+                    wrong.
                 </p>
             </div>
 
