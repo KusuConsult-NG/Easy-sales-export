@@ -11,6 +11,13 @@
  * Note the two siblings that are NOT part of this domain folder:
  * actions/farm-nation-admin.ts and actions/farm-nation-payment.ts are separate
  * modules with their own callers, and are left where they are.
+ *
+ *   #913 AND ITS PRIVATE FILES ARE PRIVATE. Nothing outside this folder imports
+ *   `./_*` directly — that is swept and pinned in
+ *   __tests__/unit/eight-barrels-and-two-tests, across all eight action domains.
+ *   Four of the eight stated this rule and four, including this one, only obeyed
+ *   it; a rule enforced by a test nobody reads is not a rule a contributor can
+ *   follow.
  */
 
 // ─── Domain types ─────────────────────────────────────────────────────────────

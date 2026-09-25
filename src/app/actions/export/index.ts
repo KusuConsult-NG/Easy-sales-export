@@ -7,6 +7,13 @@
  *
  * Replaced actions/export.ts, 1,534 lines. The action states and the two zod
  * input schemas moved to @/lib/types/export-actions and are re-exported below.
+ *
+ *   #913 AND ITS PRIVATE FILES ARE PRIVATE. Nothing outside this folder imports
+ *   `./_*` directly — that is swept and pinned in
+ *   __tests__/unit/eight-barrels-and-two-tests, across all eight action domains.
+ *   Four of the eight stated this rule and four, including this one, only obeyed
+ *   it; a rule enforced by a test nobody reads is not a rule a contributor can
+ *   follow.
  */
 
 // ─── Domain types ─────────────────────────────────────────────────────────────

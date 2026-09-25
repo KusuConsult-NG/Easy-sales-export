@@ -332,8 +332,47 @@ describe('how much of the application no test has named', () => {
          *   record-export is sound and is tested rather than changed. What the
          *   same pass found beside it is recorded, not fixed: #309's one
          *   already-logged screen still writes its audit row by a private path.
+         *
+         *   Then 77 → 75, on lib/validations/shared and lib/validations/academy.
+         *   #912: an academy application's address is written by two actions and
+         *   only one normalised it. The submit door lowercases and trims and says
+         *   why; the resubmit door writes the schema's output — the address as
+         *   typed — through an update whose nested map REPLACES rather than
+         *   merges, so one resubmission undid it.
+         *
+         *   The three readers that comment names are all fallbacks behind an
+         *   owner-scoped query, so none of them noticed. The duplicate guard in
+         *   the submit transaction did: it queries the one lowercased form, and a
+         *   de-normalised row is invisible to it. Normalised at the parse
+         *   boundary now, with both doors sharing one function.
+         *
+         *   Then 75 → 72, on the three action barrels — wave, farm-nation and
+         *   farm-nation-admin. #913: eight domain barrels, and admin and
+         *   cooperative had a parity test each, written as a LIST of the names a
+         *   file exported at one commit. The other six had nothing. The sweep
+         *   derives the domains from the filesystem and the actions from source,
+         *   checks barrel completeness in both re-export forms, the "private
+         *   files" rule, and that every action file's first statement is the
+         *   server directive.
+         *
+         *   It found no defect — all eight are complete and declared, and the one
+         *   cross-domain private import is a deliberate delegation, pinned as
+         *   itself. What it did find is that four of the eight barrels never
+         *   STATED the private-files rule they were being held to, which is now a
+         *   sentence in each of their headers.
+         *
+         *   Then 72 → 71, on lib/chatbot-knowledge. #914: the chat widget offers
+         *   "What is the membership fee?" and "Are courses free?" as quick
+         *   actions, and the system prompt behind them contained no amount at all
+         *   — no ₦, no digit group outside the hex colours. api/ai sends that
+         *   prompt straight to OpenAI, so the platform handed a member a button
+         *   asking a money question and gave the model nothing to answer from.
+         *
+         *   I went looking for a STALE price, because #1, #2, #18 and #21 were
+         *   all a fee copy disagreeing with checkout. There was no copy at all,
+         *   which is the same class from the other side.
          */
-        expect(ledgerVerdict(unreached().length, 77)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 71)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

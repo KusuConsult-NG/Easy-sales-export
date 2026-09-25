@@ -3,6 +3,12 @@
  * Module-aware system prompts and configuration
  */
 
+//   #914 The figures come from the constants the CHECKOUTS charge, so the
+//   chatbot's answer to "what does it cost" cannot drift from the price.
+//   constants.ts imports nothing at all, so this adds no dependency weight and
+//   no cycle — checked, after #911 taught me to.
+import { COOPERATIVE_CONFIG, ACADEMY_CONFIG } from "@/lib/constants";
+
 export type ChatbotModule =
     | "hub"
     | "marketplace"
@@ -114,6 +120,51 @@ const MODULE_KNOWLEDGE: Record<ChatbotModule, string> = {
     "farm-nation": `FARM NATION: Agriculture and production arm. Registration: visit section, choose participation type, fill form, submit, await onboarding. Participation types: Farmer, Investor, Partner, Landowner, Participant. Benefits: practical farming access, structured farm opportunities, value chain integration, investment potential.`,
 };
 
+/** ₦1,234,567 — the form every screen on this platform writes a fee in. */
+const naira = (amount: number) => `₦${amount.toLocaleString("en-NG")}`;
+
+/**
+ * The fees this assistant is allowed to state, and where they come from.
+ *
+ *   #914 IT INVITED THREE MONEY QUESTIONS AND COULD ANSWER NONE OF THEM.
+ *
+ *   The quick actions offered on the chat widget include, verbatim:
+ *
+ *       cooperative   "What is the membership fee?"
+ *       academy       "Are courses free?"
+ *
+ *   Neither figure was anywhere in the prompt. MODULE_KNOWLEDGE said "pay
+ *   membership fee if applicable" and "Fees vary by course — check course page",
+ *   and the whole prompt contained no amount at all — measured: no `₦` and no
+ *   digit group in the file.
+ *
+ *   That is worse than silence. The prompt tells the model "Always offer a next
+ *   action" and "Keep responses concise", it never forbids stating a number, and
+ *   the user has been handed a button that asks for one. An LLM asked "What is
+ *   the membership fee?" with no grounding does not answer "I don't know" — it
+ *   produces a plausible Nigerian figure. On this platform the real answer is
+ *   one flat ₦10,000, and #1/#2 of this audit were both about a copy of that
+ *   number disagreeing with the one checkout charges.
+ *
+ *   So the fees are IN the prompt, built from COOPERATIVE_CONFIG and
+ *   ACADEMY_CONFIG — the same constants the checkouts read — and the model is
+ *   told plainly not to state any figure it was not given. Both halves are
+ *   needed: the grounding answers the two questions the widget asks, and the
+ *   prohibition covers everything that genuinely varies (export windows, land,
+ *   WAVE, individual products), where the honest answer is "check the page".
+ */
+export function feeKnowledge(): string {
+    const plans = ACADEMY_CONFIG.plans;
+    const course = (plan: { name: string; fee: number; originalFee: number }) =>
+        `${plan.name} ${naira(plan.fee)} (was ${naira(plan.originalFee)})`;
+
+    return `FEES YOU MAY STATE (these are the amounts the checkout actually charges):
+- Cooperative membership: one flat fee of ${naira(COOPERATIVE_CONFIG.registrationFee)}. There are no tiers and no other cooperative registration amount.
+- Academy programmes: ${course(plans.foundation)}; ${course(plans.standard)}; ${course(plans.elite)}. Courses are NOT free.
+
+FIGURES YOU MAY NOT STATE: any amount not listed above. Export window amounts, land prices, WAVE amounts, product prices and delivery costs vary and are shown on their own pages — say so and point the user there rather than estimating. NEVER invent, approximate or "roughly" a fee.`;
+}
+
 export function buildSystemPrompt(module: ChatbotModule): string {
     const config = MODULE_CONFIGS[module];
     return `You are the "${config.name}", a warm and professional AI guide for Easy Sales Export — an integrated agro-commercial ecosystem in Nigeria.
@@ -124,6 +175,8 @@ TONE RULES:
 - Never say "Invalid entry" → say "I couldn't process that yet, let me guide you"
 - Never say "You are not eligible" → say "This service may need a few additional conditions. Let me show you what's needed"
 - Show empathy if user is frustrated before providing help
+- NEVER state a money amount that is not written in this prompt. If you were not
+  given the figure, say where it is shown and offer to point the user there.
 
 CURRENT MODULE: You are the assistant for the ${config.name} (${config.tagline}).
 Focus on this module first, but reference other modules when helpful to the user.
@@ -132,6 +185,8 @@ MODULE KNOWLEDGE:
 ${MODULE_KNOWLEDGE[module]}
 
 ${SHARED_KNOWLEDGE}
+
+${feeKnowledge()}
 
 ESCALATION: When payment unresolved, user distressed, refund requested, legal issues, or partnership inquiry — say: "I'd like to connect you with our support team so this can be handled properly. Please contact us at:
 📧 Email: info@easysalesexport.com

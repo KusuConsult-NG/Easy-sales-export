@@ -48,7 +48,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readdirSync, statSync, readFileSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ledgerVerdict, LEDGER_HELD } from '@/lib/testing/ledger';
 import { stripComments } from '@/lib/testing/strip-comments';
@@ -206,5 +206,90 @@ describe('positional select locators in the e2e specs', () => {
             expect({ rel, byLabel: src.includes('label:has-text("State")') })
                 .toEqual({ rel, byLabel: true });
         }
+    });
+});
+
+/**
+ * ── 3. AND A THIRD, WHICH WAS NOT THE HOOK'S FAULT BUT MINE ─────────────────
+ *
+ *   #914 CI failed `build-and-test` in ninety-eight seconds, at lint:
+ *
+ *       a-chatbot-that-invited-a-question-it-could-not-answer.test.ts
+ *         79:14  error  Do not assign to the variable `module`.
+ *                       @next/next/no-assign-module-variable
+ *
+ *   `for (const module of MODULES)`, three times. A loop variable, not an
+ *   assignment to Node's `module` — but the rule does not distinguish, it is an
+ *   error rather than a warning, and `eslint --max-warnings=0` refuses.
+ *
+ *   MY FAULT, AND THE REPO HAD ALREADY WRITTEN DOWN THE ANSWER. eslint runs in
+ *   .husky/pre-commit via lint-staged, and every commit in this session was made
+ *   with `--no-verify`, which skips that hook. This hook deliberately does not
+ *   run lint or tsc — its own header explains why (they were the third check of
+ *   the same tree) and names the remedy in the same breath:
+ *
+ *       npm run verify    typecheck, lint, build, tests — run it before pushing
+ *                         a branch that has no PR open yet.
+ *
+ *   So nothing here was blind. I skipped the gate with `--no-verify` and did not
+ *   run the command the hook tells you to run instead. The two findings above are
+ *   things the hook genuinely cannot see; this one is a gate I switched off.
+ *
+ *   Pinned below from the hook files and package.json, because the actionable
+ *   part is which command covers what — and if a later change moves lint into
+ *   pre-push, these assertions fail and the note above is what should be
+ *   corrected, not the test.
+ */
+describe('#914 — which gate runs what, and the one I skipped', () => {
+    /** A shell script with its `#` comments removed. */
+    const hookCode = (name: string) => {
+        const path = join(ROOT, '.husky', name);
+        if (!existsSync(path)) return '';
+        return readFileSync(path, 'utf8')
+            .split('\n')
+            .filter((line) => !line.trimStart().startsWith('#'))
+            .join('\n');
+    };
+
+    it('THE CONTROL: stripping the comments leaves real script behind', () => {
+        //   pre-push is mostly comment — the header explaining itself is longer
+        //   than the code. A naive read finds `tsc` and `lint` in that prose and
+        //   concludes the opposite of the truth, which is what the first draft of
+        //   this block did.
+        const prePush = hookCode('pre-push');
+
+        expect(prePush).toMatch(/npm run test/);
+        expect(prePush.length).toBeGreaterThan(200);
+        //   And the words really are in the file, just not in its code.
+        expect(readFileSync(join(ROOT, '.husky/pre-push'), 'utf8')).toMatch(/tsc/);
+    });
+
+    it('PRE-PUSH EXECUTES THE SUITE AND NEITHER LINT NOR TSC', () => {
+        const prePush = hookCode('pre-push');
+
+        expect(prePush).not.toMatch(/eslint|npm run lint/);
+        expect(prePush).not.toMatch(/tsc|npm run typecheck/);
+    });
+
+    it('AND ESLINT IS IN PRE-COMMIT, WHICH --no-verify SKIPS', () => {
+        expect(hookCode('pre-commit')).toMatch(/lint-staged/);
+    });
+
+    it('THE REMEDY THE HOOK NAMES EXISTS, and covers all four', () => {
+        //   The actionable line. `npm run verify` is what a --no-verify workflow
+        //   owes the branch before a push.
+        const scripts = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts;
+
+        expect(scripts.verify).toBeDefined();
+        for (const step of ['typecheck', 'lint', 'build', 'test']) {
+            expect(scripts.verify).toContain(step);
+        }
+    });
+
+    it('and CI runs the two the hooks do not', () => {
+        const workflow = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+
+        expect(workflow).toMatch(/npx tsc --noEmit/);
+        expect(workflow).toMatch(/npm run lint/);
     });
 });

@@ -147,7 +147,25 @@ describe('the identity it matches on', () => {
     it('stores the email lowercased, which is what the readers look for', () => {
         const body = submitBody();
 
-        expect(body).toContain('.trim().toLowerCase()');
+        /*
+         *   #912 THE SPELLING MOVED; THE GUARANTEE DID NOT.
+         *
+         *   This asserted `.trim().toLowerCase()` — the inline expression this
+         *   action used to carry. That pinned HOW the rule was written rather
+         *   than WHAT it guarantees, and it failed the moment the rule moved into
+         *   validations/shared so that the resubmit door could share it.
+         *
+         *   It had to move: _resubmitAcademyApplicationAction writes the same
+         *   field from AcademyApplicationInputSchema and normalised nothing, so
+         *   one resubmission with a capital letter replaced the value this line
+         *   produces — and the duplicate guard below, which queries the single
+         *   lowercased form, could no longer see that row.
+         *
+         *   So the assertion is on the shared rule being applied here. That the
+         *   rule trims and lowercases is asserted where it lives, in
+         *   two-doors-and-only-one-normalised.
+         */
+        expect(body).toContain('normaliseEmail(applicationData.personalInfo.email)');
         expect(body).toContain('email: normalisedEmail,');
     });
 

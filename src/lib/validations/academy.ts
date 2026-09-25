@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateSchema } from "./shared";
+import { dateSchema, applicationEmail } from "./shared";
 
 /**
  * Academy Application & Enrollment Schemas
@@ -50,7 +50,11 @@ export const AcademyApplicationInputSchema = z.object({
         lastName: z.string(),
         otherName: z.string().optional(),
         fullName: z.string().optional(),
-        email: z.string().email(),
+        //   #912 Normalised here, so the resubmit door writes the same form the
+        //   submit door writes and the duplicate guard can find either. See the
+        //   note on applicationEmail for what the two doors used to disagree
+        //   about and which reader actually noticed.
+        email: applicationEmail,
         phone: z.string(),
         dateOfBirth: z.string(),
         gender: z.string(),
