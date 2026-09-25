@@ -712,8 +712,49 @@ describe('how much of the application no test has named', () => {
          *   against raw source, and the suspend route writes the field by its
          *   DOTTED PATH inside a quoted key — so the writer matched as a reader.
          *   String literals are blanked before the read test now.
+         *
+         *   Then 41 → 38, on the three admin chart components —
+         *   components/admin/AnalyticsCharts, ContributionTrendChart and
+         *   DashboardLineChart.
+         *
+         *   #925 DEFECT ONE, and the page's own comment gave it away.
+         *   admin/analytics/page renders AnalyticsCharts with
+         *   `moduleUsage={moduleUsage}` and, two elements later, an empty
+         *   `<div></div>` labelled "Spacer since Module Usage is now handled by
+         *   AnalyticsCharts inside its own grid". AnalyticsCharts declared the prop
+         *   in its interface and never destructured it. The page deleted its chart,
+         *   made the space, handed over the data, and nothing drew it.
+         *
+         *   The series is real, and analytics.service goes out of its way to keep
+         *   it drawable — nine `{ module, count }` rows, zeroes filtered, and
+         *   `[{ module: "No data yet", count: 1 }]` rather than an empty array,
+         *   which is a deliberate "so the chart has something to show". It is drawn
+         *   now, conditionally, because admin/DashboardClient passes the other two
+         *   props and must not gain a blank third card.
+         *
+         *   DEFECT TWO. ContributionTrendChart and DashboardLineChart read the SAME
+         *   series — reports.monthlyTrend from getCooperativeReportsAction,
+         *   `{ month, amount }` in naira. The bar chart on the contributions screen
+         *   formatted it; the line chart on the cooperatives dashboard showed
+         *   "1240000", with nothing to say it was money rather than a count of
+         *   contributions. AnalyticsCharts states the platform's rule and is why
+         *   this is a defect rather than taste: its REVENUE chart formats, its USER
+         *   GROWTH chart deliberately does not.
+         *
+         *   RECORDED: the two cooperative charts hold mirror-image halves of one
+         *   guard. The bar chart checks for empty data ITSELF while its caller
+         *   passes `reports?.monthlyTrend` unguarded, so that check is
+         *   load-bearing; the line chart has no check and its caller does. Neither
+         *   is broken and both are pinned, because the halves are one edit from
+         *   being swapped.
+         *
+         *   A FIFTH HARNESS GAP: recharts measures its container and jsdom reports
+         *   every element as 0x0, so ResponsiveContainer renders NOTHING and every
+         *   assertion about a bar or a line is vacuous. Given an explicit size it
+         *   renders. Same shape as the other four — without it a correct chart and
+         *   a missing one are indistinguishable from the assertion's side.
          */
-        expect(ledgerVerdict(unreached().length, 41)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 38)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
