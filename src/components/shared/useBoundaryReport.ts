@@ -70,36 +70,79 @@ export function useBoundaryReport(
         if (reported.current === error) return;
         reported.current = error;
 
-        /*
-         *   EVERYTHING HERE IS GUARDED, BECAUSE THIS RUNS INSIDE THE BOUNDARY.
-         *
-         *   A throw in this effect replaces the error screen with a blank page —
-         *   the boundary that was meant to catch the failure becomes the
-         *   failure. Caught while writing the suite beside this: the first
-         *   version called captureException bare, and Sentry is not initialised
-         *   in every environment, so `Sentry.captureException` can itself throw.
-         *   A report that cannot be sent is not worth the page.
-         */
-        try {
-            Sentry.captureException(error, { tags: { boundary } });
-        } catch {
-            //   Nothing to fall back to: reporting that reporting failed would
-            //   use the same channel.
-        }
-
-        try {
-            //   The action has its own try/catch and returns a verdict rather
-            //   than throwing; the `.catch` is for the transport under it — a
-            //   server action is a fetch, and an offline browser rejects.
-            void logTelemetryAction("error", `UI boundary caught exception: ${boundary}`, {
-                boundary,
-                digest: error?.digest,
-                message: error?.message,
-                stack: error?.stack,
-                path: typeof window !== "undefined" ? window.location.pathname : "unknown",
-            })?.catch?.(() => { });
-        } catch {
-            // As above.
-        }
+        reportBoundaryError(error, boundary);
     }, [error, updating, boundary]);
+}
+
+/**
+ * The report itself, for a boundary that cannot use a hook.
+ *
+ *   #907 THE FOUR CLASS BOUNDARIES ARE NEARER THAN EVERY ROUTE BOUNDARY, AND
+ *   #904 DID NOT REACH THEM.
+ *
+ *   #904 wired the fourteen `error.tsx` files and was right about the defect and
+ *   wrong about the reach. React stops at the NEAREST boundary, and
+ *   `<ErrorBoundary>` — a class component — wraps the member layout of EVERY
+ *   module on this platform:
+ *
+ *       components/admin/AdminShell          all of /admin
+ *       farm-nation/(member)/layout          Farm Nation
+ *       marketplace/seller/layout            the seller portal
+ *       marketplace/buyer/layout             the buyer portal
+ *       export/(app)/layout                  Export
+ *       wave/(member)/layout                 WAVE
+ *       academy/(learner)/layout             Academy
+ *
+ *   plus MarketplaceErrorBoundary, GlobalResilienceBoundary and
+ *   CooperativeErrorBoundary inside them. So for a signed-in member anywhere in
+ *   the application, a class boundary catches the crash and the route boundary
+ *   never sees it — and every one of the four ended in `console.error`.
+ *
+ *   ErrorBoundary's own screen says "Our team has been notified and is working
+ *   on a fix." Nothing had been notified. That sentence is now true.
+ *
+ *   ONE COPY OF THE RULE, which is the arrangement these same files already use
+ *   for the reload half: "A class component cannot use the hook the route
+ *   boundaries use, so it calls the same budget directly. The RULE is shared;
+ *   only the plumbing differs." (#717, in ErrorBoundary.) This is that, for
+ *   reporting.
+ */
+export function reportBoundaryError(
+    error: (Error & { digest?: string }) | null | undefined,
+    boundary: string,
+    /** React's componentDidCatch second argument, where a class has one. */
+    errorInfo?: { componentStack?: string | null },
+): void {
+    /*
+     *   EVERYTHING HERE IS GUARDED, BECAUSE THIS RUNS INSIDE THE BOUNDARY.
+     *
+     *   A throw here replaces the error screen with a blank page — the boundary
+     *   that was meant to catch the failure becomes the failure. Caught while
+     *   writing the suite beside this: the first version called captureException
+     *   bare, and Sentry is not initialised in every environment, so
+     *   `Sentry.captureException` can itself throw. A report that cannot be sent
+     *   is not worth the page.
+     */
+    try {
+        Sentry.captureException(error, { tags: { boundary } });
+    } catch {
+        //   Nothing to fall back to: reporting that reporting failed would use
+        //   the same channel.
+    }
+
+    try {
+        //   The action has its own try/catch and returns a verdict rather than
+        //   throwing; the `.catch` is for the transport under it — a server
+        //   action is a fetch, and an offline browser rejects.
+        void logTelemetryAction("error", `UI boundary caught exception: ${boundary}`, {
+            boundary,
+            digest: error?.digest,
+            message: error?.message,
+            stack: error?.stack,
+            componentStack: errorInfo?.componentStack ?? undefined,
+            path: typeof window !== "undefined" ? window.location.pathname : "unknown",
+        })?.catch?.(() => { });
+    } catch {
+        // As above.
+    }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { reportBoundaryError } from "@/components/shared/useBoundaryReport";
 import { AlertTriangle } from 'lucide-react';
 import { isStaleDeploymentError, consumeReloadBudget } from '@/lib/stale-deployment-recovery';
 
@@ -63,7 +64,37 @@ export class CooperativeErrorBoundary extends React.Component<
         }
 
         // Log error to console (in production, send to error tracking service)
-        console.error('Cooperative Module Error:', error, errorInfo);
+        /*
+         *   #907 AND SOMEBODY IS TOLD. This ended in console.error, and a class
+         *   boundary is NEARER than every route boundary #904 wired — see
+         *   reportBoundaryError for which layouts this one wraps.
+         *
+         *   AFTER the stale-deployment branch above, deliberately: a
+         *   ChunkLoadError after a deploy is a browser holding an old bundle,
+         *   not a defect, and reporting it would fill the feed with every
+         *   deploy. And NEXT_REDIRECT is not an error at all — Next throws it to
+         *   move the router, and render() re-throws it on purpose.
+         */
+        /*
+         *   #907 AND THIS ONE HAD NO NEXT_REDIRECT GUARD AT ALL.
+         *
+         *   Found by the suite beside this, not by eye: the other three class
+         *   boundaries both decline to log NEXT_REDIRECT here AND re-throw it
+         *   from render() so the router can act. This one did neither, so the
+         *   first thing #907's reporting did was send a routine navigation to
+         *   Sentry.
+         *
+         *   STATED AS LATENT, NOT LIVE. Its one subtree —
+         *   cooperatives/onboarding/OnboardingClient — is a client component
+         *   that navigates with `router.replace`, which does not throw. A
+         *   server-side `redirect()` does, and the day one appears in this tree
+         *   the boundary would have rendered "Something went wrong" instead of
+         *   navigating. The guard is the other three's, copied deliberately
+         *   rather than left as the only boundary without it.
+         */
+        if (error.message.startsWith('NEXT_REDIRECT')) return;
+
+        reportBoundaryError(error, "component/CooperativeErrorBoundary", errorInfo);
     }
 
     handleReset = () => {
@@ -74,6 +105,13 @@ export class CooperativeErrorBoundary extends React.Component<
 
     render() {
         if (this.state.hasError) {
+            //   #907 Re-thrown so the router can act on it — see componentDidCatch.
+            if (this.state.error
+                && (this.state.error.message.startsWith('NEXT_REDIRECT')
+                    || (this.state.error as any).digest?.startsWith('NEXT_REDIRECT'))) {
+                throw this.state.error;
+            }
+
             // Custom fallback UI or default error display
             if (this.props.fallback) {
                 return this.props.fallback;

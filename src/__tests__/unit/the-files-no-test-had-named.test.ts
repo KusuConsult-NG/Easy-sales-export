@@ -267,8 +267,25 @@ describe('how much of the application no test has named', () => {
          *   in PROTECTED_PATHS) and a trap rather than a leak, which the suite
          *   says in those words; the folder is shared by every caller that
          *   reaches it.
+         *
+         *   Then 84 → 81, on the three component error boundaries — and #907 is
+         *   a CORRECTION to #904 above, which is why it reads as one.
+         *
+         *   #904 wired the fourteen route boundaries and never asked what sits
+         *   INSIDE them. React stops at the NEAREST boundary, and a CLASS
+         *   boundary — `<ErrorBoundary>` — wraps the member layout of every
+         *   module on this platform: admin, farm-nation, both marketplace
+         *   portals, export, wave, academy. So for a signed-in member anywhere,
+         *   a class boundary catches the crash and the route boundary #904 fixed
+         *   never sees it. All four ended in console.error, and ErrorBoundary's
+         *   own screen said "Our team has been notified and is working on a fix."
+         *
+         *   Reading them also found CooperativeErrorBoundary with no
+         *   NEXT_REDIRECT handling of any kind, where the other three both skip
+         *   the log and re-throw from render. Latent — its one subtree navigates
+         *   with router.replace, which does not throw — and recorded as latent.
          */
-        expect(ledgerVerdict(unreached().length, 84)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 81)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
