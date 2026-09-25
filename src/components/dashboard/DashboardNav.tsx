@@ -31,6 +31,7 @@ import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 import { usePolling } from "@/hooks/usePolling";
 import { useNavSummary } from "@/contexts/NavSummaryContext";
+import { isInWaveProgramme, waveDestinationFor, type WaveDestination } from "@/lib/wave-access";
 
 interface NavItem {
     label: string;
@@ -43,6 +44,14 @@ interface NavItem {
  * Returns the label + href for the user's primary module dashboard link
  * based on their roles — so approved users can jump straight to their module.
  */
+/** What the nav calls each destination — #929. */
+const WAVE_NAV_LABEL: Record<WaveDestination, string> = {
+    "/wave/dashboard": "WAVE Dashboard",
+    "/wave/application/review-pending": "WAVE (Pending)",
+    "/wave/application": "WAVE (Changes requested)",
+    "/wave/landing": "WAVE Program",
+};
+
 function getModuleLinks(roles: UserRole[], serviceRegs: any, gender?: string): { label: string; href: string; icon: React.ElementType }[] {
     const links: { label: string; href: string; icon: React.ElementType }[] = [];
 
@@ -54,17 +63,33 @@ function getModuleLinks(roles: UserRole[], serviceRegs: any, gender?: string): {
 
     // WAVE is visible to any female user (not male)
     if (!isMale) {
-        const waveStatus = serviceRegs?.wave?.status;
-        const hasWaveAccess = roles.includes("wave_participant") || waveStatus === "approved" || waveStatus === "active";
-        const isWavePending = waveStatus === "pending" || waveStatus === "under_review" || waveStatus === "pending_review";
-        
-        if (hasWaveAccess) {
-            links.push({ label: "WAVE Dashboard", href: "/wave/dashboard", icon: Sparkles });
-        } else if (isWavePending) {
-            links.push({ label: "WAVE (Pending)", href: "/wave/application/review-pending", icon: Sparkles });
-        } else {
-            links.push({ label: "WAVE Program", href: "/wave/application", icon: Sparkles });
-        }
+        /*
+         *   #929 — THE SAME RULE THE FRONT DOOR USES.
+         *
+         *   This was the third hand-written copy of the status list, and the
+         *   only one that happened to land a revision_required applicant
+         *   somewhere useful — through its ELSE branch, labelled "WAVE Program"
+         *   as though she had never applied. Now the destination is the shared
+         *   rule's and only the label is this component's.
+         *
+         *   `pending_review` left with it: measured across every writer of
+         *   serviceRegistrations.wave.status, nothing has ever written that
+         *   spelling — it belongs to export applications and to overpayments.
+         *   It is dropped rather than added to the shared list, because that
+         *   list also composes the middleware gate and widening a gate for a
+         *   value nothing writes is a permission granted on a guess.
+         */
+        const destination = waveDestinationFor({
+            roles: roles as string[],
+            waveRegStatus: serviceRegs?.wave?.status ?? null,
+        });
+
+        //   An account with no live registration keeps the call to action it
+        //   always had — the nav is where somebody JOINS from, so sending them
+        //   through the marketing page would add a hop to the common case.
+        const label = WAVE_NAV_LABEL[destination];
+        const href = destination === "/wave/landing" ? "/wave/application" : destination;
+        links.push({ label, href, icon: Sparkles });
     }
 
     if ((roles.includes("academy_participant") || serviceRegs?.academy?.status === 'approved') && isApprovedOrPending('academy')) {
@@ -159,8 +184,13 @@ export default function DashboardNav() {
 
     const isMarketplaceApproved = (roles.includes("buyer") || roles.includes("seller") || serviceRegs?.marketplace?.status === 'approved');
     const isFarmNationApproved  = (roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor") || serviceRegs?.['farm-nation']?.status === 'approved' || serviceRegs?.farmNation?.status === 'approved');
-    const isWaveOrAcademyApproved = (roles.includes("wave_participant") || serviceRegs?.wave?.status === 'approved') || 
-                                    (roles.includes("academy_participant") || serviceRegs?.academy?.status === 'approved');
+    //   #929 — the wave half asks the shared rule. It checked `approved` alone,
+    //   so a legacy row carrying `active` lost these nav items while every
+    //   server path admitted her. The academy half is that module's own.
+    const isWaveOrAcademyApproved = isInWaveProgramme({
+        roles: roles as string[],
+        waveRegStatus: serviceRegs?.wave?.status ?? null,
+    }) || (roles.includes("academy_participant") || serviceRegs?.academy?.status === 'approved');
 
     const isMarketplaceUser = isMarketplaceApproved;
     const isFarmNationUser = isFarmNationApproved;

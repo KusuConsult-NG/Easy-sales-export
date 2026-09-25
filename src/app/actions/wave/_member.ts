@@ -14,6 +14,7 @@ import { requireSession } from "@/lib/session-guard";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { isInWaveProgramme } from "@/lib/wave-access";
 
 /**
  * Check if current user is enrolled in WAVE
@@ -41,9 +42,24 @@ export async function checkWaveMembershipAction(): Promise<ActionResponse<{ enro
             // Auto-Healing: If user has role but no doc, create/reactivate it
             // This handles cases where registration succeeded (role assigned) but doc creation failed
             // or environment mismatch caused data loss
-            const hasRole = session.user.roles?.some((r: string) => r === "wave_participant" || r === "wave_member") ||
-                            (session.user as any).serviceRegistrations?.wave?.status === "approved" ||
-                            (session.user as any).serviceRegistrations?.wave?.status === "enrolled";
+            /*
+             *   #929 — THE SHARED IN-PROGRAMME LIST, not a fourth copy.
+             *
+             *   This read `approved || enrolled`. Swept across every writer of
+             *   serviceRegistrations.wave.status, nothing has ever written
+             *   "enrolled" — so that disjunct could not fire — while "active",
+             *   which a legacy row can carry, was missing. The heal exists for
+             *   exactly the member whose WAVE_MEMBERS row failed to be created,
+             *   and it was declining to heal one shape of her.
+             *
+             *   The `wave_member` role stays spelled out here: it is this heal's
+             *   own legacy spelling, not part of the platform's access rule.
+             */
+            const hasRole = session.user.roles?.some((r: string) => r === "wave_member")
+                || isInWaveProgramme({
+                    roles: session.user.roles as string[] | undefined,
+                    waveRegStatus: (session.user as any).serviceRegistrations?.wave?.status ?? null,
+                });
 
             if (hasRole) {
                 logger.info(`[Auto-Heal] Creating missing wave_members doc for ${session.user.id}`);
