@@ -284,8 +284,29 @@ describe('how much of the application no test has named', () => {
          *   NEXT_REDIRECT handling of any kind, where the other three both skip
          *   the log and re-throw from render. Latent — its one subtree navigates
          *   with router.replace, which does not throw — and recorded as latent.
+         *
+         *   Then 81 → 80, on /marketplace/success. #908: it read `?reference`
+         *   and rendered "Payment Successful! — Your order has been placed and
+         *   payment confirmed", with the caller's own string printed back as the
+         *   platform's Transaction Reference. It called nothing.
+         *
+         *   THE SEVERITY, MEASURED. Nothing links there — every Paystack
+         *   callback the platform hands out is `{module}/payment/callback` — so
+         *   it is not "a buyer whose payment failed is told it succeeded". It is
+         *   a page on this domain, in this branding, that tells anybody their
+         *   payment is confirmed and shows any reference they choose: a
+         *   proof-of-payment screenshot to send a seller, which is the class #262
+         *   worked. Now a redirect to the callback, carrying the reference so a
+         *   real one gets verified.
+         *
+         *   A sweep of every screen in src/app says it was the only one: the
+         *   others either ask the server or render a stored payment status off a
+         *   row. That sweep is the ratchet in its suite, written around the SOURCE
+         *   of the claim rather than the sentence — two earlier versions produced
+         *   false positives and each exemption is somewhere a real instance can
+         *   hide.
          */
-        expect(ledgerVerdict(unreached().length, 81)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 80)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
