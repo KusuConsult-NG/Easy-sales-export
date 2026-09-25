@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Component, ReactNode } from 'react';
+import { reportBoundaryError } from "@/components/shared/useBoundaryReport";
 import { RotateCw, AlertTriangle, Home, RefreshCcw } from 'lucide-react';
 import Link from 'next/link';
 import { isStaleDeploymentError, consumeReloadBudget } from '@/lib/stale-deployment-recovery';
@@ -61,8 +62,19 @@ export class MarketplaceErrorBoundary extends Component<Props, State> {
         }
 
         // Log to monitoring service if available
+        /*
+         *   #907 AND SOMEBODY IS TOLD. This ended in console.error, and a class
+         *   boundary is NEARER than every route boundary #904 wired — see
+         *   reportBoundaryError for which layouts this one wraps.
+         *
+         *   AFTER the stale-deployment branch above, deliberately: a
+         *   ChunkLoadError after a deploy is a browser holding an old bundle,
+         *   not a defect, and reporting it would fill the feed with every
+         *   deploy. And NEXT_REDIRECT is not an error at all — Next throws it to
+         *   move the router, and render() re-throws it on purpose.
+         */
         if (!error.message.startsWith('NEXT_REDIRECT')) {
-            console.error('[MarketplaceErrorBoundary] Caught error:', error, errorInfo);
+            reportBoundaryError(error, "component/MarketplaceErrorBoundary", errorInfo);
         }
     }
 

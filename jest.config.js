@@ -135,18 +135,31 @@ const customJestConfig = {
     coverageThreshold: {
         global: {
             // Re-set against the WIDER denominator above (#436), and against
-            // the MEASURED figure rather than an aspiration: statements 60.62,
-            // branches 50.72, functions 56.06, lines 61.48.
+            // the MEASURED figure rather than an aspiration.
             //
-            // One to two points of headroom, deliberately. My first pass put
+            // One to two points of headroom, deliberately. An earlier pass put
             // functions at 56 against a real 56.06 — a gate that a single new
             // uncovered function turns red for no defect. A floor that flaps
-            // gets raised by whoever it inconveniences, which is how #74's
+            // gets lowered by whoever it inconveniences, which is how #74's
             // 70%-against-32% happened.
-            branches: 49,
-            functions: 54,
-            lines: 60,
-            statements: 59,
+            //
+            // RE-MEASURED 2026-09-24, and the slack is the finding. These were
+            // 49/54/60/59, set against 50.72/56.06/61.48/60.62. The suite has
+            // grown by hundreds of tests since and the real figures are now
+            //
+            //     statements 71.02   branches 60.20
+            //     functions  69.88   lines    72.14
+            //
+            // so the gate had drifted eleven to sixteen points below what the
+            // suite actually achieves. A threshold that far under the truth
+            // passes while a whole module's tests are deleted, which is the
+            // "reads as a gate and gates nothing" state #74 found — arrived at
+            // the slow way, by the floor standing still while the work moved.
+            // Re-set with the same one-to-two points of headroom.
+            branches: 58,
+            functions: 68,
+            lines: 71,
+            statements: 69,
         },
     },
     testMatch: [

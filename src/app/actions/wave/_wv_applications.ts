@@ -1,6 +1,7 @@
 "use server";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { waveApplicationSchema, waveFieldRefusal } from "@/lib/wave-application-fields";
 import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -32,69 +33,21 @@ import { afterResponse } from "@/lib/after-response";
 import { WAVE_FULL_NAME, WAVE_FORMAL_NAME } from "@/lib/wave-program";
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
-const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
-    surname: strictNameSchema,
-    firstName: strictNameSchema,
-    otherNames: strictNameSchema.optional().or(z.literal("")),
-    dateOfBirth: z.string(),
-    age: z.number().min(18).max(100),
-    phone: strictPhoneSchema,
-    alternativePhone: strictPhoneSchema.optional().or(z.literal("")),
-    email: strictEmailSchema.optional().or(z.literal("")),
-    residentialAddress: z.string().min(5, "Residential address is required"),
-    stateOfOrigin: z.string().min(2, "State of origin is required"),
-    lgaOfOrigin: z.string().min(2, "LGA of origin is required"),
-    stateOfResidence: z.string().min(2, "State of residence is required"),
-    lgaOfResidence: z.string().min(2, "LGA of residence is required"),
-    maritalStatus: z.enum(["single", "married", "widowed", "divorced", ""]),
-    nextOfKinName: z.string().min(2, "Next of kin name is required"),
-    nextOfKinPhone: z.string().min(10, "Next of kin phone is required"),
-    nextOfKinRelationship: z.string().min(2, "Relationship is required"),
+/*
+ *   #905 THE SCHEMA MOVED TO lib/wave-application-fields, UNCHANGED.
+ *
+ *   It has to be readable from the FORM as well as from here. The form carried
+ *   a hand-written pre-submission guard covering eleven of the thirty-odd
+ *   fields this refuses on — the right idea (catch a half-restored draft before
+ *   the server sees it, and send her back to the step) applied to a third of
+ *   the list — and a schema that only the server can read is how that third
+ *   stays a third.
+ *
+ *   A "use server" module exports only async functions to its callers, so the
+ *   const could not be imported. Nothing about it changed in the move; the
+ *   suite beside it parses the same fixtures.
+ */
 
-    // SECTION B: National Identity & Civic Status
-    //   #501 The WAVE application had no check on either field.
-    //   #774 Mandatory, at the owner's instruction. Still no external check.
-    nin: requiredNationalIdField('NIN'),
-    //   #820 Optional, per the owner. A value that IS supplied is still checked.
-    votersCardNumber: optionalVotersCardField(),
-    pollingUnit: z.string().optional(),
-    ward: z.string().optional(),
-    yearOfVoterRegistration: z.string().optional(),
-    votedInLastElection: z.boolean().optional(),
-
-    // SECTION C: Socio-Economic Profile
-    highestEducation: z.enum(["none", "primary", "secondary", "tertiary", "vocational", ""]),
-    currentOccupation: z.string().min(2, "Current occupation is required"),
-    averageMonthlyIncome: z.enum(["below_50k", "50k_100k", "100k_250k", "above_250k", ""]),
-    involvedInAgriculture: z.boolean(),
-    agricultureTypes: z.array(z.enum(["farming", "processing", "trading", "export", "logistics"])).optional(),
-
-    // SECTION D: Agricultural Interest & Value Chain
-    valueChainAreas: z.array(z.enum(["crop_production", "livestock", "processing_packaging", "aggregation_trading", "export_market"])),
-    preferredCommodities: z.array(z.enum(["rice", "maize", "sesame", "soybeans", "ginger", "cassava", "vegetables", "other"])),
-    preferredCommodityOther: z.string().optional(),
-    hasAccessToFarmland: z.boolean(),
-    farmlandHectares: z.number().optional(),
-    needsFarmlandAccess: z.boolean().optional(),
-
-    // SECTION E: Financial & Cooperative Details
-    hasBankAccount: z.boolean().optional(),
-    bankName: z.string().min(2, "Bank name is required"),
-    accountNumber: z.string().min(10, "Valid 10-digit account number required"),
-    bvn: requiredNationalIdField('BVN'),
-    isMemberOfCooperative: z.boolean(),
-    cooperativeName: z.string().optional(),
-    willingToJoinCooperative: z.boolean(),
-
-    // SECTION F: Training, Support & Commitment
-    supportNeeded: z.array(z.enum(["training", "inputs", "mechanization", "finance", "market_access"])),
-    willingToUndergoTraining: z.boolean(),
-    willingToComplyWithStandards: z.boolean(),
-    willingToParticipateInME: z.boolean(),
-
-    // SECTION G: Declaration & Consent
-    declarationAccepted: z.boolean(),
-    consentGiven: z.boolean() });
 
 
 /**
@@ -263,7 +216,21 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         // Validate with Zod
         const validation = waveApplicationSchema.safeParse(applicationData);
         if (!validation.success) {
-            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null };
+            /*
+             *   #905 WHICH FIELD, AND WHICH SECTION.
+             *
+             *   This returned `issues[0].message` and dropped `issues[0].path`,
+             *   which holds the field's name. Fourteen of this schema's required
+             *   fields carry no message of their own, so the applicant reached
+             *   the end of seven sections and was shown "Too small: expected
+             *   number to be >=18" — measured, not supposed; see
+             *   lib/wave-application-fields for the five worst.
+             */
+            return {
+                success: false as const,
+                error: waveFieldRefusal(validation.error.issues[0]),
+                data: null,
+            };
         }
 
         const validatedData = validation.data;
@@ -947,9 +914,16 @@ async function _resubmitWaveApplicationAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
+        //   #905 The same sentence as the enrolment door above — the two had
+        //   the same line and would otherwise drift, which is the shape #494
+        //   found on findConflictingApplication in this very file.
         const validation = waveApplicationSchema.safeParse(applicationData);
         if (!validation.success) {
-            return { success: false as const, error: validation.error.issues[0]?.message || 'Validation failed', data: null };
+            return {
+                success: false as const,
+                error: waveFieldRefusal(validation.error.issues[0]),
+                data: null,
+            };
         }
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();

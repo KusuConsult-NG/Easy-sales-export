@@ -4,13 +4,61 @@ export const dynamic = 'force-dynamic'
 import { MetadataRoute } from 'next'
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ROOT_ORIGIN } from "@/lib/canonical-host";
+import { HUB_MODULES } from "@/config/modules.config";
+import { isPublicPath } from "@/lib/route-manifest";
 
-const BASE_URL = 'https://easysalesexport.com'
-const ACADEMY_URL = 'https://easysalesacademy.com'
-const EXPORT_URL = 'https://easysalesexportng.com'
-const FARM_NATION_URL = 'https://farmnation.ng'
-const MARKETPLACE_URL = 'https://marketplace.easysalesexport.com'
-const WAVE_URL = 'https://wave.ng'
+/*
+ *   #902 THE SITEMAP ADVERTISED EIGHT HUNDRED REDIRECTS.
+ *
+ *   Every url below — the ten static routes, and one per approved product,
+ *   verified land listing and published course — was built on the APEX, which
+ *   this platform's own middleware 301s to `www` for the session reason in
+ *   lib/canonical-host. A crawler was handed a redirect for every page the
+ *   site wanted indexed, and the canonical tags on those pages named the same
+ *   redirecting host.
+ *
+ *   The five OTHER domains below are unchanged and are NOT the same case:
+ *   their canonical host is the apex, by modules.config's own declaration, and
+ *   the middleware sends www -> apex for them. See MODULE_WWW_REDIRECTS.
+ */
+const BASE_URL = ROOT_ORIGIN
+/**
+ * The module domains, DERIVED — #902.
+ *
+ *   TWO OF THE FIVE HAND-WRITTEN ONES WERE NOT DOMAINS THIS PLATFORM SERVES,
+ *   and one module was missing entirely. Measured against modules.config, which
+ *   is what middleware's DOMAIN_MAP is built from:
+ *
+ *       wave.ng                          config says waveprogramme.com
+ *       marketplace.easysalesexport.com  config says easysalesmarket.com
+ *       easysalescooperative.com         in the config, ABSENT from the sitemap
+ *
+ *   Neither of the first two is in DOMAIN_MAP, so the middleware cannot map
+ *   either to a module — a crawler following them does not reach the WAVE or
+ *   Marketplace site at all. And the cooperative domain, which IS served, was
+ *   never offered for indexing.
+ *
+ *   #454 recorded exactly this failure mode when it deleted an APEX_DOMAINS
+ *   constant: "a list named APEX_DOMAINS is exactly the thing somebody reaches
+ *   for when adding a redirect, and it would have been silently out of date."
+ *   This was that list, and it was silently out of date. So it is derived from
+ *   the same config the middleware routes by, and the module added next year is
+ *   covered without anybody remembering.
+ *
+ *   FILTERED BY WHETHER THE MODULE HAS A PUBLIC LANDING PAGE. HUB_MODULES also
+ *   holds FINANCE at finance.easysalesexport.com, and there is no `src/app/finance`
+ *   in this application at all — offering it for indexing would publish a 404.
+ *   isPublicPath is the platform's own answer to "may a stranger open this".
+ */
+const MODULE_URLS: MetadataRoute.Sitemap = Object.values(HUB_MODULES)
+    .filter((mod) => isPublicPath(`/${mod.slug}`))
+    .map((mod) => ({
+        url: `https://${mod.domain}`,
+        lastModified: new Date('2026-02-01'),
+        changeFrequency: 'weekly' as const,
+        priority: 0.9,
+    }))
 
 // Static public routes (no auth required)
 const STATIC_ROUTES: MetadataRoute.Sitemap = [
@@ -23,12 +71,8 @@ const STATIC_ROUTES: MetadataRoute.Sitemap = [
     { url: `${BASE_URL}/farm-nation`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE_URL}/academy`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE_URL}/export`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.8 },
-    // Custom domain canonical pages
-    { url: `${ACADEMY_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: `${EXPORT_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: `${FARM_NATION_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.9 },
-    { url: `${MARKETPLACE_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${WAVE_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.8 },
+    // Custom domain canonical pages — derived, see MODULE_URLS.
+    ...MODULE_URLS,
 ]
 
 export const revalidate = 600 // Regenerate sitemap every 10 minutes (was 1 hour)

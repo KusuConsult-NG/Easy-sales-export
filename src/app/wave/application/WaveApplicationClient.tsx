@@ -25,6 +25,7 @@ import {
     CheckCircle,
     Loader2,
 } from "lucide-react";
+import { waveApplicationSchema, waveFieldRefusal, waveFieldStep } from "@/lib/wave-application-fields";
 import { submitMultiStepWaveApplicationAction, getWaveApplicationAction, resubmitWaveApplicationAction, checkWaveStatusAction, checkWaveAccessAction } from "@/app/actions/wave";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { useToast } from "@/contexts/ToastContext";
@@ -442,42 +443,37 @@ export default function WaveApplicationClient(
     };
 
     async function handleSubmit() {
-        // ── Pre-submission validation guard ───────────────────────────────────
-        // Validates critical fields before hitting the server. Catches cases where
-        // localStorage-restored data is empty or too short (Zod min-2 rule).
-        const missingPersonal =
-            !formData.surname.trim() || formData.surname.trim().length < 2 ||
-            !formData.firstName.trim() || formData.firstName.trim().length < 2 ||
-            !formData.phone.trim() ||
-            !formData.dateOfBirth ||
-            !formData.stateOfOrigin ||
-            !formData.stateOfResidence ||
-            !formData.maritalStatus;
+        /*
+         *   #905 PRE-SUBMISSION, AGAINST THE SCHEMA THE SERVER WILL USE.
+         *
+         *   This was a hand-written guard over ELEVEN of the thirty-odd fields
+         *   the server refuses on — surname, firstName, phone, dateOfBirth, the
+         *   two states, maritalStatus, the two next-of-kin fields, bankName and
+         *   accountNumber. The idea was right and is kept: a draft restored from
+         *   localStorage can be half-empty, and catching that here sends her
+         *   back to the step instead of to a refusal.
+         *
+         *   What it could not catch was the other two thirds — lgaOfOrigin,
+         *   lgaOfResidence, residentialAddress, nextOfKinRelationship, nin, bvn,
+         *   currentOccupation, age, and eleven booleans and arrays. Those
+         *   reached the server, and until this commit the server answered with
+         *   Zod's type error and no field name: "Too small: expected number to
+         *   be >=18" after seven sections.
+         *
+         *   The schema moved to lib/wave-application-fields so this can parse
+         *   the very object the action will parse. One list, and the sentence
+         *   the applicant reads is the same either side.
+         */
+        const precheck = waveApplicationSchema.safeParse(formData);
+        if (!precheck.success) {
+            const issue = precheck.error.issues[0];
+            showToast(waveFieldRefusal(issue), "error");
 
-        const missingNok =
-            !formData.nextOfKinName.trim() || formData.nextOfKinName.trim().length < 2 ||
-            !formData.nextOfKinPhone.trim();
-
-        const missingFinancial =
-            !formData.bankName.trim() || formData.bankName.trim().length < 2 ||
-            !formData.accountNumber.trim();
-
-        if (missingPersonal) {
-            showToast("Personal details are incomplete — please review Section A.", "error");
-            goToStep(0);
+            //   The step that holds the field, not a guessed section.
+            const step = waveFieldStep(issue);
+            if (step !== null) goToStep(step);
             return;
         }
-        if (missingNok) {
-            showToast("Next of kin information is incomplete — please review Section A.", "error");
-            goToStep(0);
-            return;
-        }
-        if (missingFinancial) {
-            showToast("Financial details are incomplete — please review Section E.", "error");
-            goToStep(4);
-            return;
-        }
-        // ─────────────────────────────────────────────────────────────────────
 
         setSubmitting(true);
         try {

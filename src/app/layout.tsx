@@ -1,5 +1,6 @@
 
 import { headers } from "next/headers";
+import { ROOT_ORIGIN, canonicalUrl } from "@/lib/canonical-host";
 import { Inter } from "next/font/google";
 import { NONCE_HEADER } from "@/lib/csp";
 import "./globals.css";
@@ -47,14 +48,15 @@ export const metadata: Metadata = {
   keywords: ["agricultural export", "Nigeria", "yam export", "sesame seeds", "hibiscus", "export platform", "Easy Sales Export", "cooperative", "farm nation", "academy"],
   authors: [{ name: "KusuConsult-NG" }],
   creator: "KusuConsult-NG",
-  metadataBase: new URL("https://easysalesexport.com"),
+  //   #902 The host the middleware actually serves — see lib/canonical-host.
+  metadataBase: new URL(ROOT_ORIGIN),
   alternates: {
-    canonical: "https://easysalesexport.com",
+    canonical: canonicalUrl("/"),
   },
   openGraph: {
     type: "website",
     locale: "en_NG",
-    url: "https://easysalesexport.com",
+    url: canonicalUrl("/"),
     title: "Easy Sales Export - Agricultural Export Platform",
     description: "Start your agricultural export journey today. Managed windows, marketplace, and academy.",
     siteName: "Easy Sales Export",
@@ -104,8 +106,10 @@ export default async function RootLayout({
     "@type": "Organization",
     "name": "Easy Sales Export",
     "alternateName": "ESE",
-    "url": "https://easysalesexport.com",
-    "logo": "https://easysalesexport.com/images/logo.jpg",
+    //   #902 The served host — see lib/canonical-host. A structured-data `url`
+    //   that 301s is the same disagreement the canonical tags carried.
+    "url": ROOT_ORIGIN,
+    "logo": canonicalUrl("/images/logo.jpg"),
     "description": "Nigeria's premier platform for agricultural export management. Connecting Nigerian exporters with international markets for yam, sesame seeds, and dried hibiscus.",
     "address": {
       "@type": "PostalAddress",
@@ -129,12 +133,12 @@ export default async function RootLayout({
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": "Easy Sales Export",
-    "url": "https://easysalesexport.com",
+    "url": ROOT_ORIGIN,
     "potentialAction": {
       "@type": "SearchAction",
       "target": {
         "@type": "EntryPoint",
-        "urlTemplate": "https://easysalesexport.com/marketplace/products?q={search_term_string}"
+        "urlTemplate": canonicalUrl("/marketplace/products?q={search_term_string}")
       },
       "query-input": "required name=search_term_string"
     }

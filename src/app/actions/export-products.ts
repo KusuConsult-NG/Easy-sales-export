@@ -19,6 +19,49 @@ export async function submitExportProductAction(productData: any) { try {
         if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };
         }
 
+        /*
+         *   #906 THIS DOOR ASKED FOR A SESSION AND NOTHING ELSE.
+         *
+         *   #486 found exactly this on the three land-listing writers and stated
+         *   the rule it settled on: "THE GATE IS THE MODULE'S OWN ACCESS RULE."
+         *   It did not visit Export, and this is the door it would have found —
+         *   the only member-facing write in the module with no module check at
+         *   all. (submitExportOnboardingAction has none either, correctly: that
+         *   is how a person ASKS for access.)
+         *
+         *   WHAT THAT MEANT. Any signed-in account on the platform could put a
+         *   listing into the export catalogue queue an admin works: an academy
+         *   student, a marketplace buyer, somebody who has never opened Export.
+         *   The FORM is behind /export/(app), whose layout redirects anybody
+         *   `checkModuleAccess` refuses to /export/onboarding — but a server
+         *   action is callable directly, which is the reasoning #803 wrote down
+         *   on the land door in this same audit: "whatever the form does
+         *   client-side is not a guard."
+         *
+         *   THE SAME CHECK THE LAYOUT MAKES, and deliberately not a stricter
+         *   one. `checkModuleAccess(id, roles, "export")` is what decides
+         *   whether this person may be on the screen this form belongs to;
+         *   requiring an APPROVED export seller on top would refuse people the
+         *   platform has already admitted, and the listing lands `status:
+         *   pending` for an admin to approve either way.
+         *
+         *   It reads the database rather than the token, so a revoked
+         *   registration is refused now rather than in eight hours.
+         */
+        const { checkModuleAccess } = await import("@/lib/module-access-check");
+        const mayList = await checkModuleAccess(
+            session.user.id,
+            (session.user.roles ?? []) as any,
+            "export",
+        );
+        if (!mayList) {
+            return {
+                success: false as const,
+                error: "You need an Export account to list a product. Complete Export onboarding first.",
+                data: null,
+            };
+        }
+
         const dataToSave = { ...productData };
         delete dataToSave.id;
 

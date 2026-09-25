@@ -124,6 +124,21 @@ jest.mock('@/lib/system-settings', () => ({
 }));
 jest.mock('@/lib/server-utils', () => ({ getBaseUrl: jest.fn(async () => 'https://test.local') }));
 jest.mock('@/lib/admin-notifications', () => ({ notifyAdmins: jest.fn() }));
+/*
+ *   #906 THE EXPORT MODULE GATE, HELD OPEN.
+ *
+ *   submitExportProductAction now asks checkModuleAccess before it writes: the
+ *   door had a session check and nothing else, so any signed-in account could
+ *   put a listing in the queue an admin works. The #582 cases below are about
+ *   the STOCK FIELD and are held past that gate; the gate has its own suite.
+ *
+ *   Mocked rather than seeded because the fakes in this file answer every read
+ *   with a catalogue document, including the user row the real check loads.
+ */
+const mockModuleAccess = jest.fn(async () => true) as jest.Mock<any>;
+jest.mock('@/lib/module-access-check', () => ({
+    checkModuleAccess: (...a: any[]) => mockModuleAccess(...a),
+}));
 jest.mock('@/contexts/ToastContext', () => ({
     useToast: () => ({ showToast: jest.fn() }),
 }));
@@ -316,6 +331,11 @@ describe('#582 — the checkout records and respects the stock', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#582 — a blank stock is stored as no stock', () => {
+    beforeEach(() => {
+        //   #906 Past the module gate — see the mock at the top of this file.
+        mockModuleAccess.mockResolvedValue(true);
+    });
+
     async function submit(overrides: Record<string, unknown>) {
         const { submitExportProductAction } = await import('@/app/actions/export-products');
         return submitExportProductAction({ name: 'Cocoa', pricePerMT: 2_500, ...overrides }) as any;
@@ -342,10 +362,17 @@ describe('#582 — a blank stock is stored as no stock', () => {
         expect(written()[EXPORT_STOCK_FIELD]).toBe(250);
     });
 
+    /*
+     *   #906 AND THE REFUSAL NAMES ITS RULE. Once this door grew a module gate,
+     *   `success: false` stopped identifying which rule refused — a gate that
+     *   refused everyone would have satisfied this case while the stock rule
+     *   was gone.
+     */
     it('AND A NEGATIVE ONE IS STILL REFUSED', async () => {
         const r = await submit({ availableQuantityMT: -50 });
 
         expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/quantity/i);
         expect((global as any).mockFirestoreAdd).not.toHaveBeenCalled();
     });
 });

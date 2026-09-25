@@ -27,7 +27,23 @@ export async function GET(request: NextRequest) {
             return NextResponse.redirect(new URL(`/dashboard/wallet?status=failed&error=${errorMsg}`, request.nextUrl.origin));
         }
     } catch (err: any) {
+        /*
+         *   THE EXCEPTION'S OWN MESSAGE USED TO GO INTO THE URL.
+         *
+         *   `encodeURIComponent(err.message)`, reflected into the redirect and
+         *   rendered on the wallet page. The two messages above are the
+         *   action's own, written to be read by a member; this one is whatever
+         *   threw — a database error, a fetch failure, a Paystack client
+         *   message — and this route takes its reference from the query string
+         *   with no session, so anyone can reach it.
+         *
+         *   Encoding stops it being script; it does not stop it being a
+         *   description of the inside of the server, handed to whoever asked.
+         *   The detail goes to the log, where somebody can act on it, and the
+         *   member gets the one sentence that is true for every case.
+         */
         logger.error("[Wallet Verify API] Uncaught handler error:", err);
-        return NextResponse.redirect(new URL(`/dashboard/wallet?status=failed&error=${encodeURIComponent(err.message || "Internal error")}`, request.nextUrl.origin));
+        const safe = encodeURIComponent("We could not confirm that payment. Please check your wallet.");
+        return NextResponse.redirect(new URL(`/dashboard/wallet?status=failed&error=${safe}`, request.nextUrl.origin));
     }
 }

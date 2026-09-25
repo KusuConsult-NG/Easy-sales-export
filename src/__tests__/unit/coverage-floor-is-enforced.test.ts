@@ -53,12 +53,24 @@ function source(rel: string): string {
 }
 
 /**
- * The floor as measured on 2026-08-19, after the audit.
+ * The floor as measured on 2026-09-24, after the audit.
  *
  * These may only go UP. A threshold below its entry here means somebody lowered
  * the bar, which is the thing the old aspirational numbers made invisible.
+ *
+ *   RAISED FROM { branches: 20, functions: 27, lines: 32, statements: 31 },
+ *   recorded on 2026-08-19 — and the gap is the point. By 2026-09-24 the
+ *   declared thresholds were 49/54/60/59 and the real figures were
+ *   60.20/69.88/72.14/71.02, so this record permitted dropping the gate to a
+ *   THIRD of what the suite achieves, and the gate itself sat eleven to
+ *   sixteen points under it.
+ *
+ *   Neither was anybody lowering the bar. It is the slower version of the same
+ *   failure: the floor stood still while the work moved, and a ratchet that is
+ *   not re-measured stops being one. Recorded at the declared thresholds, which
+ *   are themselves at the measured figure less a point or two.
  */
-const FLOOR = { branches: 20, functions: 27, lines: 32, statements: 31 } as const;
+const FLOOR = { branches: 58, functions: 68, lines: 71, statements: 69 } as const;
 
 function declaredThresholds(): Record<string, number> {
     const cfg = source('jest.config.js');

@@ -3,7 +3,7 @@ import { html } from "@/lib/utils";
 import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { recordAdminAction } from "@/lib/audit-log";
 import { sendEmailNotification } from "@/lib/email-notifications";
@@ -136,15 +136,31 @@ function buildEmailHtml(name: string | null, type: string, amount: number, statu
 
 export async function POST(req: NextRequest) {
     try {
-        // ── Auth guard ──
-        const session = (await requireSession()).session;
-        // `!session?.user ||` added with the audit record below: the guard
-        // relied on hasAdminPermission(undefined) returning false, which is
-        // true today but leaves `session` un-narrowed for everything after it.
-        // Every other admin route in this tree checks the session explicitly.
-        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:reconcile")) {
+        /*
+         *   ── Auth guard ──
+         *
+         *   THE ROLES COME FROM THE DATABASE, not from the session token.
+         *
+         *   This read `hasAdminPermission(session.user.roles, ...)` — #356's
+         *   class, where a JWT role claim keeps its value for up to eight hours
+         *   after the database loses it. What this route does with that access
+         *   is SEND EMAILS to members about money the platform owes them, in
+         *   batches, over its own branded template. A finance admin whose
+         *   access had been revoked could go on sending them for the rest of
+         *   their session, and every one would arrive looking official.
+         *
+         *   requireAdmin re-fetches the roles and fails closed if it cannot
+         *   reach the database — the helper #356 built for exactly this.
+         */
+        const gate = await requireAdmin("finance:reconcile");
+        if ("error" in gate) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
+
+        //   The session is still read, for the ACTOR'S ADDRESS stamped on each
+        //   recovery record below. Authorisation is the gate above; this is
+        //   only who to name.
+        const session = (await requireSession()).session;
 
         const body = await req.json();
         const { references, dryRun = false }: { references: string[]; dryRun?: boolean } = body;
@@ -244,7 +260,8 @@ export async function POST(req: NextRequest) {
 
         await recordAdminAction({
             action: 'recovery_emails_sent',
-            userId: session.user.id,
+            //   From the GATE, which re-read it, rather than from the token.
+            userId: gate.userId,
             targetType: 'payment_recovery',
             metadata: { sent, skipped, dryRun },
         });

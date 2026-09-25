@@ -1,4 +1,5 @@
 import { ArrowRight, ShoppingCart, Star, TrendingUp, Shield, Package, CheckCircle, Home } from "lucide-react";
+import { canonicalUrl } from "@/lib/canonical-host";
 import { logger } from '@/lib/logger';
 import Link from "next/link";
 import { getRecommendedProductsAction, getMarketplaceStatsAction } from "@/app/actions/marketplace";
@@ -12,11 +13,12 @@ import { numberOrZero } from "@/lib/numbers";
 export const metadata: Metadata = {
     title: "Easy Market Nigeria — Buy & Sell Agricultural Products",
     description: "Connect with verified buyers and sellers across Nigeria. Trade premium yam, sesame seeds, hibiscus and more with secure escrow protection.",
-    alternates: { canonical: "https://easysalesexport.com/marketplace" },
+        //   #902 The host the middleware actually serves — see lib/canonical-host.
+    alternates: { canonical: canonicalUrl("/marketplace") },
     openGraph: {
         title: "Easy Market Nigeria — Agricultural Marketplace",
         description: "Nigeria's largest agricultural marketplace. Buy or sell premium commodities with verified sellers and escrow-protected payments.",
-        url: "https://easysalesexport.com/marketplace",
+        url: canonicalUrl("/marketplace"),
         images: [{ url: "/images/og-banner.png", width: 1200, height: 630, alt: "Easy Market Nigeria" }],
     },
 };

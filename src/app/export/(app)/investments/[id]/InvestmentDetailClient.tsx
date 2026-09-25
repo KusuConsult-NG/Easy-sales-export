@@ -8,6 +8,8 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { getMyExportInvestmentsAction } from "@/app/actions/export";
 import { formatDate } from "@/lib/utils";
 import { humaniseCapitalised } from "@/lib/humanise";
+//   One rule for capital, return and profit — see lib/export-returns.
+import { investmentReturn, investmentProfit, roiPercent } from "@/lib/export-returns";
 
 type InvestmentSlot = {
     id: string;
@@ -77,7 +79,18 @@ export default function InvestmentDetailClient({ investmentId, initial = null }:
         );
     }
 
-    const totalPayout = investment.amount + (investment.expectedReturn || 0);
+    /*
+     *   THE CAPITAL WAS COUNTED TWICE.
+     *
+     *   This was `investment.amount + investment.expectedReturn`, and
+     *   `expectedReturn` is already the GROSS — both investment paths write it
+     *   as `amount * exportWindowReturnMultiplier(window)`. So a ₦100,000
+     *   investment at the platform's 20% printed ₦220,000 under the words
+     *   "Total Payout", against the ₦120,000 the escrow-release cron actually
+     *   transfers. See lib/export-returns.
+     */
+    const totalPayout = investmentReturn(investment.expectedReturn);
+    const profit = investmentProfit(investment.amount, investment.expectedReturn);
     const statusColors: Record<string, string> = {
         active: "bg-green-500",
         completed: "bg-blue-500",
@@ -103,7 +116,15 @@ export default function InvestmentDetailClient({ investmentId, initial = null }:
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <TrendingUp className="w-4 h-4" />
-                                    ROI: {investment.roi}
+                                    {/*
+                                        `investment.roi` is the label copied off
+                                        the window at purchase time — a string,
+                                        and "15-20%" on anything the admin never
+                                        set. The figure is derived from the money
+                                        actually recorded on this investment, so
+                                        it agrees with the portfolio row.
+                                      */}
+                                    ROI: {roiPercent(investment.amount, investment.expectedReturn)}%
                                 </div>
                             </div>
                         </div>
@@ -206,8 +227,8 @@ export default function InvestmentDetailClient({ investmentId, initial = null }:
                                 </div>
                                 <div className="pt-4 border-t border-slate-200 space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm text-slate-600">Expected Return</span>
-                                        <span className="text-sm font-bold text-green-600">+₦{(investment.expectedReturn || 0).toLocaleString()}</span>
+                                        <span className="text-sm text-slate-600">Expected Profit</span>
+                                        <span className="text-sm font-bold text-green-600">+₦{profit.toLocaleString()}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-slate-600">Total Payout</span>

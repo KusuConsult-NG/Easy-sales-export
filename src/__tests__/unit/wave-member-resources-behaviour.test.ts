@@ -323,11 +323,33 @@ describe('#199 — who may reach the resource library', () => {
         expect(await listResources()).toMatchObject({ success: false });
     });
 
-    it('admits an admin', async () => {
+    it('admits an admin — from the ROW, not from the session token', async () => {
+        /*
+         *   THIS ASSERTED THE STALE TOKEN, and it was right to fail when that
+         *   changed. `canAccessWaveResources` took `session.user.roles` and
+         *   handed them to isAdmin, so a revoked admin kept the members'
+         *   library for the life of their JWT — #356's class, on a gate that
+         *   was ALREADY reading the user's row three lines further down for the
+         *   Academy branch.
+         *
+         *   The admin's row is seeded now. That is the fixture the old version
+         *   was missing rather than a weakening of the test: an admin with a
+         *   row is what an admin is.
+         */
         store = installFakeDb();
         mockRequireSession.mockResolvedValue(sessionFor('admin-1', ['wave_admin']));
+        store.seed(USERS, 'admin-1', { roles: ['wave_admin'] });
         seedFor();
         expect((await listResources()).success).toBe(true);
+    });
+
+    it('AND REFUSES ONE WHOSE ROLE THE DATABASE HAS TAKEN AWAY', () => {
+        //   The other half, which nothing checked: the token still says admin.
+        store = installFakeDb();
+        mockRequireSession.mockResolvedValue(sessionFor('ex-admin', ['wave_admin']));
+        store.seed(USERS, 'ex-admin', { roles: ['general_user'] });
+        seedFor();
+        return listResources().then((r: any) => expect(r.success).toBe(false));
     });
 
     it('admits an Academy Elite member', async () => {

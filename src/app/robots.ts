@@ -1,5 +1,8 @@
 import { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
+import { ROOT_ORIGIN } from '@/lib/canonical-host'
+import { HUB_MODULES } from '@/config/modules.config'
+import { isPublicPath } from '@/lib/route-manifest'
 
 /**
  * Multi-Domain robots.txt
@@ -13,22 +16,37 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     const headersList = await headers()
     const host = headersList.get('host') ?? 'easysalesexport.com'
 
-    // Domain-specific sitemap URLs
+    /*
+     *   #902 DERIVED FROM THE CONFIG THE MIDDLEWARE ROUTES BY.
+     *
+     *   Two of the five hand-written module hosts were not hosts this platform
+     *   serves — `wave.ng` (config: waveprogramme.com) and
+     *   `marketplace.easysalesexport.com` (config: easysalesmarket.com) — so a
+     *   crawler arriving on either REAL module domain fell through to the `??`
+     *   below and was handed the HUB's sitemap. The cooperative domain was
+     *   absent altogether. See app/sitemap.ts for the full measurement and for
+     *   #454's recorded warning about exactly this kind of list.
+     *
+     *   Each module gets its own apex, plus the `www` spelling the middleware
+     *   redirects from — a crawler that lands on www should be told the sitemap
+     *   on the host it is about to be sent to, which is the mistake the hub
+     *   pair below used to make in the other direction.
+     */
     const sitemapMap: Record<string, string> = {
-        'easysalesexport.com': 'https://easysalesexport.com/sitemap.xml',
-        'www.easysalesexport.com': 'https://easysalesexport.com/sitemap.xml',
-        'easysalesacademy.com': 'https://easysalesacademy.com/sitemap.xml',
-        'www.easysalesacademy.com': 'https://easysalesacademy.com/sitemap.xml',
-        'easysalesexportng.com': 'https://easysalesexportng.com/sitemap.xml',
-        'www.easysalesexportng.com': 'https://easysalesexportng.com/sitemap.xml',
-        'farmnation.ng': 'https://farmnation.ng/sitemap.xml',
-        'www.farmnation.ng': 'https://farmnation.ng/sitemap.xml',
-        'marketplace.easysalesexport.com': 'https://marketplace.easysalesexport.com/sitemap.xml',
-        'wave.ng': 'https://wave.ng/sitemap.xml',
-        'www.wave.ng': 'https://wave.ng/sitemap.xml',
+        'easysalesexport.com': `${ROOT_ORIGIN}/sitemap.xml`,
+        'www.easysalesexport.com': `${ROOT_ORIGIN}/sitemap.xml`,
+    }
+    for (const mod of Object.values(HUB_MODULES)) {
+        if (!isPublicPath(`/${mod.slug}`)) continue;
+        sitemapMap[mod.domain] = `https://${mod.domain}/sitemap.xml`
+        //   Only for an apex: there is no `www.finance.easysalesexport.com`,
+        //   and inventing one would name a host nobody has.
+        if (mod.domain.split('.').length === 2) {
+            sitemapMap[`www.${mod.domain}`] = `https://${mod.domain}/sitemap.xml`
+        }
     }
 
-    const sitemap = sitemapMap[host] ?? 'https://easysalesexport.com/sitemap.xml'
+    const sitemap = sitemapMap[host] ?? `${ROOT_ORIGIN}/sitemap.xml`
 
     return {
         rules: [

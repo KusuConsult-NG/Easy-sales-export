@@ -462,6 +462,21 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         //   their role-assignment functions left each file asking the database
         //   in one place and the token in another, which the ratchet above
         //   refuses, and was right to.
-        expect(ledgerVerdict(jwtOnly.length, 77)).toBe(LEDGER_HELD);
+        //
+        //   Lowered from 77 by the sweep of the files no test had named. Two
+        //   of the ten unreached API routes turned out to gate on the JWT, and
+        //   both guard something worth eight hours of stale access:
+        //
+        //     api/admin/finance/paystack-balance   the company's live bank
+        //                                          balance
+        //     api/admin/finance/recovery-emails    SENDS EMAILS to members
+        //                                          about money owed them, in
+        //                                          batches, on the platform's
+        //                                          own branded template
+        //
+        //   Thirty-two routes under api/admin still read the token. These two
+        //   were converted because they were being read for the first time
+        //   anyway and because of what they do with the access.
+        expect(ledgerVerdict(jwtOnly.length, 75)).toBe(LEDGER_HELD);
     });
 });

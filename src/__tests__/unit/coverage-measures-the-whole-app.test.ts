@@ -182,8 +182,22 @@ describe('#436 — the floor', () => {
      * If the suite improves, these move up; the point of pinning them is that
      * the floor must sit just BELOW the truth, never far below it and never
      * above.
+     *
+     *   RE-MEASURED 2026-09-24, and the staleness was the finding.
+     *
+     *   These held 60.62/50.72/56.06/61.48 from the day the floor was set, and
+     *   the three assertions below compare the DECLARED thresholds against
+     *   THEM. So the guard that exists to catch the floor drifting far below
+     *   the truth was itself holding a snapshot of the truth — and when the
+     *   suite grew by hundreds of tests and the real figures reached
+     *   71.02/60.20/69.88/72.14, the guard went on comparing against the old
+     *   ones and reported everything in order.
+     *
+     *   A ratchet with a reference value nobody re-takes measures the past. The
+     *   number is re-taken here and the thresholds moved with it; what the
+     *   assertions check is unchanged, because their shape was never wrong.
      */
-    const MEASURED = { statements: 60.62, branches: 50.72, functions: 56.06, lines: 61.48 };
+    const MEASURED = { statements: 71.02, branches: 60.20, functions: 69.88, lines: 72.14 };
 
     it('SITS BELOW THE MEASURED FIGURE — a gate that cannot pass is not a gate', () => {
         const f = floor();

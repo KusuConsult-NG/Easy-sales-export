@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { canonicalUrl } from "@/lib/canonical-host";
 import { getAdminDb } from '@/lib/firebase-admin'
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -55,7 +56,8 @@ export async function generateMetadata(
                 type: 'website',
                 title: `${title} | Easy Sales Export Marketplace`,
                 description,
-                url: `https://easysalesexport.com/marketplace/products/${id}`,
+                //   #902 The served host — see lib/canonical-host.
+                url: canonicalUrl(`/marketplace/products/${id}`),
                 images: [{ url: image, width: 800, height: 600, alt: title }],
             },
             twitter: {

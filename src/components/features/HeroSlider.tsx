@@ -3,13 +3,16 @@
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
+import { DEFAULT_EXPORT_ROI_PERCENT } from "@/lib/export-window-status";
 
 const slides = [
     {
         id: 1,
         image: "/images/hero-1.jpg",
         title: "Export Windows",
-        description: "Invest in verified agricultural export contracts with 18-22% returns"
+        //   #903 The rate the platform pays — see app/export/layout.tsx. This
+        //   said "18-22%", a range whose ends nothing on the platform honours.
+        description: `Invest in verified agricultural export contracts with ${DEFAULT_EXPORT_ROI_PERCENT}% returns`
     },
     {
         id: 2,

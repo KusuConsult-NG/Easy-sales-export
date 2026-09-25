@@ -26,7 +26,16 @@ async function enableMFAHandler(request: NextRequest) {
 
         const { token } = await request.json();
 
-        if (!token || token.length !== 6) {
+        /*
+         *   `typeof token !== "string"` as well as the length.
+         *
+         *   It was `!token || token.length !== 6`, and the body is arbitrary
+         *   JSON: an ARRAY of six elements has `length === 6` and would reach
+         *   verifyTOTPToken, which expects a string. On the endpoint that turns
+         *   on a second factor, the input should be the shape it claims to be
+         *   before anything downstream assumes it.
+         */
+        if (typeof token !== "string" || token.length !== 6) {
             return NextResponse.json(
                 { success: false, error: "Invalid token" },
                 { status: 400 }

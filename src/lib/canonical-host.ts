@@ -50,7 +50,55 @@ import { HUB_MODULES } from '@/config/modules.config';
 
 /** The primary domain, which redirects the OTHER way. See the header. */
 const ROOT_APEX = 'easysalesexport.com';
+
+/**
+ * The host the hub is actually served on.
+ *
+ *   #902 EXPORTED, BECAUSE TEN PLACES WERE DECLARING THE OTHER ONE.
+ *
+ *   The middleware has sent `easysalesexport.com` to `www.easysalesexport.com`
+ *   since #494, for the reason at the top of this file — the session cookie is
+ *   host-only, so two hosts is two sessions. Meanwhile the platform told search
+ *   engines the opposite, in ten separate hand-written strings:
+ *
+ *       app/layout.tsx           metadataBase AND alternates.canonical AND
+ *                                openGraph.url
+ *       five module layouts      alternates.canonical, and export's openGraph.url
+ *       app/sitemap.ts           BASE_URL — every static route, and every
+ *                                product, land listing and course it emits,
+ *                                up to 800 URLs
+ *       app/robots.ts            the sitemap it advertises, from BOTH hosts
+ *
+ *   So every canonical tag the site published named a URL its own middleware
+ *   301s away from, and the sitemap handed a crawler eight hundred redirects.
+ *   A canonical that points at a redirect is not a strong signal, and here the
+ *   site was arguing with itself about which host it lives on.
+ *
+ *   Derived rather than restated, for #454's reason quoted above: a constant
+ *   somebody reaches for when adding the eleventh one.
+ */
 const ROOT_CANONICAL = `www.${ROOT_APEX}`;
+
+/** `https://www.easysalesexport.com` — what a canonical tag, an OG url and a sitemap should say. */
+export const ROOT_ORIGIN = `https://${ROOT_CANONICAL}`;
+
+/**
+ * The canonical absolute URL for a hub path. `canonicalUrl('/export')`.
+ *
+ * LEADING SLASHES ARE STRIPPED AND ONE IS PUT BACK, rather than tested for.
+ * The first version of this was `path.startsWith('/') ? path : '/' + path`, and
+ * safe-redirect-path's sweep refused it by name — "NO GUARD CHECKS ONLY FOR A
+ * LEADING SLASH", because `//evil.example` starts with one. This is not a
+ * redirect guard and could not have been exploited through it, but the sweep is
+ * right that the shape should not exist in the codebase: written this way,
+ * `canonicalUrl('//evil.example')` yields
+ * `https://www.easysalesexport.com/evil.example` rather than a protocol-relative
+ * URL, which is also simply the more correct answer.
+ */
+export function canonicalUrl(path: string = '/'): string {
+    const suffix = String(path ?? '').replace(/^\/+/, '');
+    return suffix === '' ? ROOT_ORIGIN : `${ROOT_ORIGIN}/${suffix}`;
+}
 
 /**
  * `www.<apex>` -> `<apex>`, for every module whose canonical domain is an apex.

@@ -441,9 +441,35 @@ export default function ExportOnboardingClient(
                 setFilesUploading(localFilesToUpload);
                 setIsUploadingClient(true);
                 try {
+                    /*
+                     *   #906 AN IDENTITY DOCUMENT IS NEVER FILED UNDER "anonymous".
+                     *
+                     *   The path was
+                     *   `export-kyc/${session?.user?.id || 'anonymous'}/…`. Dead
+                     *   today — middleware's PROTECTED_PATHS covers
+                     *   /export/onboarding, so the form does not render without a
+                     *   session — and a trap rather than a nicety: the folder is
+                     *   shared by every caller that reaches it, so the day this
+                     *   route is made public, or a session read races, one
+                     *   person's ID document and proof of address are written
+                     *   into a directory another person also writes into.
+                     *
+                     *   #277's rule, on the ImageKit account id in this same
+                     *   audit: a check that cannot be made must fail CLOSED. So
+                     *   the upload is refused and the submission stops, which is
+                     *   what the caller's own catch already does with a throw.
+                     */
+                    const ownerId = session?.user?.id;
+                    if (!ownerId) {
+                        throw new Error(
+                            "We could not confirm who you are signed in as, so your documents were "
+                            + "not uploaded. Please sign in again and resubmit.",
+                        );
+                    }
+
                     await Promise.all(
                         localFilesToUpload.map(async ({ file, field }) => {
-                            const url = await uploadFile(file, `export-kyc/${session?.user?.id || 'anonymous'}/${field}_${Date.now()}`);
+                            const url = await uploadFile(file, `export-kyc/${ownerId}/${field}_${Date.now()}`);
                             if (field === 'idDocument') uploadedIdDocument = url;
                             if (field === 'proofOfAddress') uploadedProofOfAddress = url;
                         })

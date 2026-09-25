@@ -1,5 +1,14 @@
 import { z } from "zod";
 import { SoilQuality } from "@/types/strict";
+import { WATER_SOURCES, waterKey } from "@/lib/land-soil";
+
+/**
+ * Every water source this platform accepts, as comparison keys — the form's
+ * seven, plus the five this schema used to name, which rows already carry.
+ */
+const ACCEPTED_WATER_KEYS = new Set(
+    [...WATER_SOURCES, "borehole", "river", "rain", "dam", "none"].map(waterKey),
+);
 
 /**
  * Zod schema for creating a land listing
@@ -20,8 +29,36 @@ export const landListingSchema = z.object({
     price: z.number().positive("Price must be positive"),
     size: z.number().positive("Size must be positive"), // in Hectares
 
+    /*
+     *   #901 THE FIELD NAME AND THE SPELLING, BOTH OF WHICH WERE TRAPS.
+     *
+     *   `soilQuality` is what this schema named and `soilType` is what every
+     *   live writer of LAND_LISTINGS sets — and Zod STRIPS unknown keys, so an
+     *   edit form sending the field the platform actually stores would have had
+     *   it silently dropped. That is #349's mechanism, on a field four screens
+     *   read. Both names are accepted; neither is invented.
+     *
+     *   `waterSource` was a five-value lower-case enum — "borehole", "river",
+     *   "rain", "dam", "none" — while the only form that collects a water
+     *   source offers seven CAPITALISED values including Stream, Well and
+     *   Rain-fed. An enum does not strip, it REFUSES, so a listing carrying its
+     *   own stored value would have been un-editable the moment anything sent
+     *   it back: the nearest-market defect the owner reported on products
+     *   ("those products can't be re-saved"), waiting to happen here.
+     *
+     *   Checked through lib/land-soil's key rather than by a literal list, so
+     *   the schema and the form cannot drift apart again: `waterKey` folds
+     *   "Rain-fed" onto the "rain" this enum meant, and the legacy lower-case
+     *   spellings still pass unchanged.
+     */
     soilQuality: z.nativeEnum(SoilQuality).optional(),
-    waterSource: z.enum(["borehole", "river", "rain", "dam", "none"]).optional(),
+    soilType: z.string().trim().min(1).optional(),
+    waterSource: z.string().trim().min(1)
+        .refine(
+            (v) => ACCEPTED_WATER_KEYS.has(waterKey(v)),
+            { message: "Water source must be one of: " + WATER_SOURCES.join(", ") },
+        )
+        .optional(),
     category: z.union([z.string(), z.array(z.string())]).optional(),
 
     availableForSale: z.boolean().optional(),

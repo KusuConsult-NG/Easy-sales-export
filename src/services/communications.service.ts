@@ -1,6 +1,10 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+//   Both spellings of each marketplace role. See the note on the `sellers`
+//   branch below for what asking for one of the two silently cost.
+import { SELLER_ROLES } from "@/lib/seller-approval";
+import { MARKETPLACE_BUYER_ROLES } from "@/lib/role-app-mapping";
 import type { CommunicationsServiceContract } from "@easy-sales/services";
 
 /**
@@ -78,7 +82,24 @@ export class CommunicationsService implements CommunicationsServiceContract {
                         query = query.where("verified", "==", true);
                         break;
                     case "sellers":
-                        query = query.where("roles", "array-contains", "seller");
+                        /*
+                         *   BOTH SPELLINGS, and asking for one was silently
+                         *   losing people.
+                         *
+                         *   This was `array-contains "seller"`, and the role
+                         *   vocabulary carries two names for the same thing —
+                         *   lib/seller-approval declares
+                         *   SELLER_ROLES = ["seller", "marketplace_seller"]
+                         *   and roles.ts calls the second "the new standardized
+                         *   role". So a broadcast to sellers reached the ones
+                         *   holding the old spelling and nobody else, with no
+                         *   error and a plausible-looking count in the log.
+                         *
+                         *   A reader narrower than its writers, on an admin
+                         *   broadcast — where the symptom is simply that some
+                         *   sellers were never told.
+                         */
+                        query = query.where("roles", "array-contains-any", [...SELLER_ROLES]);
                         break;
                     case "marketplace":
                         // Fetch all and filter in memory to support buyer or seller role checks
@@ -94,7 +115,13 @@ export class CommunicationsService implements CommunicationsServiceContract {
                     if (data.status === "suspended") return;
                     
                     if (audience === "marketplace") {
-                        const hasRole = data.roles?.includes("buyer") || data.roles?.includes("seller");
+                        //   Both spellings of both roles, for the reason given
+                        //   on the `sellers` branch above. This asked for
+                        //   "buyer" or "seller" and so missed every
+                        //   marketplace_buyer and marketplace_seller.
+                        const held: string[] = Array.isArray(data.roles) ? data.roles : [];
+                        const hasRole = [...MARKETPLACE_BUYER_ROLES, ...SELLER_ROLES]
+                            .some((role) => held.includes(role));
                         if (hasRole && data.email) emails.push(data.email);
                     } else {
                         if (data.email) emails.push(data.email);
