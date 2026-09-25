@@ -33,6 +33,7 @@ import { storedNearestMarket, NEAREST_MARKET_LABEL, NEAREST_MARKET_HINT } from "
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
 import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
+import { goBackOr } from "@/lib/go-back";
 
 //   #802 One list, imported. Both of these files held an identical
 //   eighteen-entry copy, and /marketplace/products/add held a third that
@@ -348,7 +349,7 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Error Loading Product</h1>
                 <p className="text-slate-600 mb-6">{error || "The product could not be loaded."}</p>
                 <button
-                    onClick={() => router.back()}
+                    onClick={() => goBackOr(router, "/marketplace/seller/products")}
                     className="px-6 py-3 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 transition"
                 >
                     Go Back
@@ -403,7 +404,7 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
                 {/* Back Link & Header */}
                 <div className="bg-white rounded-2xl shadow-md p-8 mb-6 border border-slate-100">
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => goBackOr(router, "/marketplace/seller/products")}
                         className="flex items-center gap-2 text-slate-600 hover:text-violet-700 font-semibold mb-4 transition"
                     >
                         <ArrowLeft className="w-4 h-4" />
@@ -822,7 +823,7 @@ export default function EditProductClient({ initial = null }: { initial?: Produc
                     <div className="flex gap-4">
                         <button
                             type="button"
-                            onClick={() => router.back()}
+                            onClick={() => goBackOr(router, "/marketplace/seller/products")}
                             className="flex-1 px-6 py-4 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition"
                         >
                             Cancel

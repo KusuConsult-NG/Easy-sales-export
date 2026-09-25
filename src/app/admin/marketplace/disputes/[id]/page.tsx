@@ -31,6 +31,7 @@ import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate, formatLocalDateTime, toDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
 import { humanise, humaniseUpper } from "@/lib/humanise";
+import { goBackOr } from "@/lib/go-back";
 
 const DISPUTE_REASON_LABELS: Record<string, string> = {
     not_received: "Item Not Received",
@@ -311,7 +312,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
             <div className="max-w-5xl mx-auto px-4">
                 {/* Back Button */}
                 <button
-                    onClick={() => router.back()}
+                    onClick={() => goBackOr(router, "/admin/marketplace/disputes")}
                     className="flex items-center gap-2 text-gray-600 hover:text-primary mb-6 transition"
                 >
                     <ArrowLeft className="w-5 h-5" />

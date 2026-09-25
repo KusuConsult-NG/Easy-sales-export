@@ -17,6 +17,7 @@ import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
 import { humanise } from "@/lib/humanise";
+import { goBackOr } from "@/lib/go-back";
 
 const DISPUTE_REASONS: { value: DisputeReason; label: string; description: string }[] = [
     {
@@ -208,7 +209,7 @@ function NewDisputePageContent({ initial }: { initial: Order | null }) {
             <div className="max-w-3xl mx-auto px-4">
                 {/* Back Button */}
                 <button
-                    onClick={() => router.back()}
+                    onClick={() => goBackOr(router, "/marketplace/buyer/orders")}
                     className="flex items-center gap-2 text-gray-600 hover:text-primary mb-6 transition"
                 >
                     <ArrowLeft className="w-5 h-5" />
@@ -401,7 +402,7 @@ function NewDisputePageContent({ initial }: { initial: Order | null }) {
                     <div className="flex gap-3">
                         <button
                             type="button"
-                            onClick={() => router.back()}
+                            onClick={() => goBackOr(router, "/marketplace/buyer/orders")}
                             className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition"
                         >
                             Cancel
