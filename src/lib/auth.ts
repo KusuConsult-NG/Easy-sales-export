@@ -1,4 +1,5 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
+import { SESSION_SYNC_INTERVAL_MS } from "@/lib/session-staleness";
 import Credentials from "next-auth/providers/credentials";
 
 /**
@@ -634,7 +635,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             if (token.id) {
                 const now = Date.now();
                 const lastSynced = token.lastSyncedAt as number | undefined;
-                const SYNC_INTERVAL = 2 * 60 * 1000; // 2 minutes
+                //   #922 The bound now lives in lib/session-staleness, because
+                //   the background refresh in SessionRefreshListener has to
+                //   respect the same number and was choosing its own (none).
+                const SYNC_INTERVAL = SESSION_SYNC_INTERVAL_MS;
 
                 if (trigger === "update" || !lastSynced || (now - lastSynced) > SYNC_INTERVAL) {
                     try {

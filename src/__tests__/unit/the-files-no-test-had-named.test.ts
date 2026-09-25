@@ -532,8 +532,63 @@ describe('how much of the application no test has named', () => {
          *   resolves only first-party specifiers, so a late mock of a bare package
          *   is outside its reach. Searched for a live instance and found none; the
          *   gap is named, not closed.
+         *
+         *   Then 51 → 49, on the two components mounted on EVERY page —
+         *   components/session-refresh-listener and
+         *   components/common/GlobalScrollWatcher. Both are always-on, both were
+         *   unreached, and both were doing the opposite of their job.
+         *
+         *   #922 DEFECT ONE. The refresh listener called next-auth's `update()` on
+         *   every path change and every window focus with no interval at all.
+         *   `trigger === "update"` is the first term of the jwt callback's sync
+         *   test, so each call FORCED a profile resync past the two-minute
+         *   SYNC_INTERVAL — and that interval is not a tuning knob: the callback's
+         *   own comment calls it the latency budget for ban and password-reset
+         *   revocation. Then useSession() handed every consumer a new session
+         *   OBJECT, and 24 effects across 21 client components still list the whole
+         *   `session` in their dependency array.
+         *
+         *   That was measured in production once, at one of those consumers.
+         *   WaveApplicationClient: "checkWaveStatusAction ran about fourteen times
+         *   in forty seconds for one member, at 784ms to 2784ms a call." It fixed
+         *   its own dependency list and named the cause without changing it. The
+         *   cause is throttled now, to the platform's own constant, shared from
+         *   lib/session-staleness so there is one statement of "fresh enough". The
+         *   four deliberate `update()` callers are untouched — there the bypass is
+         *   the point. The 24 effects are counted and pinned, not re-keyed: two
+         *   dozen dependency arrays across six modules, each watching for something
+         *   different, is not a change to make on one reading.
+         *
+         *   DEFECT TWO, and a Next fact worth keeping. GlobalScrollWatcher exists,
+         *   in its own words, so that "users on mobile don't miss feedback after
+         *   submitting forms". It excluded EXCLUDED_PATHS as SUBTREES, with two
+         *   escape hatches — and `!pathname.includes('/member')` could never fire,
+         *   because every member area here lives in a route GROUP (`(member)`,
+         *   `(learner)`, `(app)`) and route groups are stripped from the URL.
+         *   `app/farm-nation/(member)/offers` is served at `/farm-nation/offers`.
+         *   The clause was written against the filesystem path.
+         *
+         *   Counted over all 254 pages: 122 were excluded, including
+         *   /academy/dashboard, /cooperatives/my-savings,
+         *   /marketplace/seller/dashboard, /farm-nation/inquiries and every orders
+         *   list. The watcher was off wherever the forms are. Exact match now — 9
+         *   pages, which is what the list's own heading describes — and both
+         *   hatches go with it. The list already thought that way: `/wave/landing`
+         *   had its own entry although `/wave` covered its subtree.
+         *
+         *   Widening is safe because the strict guard already replaced the old
+         *   colour-class matcher, and that is asserted rather than assumed:
+         *   role="alert" or data-message only, after a 1.5s readiness delay, and
+         *   only when the element is off screen.
+         *
+         *   A SECOND HARNESS TRAP, after #921's. jsdom does not implement
+         *   innerText, which the watcher reads, so every positive assertion failed
+         *   on correct code until it was shimmed — the same shape as the router
+         *   mock, where a harness gap and the defect are indistinguishable from the
+         *   assertion's side. The shim has its own control so it cannot outlive the
+         *   need for it silently.
          */
-        expect(ledgerVerdict(unreached().length, 51)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 49)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
