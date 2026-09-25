@@ -76,8 +76,8 @@ describe('#914 — the quick actions that ask for a figure', () => {
     });
 
     it('and every module offers some quick actions at all', () => {
-        for (const module of MODULES) {
-            expect(MODULE_CONFIGS[module].quickActions.length).toBeGreaterThan(0);
+        for (const chatModule of MODULES) {
+            expect(MODULE_CONFIGS[chatModule].quickActions.length).toBeGreaterThan(0);
         }
     });
 });
@@ -128,8 +128,8 @@ describe('#914 — the prompt can now answer them, from the checkout constants',
         //   A member can ask the Marketplace assistant what cooperative
         //   membership costs. The block is in SHARED_KNOWLEDGE's position for
         //   that reason.
-        for (const module of MODULES) {
-            expect(buildSystemPrompt(module)).toContain(naira(COOPERATIVE_CONFIG.registrationFee));
+        for (const chatModule of MODULES) {
+            expect(buildSystemPrompt(chatModule)).toContain(naira(COOPERATIVE_CONFIG.registrationFee));
         }
     });
 });
@@ -139,8 +139,8 @@ describe('#914 — and it is told not to invent the figures it was not given', (
         //   Grounding alone just moves the invention to the next question: the
         //   widget has no "what does a land partnership cost" button, but a user
         //   can type it.
-        for (const module of MODULES) {
-            const prompt = buildSystemPrompt(module);
+        for (const chatModule of MODULES) {
+            const prompt = buildSystemPrompt(chatModule);
 
             expect(prompt).toMatch(/NEVER state a money amount that is not written in this prompt/i);
             expect(prompt).toMatch(/NEVER invent, approximate/i);
