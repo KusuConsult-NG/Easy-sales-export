@@ -305,8 +305,22 @@ describe('how much of the application no test has named', () => {
          *   of the claim rather than the sentence — two earlier versions produced
          *   false positives and each exemption is somewhere a real instance can
          *   hide.
+         *
+         *   Then 80 → 79, on components/admin/AdminDataTable. #909: it renders a
+         *   failed read as a banner — so unlike #384 and #408 it was never
+         *   silent — and then the table body underneath said "No results found"
+         *   anyway. useAdminData sets `error` and leaves `data` at its initial
+         *   `[]`, so the two co-occur on every first-load failure.
+         *
+         *   It backs /admin/users, /admin/farm-nation/listings and
+         *   /admin/farm-nation/applications. On the last, "No results found"
+         *   means "no applications to review" — the sentence #384 called "the
+         *   worst available wrong answer" on the loans queue and #408 called the
+         *   same on the land queue. Both were fixed one screen at a time; this is
+         *   the shared component neither reached, so three queues get #408's
+         *   three distinguishable states at once.
          */
-        expect(ledgerVerdict(unreached().length, 80)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 79)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

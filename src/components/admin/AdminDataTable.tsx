@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useEffect, ReactNode } from "react";
-import { Search, ChevronLeft, ChevronRight, Loader2, Download, Filter } from "lucide-react";
-import { useDebounce } from "@/hooks/useDebounce"; // Assuming this exists, or I will implement a simple one inside useAdminData
+import { ReactNode } from "react";
+import { Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+/*
+ *   #909 useState, useEffect, useDebounce, Download and Filter were imported and
+ *   never called — the `useDebounce` line still carries the note it was written
+ *   with, "Assuming this exists, or I will implement a simple one inside
+ *   useAdminData". The debounce did end up in useAdminData; the import here
+ *   stayed. Removed rather than left, because an unused import of a hook is the
+ *   thing somebody reaches for when adding local state to a component whose
+ *   state is deliberately all its caller's.
+ */
 
 interface Column<T> {
     header: string;
@@ -41,6 +49,33 @@ interface AdminDataTableProps<T> {
 
     // Filter Slots
     filters?: ReactNode;
+}
+
+
+/**
+ * What the table body says when it has no rows.
+ *
+ *   #909 A FAILED READ IS NOT AN EMPTY TABLE, AND THIS ONE SAID BOTH.
+ *
+ *   The error was rendered as a banner above — so this was never SILENT, which
+ *   #384 and #408 both were — and the body underneath went on to say "No results
+ *   found" regardless. So a first-load failure showed an administrator a red
+ *   banner and, below it, a table stating there is nothing there.
+ *
+ *   THIS TABLE BACKS THREE ADMIN SCREENS: /admin/users,
+ *   /admin/farm-nation/listings and /admin/farm-nation/applications. On the last
+ *   of those, "No results found" means "no applications to review" — the exact
+ *   sentence #384 called "the worst available wrong answer" on the loans queue
+ *   and #408 called the same on the land queue. Both were fixed one screen at a
+ *   time; this is the shared component they never reached.
+ *
+ *   Three states, distinguishable, which is #408's wording for the rule:
+ *   loading, failed (with the reason and what to do), and genuinely empty.
+ */
+export function emptyStateMessage(error: string | null | undefined): string {
+    return error
+        ? "This is not an empty list — the read failed. Reload before assuming there is nothing here."
+        : "No results found";
 }
 
 export default function AdminDataTable<T extends Record<string, any>>({
@@ -144,8 +179,11 @@ export default function AdminDataTable<T extends Record<string, any>>({
                                 </tr>
                             ) : data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-6 py-12 text-center text-slate-500">
-                                        No results found
+                                    <td
+                                        colSpan={columns.length + (selectable ? 1 : 0)}
+                                        className={`px-6 py-12 text-center ${error ? "text-red-700" : "text-slate-500"}`}
+                                    >
+                                        {emptyStateMessage(error)}
                                     </td>
                                 </tr>
                             ) : (
@@ -206,8 +244,8 @@ export default function AdminDataTable<T extends Record<string, any>>({
                             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
                         </div>
                     ) : data.length === 0 ? (
-                        <div className="p-12 text-center text-slate-500">
-                            No results found
+                        <div className={`p-12 text-center ${error ? "text-red-700" : "text-slate-500"}`}>
+                            {emptyStateMessage(error)}
                         </div>
                     ) : (
                         data.map((item) => {
