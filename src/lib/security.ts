@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { isNigerianMobile } from "@/lib/phone";
 
 /**
  * Password Validation Utility
@@ -169,12 +170,24 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
- * Validate phone number (Nigerian format)
+ * Validate phone number (Nigerian format).
+ *
+ *   #919 THIS HAD ITS OWN REGEX AND IT WAS THE WRONG ONE.
+ *
+ *   It was /^(\+?234|0)[789]\d{9}$/. The middle digit is unconstrained there, so
+ *   it admitted 072…079, 082…089 and 092…099 — none of which is a Nigerian mobile
+ *   prefix. components/ui/PhoneInput had a function of the SAME NAME with
+ *   `[789][01]`, and measured, the two disagreed on 08212345678, 07512345678,
+ *   09512345678 and +2348512345678 among others.
+ *
+ *   This copy had no callers — the only importer of the name is
+ *   marketplace/checkout, from PhoneInput — so nothing was being let through. It
+ *   was a dead and wrong copy of a live rule, sitting in the module whose name is
+ *   the first place somebody would look. Kept, renamed nothing, and pointed at
+ *   the one rule in lib/phone so it cannot answer differently again.
  */
 export function isValidNigerianPhone(phone: string): boolean {
-    // Accepts formats: 08012345678, 2348012345678, +2348012345678
-    const phoneRegex = /^(\+?234|0)[789]\d{9}$/;
-    return phoneRegex.test(phone.replace(/\s/g, ''));
+    return isNigerianMobile(phone);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { InputHTMLAttributes, forwardRef } from "react";
+import { isNigerianMobile } from "@/lib/phone";
 import { FormField, BaseFieldProps } from "./FormField";
 
 interface PhoneInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>, BaseFieldProps {
@@ -103,22 +104,21 @@ PhoneInput.displayName = "PhoneInput";
 
 export default PhoneInput;
 
-// Helper function to validate Nigerian phone numbers
+/**
+ * Validate Nigerian phone numbers.
+ *
+ *   #919 THE RULE MOVED TO lib/phone AND THIS DELEGATES.
+ *
+ *   The three branches that used to be written out here are now
+ *   isNigerianMobile, beside normalisePhone — which is where the platform's phone
+ *   reasoning already lived. This function keeps its name and its callers
+ *   (marketplace/checkout imports it from here) and answers from the one rule.
+ *
+ *   The copy in lib/security had the same name and a looser middle digit, and
+ *   delegates to the same rule now. See the note on isNigerianMobile.
+ */
 export function isValidNigerianPhone(phone: string): boolean {
-    if (!phone) return false;
-
-    // Remove all non-digit characters
-    const cleaned = phone.replace(/\D/g, '');
-
-    if (cleaned.length === 11 && cleaned.startsWith('0')) {
-        return /^0[789][01]\d{8}$/.test(cleaned);
-    } else if (cleaned.length === 13 && cleaned.startsWith('234')) {
-        return /^234[789][01]\d{8}$/.test(cleaned);
-    } else if (cleaned.length === 10) {
-        return /^[789][01]\d{8}$/.test(cleaned);
-    }
-
-    return false;
+    return isNigerianMobile(phone);
 }
 
 // Helper function to format phone number for display
