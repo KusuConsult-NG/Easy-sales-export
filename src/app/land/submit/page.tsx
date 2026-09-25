@@ -78,8 +78,25 @@
 
 import { redirect } from "next/navigation";
 
+/*
+ *   NOT EXPORTED, AND THAT IS NOT A STYLE CHOICE.
+ *
+ *   #910 This was `export const LAND_LISTING_FORM` and it broke the production
+ *   build's type check. Next generates a type file per route under
+ *   `.next/types` asserting that a page module exports ONLY the names it
+ *   allows — default, metadata, dynamic and the rest — by constraining
+ *   everything else to `never`:
+ *
+ *       Property 'LAND_LISTING_FORM' is incompatible with index signature.
+ *         Type '"/farm-nation/list-land"' is not assignable to type 'never'.
+ *
+ *   `tsc --noEmit` does not see it, because those files only exist after a
+ *   `next build`. The suite that DOES see it is
+ *   maintenance-scripts-are-inside-the-gates, which typechecks the whole
+ *   program in CI — and it caught this on a commit whose pre-push run was green.
+ */
 /** Where the land listing form lives. One door. */
-export const LAND_LISTING_FORM = "/farm-nation/list-land";
+const LAND_LISTING_FORM = "/farm-nation/list-land";
 
 export default function SubmitLandListingPage() {
     redirect(LAND_LISTING_FORM);

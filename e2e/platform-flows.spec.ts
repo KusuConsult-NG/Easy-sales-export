@@ -64,7 +64,23 @@ test.describe('Farm Nation Property Listings', () => {
          *   selector problem six steps later, which is the trap the comment
          *   above this test already records for the category buttons.
          */
-        await page.locator('select').first().selectOption('Kano');
+        /*
+         *   #910 ADDRESSED BY ITS LABEL, NOT BY POSITION.
+         *
+         *   This was `page.locator('select').first()`. #901 added Soil type and
+         *   Water source to the Description section — which sits ABOVE Location —
+         *   so `.first()` became the soil dropdown and `selectOption('Kano')`
+         *   failed on a control that has no such option.
+         *
+         *   afa38593 already recorded this trap on the marketplace buyer journey
+         *   and amended its own note to say a positional locator "breaks the next
+         *   time anybody adds OR REMOVES a field". It was right, and the lesson
+         *   had not reached this spec. The LGA two lines down was already doing
+         *   it correctly; the state now matches.
+         */
+        const stateSelect = page.locator('label:has-text("State") >> xpath=.. >> select');
+        await expect(stateSelect).toBeVisible({ timeout: 10000 });
+        await stateSelect.selectOption('Kano');
 
         const lgaSelect = page.locator('label:has-text("LGA") >> xpath=.. >> select');
         await expect(lgaSelect).toBeEnabled({ timeout: 10000 });

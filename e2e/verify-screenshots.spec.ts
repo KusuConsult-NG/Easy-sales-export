@@ -157,7 +157,12 @@ test.describe('what the owner sees', () => {
 
         //   #869 one category, #857 state then LGA.
         await page.getByRole('button', { name: /Farmland/i }).first().click();
-        await page.locator('select').first().selectOption('Enugu').catch(() => undefined);
+        //   #910 By label, not by position — see platform-flows for the
+        //   measurement. `select.first()` is the Soil type dropdown since #901
+        //   added it above Location, so this was silently choosing no state at
+        //   all and photographing a form nobody had filled in.
+        await page.locator('label:has-text("State") >> xpath=.. >> select')
+            .selectOption('Enugu').catch(() => undefined);
 
         await shot(page, '01-list-land-top');
 

@@ -54,8 +54,14 @@
 
 import { redirect } from "next/navigation";
 
+/*
+ *   NOT EXPORTED — see app/land/submit/page.tsx for the measurement. A page
+ *   module may export only the names Next allows; anything else is constrained
+ *   to `never` in the generated `.next/types` and fails the production build.
+ *   This one had the same mistake and had not reached CI yet.
+ */
 /** The screen that verifies before it congratulates. */
-export const MARKETPLACE_PAYMENT_CALLBACK = "/marketplace/payment/callback";
+const MARKETPLACE_PAYMENT_CALLBACK = "/marketplace/payment/callback";
 
 export default async function MarketplaceSuccessPage({
     searchParams,
