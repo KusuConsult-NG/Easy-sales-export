@@ -70,6 +70,22 @@ jest.mock('@/lib/system-settings', () => ({
     getPlatformFees: jest.fn(async () => ({ minOrderAmount: 0 })),
 }));
 jest.mock('@/lib/server-utils', () => ({ getBaseUrl: jest.fn(async () => 'https://test.local') }));
+/*
+ *   #906 THE EXPORT MODULE GATE, MOCKED OPEN.
+ *
+ *   submitExportProductAction now asks checkModuleAccess before it writes —
+ *   the door had a session check and nothing else, so any signed-in account
+ *   could put a listing into the queue an admin works. This suite is about
+ *   PRICES, so the gate is held open here and refused in its own suite.
+ *
+ *   It is mocked rather than seeded because the fake `get` in this file returns
+ *   the CATALOGUE fixture for every read, including the user row the real check
+ *   would load — so an unmocked gate would answer from a product document.
+ */
+const mockModuleAccess = jest.fn() as jest.Mock<any>;
+jest.mock('@/lib/module-access-check', () => ({
+    checkModuleAccess: (...a: any[]) => mockModuleAccess(...a),
+}));
 jest.mock('@/lib/audit-log', () => ({
     recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p), createAdminAuditLog: jest.fn(async () => ({})) }));
 
@@ -212,6 +228,8 @@ describe('submitExportProductAction — an impossible price is refused at the so
         jest.clearAllMocks();
         setSession(BUYER);
         setProduct();
+        //   #906 Past the module gate, so these cases are about the PRICE.
+        mockModuleAccess.mockResolvedValue(true);
     });
 
     async function submit(overrides: Record<string, any> = {}) {
@@ -227,6 +245,11 @@ describe('submitExportProductAction — an impossible price is refused at the so
         const r: any = await submit({ pricePerMT: -2_500 });
 
         expect(r.success).toBe(false);
+        //   #906 THE REASON, not just the refusal. Once this door grew a module
+        //   gate, "success: false" stopped identifying which rule refused —
+        //   and a gate that refused everything would have satisfied every
+        //   assertion in this describe.
+        expect(String(r.error)).toMatch(/price per mt/i);
         expect(added()).toEqual([]);
     });
 
@@ -234,6 +257,7 @@ describe('submitExportProductAction — an impossible price is refused at the so
         const r: any = await submit({ pricePerMT: 0 });
 
         expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/price per mt/i);
         expect(added()).toEqual([]);
     });
 
@@ -241,6 +265,8 @@ describe('submitExportProductAction — an impossible price is refused at the so
         const r: any = await submit({ availableQuantityMT: -50 });
 
         expect(r.success).toBe(false);
+        //   #906 As above: the quantity rule, not the module gate.
+        expect(String(r.error)).toMatch(/quantity/i);
         expect(added()).toEqual([]);
     });
 

@@ -40,9 +40,24 @@ export default function CreateExportProductPage() {
         setError(null);
 
         try {
+            /*
+             *   #906 AND NOTHING IS FILED UNDER "anonymous" HERE EITHER.
+             *
+             *   Same shape as the KYC upload on /export/onboarding, and the same
+             *   reasoning — see that file. Dead today, because this page sits
+             *   behind the /export/(app) layout, and a trap for the same reason.
+             *   Refused before a single byte is uploaded rather than after.
+             */
+            const ownerId = session?.user?.id;
+            if (!ownerId) {
+                setError("We could not confirm who you are signed in as. Please sign in again.");
+                setLoading(false);
+                return;
+            }
+
             // 1. Upload Images to Cloudinary in parallel
             const imageUploadPromises = imageFiles.map(image => {
-                const folderPath = `export-catalog/${session?.user?.id || "anonymous"}/images/${Date.now()}_${image.name}`;
+                const folderPath = `export-catalog/${ownerId}/images/${Date.now()}_${image.name}`;
                 return uploadFile(image, folderPath);
             });
             const imageUrls = await Promise.all(imageUploadPromises);

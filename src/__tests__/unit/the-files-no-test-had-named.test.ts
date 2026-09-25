@@ -251,8 +251,24 @@ describe('how much of the application no test has named', () => {
          *   object the action parses; the field→step table lives beside it, so a
          *   field added to one without the other fails a test rather than
          *   reappearing as a bare Zod message on exactly one field.
+         *
+         *   Then 85 → 84, on the export product create form. #906: the action
+         *   behind it, submitExportProductAction, asked for a session and
+         *   NOTHING ELSE — so any signed-in account could put a listing into the
+         *   catalogue queue an admin works. #486 found this exact shape on the
+         *   three land-listing writers and wrote the rule down ("THE GATE IS THE
+         *   MODULE'S OWN ACCESS RULE"); it never visited Export. The form being
+         *   behind a gated layout is not the same thing, for the reason #803
+         *   recorded on the land door: a server action is callable directly.
+         *
+         *   And two upload paths in the module filed under a literal —
+         *   `${session?.user?.id || 'anonymous'}` — one of them for an ID
+         *   document and a proof of address. Unreachable today (both routes are
+         *   in PROTECTED_PATHS) and a trap rather than a leak, which the suite
+         *   says in those words; the folder is shared by every caller that
+         *   reaches it.
          */
-        expect(ledgerVerdict(unreached().length, 85)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 84)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
