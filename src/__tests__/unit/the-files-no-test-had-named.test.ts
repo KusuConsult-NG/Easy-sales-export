@@ -647,8 +647,73 @@ describe('how much of the application no test has named', () => {
          *   Caught by this repo's own recorded lesson, inside the test written to
          *   describe it. Stripped before the negative sweep; raw for the positive
          *   one, since raw is what Tailwind reads.
+         *
+         *   Then 45 → 41, on components/admin/RejectionModal,
+         *   components/modals/QuoteRequestModal, components/marketplace/
+         *   ShipmentFields and components/ui/LocalVideoPreview.
+         *
+         *   #924 RejectionModal is rendered by FIVE admin screens, will not enable
+         *   Confirm until the reason is at least ten characters, and its default
+         *   banner says that reason "will be communicated to the applicant". Four
+         *   of the five doors keep that promise — the export and wave actions and
+         *   the cooperative reject-member and marketplace reject-seller routes all
+         *   store it and email it.
+         *
+         *   THE FIFTH DOES NOT. /api/admin/marketplace/suspend-seller writes
+         *   `suspensionReason` on the verification row AND on
+         *   serviceRegistrations.marketplace.suspensionReason, sends no email, and
+         *   raises no notification. Measured: four occurrences of the field in the
+         *   tree and every one a WRITE — this route twice, bulk-user-operations
+         *   twice. Not one reader.
+         *
+         *   AND THE SELLER HAD A SLOT FOR IT ALL ALONG. onboarding/pending routes
+         *   `rejected` AND `suspended` to /marketplace/onboarding in one line, and
+         *   that screen's amber banner has a paragraph for the explanation —
+         *   reading `rejectionReason`. So a seller whose shop had stopped working
+         *   was sent to a banner headed "Your verification requires updates" with
+         *   nothing under it, while the ten characters an admin was compelled to
+         *   write sat one field away. The reader takes suspensionReason first now,
+         *   because the suspension is the newer verdict when a row carries both.
+         *
+         *   RECORDED AND NOT FIXED: there is no suspension email. The library has
+         *   four rejection emails and no suspension counterpart, and writing one is
+         *   composing a new message to sellers in the platform's voice, which is
+         *   the owner's to word. And the server floor is ONE character, not ten —
+         *   both review schemas want only `!!reason`, both API doors only
+         *   `!reason`. Left alone: every door is admin-only behind a permission
+         *   check, so the caller who would bypass the floor is the person it
+         *   advises, and refusing a short-but-adequate reason would strand an admin
+         *   mid-decision.
+         *
+         *   ALSO PINNED: WaveApplicationReviewSchema and
+         *   ExportOnboardingReviewSchema are byte-identical but for the name. They
+         *   agree, so a ledger beats a rewrite — folding them makes one module's
+         *   schema import another's, and #912 recorded what that costs.
+         *
+         *   The other three are clean and are recorded as such. LocalVideoPreview
+         *   owns exactly one object URL per file and revokes it on cleanup, which
+         *   is the whole reason it exists as a component. ShipmentFields' courier
+         *   phone is `type="tel"` with no format rule, and that is right rather
+         *   than a sixth phone rule: "a phone number the buyer can call" may be a
+         *   landline, which isNigerianMobile would refuse.
+         *
+         *   QuoteRequestModal is clean for a reason worth writing down, because it
+         *   is not in the component: `if (!isOpen) return null` sits AFTER its
+         *   hooks, so a parent that kept it mounted would show the previous
+         *   product's quantity, notes and OFFERED PRICE against the next one. Both
+         *   callers avoid that — ProductDetailClient is one product per page, and
+         *   the export opportunities LIST renders it as
+         *   `{selectedWindow && …}` with onClose nulling the selection, so it
+         *   remounts per window. The guarantee lives at the call site, and that is
+         *   where it is pinned.
+         *
+         *   A FOURTH HARNESS TRAP, and it would have reported the defect as
+         *   already fixed: the reader/writer sweep tested `/\.suspensionReason/`
+         *   against raw source, and the suspend route writes the field by its
+         *   DOTTED PATH inside a quoted key — so the writer matched as a reader.
+         *   String literals are blanked before the read test now.
          */
-        expect(ledgerVerdict(unreached().length, 45)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 41)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

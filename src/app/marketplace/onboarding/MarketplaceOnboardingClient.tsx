@@ -208,7 +208,39 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                             location: v.location || prev.location,
                             bankAccount: v.bankAccount || prev.bankAccount,
                         }));
-                        if (v.rejectionReason) setRejectionReason(v.rejectionReason);
+                        /*
+                         *   #924 A SUSPENDED SELLER LANDED HERE AND WAS TOLD
+                         *   NOTHING.
+                         *
+                         *   onboarding/pending routes `rejected` AND `suspended`
+                         *   to this screen — one line, both statuses — and the
+                         *   amber banner below has a slot for the explanation.
+                         *   This read `rejectionReason` only, and
+                         *   /api/admin/marketplace/suspend-seller writes
+                         *   `suspensionReason`.
+                         *
+                         *   MEASURED: `grep -rn suspensionReason src` found FOUR
+                         *   occurrences and every one was a WRITE — this route
+                         *   twice and bulk-user-operations twice (which also
+                         *   deletes it on unsuspend). No reader anywhere. So the
+                         *   ten characters RejectionModal REQUIRES an admin to
+                         *   type before it will enable Confirm went into a field
+                         *   nothing has ever read, and the seller saw an empty
+                         *   banner headed "Your verification requires updates"
+                         *   with no idea what to update.
+                         *
+                         *   The rejection path is complete by contrast: stored,
+                         *   emailed by sendSellerRejectionEmail, and shown here.
+                         *   That asymmetry on one screen is what makes this an
+                         *   omission rather than a decision.
+                         *
+                         *   rejectionReason first, because a row can carry both
+                         *   if a rejected seller is later suspended, and the
+                         *   newer verdict is the suspension — hence the fallback
+                         *   order is deliberate and asserted in the test.
+                         */
+                        if (v.suspensionReason) setRejectionReason(v.suspensionReason);
+                        else if (v.rejectionReason) setRejectionReason(v.rejectionReason);
                     }
                     setIsRevisionMode(true);
                 } else {
