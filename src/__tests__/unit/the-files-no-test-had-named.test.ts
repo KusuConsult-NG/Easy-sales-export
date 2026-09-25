@@ -880,8 +880,46 @@ describe('how much of the application no test has named', () => {
          *   says its scope. The forensics INDEX is out of it for a stated reason —
          *   its checks carry their verdict through verdictFor and it renders
          *   "inconclusive" as its own state.
+         *
+         *   Then 26 → 25, on app/wave/page.
+         *
+         *   #929 THE PLATFORM ASKED A WAVE APPLICANT FOR CHANGES AND THEN TOLD
+         *   HER TO APPLY. requestWaveRevisionAction writes `revision_required`
+         *   with the reviewer's note and sends nothing — measured in its own
+         *   file, which is what makes it a finding: the submission path four
+         *   hundred lines above acknowledges her application by email and
+         *   notifies every admin. So she learns of it by visiting, and three
+         *   screens decided where a visitor goes with three different
+         *   hand-written status lists, none naming that one. She reached /wave,
+         *   fell through every branch to the marketing page, and read "Begin
+         *   Here - Apply Now!" — while /wave/application was already waiting
+         *   with her note in an amber panel.
+         *
+         *   THE GATE KNEW ALL FIVE. lib/wave-access has listed revision_required
+         *   since it was written and middleware admits her on it; only the
+         *   screens deciding where she should GO had a smaller list. The
+         *   destination is that module's now, under an invariant asserted rather
+         *   than argued: every status the gate admits must have somewhere to go
+         *   that is not the marketing page.
+         *
+         *   AND TWO DISJUNCTS COULD NOT FIRE. Swept across every writer of
+         *   serviceRegistrations.wave.status the values are approved, rejected,
+         *   pending and revision_required. `enrolled` (read in the member heal)
+         *   and `pending_review` (read in DashboardNav) are written nowhere.
+         *   Dropped rather than added to the shared list, because that list also
+         *   composes the middleware gate and widening a gate for a value nothing
+         *   writes is a permission granted on a guess. `active` and
+         *   `under_review` are KEPT though current code writes neither: a legacy
+         *   row may carry them, and dropping a status from an ACCEPTING list
+         *   locks somebody out — the direction that costs a member her place.
+         *
+         *   RECORDED, NOT FIXED — A LEDGER AT 3. WAVE, Export and the Cooperative
+         *   each have a request-revision path, each writes the status and the
+         *   note, and none of them tells the applicant. Customer-facing copy for
+         *   three modules is the owner's call with the programme, the same line
+         *   #927 drew about the absent suspension email.
          */
-        expect(ledgerVerdict(unreached().length, 26)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 25)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

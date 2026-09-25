@@ -19,6 +19,7 @@ import { checkWaveStatusAction } from "@/app/actions/wave";
 //   this screen spelled it out, and the owner has now corrected that
 //   spelling twice — see lib/wave-program.
 import { WAVE_FULL_NAME, WAVE_PROGRAM_NAME } from "@/lib/wave-program";
+import { waveDestinationFor } from "@/lib/wave-access";
 
 function ClickToPlayVideo({ videoId }: { videoId: string }) {
     const [playing, setPlaying] = useState(false);
@@ -68,16 +69,23 @@ export default function WaveLandingPage() {
         if (sessionStatus === "authenticated" && session?.user) {
             const roles = (session.user.roles || []) as string[];
             const serviceRegistrations = (session.user as any).serviceRegistrations || {};
-            const waveRegStatus = serviceRegistrations.wave?.status;
-            
-            const hasWaveAccess = roles.includes("wave_participant") || 
-                                  waveRegStatus === "approved" || 
-                                  waveRegStatus === "active";
-                                  
-            if (hasWaveAccess) {
-                router.replace("/wave/dashboard");
-            } else if (waveRegStatus === "pending" || waveRegStatus === "under_review") {
-                router.replace("/wave/application/review-pending");
+
+            /*
+             *   #929 — ONE RULE, and this page is where it mattered most.
+             *
+             *   This chose between dashboard and review-pending on its own list
+             *   of statuses, and an applicant asked for CHANGES matched neither
+             *   — so she stayed here, on a page whose button reads "Begin Here -
+             *   Apply Now!", with her reviewer's note sitting unread on
+             *   /wave/application. Anyone the rule sends elsewhere is sent;
+             *   landing here is now a decision rather than a fall-through.
+             */
+            const destination = waveDestinationFor({
+                roles,
+                waveRegStatus: serviceRegistrations.wave?.status ?? null,
+            });
+            if (destination !== "/wave/landing") {
+                router.replace(destination);
             }
         }
     }, [sessionStatus, session, router]);
