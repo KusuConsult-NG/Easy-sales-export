@@ -18,21 +18,46 @@ import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, Reac
 
 // ─── Shared class tokens ──────────────────────────────────────────────────────
 
-export const INPUT_BASE =
+/**
+ *   #923 Everything about a field that is NOT its accent colour, written once.
+ *
+ *   INPUT_BASE and INPUT_EMERALD were two full copies of these five lines,
+ *   differing only in `focus:ring-*` and `focus:border-*`. They agreed — which is
+ *   exactly when this is worth folding, before a padding or a disabled style is
+ *   changed in one and not the other. The exported values are unchanged, byte for
+ *   byte, and a test asserts that rather than trusting the refactor.
+ */
+const INPUT_SHELL =
     'w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 bg-white ' +
     'text-slate-900 placeholder-slate-400 ' +
-    'focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ' +
+    'focus:outline-none focus:ring-2 ';
+
+const INPUT_TAIL =
+    ' ' +
     'transition-colors duration-150 ' +
     'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
+
+/*
+ *   THE ACCENT CLASSES STAY WHOLE LITERALS, and that is not a style choice.
+ *
+ *   The first version of this fold built them with `focus:ring-${colour}`. That
+ *   compiles, typechecks and renders the right string at runtime — and Tailwind
+ *   would have generated NEITHER utility, because its scanner reads the SOURCE
+ *   text for complete class names and `focus:ring-orange-500` no longer appeared
+ *   in it. The focus ring on every field in five onboarding forms would have
+ *   disappeared, silently, with no error anywhere. Only the joining is dynamic.
+ *
+ *   EXPORTED AND UNUSED OUTSIDE THIS FILE — measured: `grep -rn INPUT_BASE src`
+ *   finds only FormField itself. Kept exported rather than narrowed; nothing is
+ *   gained by removing a name.
+ */
+export const INPUT_BASE =
+    `${INPUT_SHELL}focus:ring-orange-500 focus:border-orange-500${INPUT_TAIL}`;
 
 export const INPUT_ERROR = 'border-red-400 focus:ring-red-400 focus:border-red-400';
 
 export const INPUT_EMERALD =
-    'w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 bg-white ' +
-    'text-slate-900 placeholder-slate-400 ' +
-    'focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ' +
-    'transition-colors duration-150 ' +
-    'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
+    `${INPUT_SHELL}focus:ring-emerald-600 focus:border-emerald-600${INPUT_TAIL}`;
 
 // ─── Base Field Contract ──────────────────────────────────────────────────────
 export interface BaseFieldProps {
@@ -120,6 +145,13 @@ export function FormInput({
                     {...rest}
                     id={id}
                     required={required}
+                    //   #923 The platform already decided how to say "this field
+                    //   is wrong" to a screen reader — ComboBox does exactly
+                    //   this, and it was the ONLY place in the tree that did.
+                    //   Five onboarding and KYC forms go through these three
+                    //   inputs, and they announced the description without ever
+                    //   announcing the error state.
+                    aria-invalid={Boolean(error) || undefined}
                     aria-describedby={error || hint ? errorId : undefined}
                     className={`${base} ${err} ${className ?? ''}`}
                 />
@@ -158,6 +190,13 @@ export function FormSelect({
                     {...rest}
                     id={id}
                     required={required}
+                    //   #923 The platform already decided how to say "this field
+                    //   is wrong" to a screen reader — ComboBox does exactly
+                    //   this, and it was the ONLY place in the tree that did.
+                    //   Five onboarding and KYC forms go through these three
+                    //   inputs, and they announced the description without ever
+                    //   announcing the error state.
+                    aria-invalid={Boolean(error) || undefined}
                     aria-describedby={error || hint ? errorId : undefined}
                     className={`${base} ${err} ${className ?? ''}`}
                 >
@@ -193,6 +232,13 @@ export function FormTextarea({
                     {...rest}
                     id={id}
                     required={required}
+                    //   #923 The platform already decided how to say "this field
+                    //   is wrong" to a screen reader — ComboBox does exactly
+                    //   this, and it was the ONLY place in the tree that did.
+                    //   Five onboarding and KYC forms go through these three
+                    //   inputs, and they announced the description without ever
+                    //   announcing the error state.
+                    aria-invalid={Boolean(error) || undefined}
                     aria-describedby={error || hint ? errorId : undefined}
                     className={`${INPUT_BASE} resize-none ${err} ${className ?? ''}`}
                 />

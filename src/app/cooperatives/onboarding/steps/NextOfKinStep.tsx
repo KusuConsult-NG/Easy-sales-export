@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import { isNigerianMobile } from "@/lib/phone";
 import { useToast } from "@/contexts/ToastContext";
 import { FormInput, FormSelect, FormTextarea } from "@/components/ui/FormField";
 
@@ -29,7 +30,21 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
         else if (data.fullName.trim().length < 2) e.fullName = "Next of kin name must be at least 2 characters";
         if (!data.relationship) e.relationship = "Please select relationship";
         if (!data.phone.trim()) e.phone = "Phone number is required";
-        else if (!/^0\d{10}$/.test(data.phone.replace(/\s/g, ""))) e.phone = "Enter a valid 11-digit phone number";
+            /*
+             *   #923 THE PLATFORM'S ONE PHONE RULE, not a copy of it.
+             *
+             *   #919 consolidated the two functions called isValidNigerianPhone
+             *   onto lib/phone's isNigerianMobile, whose header records WHY the
+             *   middle digit matters: "Nigerian mobile prefixes are 070, 071,
+             *   080, 081, 090 and 091 — so `[789][01]` is the real set."
+             *
+             *   THREE REGEXES SURVIVED THAT, and this was one of them. `/^0\d{10}$/` is barely a phone
+             *   check at all: it accepts 0 followed by ANY ten digits, so
+             *   01234567890 and 09912345678 both passed. isNigerianMobile
+             *   refuses both, and also accepts the +234 and bare ten-digit
+             *   spellings a person may paste.
+             */
+        else if (!isNigerianMobile(data.phone)) e.phone = "Enter a valid Nigerian mobile number, e.g. 08031234567";
         if (!data.address.trim()) e.address = "Address is required";
         setErrors(e);
         return Object.keys(e).length === 0;

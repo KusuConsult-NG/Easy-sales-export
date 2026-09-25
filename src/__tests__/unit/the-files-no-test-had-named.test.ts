@@ -587,8 +587,68 @@ describe('how much of the application no test has named', () => {
          *   mock, where a harness gap and the defect are indistinguishable from the
          *   assertion's side. The shim has its own control so it cannot outlive the
          *   need for it silently.
+         *
+         *   Then 49 → 45, on the shared form primitive and its neighbours:
+         *   components/ui/FormField, components/ui/LoadingButton,
+         *   components/common/BackToHub and
+         *   cooperatives/onboarding/steps/NextOfKinStep.
+         *
+         *   #923 DEFECT ONE. FormInput, FormSelect and FormTextarea back FIVE
+         *   onboarding and KYC forms, and when `error` was set they drew a red
+         *   border and wired aria-describedby but never aria-invalid — the
+         *   description announced, the state not. Measured before calling it a
+         *   defect: `grep -rn aria-invalid src` found ONE occurrence in the whole
+         *   tree, components/ui/ComboBox, and the expression is copied from it
+         *   rather than invented. The platform had decided; the primitive five
+         *   forms go through was the one place not doing it.
+         *
+         *   DEFECT TWO, and the trap inside its own fix. INPUT_BASE and
+         *   INPUT_EMERALD were five identical lines each, differing only in the
+         *   focus accent. Folded — and the first fold built them with
+         *   `focus:ring-` + an interpolated colour, which compiles, typechecks,
+         *   renders the right string, and would have made Tailwind generate
+         *   NEITHER utility, because its scanner reads source text for whole class
+         *   names. The focus ring on every field in five forms would have vanished
+         *   with no error anywhere. The accent classes are whole literals; a test
+         *   asserts both exported strings are byte-for-byte what they were.
+         *
+         *   DEFECT THREE — THE FOURTH AND FIFTH PHONE RULES. #919 folded the two
+         *   functions called isValidNigerianPhone onto isNigerianMobile. Swept by
+         *   SHAPE rather than by name, three regexes had survived it:
+         *   cooperatives NextOfKinStep and marketplace BusinessProfileStep both
+         *   used `/^0\d{10}$/` — 0 followed by ANY ten digits, so 01234567890
+         *   passed — and one of those is the SELLER'S BUSINESS PHONE, the number a
+         *   buyer rings. WAVE's PersonalDetailsStep restated the rule correctly.
+         *   All three delegate now.
+         *
+         *   RECORDED, NOT CHANGED: lib/schemas' strictNigerianPhoneSchema is the
+         *   `[789]\d` shape #919 measured as wrong, and it gates PUBLIC WAVE
+         *   briefing registration and the WAVE application. Tightening it decides
+         *   who may register, and refusing a real person costs more than storing a
+         *   number no network issues. The disagreeing set — 0821…, 0751…, 0951…,
+         *   0851… — is pinned so the decision is costed rather than forgotten.
+         *
+         *   LoadingButton is clean, and one thing about it was worth checking: it
+         *   never sets `type`, so one inside a form defaults to submit. Swept the
+         *   whole tree — ZERO onClick buttons without a type inside a form. The
+         *   sweep is kept, because that is a one-character regression.
+         *
+         *   BackToHub is correct, with one caveat recorded rather than fixed:
+         *   useSession reports "loading" before "authenticated" and this reads only
+         *   `data`, so for the first moment of a page a signed-in member is offered
+         *   "Back to Hub" pointing at "/". Every available fix is somebody else's
+         *   decision — hiding a floating control makes it flicker, defaulting to
+         *   /dashboard sends an anonymous visitor to a guarded route — so the
+         *   behaviour is pinned and the choice left visible.
+         *
+         *   A THIRD HARNESS TRAP, and the most pointed one: the assertion written
+         *   to forbid the interpolated Tailwind class failed on correct code,
+         *   because the COMMENT explaining the trap quotes the interpolated form.
+         *   Caught by this repo's own recorded lesson, inside the test written to
+         *   describe it. Stripped before the negative sweep; raw for the positive
+         *   one, since raw is what Tailwind reads.
          */
-        expect(ledgerVerdict(unreached().length, 49)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 45)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

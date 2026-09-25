@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useActionState } from "react";
 import { X, DollarSign, AlertCircle, CheckCircle, TrendingUp, TrendingDown } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import LoadingButton from "@/components/ui/LoadingButton";
 import { useToast } from "@/contexts/ToastContext";
 import { makeContributionAction } from "@/app/actions/cooperative";
 import type { MakeContributionState } from "@/lib/types/cooperative";

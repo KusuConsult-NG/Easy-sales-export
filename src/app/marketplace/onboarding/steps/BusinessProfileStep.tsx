@@ -7,6 +7,7 @@
 "use client";
 
 import { useState } from "react";
+import { isNigerianMobile } from "@/lib/phone";
 import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 import {
     BUSINESS_STATUSES,
@@ -88,7 +89,23 @@ export default function BusinessProfileStep({ data, accountType, onChange, onNex
         const newErrors = missingForStep(2, { ...data, accountType, businessType });
 
         const phone = data?.phone || "";
-        if (phone.trim() && !/^0\d{10}$/.test(phone.replace(/\s/g, ""))) {
+            /*
+             *   #923 THE PLATFORM'S ONE PHONE RULE, not a copy of it.
+             *
+             *   #919 consolidated the two functions called isValidNigerianPhone
+             *   onto lib/phone's isNigerianMobile, whose header records WHY the
+             *   middle digit matters: "Nigerian mobile prefixes are 070, 071,
+             *   080, 081, 090 and 091 — so `[789][01]` is the real set."
+             *
+             *   THREE REGEXES SURVIVED THAT, and this was one of them. The same `/^0\d{10}$/` as the
+             *   cooperative next-of-kin step — 0 plus any ten digits — and this
+             *   one is the SELLER'S BUSINESS PHONE, the number a buyer would
+             *   ring. isNigerianMobile refuses what no network issues, and
+             *   accepts the +234 and bare ten-digit spellings a person may
+             *   paste. The `phone.trim() &&` guard stays: this field is
+             *   optional here.
+             */
+        if (phone.trim() && !isNigerianMobile(phone)) {
             newErrors.phone = "Enter a valid 11-digit phone number";
         }
 
