@@ -487,8 +487,53 @@ describe('how much of the application no test has named', () => {
          *   The success page is clean and stays retired: #384 pointed it at
          *   /academy/dashboard because the wizard never sends anyone to it, and
          *   that redirect is pinned rather than left looking unfinished.
+         *
+         *   Then 54 → 51, on three navigation primitives: components/ui/BackButton
+         *   and BOTH components called StepIndicator — one under components/shared,
+         *   one under components/onboarding.
+         *
+         *   #921 DEFECT ONE. BackButton is rendered by fourteen screens and read
+         *
+         *       if (history.length > 1) router.back();
+         *       else if (fallbackPath) router.push(fallbackPath);
+         *
+         *   with nothing after the `else if`, and `fallbackPath` OPTIONAL. Four of
+         *   the fourteen left it out — admin/marketplace/products, farm-nation
+         *   offers, and the seller and buyer quote lists. On a tab with one
+         *   history entry (a bookmark, a link from an email, target=_blank) those
+         *   four rendered an enabled Back button that did nothing at all. The prop
+         *   is required now and each of the four was given its own screen's path;
+         *   required rather than defaulted, because one default cannot be right
+         *   for an admin moderation tool and a member dashboard both.
+         *
+         *   DEFECT TWO. shared/StepIndicator chose the step circle's colour from a
+         *   nested ternary whose first two branches were byte-identical, so the
+         *   step you were ON rendered exactly like the ones you had finished —
+         *   three states written, two drawn. It draws the marketplace onboarding
+         *   wizard, up to six steps for a seller. The current circle now carries
+         *   the ring its SIBLING component already uses for the same purpose, and
+         *   aria-current, which it had no way to express at all.
+         *
+         *   The two same-named components are NOT merged and the test says why:
+         *   numeric id and numeric cursor here, string id plus a per-step
+         *   `completed` flag there, so folding either into the other changes a
+         *   live wizard's data shape. onboarding/StepIndicator's own gap is
+         *   recorded rather than fixed — an id it does not have greys every circle
+         *   and hides the description, which #625 already guards at the one caller
+         *   that could produce it.
+         *
+         *   AND A LESSON ABOUT THE HARNESS, which nearly became a false finding:
+         *   the first draft of that test took `jest` from '@jest/globals', which
+         *   #392 established defeats jest.mock hoisting. Every router assertion
+         *   came back zero — and so does the no-op being investigated, so the
+         *   broken harness and the defect were indistinguishable until the FIXED
+         *   component also reported zero. Re-measured with a working mock before
+         *   anything was claimed. #392's own detector cannot see this class: it
+         *   resolves only first-party specifiers, so a late mock of a bare package
+         *   is outside its reach. Searched for a live instance and found none; the
+         *   gap is named, not closed.
          */
-        expect(ledgerVerdict(unreached().length, 54)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 51)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
