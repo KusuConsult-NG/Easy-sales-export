@@ -215,3 +215,67 @@ describe('and the rate quoted is the rate paid', () => {
         expect(source(WINDOW)).toContain('exportWindowRoiPercent(windowData.projectedROI)');
     });
 });
+
+/*
+ *   #903 AND THE FIFTH ANSWER, WHICH WAS THE ONE GOOGLE SHOWED.
+ *
+ *   Found auditing the files no test had named — app/export/layout.tsx was on
+ *   that list. The four answers above are the ones a member sees after
+ *   investing. This is the one a stranger sees BEFORE:
+ *
+ *       app/export/layout.tsx   "Fund verified Nigerian agricultural export
+ *                               contracts and earn 18–22% ROI in 4–6 months"
+ *                               — the meta description AND the Open Graph card
+ *       components/features/HeroSlider   "with 18-22% returns", on the hub's
+ *                               own front page
+ *
+ *   Nothing on this platform pays 18% or 22%. DEFAULT_EXPORT_ROI_PERCENT is 20,
+ *   and the note above it says why that number and no other: it is what the two
+ *   fulfilment paths pay when a window records no multiplier, and using anything
+ *   else "would have the page advertise one figure and the payout compute
+ *   another."
+ *
+ *   And a RANGE is the exact shape exportWindowRoiPercent was written to reject.
+ *   Its own comment: a window carrying "15-20%" made the investor page quote 15
+ *   while the payout paid 1.20. The lesson reached the window label and not the
+ *   platform's public claim about itself.
+ */
+describe('#903 — what the platform tells a stranger it pays', () => {
+    const EXPORT_LAYOUT = 'src/app/export/layout.tsx';
+    const HERO = 'src/components/features/HeroSlider.tsx';
+
+    it('THE RATE IT ACTUALLY PAYS IS A SINGLE FIGURE (control)', () => {
+        //   THE control: "the claim should be this number" is worth nothing
+        //   unless the number is what the payout uses.
+        expect(DEFAULT_EXPORT_ROI_PERCENT).toBe(20);
+        expect(exportWindowReturnMultiplier({})).toBe(1 + DEFAULT_EXPORT_ROI_PERCENT / 100);
+    });
+
+    it('NEITHER PUBLIC CLAIM STATES A RANGE ANY MORE', () => {
+        for (const rel of [EXPORT_LAYOUT, HERO]) {
+            const src = stripComments(code(rel), { label: rel });
+            expect({ rel, range: /1[0-9]\s*[–-]\s*2[0-9]\s*%/.test(src) })
+                .toEqual({ rel, range: false });
+        }
+    });
+
+    it('AND BOTH ARE DERIVED FROM THE RATE, so they cannot drift from the payout', () => {
+        //   The vacuity guard on the assertion above: deleting the sentences
+        //   would also remove the range.
+        for (const rel of [EXPORT_LAYOUT, HERO]) {
+            const src = stripComments(code(rel), { label: rel });
+            expect({ rel, derived: src.includes('${DEFAULT_EXPORT_ROI_PERCENT}%') })
+                .toEqual({ rel, derived: true });
+            expect({ rel, imported: src.includes('DEFAULT_EXPORT_ROI_PERCENT } from "@/lib/export-window-status"') })
+                .toEqual({ rel, imported: true });
+        }
+    });
+
+    it('AND THE CLAIM STILL SAYS WHAT IT IS ABOUT', () => {
+        //   Not a silent deletion of the number: a page that stopped naming a
+        //   return would pass every assertion above.
+        const layout = stripComments(code(EXPORT_LAYOUT), { label: EXPORT_LAYOUT });
+        expect(layout).toContain('ROI');
+        expect(layout).toContain('escrow');
+    });
+});

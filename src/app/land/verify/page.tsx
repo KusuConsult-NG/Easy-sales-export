@@ -18,6 +18,8 @@ import {
 import { getLandListings, verifyLandListing } from "@/app/actions/land-actions";
 import { useToast } from "@/contexts/ToastContext";
 import { type LandListing, SoilQuality } from "@/types/strict";
+import { landLocationText } from "@/lib/land-location";
+import { readSoil, soilKey } from "@/lib/land-soil";
 import { numberOrZero } from "@/lib/numbers";
 
 export default function LandVerificationPage() {
@@ -257,18 +259,48 @@ export default function LandVerificationPage() {
                                 </div>
 
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                    {/*
+                                      *   #901 THIS QUEUE COULD NOT RENDER A SINGLE ROW.
+                                      *
+                                      *   Three unguarded reads of fields no live writer
+                                      *   of LAND_LISTINGS puts on a row:
+                                      *
+                                      *     location.city              absent — the
+                                      *                                normalised shape
+                                      *                                carries it only if
+                                      *                                the row did
+                                      *     soilQuality.toUpperCase()  THROWS. Written only
+                                      *                                by createLandListing,
+                                      *                                which has no caller.
+                                      *     location.lat.toFixed(4)    THROWS. readLandLocation
+                                      *                                returns null for a row
+                                      *                                with no coordinates,
+                                      *                                which is all of them.
+                                      *
+                                      *   So the admin land verification queue threw during
+                                      *   render for every listing awaiting a decision —
+                                      *   #689's own warning ("one listing created through it
+                                      *   stops every listing from being reviewable") landing
+                                      *   on the screen rather than on the action it fixed.
+                                      *   #408 had already made a failed READ distinguishable
+                                      *   from an empty queue here; a successful read that
+                                      *   cannot be drawn was the half left.
+                                      */}
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Location</p>
                                         <p className="font-semibold text-slate-900 text-sm">
-                                            {listing.location.city}, {listing.location.state}
+                                            {landLocationText(listing as any) || "Not recorded"}
                                         </p>
-                                        <p className="text-xs text-slate-600">{listing.location.address}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Soil Quality</p>
-                                        <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${getSoilQualityColor(listing.soilQuality)}`}>
-                                            {listing.soilQuality.toUpperCase()}
-                                        </span>
+                                        {readSoil(listing as any)
+                                            ? (
+                                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${getSoilQualityColor(soilKey(readSoil(listing as any)) as SoilQuality)}`}>
+                                                    {(readSoil(listing as any) as string).toUpperCase()}
+                                                </span>
+                                            )
+                                            : <p className="text-xs text-slate-500">Not recorded</p>}
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Amenities</p>
@@ -281,7 +313,9 @@ export default function LandVerificationPage() {
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Coordinates</p>
                                         <p className="text-xs font-mono text-slate-900">
-                                            {listing.location.lat.toFixed(4)}, {listing.location.lng.toFixed(4)}
+                                            {typeof listing.location?.lat === "number" && typeof listing.location?.lng === "number"
+                                                ? `${listing.location.lat.toFixed(4)}, ${listing.location.lng.toFixed(4)}`
+                                                : "Not recorded"}
                                         </p>
                                     </div>
                                 </div>

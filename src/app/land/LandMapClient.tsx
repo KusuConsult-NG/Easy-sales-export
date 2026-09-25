@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { SoilQuality, type LandListing } from "@/types/strict";
 import { logger } from '@/lib/logger';
 import { numberOrZero } from "@/lib/numbers";
+import { readSoil } from "@/lib/land-soil";
 
 //Dynamically import LandMap to prevent SSR issues with leaflet
 const LandMap = dynamic(
@@ -108,7 +109,11 @@ export default function LandMapClient({ initial = null }: { initial?: LandListin
                                   */}
                                 <p>📍 {[listing.location?.city, listing.location?.state].filter(Boolean).join(", ") || "Location not recorded"}</p>
                                 <p>📏 {(numberOrZero(listing.size) * 2.47).toFixed(1)} acres</p>
-                                {listing.soilQuality && <p>🌱 {listing.soilQuality} soil quality</p>}
+                                {/*   #901 #598 guarded this against the throw and left
+                                  *   it reading a field nothing writes, so the soil a
+                                  *   seller DID record never appeared. Guard kept,
+                                  *   field widened. */}
+                                {readSoil(listing as any) && <p>🌱 {readSoil(listing as any)} soil quality</p>}
                             </div>
                         </div>
                     ))}

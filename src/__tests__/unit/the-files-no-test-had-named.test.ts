@@ -167,8 +167,53 @@ describe('how much of the application no test has named', () => {
          *   spellings of the seller and buyer roles, so an admin mailing
          *   "sellers" reached the older spelling and nobody else, with a
          *   plausible count in the log.
+         *
+         *   Then 103 → 102, on ONE file — land/submit — and it is worth the
+         *   whole line. Reading it found #901, which is three defects wearing
+         *   the same shape and two of them fatal:
+         *
+         *     /land/verify         the admin land queue read `soilQuality` and
+         *                          `location.lat` unguarded. Nothing on the
+         *                          platform writes either, so it THREW on every
+         *                          row waiting for a decision — #689's own
+         *                          warning about this queue, landing on the
+         *                          screen rather than on the action it repaired.
+         *     LandMap.tsx          the public land map plotted every pin from
+         *                          `location.lat` and labelled it with
+         *                          `soilQuality.toUpperCase()`. #598 found this
+         *                          shape in the file NEXT DOOR and guarded the
+         *                          grid without entering the map.
+         *     CROP_SOIL_MATRIX     asked for "clayey", a word no writer on this
+         *                          platform uses, so a buyer searching for land
+         *                          to grow sugarcane matched nothing at all.
+         *     /land/submit         itself: a four-step wizard that uploaded her
+         *                          title deeds and THEN called an action that
+         *                          refuses anyone without Farm Nation access —
+         *                          and for those it did admit, wrote a listing
+         *                          with no category, no lease term and no rent
+         *                          price. Now a redirect to the one door that
+         *                          gates before she types, with the two fields
+         *                          only it collected moved across first.
+         *
+         *   Then 102 → 94, on eight files that were one finding. #902: the
+         *   platform published its canonical host in ten hand-written strings
+         *   and named the one its OWN middleware 301s away from —
+         *   `easysalesexport.com`, while lib/canonical-host has sent that to
+         *   `www.` since #494 because the session cookie is host-only. The
+         *   sitemap built up to eight hundred urls on it, and robots advertised
+         *   it from the www host too, so a crawler that had already been moved
+         *   was sent back.
+         *
+         *   Reading those two files then found the second half: the five module
+         *   domains were hand-written and TWO of them are not hosts this
+         *   platform serves — `wave.ng` (the config says waveprogramme.com) and
+         *   `marketplace.easysalesexport.com` (easysalesmarket.com) — while the
+         *   cooperative domain was missing altogether. #454 deleted a constant
+         *   for this exact reason and wrote down why: "a list ... is exactly the
+         *   thing somebody reaches for ... and it would have been silently out
+         *   of date." Both are derived from HUB_MODULES now.
          */
-        expect(ledgerVerdict(unreached().length, 103)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 94)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

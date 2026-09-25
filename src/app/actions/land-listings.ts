@@ -31,6 +31,7 @@ import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visib
 import { hasAppAccess } from "@/lib/role-app-mapping";
 import { checkProductPricing } from "@/lib/product-pricing-guard";
 import { leaseTermRefusal } from "@/lib/lease-term";
+import { soilsForCrop, soilSuitsCrop } from "@/lib/land-soil";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -653,24 +654,15 @@ export async function rejectLandListingAction(...args: Parameters<typeof _reject
     return withFlexibleSafeAction("rejectLandListingAction", _rejectLandListingAction)(...args);
 }
 
-const CROP_SOIL_MATRIX: Record<string, string[]> = {
-    rice: ["clayey", "loamy"],
-    maize: ["loamy", "clayey"],
-    beans: ["loamy", "sandy"],
-    vegetables: ["loamy"],
-    soybeans: ["loamy"],
-    tomatoes: ["loamy"],
-    pepper: ["loamy"],
-    cassava: ["loamy", "sandy"],
-    wheat: ["clayey", "loamy"],
-    sugarcane: ["clayey"],
-    groundnut: ["sandy", "loamy"],
-    yams: ["sandy", "loamy"],
-    coconut: ["sandy"],
-    ginger: ["sandy", "loamy"],
-    potatoes: ["sandy", "loamy"],
-    sesame: ["loamy", "sandy"],
-};
+/*
+ *   #901 CROP_SOIL_MATRIX MOVED TO lib/land-soil.ts, AND ITS "clayey" FIXED.
+ *
+ *   The table lived here and asked for a soil spelling nothing on the platform
+ *   writes, so `sugarcane` — whose only entry was "clayey" — matched no listing
+ *   at all, and rice, maize and wheat each silently returned the loamy half of
+ *   their answer. The table and the vocabulary it looks up are now one module.
+ */
+
 
 /**
  * Get verified land listings with filters
@@ -830,12 +822,12 @@ async function _searchLandListingsAction(filters: {
         // Crop-Soil Suitability Matrix filtering
         if (filters.cropType) {
             const cropTypeFilter = filters.cropType;
-            const suitableSoils = CROP_SOIL_MATRIX[cropTypeFilter.toLowerCase()] || [];
+            //   #901 Through the shared rule, which folds "clayey" to the
+            //   "Clay" the form writes and reads `soilQuality` as a second
+            //   spelling of `soilType`. Asking the row rather than one field.
+            const suitableSoils = soilsForCrop(cropTypeFilter);
             if (suitableSoils.length > 0) {
-                results = results.filter((l) => {
-                    if (!l.soilType) return false;
-                    return suitableSoils.includes(l.soilType.toLowerCase());
-                });
+                results = results.filter((l) => soilSuitsCrop(l as any, cropTypeFilter));
             } else {
                 results = results.filter((l) => {
                     const desc = l.description?.toLowerCase() || "";

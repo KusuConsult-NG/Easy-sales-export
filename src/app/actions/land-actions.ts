@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { readLandLocation } from "@/lib/land-location";
+import { readSoil, soilKey } from "@/lib/land-soil";
 import { safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -214,7 +215,10 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
                 if (filters.maxPrice && listing.price > filters.maxPrice) return false;
                 if (filters.minSize && listing.size < filters.minSize) return false;
                 if (filters.maxSize && listing.size > filters.maxSize) return false;
-                if (filters.soilQuality && listing.soilQuality !== filters.soilQuality) return false;
+                //   #901 Compared through the shared key, and asked of the row:
+                //   `listing.soilQuality` is unset on every stored listing, so
+                //   this filter returned nothing for any value it was given.
+                if (filters.soilQuality && soilKey(readSoil(listing as any)) !== soilKey(filters.soilQuality)) return false;
                 if (filters.state && listing.location.state !== filters.state) return false;
                 if (filters.city && listing.location.city !== filters.city) return false;
                 if (filters.waterAccess !== undefined && listing.waterAccess !== filters.waterAccess) return false;
@@ -891,7 +895,14 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
             //   reported 334 farmers as 206 — "Farmer", "Farmer " and "FARMER"
             //   counted as three occupations.
             rawStates.push(String(readLandLocation(data).state || 'Unknown'));
-            rawQualities.push(String(data.soilQuality || 'Unknown'));
+            //   #901 AND THE LINE BELOW IT, WHICH IS THE SAME DEFECT.
+            //
+            //   #689 fixed the state half of this pair and left `data.soilQuality`
+            //   — a field NO live writer of this collection sets, so
+            //   `bySoilQuality` counted every parcel on the platform as
+            //   'Unknown' and the admin breakdown was a single bar. readSoil
+            //   reads the `soilType` the form writes as well.
+            rawQualities.push(String(readSoil(data) || 'Unknown'));
         });
 
         //   Mechanical differences only — case, surrounding and repeated

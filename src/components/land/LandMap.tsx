@@ -6,6 +6,8 @@ import { Icon, LatLngBounds } from "leaflet";
 import { motion } from "framer-motion";
 import { MapPin, Droplets, Zap, Route } from "lucide-react";
 import { type LandListing, SoilQuality } from "@/types/strict";
+import { readLandLocation, landLocationText } from "@/lib/land-location";
+import { readSoil, soilKey } from "@/lib/land-soil";
 import { formatCurrency } from "@/lib/utils";
 import { humaniseUpper } from "@/lib/humanise";
 import "leaflet/dist/leaflet.css";
@@ -32,13 +34,24 @@ function AutoFitBounds({ listings }: { listings: LandListing[] }) {
     const map = useMap();
 
     useEffect(() => {
-        if (listings.length === 0) return;
+        /*
+         *   #901 THE SAME COORDINATES THE PINS USE, AND ONLY THE REAL ONES.
+         *
+         *   `listings.map(l => [l.location.lat, l.location.lng])` handed
+         *   LatLngBounds a list of [undefined, undefined] for every live row —
+         *   see the markers below for why none of them carries location.lat —
+         *   and Leaflet rejects that, from an effect, before a single pin is
+         *   drawn. A map that cannot fit its bounds must still show its tiles,
+         *   so an unplottable listing is skipped rather than fatal.
+         */
+        const points = listings
+            .map((listing) => readLandLocation(listing as any))
+            .filter((where) => where.lat !== null && where.lng !== null)
+            .map((where) => [where.lat as number, where.lng as number] as [number, number]);
 
-        const bounds = new LatLngBounds(
-            listings.map(listing => [listing.location.lat, listing.location.lng])
-        );
+        if (points.length === 0) return;
 
-        map.fitBounds(bounds, { padding: [50, 50] });
+        map.fitBounds(new LatLngBounds(points), { padding: [50, 50] });
     }, [listings, map]);
 
     return null;
@@ -135,12 +148,40 @@ export function LandMap({
 
                 <AutoFitBounds listings={listings} />
 
-                {/* Markers */}
-                {listings.map((listing) => (
+                {/*
+                  *   #901 Markers, FROM THE COORDINATES THE ROW ACTUALLY HAS.
+                  *
+                  *   This read `listing.location.lat` / `.lng` directly. No live
+                  *   writer of LAND_LISTINGS stores those: `submitLandListingAction`
+                  *   writes `location: { state, lga, address }` and puts the
+                  *   coordinates in `gpsCoordinates`, farm-nation writes `location`
+                  *   as a STRING, and the one writer of the lat/lng shape —
+                  *   createLandListing in land-actions.ts — has no caller anywhere.
+                  *
+                  *   So every pin on the public land map was
+                  *   `position={[undefined, undefined]}`, which Leaflet rejects
+                  *   ("Invalid LatLng object") from inside the .map — #598's finding
+                  *   in this very file, which was fixed in the grid beside this
+                  *   component and never entered the component.
+                  *
+                  *   readLandLocation is #689's shared reader and resolves all four
+                  *   shapes, including gpsCoordinates. It returns null when the row
+                  *   truly has no coordinates, and a parcel whose position is not
+                  *   recorded is LEFT OFF THE MAP rather than plotted at (0, 0) off
+                  *   the coast of Ghana, or allowed to take the map down.
+                  */}
+                {listings.map((listing) => {
+                    const where = readLandLocation(listing as any);
+                    if (where.lat === null || where.lng === null) return null;
+                    const soil = readSoil(listing as any);
+
+                    return (
                     <Marker
                         key={listing.id}
-                        position={[listing.location.lat, listing.location.lng]}
-                        icon={getMarkerIcon(listing.soilQuality)}
+                        position={[where.lat, where.lng]}
+                        //   #901 Keyed through soilKey: the colour tables use the
+                        //   enum's lower-case values and the form writes "Clay".
+                        icon={getMarkerIcon(soilKey(soil) as SoilQuality)}
                         eventHandlers={{
                             click: () => onListingClick?.(listing),
                         }}
@@ -161,8 +202,11 @@ export function LandMap({
                                     <div className="flex items-start gap-2">
                                         <MapPin className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
                                         <div>
-                                            <p className="font-medium">{listing.location.address}</p>
-                                            <p className="text-slate-600">{listing.location.city}, {listing.location.state}</p>
+                                            {/*   #901 landLocationText builds the line from
+                                              *   the parts that exist, so a row with no
+                                              *   `city` does not render a leading comma —
+                                              *   the stray-comma defect #689 wrote it for. */}
+                                            <p className="font-medium">{landLocationText(listing as any)}</p>
                                         </div>
                                     </div>
 
@@ -173,12 +217,19 @@ export function LandMap({
                                         </p>
                                     </div>
 
-                                    {/* Soil Quality */}
-                                    <div>
-                                        <span className={`inline-block px-2 py-1 rounded-lg text-xs font-bold ${getSoilQualityColor(listing.soilQuality)}`}>
-                                            {listing.soilQuality.toUpperCase()} Soil
-                                        </span>
-                                    </div>
+                                    {/*   #901 Soil, ONLY WHEN THE ROW RECORDS ONE.
+                                      *
+                                      *   `listing.soilQuality.toUpperCase()` threw on
+                                      *   every row the platform has: the field is
+                                      *   written by nothing. readSoil accepts the
+                                      *   `soilType` live writers use as well. */}
+                                    {soil && (
+                                        <div>
+                                            <span className={`inline-block px-2 py-1 rounded-lg text-xs font-bold ${getSoilQualityColor(soilKey(soil) as SoilQuality)}`}>
+                                                {soil.toUpperCase()} Soil
+                                            </span>
+                                        </div>
+                                    )}
 
                                     {/* Amenities */}
                                     <div className="flex gap-3 pt-2 border-t border-slate-200">
@@ -211,7 +262,8 @@ export function LandMap({
                             </div>
                         </Popup>
                     </Marker>
-                ))}
+                    );
+                })}
             </MapContainer>
 
             {/* Legend */}

@@ -34,6 +34,7 @@ import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
 import { leaseTermRefusal } from "@/lib/lease-term";
 import { LAND_CATEGORIES } from "@/lib/land-categories";
+import { SOIL_TYPES, WATER_SOURCES } from "@/lib/land-soil";
 
 type LandCategory = "farmland" | "ranch" | "forest" | "mixed" | "orchard" | "aquaculture";
 
@@ -67,6 +68,29 @@ export default function ListLandPage() {
          */
         category: "" as LandCategory | "",
         description: "",
+        /**
+         *   #901 THE SOIL AND THE WATER, ASKED FOR RATHER THAN HOPED FOR.
+         *
+         *   This form's own description placeholder says "Describe the land, its
+         *   features, soil type, water access, nearby infrastructure" — so it
+         *   knew these matter and collected them as prose, which no filter can
+         *   read. Meanwhile FOUR readers want them as fields: the property page
+         *   and the properties grid render a chip each, searchLandListingsAction
+         *   filters on both, and its crop-suitability filter is built entirely
+         *   on the soil.
+         *
+         *   The only form that ever collected them was /land/submit, which is
+         *   now a redirect here (see that file). Without these two the
+         *   capability would have left with it, and the crop filter — which
+         *   drops any parcel with no recorded soil — would match nothing at all
+         *   on every listing made from today.
+         *
+         *   OPTIONAL. A seller who does not know her soil type should not be
+         *   blocked from listing, and the empty string is spread away at submit
+         *   rather than stored as a value readers have to disregard.
+         */
+        soilType: "",
+        waterSource: "",
         state: "",
         lga: "",
         address: "",
@@ -449,6 +473,12 @@ export default function ListLandPage() {
                 //   #859 The seller's asking price — see effectiveTotal.
                 price: effectiveTotal,
                 category: formData.category, // Added category
+                //   #901 Spread, not defaulted: an unanswered soil is NO soil on
+                //   the row, which is what the crop filter's "a parcel with no
+                //   recorded soil is not claimed as suitable" rule needs. A
+                //   stored "" would be a value every reader has to special-case.
+                ...(formData.soilType ? { soilType: formData.soilType } : {}),
+                ...(formData.waterSource ? { waterSource: formData.waterSource } : {}),
                 imageUrls,
                 documentUrls,
                 gpsCoordinates: formData.latitude && formData.longitude ? {
@@ -618,9 +648,55 @@ export default function ListLandPage() {
                                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                                         rows={5}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
-                                        placeholder="Describe the land, its features, soil type, water access, nearby infrastructure, etc."
+                                        placeholder="Describe the land, its features, nearby infrastructure, access roads, etc."
                                         required
                                     />
+                                </div>
+
+                                {/*
+                                  *   #901 Soil and water as FIELDS. The placeholder
+                                  *   above used to ask for both inside the prose,
+                                  *   where the property page cannot render them and
+                                  *   the crop-suitability search cannot read them.
+                                  */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label htmlFor="soilType" className="block text-sm font-semibold text-slate-900 mb-2">
+                                            Soil type
+                                        </label>
+                                        <select
+                                            id="soilType"
+                                            value={formData.soilType}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, soilType: e.target.value }))}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        >
+                                            <option value="">Not sure / prefer not to say</option>
+                                            {SOIL_TYPES.map(soil => (
+                                                <option key={soil} value={soil}>{soil}</option>
+                                            ))}
+                                        </select>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Buyers search for land by the crop it suits, and that search is
+                                            based on the soil. A parcel with no soil recorded is left out of it.
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label htmlFor="waterSource" className="block text-sm font-semibold text-slate-900 mb-2">
+                                            Water source
+                                        </label>
+                                        <select
+                                            id="waterSource"
+                                            value={formData.waterSource}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, waterSource: e.target.value }))}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        >
+                                            <option value="">Not sure / prefer not to say</option>
+                                            {WATER_SOURCES.map(source => (
+                                                <option key={source} value={source}>{source}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </section>
