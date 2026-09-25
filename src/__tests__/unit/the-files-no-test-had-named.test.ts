@@ -360,8 +360,19 @@ describe('how much of the application no test has named', () => {
          *   itself. What it did find is that four of the eight barrels never
          *   STATED the private-files rule they were being held to, which is now a
          *   sentence in each of their headers.
+         *
+         *   Then 72 → 71, on lib/chatbot-knowledge. #914: the chat widget offers
+         *   "What is the membership fee?" and "Are courses free?" as quick
+         *   actions, and the system prompt behind them contained no amount at all
+         *   — no ₦, no digit group outside the hex colours. api/ai sends that
+         *   prompt straight to OpenAI, so the platform handed a member a button
+         *   asking a money question and gave the model nothing to answer from.
+         *
+         *   I went looking for a STALE price, because #1, #2, #18 and #21 were
+         *   all a fee copy disagreeing with checkout. There was no copy at all,
+         *   which is the same class from the other side.
          */
-        expect(ledgerVerdict(unreached().length, 72)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 71)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
