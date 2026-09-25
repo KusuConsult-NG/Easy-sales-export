@@ -284,8 +284,43 @@ describe('how much of the application no test has named', () => {
          *   NEXT_REDIRECT handling of any kind, where the other three both skip
          *   the log and re-throw from render. Latent — its one subtree navigates
          *   with router.replace, which does not throw — and recorded as latent.
+         *
+         *   Then 81 → 80, on /marketplace/success. #908: it read `?reference`
+         *   and rendered "Payment Successful! — Your order has been placed and
+         *   payment confirmed", with the caller's own string printed back as the
+         *   platform's Transaction Reference. It called nothing.
+         *
+         *   THE SEVERITY, MEASURED. Nothing links there — every Paystack
+         *   callback the platform hands out is `{module}/payment/callback` — so
+         *   it is not "a buyer whose payment failed is told it succeeded". It is
+         *   a page on this domain, in this branding, that tells anybody their
+         *   payment is confirmed and shows any reference they choose: a
+         *   proof-of-payment screenshot to send a seller, which is the class #262
+         *   worked. Now a redirect to the callback, carrying the reference so a
+         *   real one gets verified.
+         *
+         *   A sweep of every screen in src/app says it was the only one: the
+         *   others either ask the server or render a stored payment status off a
+         *   row. That sweep is the ratchet in its suite, written around the SOURCE
+         *   of the claim rather than the sentence — two earlier versions produced
+         *   false positives and each exemption is somewhere a real instance can
+         *   hide.
+         *
+         *   Then 80 → 79, on components/admin/AdminDataTable. #909: it renders a
+         *   failed read as a banner — so unlike #384 and #408 it was never
+         *   silent — and then the table body underneath said "No results found"
+         *   anyway. useAdminData sets `error` and leaves `data` at its initial
+         *   `[]`, so the two co-occur on every first-load failure.
+         *
+         *   It backs /admin/users, /admin/farm-nation/listings and
+         *   /admin/farm-nation/applications. On the last, "No results found"
+         *   means "no applications to review" — the sentence #384 called "the
+         *   worst available wrong answer" on the loans queue and #408 called the
+         *   same on the land queue. Both were fixed one screen at a time; this is
+         *   the shared component neither reached, so three queues get #408's
+         *   three distinguishable states at once.
          */
-        expect(ledgerVerdict(unreached().length, 81)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 79)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

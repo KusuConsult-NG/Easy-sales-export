@@ -1,83 +1,78 @@
-"use client";
+/**
+ * /marketplace/success — RETIRED. The verifying screen is /marketplace/payment/callback.
+ *
+ *   #908 A SCREEN THAT SAID "PAYMENT CONFIRMED" ON THE STRENGTH OF A QUERY
+ *   STRING.
+ *
+ *   Found auditing the files no test had named. This page read `?reference` and
+ *   rendered, unconditionally:
+ *
+ *       ✓  Payment Successful!
+ *          Your order has been placed and payment confirmed
+ *          Transaction Reference    <whatever the URL said>
+ *
+ *   It called nothing. It verified nothing. Opening
+ *   /marketplace/success?reference=anything told the visitor their payment was
+ *   confirmed and printed their own string back as the platform's transaction
+ *   reference.
+ *
+ * ── MEASURED, BECAUSE THE SEVERITY DEPENDS ON IT ────────────────────────────
+ *
+ *   NOTHING ON THE PLATFORM LINKS HERE. Every Paystack callback URL in the
+ *   codebase is `{baseUrl}/{module}/payment/callback` — marketplace, export,
+ *   cooperatives, academy, farm-nation — and the marketplace's own
+ *   `_payment_orders.ts` names `/marketplace/payment/callback`. This route
+ *   appears in route-manifest and nowhere else. So no buyer is sent here by a
+ *   payment, and the defect is not "buyers are told a failed payment
+ *   succeeded".
+ *
+ *   WHAT IT IS INSTEAD: a page on this platform's own domain, with this
+ *   platform's own branding, that will tell anybody their payment is confirmed
+ *   and display any reference they choose. That is a ready-made proof-of-payment
+ *   screenshot to send a seller, and it is the same class #262 worked on — a
+ *   fabricated reference that reads as a real one.
+ *
+ *   AND A SWEEP SAYS IT WAS THE ONLY ONE. Every other screen that claims a
+ *   payment succeeded either verifies (the five module callbacks) or renders a
+ *   stored `payment_received` / `payment_confirmed` status off an order row,
+ *   which is a fact rather than a claim. This was the single screen deriving
+ *   that sentence from the URL.
+ *
+ * ── WHY A REDIRECT AND NOT A DELETION ───────────────────────────────────────
+ *
+ *   The same answer /land/submit got in #901: the URL keeps working and sends
+ *   the person to the screen that does the job. /marketplace/payment/callback
+ *   calls verifyOrderPaymentAction, shows "Verifying Payment…" while it waits,
+ *   and shows the refusal when the reference is not a paid one — so a
+ *   bookmarked link, a shared link, or a link somebody invented now lands
+ *   somewhere that checks before it congratulates.
+ *
+ *   THE REFERENCE IS CARRIED, not dropped: a buyer who genuinely has one gets it
+ *   verified rather than being asked to find it again. The callback's own
+ *   "No payment reference found" handles the case where there is none.
+ */
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { CheckCircle, Package, ArrowRight } from "lucide-react";
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
-function SuccessContent() {
-    const searchParams = useSearchParams();
-    const reference = searchParams.get("reference");
+/*
+ *   NOT EXPORTED — see app/land/submit/page.tsx for the measurement. A page
+ *   module may export only the names Next allows; anything else is constrained
+ *   to `never` in the generated `.next/types` and fails the production build.
+ *   This one had the same mistake and had not reached CI yet.
+ */
+/** The screen that verifies before it congratulates. */
+const MARKETPLACE_PAYMENT_CALLBACK = "/marketplace/payment/callback";
 
-    return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-            <div className="max-w-md w-full">
-                <div className="bg-white rounded-2xl p-8 text-center">
-                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle className="w-12 h-12 text-green-600" />
-                    </div>
+export default async function MarketplaceSuccessPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ reference?: string }>;
+}) {
+    const { reference } = await searchParams;
 
-                    <h1 className="text-2xl font-bold text-slate-900 mb-2">
-                        Payment Successful!
-                    </h1>
-                    <p className="text-slate-600 mb-6">
-                        Your order has been placed and payment confirmed
-                    </p>
-
-                    {reference && (
-                        <div className="bg-slate-50 rounded-xl p-4 mb-6">
-                            <p className="text-xs text-slate-500 mb-1">
-                                Transaction Reference
-                            </p>
-                            <p className="font-mono text-sm font-semibold text-slate-900">
-                                {reference}
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="space-y-3">
-                        <Link
-                            href="/dashboard"
-                            className="block w-full px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition"
-                        >
-                            View My Orders
-                        </Link>
-                        <Link
-                            href="/marketplace"
-                            className="block w-full px-6 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition flex items-center justify-center gap-2"
-                        >
-                            <Package className="w-5 h-5" />
-                            Continue Shopping
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function MarketplaceSuccessPageContent() {
-    return (
-        <Suspense
-            fallback={
-                <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                    <div className="text-slate-600">Loading...</div>
-                </div>
-            }
-        >
-            <SuccessContent />
-        </Suspense>
-    );
-}
-
-export default function MarketplaceSuccessPagePage() {
-    return (
-        <Suspense fallback={
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-            </div>
-        }>
-            <MarketplaceSuccessPageContent />
-        </Suspense>
+    redirect(
+        reference
+            ? `${MARKETPLACE_PAYMENT_CALLBACK}?reference=${encodeURIComponent(reference)}`
+            : MARKETPLACE_PAYMENT_CALLBACK,
     );
 }
