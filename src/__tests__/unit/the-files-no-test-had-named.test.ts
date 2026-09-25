@@ -994,8 +994,43 @@ describe('how much of the application no test has named', () => {
          *   retention floor throws on a whole-tree walk — src/app/land/submit is
          *   five lines of code under ninety-five of explanation — so the sweep
          *   passes minRetainedRatio 0 and the named reads keep the floor.
+         *
+         *   Then 23 → 22, on academy/[courseId]/layout.
+         *
+         *   #932 EVERY ACADEMY COURSE WAS PUBLISHED TO SEARCH ENGINES AS FREE.
+         *   That layout emits schema.org JSON-LD per course and its offer was a
+         *   literal — `price: '0', priceCurrency: 'NGN', category: 'Free'` —
+         *   reading nothing about the course. Two ways that is false, both live:
+         *   _ac_course_payment charges `Math.round(course.price * 100)` kobo
+         *   through Paystack for a priced course, and checkCourseAccess refuses
+         *   any tier past "free" without a plan that academyPlanFee prices. An
+         *   elite course was advertised as Free to everybody, Google included.
+         *
+         *   A price in structured data is a claim to THIRD PARTIES, which is
+         *   worse than the same claim on a page: the page can be read in context
+         *   and a rich result cannot.
+         *
+         *   AND IT WAS THE ONLY ONE OF THREE. This application emits JSON-LD from
+         *   three layouts; Farm Nation property and marketplace product both
+         *   write `offers: price ? { … String(price) … } : undefined`, reading the
+         *   real figure and saying nothing when there is none. So the fix is the
+         *   shape already shipping next door, not a new convention.
+         *
+         *   A PLAN-GATED COURSE GETS NO OFFER AT ALL, deliberately. Publishing the
+         *   plan's fee would be a second false claim in the other direction — the
+         *   plan opens a catalogue, so its fee is not this course's price, and a
+         *   shopper told "₦45,000" for one course is misled as surely as one told
+         *   free. schema.org makes `offers` optional, so silence is available and
+         *   a wrong number is not. "Free" is decided by asking
+         *   checkCourseAccess(null, tier) — the platform's own gate, so the
+         *   published claim cannot drift from what the gate allows.
+         *
+         *   `timeRequired` was being filled with "4 weeks", which is prose in a
+         *   field ISO 8601 owns: a value consumers discard, so the effort bought
+         *   nothing. It converts the shapes the admin form produces and omits
+         *   anything else rather than rounding into a duration nobody stated.
          */
-        expect(ledgerVerdict(unreached().length, 23)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 22)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

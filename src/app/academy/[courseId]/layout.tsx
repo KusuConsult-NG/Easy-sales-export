@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getAdminDb } from '@/lib/firebase-admin'
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { courseOfferFor, courseTimeRequired } from '@/lib/academy-course-offer'
 
 export const runtime = 'nodejs'
 
@@ -31,7 +32,24 @@ export async function generateMetadata(
             ? String(data.description).slice(0, 160)
             : `Learn export readiness with "${title}" on Easy Sales Academy — Nigeria's premier agro-export training platform.`
         const instructor = data.instructor ?? 'Easy Sales Academy'
-        const duration = data.duration ?? ''
+
+        /*
+         *   #932 THE OFFER IS READ OFF THE COURSE, and may be absent.
+         *
+         *   What stood here was `price: '0', category: 'Free'` as a literal, on
+         *   every course — including the ones _ac_course_payment charges for and
+         *   the ones checkCourseAccess refuses without a paid plan. A price in
+         *   structured data is a claim to third parties, and a rich result
+         *   cannot be read in context the way a page can.
+         *
+         *   lib/academy-course-offer decides it, and says nothing at all for a
+         *   course that is neither free nor individually priced — because the
+         *   plan fee is not this course's price either.
+         */
+        const offers = courseOfferFor({ price: data.price, tier: data.tier })
+        //   ISO 8601 or omitted. "4 weeks" in timeRequired is a value consumers
+        //   discard, so emitting it was effort spent on nothing.
+        const timeRequired = courseTimeRequired(data.duration)
 
         const jsonLd = {
             '@context': 'https://schema.org',
@@ -47,14 +65,11 @@ export async function generateMetadata(
                 '@type': 'Person',
                 name: instructor,
             },
-            timeRequired: duration || undefined,
+            timeRequired,
             inLanguage: 'en-NG',
-            offers: {
-                '@type': 'Offer',
-                price: '0',
-                priceCurrency: 'NGN',
-                category: 'Free',
-            },
+            //   Absent for a plan-gated course: JSON.stringify drops an
+            //   undefined value, which is the "say nothing" schema.org allows.
+            offers,
         }
 
         return {
