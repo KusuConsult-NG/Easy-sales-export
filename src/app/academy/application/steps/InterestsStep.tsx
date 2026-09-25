@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Lightbulb, MessageSquare, CheckCircle2 } from "lucide-react";
+import { Target, Lightbulb, CheckCircle2 } from "lucide-react";
 
 interface InterestsData {
     learningPaths: string[];

@@ -209,6 +209,7 @@ export function serializeDocs<T = Record<string, unknown>>(
 import type { User, WaveApplication } from "./types/firestore";
 
 import { UserSchema } from "./validations/user";
+import { joinFullName, namePartsOf } from "./person-name";
 
 /**
  * Standardize User entity to ensure consistent formatting.
@@ -221,14 +222,27 @@ export function serializeUser(id: string, data: DocumentData | undefined): User 
     // Strict Schema Gating & Data Healing
     const validated = UserSchema.parse(rawDoc);
     
-    // Compute a consistent full name if structured fields are present
-    let computedFullName = validated.fullName;
-    if (validated.firstName || validated.lastName) {
-        const parts = [validated.firstName, validated.lastName].filter(Boolean);
-        if (parts.length > 0) {
-            computedFullName = parts.join(" ");
-        }
-    }
+    /*
+     *   #920 THE SECOND COPY THAT DROPPED THE MIDDLE NAME — dead, and fixed
+     *   rather than left as a trap.
+     *
+     *   This derived the name from firstName + lastName ONLY, and overwrote a
+     *   stored fullName whenever either part existed. So a row written
+     *   "Ada Chidinma Obi" came back "Ada Obi" from the function whose name
+     *   ("standardize User entity") invites reaching for it.
+     *
+     *   MEASURED: `serializeUser` has NO CALLERS — `grep -rn serializeUser src`
+     *   finds only its own definition — so no screen loses a middle name to it
+     *   today. That is exactly why it is worth correcting: #919 met the same
+     *   shape in lib/security (a dead, wrong copy of a live phone rule) and the
+     *   lesson recorded there was that the day somebody imports it, it becomes
+     *   live and wrong at the same moment. Nothing is deleted.
+     *
+     *   #452's rule, stated once in lib/person-name: namePartsOf prefers the
+     *   stored parts and falls back to splitting fullName; joinFullName is that
+     *   split's exact inverse, so the round trip cannot grow or lose a name.
+     */
+    const computedFullName = joinFullName(namePartsOf(validated)) || validated.fullName;
     
     return {
         ...validated,

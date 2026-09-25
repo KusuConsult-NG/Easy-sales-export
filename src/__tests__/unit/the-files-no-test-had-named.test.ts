@@ -434,8 +434,61 @@ describe('how much of the application no test has named', () => {
          *   forgot-password is correct and is pinned for it: its success message
          *   never confirms an address is registered, which is the screen's half of
          *   a non-enumeration guarantee the action already keeps.
+         *
+         *   Then 59 → 54, on the five academy application wizard files — the three
+         *   steps, ReviewStep and the retired success page. Taken as a batch
+         *   because the question worth asking spans them: do the steps collect
+         *   exactly what AcademyApplicationInputSchema declares? They do, field
+         *   for field, and that is now pinned — Zod strips what it does not
+         *   declare, so a step that gains a field the schema lacks loses it in
+         *   silence.
+         *
+         *   #920 is what the comparison found one layer in. #912's fix ends "so:
+         *   normalise at the parse boundary, where every caller of the schema gets
+         *   it" — and _submitAcademyApplicationAction, the door that fix was
+         *   written about, was not a caller of the schema. It took a TypeScript
+         *   interface, and withFlexibleSafeAction validates nothing. Measured
+         *   against both doors with the same payload: submit WROTE
+         *   `email: "not-an-email"` into the field its own dedup guard queries,
+         *   wrote a blank address as null and thereby SKIPPED that guard
+         *   (`if (normalisedEmail)` is falsy on ""), and spread an invented key
+         *   into the row — `_version: 99` reached it, and the admin raw-details
+         *   modal prints `v{_version}.0`. Resubmit refused all three. It parses
+         *   now, before the session read, the order its sibling already pinned.
+         *
+         *   NOT fixed and said so: the schema gives no string a `.min(1)`, so both
+         *   doors accept a blank in a field the wizard marks required, and submit
+         *   copies seven blanks onto the learner's own user row. Tightening it
+         *   would refuse resubmission of the historical rows the edit form loads
+         *   back into itself, and how many carry a blank is not measurable from
+         *   here. Pinned with the exact list of nine instead.
+         *
+         *   And a ninth spelling of #452's name rule: the wizard built
+         *   `personalInfo.fullName` as firstName + lastName, dropping the middle
+         *   name, while the action writes the user row as
+         *   [firstName, otherName, lastName]. One submission, two names for one
+         *   person — the admin users screen said "Ada Chidinma Obi", the admin
+         *   academy applications screen, which prints personalInfo.fullName as its
+         *   heading and exports it to CSV, said "Ada Obi", and its search could
+         *   not find the middle name the applicant typed. Both now go through
+         *   joinFullName. firestore-serialize's serializeUser carried the same
+         *   two-part rule and overwrote a stored three-part name with it; it has
+         *   no callers, so nothing loses a name to it today, and it is corrected
+         *   rather than left for the reason #919 recorded about lib/security.
+         *
+         *   ReviewStep — the last screen before Submit, ending in "I confirm that
+         *   all the information provided is accurate and complete" — declared six
+         *   personalInfo fields and omitted GENDER and LGA, both required, both
+         *   written onto the user row. LGA is the one the form clears whenever the
+         *   State changes, so it is precisely the value an applicant needed to see
+         *   confirmed. The parent already passed them; only the prop type left
+         *   them out, which is why nothing complained.
+         *
+         *   The success page is clean and stays retired: #384 pointed it at
+         *   /academy/dashboard because the wizard never sends anyone to it, and
+         *   that redirect is pinned rather than left looking unfinished.
          */
-        expect(ledgerVerdict(unreached().length, 59)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 54)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

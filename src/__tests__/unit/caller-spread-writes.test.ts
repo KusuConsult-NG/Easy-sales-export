@@ -282,7 +282,22 @@ const KNOWN: Record<string, number> = {
     'app/api/admin/academy/quiz/create/route.ts': 1,
 
     // Server-built objects, not request payloads.
-    'app/actions/academy/_ac_applications.ts': 1,
+    //
+    //   #920 _ac_applications.ts REMOVED, and the claim it was filed under was
+    //   the wrong one. Its entry sat in this section — "server-built objects, not
+    //   request payloads" — but the spread was
+    //   `t.set(appRef, { ...applicationData })`, and `applicationData` was the
+    //   action's own PARAMETER: the learner's form body, straight from the
+    //   browser, with no schema between. What made it harmless was the eleven
+    //   fields pinned AFTER the spread (userId, status, paymentStatus, reviewedBy
+    //   and the rest), not anything about where the object came from. Measured:
+    //   `invented: 'yes'` and `_version: 99` reached the row.
+    //
+    //   The submit door now parses through AcademyApplicationInputSchema, like
+    //   its resubmit sibling, so the spread really is of a server-built object —
+    //   the parser's output — and the scanner no longer traces it to a parameter.
+    //   The entry goes rather than being restated, so that `added` catches it if
+    //   the parse is ever removed.
     'app/actions/land-listings.ts': 1,
     'app/actions/wave/_wv_resources.ts': 1,
     'infrastructure/notifications/service.ts': 2,
@@ -369,6 +384,21 @@ describe('the codebase', () => {
         // Vacuity guard for the two assertions above. A scanner returning []
         // passes both of them and proves nothing; the count is not zero and must
         // not become zero silently.
-        expect(leads.length).toBeGreaterThanOrEqual(10);
+        //
+        //   #920 10 → 9. One site left the scan because the academy submit door
+        //   now parses its input; see the note in KNOWN. A floor is lowered only
+        //   when the reason is a site that was FIXED, which is why the count is
+        //   recorded here rather than replaced by `> 0`.
+        //
+        //   AND ONE THING THIS GATE DOES NOT NOTICE, recorded while lowering it:
+        //   a KNOWN entry whose site has gone away fails nothing. Only `added`
+        //   and `grown` are checked. Two entries besides the one removed above —
+        //   app/actions/admin/_settings.ts and
+        //   app/actions/academy/_ac_catalog.ts — are already in that state, and
+        //   were before this change. They are left alone deliberately: neither is
+        //   this work's, and a stale entry is a claim somebody made that only its
+        //   author can retire. What it means for a reader is that KNOWN's ten
+        //   entries describe seven live sites.
+        expect(leads.length).toBeGreaterThanOrEqual(9);
     });
 });

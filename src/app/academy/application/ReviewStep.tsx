@@ -4,12 +4,29 @@ import { Check, User, GraduationCap, Target, Calendar, MapPin, Briefcase, Phone,
 import Link from "next/link";
 
 interface ReviewStepProps {
+    /*
+     *   #920 GENDER AND LGA WERE MISSING FROM THIS LIST, and the checkbox at the
+     *   foot of this screen reads "I confirm that all the information provided is
+     *   accurate and complete."
+     *
+     *   Both are marked required on PersonalInfoStep, both are written onto the
+     *   learner's own user row by the submit action (gender, stateOfOrigin, lga),
+     *   and neither was ever shown back. The applicant was asked to confirm the
+     *   completeness of a summary that omitted two of the ten answers they gave
+     *   — and LGA is the one a select-with-a-dependent-list most easily leaves on
+     *   the wrong value, because choosing a State clears it.
+     *
+     *   The parent already passes them: it spreads the whole personalInfo object.
+     *   Only this interface left them out, so nothing needed to be plumbed.
+     */
     personalInfo: {
         fullName: string;
         email: string;
         phone: string;
         dateOfBirth: string;
+        gender: string;
         state: string;
+        lga: string;
         occupation: string;
     };
     education: {
@@ -80,8 +97,16 @@ export default function ReviewStep({
                         <p className="font-semibold text-slate-900">{personalInfo?.dateOfBirth || ""}</p>
                     </div>
                     <div>
+                        <p className="text-slate-500">Gender</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.gender || ""}</p>
+                    </div>
+                    <div>
                         <p className="text-slate-500">State</p>
                         <p className="font-semibold text-slate-900">{personalInfo?.state || ""}</p>
+                    </div>
+                    <div>
+                        <p className="text-slate-500">LGA</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.lga || ""}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Occupation</p>
