@@ -235,8 +235,24 @@ describe('how much of the application no test has named', () => {
          *   app/error.tsx and admin/error.tsx also rendered `error.message`
          *   straight onto the page — useless to the reader and, for a
          *   client-side throw, whatever the code happened to say.
+         *
+         *   Then 88 → 85, on the WAVE application steps. #905: both doors that
+         *   accept an application returned `issues[0].message` and threw away
+         *   `issues[0].path`, and FOURTEEN of the schema's required fields carry
+         *   no message of their own — so an applicant reached the end of seven
+         *   sections, on the largest programme this platform runs, and was told
+         *   "Too small: expected number to be >=18" with no field, no section
+         *   and nowhere to go. Measured against the schema, not supposed.
+         *
+         *   And the form's own pre-submission guard checked ELEVEN of the thirty
+         *   fields the server refuses on, because the schema sat in a
+         *   "use server" module the form could not import. The schema moved to
+         *   lib/wave-application-fields unchanged and the form parses the very
+         *   object the action parses; the field→step table lives beside it, so a
+         *   field added to one without the other fails a test rather than
+         *   reappearing as a bare Zod message on exactly one field.
          */
-        expect(ledgerVerdict(unreached().length, 88)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 85)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

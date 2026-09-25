@@ -280,10 +280,26 @@ describe('#626 — and the civic step refuses exactly what the server refuses', 
         //   And the check that could not fail is gone.
         expect(src).not.toContain('setErrors({});\n        return true;');
 
-        //   The submit action validates with the same one, so the two agree by
-        //   construction rather than by somebody remembering.
+        /*
+         *   The submit action validates with the same one, so the two agree by
+         *   construction rather than by somebody remembering.
+         *
+         *   #905 THE SCHEMA MOVED, AND THIS TEST'S POINT IS WHY. It was declared
+         *   inside actions/wave/_wv_applications, a "use server" module, so the
+         *   FORM could not import it — and this assertion existed precisely
+         *   because the client had to restate the rule as a string instead. It
+         *   now lives in lib/wave-application-fields, which both sides import,
+         *   and WaveApplicationClient parses the whole schema before submitting.
+         *   Still asserted here: the civic step's own field-level check must be
+         *   the same rule, because it is what refuses her BEFORE the last step.
+         */
+        const schema = readFileSync(join(process.cwd(), 'src/lib/wave-application-fields.ts'), 'utf8');
+        expect(schema).toContain("nin: requiredNationalIdField('NIN')");
+
+        //   And the action no longer keeps one of its own.
         const action = readFileSync(join(process.cwd(), 'src/app/actions/wave/_wv_applications.ts'), 'utf8');
-        expect(action).toContain("nin: requiredNationalIdField('NIN')");
+        expect(action).not.toContain("nin: requiredNationalIdField('NIN')");
+        expect(action).toContain('waveApplicationSchema');
 
         /*
          *   AND THE BVN IS CHECKED ON THE STEP THAT DRAWS IT. It is collected
@@ -294,7 +310,8 @@ describe('#626 — and the civic step refuses exactly what the server refuses', 
          */
         const financial = readFileSync(join(process.cwd(), 'src/app/wave/application/steps/FinancialStep.tsx'), 'utf8');
         expect(financial).toContain("requiredNationalIdField('BVN')");
-        expect(action).toContain("bvn: requiredNationalIdField('BVN')");
+        //   #905 The schema's side, at its new address — see the note above.
+        expect(schema).toContain("bvn: requiredNationalIdField('BVN')");
     });
 });
 
