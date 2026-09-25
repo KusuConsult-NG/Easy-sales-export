@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COURSE_LEVELS } from "@/lib/academy-course-fields";
 import { PASSWORD_RULES } from "@/lib/password-policy";
 import { nationalIdField } from '@/lib/kyc-validators';
 import { personNameField } from '@/lib/types/person-name-field';
@@ -461,7 +462,8 @@ export const courseSchema = z.object({
     description: z.string().min(20, "Course description must be at least 20 characters"),
     instructor: z.string().min(3, "Instructor name must be at least 3 characters"),
     duration: z.string().min(1, "Duration is required"),
-    level: z.enum(["beginner", "intermediate", "advanced"]),
+    //   #930 — one list, shared with the forms. See academy-course-fields.
+    level: z.enum(COURSE_LEVELS),
     tier: z.enum(["free", "foundation", "standard", "elite"]).optional().default("free"),
     moduleId: z.string().min(1, "Module ID is required"),
     price: z.number().min(0),

@@ -918,8 +918,44 @@ describe('how much of the application no test has named', () => {
          *   note, and none of them tells the applicant. Customer-facing copy for
          *   three modules is the owner's call with the programme, the same line
          *   #927 drew about the absent suspension email.
+         *
+         *   Then 25 → 24, on admin/academy/create/page.
+         *
+         *   #930 EVERY COURSE THE ACADEMY HAS EVER PUBLISHED IS "BEGINNER, 4
+         *   WEEKS", AND THE CERTIFICATE PRINTS IT. The create form's payload
+         *   carried `level: "beginner"` and `duration: "4 weeks"` as literals and
+         *   asked for neither, and the EDIT screen's courseDetailsForm was
+         *   {title, description, instructor, tier} — so no screen on this
+         *   platform could set either field. Both are read in five places:
+         *   the catalogue's level FILTER, the level badge and duration on its
+         *   card, both on the course page, and `{course.duration}` on the
+         *   learner's CERTIFICATE. A twelve-week advanced masterclass was listed
+         *   as Beginner, 4 weeks; the "advanced" filter could never match
+         *   anything, because every course in the catalogue holds the one value;
+         *   and the document she shows an employer attests a length nobody
+         *   entered.
+         *
+         *   AND THE CATEGORY SELECT WAS DECORATION — five options, written into
+         *   form state by its onChange and absent from the object handed to
+         *   createCourseAction. validations/course has admitted `category` since
+         *   the tier fix; its header even says "the create page sends both". It
+         *   sends tier. This is the same file's own history repeating: the
+         *   thumbnail "upload placeholder" that was a styled div with no input.
+         *
+         *   Nothing READS course.category yet, so it is recorded rather than
+         *   displayed — a smaller wrong than a select that discards the answer it
+         *   asked for. A category filter needs a reader, which is the owner's
+         *   call. The edit screen gained all three fields, because the courses
+         *   already stored are the ones carrying the invented values, and it also
+         *   refuses a blank duration in a sentence naming the field rather than
+         *   relaying the schema's after a round trip.
+         *
+         *   The three levels had been written out four times — two types, two zod
+         *   schemas — and the forms needed a fifth to render a <select>. They are
+         *   one list in lib/academy-course-fields now, which both enums are built
+         *   from.
          */
-        expect(ledgerVerdict(unreached().length, 25)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 24)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
