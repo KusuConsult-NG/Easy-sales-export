@@ -35,6 +35,7 @@ import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
 import { ImageOff } from "lucide-react";
 import { PRODUCT_CATEGORY_OPTIONS } from "@/lib/product-categories";
 import { PRODUCT_CREATED_MESSAGE } from "@/lib/product-status";
+import { goBackOr } from "@/lib/go-back";
 
 const initialState = { success: false as const, error: "", data: null };
 
@@ -726,7 +727,7 @@ export default function CreateProductPage() {
                     <div className="flex gap-4">
                         <button
                             type="button"
-                            onClick={() => router.back()}
+                            onClick={() => goBackOr(router, "/marketplace/seller/products")}
                             className="flex-1 px-6 py-4 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition"
                         >
                             Cancel

@@ -25,6 +25,7 @@ import { getUserProfileAction } from "@/app/actions/profile";
  */
 import { geocodeAddress, type GeocodeResult } from "@/lib/geocode-request";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/nominatim";
+import { goBackOr } from "@/lib/go-back";
 
 // Disable static generation for this page - must be client-only due to Paystack
 export const dynamic = 'force-dynamic';
@@ -836,7 +837,7 @@ export default function CheckoutPage() {
                 <div className="max-w-6xl mx-auto">
                     {/* Header */}
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => goBackOr(router, "/marketplace")}
                         className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 transition"
                     >
                         <ArrowLeft className="w-5 h-5" />

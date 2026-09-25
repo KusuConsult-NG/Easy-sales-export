@@ -51,13 +51,16 @@
  *   the presentation stayed each screen's own. Two are fixed here because their
  *   destination was not a judgement call: the 404 already offers Go Home beside
  *   it, and the chatbot thread's button is literally labelled "Back to sessions"
- *   with /admin/chatbot existing. The remaining EIGHT are a ledger.
+ *   with /admin/chatbot existing. The remaining EIGHT were a ledger, and #935
+ *   closed it: six of those eight print their destination on the button, and
+ *   the other two are Cancel beside a sibling that does. The per-screen
+ *   decision this deferred had already been made, on the screens.
  *
  *   `jest` is the GLOBAL here, per #392.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { stripComments } from '@/lib/testing/strip-comments';
@@ -250,27 +253,109 @@ describe('#927 — the 404\'s Go Back button goes somewhere', () => {
         expect(page).toContain('Back to sessions');
     });
 
-    it('THE LEDGER — screens still calling back() with no fallback', () => {
-        //   Eight call sites across five files, of the TEN the sweep found. Each
-        //   needs a per-screen answer to "where does back mean when there is no
-        //   history", and deciding that eight times in one pass is how a working
-        //   screen starts navigating somewhere wrong. They are reached by
-        //   moving around INSIDE the app, so no-history is possible via a bookmark
-        //   but is not the normal case — unlike a 404, where it is.
-        const REMAINING = [
+    it('THE LEDGER — screens still calling back() with no fallback, now ZERO', () => {
+        /*
+         *   #935 CLOSED, AND THE PREMISE FOR HOLDING IT WAS WEAKER THAN I WROTE.
+         *
+         *   This ledger deferred eight call sites on the grounds that each "needs
+         *   a per-screen answer to 'where does back mean when there is no
+         *   history', and deciding that eight times in one pass is how a working
+         *   screen starts navigating somewhere wrong". lib/go-back's header says
+         *   the same.
+         *
+         *   Then the eight were read instead of reasoned about, and SIX OF THEM
+         *   HAVE THE ANSWER PRINTED ON THE BUTTON: "Back to Disputes", "Back to
+         *   Products", "Back to Marketplace", "Back to Orders". The remaining two
+         *   are Cancel buttons whose own screen carries one of those labels a few
+         *   lines above. That is the same argument #927 used for the chatbot
+         *   thread — "its label says where, and the route exists" — and it applied
+         *   to all eight, not to one.
+         *
+         *   So the number stays a ledger, at zero. A new hand-rolled back() in
+         *   any of these five files fails here, and the destinations each screen
+         *   chose are asserted below rather than left to a future reader to infer.
+         */
+        const SWEPT = [
             'src/app/admin/marketplace/disputes/[id]/page.tsx',
             'src/app/marketplace/seller/products/[id]/edit/EditProductClient.tsx',
             'src/app/marketplace/checkout/page.tsx',
             'src/app/marketplace/sell/create/page.tsx',
             'src/app/dashboard/disputes/new/NewDisputeClient.tsx',
         ];
-        const calls = REMAINING.reduce(
+        const calls = SWEPT.reduce(
             (n, rel) => n + (code(rel).match(/router\.back\(\)/g) ?? []).length, 0);
 
-        //   EIGHT, counted rather than remembered. My first pass at this number
-        //   said seven, because EditProductClient carries THREE of them and I
-        //   totalled the grep by eye. The ledger caught it, which is what it is for.
-        expect(ledgerVerdict(calls, 8)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(calls, 0)).toBe(LEDGER_HELD);
+    });
+
+    it('AND EVERY ONE OF THEM FALLS BACK WHERE ITS OWN LABEL POINTS', () => {
+        /*
+         *   The destinations, each read off the screen rather than chosen for it.
+         *   A fallback that contradicted its own button would be a worse defect
+         *   than the no-op this replaces: the button would work, and go somewhere
+         *   the person was not promised.
+         */
+        const DESTINATIONS: { rel: string; fallback: string; label: string; count: number }[] = [
+            {
+                rel: 'src/app/admin/marketplace/disputes/[id]/page.tsx',
+                fallback: '/admin/marketplace/disputes',
+                label: 'Back to Disputes',
+                count: 1,
+            },
+            {
+                //   Three: the error screen's "Go Back", the header's "Back to
+                //   Products", and the form's Cancel. All three mean the list.
+                rel: 'src/app/marketplace/seller/products/[id]/edit/EditProductClient.tsx',
+                fallback: '/marketplace/seller/products',
+                label: 'Back to Products',
+                count: 3,
+            },
+            {
+                rel: 'src/app/marketplace/checkout/page.tsx',
+                fallback: '/marketplace',
+                label: 'Back to Marketplace',
+                count: 1,
+            },
+            {
+                //   Cancel on the create form. Its sibling screen's own list is
+                //   where a seller who abandons a listing belongs.
+                rel: 'src/app/marketplace/sell/create/page.tsx',
+                fallback: '/marketplace/seller/products',
+                label: 'Cancel',
+                count: 1,
+            },
+            {
+                rel: 'src/app/dashboard/disputes/new/NewDisputeClient.tsx',
+                fallback: '/marketplace/buyer/orders',
+                label: 'Back to Orders',
+                count: 2,
+            },
+        ];
+
+        for (const { rel, fallback, label, count } of DESTINATIONS) {
+            const page = code(rel);
+            const calls = (page.match(new RegExp(`goBackOr\\(router, "${fallback}"\\)`, 'g')) ?? []).length;
+
+            expect({ rel, calls }).toEqual({ rel, calls: count });
+            expect({ rel, label, says: page.includes(label) }).toEqual({ rel, label, says: true });
+            expect({ rel, imports: page.includes('@/lib/go-back') }).toEqual({ rel, imports: true });
+        }
+    });
+
+    it('AND EVERY FALLBACK IS A ROUTE THAT EXISTS', () => {
+        //   A fallback naming a page that is not there would replace a button
+        //   doing nothing with a button reaching a 404 — the same failure wearing
+        //   a different face.
+        const TARGETS = [
+            'src/app/admin/marketplace/disputes/page.tsx',
+            'src/app/marketplace/seller/products/page.tsx',
+            'src/app/marketplace/page.tsx',
+            'src/app/marketplace/buyer/orders/page.tsx',
+        ];
+
+        for (const rel of TARGETS) {
+            expect({ rel, exists: existsSync(join(ROOT, rel)) }).toEqual({ rel, exists: true });
+        }
     });
 
     it('and the two that were fixed are off it', () => {
