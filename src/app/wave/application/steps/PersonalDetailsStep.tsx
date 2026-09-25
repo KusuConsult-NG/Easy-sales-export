@@ -6,6 +6,7 @@
 "use client";
 
 import { useState } from "react";
+import { isNigerianMobile } from "@/lib/phone";
 import { CheckCircle, AlertCircle } from "lucide-react";
 //   #560 The form's shape lives with the form — see ReviewStep. `page` is now
 //   the server half and exports only the page component.
@@ -68,7 +69,22 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
             newErrors.phone = "Phone number is required";
         } else if (phone.length !== 11) {
             newErrors.phone = "Phone number must be exactly 11 digits";
-        } else if (!/^0[789][01]\d{8}$/.test(phone)) {
+            /*
+             *   #923 THE PLATFORM'S ONE PHONE RULE, not a restatement of it.
+             *
+             *   #919 consolidated the two functions called isValidNigerianPhone
+             *   onto lib/phone's isNigerianMobile, whose header records WHY the
+             *   middle digit matters: "Nigerian mobile prefixes are 070, 071,
+             *   080, 081, 090 and 091 — so `[789][01]` is the real set."
+             *
+             *   THREE REGEXES SURVIVED THAT, and this was one of them. This one AGREED with the rule
+             *   for an eleven-digit number, which is why it is the least urgent
+             *   and still worth folding: a copy that agrees is a copy that can
+             *   stop agreeing. Delegating also accepts `+2348031234567`, which
+             *   the server schema this screen feeds already accepts and this
+             *   pre-check refused.
+             */
+        } else if (!isNigerianMobile(phone)) {
             newErrors.phone = "Please enter a valid Nigerian phone number";
         }
 
