@@ -270,12 +270,17 @@ describe('#911 — normalisePaymentStatus stops calling a moved payment "pending
         //   answer. What changes is that it is no longer SILENT: answering
         //   confidently without a basis is the mechanism this whole finding is
         //   about.
-        const warn = jest.spyOn(require('@/lib/logger').logger, 'warn').mockImplementation(() => {});
+        const lines: string[] = [];
+        const warn = jest.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+            lines.push(args.map(String).join(' '));
+        });
 
         try {
             expect(normalisePaymentStatus('banana')).toBe(PAYMENT_STATUS.PENDING);
-            expect(warn).toHaveBeenCalledTimes(1);
-            expect(String((warn.mock.calls[0] as unknown[])[0])).toContain('banana');
+
+            const reported = lines.filter((l) => l.includes('normalisePaymentStatus'));
+            expect(reported).toHaveLength(1);
+            expect(reported[0]).toContain('banana');
         } finally {
             warn.mockRestore();
         }
@@ -285,13 +290,16 @@ describe('#911 — normalisePaymentStatus stops calling a moved payment "pending
         //   An absent status is a legitimate state of a row that has never been
         //   paid. Warning on it would make the log useless for finding the case
         //   that matters.
-        const warn = jest.spyOn(require('@/lib/logger').logger, 'warn').mockImplementation(() => {});
+        const lines: string[] = [];
+        const warn = jest.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+            lines.push(args.map(String).join(' '));
+        });
 
         try {
             expect(normalisePaymentStatus(null)).toBe(PAYMENT_STATUS.PENDING);
             expect(normalisePaymentStatus(undefined)).toBe(PAYMENT_STATUS.PENDING);
             expect(normalisePaymentStatus('')).toBe(PAYMENT_STATUS.PENDING);
-            expect(warn).not.toHaveBeenCalled();
+            expect(lines.filter((l) => l.includes('normalisePaymentStatus'))).toEqual([]);
         } finally {
             warn.mockRestore();
         }
@@ -551,5 +559,73 @@ describe('#309/#911 — recordExport makes a failed audit row visible', () => {
 
         expect(calls).toEqual([['cooperative_loans', {}]]);
         expect(exportLines(lines)).toEqual([]);
+    });
+});
+
+/**
+ *   #911/#392 AND THE MISTAKE THAT PRODUCED THIS SECTION.
+ *
+ *   The first version of the fix reached for the house logger for that warning:
+ *
+ *       import { logger } from "@/lib/logger";
+ *
+ *   in src/lib/types/firestore.ts. The unit suite was green, tsc was green, and
+ *   the pre-push hook refused the push — every-jest-mock-takes-effect (#392)
+ *   named six suites whose `jest.mock('@/lib/logger')` had stopped taking
+ *   effect:
+ *
+ *       academy-live-session-entitlement    briefing-public-registration
+ *       academy-quiz-editor-permission      classroom-room-is-not-guessable
+ *       admin-api-routes-are-sibling-doors  fixed-savings-terms
+ *
+ *   That file is what its own header calls "the SINGLE IMPORT POINT for all
+ *   platform types". A runtime import added to it is loaded by anything that
+ *   imports any TYPE from it — which is most of the application and most of the
+ *   suite — and it loads BEFORE the mock registers, so each of those six would
+ *   have gone on passing while silently exercising the real logger.
+ *
+ *   The barrel keeps its two existing runtime exports and gains no runtime
+ *   imports. Pinned below, because the next person to want a log line in
+ *   normalisePaymentStatus will reach for exactly what I reached for, and #392
+ *   only reports it once a suite happens to mock the thing that was pulled in.
+ */
+describe('#911 — the types barrel imports no runtime module', () => {
+    const BARREL = 'src/lib/types/firestore.ts';
+
+    it('every import in it is `import type`, or a sibling type module', () => {
+        const src = stripComments(readFileSync(join(ROOT, BARREL), 'utf8'), {
+            label: BARREL,
+            minRetainedRatio: 0.3,
+        });
+
+        const valueImports = [...src.matchAll(/^import\s+(?!type\b)([^;]+?)\s+from\s+['"]([^'"]+)['"]/gm)]
+            .map((m) => ({ what: m[1].trim(), from: m[2] }));
+
+        expect(valueImports).toEqual([]);
+    });
+
+    it('POSITIVE CONTROL: the matcher really does find a value import', () => {
+        //   Without this, a regex that never matched would report an empty list
+        //   and the ratchet would pass on a barrel full of runtime imports.
+        const sample = [
+            'import type { A } from "./a";',
+            'import { logger } from "@/lib/logger";',
+            'import type { B } from "./b";',
+        ].join('\n');
+
+        const found = [...sample.matchAll(/^import\s+(?!type\b)([^;]+?)\s+from\s+['"]([^'"]+)['"]/gm)]
+            .map((m) => m[2]);
+
+        expect(found).toEqual(['@/lib/logger']);
+    });
+
+    it('and it still re-exports the type surface it exists for (control)', () => {
+        //   The cheap way to pass the assertion above is to gut the file. This
+        //   insists the barrel is still a barrel.
+        const src = readFileSync(join(ROOT, BARREL), 'utf8');
+
+        expect(src).toContain('export type {');
+        expect(src).toContain('PAYMENT_STATUS');
+        expect(src.length).toBeGreaterThan(10_000);
     });
 });

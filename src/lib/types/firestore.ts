@@ -26,11 +26,6 @@ export * from "./prd-interfaces";
 
 // Export role types
 import type { UserRole, LegacyRole } from "./roles";
-//   #911 A runtime import into what the header calls the single import point
-//   for all platform types. It already had two — PAYMENT_STATUS and
-//   normalisePaymentStatus below — and logger imports nothing at all, so this
-//   adds no cycle and no third-party weight.
-import { logger } from "@/lib/logger";
 export type { UserRole, LegacyRole };
 export { ROLE_LABELS, LEGACY_ROLE_MAP } from "./roles";
 
@@ -209,7 +204,22 @@ export function normalisePaymentStatus(status: string | null | undefined): Payme
     //   A value the platform has never written. `pending` is still the safest
     //   answer — it claims nothing about money having moved — but it is a guess,
     //   and a silent guess about a payment is what this finding is about.
-    logger.warn(
+    //   console.warn, and NOT the house logger. MEASURED, after getting it
+    //   wrong: importing `@/lib/logger` here broke six existing suites.
+    //
+    //   This file is what its own header calls "the SINGLE IMPORT POINT for all
+    //   platform types", so a runtime import added to it is loaded by anything
+    //   that imports any type from it — before that suite's own
+    //   `jest.mock('@/lib/logger')` can register. #392's meta-test
+    //   (every-jest-mock-takes-effect) caught exactly that and named all six:
+    //   academy-live-session-entitlement, academy-quiz-editor-permission,
+    //   admin-api-routes-are-sibling-doors, briefing-public-registration,
+    //   classroom-room-is-not-guessable and fixed-savings-terms. Each mocks the
+    //   logger and would have been silently testing the real one.
+    //
+    //   A types barrel stays free of runtime imports, then. `no-console` allows
+    //   warn, and there is nothing sensitive in an unrecognised status string.
+    console.warn(
         `[normalisePaymentStatus] no canonical value for ${JSON.stringify(status)} — answering "pending"`,
     );
     return PAYMENT_STATUS.PENDING;
