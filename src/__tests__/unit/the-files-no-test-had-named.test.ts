@@ -220,8 +220,23 @@ describe('how much of the application no test has named', () => {
          *   needed it is exactly what this ledger measures; a file reached by a
          *   test written to lower the number is not, which is why every entry
          *   above says what was found.
+         *
+         *   Then 93 → 88, on the error boundaries. #904: FOURTEEN of them, and
+         *   the only one that reported was app/global-error.tsx — which Next
+         *   reaches LAST, so it handles almost nothing, because there is an
+         *   error.tsx at the app root and one in every module segment. Thirteen
+         *   boundaries wrote `console.error` and told nobody.
+         *
+         *   Which is WHY the two crashes above were live. #901's screens threw
+         *   on every row they were given and both sit under /land, which has no
+         *   boundary of its own, so both landed on app/error.tsx and were
+         *   logged to a browser console. An audit had to find them by reading.
+         *
+         *   app/error.tsx and admin/error.tsx also rendered `error.message`
+         *   straight onto the page — useless to the reader and, for a
+         *   client-side throw, whatever the code happened to say.
          */
-        expect(ledgerVerdict(unreached().length, 93)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 88)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

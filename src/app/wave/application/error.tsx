@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { useStaleDeploymentRecovery } from "@/components/shared/useStaleDeploymentRecovery";
+import { useBoundaryReport } from "@/components/shared/useBoundaryReport";
 import { AlertTriangle } from "lucide-react";
 import { HardLogoutButton } from "@/components/auth/HardLogoutButton";
 
@@ -16,14 +16,18 @@ export default function WaveApplicationError({
     //   of the same unguarded reload.
     const updating = useStaleDeploymentRecovery(error);
 
-    useEffect(() => {
-        //   #717 — any reload is the hook's, and it is bounded. This was
-        //   an unguarded window.location.reload(): when a reload did not
-        //   fetch a newer page, the same error hit the same boundary and
-        //   reloaded again, with nothing counting.
-        if (updating) return;
-        console.error("[WAVE Application Error]", error);
-    }, [error, updating]);
+    /*
+     *   #904 AND SOMEBODY IS TOLD. This boundary logged to the browser console
+     *   and reported nowhere; only app/global-error.tsx reported, and Next
+     *   stops at the NEAREST boundary, so global-error handles almost nothing.
+     *   See components/shared/useBoundaryReport for the measurement — #901's two
+     *   screens threw on every row they were given, in production, silently.
+     *
+     *   The hook keeps this boundary's own `if (updating) return`: a
+     *   ChunkLoadError after a deploy is a stale bundle, not a defect, and
+     *   reporting it would bury the real crashes.
+     */
+    useBoundaryReport(error, updating, "wave/application");
 
     if (updating) {
         return (

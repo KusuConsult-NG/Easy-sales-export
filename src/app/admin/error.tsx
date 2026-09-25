@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useStaleDeploymentRecovery } from "@/components/shared/useStaleDeploymentRecovery";
-import { logger } from '@/lib/logger';
+import { useBoundaryReport } from "@/components/shared/useBoundaryReport";
 import { AlertOctagon, RotateCcw, Home } from 'lucide-react';
 import Link from 'next/link';
 import { HardLogoutButton } from '@/components/auth/HardLogoutButton';
@@ -18,14 +17,18 @@ export default function AdminError({
     //   of the same unguarded reload.
     const updating = useStaleDeploymentRecovery(error);
 
-    useEffect(() => {
-        //   #717 — any reload is the hook's, and it is bounded. This was
-        //   an unguarded window.location.reload(): when a reload did not
-        //   fetch a newer page, the same error hit the same boundary and
-        //   reloaded again, with nothing counting.
-        if (updating) return;
-        logger.error('Admin Error Boundary caught:', error);
-    }, [error, updating]);
+    /*
+     *   #904 AND SOMEBODY IS TOLD. This boundary logged to the browser console
+     *   and reported nowhere; only app/global-error.tsx reported, and Next
+     *   stops at the NEAREST boundary, so global-error handles almost nothing.
+     *   See components/shared/useBoundaryReport for the measurement — #901's two
+     *   screens threw on every row they were given, in production, silently.
+     *
+     *   The hook keeps this boundary's own `if (updating) return`: a
+     *   ChunkLoadError after a deploy is a stale bundle, not a defect, and
+     *   reporting it would bury the real crashes.
+     */
+    useBoundaryReport(error, updating, "admin");
 
     if (updating) {
         return (
@@ -45,9 +48,19 @@ export default function AdminError({
                 Admin Console Error
             </h2>
 
+            {/*   #904 The message is not rendered in production — see
+              *   app/error.tsx. An administrator is still a browser, and this
+              *   screen is reachable with a session that is not trusted with
+              *   adapter internals. Dev keeps it. */}
             <p className="text-slate-600 max-w-md mb-8">
-                {error.message || "An critical error occurred in the admin dashboard. This event has been logged."}
+                A critical error occurred in the admin dashboard. This event has been logged.
             </p>
+
+            {process.env.NODE_ENV === 'development' && error.message && (
+                <p className="max-w-md mb-8 text-left text-xs font-mono text-red-600 wrap-break-word bg-slate-100 p-3 rounded-lg">
+                    {error.message}
+                </p>
+            )}
 
             <div className="flex flex-col gap-4 items-center">
                 <div className="flex gap-4">

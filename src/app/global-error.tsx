@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
 import { useStaleDeploymentRecovery } from "@/components/shared/useStaleDeploymentRecovery";
-import { logger } from "@/lib/logger";
+import { useBoundaryReport } from "@/components/shared/useBoundaryReport";
 import { AlertTriangle, Home, RefreshCcw } from "lucide-react";
 import Link from "next/link";
-import * as Sentry from "@sentry/nextjs";
-import { logTelemetryAction } from "@/app/actions/telemetry";
 
 export default function GlobalError({
     error,
@@ -19,29 +16,17 @@ export default function GlobalError({
     //   of the same unguarded reload.
     const updating = useStaleDeploymentRecovery(error);
 
-    useEffect(() => {
-        // ── Stale-deployment auto-recovery ──────────────────────────────────
-        // ChunkLoadError / UnrecognizedActionError mean the browser has a stale
-        // JS bundle from before the last Railway deploy. A hard reload fetches
-        // the new bundle and the user lands on the same page without any error.
-        //   #717 — any reload is the hook's, and it is bounded. This was
-        //   an unguarded window.location.reload(): when a reload did not
-        //   fetch a newer page, the same error hit the same boundary and
-        //   reloaded again, with nothing counting.
-        if (updating) return;
-
-        // Log genuine errors to Sentry
-        Sentry.captureException(error);
-
-        // Also log to internal telemetry
-        logTelemetryAction('error', "Next.js Global UI Boundary Caught Exception", {
-            digest: error.digest,
-            message: error.message,
-            stack: error.stack,
-            path: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
-            fatal: true
-        });
-    }, [error, updating]);
+    /*
+     *   #904 THE ONE COPY OF THE REPORTING RULE.
+     *
+     *   This file was the only boundary of fourteen that reported, and its body
+     *   is what useBoundaryReport was built from — the Sentry call, the
+     *   telemetry row, and the `if (updating) return` that keeps a
+     *   stale-deployment reload out of the error feed. It goes through the hook
+     *   now so the fourteen cannot drift apart again, which is #717's argument
+     *   about the reload half of this same file.
+     */
+    useBoundaryReport(error, updating, "global");
 
     // While a stale-deployment reload is in flight, show nothing
     if (updating) {
