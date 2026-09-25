@@ -42,6 +42,35 @@
  *
  *   ONE RULE HERE. `splitFullName` is registration's — the one that was right —
  *   and `joinFullName` is its exact inverse, so the round trip is stable.
+ *
+ * ── #920 TWO MORE COPIES, FOUND LATER, AND WHAT IS STILL OUTSTANDING ────────
+ *
+ *   Both dropped the middle name, and both are now pointed here:
+ *
+ *     AcademyApplicationClient   LIVE. It built the academy application's stored
+ *                                `personalInfo.fullName` as firstName + lastName
+ *                                while the submit action wrote the same person's
+ *                                user row as [first, other, last] — so one
+ *                                submission produced two names, and the admin
+ *                                applications screen (which prints, sorts and
+ *                                exports personalInfo.fullName) showed the shorter
+ *                                one.
+ *
+ *     firestore-serialize        DEAD. serializeUser has no callers, but it
+ *                                OVERWROTE a stored three-part name with a
+ *                                two-part derivation, so it would have become
+ *                                live and wrong in the same moment.
+ *
+ *   THIRTY-THREE OCCURRENCES ACROSS TWENTY FILES still spell the join out
+ *   inline instead of importing it — swept, not listed, because the first
+ *   hand-built list of them missed six files by being case-sensitive on the
+ *   middle-name token. They all agree with joinFullName today, which is why they
+ *   are a ledger in one-door-parsed-and-the-other-did-not rather than a rewrite:
+ *   the WAVE and shipment copies use a different field vocabulary (`otherNames`,
+ *   `surname`), so folding them in is a mapping change of its own. #452's cost
+ *   was three copies DISAGREEING, not three copies existing — and the
+ *   twenty-first file is how the next disagreement starts, which is the argument
+ *   this file was written to settle.
  */
 
 export interface NameParts {

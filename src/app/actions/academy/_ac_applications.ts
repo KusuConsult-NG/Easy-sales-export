@@ -18,6 +18,7 @@ import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/va
 import { normaliseEmail } from "@/lib/validations/shared";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { normalisePhone } from "@/lib/phone";
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 import { checkAcademyPaymentStatusAction } from "./_payment";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
@@ -40,9 +41,71 @@ const DUPLICATE_SCAN_LIMIT = 20;
  * Submit Academy learner application
  */
 async function _submitAcademyApplicationAction(
-    applicationData: AcademyApplicationData
+    input: AcademyApplicationData
 ): Promise<ActionResponse<null>> {
     try {
+        /*
+         *   #920 THE DOOR #912 WAS WRITTEN FOR NEVER CROSSED THE BOUNDARY IT PUT
+         *   THE RULE ON.
+         *
+         *   validations/shared's own header ends: "So: normalise at the parse
+         *   boundary, where every caller of the schema gets it." The resubmit
+         *   door is a caller of the schema. THIS one was not — it took a
+         *   TypeScript interface, which exists only at compile time, and
+         *   withFlexibleSafeAction is a try/catch wrapper that validates nothing.
+         *   So the phrase "every caller of the schema" quietly excluded the door
+         *   almost every learner uses, and the two doors that #912 made agree
+         *   about the SPELLING of an address still disagreed about whether the
+         *   address was checked at all.
+         *
+         * ── MEASURED AGAINST THE FAKE DB, BOTH DOORS, SAME PAYLOAD ──────────
+         *
+         *                                 submit (before)      resubmit
+         *     email "not-an-email"        WRITTEN verbatim     refused
+         *     email ""                    written as null      refused
+         *     an invented extra key       lands in the row     stripped
+         *     every required field blank  accepted             accepted
+         *
+         *   The first is the one that costs something. `personalInfo.email` is
+         *   the field the dedup guard below queries and the field two recovery
+         *   lookups fall back to, and a row can now hold a value that is not an
+         *   address. The second is worse in a quiet way: `normaliseEmail("")` is
+         *   falsy, so `if (normalisedEmail)` SKIPS the email half of the
+         *   duplicate check — the "one application per address" rule was not
+         *   failed, it was not asked.
+         *
+         *   The extra key is not hypothetical either: `_version: 99` from the
+         *   caller reached the row, and the admin raw-details modal prints
+         *   `v{_version}.0`. An operator was shown a version nobody wrote.
+         *
+         *   THE FOURTH LINE IS NOT FIXED HERE, and saying so matters: the schema
+         *   declares every string as `z.string()` with no `.min(1)`, so BOTH
+         *   doors accept a blank in a field the form marks required — and the
+         *   submit door then writes those blanks onto the learner's own user row
+         *   (firstName, lastName, fullName, phone, gender, stateOfOrigin, lga).
+         *   Tightening it would refuse resubmission of the historical rows the
+         *   edit form loads back into itself, and I cannot measure how many of
+         *   those carry a blank without production data. It is pinned instead,
+         *   with the exact list, in the test named at the top of this note.
+         *
+         *   PARSED FIRST, BEFORE THE SESSION IS READ — the same order the
+         *   resubmit door already pins, so a malformed body gets a validation
+         *   error rather than "Unauthorized" at either door.
+         */
+        const validation = AcademyApplicationInputSchema.safeParse(input);
+        if (!validation.success) {
+            return {
+                success: false as const,
+                error: validation.error.issues[0]?.message || "Validation failed",
+                data: null,
+            };
+        }
+
+        //   The name the rest of this function reads is bound to the PARSED
+        //   form, so no line below can reach the unchecked input. `input` is the
+        //   only binding that holds it, and nothing uses `input` again.
+        const applicationData = validation.data;
+
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
@@ -318,11 +381,11 @@ async function _submitAcademyApplicationAction(
                 firstName: applicationData.personalInfo.firstName,
                 lastName: applicationData.personalInfo.lastName,
                 otherName: applicationData.personalInfo.otherName || null,
-                fullName: [
-                    applicationData.personalInfo.firstName,
-                    applicationData.personalInfo.otherName,
-                    applicationData.personalInfo.lastName,
-                ].filter(Boolean).join(" ").trim(),
+                //   #920 #452's rule, imported rather than spelled out. Both
+                //   doors wrote this expression; the wizard wrote a two-part
+                //   version of it, and that is how one person ended up with two
+                //   names. A rule stated once cannot disagree with itself.
+                fullName: joinFullName(namePartsOf(applicationData.personalInfo)),
                 phone: applicationData.personalInfo.phone,
                 gender: applicationData.personalInfo.gender,
                 stateOfOrigin: applicationData.personalInfo.state,
@@ -667,11 +730,11 @@ async function _resubmitAcademyApplicationAction(
                 firstName: validatedData.personalInfo.firstName,
                 lastName: validatedData.personalInfo.lastName,
                 otherName: validatedData.personalInfo.otherName || null,
-                fullName: [
-                    validatedData.personalInfo.firstName,
-                    validatedData.personalInfo.otherName,
-                    validatedData.personalInfo.lastName,
-                ].filter(Boolean).join(" ").trim(),
+                //   #920 #452's rule, imported rather than spelled out. Both
+                //   doors wrote this expression; the wizard wrote a two-part
+                //   version of it, and that is how one person ended up with two
+                //   names. A rule stated once cannot disagree with itself.
+                fullName: joinFullName(namePartsOf(validatedData.personalInfo)),
                 phone: validatedData.personalInfo.phone,
                 gender: validatedData.personalInfo.gender,
                 stateOfOrigin: validatedData.personalInfo.state,

@@ -16,6 +16,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useServerSeed } from "@/hooks/useServerSeed";
 import { AlertTriangle } from "lucide-react";
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 
@@ -639,9 +640,28 @@ export default function AcademyApplicationClient(
         setIsSubmitting(true);
 
         try {
+            /*
+             *   #920 THE ONE JOIN RULE, not a ninth spelling of it.
+             *
+             *   This was `${firstName} ${lastName}`.trim() — the MIDDLE NAME
+             *   LEFT OUT — while the server writes the learner's user row as
+             *   [firstName, otherName, lastName]. PersonalInfoStep collects
+             *   otherName, so a learner who filled it in produced two names for
+             *   one person in one submission: the admin users screen showed
+             *   "Ada Chidinma Obi" and the admin academy applications screen,
+             *   which prints `app.personalInfo.fullName` as its heading, showed
+             *   "Ada Obi". The applications search reads fullName, firstName and
+             *   lastName, so searching for the middle name the applicant typed
+             *   found nothing.
+             *
+             *   #452 already settled this rule for the whole platform and states
+             *   why: "A middle name is ordinary in Nigeria." joinFullName is the
+             *   exact inverse of splitFullName, and namePartsOf prefers the parts
+             *   the person typed into three separate boxes over anything derived.
+             */
             const enrichedPersonalInfo = {
                 ...personalInfo,
-                fullName: `${personalInfo?.firstName || ""} ${personalInfo?.lastName || ""}`.trim(),
+                fullName: joinFullName(namePartsOf(personalInfo)),
             };
             const response = (isRevisionMode || isEditMode)
                 ? await resubmitAcademyApplicationAction({ personalInfo: enrichedPersonalInfo, education, interests })
@@ -794,7 +814,7 @@ export default function AcademyApplicationClient(
                         <ReviewStep
                             personalInfo={{
                                 ...personalInfo,
-                                fullName: `${personalInfo?.firstName || ""} ${personalInfo?.lastName || ""}`.trim(),
+                                fullName: joinFullName(namePartsOf(personalInfo)),
                             }}
                             education={education}
                             interests={interests}
