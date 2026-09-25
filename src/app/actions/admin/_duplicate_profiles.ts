@@ -46,6 +46,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { maskAddress } from "@/lib/missing-email-backfill";
+import { sampleOf, describeSample, type SampleScope } from "@/lib/forensic-scan-scope";
 import {
     describeGroup,
     checkResolution,
@@ -61,9 +62,44 @@ import { consolidateWalletToLiveProfile } from "@/lib/wallet-ledger";
 const PAGE = 1000;
 const MAX_PAGES = 50;
 
-/** Every profile grouped by its normalised address. Read-only. */
-async function loadGroups(): Promise<Map<string, { id: string; data: Record<string, unknown> }[]>> {
+interface LoadedGroups {
+    byEmail: Map<string, { id: string; data: Record<string, unknown> }[]>;
+    /** How much of the users table this walk saw. */
+    scope: SampleScope;
+    /** Profiles the grouping could not consider, because they carry no address. */
+    withoutEmail: number;
+}
+
+/**
+ * Every profile grouped by its normalised address. Read-only.
+ *
+ *   #918 IT SAID NOTHING ABOUT WHAT IT COULD NOT SEE.
+ *
+ *   Two blind spots, and an operator supersedes records on the strength of this
+ *   report:
+ *
+ *   1. `if (!email) continue;` — a profile with no address is skipped entirely.
+ *      forensics.ts's own blank-email check found 49 of them. If two are the same
+ *      person, this tool cannot group them and never said it had not looked.
+ *
+ *   2. The walk stops at MAX_PAGES × PAGE = 50,000 rows. supabase-db's header
+ *      calls the users table 41,000, so it fits TODAY — and the day it does not,
+ *      the scan returns the groups it happened to reach and the screen presents
+ *      them as the answer. That is #915's shape exactly, on a tool whose output
+ *      is acted on irreversibly rather than printed.
+ *
+ *   Neither is fixable by looking harder: you cannot group by an address that is
+ *   absent, and a ceiling is what keeps this from reading the whole table on
+ *   every page load. What was missing is the SENTENCE. lib/forensic-scan-scope
+ *   already carries the platform's vocabulary for it — SampleScope, sampleOf,
+ *   describeSample, written for precisely this ("a check that claims
+ *   completeness it does not have is worse than no check, because the owner
+ *   stops looking"). Used here rather than restated.
+ */
+async function loadGroups(): Promise<LoadedGroups> {
     const byEmail = new Map<string, { id: string; data: Record<string, unknown> }[]>();
+    let scanned = 0;
+    let withoutEmail = 0;
 
     let cursor: string | undefined;
     for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -73,9 +109,10 @@ async function loadGroups(): Promise<Map<string, { id: string; data: Record<stri
         if (snap.docs.length === 0) break;
 
         for (const d of snap.docs) {
+            scanned += 1;
             const data = (d.data() ?? {}) as Record<string, unknown>;
             const email = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
-            if (!email) continue;
+            if (!email) { withoutEmail += 1; continue; }
             byEmail.set(email, [...(byEmail.get(email) ?? []), { id: d.id, data }]);
         }
 
@@ -83,7 +120,7 @@ async function loadGroups(): Promise<Map<string, { id: string; data: Record<stri
         if (snap.docs.length < PAGE) break;
     }
 
-    return byEmail;
+    return { byEmail, scope: sampleOf(scanned, MAX_PAGES * PAGE), withoutEmail };
 }
 
 export interface DuplicateProfileReport {
@@ -108,6 +145,16 @@ export interface DuplicateProfileReport {
     needsADecision: number;
     inconsistent: number;
     resolved: number;
+    /**
+     *   #918 WHAT THE SCAN SAW, so the screen can say it.
+     *
+     *   `scope.complete` is false when the page walk hit its ceiling, and
+     *   `profilesWithoutEmail` counts the rows grouping could not consider at
+     *   all. Both are absences, and an absence the operator is not told about is
+     *   one they will read as a zero.
+     */
+    scope: SampleScope;
+    profilesWithoutEmail: number;
 }
 
 async function _listDuplicateProfileGroupsAction(): Promise<ActionResponse<DuplicateProfileReport | null>> {
@@ -117,7 +164,7 @@ async function _listDuplicateProfileGroupsAction(): Promise<ActionResponse<Dupli
             return { success: false as const, error: authCheck.error, data: null };
         }
 
-        const byEmail = await loadGroups();
+        const { byEmail, scope, withoutEmail } = await loadGroups();
         const groups: DuplicateGroup[] = [];
 
         /*
@@ -187,6 +234,16 @@ async function _listDuplicateProfileGroupsAction(): Promise<ActionResponse<Dupli
             return b.candidates.length - a.candidates.length;
         });
 
+        //   #918 Said in the log as well as on the screen. A scan that stopped
+        //   short is worth finding later, and `describeSample` is the sentence
+        //   the rest of the platform already uses for it.
+        if (!scope.complete || withoutEmail > 0) {
+            logger.warn(
+                `[admin/duplicate-profiles] ${describeSample(scope, "profile")}; `
+                + `${withoutEmail} carried no address and could not be grouped.`,
+            );
+        }
+
         return {
             success: true as const,
             error: null,
@@ -197,6 +254,8 @@ async function _listDuplicateProfileGroupsAction(): Promise<ActionResponse<Dupli
                 needsADecision: groups.filter((g) => g.state === "needs-a-decision").length,
                 inconsistent: groups.filter((g) => g.state === "inconsistent").length,
                 resolved: groups.filter((g) => g.state === "resolved").length,
+                scope,
+                profilesWithoutEmail: withoutEmail,
             },
         };
     } catch (error: any) {
@@ -266,7 +325,7 @@ async function _resolveDuplicateProfileGroupAction(
          *   could not undo. Deciding from what the caller sent would make all
          *   of them decorative.
          */
-        const byEmail = await loadGroups();
+        const { byEmail } = await loadGroups();
         const rows = byEmail.get(email) ?? [];
         if (rows.length < 2) {
             return {
