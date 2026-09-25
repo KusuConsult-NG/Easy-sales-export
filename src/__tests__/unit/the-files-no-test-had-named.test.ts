@@ -954,8 +954,48 @@ describe('how much of the application no test has named', () => {
          *   schemas — and the forms needed a fifth to render a <select>. They are
          *   one list in lib/academy-course-fields now, which both enums are built
          *   from.
+         *
+         *   Then 24 → 23, on farm-nation/onboarding/steps/RoleSelectionStep.
+         *
+         *   #931 TWO OF ITS TWELVE PROMISES NAMED FEATURES THAT EXIST NOWHERE.
+         *   Three cards, four bullets each, read at the moment somebody chooses
+         *   a side of Farm Nation. Swept across every shipping file under src,
+         *   stripped: "Pricing analytics tools" and "Priority support" appear in
+         *   that file and in NO other, and neither has an implementation — the
+         *   tree holds no price analytics of any kind and one support address
+         *   with no tiering. The other ten were checked and stand, and each is
+         *   now pinned to the file that implements it, so a bullet added later
+         *   fails until somebody says where it lives. That pairing is the part
+         *   worth keeping: the defect was not a typo, it was a list nobody could
+         *   check.
+         *
+         *   AND "You can change this later" HAD NO DOOR. The choice is stored at
+         *   serviceRegistrations.farmNation.role, and the only screen that can
+         *   rewrite it is that wizard behind `?edit=true` — linked from the
+         *   PENDING page alone, which an approved member never sees because Farm
+         *   Nation grants her roles at submit and sends her to the dashboard
+         *   (#790). RECORDED, NOT IMPROVISED: that path is
+         *   resubmitFarmNationApplicationAction, which writes `status:
+         *   "pending"`, so the obvious repair — an "edit your details" link in
+         *   the member area — would put an approved member back in the review
+         *   queue. A role-change action that does not is a new feature with
+         *   review semantics the owner should choose, so the SENTENCE is what
+         *   changed.
+         *
+         *   WHAT THE CHOICE DECIDES, measured rather than assumed:
+         *   rolesForFarmNationRole grants `investor` for a buyer and `farmer` for
+         *   a seller, and _createLandListingAction's gate is
+         *   hasAppAccess(roles, "farm-nation") — which either satisfies. So
+         *   neither answer shuts anybody out of listing or buying; it decides the
+         *   roles on the account and the admin broadcast segment. The new wording
+         *   says that instead of implying a lock-in that is not there.
+         *
+         *   A SIXTH HARNESS GAP, same family as the other five: stripComments'
+         *   retention floor throws on a whole-tree walk — src/app/land/submit is
+         *   five lines of code under ninety-five of explanation — so the sweep
+         *   passes minRetainedRatio 0 and the named reads keep the floor.
          */
-        expect(ledgerVerdict(unreached().length, 24)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 23)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
