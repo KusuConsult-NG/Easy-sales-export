@@ -1,11 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, Search, ArrowLeft } from 'lucide-react';
+import { Home, ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { goBackOr } from '@/lib/go-back';
 import { logTelemetryAction } from '@/app/actions/telemetry';
 
 export default function NotFound() {
+    const router = useRouter();
+
     useEffect(() => {
         // Silently log the 404 so engineering knows about broken links/routes
         const missingUrl = typeof window !== 'undefined' ? window.location.href : 'unknown';
@@ -45,8 +49,25 @@ export default function NotFound() {
                         <Home className="w-5 h-5" />
                         Go Home
                     </Link>
+                    {/*
+                      *   #927 THIS BUTTON DID NOTHING FOR THE VISITOR MOST LIKELY
+                      *   TO BE HERE.
+                      *
+                      *   It was `onClick={() => window.history.back()}` with no
+                      *   fallback and no router — the exact no-op #921 fixed in
+                      *   components/ui/BackButton, which is why that prop is
+                      *   REQUIRED there. A 404 is reached disproportionately from a
+                      *   dead EXTERNAL link, and then `history.length` is 1: the
+                      *   button rendered, looked enabled, and did nothing.
+                      *
+                      *   goBackOr is the same two-line rule BackButton uses, shared
+                      *   rather than restated. The fallback is "/" because this page
+                      *   already offers Go Home beside it, so there is no new
+                      *   decision about where a lost visitor belongs.
+                      */}
                     <button
-                        onClick={() => window.history.back()}
+                        type="button"
+                        onClick={() => goBackOr(router, '/')}
                         className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                     >
                         <ArrowLeft className="w-5 h-5" />

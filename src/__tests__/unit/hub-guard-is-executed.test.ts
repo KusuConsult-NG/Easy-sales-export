@@ -147,7 +147,35 @@ describe('#366 — the guard runs, and lets a completed member through', () => {
         expect(await outcome()).toEqual({ redirectedTo: '/hub/register' });
     });
 
-    it('a signed-out caller goes to the login page, carrying the reason', async () => {
+    /*
+     *   #927 THIS ASSERTED THAT THE PROSE REACHED THE URL, and that was the right
+     *   thing to pin until it was measured on the other end.
+     *
+     *   LoginForm renders only codes it knows — `errorParam in errorMap ? … :
+     *   errorMap["Default"]` — so the sentence this guard url-encoded arrived as
+     *   "Authentication failed." A suspended member read that as a mistyped
+     *   password. And the fix is NOT to make LoginForm print the text: a sentence
+     *   supplied in a URL, rendered in the platform's voice on the screen where
+     *   people type their password, is a phishing hole. So the guard sends a CODE.
+     *
+     *   Note what 'Session revoked' was: a string invented by this fixture and
+     *   produced nowhere in shipping code. That is why the second case below
+     *   matters more than the first — an unrecognised message must not be echoed
+     *   into the URL, and now cannot be.
+     */
+    it('a signed-out caller goes to the login page with a CODE for the reason', async () => {
+        //   One of the five sentences requireSession really returns.
+        (global as any).mockRequireSession.mockResolvedValue({
+            session: null,
+            error: { error: 'Your account has been suspended.' },
+        });
+
+        expect(await outcome()).toEqual({ redirectedTo: '/auth/login?error=account_suspended' });
+    });
+
+    it('and an unrecognised message is NOT echoed into the URL', async () => {
+        //   The security half. 'Session revoked' is this fixture's own invention,
+        //   which makes it the perfect stand-in for anything a caller might hold.
         (global as any).mockRequireSession.mockResolvedValue({
             session: null,
             error: { error: 'Session revoked' },
@@ -155,7 +183,8 @@ describe('#366 — the guard runs, and lets a completed member through', () => {
 
         const result = await outcome();
 
-        expect(result).toEqual({ redirectedTo: '/auth/login?error=Session%20revoked' });
+        expect(result).toEqual({ redirectedTo: '/auth/login?error=auth_required' });
+        expect(JSON.stringify(result)).not.toContain('Session');
     });
 });
 

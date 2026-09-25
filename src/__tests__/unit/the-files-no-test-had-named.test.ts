@@ -794,8 +794,56 @@ describe('how much of the application no test has named', () => {
          *   address moved, on the one path that runs when the form has just
          *   failed and that address is all the person has left. That is why a
          *   clean verdict is asserted rather than declared.
+         *
+         *   Then 34 → 28, on app/not-found, app/loading, app/auth/error/page,
+         *   app/invite-error/page, app/hub/register/page and
+         *   admin/chatbot/[sessionId]/page.
+         *
+         *   #927 FOUR EMITTERS WROTE A SPECIFIC REASON AND THE LOGIN SCREEN
+         *   REPLACED IT WITH "AUTHENTICATION FAILED." LoginForm chose its message
+         *   with `errorParam in errorMap ? … : errorMap["Default"]`. Swept every
+         *   emitter of /auth/login?error=: middleware sends the code SessionError,
+         *   and hub-guard, AdminShell and hub/register each url-encode
+         *   requireSession's PROSE. None was a key. requireSession returns exactly
+         *   five such sentences and one is "Your account has been suspended." — so
+         *   a suspended member read "Authentication failed.", which looks like a
+         *   mistyped password. They would try it again and never learn why.
+         *
+         *   AND THE GENERIC FALLBACK IS RIGHT, which is what decided the fix.
+         *   Printing unknown text would be a phishing hole: a sentence supplied in
+         *   a URL, rendered in the platform's voice on the screen where people type
+         *   their password. So the EMITTERS were wrong to send prose. They send
+         *   codes now from one list in lib/auth-error-codes, which also gained
+         *   SessionError. `sessionResult.error.error` is untouched — 283 places read
+         *   that contract and the prose is still right for an API body.
+         *
+         *   AND #921 HAD RECURRED. app/not-found was
+         *   `onClick={() => window.history.back()}` with no fallback and no router —
+         *   the same no-op, on the one page whose visitors most often arrive from a
+         *   dead EXTERNAL link, where history.length is 1. Swapping it to
+         *   <BackButton> would have imported that component's chevron and classes
+         *   into a screen with its own styling, and the sweep found TEN hand-rolled
+         *   back calls across seven files. So the RULE moved to lib/go-back and the
+         *   presentation stayed each screen's own; BackButton calls it too.
+         *
+         *   Two are fixed because their destination was not a judgement call: the
+         *   404 already offers Go Home beside it, and the chatbot thread's button is
+         *   labelled "Back to sessions" with /admin/chatbot existing. The remaining
+         *   EIGHT are a ledger — and that number was counted, not remembered: the
+         *   first pass said seven because EditProductClient carries three and the
+         *   grep was totalled by eye.
+         *
+         *   THREE IN THIS BATCH WERE ALREADY RIGHT. /invite-error maps five reasons
+         *   and exactly five are emitted — the pattern LoginForm was missing, with
+         *   an unknown reason falling back safely and URL text never rendered.
+         *   /auth/error looks dead because nothing links it, and is reached by
+         *   NextAuth itself through `pages.error` in auth.ts — recorded so nobody
+         *   deletes it. Its Edge sibling auth.config.ts has no pages.error, which
+         *   costs nothing: the middleware catches its own crash and redirects to
+         *   /auth/login?error=SessionError rather than relying on that page.
+         *   /loading is a spinner with no state.
          */
-        expect(ledgerVerdict(unreached().length, 34)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 28)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { authErrorMessageFor } from "@/lib/auth-error-codes";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -221,18 +222,18 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
     // Handle error params from redirects
     useEffect(() => {
         if (errorParam) {
-            const errorMap: Record<string, string> = {
-                "CredentialsSignin": "Invalid email or password",
-                "MissingCSRF": "Session expired — please refresh the page and try again.",
-                "session_expired": "Your session has expired. Please log in again.",
-                "security_refresh": "For your security, please sign in again to continue.",
-                "access_denied": "You do not have permission to access that resource.",
-                "AccessDenied": "You do not have permission to access that resource.",
-                "SessionRequired": "", // Silent bypass for standard redirect when user is not logged in
-                "Default": "Authentication failed."
-            };
-            
-            const message = errorParam in errorMap ? errorMap[errorParam] : errorMap["Default"];
+            /*
+             *   #927 THE MAP MOVED TO lib/auth-error-codes, UNCHANGED, and gained
+             *   the five codes the platform was already sending and this screen
+             *   did not know: SessionError from middleware, plus account_not_found,
+             *   account_suspended, admin_check_failed and auth_required from the
+             *   three guards that used to url-encode requireSession's PROSE.
+             *   Anything not a key still becomes "Authentication failed.", and that
+             *   refusal to print unknown text is deliberate — a sentence supplied
+             *   in a URL, rendered in the platform's voice on the password screen,
+             *   is a phishing hole. The senders send codes now instead.
+             */
+            const message = authErrorMessageFor(errorParam);
             
             if (message) {
                 if (errorParam !== "CredentialsSignin") {
