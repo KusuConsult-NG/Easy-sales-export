@@ -1,3 +1,21 @@
+/**
+ *   #911 THIS SUITE ENUMERATED THE CONSTANT INSTEAD OF THE APPLICATION.
+ *
+ *   Eighteen cases, twenty-three assertions, all green, and it did not notice that
+ *   normalisePaymentStatus answered `pending` for `paid_awaiting_refund`,
+ *   `escrow_held`, `paid_to_seller` and `refunded` — four states where the money
+ *   had already moved. Its first case is "maps canonical values to themselves"
+ *   and it lists the six values PAYMENT_STATUS held; it asserts that `banana`
+ *   and `xyz123` answer `pending`, which is right, and never asks what the seven
+ *   values the application actually writes answer.
+ *
+ *   A list written beside the thing it checks agrees with it by construction.
+ *   The derived sweep, and the seven cases this one was missing, are in
+ *   __tests__/unit/a-vocabulary-that-called-itself-canonical.test.ts. Nothing
+ *   here is wrong, so nothing here is changed — it is a narrower test than it
+ *   reads as, and that is worth saying where somebody will see it.
+ */
+
 import { normalisePaymentStatus, PAYMENT_STATUS } from '../types/firestore';
 
 describe('normalisePaymentStatus', () => {

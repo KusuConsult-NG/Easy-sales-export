@@ -74,6 +74,47 @@ export type {
 /**
  * Canonical payment status values used across all modules.
  * Use these constants everywhere instead of raw strings.
+ *
+ *   #911 IT CALLED ITSELF CANONICAL AND HELD SIX OF THE THIRTEEN.
+ *
+ *   The list below used to stop at PROCESSING. A derived sweep of every literal
+ *   this application writes into a `paymentStatus` field — the numerator, not a
+ *   hand-list — found ten write sites carrying seven values that were not in it:
+ *
+ *       escrow_held           payments/service, marketplace/_payment_verify
+ *       paid_to_seller        marketplace/_escrow_actions, cron/release-escrow
+ *       paid_awaiting_refund  marketplace/_payment_verify, export-order-fulfilment
+ *       refunded              export-admin
+ *       pending_verification  marketplace/_payment_orders
+ *       pending_review        payments/service
+ *       cancelled             marketplace/_buyer
+ *
+ *   Not one of them is a second spelling of something already here. Each is a
+ *   distinct thing that happened to somebody's money, and four of the seven are
+ *   the states where the platform is holding it or owes it back.
+ *
+ * ── WHY THAT MADE THE WRITE GUARD UNUSABLE ──────────────────────────────────
+ *
+ *   write-guard builds `PaymentStatusWriteSchema` as `z.enum(Object.values(
+ *   PAYMENT_STATUS))`, and writeGuard THROWS on a violation. So every one of
+ *   those ten writes had to bypass the guard, and the guard is in fact applied
+ *   at exactly two sites — export-payment and export-order-fulfilment — both
+ *   writing `completed`, the one value never in doubt.
+ *
+ *   A validator applied only where it cannot fail has never constrained
+ *   anything. Worse, it is a loaded trap: in export-order-fulfilment the
+ *   guarded `completed` write sits twenty lines below the UNGUARDED
+ *   `paid_awaiting_refund` write, so the obvious tidy-up — make the second one
+ *   match the first — would have thrown at the moment a buyer has paid for
+ *   stock that is not there. The order would never be marked, the
+ *   reconcile-fulfilment cron's `where("paymentStatus", "==",
+ *   "paid_awaiting_refund")` would never find it, refundExportOrderAction's
+ *   `if (order.paymentStatus !== "paid_awaiting_refund")` would refuse it, and
+ *   the money would sit there with nothing pointing at it.
+ *
+ *   Widening an enum cannot reject anything it used to accept, so this is safe
+ *   in the only direction that matters, and the two refund writes are guarded
+ *   now that the schema can describe them.
  */
 export const PAYMENT_STATUS = {
     PENDING: 'pending',
@@ -82,6 +123,32 @@ export const PAYMENT_STATUS = {
     FAILED: 'failed',
     UNPAID: 'unpaid',
     PROCESSING: 'processing',
+
+    //   #911 The seven the sweep found. Grouped by what they say about where
+    //   the money is, because that is the distinction every one of them exists
+    //   to make and the old list erased.
+
+    /** Taken from the buyer and held by the platform, not yet the seller's. */
+    ESCROW_HELD: 'escrow_held',
+    /** Escrow released — the seller has it. */
+    PAID_TO_SELLER: 'paid_to_seller',
+    /**
+     * Taken, and owed back.
+     *
+     * Written when a payment succeeds and the catalog cannot cover the order.
+     * The reconcile-fulfilment cron queries for exactly this string and
+     * refundExportOrderAction refuses to act on an order that does not carry
+     * it, so it is load-bearing in two places besides the screens that show it.
+     */
+    PAID_AWAITING_REFUND: 'paid_awaiting_refund',
+    /** Given back. */
+    REFUNDED: 'refunded',
+    /** An offline/bank-transfer payment waiting for an admin to confirm it. */
+    PENDING_VERIFICATION: 'pending_verification',
+    /** The dispatcher could not classify the reference; a person must look. */
+    PENDING_REVIEW: 'pending_review',
+    /** The order was cancelled before any money moved. */
+    CANCELLED: 'cancelled',
 } as const;
 
 export type PaymentStatus = typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS];
@@ -89,6 +156,33 @@ export type PaymentStatus = typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS];
 /**
  * Normalises any payment status variant to a canonical value.
  * Handles legacy 'successful' → 'completed', 'successful_payment' → 'completed' etc.
+ *
+ *   #911 AND IT ANSWERED "pending" FOR FOUR STATES WHERE THE MONEY HAD MOVED.
+ *
+ *   Every value the sweep found fell through to the final
+ *   `return PAYMENT_STATUS.PENDING`. So this function — exported beside the
+ *   constant, named for normalising "any payment status variant", the one
+ *   anybody would reach for — answered:
+ *
+ *       escrow_held           → pending
+ *       paid_to_seller        → pending
+ *       paid_awaiting_refund  → pending
+ *       refunded              → pending
+ *
+ *   "We owe this buyer a refund" and "the seller has been paid" both read back
+ *   as "payment not made yet". MEASURED: nothing imports this function today —
+ *   `grep -rln normalisePaymentStatus src` returns only this file — so it is a
+ *   trap rather than a leak, and it is recorded as a trap. But an unknown value
+ *   silently becoming `pending` is the shape of #349 and #773, and the fallthrough
+ *   is the whole mechanism: a reader narrower than its writers, answering
+ *   confidently.
+ *
+ *   The known values now map to themselves. The legacy folds are unchanged —
+ *   `successful`/`success` → paid and `successful_payment`/`paid_completed` →
+ *   completed are real historical spellings and still need folding. The
+ *   fallthrough stays `pending`, because a value nobody has ever written is a
+ *   different question from the seven that are written every day, but it logs
+ *   now rather than answering silently.
  */
 export function normalisePaymentStatus(status: string | null | undefined): PaymentStatus {
     if (!status) return PAYMENT_STATUS.PENDING;
@@ -99,6 +193,35 @@ export function normalisePaymentStatus(status: string | null | undefined): Payme
     if (s === 'pending' || s === 'pending_payment' || s === 'awaiting') return PAYMENT_STATUS.PENDING;
     if (s === 'processing') return PAYMENT_STATUS.PROCESSING;
     if (s === 'unpaid') return PAYMENT_STATUS.UNPAID;
+
+    //   #911 The seven, answering for themselves rather than as `pending`.
+    //   A membership test rather than seven more comparisons: the list above
+    //   IS the vocabulary, and restating it here is how the two drift apart.
+    if ((Object.values(PAYMENT_STATUS) as string[]).includes(s)) {
+        return s as PaymentStatus;
+    }
+
+    //   A value the platform has never written. `pending` is still the safest
+    //   answer — it claims nothing about money having moved — but it is a guess,
+    //   and a silent guess about a payment is what this finding is about.
+    //   console.warn, and NOT the house logger. MEASURED, after getting it
+    //   wrong: importing `@/lib/logger` here broke six existing suites.
+    //
+    //   This file is what its own header calls "the SINGLE IMPORT POINT for all
+    //   platform types", so a runtime import added to it is loaded by anything
+    //   that imports any type from it — before that suite's own
+    //   `jest.mock('@/lib/logger')` can register. #392's meta-test
+    //   (every-jest-mock-takes-effect) caught exactly that and named all six:
+    //   academy-live-session-entitlement, academy-quiz-editor-permission,
+    //   admin-api-routes-are-sibling-doors, briefing-public-registration,
+    //   classroom-room-is-not-guessable and fixed-savings-terms. Each mocks the
+    //   logger and would have been silently testing the real one.
+    //
+    //   A types barrel stays free of runtime imports, then. `no-console` allows
+    //   warn, and there is nothing sensitive in an unrecognised status string.
+    console.warn(
+        `[normalisePaymentStatus] no canonical value for ${JSON.stringify(status)} — answering "pending"`,
+    );
     return PAYMENT_STATUS.PENDING;
 }
 // ──────────────────────────────────────────────────────────────────────────

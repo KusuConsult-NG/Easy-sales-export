@@ -6,7 +6,8 @@ import { verifyPaystackPayment } from "@/lib/paystack-server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revalidatePath } from "next/cache";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { COLLECTIONS, PAYMENT_STATUS } from "@/lib/types/firestore";
+import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
 import { claimPaymentOnce, decrementManyOrFail, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
 import { platformFeeFor, sellerNetFor, feeSplitFor } from "@/lib/platform-fee";
@@ -303,17 +304,25 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 `₦${amountInNaira} taken, product ${stock.failedId} ${stock.reason}. Needs refund.`
             );
 
-            await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id).update({
-                paymentStatus: "paid_awaiting_refund",
-                status: "cancelled_out_of_stock",
-                paidAmount: amountInNaira,
-                paymentVerifiedAt: FieldValue.serverTimestamp(),
-                refundReason: stock.reason === "not_found"
-                    ? `Product ${stock.failedId} is no longer listed`
-                    : `Insufficient stock for ${shortItem?.productTitle ?? stock.failedId}`,
-                refundRequiredAmount: amountInNaira,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+            //   #911 GUARDED. `paid_awaiting_refund` was not in PAYMENT_STATUS,
+            //   so PaymentStatusWriteSchema would have thrown on this write and
+            //   it had to stay bare. The vocabulary holds it now — see the note
+            //   on PAYMENT_STATUS for what the throw would have cost here.
+            await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id).update(writeGuard(
+                PaymentStatusWriteSchema.partial(),
+                {
+                    paymentStatus: PAYMENT_STATUS.PAID_AWAITING_REFUND,
+                    status: "cancelled_out_of_stock",
+                    paidAmount: amountInNaira,
+                    paymentVerifiedAt: FieldValue.serverTimestamp(),
+                    refundReason: stock.reason === "not_found"
+                        ? `Product ${stock.failedId} is no longer listed`
+                        : `Insufficient stock for ${shortItem?.productTitle ?? stock.failedId}`,
+                    refundRequiredAmount: amountInNaira,
+                    updatedAt: FieldValue.serverTimestamp(),
+                },
+                'marketplace/_payment_verify:out-of-stock'
+            ));
 
             return {
                 error: stock.reason === "not_found"
