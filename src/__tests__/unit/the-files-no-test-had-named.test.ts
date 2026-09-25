@@ -421,8 +421,21 @@ describe('how much of the application no test has named', () => {
          *   nothing constructing one directly, no constructors at all — and the
          *   sweep that establishes that is kept, because a fifth service added
          *   without registration is what would go unnoticed.
+         *
+         *   Then 61 → 59, on components/ui/PhoneInput and auth/forgot-password.
+         *   #919: two functions called isValidNigerianPhone existed, one in
+         *   PhoneInput and one in lib/security, and they disagreed on the middle
+         *   digit — `[789][01]` against `[789]\d`, so 082, 075, 095 and 085 were
+         *   valid to one and not the other. Measured: lib/security's copy had NO
+         *   callers, so it was a dead and wrong copy of a live rule in the module
+         *   whose name invites reaching for it. One rule in lib/phone now, both
+         *   spellings delegating, nothing deleted.
+         *
+         *   forgot-password is correct and is pinned for it: its success message
+         *   never confirms an address is registered, which is the screen's half of
+         *   a non-enumeration guarantee the action already keeps.
          */
-        expect(ledgerVerdict(unreached().length, 61)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 59)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
