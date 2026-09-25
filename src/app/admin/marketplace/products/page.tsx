@@ -174,7 +174,7 @@ export default function AdminProductsPage() {
 
     return (
         <div className="max-w-6xl mx-auto p-4 lg:p-8">
-            <BackButton />
+            <BackButton fallbackPath="/admin/marketplace" />
 
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">

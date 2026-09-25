@@ -154,7 +154,7 @@ export default function SellerQuotesClient({ initial = null }: {
 
     return (
         <div className="max-w-5xl mx-auto">
-            <BackButton />
+            <BackButton fallbackPath="/marketplace/seller/dashboard" />
 
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
