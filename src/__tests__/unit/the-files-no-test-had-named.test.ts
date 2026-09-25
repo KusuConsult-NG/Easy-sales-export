@@ -384,8 +384,20 @@ describe('how much of the application no test has named', () => {
          *   diag-coop-members, which bypasses the adapter for PostgREST on named
          *   users — were clean, and the test says so rather than leaving it
          *   silent.
+         *
+         *   Then 66 → 65, on components/profile/DeleteAccountSection. #916: the
+         *   delete-my-account screen told the person "This permanently removes …
+         *   your identity documents. It cannot be undone, and support cannot
+         *   restore them afterwards." Two deliberate owner decisions make all
+         *   three claims false — #530 keeps a full profile copy for fraud audit,
+         *   and #292 deletes nothing on Cloudinary, so the ID scan and passport
+         *   photo survive and the retention record keeps their links.
+         *
+         *   The retention is defensible and is left exactly as the owner set it.
+         *   Telling the data subject the opposite of it is not, and that is the
+         *   half this fixes — the wording, not the behaviour.
          */
-        expect(ledgerVerdict(unreached().length, 66)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 65)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

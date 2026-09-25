@@ -6,10 +6,16 @@
  * WHY THIS EXISTS
  * ---------------
  * `deleteUserAccountAction` has been written and correct for some time: it
- * scrubs every PII field, deletes KYC records, seller verification and the
- * wallet, and keeps the UID so ledgers and orders do not lose their foreign
- * keys. It had **no caller**, so the right existed in the codebase and not for
- * any actual person.
+ * scrubs every PII field, marks KYC records and seller verification, and keeps
+ * the UID so ledgers and orders do not lose their foreign keys. It had **no
+ * caller**, so the right existed in the codebase and not for any actual person.
+ *
+ *   #916 THIS PARAGRAPH SAID THE WALLET WAS DELETED. IT IS NOT.
+ *
+ *   #300 removed that delete entirely — "the wallet is marked, never dropped",
+ *   in _deleteUserAccountAction's own words. The sentence above was written
+ *   before that and kept the old behaviour, which is the smaller half of what
+ *   this component was claiming and the easier half to notice.
  *
  * That gap matters more than it did last week. This platform's user export sat
  * in a public repository for 52 days, and the people in it may reasonably want
@@ -17,9 +23,34 @@
  *
  * WHY THE CONFIRMATION IS TYPED, NOT A CHECKBOX
  * ---------------------------------------------
- * The deletion is irreversible and the PII is genuinely destroyed — there is no
- * undo and no support path that restores a name once it is redacted. A typed
- * confirmation is the standard for that, and it is worth the friction.
+ * The account cannot be un-deleted from any screen, and every personal field
+ * leaves the row it is read from, so the person disappears from the platform.
+ * A typed confirmation is the standard for that and is worth the friction.
+ *
+ *   #916 AND IT IS NOT "GENUINELY DESTROYED", WHICH IS WHAT THIS SAID.
+ *
+ *   Two owner decisions, both deliberate, both recorded in lib/user-erasure:
+ *
+ *     #530  "the users profile should still be saved even after they delete
+ *            their profile so admin can use it for audit incase of fraud etc."
+ *            A full profile copy (credentials excluded by stripSecrets) is
+ *            written to COLLECTIONS.ERASURE_RETENTION with
+ *            `basis: "fraud_prevention"`, server-only under RLS with no
+ *            policies.
+ *
+ *     #292  Nothing is deleted on Cloudinary or anywhere else. MEASURED: no
+ *            destroy call exists in this codebase — every reference to
+ *            api.cloudinary.com is an /upload. So the ID scan, passport photo
+ *            and proof of address survive, publicly readable with no expiry,
+ *            and the retention record keeps the links.
+ *
+ *   The retention is a defensible position: it has a named lawful basis, a
+ *   scope, and no screen that reads it. TELLING THE PERSON THE OPPOSITE IS NOT.
+ *   The copy below used to promise that their identity documents were
+ *   permanently removed and that "support cannot restore them afterwards", when
+ *   a copy is kept precisely so an admin can use it. That is the half worth
+ *   fixing, and the fix is the wording — not the retention, which is the
+ *   owner's call and is left exactly as it is.
  *
  * WHAT THE SERVER STILL DECIDES
  * -----------------------------
@@ -79,13 +110,24 @@ export default function DeleteAccountSection() {
                 <div className="flex-1">
                     <h2 className="text-lg font-bold text-slate-900">Delete my account</h2>
                     <p className="mt-1 text-sm text-slate-600">
-                        This permanently removes your name, email, phone number, address, bank
-                        details and identity documents. It cannot be undone, and support cannot
-                        restore them afterwards.
+                        Your name, email, phone number, address, bank details and identity
+                        numbers are removed from your account. You will no longer appear on any
+                        screen, search or report on this platform, and you cannot undo this
+                        yourself.
                     </p>
                     <p className="mt-2 text-sm text-slate-600">
                         Your past orders and transactions stay on record without your personal
                         details, so other people&apos;s receipts and ledgers remain correct.
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                        So that you know exactly what is kept: a copy of your profile is held in
+                        a private record that our fraud team can consult, and files you already
+                        uploaded — such as an ID scan or passport photograph — are not deleted
+                        from the service that stores them. Your password and any two-factor
+                        codes are never kept. To ask about the retained copy, contact{" "}
+                        <a href="mailto:info@easysalesexport.com" className="font-semibold underline">
+                            info@easysalesexport.com
+                        </a>.
                     </p>
 
                     {blocked && (

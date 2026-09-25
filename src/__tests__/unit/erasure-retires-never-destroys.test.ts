@@ -263,7 +263,27 @@ describe('#300 — the retention collection is server-only', () => {
     });
 
     it('and nothing in the browser layer reads it', () => {
-        // A page that rendered this would undo the whole arrangement.
+        /*
+         * A page that rendered this would undo the whole arrangement.
+         *
+         *   #916 IT READ COMMENTS, AND FLAGGED ONE.
+         *
+         *   This scanned the RAW text of every .tsx file. DeleteAccountSection's
+         *   header was corrected to explain what the deletion actually keeps, and
+         *   naming `COLLECTIONS.ERASURE_RETENTION` in that explanation tripped
+         *   this — a component that tells the truth about the retention was
+         *   reported as reading it.
+         *
+         *   The rule is about a component READING the collection, and a comment
+         *   cannot read anything. Stripping comments first makes the check
+         *   sharper, not weaker: it now measures code, which is what "nothing in
+         *   the browser layer reads it" means.
+         *
+         *   THIS SUITE ALREADY KNEW. It imports stripComments at the top and uses
+         *   it in its own `code()` helper twenty lines below — this one check was
+         *   the only raw read left in the file. Which is the ordinary way a lesson
+         *   goes missing: not unlearned, just not applied in the last place.
+         */
         const offenders: string[] = [];
         const walk = (dir: string) => {
             for (const e of require('fs').readdirSync(dir)) {
@@ -271,8 +291,10 @@ describe('#300 — the retention collection is server-only', () => {
                 if (require('fs').statSync(full).isDirectory()) {
                     if (!full.includes('__tests__')) walk(full);
                 } else if (full.endsWith('.tsx')) {
-                    if (/ERASURE_RETENTION|erasure_retention/.test(readFileSync(full, 'utf-8'))) {
-                        offenders.push(full.slice(process.cwd().length + 1));
+                    const rel = full.slice(process.cwd().length + 1);
+                    const code = stripComments(readFileSync(full, 'utf-8'), { label: rel });
+                    if (/ERASURE_RETENTION|erasure_retention/.test(code)) {
+                        offenders.push(rel);
                     }
                 }
             }
@@ -280,5 +302,26 @@ describe('#300 — the retention collection is server-only', () => {
         walk(join(process.cwd(), 'src'));
 
         expect(offenders).toEqual([]);
+    });
+
+    it('POSITIVE CONTROL: it still catches a component that really reads it', () => {
+        //   Stripping comments could have turned this into a check that passes on
+        //   anything, so the pattern is exercised against both forms.
+        const reading = stripComments(
+            'export default function P() {\n'
+            + '  // nothing here\n'
+            + '  const s = db.collection(COLLECTIONS.ERASURE_RETENTION).get();\n'
+            + '  return <div>{s}</div>;\n}',
+            { label: 'fixture' },
+        );
+        const explaining = stripComments(
+            'export default function P() {\n'
+            + '  // COLLECTIONS.ERASURE_RETENTION is server-only and not read here\n'
+            + '  return <div />;\n}',
+            { label: 'fixture' },
+        );
+
+        expect(/ERASURE_RETENTION/.test(reading)).toBe(true);
+        expect(/ERASURE_RETENTION/.test(explaining)).toBe(false);
     });
 });
