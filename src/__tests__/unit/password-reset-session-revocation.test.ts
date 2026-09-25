@@ -45,6 +45,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { SESSION_SYNC_INTERVAL_MS } from '@/lib/session-staleness';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -316,6 +317,16 @@ describe('changePasswordAction revokes the OTHER sessions', () => {
     it('revocation lands within the sync interval, not instantly', () => {
         // The same latency the ban check has, for the same reason: the profile
         // is only re-read there. Said plainly so nobody reads this as immediate.
-        expect(code(AUTH)).toContain('const SYNC_INTERVAL = 2 * 60 * 1000;');
+        //   #922 THE SPELLING MOVED; THE GUARANTEE DID NOT. The number was a
+        //   local literal in the jwt callback, and it now comes from
+        //   lib/session-staleness, because SessionRefreshListener has to respect
+        //   the same bound and was choosing its own (none — it refreshed on every
+        //   navigation, and `trigger === "update"` skips the interval). So this
+        //   asserts the VALUE of the shared constant and that auth.ts uses it,
+        //   rather than the two lines it used to be written on. #912 recorded the
+        //   same lesson: pinning HOW a rule is written fails the moment the rule
+        //   moves so that a second caller can share it.
+        expect(SESSION_SYNC_INTERVAL_MS).toBe(2 * 60 * 1000);
+        expect(code(AUTH)).toContain('const SYNC_INTERVAL = SESSION_SYNC_INTERVAL_MS;');
     });
 });

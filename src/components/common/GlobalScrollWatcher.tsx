@@ -14,7 +14,49 @@ import { usePathname } from "next/navigation";
  * badges, and table rows during data load — causing unwanted mid-page scrolls.
  */
 
-// Public pages where we should NEVER auto-scroll
+/**
+ * Public pages where we should NEVER auto-scroll.
+ *
+ *   #922 MATCHED AS A SUBTREE, AND THAT SWITCHED THIS OFF ON HALF THE
+ *   APPLICATION — including every screen that has a form.
+ *
+ *   The test was
+ *
+ *       pathname === p || pathname.startsWith(p + '/')
+ *
+ *   with two escape hatches, `!pathname.includes('/application')` and
+ *   `!pathname.includes('/member')`. So `/academy`, `/wave`, `/marketplace`,
+ *   `/cooperatives`, `/farm-nation` and `/export` excluded their whole subtrees.
+ *
+ *   AND THE SECOND HATCH IS DEAD. Every member area in this app lives in a Next
+ *   ROUTE GROUP — `(member)`, `(learner)`, `(app)` — and route groups are
+ *   stripped from the URL. `/farm-nation/(member)/offers` is served at
+ *   `/farm-nation/offers`, which contains no `/member` at all. Measured across
+ *   all 254 pages: the only URLs containing `/member` are
+ *   /admin/cooperatives/members and /admin/wave/members, and /admin was never on
+ *   this list, so the clause could never un-exclude anything. It was written
+ *   against the filesystem path, not the address.
+ *
+ *   WHAT THAT COST, counted: 122 of 254 pages were excluded — /academy/dashboard,
+ *   /cooperatives/my-savings, /marketplace/seller/dashboard,
+ *   /farm-nation/inquiries, /export/portfolio, every orders list, every savings
+ *   screen. This component exists, in its own words, so that "users on mobile
+ *   don't miss feedback after submitting forms", and it was off on the screens
+ *   with the forms.
+ *
+ *   EXACT MATCH NOW, which is what this list's own heading describes: these
+ *   PAGES, not their descendants. Nine pages instead of 122. Both hatches go
+ *   with it — `/academy/application` is simply not equal to `/academy`.
+ *
+ *   The list already thought this way, which is the tell: `/wave/landing` is
+ *   listed separately although the subtree rule made `/wave` cover it.
+ *
+ *   SAFE TO WIDEN BECAUSE THE GUARD BELOW IS STRICT. The subtree exclusion was
+ *   compensating for a matcher that fired on bare colour classes; that was
+ *   already replaced by an explicit role="alert" / data-message test, plus a
+ *   1.5s readiness delay and a "skip if already on screen" check. A fixed-position
+ *   toast is always in the viewport, so it is never scrolled to.
+ */
 const EXCLUDED_PATHS = [
     '/',
     '/wave/landing',
@@ -31,9 +73,7 @@ export default function GlobalScrollWatcher() {
     const pathname = usePathname();
     const isReady = useRef(false);
 
-    const isExcluded = EXCLUDED_PATHS.some(p =>
-        pathname === p || pathname.startsWith(p + '/')
-    ) && !pathname.includes('/application') && !pathname.includes('/member');
+    const isExcluded = EXCLUDED_PATHS.includes(pathname);
 
     useEffect(() => {
         // Prevent scrolling on initial render to avoid jumpy page loads.

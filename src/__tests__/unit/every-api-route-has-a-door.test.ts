@@ -68,6 +68,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { SESSION_SYNC_INTERVAL_MS } from '@/lib/session-staleness';
 import { readFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { join, relative } from 'path';
@@ -207,7 +208,17 @@ describe('#437 — the two admin conventions, both sound', () => {
         // callback. Without this, those routes would be deciding on an
         // eight-hour-old answer.
         const auth = code('src/lib/auth.ts');
-        expect(auth).toMatch(/const SYNC_INTERVAL = 2 \* 60 \* 1000;/);
+        //   #922 THE SPELLING MOVED; THE GUARANTEE DID NOT. The number was a
+        //   local literal in the jwt callback, and it now comes from
+        //   lib/session-staleness, because SessionRefreshListener has to respect
+        //   the same bound and was choosing its own (none — it refreshed on every
+        //   navigation, and `trigger === "update"` skips the interval). So this
+        //   asserts the VALUE of the shared constant and that auth.ts uses it,
+        //   rather than the two lines it used to be written on. #912 recorded the
+        //   same lesson: pinning HOW a rule is written fails the moment the rule
+        //   moves so that a second caller can share it.
+        expect(SESSION_SYNC_INTERVAL_MS).toBe(2 * 60 * 1000);
+        expect(auth).toContain('const SYNC_INTERVAL = SESSION_SYNC_INTERVAL_MS;');
         expect(auth).toMatch(/if \(trigger === "update" \|\| !lastSynced \|\| \(now - lastSynced\) > SYNC_INTERVAL\)/);
         expect(auth).toMatch(/if \(token\.isBanned \|\| token\.sessionRevoked\)/);
     });
