@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
+import { goBackOr } from "@/lib/go-back";
 
 interface BackButtonProps {
     /**
@@ -57,12 +58,11 @@ export default function BackButton({
          *   So the fallback is a last resort, not a preference. What #921 changed
          *   is that the last resort now always exists.
          */
-        if (typeof window !== 'undefined' && window.history.length > 1) {
-            router.back();
-            return;
-        }
-
-        router.push(fallbackPath);
+        //   #927 The two lines that were here are shared now, because app/not-found
+        //   hand-rolled the same broken shape and could not adopt this component
+        //   without adopting its chevron and classes. The rule is one place; the
+        //   presentation stays each screen's own.
+        goBackOr(router, fallbackPath);
     };
 
     return (

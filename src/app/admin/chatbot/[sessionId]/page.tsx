@@ -13,6 +13,7 @@ import {
 } from "@/app/actions/chatbot-admin";
 import { MODULE_CONFIGS } from "@/lib/chatbot-knowledge";
 import { cn } from "@/lib/utils";
+import { goBackOr } from "@/lib/go-back";
 import { toast } from "sonner";
 
 export default function ChatThreadPage() {
@@ -62,8 +63,15 @@ export default function ChatThreadPage() {
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             {/* Back */}
+            {/*
+              *   #927 The label says where it goes, so the fallback was never a
+              *   judgement call — `router.back()` alone is a no-op on a tab with
+              *   one history entry, which is what an admin gets from a bookmarked
+              *   or emailed thread link. goBackOr is #921's rule, shared.
+              */}
             <button
-                onClick={() => router.back()}
+                type="button"
+                onClick={() => goBackOr(router, "/admin/chatbot")}
                 className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors"
             >
                 <ArrowLeft className="w-4 h-4" /> Back to sessions

@@ -254,7 +254,21 @@ describe('#921 — BackButton always has somewhere to go', () => {
         //   The dangling `else if` is gone: the last statement navigates
         //   unconditionally.
         expect(src).not.toContain('else if (fallbackPath)');
-        expect(src).toContain('router.push(fallbackPath)');
+
+        /*
+         *   #927 THE SPELLING MOVED; THE GUARANTEE DID NOT — #912's lesson again,
+         *   and this assertion is the third time this repo has had to learn it.
+         *
+         *   This read `router.push(fallbackPath)` in THIS file. app/not-found
+         *   turned out to hand-roll the same no-op `history.back()`, on the page
+         *   where arriving with no history is the normal case rather than an edge
+         *   — and it could not adopt <BackButton> without adopting its chevron and
+         *   classes. So the two lines moved to lib/go-back and both callers share
+         *   them. The unconditional navigate is asserted where it now lives.
+         */
+        expect(src).toContain('goBackOr(router, fallbackPath)');
+        expect(code('src/lib/go-back.ts')).toContain('router.push(fallbackPath)');
+        expect(code('src/lib/go-back.ts')).toContain('window.history.length > 1');
     });
 });
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { authErrorCodeFor } from "@/lib/auth-error-codes";
 import { requireSession } from "@/lib/session-guard";
 import { redirect } from "next/navigation";
 import { getAdminDb } from "@/lib/supabase-db";
@@ -23,7 +24,11 @@ export async function requireHubRegistration() {
     if (!sessionResult.session) {
         // Proper handling of the nested error object structure (result.error.error)
         const errorMessage = sessionResult.error?.error || "Authentication required";
-        redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
+        //   #927 A CODE, NOT THE PROSE. LoginForm renders only codes it knows —
+        //   correctly, since arbitrary text in a URL on the password screen is a
+        //   phishing hole — so the sentence this used to url-encode arrived as
+        //   "Authentication failed." A suspended member read that as a typo.
+        redirect(`/auth/login?error=${authErrorCodeFor(errorMessage)}`);
     }
     
     /**

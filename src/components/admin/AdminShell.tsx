@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { authErrorCodeFor } from "@/lib/auth-error-codes";
 import { requireSession } from "@/lib/session-guard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -41,7 +42,11 @@ export default async function AdminShellContent({ children }: { children: React.
 
     if (!sessionResult.session) {
         const errorMessage = sessionResult.error?.error || "Authentication required";
-        redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
+        //   #927 A CODE, NOT THE PROSE. LoginForm renders only codes it knows —
+        //   correctly, since arbitrary text in a URL on the password screen is a
+        //   phishing hole — so the sentence this used to url-encode arrived as
+        //   "Authentication failed." A suspended member read that as a typo.
+        redirect(`/auth/login?error=${authErrorCodeFor(errorMessage)}`);
     }
 
     const roles = sessionResult.session?.user?.roles || [];
