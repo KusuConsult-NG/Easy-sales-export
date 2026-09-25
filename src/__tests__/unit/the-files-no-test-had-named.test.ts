@@ -371,8 +371,21 @@ describe('how much of the application no test has named', () => {
          *   I went looking for a STALE price, because #1, #2, #18 and #21 were
          *   all a fee copy disagreeing with checkout. There was no copy at all,
          *   which is the same class from the other side.
+         *
+         *   Then 71 → 66, which finishes src/scripts — every script there is now
+         *   named by a test. #915: three diagnostics swept a collection with a
+         *   bare `.get()`, which supabase-db caps at 5,000, against a users table
+         *   its own header calls 41,000 rows. audit-academy printed "Total users
+         *   who bypassed payment" and wrote the report an operator works through,
+         *   from an eighth of the table.
+         *
+         *   Five of the eleven scripts were unreached. Three had the defect; the
+         *   other two — auth-db-audit, which pages listUsers properly, and
+         *   diag-coop-members, which bypasses the adapter for PostgREST on named
+         *   users — were clean, and the test says so rather than leaving it
+         *   silent.
          */
-        expect(ledgerVerdict(unreached().length, 71)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 66)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
