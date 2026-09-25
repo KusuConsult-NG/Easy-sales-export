@@ -58,7 +58,7 @@
  */
 
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { COLLECTIONS, PAYMENT_STATUS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { EXPORT_STOCK_FIELD } from "@/lib/export-stock";
 import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
@@ -164,13 +164,29 @@ export async function fulfilExportBuyerOrder(args: {
             reason: stock.reason,
         });
 
-        await db.collection(COLLECTIONS.EXPORT_ORDERS).doc(order.docId).update({
-            status: "cancelled_out_of_stock",
-            paymentStatus: "paid_awaiting_refund",
-            refundReason: `Insufficient catalog stock for product ${stock.failedId}`,
-            refundAmount: amountInNaira,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        //   #911 GUARDED, LIKE THE `completed` WRITE TWENTY LINES BELOW.
+        //
+        //   It could not be, until now. PaymentStatusWriteSchema is built from
+        //   PAYMENT_STATUS, `paid_awaiting_refund` was not in that list, and
+        //   writeGuard THROWS on a violation — so wrapping this write would have
+        //   thrown at the exact moment a buyer has paid for stock that is not
+        //   there, leaving the order unmarked, invisible to the
+        //   reconcile-fulfilment cron's query and refused by
+        //   refundExportOrderAction's `!== "paid_awaiting_refund"` gate.
+        //
+        //   The vocabulary holds the value now, so the platform's most
+        //   consequential payment write gets the same validation as its least.
+        await db.collection(COLLECTIONS.EXPORT_ORDERS).doc(order.docId).update(writeGuard(
+            PaymentStatusWriteSchema.partial(),
+            {
+                status: "cancelled_out_of_stock",
+                paymentStatus: PAYMENT_STATUS.PAID_AWAITING_REFUND,
+                refundReason: `Insufficient catalog stock for product ${stock.failedId}`,
+                refundAmount: amountInNaira,
+                updatedAt: FieldValue.serverTimestamp(),
+            },
+            'export-order-fulfilment/fulfilExportBuyerOrder:out-of-stock'
+        ));
 
         return {
             ok: false,

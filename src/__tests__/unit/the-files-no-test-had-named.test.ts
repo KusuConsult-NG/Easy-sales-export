@@ -319,8 +319,21 @@ describe('how much of the application no test has named', () => {
          *   same on the land queue. Both were fixed one screen at a time; this is
          *   the shared component neither reached, so three queues get #408's
          *   three distinguishable states at once.
+         *
+         *   Then 79 → 77, on lib/export-order-fulfilment and lib/record-export,
+         *   which were audited together as the export money path. #911 came out
+         *   of the first: the module is carefully reasoned and the defect is in
+         *   the vocabulary it has to write into. PAYMENT_STATUS called itself
+         *   canonical and held six of the thirteen values the application
+         *   writes, so PaymentStatusWriteSchema — z.enum over that list, and
+         *   writeGuard THROWS — could not describe the `paid_awaiting_refund`
+         *   write sitting twenty lines above the guarded `completed` one.
+         *
+         *   record-export is sound and is tested rather than changed. What the
+         *   same pass found beside it is recorded, not fixed: #309's one
+         *   already-logged screen still writes its audit row by a private path.
          */
-        expect(ledgerVerdict(unreached().length, 79)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 77)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
