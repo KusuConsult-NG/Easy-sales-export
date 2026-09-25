@@ -47,6 +47,7 @@ import {
     type DuplicateProfileReport,
 } from "@/app/actions/admin";
 import type { DuplicateGroup } from "@/lib/duplicate-profile-resolution";
+import { numberOrZero } from "@/lib/numbers";
 
 const naira = (n: number) => `₦${n.toLocaleString()}`;
 
@@ -187,6 +188,83 @@ export default function DuplicateProfilesPage() {
                             </div>
                         ))}
                     </div>
+
+                    {/*
+                      *   #918 WHAT THE SCAN DID NOT SEE, said before the list.
+                      *
+                      *   The three numbers above are counts of what was found.
+                      *   Two things are not in them and an operator would read
+                      *   their absence as a zero: profiles with no address, which
+                      *   cannot be grouped by address at all, and a page walk
+                      *   that stopped at its ceiling.
+                      *
+                      *   Shown only when there is something to say, so the
+                      *   ordinary run stays quiet — and worded as a limit on the
+                      *   TOOL rather than a finding about anybody, because that is
+                      *   what it is.
+                      */}
+                    {(() => {
+                        /*
+                          *   #918 READ THROUGH numberOrZero, AND scope OPTIONALLY.
+                          *
+                          *   The first version formatted the count straight off the
+                          *   report object and tested completeness with a plain
+                          *   member access. #598/#600's ratchets refused both, and
+                          *   they were right about a hazard I had not thought
+                          *   through: a report served by a deployment older
+                          *   than this screen carries no `scope`, so
+                          *   `report.scope.complete` THROWS and takes the whole
+                          *   screen down — on the screen an operator uses to settle
+                          *   duplicate accounts.
+                          *
+                          *   A missing scope means the server said nothing, so this
+                          *   claims nothing: the notice appears only when
+                          *   `complete === false` is actually stated. Asserting
+                          *   incompleteness from an absent field would be the same
+                          *   invention in the other direction.
+                          *
+                          *   This note deliberately does not spell the old
+                          *   expression out. #600's scan reads raw source, so a
+                          *   comment written in the shape it looks for is counted as
+                          *   an instance — it refused this file twice: once for
+                          *   quoting the original line, and then again for the
+                          *   placeholder I substituted to describe the shape, which
+                          *   was of course an example of it. #598 imports
+                          *   stripComments and uses it elsewhere but reads raw for
+                          *   the same scan. Recorded in the test rather than changed
+                          *   here: two shared ratchets' semantics are not something
+                          *   to alter in passing.
+                          */
+                        const scope = report.scope;
+                        const scanIncomplete = scope ? scope.complete === false : false;
+                        const withoutEmail = numberOrZero(report.profilesWithoutEmail);
+                        if (!scanIncomplete && withoutEmail <= 0) return null;
+
+                        return (
+                            <div className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4">
+                                <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                                    What this list does not cover
+                                </p>
+                                {withoutEmail > 0 && (
+                                    <p className="mt-2 text-sm text-slate-600">
+                                        {withoutEmail.toLocaleString()} profile
+                                        {withoutEmail === 1 ? "" : "s"} carry no email address.
+                                        Duplicates are grouped by address, so those are not grouped
+                                        here at all — two of them could be the same person and this
+                                        list would not show it.
+                                    </p>
+                                )}
+                                {scanIncomplete && (
+                                    <p className="mt-2 text-sm text-slate-600">
+                                        The scan read {numberOrZero(scope?.scanned).toLocaleString()} profiles
+                                        and stopped at its {numberOrZero(scope?.ceiling).toLocaleString()}-row
+                                        limit, so there may be duplicate groups it never reached. Treat the
+                                        counts above as a floor rather than a total.
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     <div className="mt-6 space-y-4">
                         {report.groups.map((group) => {

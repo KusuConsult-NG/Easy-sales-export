@@ -407,8 +407,22 @@ describe('how much of the application no test has named', () => {
          *   No live open redirect (all four fallbacks are safe literals or the
          *   documented empty sentinel); the guard enforces it now instead of
          *   trusting four callers to remember.
+         *
+         *   Then 63 → 61, on admin/forensics/duplicates/page and services/index.
+         *   #918: the duplicate-profile report gives three counts and said nothing
+         *   about what it could not see — profiles with no address are skipped
+         *   entirely (forensics found 49 of them) and the page walk stops at
+         *   50,000 rows against a 41,000-row table. An operator supersedes records
+         *   on the strength of it. lib/forensic-scan-scope already held the
+         *   platform's vocabulary for saying so, and it is used rather than
+         *   restated.
+         *
+         *   services/index is clean — four files, four registered singletons,
+         *   nothing constructing one directly, no constructors at all — and the
+         *   sweep that establishes that is kept, because a fifth service added
+         *   without registration is what would go unnoticed.
          */
-        expect(ledgerVerdict(unreached().length, 63)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 61)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
