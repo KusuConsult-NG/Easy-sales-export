@@ -93,13 +93,31 @@ function unreached(): string[] {
         .filter((f) => {
             const rel = relative(ROOT, f);
             const noExt = rel.replace(/\.tsx?$/, '');
-            //   Either spelling a test would use: the repo path, or the `@/`
-            //   import alias. A bare mention of the MODULE name is deliberately
-            //   not enough — `lib/claim-outcome` appearing in a comment is what
-            //   made that module look covered while nothing imported it.
-            return !(corpus.includes(rel)
-                || corpus.includes(noExt)
-                || corpus.includes('@/' + noExt.replace(/^src\//, '')));
+            /*
+             *   Either spelling a test would use: the repo path, or the `@/`
+             *   import alias. A bare mention of the MODULE name is deliberately
+             *   not enough — `lib/claim-outcome` appearing in a comment is what
+             *   made that module look covered while nothing imported it.
+             *
+             *   #934 AND THE DIRECTORY FORM, for an index file.
+             *
+             *   data/polling-units/index.ts was the last entry on this ledger,
+             *   and three suites read it — as `@/data/polling-units`, which is
+             *   how Node and TypeScript resolve it and how every caller in the
+             *   application spells it. Nothing writes the word "index", so the
+             *   sweep reported a file that had been looked at as never visited.
+             *
+             *   The over-match this admits is narrow: naming `@/lib/x` would
+             *   also credit `src/lib/x/index.ts`, and both cannot resolve at
+             *   once. The two controls above are what keep it from swallowing a
+             *   real gap.
+             */
+            const spellings = [rel, noExt, '@/' + noExt.replace(/^src\//, '')];
+            const asDirectory = noExt.replace(/\/index$/, '');
+            if (asDirectory !== noExt) {
+                spellings.push(asDirectory, '@/' + asDirectory.replace(/^src\//, ''));
+            }
+            return !spellings.some((spelling) => corpus.includes(spelling));
         })
         .map((f) => relative(ROOT, f))
         .sort();
@@ -124,6 +142,42 @@ describe('how much of the application no test has named', () => {
         //   catastrophe rather than as a measurement.
         expect(unreached()).not.toContain('src/lib/export-returns.ts');
         expect(unreached()).not.toContain('src/lib/price-reduction.ts');
+    });
+
+    it('AND A FILE NOTHING NAMES IS STILL REPORTED (control)', () => {
+        /*
+         *   #934 THE CONTROL THAT MAKES ZERO WORTH ANYTHING.
+         *
+         *   The two controls above prove the sweep reads the tree and does not
+         *   flag a file that IS named. Neither can prove the other direction any
+         *   more, because the list is empty — and an empty list is exactly what a
+         *   broken matcher produces.
+         *
+         *   So the matching rule is exercised against a fabricated corpus: a path
+         *   nothing names must come back unmatched, each spelling a test might use
+         *   must match, and the directory form must credit an index file and only
+         *   an index file. If this ever passes vacuously, the ledger below means
+         *   nothing.
+         */
+        const matches = (rel: string, corpus: string) => {
+            const noExt = rel.replace(/\.tsx?$/, '');
+            const spellings = [rel, noExt, '@/' + noExt.replace(/^src\//, '')];
+            const asDirectory = noExt.replace(/\/index$/, '');
+            if (asDirectory !== noExt) {
+                spellings.push(asDirectory, '@/' + asDirectory.replace(/^src\//, ''));
+            }
+            return spellings.some((spelling) => corpus.includes(spelling));
+        };
+
+        expect(matches('src/lib/nobody-reads-this.ts', 'import { x } from "@/lib/something-else";'))
+            .toBe(false);
+
+        expect(matches('src/lib/thing.ts', "import x from '@/lib/thing';")).toBe(true);
+        expect(matches('src/lib/thing.ts', "readFileSync('src/lib/thing.ts')")).toBe(true);
+        expect(matches('src/lib/thing.ts', "code('src/lib/thing')")).toBe(true);
+
+        expect(matches('src/data/shards/index.ts', "import { S } from '@/data/shards';")).toBe(true);
+        expect(matches('src/data/shards/loader.ts', "import { S } from '@/data/shards';")).toBe(false);
     });
 
     it('THE LEDGER — files with runtime that no test names', () => {
@@ -1029,8 +1083,50 @@ describe('how much of the application no test has named', () => {
          *   field ISO 8601 owns: a value consumers discard, so the effort bought
          *   nothing. It converts the shapes the admin form produces and omits
          *   anything else rather than rounding into a duration nobody stated.
+         *
+         *   Then 22 → 0.
+         *
+         *   #933 ELEVEN FILES WITH ONE JOB EACH, and #934 the last ten. The tail
+         *   of this ledger was not screens: five layouts whose whole content is
+         *   one setting, six modules under a `types/` path, four pages that only
+         *   forward, two retired by #384, two server halves and a generated data
+         *   shard map. Every one was opened and measured, and all but one were
+         *   correct — recorded rather than left silent, the treatment #918 gave
+         *   the services registry.
+         *
+         *   THE ONE THAT WAS NOT: /marketplace/buyer forwarded to
+         *   /marketplace/buyer/products from a `useEffect` behind a spinner, alone
+         *   among the four forwarding pages — the other three are one line of
+         *   `redirect()` on the server. So the buyer waited on JavaScript before
+         *   anything moved, and with the bundle unavailable the spinner was the
+         *   whole screen and the redirect never happened.
+         *
+         *   AND TWO INSTRUMENT CORRECTIONS, both caught by their own controls:
+         *
+         *     A DIRECTORY IMPORT NOW COUNTS. data/polling-units/index.ts was the
+         *     last entry here while three suites already read it — as
+         *     `@/data/polling-units`, which is how Node, TypeScript and every
+         *     caller spell it. Nothing writes "index", so the sweep called a file
+         *     it had been looking at unvisited.
+         *
+         *     A `types/` PATH IS NOT A GUARANTEE. #933's detector classified
+         *     lib/types/farm-nation.ts as declaration-only; it is
+         *     `export * from "@easy-sales/farm-nation"`, whose constants module
+         *     ships three real objects. The detector required a word boundary
+         *     after the star, which a star followed by a space does not give.
+         *     Five of those six modules are declaration-only; the sixth ships
+         *     runtime through a directory where nobody looks for it, and the suite
+         *     imports it to prove the three values arrive.
+         *
+         *   WHAT ZERO MEANS, AND WHAT IT DOES NOT. Every shipping file under src
+         *   is now named by at least one test. This header’s own warning stands:
+         *   being named is not being correct, and the number measures REACH — that
+         *   the audit has visited each file once, not that each one is right. What
+         *   it buys is that the next regression lands somewhere somebody has read,
+         *   and that a NEW unnamed file fails this immediately rather than hiding
+         *   in a difference of twenty-two.
          */
-        expect(ledgerVerdict(unreached().length, 22)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 0)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {
