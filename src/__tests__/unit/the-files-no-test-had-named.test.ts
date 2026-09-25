@@ -345,8 +345,23 @@ describe('how much of the application no test has named', () => {
          *   the submit transaction did: it queries the one lowercased form, and a
          *   de-normalised row is invisible to it. Normalised at the parse
          *   boundary now, with both doors sharing one function.
+         *
+         *   Then 75 → 72, on the three action barrels — wave, farm-nation and
+         *   farm-nation-admin. #913: eight domain barrels, and admin and
+         *   cooperative had a parity test each, written as a LIST of the names a
+         *   file exported at one commit. The other six had nothing. The sweep
+         *   derives the domains from the filesystem and the actions from source,
+         *   checks barrel completeness in both re-export forms, the "private
+         *   files" rule, and that every action file's first statement is the
+         *   server directive.
+         *
+         *   It found no defect — all eight are complete and declared, and the one
+         *   cross-domain private import is a deliberate delegation, pinned as
+         *   itself. What it did find is that four of the eight barrels never
+         *   STATED the private-files rule they were being held to, which is now a
+         *   sentence in each of their headers.
          */
-        expect(ledgerVerdict(unreached().length, 75)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 72)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

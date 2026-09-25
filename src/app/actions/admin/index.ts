@@ -25,6 +25,13 @@
  * Private files (_users, _withdrawals, _land, ...) must never be imported
  * directly from outside this domain, matching the cooperative and marketplace
  * domains.
+ *
+ *   #913 AND ITS PRIVATE FILES ARE PRIVATE. Nothing outside this folder imports
+ *   `./_*` directly — that is swept and pinned in
+ *   __tests__/unit/eight-barrels-and-two-tests, across all eight action domains.
+ *   Four of the eight stated this rule and four, including this one, only obeyed
+ *   it; a rule enforced by a test nobody reads is not a rule a contributor can
+ *   follow.
  */
 
 // ─── Erased accounts (_erased.ts) ─────────────────────────────────────────────
