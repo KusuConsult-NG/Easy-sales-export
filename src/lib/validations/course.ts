@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COURSE_LEVELS } from '@/lib/academy-course-fields';
 
 // Course Progress Update Schema
 export const courseProgressSchema = z.object({
@@ -53,7 +54,10 @@ export const createCourseSchema = z.object({
     description: z.string().min(20, "Description must be at least 20 characters"),
     instructor: z.string().min(2, "Instructor name is required"),
     duration: z.string().min(1, "Duration is required"), // e.g., "4 weeks"
-    level: z.enum(["beginner", "intermediate", "advanced"]),
+    //   #930 — the three levels come from lib/academy-course-fields, which the
+    //   admin forms render their <select> from. Four spellings of this union
+    //   existed and the forms needed a fifth.
+    level: z.enum(COURSE_LEVELS),
     // Same values and same default as courseSchema — one entity, one vocabulary.
     tier: z.enum(["free", "foundation", "standard", "elite"]).optional().default("free"),
     category: z.string().min(1).optional(),

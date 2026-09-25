@@ -8,6 +8,12 @@ import Link from "next/link";
 import { ArrowLeft, Image as ImageIcon, Loader2, Save, X } from "lucide-react";
 import { useStorage } from "@/hooks/use-storage";
 import { ThumbnailImage } from "@/components/ui/ThumbnailImage";
+import {
+    COURSE_CATEGORIES,
+    COURSE_LEVELS,
+    DEFAULT_COURSE_CATEGORY,
+    DEFAULT_COURSE_LEVEL,
+} from "@/lib/academy-course-fields";
 
 export default function CreateCoursePage() {
     const router = useRouter();
@@ -34,12 +40,23 @@ export default function CreateCoursePage() {
     const [thumbFile, setThumbFile] = useState<File | null>(null);
     const [thumbPreview, setThumbPreview] = useState<string | null>(null);
     const [isUploadingThumb, setIsUploadingThumb] = useState(false);
+    /*
+     *   #930 — LEVEL AND DURATION ARE ASKED FOR NOW.
+     *
+     *   They were sent as the literals "beginner" and "4 weeks" from the
+     *   payload below, on every course this form has ever created, and the edit
+     *   screen collects neither — so nothing on the platform could set them.
+     *   Five screens display them, including the CERTIFICATE, which prints
+     *   `{course.duration}` on the document a learner shows an employer.
+     */
     const [formData, setFormData] = useState({
         title: "",
         description: "",
         instructor: "",
-        category: "export-basics",
+        category: DEFAULT_COURSE_CATEGORY as string,
         tier: "foundation",
+        level: DEFAULT_COURSE_LEVEL as string,
+        duration: "",
         thumbnail: "",
     });
 
@@ -72,8 +89,13 @@ export default function CreateCoursePage() {
                 instructor: formData.instructor,
                 thumbnail: thumbnailUrl,
                 tier: formData.tier,
-                level: "beginner",
-                duration: "4 weeks",
+                level: formData.level,
+                duration: formData.duration,
+                //   #930 — the answer the select has always collected. The
+                //   schema has admitted `category` since the tier fix; this
+                //   caller simply never passed it, so every choice an admin
+                //   made in that dropdown was dropped on the floor here.
+                category: formData.category,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             });
@@ -164,11 +186,9 @@ export default function CreateCoursePage() {
                                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                     className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/50"
                                 >
-                                    <option value="export-basics">Export Basics</option>
-                                    <option value="compliance">Compliance & Legal</option>
-                                    <option value="logistics">Logistics & Shipping</option>
-                                    <option value="market-entry">Market Entry Strategies</option>
-                                    <option value="finance">Finance & Payment</option>
+                                    {COURSE_CATEGORIES.map((c) => (
+                                        <option key={c.value} value={c.value}>{c.label}</option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -186,6 +206,50 @@ export default function CreateCoursePage() {
                                     <option value="standard">Standard</option>
                                     <option value="elite">Elite</option>
                                 </select>
+                            </div>
+
+                            {/*
+                              *   #930 — LEVEL. The catalogue's own filter reads it,
+                              *   so a course whose level is wrong is a course that
+                              *   filter can never find.
+                              */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-900 mb-2">
+                                    Level
+                                </label>
+                                <select
+                                    value={formData.level}
+                                    onChange={(e) => setFormData({ ...formData, level: e.target.value })}
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                >
+                                    {COURSE_LEVELS.map((l) => (
+                                        <option key={l} value={l} className="capitalize">{l}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/*
+                              *   #930 — DURATION, and `required` because the schema
+                              *   requires it: a course stored without one is what
+                              *   this finding is about. It is printed on the
+                              *   learner's certificate, so the placeholder asks for
+                              *   the real length rather than suggesting a default.
+                              */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-900 mb-2">
+                                    Duration
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.duration}
+                                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                                    placeholder="e.g., 6 weeks"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                />
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Shown in the catalogue and printed on the learner&apos;s certificate.
+                                </p>
                             </div>
                         </div>
 

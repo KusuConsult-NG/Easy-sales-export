@@ -10,6 +10,13 @@ import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
 import { uploadFile, type UploadProgress } from "@/lib/storage-upload";
 import MasterUploader from "@/components/shared/MasterUploader";
+import {
+    COURSE_CATEGORIES,
+    COURSE_LEVELS,
+    DEFAULT_COURSE_CATEGORY,
+    DEFAULT_COURSE_LEVEL,
+    type CourseLevel,
+} from "@/lib/academy-course-fields";
 
 
 // Local interface for UI state
@@ -64,16 +71,35 @@ export default function CourseManagerPage() {
         description: '',
         contentType: 'video',
     });
+    /*
+     *   #930 — LEVEL, DURATION AND CATEGORY ARE EDITABLE NOW.
+     *
+     *   This form was {title, description, instructor, tier}, and the create
+     *   screen sent level and duration as the literals "beginner" and "4 weeks".
+     *   So no screen on the platform could set either, and every course already
+     *   stored carries those two values whatever it actually is — including on
+     *   the certificate, which prints the duration. This is where the ones
+     *   already created get corrected.
+     *
+     *   updateCourseAction validates against `createCourseSchema.partial()`, so
+     *   all three were already accepted; only the form was short.
+     */
     const [courseDetailsForm, setCourseDetailsForm] = useState<{
         title: string;
         description: string;
         instructor: string;
         tier: "foundation" | "standard" | "elite";
+        level: CourseLevel;
+        duration: string;
+        category: string;
     }>({
         title: "",
         description: "",
         instructor: "",
         tier: "foundation",
+        level: DEFAULT_COURSE_LEVEL,
+        duration: "",
+        category: DEFAULT_COURSE_CATEGORY,
     });
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
     const [uploadContext, setUploadContext] = useState<'lesson' | 'newModule'>('lesson');
@@ -97,7 +123,13 @@ export default function CourseManagerPage() {
                     title: data.title || "",
                     description: data.description || "",
                     instructor: data.instructor || "",
-                    tier: (data.tier as "foundation" | "standard" | "elite") || "foundation"
+                    tier: (data.tier as "foundation" | "standard" | "elite") || "foundation",
+                    //   The STORED value, not a default dressed as one: an admin
+                    //   opening this must see what the catalogue is showing
+                    //   learners before deciding what to change it to.
+                    level: (data.level as CourseLevel) || DEFAULT_COURSE_LEVEL,
+                    duration: data.duration || "",
+                    category: (data as { category?: string }).category || DEFAULT_COURSE_CATEGORY,
                 });
             } else {
                 toast.error("Course not found");
@@ -248,6 +280,23 @@ export default function CourseManagerPage() {
 
     async function handleSaveCourseDetails() {
         if (!course) return;
+
+        /*
+         *   #930 — SAID HERE, WHERE THE FIELD IS, rather than relayed from the
+         *   schema after a round trip.
+         *
+         *   `duration` is required, and a course stored by the other creator may
+         *   hold none — so an admin who opened this to change the TITLE would
+         *   have had the whole patch refused with "Duration is required" and no
+         *   clue which box it meant. The catalogue and the certificate both
+         *   print this field, which is why the answer is to ask for it rather
+         *   than to let it through empty.
+         */
+        if (!courseDetailsForm.duration.trim()) {
+            toast.error("How long is this course? It is shown in the catalogue and printed on the certificate.");
+            return;
+        }
+
         setIsLoading(true);
         try {
             const result = await updateCourseAction(courseId, courseDetailsForm);
@@ -797,6 +846,48 @@ export default function CourseManagerPage() {
                                 <option value="foundation">Foundation</option>
                                 <option value="standard">Standard</option>
                                 <option value="elite">Elite</option>
+                            </select>
+                        </div>
+                        {/*
+                          *   #930 — the two fields no screen could set. The level
+                          *   drives the catalogue's own filter; the duration is
+                          *   printed on the learner's certificate.
+                          */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Level</label>
+                            <select
+                                value={courseDetailsForm.level}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, level: e.target.value as CourseLevel })}
+                                className="w-full px-4 py-2 border rounded-lg"
+                            >
+                                {COURSE_LEVELS.map((l) => (
+                                    <option key={l} value={l} className="capitalize">{l}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Duration</label>
+                            <input
+                                type="text"
+                                value={courseDetailsForm.duration}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, duration: e.target.value })}
+                                placeholder="e.g., 6 weeks"
+                                className="w-full px-4 py-2 border rounded-lg"
+                            />
+                            <p className="mt-1 text-xs text-slate-500">
+                                Shown in the catalogue and printed on the learner&apos;s certificate.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                            <select
+                                value={courseDetailsForm.category}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, category: e.target.value })}
+                                className="w-full px-4 py-2 border rounded-lg"
+                            >
+                                {COURSE_CATEGORIES.map((c) => (
+                                    <option key={c.value} value={c.value}>{c.label}</option>
+                                ))}
                             </select>
                         </div>
                         <div className="pt-4 flex justify-end gap-3 border-t">
