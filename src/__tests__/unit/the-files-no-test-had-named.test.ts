@@ -212,8 +212,16 @@ describe('how much of the application no test has named', () => {
          *   for this exact reason and wrote down why: "a list ... is exactly the
          *   thing somebody reaches for ... and it would have been silently out
          *   of date." Both are derived from HUB_MODULES now.
+         *
+         *   And 94 → 93 on one more, reached incidentally and recorded anyway:
+         *   types/strict.ts, which #901's suite imports for `SoilQuality` to
+         *   assert that the colour tables are keyed on the enum's lower-case
+         *   values while the form writes "Clay". A file reached by a test that
+         *   needed it is exactly what this ledger measures; a file reached by a
+         *   test written to lower the number is not, which is why every entry
+         *   above says what was found.
          */
-        expect(ledgerVerdict(unreached().length, 94)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 93)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

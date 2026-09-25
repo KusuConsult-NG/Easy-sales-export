@@ -117,6 +117,20 @@ describe('the host the platform serves, and the host it advertised', () => {
             expect(canonicalUrl('academy')).toBe('https://www.easysalesexport.com/academy');
         });
 
+        it('AND A PROTOCOL-RELATIVE PATH DOES NOT SURVIVE AS ONE', () => {
+            /*
+             *   Not a redirect guard and never reachable as one — this builds a
+             *   canonical tag, not a Location header. It is asserted because the
+             *   first version tested `startsWith('/')`, which safe-redirect-path's
+             *   sweep refuses by name for exactly the `//host` case, and because
+             *   collapsing it to one host-relative path is the right answer
+             *   anyway.
+             */
+            expect(canonicalUrl('//evil.example/x')).toBe('https://www.easysalesexport.com/evil.example/x');
+            expect(canonicalUrl('///')).toBe('https://www.easysalesexport.com');
+            expect(new URL(canonicalUrl('//evil.example')).hostname).toBe('www.easysalesexport.com');
+        });
+
         it('AND WHAT IT PRODUCES IS NEVER ITSELF REDIRECTED', () => {
             //   THE test, stated as a property rather than as a string: whatever
             //   canonicalUrl says, the middleware must have nothing to say about

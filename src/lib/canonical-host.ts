@@ -82,10 +82,22 @@ const ROOT_CANONICAL = `www.${ROOT_APEX}`;
 /** `https://www.easysalesexport.com` — what a canonical tag, an OG url and a sitemap should say. */
 export const ROOT_ORIGIN = `https://${ROOT_CANONICAL}`;
 
-/** The canonical absolute URL for a hub path. `canonicalUrl('/export')`. */
+/**
+ * The canonical absolute URL for a hub path. `canonicalUrl('/export')`.
+ *
+ * LEADING SLASHES ARE STRIPPED AND ONE IS PUT BACK, rather than tested for.
+ * The first version of this was `path.startsWith('/') ? path : '/' + path`, and
+ * safe-redirect-path's sweep refused it by name — "NO GUARD CHECKS ONLY FOR A
+ * LEADING SLASH", because `//evil.example` starts with one. This is not a
+ * redirect guard and could not have been exploited through it, but the sweep is
+ * right that the shape should not exist in the codebase: written this way,
+ * `canonicalUrl('//evil.example')` yields
+ * `https://www.easysalesexport.com/evil.example` rather than a protocol-relative
+ * URL, which is also simply the more correct answer.
+ */
 export function canonicalUrl(path: string = '/'): string {
-    const suffix = path.startsWith('/') ? path : `/${path}`;
-    return suffix === '/' ? ROOT_ORIGIN : `${ROOT_ORIGIN}${suffix}`;
+    const suffix = String(path ?? '').replace(/^\/+/, '');
+    return suffix === '' ? ROOT_ORIGIN : `${ROOT_ORIGIN}/${suffix}`;
 }
 
 /**
