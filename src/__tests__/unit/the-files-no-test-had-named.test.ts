@@ -332,8 +332,21 @@ describe('how much of the application no test has named', () => {
          *   record-export is sound and is tested rather than changed. What the
          *   same pass found beside it is recorded, not fixed: #309's one
          *   already-logged screen still writes its audit row by a private path.
+         *
+         *   Then 77 → 75, on lib/validations/shared and lib/validations/academy.
+         *   #912: an academy application's address is written by two actions and
+         *   only one normalised it. The submit door lowercases and trims and says
+         *   why; the resubmit door writes the schema's output — the address as
+         *   typed — through an update whose nested map REPLACES rather than
+         *   merges, so one resubmission undid it.
+         *
+         *   The three readers that comment names are all fallbacks behind an
+         *   owner-scoped query, so none of them noticed. The duplicate guard in
+         *   the submit transaction did: it queries the one lowercased form, and a
+         *   de-normalised row is invisible to it. Normalised at the parse
+         *   boundary now, with both doors sharing one function.
          */
-        expect(ledgerVerdict(unreached().length, 77)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 75)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

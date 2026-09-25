@@ -15,6 +15,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
+import { normaliseEmail } from "@/lib/validations/shared";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { normalisePhone } from "@/lib/phone";
 import { checkAcademyPaymentStatusAction } from "./_payment";
@@ -50,9 +51,16 @@ async function _submitAcademyApplicationAction(
         }
 
         const phone = applicationData.personalInfo.phone;
-        // Lowercased and trimmed, because that is the form every other reader
-        // looks for. See the dedup guard below.
-        const normalisedEmail = String(applicationData.personalInfo.email ?? "").trim().toLowerCase() || null;
+        //   Lowercased and trimmed, because that is the form every other reader
+        //   looks for. See the dedup guard below.
+        //
+        //   #912 THROUGH THE SHARED RULE NOW, not two lines of its own. The
+        //   resubmit door writes this field from AcademyApplicationInputSchema
+        //   and normalised nothing, so a resubmission with a capital letter
+        //   replaced the value this line had carefully produced — and the dedup
+        //   guard below, which queries the one lowercased form, could no longer
+        //   see that row. Both doors share `applicationEmail`/`normaliseEmail`.
+        const normalisedEmail = normaliseEmail(applicationData.personalInfo.email) || null;
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
         let finalApplicationId: string = "";
