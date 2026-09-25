@@ -36,6 +36,7 @@ import {
     type FarmNationApprovalReport,
 } from "@/app/actions/admin";
 import { decisionsFor, type FarmerCase } from "@/lib/farm-nation-approval-decision";
+import { numberOrZero } from "@/lib/numbers";
 
 const DECISION_LABEL: Record<string, string> = {
     confirm: "Approval stands — record why",
@@ -145,6 +146,49 @@ export default function FarmNationApprovalsPage() {
                             </div>
                         ))}
                     </div>
+
+                    {/*
+                      *   #928 — WHAT THE THREE NUMBERS ABOVE DO NOT COVER.
+                      *
+                      *   This scan reads 200 farmers and stops, and the live run is
+                      *   already there: bounded-concurrency records "0 + 1 + 177 =
+                      *   178 cases out of a 200-farmer scan". A walk that returned
+                      *   its whole ceiling cannot tell "that is all of them" from
+                      *   "there are more and I stopped", so the counts are a floor
+                      *   and the screen has to say so — an approval nobody ever
+                      *   reviews is the thing this screen exists to prevent.
+                      *
+                      *   Shown only when the server states incompleteness, and
+                      *   worded as a limit on the TOOL rather than a finding about
+                      *   any farmer.
+                      */}
+                    {(() => {
+                        /*
+                          *   Read the way #918's screen is read, and for its reason:
+                          *   a report from a deployment older than this screen
+                          *   carries no `scope` at runtime, whatever the type says,
+                          *   and a plain member access on it takes the screen down.
+                          *   An absent scope means the server said nothing, so this
+                          *   claims nothing in either direction.
+                          */
+                        const scope = report.scope;
+                        const scanIncomplete = scope ? scope.complete === false : false;
+                        if (!scanIncomplete) return null;
+
+                        return (
+                            <div className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4">
+                                <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                                    What this list does not cover
+                                </p>
+                                <p className="mt-2 text-sm text-slate-600">
+                                    The scan read {numberOrZero(scope?.scanned).toLocaleString()} farmers and
+                                    stopped at its {numberOrZero(scope?.ceiling).toLocaleString()}-row limit, so
+                                    there may be approvals it never reached. Treat the counts above as a floor
+                                    rather than a total.
+                                </p>
+                            </div>
+                        );
+                    })()}
 
                     <div className="mt-6 space-y-4">
                         {report.cases.map((c) => (

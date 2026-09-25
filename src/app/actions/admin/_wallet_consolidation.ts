@@ -46,6 +46,7 @@ import { isPositiveAmount } from "@/lib/amount";
 import { supersedingPointer } from "@/lib/user-identity";
 import { mapWithConcurrency } from "@/lib/bounded-concurrency";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
+import { sampleOf, describeSample, type SampleScope } from "@/lib/forensic-scan-scope";
 
 /** One profile holding money it cannot spend, and where the money should go. */
 export interface StrandedWallet {
@@ -62,6 +63,15 @@ export interface StrandedWalletReport {
     stranded: StrandedWallet[];
     /** Superseded profiles carrying a wallet row at all, stranded or not. */
     scanned: number;
+    /**
+     *   #928 HOW MUCH OF THE TABLE THE WALK READ — which is NOT `scanned`.
+     *
+     *   `scanned` counts what was FOUND (272 of them, measured). Comparing that
+     *   against the walk's ceiling would be a guard that cannot fire: 272 is
+     *   below 50,000 whether the walk read the whole table or gave up at its
+     *   fiftieth page. The rows read are the only figure that answers it.
+     */
+    scope: SampleScope;
 }
 
 /** Matches the duplicate tool's paging, so both read the same population. */
@@ -87,12 +97,15 @@ async function _findStrandedWalletsAction(): Promise<ActionResponse<StrandedWall
          */
         const superseded: { id: string; data: Record<string, unknown> }[] = [];
         let cursor: string | undefined;
+        //   #928 — rows the walk actually read, for the scope below.
+        let rowsRead = 0;
 
         for (let page = 0; page < MAX_PAGES; page += 1) {
             let q = db.collection(COLLECTIONS.USERS).orderBy("id").limit(PAGE);
             if (cursor) q = q.startAfter(cursor);
             const snap = await q.get();
             if (snap.docs.length === 0) break;
+            rowsRead += snap.docs.length;
 
             for (const d of snap.docs) {
                 const data = (d.data() ?? {}) as Record<string, unknown>;
@@ -177,6 +190,20 @@ async function _findStrandedWalletsAction(): Promise<ActionResponse<StrandedWall
             });
         }
 
+        /*
+         *   #928 — WHAT THE WALK SAW, beside what it found.
+         *
+         *   This screen already shows `scanned` and its header says why: "0
+         *   stranded means something quite different depending on whether 272
+         *   wallets were examined or none were." The same argument reaches one
+         *   step further back — 272 examined out of a table the walk may have
+         *   stopped reading is a different figure again, and only this says so.
+         */
+        const scope = sampleOf(rowsRead, MAX_PAGES * PAGE);
+        if (!scope.complete) {
+            logger.warn(`[admin/wallet-consolidation] ${describeSample(scope, "profile")}`);
+        }
+
         if (stranded.length > 0) {
             //   Loud, because this is money nobody can reach. The measured
             //   state when this was written was 272 wallet rows on superseded
@@ -189,7 +216,7 @@ async function _findStrandedWalletsAction(): Promise<ActionResponse<StrandedWall
             );
         }
 
-        return { success: true as const, error: null, data: { stranded, scanned } };
+        return { success: true as const, error: null, data: { stranded, scanned, scope } };
     } catch (error: any) {
         logger.error("[admin/wallet-consolidation] could not scan for stranded balances", {
             error: error?.message ?? String(error),
