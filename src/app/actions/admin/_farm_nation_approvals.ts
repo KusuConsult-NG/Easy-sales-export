@@ -56,6 +56,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { mapWithConcurrency } from "@/lib/bounded-concurrency";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
+import { sampleOf, describeSample, type SampleScope } from "@/lib/forensic-scan-scope";
 
 /** Matches the scan's own bound, so both look at the same population. */
 const SCAN_LIMIT = 200;
@@ -121,6 +122,14 @@ export interface FarmNationApprovalReport {
     noApplication: number;
     drift: number;
     settled: number;
+    /**
+     *   #928 HOW MUCH OF THE FARMER POPULATION THIS SCAN READ.
+     *
+     *   REQUIRED here, and read DEFENSIVELY on the screen — the compiler should
+     *   refuse a future reader that forgets to say what it saw, while the screen
+     *   still has to survive a report from a deployment older than itself.
+     */
+    scope: SampleScope;
 }
 
 async function _listFarmNationApprovalCasesAction(): Promise<ActionResponse<FarmNationApprovalReport | null>> {
@@ -134,6 +143,23 @@ async function _listFarmNationApprovalCasesAction(): Promise<ActionResponse<Farm
             .where("roles", "array-contains", "farmer")
             .limit(SCAN_LIMIT)
             .get();
+
+        /*
+         *   #928 — WHAT THE SCAN READ, so the three counts below stop being
+         *   presented as the whole population.
+         *
+         *   THIS ONE IS NOT HYPOTHETICAL. bounded-concurrency's header records
+         *   the live run: "0 + 1 + 177 = 178 cases out of a 200-farmer scan" —
+         *   two hundred rows returned against a two-hundred ceiling, which
+         *   sampleOf calls incomplete for the reason it states.
+         *
+         *   AND RAISING THE CEILING IS NOT THE FIX AVAILABLE HERE. #805 measured
+         *   this scan at eight keyed reads per farmer, sitting on the function
+         *   timeout at exactly this 200. Reading further is what makes the screen
+         *   answer "Could not read the Farm Nation approvals"; what was missing
+         *   was the sentence.
+         */
+        const scope = sampleOf(farmers.docs.length, SCAN_LIMIT);
 
         /*
          *   #805 — SEVERAL AT A TIME. This awaited buildCase once per farmer,
@@ -159,6 +185,12 @@ async function _listFarmNationApprovalCasesAction(): Promise<ActionResponse<Farm
             return a.userId < b.userId ? -1 : 1;
         });
 
+        //   Said in the log as well as on the screen, so a truncated run can be
+        //   found afterwards rather than only noticed by whoever was looking.
+        if (!scope.complete) {
+            logger.warn(`[admin/farm-nation-approvals] ${describeSample(scope, "farmer")}`);
+        }
+
         return {
             success: true as const,
             error: null,
@@ -167,6 +199,7 @@ async function _listFarmNationApprovalCasesAction(): Promise<ActionResponse<Farm
                 noApplication: cases.filter((c) => c.issue === "no-application" && !c.settled).length,
                 drift: cases.filter((c) => c.issue === "drift" && !c.settled).length,
                 settled: cases.filter((c) => c.settled).length,
+                scope,
             },
         };
     } catch (error: any) {

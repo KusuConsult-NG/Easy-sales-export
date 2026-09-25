@@ -48,6 +48,7 @@ import {
     DEFAULT_MEMBERSHIP_TIER,
     type MissingMembershipCase,
 } from "@/lib/cooperative-membership-repair";
+import { numberOrZero } from "@/lib/numbers";
 
 const naira = (n: number) => `₦${n.toLocaleString()}`;
 
@@ -152,6 +153,50 @@ export default function CooperativeMembershipsPage() {
                             </div>
                         ))}
                     </div>
+
+                    {/*
+                      *   #928 — WHAT THE TWO NUMBERS ABOVE DO NOT COVER.
+                      *
+                      *   The scan behind them stops at its 200-row ceiling, and a
+                      *   walk that stopped short is indistinguishable from one that
+                      *   found everything: an operator works this list to the
+                      *   bottom, sees nothing left, and concludes the platform owes
+                      *   nobody a membership row. On this screen that conclusion is
+                      *   about somebody's savings record.
+                      *
+                      *   Shown only when the server actually states incompleteness
+                      *   — worded as a limit on the TOOL, since that is what it is.
+                      */}
+                    {(() => {
+                        /*
+                          *   Read the way #918's screen is read, and for its
+                          *   reason: a report served by a deployment older than this
+                          *   screen carries no `scope` at runtime, whatever the type
+                          *   says, and a plain member access on it takes the whole
+                          *   screen down. An absent scope means the server said
+                          *   nothing, so this claims nothing — asserting
+                          *   incompleteness from an absent field would be the same
+                          *   invention in the other direction.
+                          */
+                        const scope = report.scope;
+                        const scanIncomplete = scope ? scope.complete === false : false;
+                        if (!scanIncomplete) return null;
+
+                        return (
+                            <div className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4">
+                                <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                                    What this list does not cover
+                                </p>
+                                <p className="mt-2 text-sm text-slate-600">
+                                    The scan read {numberOrZero(scope?.scanned).toLocaleString()} members holding
+                                    the cooperative role and stopped at its{" "}
+                                    {numberOrZero(scope?.ceiling).toLocaleString()}-row limit, so there may be
+                                    members owed a membership row it never reached. Treat the counts above as a
+                                    floor rather than a total.
+                                </p>
+                            </div>
+                        );
+                    })()}
 
                     <div className="mt-6 space-y-4">
                         {report.cases.map((c) => (

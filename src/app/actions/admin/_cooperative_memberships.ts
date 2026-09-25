@@ -56,6 +56,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { sampleOf, describeSample, type SampleScope } from "@/lib/forensic-scan-scope";
 
 /** Matches the reconciliation check's own sample bound. */
 const SCAN_LIMIT = 200;
@@ -116,6 +117,15 @@ export interface MissingMembershipReport {
     fullyKnown: number;
     /** Rows where a person has to choose the tier. */
     needATier: number;
+    /**
+     *   #928 HOW MUCH OF THE POPULATION THIS SCAN READ.
+     *
+     *   REQUIRED here, and read DEFENSIVELY on the screen. The compiler should
+     *   refuse a future reader of this collection that forgets to say what it
+     *   saw; the screen still has to survive a report from a deployment older
+     *   than itself, where the field is simply absent at runtime.
+     */
+    scope: SampleScope;
 }
 
 async function _listMissingMembershipsAction(): Promise<ActionResponse<MissingMembershipReport | null>> {
@@ -130,6 +140,12 @@ async function _listMissingMembershipsAction(): Promise<ActionResponse<MissingMe
             .limit(SCAN_LIMIT)
             .get();
 
+        //   #928 — WHAT THE SCAN READ, so the screen can stop presenting its
+        //   counts as the whole picture. The ceiling is not raised: this reads
+        //   the ledger per member and #805 measured the neighbouring scan
+        //   sitting on the function timeout at this same 200.
+        const scope = sampleOf(members.docs.length, SCAN_LIMIT);
+
         const cases: MissingMembershipCase[] = [];
         for (const doc of members.docs) {
             const c = await buildCase(doc as any);
@@ -142,6 +158,15 @@ async function _listMissingMembershipsAction(): Promise<ActionResponse<MissingMe
             return a.userId < b.userId ? -1 : 1;
         });
 
+        //   Said in the log as well as on the screen — a scan that stopped
+        //   short is worth finding later, and describeSample is the sentence
+        //   the rest of the platform already uses for it.
+        if (!scope.complete) {
+            logger.warn(
+                `[admin/cooperative-memberships] ${describeSample(scope, "member holding the cooperative role")}`,
+            );
+        }
+
         return {
             success: true as const,
             error: null,
@@ -149,6 +174,7 @@ async function _listMissingMembershipsAction(): Promise<ActionResponse<MissingMe
                 cases,
                 fullyKnown: cases.filter((c) => !c.needsATier).length,
                 needATier: cases.filter((c) => c.needsATier).length,
+                scope,
             },
         };
     } catch (error: any) {

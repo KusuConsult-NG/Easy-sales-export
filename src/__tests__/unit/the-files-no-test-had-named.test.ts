@@ -842,8 +842,46 @@ describe('how much of the application no test has named', () => {
          *   costs nothing: the middleware catches its own crash and redirects to
          *   /auth/login?error=SessionError rather than relying on that page.
          *   /loading is a spinner with no state.
+         *
+         *   Then 28 → 26, on admin/forensics/cooperative/page and
+         *   admin/forensics/farm-nation/page.
+         *
+         *   #928 TWO FORENSIC WORKLISTS PRESENTED A 200-ROW SAMPLE AS THE WHOLE
+         *   POPULATION, AND SWEEPING THE DIRECTORY FOUND A THIRD. #918 fixed this
+         *   exact shape on the fourth screen in that same directory and named it;
+         *   the ones beside it were never opened. Measured before anything was
+         *   written: cooperative and farm-nation carried none of the scope
+         *   vocabulary that duplicates carried eight times.
+         *
+         *   AND ON FARM NATION IT IS NOT HYPOTHETICAL — lib/bounded-concurrency
+         *   records the live run, "0 + 1 + 177 = 178 cases out of a 200-farmer
+         *   scan": the ceiling, returned in full, which sampleOf calls incomplete
+         *   for the reason it states. Raising it is not the fix available, either:
+         *   #805 measured that scan at eight keyed reads per farmer sitting on the
+         *   function timeout at exactly this 200, which is why the SENTENCE is the
+         *   fix. Both scans report a SampleScope now, both screens say it, and
+         *   both log it so a truncated run can be found afterwards.
+         *
+         *   THE THIRD ONE IS THE INSTRUCTIVE ONE. stranded-wallets already showed a
+         *   figure for trust and its header argues for it — "0 stranded means
+         *   something quite different depending on whether 272 wallets were
+         *   examined or none were". That figure is what the walk FOUND, and it
+         *   cannot answer this question at all: 272 is below the 50,000-row ceiling
+         *   whether the walk read the whole table or gave up on its fiftieth page.
+         *   A scope built from it would be a guard that cannot fire — the same trap
+         *   forensic-scan-scope's header describes about the adapter's own
+         *   `truncated` flag — so the walk counts the rows it read. That screen also
+         *   stops claiming "No money is stranded" when it stopped short, which is
+         *   the false green the whole module exists to prevent.
+         *
+         *   AND THE POPULATION IS SWEPT FROM THE FILESYSTEM, not listed: a hand
+         *   list is precisely what left these two sitting beside a fixed one for
+         *   two findings. A fifth worklist added to that directory fails until it
+         *   says its scope. The forensics INDEX is out of it for a stated reason —
+         *   its checks carry their verdict through verdictFor and it renders
+         *   "inconclusive" as its own state.
          */
-        expect(ledgerVerdict(unreached().length, 28)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(unreached().length, 26)).toBe(LEDGER_HELD);
     });
 
     it('AND EVERY HTTP ENTRY POINT IS OFF IT', () => {

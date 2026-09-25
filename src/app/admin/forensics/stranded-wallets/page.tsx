@@ -55,6 +55,7 @@ import {
     type StrandedWalletReport,
     type StrandedWallet,
 } from "@/app/actions/admin";
+import { numberOrZero } from "@/lib/numbers";
 
 const naira = (n: number) => `₦${n.toLocaleString()}`;
 
@@ -120,6 +121,18 @@ export default function StrandedWalletsPage() {
 
     const total = report?.stranded.reduce((sum, w) => sum + w.balance, 0) ?? 0;
 
+    /*
+     *   #928 — WHETHER THE WALK SAW THE WHOLE TABLE.
+     *
+     *   Read the way #918's duplicates screen reads it, and for its reason: a
+     *   report from a deployment older than this screen carries no `scope` at
+     *   runtime, whatever the type says, and a plain member access on it takes
+     *   the screen down. An absent scope means the server said nothing, so this
+     *   claims nothing in either direction.
+     */
+    const scope = report?.scope;
+    const scanIncomplete = scope ? scope.complete === false : false;
+
     return (
         <div className="p-6 max-w-5xl mx-auto">
             <div className="mb-6">
@@ -167,7 +180,40 @@ export default function StrandedWalletsPage() {
                         ))}
                     </div>
 
-                    {report.stranded.length === 0 && (
+                    {/*
+                      *   #928 — WHAT THE THREE NUMBERS ABOVE DO NOT COVER.
+                      *
+                      *   This screen's header already argues the near half of this:
+                      *   "0 stranded means something quite different depending on
+                      *   whether 272 wallets were examined or none were." One step
+                      *   further back is the walk itself, which stops at fifty pages
+                      *   of a thousand — and `scanned` cannot reveal that, because
+                      *   272 is below the ceiling whether the walk read the whole
+                      *   table or gave up halfway.
+                      */}
+                    {scanIncomplete && (
+                        <div className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4">
+                            <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                                What this list does not cover
+                            </p>
+                            <p className="mt-2 text-sm text-slate-600">
+                                The walk read {numberOrZero(scope?.scanned).toLocaleString()} profiles and
+                                stopped at its {numberOrZero(scope?.ceiling).toLocaleString()}-row limit, so
+                                there may be superseded profiles holding a balance it never reached. Among the
+                                rows it did read, what is listed above is everything — but a clean result here
+                                is not a clean table.
+                            </p>
+                        </div>
+                    )}
+
+                    {/*
+                      *   #928 — AND NOT WHEN THE WALK STOPPED SHORT. "No money is
+                      *   stranded" is a claim about the table; a walk that gave up
+                      *   at its ceiling cannot make it, and this is the screen
+                      *   somebody reads to decide whether anybody's money is stuck.
+                      *   The notice above says what was read instead.
+                      */}
+                    {report.stranded.length === 0 && !scanIncomplete && (
                         <div className="mt-6 p-5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3">
                             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                             <div>
