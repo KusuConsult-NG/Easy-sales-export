@@ -40,6 +40,13 @@ export default function WebsiteFooter() {
             // "FAQ" points at the help centre, which carries the "Frequently
             // Asked Questions" section this link was named for.
             { name: "FAQ", href: "/help" },
+            // #926 /refund-policy is a real, complete page that NOTHING in the
+            // tree linked — not the live home-page footer, and not this column
+            // either. Added in both places. This file is still unrendered (see
+            // the note at the top), so the link that makes it reachable is the
+            // one on app/page; this one keeps the component correct for the day
+            // somebody mounts it, which is the same reasoning #359 used.
+            { name: "Refund Policy", href: "/refund-policy" },
         ],
     };
 

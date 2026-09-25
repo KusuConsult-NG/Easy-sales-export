@@ -39,7 +39,15 @@ export default function ContactPage() {
             }
         } catch (error) {
             logger.error("Contact form error:", error);
-            toast.error("Failed to send message. Please email us directly at info@easysalesexport.com");
+            /*
+             *   #926 THE ONE ADDRESS ON THIS PAGE THAT WAS TYPED OUT, and it is
+             *   on the path that runs when the form has just failed — the moment
+             *   the address actually has to be right. The four working links
+             *   above all read COMPANY_INFO; this literal agreed with it today
+             *   and would not have survived the address changing, leaving the
+             *   failure message pointing at an inbox nobody reads.
+             */
+            toast.error(`Failed to send message. Please email us directly at ${COMPANY_INFO.contact.general.email}`);
         } finally {
             setIsSubmitting(false);
         }

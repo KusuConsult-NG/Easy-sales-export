@@ -381,11 +381,35 @@ export default function HubPage() {
                                         Privacy Policy
                                     </Link>
                                 </li>
+                                {/*
+                                  *   #926 /refund-policy WAS PUBLISHED AND
+                                  *   UNREACHABLE. Sixty-four lines covering
+                                  *   recorded trainings, live trainings,
+                                  *   cooperative membership fees and chargebacks
+                                  *   — every one of them something a member pays
+                                  *   for — and `grep -rn '"/refund-policy"' src`
+                                  *   found not a single link to it anywhere,
+                                  *   including in WebsiteFooter's own Legal
+                                  *   column. A policy nobody can reach is not
+                                  *   published.
+                                  */}
+                                <li>
+                                    <Link href="/refund-policy" className="hover:text-white transition-colors">
+                                        Refund Policy
+                                    </Link>
+                                </li>
                             </ul>
                         </div>
                     </div>
                     <div className="border-t border-slate-800 pt-8 text-center text-sm">
-                        <p>© 2024 Easy Sales Export. All rights reserved.</p>
+                        {/*
+                          *   #926 The year was hardcoded to 2024 on the most
+                          *   visited public page of the platform, two years
+                          *   stale. LoginForm, RegisterForm and ModuleRegisterPage
+                          *   all already derive it; this footer was the outlier,
+                          *   and the expression is theirs rather than a new one.
+                          */}
+                        <p>© {new Date().getFullYear()} Easy Sales Export. All rights reserved.</p>
                     </div>
                 </div>
             </footer>
