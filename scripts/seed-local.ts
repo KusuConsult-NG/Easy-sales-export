@@ -123,6 +123,13 @@ async function seedUser(u: (typeof USERS)[number]): Promise<string> {
     if (!id) fail(`Could not create or find auth user ${u.email}: ${error?.message}`);
 
     const now = new Date().toISOString();
+    //   Widened from the `as const` tuple, which types each persona's roles as
+    //   its own literal list — `.includes('admin')` on one that has no 'admin'
+    //   narrows the argument to `never`. Widening a literal type cannot hide a
+    //   missing field, which is the distinction that matters after #937.
+    const isAdminPersona = (u.roles as readonly string[])
+        .some(r => r === 'admin' || r === 'super_admin');
+
     const raw = {
         id, email: u.email, name: u.name, fullName: u.name,
         roles: u.roles, isVerified: true, verified: true,
@@ -154,6 +161,18 @@ async function seedUser(u: (typeof USERS)[number]): Promise<string> {
                 ...(m === 'academy' ? { plan: 'elite' } : {}),
             }])
         ),
+        // #937 THE ADMIN PERSONA CARRIES A SECOND FACTOR.
+        //
+        // From MFA_ADMIN_ENFORCE_FROM (2026-09-26) middleware sends an
+        // administrator without one to the enrolment screen, so an unenrolled
+        // fixture fails every admin spec on a redirect that looks like a broken
+        // login — the same shape `profileComplete` above was added for. Ten specs
+        // went red at midnight for exactly this.
+        //
+        // The gate reads a FLAG, not a live challenge: #663 wired enrolment and
+        // left per-action re-verification unwired, which is why setting this is
+        // enough and the suite needs no TOTP.
+        ...(isAdminPersona ? { mfaEnabled: true } : {}),
         // The seller specs need an approved seller; this is the flag
         // /api/marketplace/create-product checks.
         ...(u.key === 'seller' ? { sellerVerificationStatus: 'approved', businessName: 'E2E Seller Ltd' } : {}),

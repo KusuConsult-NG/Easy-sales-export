@@ -119,6 +119,22 @@ export const authConfig = {
                 session.user.serviceRegistrations = token.serviceRegistrations as Record<string, any> | undefined;
                 session.user.currentModuleId = token.currentModuleId as string || "platform";
                 session.user.gender = token.gender as "male" | "female" | undefined;
+                /*
+                 *   #937 THE ONE MIDDLEWARE READS, AND THE ONE THIS DID NOT SET.
+                 *
+                 *   #663 made middleware send an unenrolled administrator to
+                 *   enrol, and set `token.mfaEnabled` in the jwt callback for it
+                 *   to read. This callback maps the token onto the session
+                 *   `req.auth` is built from — and it mapped thirteen fields, not
+                 *   this one. So the value middleware saw was always undefined:
+                 *   every administrator read as unenrolled, enrolled or not.
+                 *
+                 *   Harmless while the grace window was open, because the verdict
+                 *   was "warn" and the gate dropped it. From
+                 *   MFA_ADMIN_ENFORCE_FROM it is a redirect loop for the whole
+                 *   admin panel: enrol, open /admin, get sent back to enrol.
+                 */
+                session.user.mfaEnabled = token.mfaEnabled === true;
                 session.user.createdAt = token.createdAt as string | undefined;
                 // Surfaced for changePasswordAction, which revokes every session
                 // OLDER than this one. `iat` is the fallback for sessions minted
