@@ -196,7 +196,17 @@ beforeEach(() => {
     asAdmin();
     //   The row requireAdmin reads. `super_admin` holds
     //   farm_nation:verify_applications and land:verify_listings both.
-    store.seed(COLLECTIONS.USERS, ADMIN, { email: 'admin@e.com', roles: ['super_admin'] });
+    /*
+     *   #936 ENROLLED, because from MFA_ADMIN_ENFORCE_FROM requireAdmin refuses an
+     *   administrator without a second factor — and this suite is about land
+     *   inspections, not about the MFA gate. An unenrolled fixture made nine
+     *   tests here fail with 403 the minute that date passed, on a push, saying
+     *   nothing about inspections. A compliant admin is also what production
+     *   looks like from that date on.
+     */
+    store.seed(COLLECTIONS.USERS, ADMIN, {
+        email: 'admin@e.com', roles: ['super_admin'], mfaEnabled: true,
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

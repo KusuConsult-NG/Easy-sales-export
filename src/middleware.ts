@@ -241,7 +241,13 @@ const authMiddleware = auth((req: any) => {
          */
         const mfaGate = adminMfaGate(pathname, {
             roles: req.auth?.user?.roles,
-            mfaEnabled: (req.auth?.user as { mfaEnabled?: boolean } | undefined)?.mfaEnabled,
+            //   #937 NO CAST. It read this through
+            //   `as { mfaEnabled?: boolean }`, which silenced the compiler error
+            //   that would have said the session does not carry it — and it did
+            //   not. Declared on Session["user"] now, so a field this gate needs
+            //   and the session omits is a build failure rather than a silent
+            //   undefined.
+            mfaEnabled: req.auth?.user?.mfaEnabled,
         });
 
         if (mfaGate?.kind === "deny") {

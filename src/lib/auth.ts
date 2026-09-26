@@ -853,6 +853,21 @@ declare module "next-auth" {
             gender?: "male" | "female";
             createdAt?: string;
             /**
+             * Has this account enrolled a second factor? — #937.
+             *
+             * DECLARED, because middleware reads it to decide whether to send an
+             * administrator to enrol, and it was reading it through a CAST:
+             *
+             *     (req.auth?.user as { mfaEnabled?: boolean } | undefined)?.mfaEnabled
+             *
+             * The jwt callback has set `token.mfaEnabled` since #663. The session
+             * callback never copied it, so the value middleware read was always
+             * `undefined` — and the cast is why nothing said so. Without it the
+             * compiler would have refused the read against this interface, which
+             * is the check that existed and was talked out of.
+             */
+            mfaEnabled?: boolean;
+            /**
              * When THIS session was authenticated, in epoch ms.
              *
              * Surfaced so changePasswordAction can revoke every OTHER session

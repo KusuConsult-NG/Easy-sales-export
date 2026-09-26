@@ -69,6 +69,7 @@ import {
     adminMfaVerdict,
     graceActive,
     mfaEnrolmentRequired,
+    MFA_ADMIN_ENFORCE_FROM,
     MFA_SETUP_PATH,
 } from '@/lib/mfa-policy';
 
@@ -369,12 +370,135 @@ describe('#663 — requireAdmin, RUN rather than read', () => {
          *   second factor, so the guard must let them through and say so —
          *   otherwise the fix for an unwired security feature takes the admin
          *   panel offline, which is the defect this audit exists to stop.
+         *
+         *   #936 THE WINDOW IS PINNED, and the first version of this test is why.
+         *
+         *   It did `delete process.env.MFA_ADMIN_GRACE_UNTIL`, falling back to the
+         *   built-in MFA_ADMIN_ENFORCE_FROM — so it asserted the grace branch
+         *   against the REAL clock, and stopped being true at 2026-09-26T00:00:00Z.
+         *   It went red at midnight, on a push, in a suite whose own header warns
+         *   that "a suite that starts failing on a calendar day is a trap, not a
+         *   ratchet". The header was right and the test did not follow it.
+         *
+         *   A claim about deployment day is a claim about a MOMENT, so the moment
+         *   is stated. graceActive takes the environment for exactly this reason.
          */
-        delete process.env.MFA_ADMIN_GRACE_UNTIL;
+        process.env.MFA_ADMIN_GRACE_UNTIL = '2999-01-01T00:00:00.000Z';
         store.seed(COLLECTIONS.USERS, 'a3', { roles: ['admin'], email: 'a3@example.test' });
         await signedInAs('a3');
 
         expect(await callRequireAdmin()).toEqual({ userId: 'a3', roles: ['admin'] });
+    });
+
+    it('AND ONCE THE WINDOW CLOSES IT SENDS THEM TO ENROL — the world from 2026-09-26', async () => {
+        /*
+         *   The other side of the same date, asserted rather than arrived at by
+         *   waiting. This is what the platform does NOW: MFA_ADMIN_ENFORCE_FROM is
+         *   2026-09-26T00:00:00Z, so an administrator with no second factor is
+         *   refused, with the sentence that tells them where to fix it.
+         *
+         *   The pair is the point. Before #936 the suite could only demonstrate
+         *   one of these two worlds at a time, and which one depended on the day
+         *   somebody ran it.
+         */
+        process.env.MFA_ADMIN_GRACE_UNTIL = '2000-01-01T00:00:00.000Z';
+        store.seed(COLLECTIONS.USERS, 'a4', { roles: ['admin'], email: 'a4@example.test' });
+        await signedInAs('a4');
+
+        const verdict = await callRequireAdmin() as { error?: string };
+
+        expect(verdict.error).toContain('Two-factor authentication is required');
+        expect(verdict.error).toContain('Profile');
+    });
+
+    it('AND THE BUILT-IN DATE IS THE ONE THE POLICY SHIPPED WITH', () => {
+        /*
+         *   The fallback both tests above deliberately bypass. Pinned so that
+         *   moving the deadline is a visible change to a documented date rather
+         *   than a quiet shift in what the two tests above are describing.
+         */
+        expect(MFA_ADMIN_ENFORCE_FROM).toBe('2026-09-26T00:00:00.000Z');
+
+        //   And the fallback really is the fallback: with no override, the
+        //   built-in date is what decides.
+        expect(graceActive({ NODE_ENV: 'test' } as NodeJS.ProcessEnv,
+            Date.parse('2026-09-25T23:59:59.000Z'))).toBe(true);
+        expect(graceActive({ NODE_ENV: 'test' } as NodeJS.ProcessEnv,
+            Date.parse('2026-09-26T00:00:01.000Z'))).toBe(false);
+    });
+
+    it('AND NO TEST HERE LEANS ON THE WALL CLOCK AGAIN', () => {
+        /*
+         *   #936 THE GUARD, because the header's rule needed one.
+         *
+         *   "A suite that starts failing on a calendar day is a trap, not a
+         *   ratchet" was written here from the start, and one test then deleted
+         *   the override and asserted the grace branch against the real clock.
+         *   It passed for fourteen days and went red at midnight, on a push.
+         *
+         *   Deleting the override is what makes a test's answer depend on the day
+         *   it runs, so that is what this refuses. Every test above states the
+         *   instant it is describing.
+         */
+        const self = read('src/__tests__/unit/the-second-factor-that-guarded-nothing.test.ts');
+        const stripped = stripComments(self, {
+            label: 'this suite', minRetainedRatio: 0.15,
+        });
+
+        //   A BARE delete in a test BODY, which is the shape that makes an
+        //   answer depend on the day. The afterEach restore below is the same
+        //   call under a condition and is correct — the first version of this
+        //   assertion forbade both and failed on the teardown.
+        expect(stripped).not.toMatch(/^\s+delete process\.env\.MFA_ADMIN_GRACE_UNTIL;/m);
+        expect(stripped)
+            .toContain('if (ORIGINAL_GRACE === undefined) delete process.env.MFA_ADMIN_GRACE_UNTIL;');
+        //   And both sides of the date are still described, so this cannot be
+        //   satisfied by deleting the grace test instead of pinning it.
+        expect(stripped).toContain("MFA_ADMIN_GRACE_UNTIL = '2999-01-01T00:00:00.000Z'");
+        expect(stripped).toContain("MFA_ADMIN_GRACE_UNTIL = '2000-01-01T00:00:00.000Z'");
+    });
+
+    it('RECORDED: the grace window warned nobody, and the gate is why', () => {
+        /*
+         *   #936 A MEASUREMENT WORTH WRITING DOWN, found while working out how
+         *   much notice administrators actually had before tonight.
+         *
+         *   adminMfaVerdict has three outcomes — ok, WARN, enrol — and warn
+         *   carries a sentence. adminMfaGate, its only caller on the request
+         *   path, does:
+         *
+         *       if (verdict.outcome !== "enrol") return null;
+         *
+         *   So for the whole fourteen-day window the verdict said "warn", the
+         *   gate threw the sentence away, and nothing on any screen mentioned it.
+         *   An administrator's first notice was being redirected to the setup
+         *   page on the day enforcement began.
+         *
+         *   NOT STRANDED, and that distinction matters: the redirect goes to
+         *   MFA_SETUP_PATH, which is the screen that fixes it, and the API's 403
+         *   carries the same sentence. Nobody is locked out — they are asked,
+         *   abruptly, on a date nobody told them about.
+         *
+         *   NOT FIXED HERE. Rendering the warning is an admin-surface banner, and
+         *   the window it would have warned during has closed — so building it now
+         *   changes nothing unless the owner extends MFA_ADMIN_GRACE_UNTIL, which
+         *   is their call about a security control, not mine. This asserts the
+         *   current truth so it cannot be mistaken for working, and so whoever
+         *   wires the warning has a test telling them to update this note.
+         */
+        const policy = code('src/lib/mfa-policy.ts');
+
+        //   The warn outcome exists and carries a reason.
+        expect(policy).toContain('| { outcome: "warn"; reason: string }');
+        //   And the gate on the request path drops everything that is not "enrol".
+        expect(policy).toContain('if (verdict.outcome !== "enrol") return null;');
+
+        //   Nothing renders it: no admin surface reads the warn outcome.
+        const readers = ['src/middleware.ts', 'src/lib/require-admin.ts'];
+        for (const rel of readers) {
+            expect({ rel, renders: code(rel).includes('"warn"') || code(rel).includes("'warn'") })
+                .toEqual({ rel, renders: false });
+        }
     });
 
     it('AND STILL REFUSES A NON-ADMIN FOR THE ORIGINAL REASON', async () => {
