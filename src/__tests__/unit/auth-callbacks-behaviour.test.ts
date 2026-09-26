@@ -110,6 +110,46 @@ describe('the profile sync', () => {
         expect(token.lastSyncedAt).toBeGreaterThan(0);
     });
 
+    it('AND THE FIRST SYNC IS THE ONE A JUST-SIGNED-IN ADMIN DEPENDS ON', async () => {
+        /*
+         *   #937 A token minted a moment ago carries no `lastSyncedAt` at all,
+         *   and the middle term of the guard — `!lastSynced` — is the only thing
+         *   that admits it: `now - undefined` is NaN and every comparison
+         *   against NaN is false, and `lastSyncedAt` is stamped ONLY inside the
+         *   branch that term guards, so a token that skips it once skips it for
+         *   the life of the session.
+         *
+         *   That is not an abstract worry about a future edit. From
+         *   MFA_ADMIN_ENFORCE_FROM, middleware sends any administrator whose
+         *   session says `mfaEnabled !== true` to the enrolment screen — so a
+         *   session that never syncs is an enrolled admin locked out of the whole
+         *   admin panel, with the enrolment page the only door that opens.
+         *
+         *   The case above proves the profile is re-read. This one proves the
+         *   flag the gate reads is one of the fields that arrives, on the very
+         *   first pass, with no window to wait out.
+         */
+        getUserProfile.mockImplementation(async () => ({ roles: ['admin'], mfaEnabled: true }));
+        const cb = await callbacks();
+
+        const token = await cb.jwt({ token: { id: 'admin-1' } });
+
+        expect(token.mfaEnabled).toBe(true);
+    });
+
+    it('and an admin who has NOT enrolled is carried as false, not as absent', async () => {
+        //   The control. `undefined` and `false` both send them to enrol, but
+        //   only one of them says the profile was actually read — an absent flag
+        //   is what #937 was, and it must not be what a successful sync leaves
+        //   behind.
+        getUserProfile.mockImplementation(async () => ({ roles: ['admin'] }));
+        const cb = await callbacks();
+
+        const token = await cb.jwt({ token: { id: 'admin-1' } });
+
+        expect(token.mfaEnabled).toBe(false);
+    });
+
     it('and NOT again inside the two-minute window', async () => {
         // The whole point of the window: this callback runs on every request, and
         // re-reading the profile each time is a database round trip per page load
@@ -153,6 +193,7 @@ describe('the profile sync', () => {
             sellerVerificationStatus: 'approved',
             serviceRegistrations: { export: { status: 'approved' } },
             gender: 'female',
+            mfaEnabled: true,
         }));
         const cb = await callbacks();
 
@@ -163,6 +204,11 @@ describe('the profile sync', () => {
         expect(token.sellerVerificationStatus).toBe('approved');
         expect(token.serviceRegistrations).toEqual({ export: { status: 'approved' } });
         expect(token.gender).toBe('female');
+        //   #937 — this list is meant to be "the fields the rest of the platform
+        //   reads off the token", and it omitted the one middleware uses to
+        //   decide the entire admin panel. The session callback dropping it was
+        //   the defect; the jwt callback setting it is what that fix relies on.
+        expect(token.mfaEnabled).toBe(true);
     });
 
     it('and leaving the token alone when the profile cannot be read', async () => {
