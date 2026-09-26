@@ -135,11 +135,29 @@ describe('#315 — the premise: the action really does distinguish two refusals'
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#315 — the stale-session gap that makes it reachable', () => {
     it('the page gate reads the SESSION plan; the action reads the live row', () => {
-        // Recorded rather than changed: closing the gap means re-reading the
-        // user row in the browser on every course open, which is a caching
-        // decision, not a defect fix. What was a defect is saying nothing when
-        // the two disagree.
-        expect(code(PAGE)).toMatch(/session\.user as any\)\?\.serviceRegistrations\?\.academy\?\.plan/);
+        /*
+         * Recorded rather than changed: closing the gap means re-reading the
+         * user row in the browser on every course open, which is a caching
+         * decision, not a defect fix. What was a defect is saying nothing when
+         * the two disagree.
+         *
+         *   #944 THIS PINNED THE CAST'S SPELLING, `(session.user as any)?`, and
+         *   the cast is gone — it was what hid this read from
+         *   react-hooks/exhaustive-deps, so the effect's dependency list did not
+         *   name the plan and an administrator's grant did not re-run the check.
+         *   The GAP is unchanged, which is what this test is about, so it asserts
+         *   the property: the plan is derived from the session here and the
+         *   action reads a row. A spelling is not the property.
+         */
+        const page = code(PAGE);
+
+        expect(page).toMatch(/const academyPlan = \(session\?\.user as/);
+        expect(page).toMatch(/\?\.serviceRegistrations\?\.academy\?\.plan/);
+        //   And it is what the gate actually asks, not a value computed beside it.
+        expect(page).toContain('const userPlan = academyPlan || "free";');
+        //   No server read of the plan on this page: that is the gap, still open.
+        expect(page).not.toContain('getUserProfileAction');
+
         expect(code(ACTION)).toMatch(/userData/);
     });
 });
