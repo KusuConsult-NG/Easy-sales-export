@@ -327,6 +327,19 @@ export function normaliseStatusForKind(kind: ExportWindowKind, status: unknown):
  * existing row — only a stored `fundingGoal` does. New windows are capped from
  * creation; existing ones need scripts/backfill-export-funding-goals.ts, which
  * is written but deliberately not run here.
+ *
+ * AND #950: THIS FUNCTION HAD NO CALLERS OUTSIDE THE TEST SUITE. It was written,
+ * tested and wired to nothing, while its suite's header said the derivation
+ * "fixes every reader that wanted to show or check a goal". It fixed none of
+ * them, because a second function — windowFundingGoal in
+ * lib/export-window-funding — answered the same question as
+ * `fundingGoal ?? goal`, and that is the one the investor's screen and both
+ * fulfilment pre-checks asked. So a legacy window showed no funded bar and the
+ * word "Open".
+ *
+ * windowFundingGoal delegates here now, and both pre-checks go through it. Two
+ * functions answering "what is this window raising towards", disagreeing on the
+ * rows that matter, is #452's shape in money.
  */
 export function exportWindowFundingGoal(
     data: Record<string, unknown> | null | undefined,

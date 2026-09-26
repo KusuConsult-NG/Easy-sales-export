@@ -18,6 +18,7 @@ import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling , markFul
 import { isAmountAtLeast } from "@/lib/amount";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 import { findExportOrderByReference, fulfilExportBuyerOrder } from "@/lib/export-order-fulfilment";
+import { windowFundingGoal } from "@/lib/export-window-funding";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -454,13 +455,26 @@ export async function initializeInvestmentPaymentAction(
         // for the same reason both fulfilment paths read it: older windows
         // recorded it under that name.
         //
-        // NOTE FOR THE OWNER: because no window carries a goal, no window is
-        // capped. Deciding which of the two window shapes should record one, and
-        // from what — the aggregation windows carry targetVolume and slotPrice,
-        // whose product would be a natural goal — is a product decision, not one
-        // to make inside a bug fix.
+        // WAS A NOTE FOR THE OWNER, AND IT HAS BEEN ANSWERED — #950.
+        //
+        // It read: "because no window carries a goal, no window is capped.
+        // Deciding which of the two window shapes should record one, and from
+        // what — the aggregation windows carry targetVolume and slotPrice, whose
+        // product would be a natural goal — is a product decision."
+        //
+        // It is not a product decision, and the note contained its own answer.
+        // targetVolume * slotPrice is exactly what the aggregation creator writes
+        // as fundingGoal today, and what admin/_exports.ts has always computed for
+        // the same window and thrown away. windowFundingGoal derives it for the
+        // rows that predate the creator, so this pre-check now refuses on a legacy
+        // window instead of waving it through.
+        //
+        // The ATOMIC ceiling below is a different matter and is unchanged:
+        // incrementWithinCeiling reads a stored column through a Postgres
+        // function, so only scripts/backfill-export-funding-goals.ts can cap an
+        // existing row. This is the pre-check being honest, not the lock.
         const currentFunding = windowData.currentFunding || 0;
-        const fundingGoal = Number(windowData.fundingGoal ?? windowData.goal ?? 0);
+        const fundingGoal = windowFundingGoal(windowData as Record<string, unknown>);
 
         if (fundingGoal > 0 && currentFunding + investmentAmount > fundingGoal) {
             return {

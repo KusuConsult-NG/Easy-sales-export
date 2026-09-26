@@ -52,6 +52,8 @@
  *   under that name.
  */
 
+import { exportWindowFundingGoal } from "@/lib/export-window-status";
+
 /** A number, or 0 — never NaN, never undefined. */
 function counter(...candidates: unknown[]): number {
     for (const candidate of candidates) {
@@ -69,11 +71,39 @@ export function windowRaisedAmount(
     return counter(w?.fundedAmount, w?.currentFunding);
 }
 
-/** What this window is raising towards — 0 meaning "no goal recorded". */
+/**
+ * What this window is raising towards — 0 meaning "nothing to raise".
+ *
+ *   #950 THIS RETURNED 0 FOR EVERY WINDOW CREATED BEFORE `fundingGoal` EXISTED,
+ *   AND THE INVESTOR'S SCREEN READ THAT AS "Availability: Open".
+ *
+ *   exportWindowFundingGoal in lib/export-window-status derives the goal for
+ *   exactly those rows — `targetVolume * slotPrice`, which is the figure
+ *   admin/_exports.ts has always computed for the same window and thrown away.
+ *   It was written, tested, and called by NOTHING outside the test suite, while
+ *   its own suite's header said the derivation "fixes every reader".
+ *
+ *   So a legacy aggregation window that had taken investment showed no progress
+ *   bar and the word "Open" to the next investor deciding whether to put money
+ *   in — the bar and the numbers being behind `windowFundingGoal(window) > 0`.
+ *   Two functions answering "what is this window raising towards", disagreeing
+ *   on the rows that matter, is #452's shape in money.
+ *
+ *   ONE RULE NOW. This is the reader's spelling of it — 0 rather than null,
+ *   because every call site compares it numerically — and the derivation lives
+ *   in one place.
+ *
+ *   WHAT THIS DOES NOT DO, said plainly: incrementWithinCeiling reads a STORED
+ *   column through a Postgres function, so a derived goal caps nothing at the
+ *   row lock. It makes every READER and every pre-check honest. Capping an
+ *   existing row needs the stored value, which is what
+ *   scripts/backfill-export-funding-goals.ts writes and which needs a database
+ *   this branch does not have.
+ */
 export function windowFundingGoal(
-    w: { fundingGoal?: unknown; goal?: unknown } | null | undefined,
+    w: Record<string, unknown> | { fundingGoal?: unknown; goal?: unknown } | null | undefined,
 ): number {
-    return counter(w?.fundingGoal, w?.goal);
+    return exportWindowFundingGoal(w as Record<string, unknown> | null | undefined) ?? 0;
 }
 
 /**
@@ -85,7 +115,13 @@ export function windowFundingGoal(
  * CSS width, which renders as no bar at all rather than an empty one.
  */
 export function windowFundedPercent(
-    w: { fundedAmount?: unknown; currentFunding?: unknown; fundingGoal?: unknown; goal?: unknown } | null | undefined,
+    /*
+     *   #950 WIDENED with windowFundingGoal, which now derives the goal from
+     *   `targetVolume` and `slotPrice` for a legacy row. A signature naming only
+     *   the two goal fields would refuse the rows this function most needs to
+     *   answer for, and the caller passes a whole window anyway.
+     */
+    w: Record<string, unknown> | null | undefined,
 ): number {
     const goal = windowFundingGoal(w);
     if (goal <= 0) return 0;

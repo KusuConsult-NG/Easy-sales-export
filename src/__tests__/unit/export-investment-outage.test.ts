@@ -147,12 +147,61 @@ describe('the funding gate', () => {
     });
 
     it('reading `goal` as a fallback, as both fulfilment paths do', () => {
+        /*
+         *   #950 THIS PINNED THE FALLBACK'S SPELLING IN ALL THREE PLACES, and the
+         *   pre-checks now ask windowFundingGoal instead — which reads
+         *   `fundingGoal` then `goal`, AND derives targetVolume * slotPrice for a
+         *   window written before either name existed. The property this test is
+         *   about is stronger than it was; three hand-written copies of it are not.
+         *
+         *   The ATOMIC ceiling still spells it out, and must: incrementWithinCeiling
+         *   takes the NAME of a stored column, so there is nothing to derive there
+         *   and a derived number would cap nothing. Asserted separately below.
+         */
         const body = fn(PAYMENT, 'initializeInvestmentPaymentAction');
 
-        expect(body).toContain('windowData.fundingGoal ?? windowData.goal ?? 0');
-        // Vacuity guard: the fallback is the platform's own convention.
-        expect(code(PAYMENT)).toContain('windowData?.fundingGoal ?? windowData?.goal ?? 0');
-        expect(code(LOOSE)).toContain('exportWindow.fundingGoal ?? exportWindow.goal ?? 0');
+        expect(body).toContain('windowFundingGoal(windowData as Record<string, unknown>)');
+        expect(code(LOOSE)).toContain('windowFundingGoal(exportWindow as Record<string, unknown>)');
+
+        //   And the shared rule really does read `goal` — the fallback is the
+        //   platform's own convention, not something the delegation dropped.
+        const { exportWindowFundingGoal } = require('@/lib/export-window-status');
+        expect(exportWindowFundingGoal({ goal: 500 })).toBe(500);
+        expect(exportWindowFundingGoal({ fundingGoal: 400, goal: 500 })).toBe(400);
+    });
+
+    it('AND THE ATOMIC CEILING STILL NAMES A STORED COLUMN — #950', () => {
+        //   The half a derivation cannot fix. incrementWithinCeiling locks the row
+        //   in Postgres and reads the ceiling out of it, so passing a JavaScript
+        //   number there would cap nothing while looking like it did.
+        expect(code(PAYMENT)).toContain('windowData?.fundingGoal !== undefined ? "fundingGoal" : "goal"');
+        expect(code(LOOSE)).toContain('exportWindow?.fundingGoal !== undefined ? "fundingGoal" : "goal"');
+    });
+
+    it('AND THE DERIVED RULE HAS SHIPPING CALLERS AT LAST — #950', () => {
+        /*
+         *   exportWindowFundingGoal was written, tested, and called by NOTHING
+         *   outside the test suite, while its own suite's header said the
+         *   derivation "fixes every reader". It fixed none of them.
+         *
+         *   The cost was on the investor's screen: the funded bar and the numbers
+         *   sit behind `windowFundingGoal(window) > 0`, and that returned 0 for
+         *   every legacy window — so a window that had taken investment showed no
+         *   progress at all and the words "Availability: Open" to the next person
+         *   deciding whether to put money in.
+         */
+        const callers = ['src/lib/export-window-funding.ts', PAYMENT, LOOSE];
+
+        for (const rel of callers) {
+            const src = code(rel);
+            expect({ rel, asks: /exportWindowFundingGoal|windowFundingGoal/.test(src) })
+                .toEqual({ rel, asks: true });
+        }
+
+        //   And the screen reads it through the one rule rather than the field.
+        const screen = code('src/app/export/windows/[id]/ExportWindowDetailClient.tsx');
+        expect(screen).toContain('windowFundingGoal(window) > 0');
+        expect(screen).not.toContain('window.fundingGoal >');
     });
 
     it('which is what the sibling path already did', () => {
@@ -251,3 +300,26 @@ describe('the authorization URL', () => {
         expect(page).toContain('initializeInvestmentPaymentAction(');
     });
 });
+
+/**
+ * ── MUTATION LOG, #950 ──────────────────────────────────────────────────────
+ *
+ *   MUTANT                                          CAUGHT BY
+ *   ──────────────────────────────────────────────  ───────────────────────────
+ *   windowFundingGoal back to `fundingGoal ?? goal`  A LEGACY WINDOW GETS THE
+ *     — the defect exactly as it shipped             GOAL DERIVED, and THE BAR
+ *                                                    MOVES FOR ONE
+ *   a STORED goal no longer wins over the             A LEGACY WINDOW GETS THE
+ *     derivation, so an admin's hand-set figure      GOAL DERIVED, and four more
+ *     is overwritten by the product
+ *   the export-payment pre-check reverted to its      reading `goal` as a
+ *     own `?? goal ?? 0` reading                     fallback
+ *   the ATOMIC ceiling changed to a derived number    THE ATOMIC CEILING STILL
+ *     — looks like a cap and caps nothing            NAMES A STORED COLUMN
+ *
+ *   ALL FOUR CAUGHT. The second and fourth are the ones worth the trouble: one
+ *   would quietly replace a number a person chose, and the other would look like
+ *   it had closed the gap while leaving the row lock exactly as uncapped as
+ *   before.
+ */
+
