@@ -6,6 +6,7 @@ import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
@@ -891,6 +892,34 @@ async function _requestWaveRevisionAction(
             targetType: 'wave_application',
             metadata: { action: 'revision_requested', reason }
         });
+
+        /*
+         *   #941 AND THE APPLICANT IS TOLD, which for three modules nobody was.
+         *
+         *   Everything above this line worked: the status claim, the note, the
+         *   cache invalidation, the audit entry. What did not exist was the half
+         *   that matters to the person — so an applicant asked for one correction
+         *   saw nothing, and the admin saw no resubmission. Each waited on the
+         *   other, and a WAVE place went unfilled.
+         *
+         *   LAST, and after the audit log, because notifyMemberDecision never
+         *   throws: the revision is already committed and a refused email must
+         *   not turn it into an error the admin retries.
+         *
+         *   The link comes from waveDestinationFor rather than a literal, so the
+         *   email lands where the screen itself sends a member in this state.
+         */
+        if (userId) {
+            await notifyMemberDecision({
+                userId,
+                subject: 'Your WAVE application',
+                outcome: 'revision',
+                reason,
+                link: '/wave/application',
+                linkText: 'Open your application',
+                channel: 'wave',
+            });
+        }
 
         return { error: null, success: true as const, data: null };
     } catch (error) {

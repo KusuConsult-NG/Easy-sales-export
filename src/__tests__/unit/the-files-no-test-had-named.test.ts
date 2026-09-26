@@ -967,11 +967,30 @@ describe('how much of the application no test has named', () => {
          *   row may carry them, and dropping a status from an ACCEPTING list
          *   locks somebody out — the direction that costs a member her place.
          *
-         *   RECORDED, NOT FIXED — A LEDGER AT 3. WAVE, Export and the Cooperative
-         *   each have a request-revision path, each writes the status and the
-         *   note, and none of them tells the applicant. Customer-facing copy for
-         *   three modules is the owner's call with the programme, the same line
-         *   #927 drew about the absent suspension email.
+         *   CLOSED BY #941, AND THE ENTRY WAS WRONG IN BOTH DIRECTIONS. What it
+         *   said: "A LEDGER AT 3. WAVE, Export and the Cooperative each have a
+         *   request-revision path, each writes the status and the note, and none
+         *   of them tells the applicant. Customer-facing copy for three modules
+         *   is the owner's call with the programme."
+         *
+         *   Measured when the owner asked for it: there are FOUR such paths, not
+         *   three — Export has an admin one and an onboarding one — and only ONE
+         *   of the four was silent. The other three each emailed, in three
+         *   hand-rolled wordings.
+         *
+         *   What was true of all four went unrecorded: NOT ONE OF THEM RANG THE
+         *   BELL. member-decision-notice's header says why that matters — the
+         *   bell is the channel that always exists, since email needs
+         *   RESEND_API_KEY "and this platform is deployed today without the key
+         *   in some environments". So the entry's conclusion held for every path
+         *   and its stated reason held for one.
+         *
+         *   THE COPY WAS NEVER THE BLOCKER IT WAS RECORDED AS, either: three of
+         *   the four already shipped customer-facing revision copy nobody had
+         *   flagged. All four route through notifyMemberDecision now, which also
+         *   gained the link in its EMAIL — `notice.link` had been bell-only since
+         *   #690, so eleven callers' emails told a member to go and find the
+         *   decision in their dashboard.
          *
          *   Then 25 → 24, on admin/academy/create/page.
          *

@@ -7,6 +7,7 @@ import { hashData } from "@/lib/security";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
 import { logger } from '@/lib/logger';
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
@@ -674,41 +675,34 @@ export async function requestExportRevisionAction(
             details: reason,
         });
 
-        // Send revision email (non-blocking)
-        try {            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-            const email = userDoc.data()?.email;
-            const name = userDoc.data()?.fullName || userDoc.data()?.displayName || 'Applicant';
-            if (email) {
-                /**
-                 * #394. This was `await resend.emails.send({...})` with the
-                 * result thrown away. Resend RETURNS its errors rather than
-                 * throwing them, so the surrounding try/catch never fired and a
-                 * refused or rate-limited export onboarding email was invisible — not
-                 * logged, not retried, not noticed. Five sends across the
-                 * platform had that shape.
-                 */
-                const { error: sendError } = await sendEmailNotification({
-                    from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
-                    to: email,
-                    subject: '⚠️ Action Required: Update Your Export Application',
-                    message: html`<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-                        <h2 style="color:#ea580c;">Export Application — Update Required</h2>
-                        <p>Dear <strong>${name}</strong>,</p>
-                        <p>Our team has reviewed your Export Windows onboarding application and requires some additional information.</p>
-                        <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:16px;margin:16px 0;">
-                            <p style="margin:0;color:#9a3412;"><strong>Note from Admin:</strong><br/>${reason}</p>
-                        </div>
-                        <p>Please log in to update and resubmit your application.</p>
-                        <div style="text-align:center;margin:24px 0;">
-                            <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/export/onboarding" style="background:#ea580c;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Update Application</a>
-                        </div>
-                    </div>`,
-                    metadata: { type: "export_onboarding" },
-                });
-                if (sendError) logger.error("[#394] email send failed", { error: sendError });
-            }
-        } catch (emailError) { logger.error('Export revision email failed (non-blocking):', emailError);
-        }
+        /*
+         *   #941 THROUGH THE SHARED NOTICE — see admin/_exports.ts for the rule.
+         *   This path emailed and did not ring the bell, which is the gap all
+         *   four of this platform's revision paths shared.
+         *
+         *   THE LINK IS KEPT AS IT WAS, deliberately. This door sends the
+         *   applicant to /export/onboarding and the admin/_exports.ts door sends
+         *   them to /export — two destinations for what may or may not be the
+         *   same application, over the same collection. That drift is worth
+         *   recording and is NOT worth resolving by guessing here: re-routing a
+         *   member to the wrong screen is a worse defect than the inconsistency,
+         *   and deciding which screen is correct needs somebody who knows
+         *   whether Export Windows onboarding and Export Services are one
+         *   application or two.
+         */
+        const revisionUserDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        await notifyMemberDecision({
+            userId,
+            userEmail: revisionUserDoc.data()?.email,
+            recipientName: revisionUserDoc.data()?.fullName
+                || revisionUserDoc.data()?.displayName
+                || 'Applicant',
+            subject: 'Your Export Windows application',
+            outcome: 'revision',
+            reason,
+            link: '/export/onboarding',
+            linkText: 'Update my application',
+        });
 
         return { error: null, success: true as const , data: { message: "Revision requested" } };
     } catch (error) { logger.error('requestExportRevisionAction error:', error);
