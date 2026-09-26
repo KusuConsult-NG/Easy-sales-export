@@ -19,6 +19,7 @@ import { humanise } from "@/lib/humanise";
 import { formatDateTimeOrDash, formatShortDateOrDash } from "@/lib/date-utils";
 import { statText } from "@/lib/admin-stat-display";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 interface UserSearchRef {
     id: string;
     name: string;
@@ -118,7 +119,7 @@ export default function AdminWaveShipmentsPage() {
                 const list: UserSearchRef[] = (result.data || []).map((item: any) => {
                     const data = item.data || {};
                     const user = item.user || {};
-                    const fullName = data.fullName || [data.firstName, data.otherNames, data.surname].filter(Boolean).join(" ").trim() || user.name || "Unknown";
+                    const fullName = data.fullName || joinFullName(namePartsOf(data)) || user.name || "Unknown";
                     return {
                         id: user.id || item.id,
                         name: fullName,

@@ -44,7 +44,7 @@ export default function WaveShipmentsClient({ initial = null }: {
             loadShipments();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, session]);
+    }, [status, session?.user?.id]);
 
     async function loadShipments() {
         if (!session?.user?.id) return;

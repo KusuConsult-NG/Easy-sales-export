@@ -307,9 +307,54 @@ describe('#922 — the consumers that re-run on a new session object', () => {
     }
 
     it('THE LEDGER — how many effects a re-minted session still re-runs', () => {
+        /*
+         *   #944 24 -> 17. Seven re-keyed, and the seven were chosen by reading
+         *   each body rather than by pattern — this file's own note says why:
+         *   "re-keying two dozen on a hunch is how a working screen stops
+         *   loading".
+         *
+         *   SIX read nothing from the session but `user?.id`, so they key on that
+         *   now: the academy progress screen, both Farm Nation inquiry screens,
+         *   and the WAVE earnings, resources and shipments screens.
+         *
+         *   ONE — Farm Nation my-purchases — did not read the session AT ALL. Its
+         *   body branches on `status` and `initial` and calls loadPurchases; the
+         *   `session` in its dependency array was pure noise, re-running a server
+         *   action on every refresh for a value it never looked at.
+         *
+         *   THE SEVENTEEN LEFT ARE NOT LEFT OUT OF LAZINESS. Each reads the whole
+         *   `user` object or several of its fields, so each needs a decision about
+         *   which fields it is actually watching — and two of them hold a BARE
+         *   `if (session)` truthiness check, which is the trap: a scan that looks
+         *   for `session.` followed by a member misses those entirely and reports
+         *   them as not using the session at all. Mine did, on marketplace/checkout
+         *   and ModuleRegisterPage, and sweeping on that reading would have pulled
+         *   the dependency out from under two working screens.
+         *
+         *   So the remaining seventeen are per-file work with a per-file reading,
+         *   which is what this note asked for in the first place.
+         */
         const effects = sessionKeyedEffects();
 
-        expect(ledgerVerdict(effects.length, 24)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(effects.length, 17)).toBe(LEDGER_HELD);
+    });
+
+    it('AND THE SEVEN THAT WERE RE-KEYED STAY RE-KEYED', () => {
+        //   Named, so a later edit that puts the whole object back fails here
+        //   rather than being absorbed by the count above.
+        const files = sessionKeyedEffects().map((e) => e.split('  ')[0]);
+
+        for (const rel of [
+            'src/app/academy/(learner)/progress/ProgressClient.tsx',
+            'src/app/farm-nation/(member)/inquiries/InquiriesClient.tsx',
+            'src/app/farm-nation/(member)/inquiries/[id]/InquiryDetailsClient.tsx',
+            'src/app/farm-nation/(member)/my-purchases/MyPurchasesClient.tsx',
+            'src/app/wave/(member)/earnings/WaveEarningsClient.tsx',
+            'src/app/wave/(member)/resources/WaveResourcesClient.tsx',
+            'src/app/wave/(member)/shipments/WaveShipmentsClient.tsx',
+        ]) {
+            expect({ rel, onLedger: files.includes(rel) }).toEqual({ rel, onLedger: false });
+        }
     });
 
     it('POSITIVE CONTROL: the sweep finds real ones, named', () => {

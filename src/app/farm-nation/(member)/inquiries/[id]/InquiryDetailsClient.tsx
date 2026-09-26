@@ -114,7 +114,7 @@ export default function InquiryDetailsClient({ initial = null }: {
         if (status === "authenticated") {
             loadInquiry();
         }
-    }, [status, session, inquiryId, router, initial]);
+    }, [status, session?.user?.id, inquiryId, router, initial]);
 
     if (loading) {
         return (

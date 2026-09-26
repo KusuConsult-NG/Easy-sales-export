@@ -13,6 +13,7 @@ import { buildUserColumns, type User } from "./_columns";
 import { ADMIN_ASSIGNABLE_ROLES } from "@/lib/types/roles";
 
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  *   #648 — this was a SEVENTH hand-written role list, with five members: four
  *   staff roles and ONE of the six module admins, alone and unexplained. And
@@ -118,7 +119,7 @@ export default function AdminUsersPage() {
             if (res.success) {
                 showToast("User profile and all linked modules updated successfully", "success");
                 
-                const computedName = [editFields.firstName, editFields.otherName, editFields.lastName].filter(Boolean).join(" ").trim();
+                const computedName = joinFullName(namePartsOf(editFields));
                 const updatedUser: User = {
                     ...selectedUserForModal,
                     name: computedName || selectedUserForModal.name,

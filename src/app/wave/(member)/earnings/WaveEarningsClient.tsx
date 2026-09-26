@@ -64,7 +64,7 @@ export default function WaveEarningsClient({ initial = null }: { initial?: Membe
             loadEarnings();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, session]);
+    }, [status, session?.user?.id]);
 
     async function loadEarnings() {
         if (!session?.user?.id) return;

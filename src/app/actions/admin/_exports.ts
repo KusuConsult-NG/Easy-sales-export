@@ -9,6 +9,7 @@ import { revalidatePath, updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
@@ -463,49 +464,46 @@ async function _requestExportApplicationRevisionAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // Send email notification to applicant
-        if (canSendEmail("export decision email", appData.userEmail)) {
-            try {
-                /**
-                 * #394. This was `await resend.emails.send({...})` with the
-                 * result thrown away. Resend RETURNS its errors rather than
-                 * throwing them, so the surrounding try/catch never fired and a
-                 * refused or rate-limited export decision email was invisible — not
-                 * logged, not retried, not noticed. Five sends across the
-                 * platform had that shape.
-                 */
-                const { error: sendError } = await sendEmailNotification({
-                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
-                    to: appData.userEmail,
-                    subject: "Action Required: Correction Needed on Your Export Application",
-                    message: html`
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #ea580c;">Action Required: Correction Needed</h2>
-                            <p>Dear ${appData.profile?.fullName || appData.userEmail},</p>
-                            <p>Your Export Services application has been reviewed and requires some corrections before it can proceed.</p>
-                            <div style="background: #fff7ed; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #ffedd5;">
-                                <p style="margin: 0; color: #9a3412; font-weight: bold;">Correction Required:</p>
-                                <p style="margin: 10px 0 0; color: #7c2d12; font-style: italic;">&ldquo;${revisionNote.trim()}&rdquo;</p>
-                            </div>
-
-                            <p>Please log in to your dashboard, update the indicated information, and re-submit your application.</p>
-
-                            <div style="text-align: center; margin-top: 30px;">
-                                <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/export"
-                                   style="background-color: #ea580c; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
-                                    Update My Application
-                                </a>
-                            </div>
-                            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">Easy Sales Export Team</p>
-                        </div>
-                    `,
-                    metadata: { type: "export_decision" },
-                });
-                if (sendError) logger.error("[#394] email send failed", { error: sendError });
-            } catch (emailErr) {
-                logger.error("[Export Revision] Email send failed:", emailErr);
-            }
-        }
+        /*
+         *   #941 THROUGH THE SHARED NOTICE, AND THE BELL IS WHY.
+         *
+         *   What was here worked: a styled email with the correction quoted and
+         *   a button. What it did NOT do was ring the in-app bell — and a sweep
+         *   of all four revision paths on this platform found the same gap in
+         *   every one of them. member-decision-notice's own header says why that
+         *   matters: "THE BELL FIRST, because it is the channel that always
+         *   exists. Email needs RESEND_API_KEY and an address on the record, and
+         *   this platform is deployed today without the key in some
+         *   environments." In such a deployment this told the applicant nothing.
+         *
+         *   Three hand-rolled revision emails, three wordings, for one event.
+         *   The module holds the wording now, carries `recipientName` so this
+         *   keeps its greeting, and puts the link in the email as a button — the
+         *   `link` field had been bell-only since #690.
+         *
+         *   #394'S TOMBSTONE, KEPT. The block removed here carried the note that
+         *   this send was once `await resend.emails.send({...})` with its result
+         *   thrown away — Resend RETURNS its errors rather than throwing them, so
+         *   a refused or rate-limited export decision email was invisible: not
+         *   logged, not retried, not noticed. Five sends across the platform had
+         *   that shape.
+         *
+         *   The marker stays because every-decision-email-is-retried scans for it
+         *   to prove its own sweep reads code and not the notes explaining what
+         *   was removed — deleting the tombstone along with the code turned that
+         *   test red, which is the check working. The lesson now lives where the
+         *   sending does, in member-decision-notice.
+         */
+        await notifyMemberDecision({
+            userId,
+            userEmail: appData.userEmail,
+            recipientName: appData.profile?.fullName || appData.userEmail,
+            subject: "Your Export Services application",
+            outcome: "revision",
+            reason: revisionNote.trim(),
+            link: "/export",
+            linkText: "Update my application",
+        });
 
         logger.info(`[Export Revision] Application ${applicationId} marked revision_required by admin ${session.user.id}`);
         // FAST STATS UPDATER (Non-blocking fallback safe)

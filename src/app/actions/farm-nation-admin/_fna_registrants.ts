@@ -14,6 +14,7 @@ import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Get registrants for Farm Nation (Legacy/General User collection check)
  */
@@ -79,7 +80,7 @@ async function _getFarmNationRegistrantsAction(options: {
             const d = doc.data() as any;
             if (!d?.userId) continue;
             const p = (d.profile || d.personalInfo || {}) as any;
-            const name = [p.firstName, p.otherName, p.lastName].filter(Boolean).join(" ").trim()
+            const name = joinFullName(namePartsOf(p))
                 || p.fullName || "";
             const existing = appById.get(d.userId);
             //   One user may hold more than one application; the first with a

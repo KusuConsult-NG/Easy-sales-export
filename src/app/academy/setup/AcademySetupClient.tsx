@@ -15,6 +15,7 @@ import { logger } from "@/lib/logger";
 import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 import { useServerSeed } from "@/hooks/useServerSeed";
 
+import { joinFullName } from "@/lib/person-name";
 /**
  * What the server read before the page was sent.
  *
@@ -156,8 +157,7 @@ export default function AcademySetupClient({ initial = null }: { initial?: Acade
 
         try {
             // Compute fullName from structured Firestore names — NOT from session.user.name split
-            const computedFullName = [resolvedFirstName, resolvedOtherName, resolvedLastName]
-                .filter(Boolean).join(" ").trim() || session.user.name || "";
+            const computedFullName = joinFullName({ first: resolvedFirstName, other: resolvedOtherName, last: resolvedLastName }) || session.user.name || "";
 
             const applicationData: AcademyApplicationData = {
                 personalInfo: {

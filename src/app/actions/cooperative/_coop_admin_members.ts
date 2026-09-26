@@ -6,6 +6,7 @@ import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
+import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
@@ -680,40 +681,35 @@ export async function requestCooperativeRevisionAction(
             }
 
             return {
+                //   #941 userId travels with it now: the shared notice rings the
+                //   bell as well as emailing, and the bell is keyed on the member
+                //   rather than on an address.
+                userId,
                 email: memberData?.email,
                 name: memberData?.firstName ? `${memberData.firstName} ${memberData.lastName || ''}`.trim() : 'Member'
             };
         })();
 
-        // Send revision requested email (non-blocking post-commit)
-        try {
-            if (notificationData?.email) {
-                const { error } = await sendEmailNotification({
-                    from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
-                    to: notificationData.email,
-                    subject: '⚠️ Action Required: Update Your Cooperative Application',
-                    message: html`
-                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-                            <h2 style="color:#d97706;">Application Update Requested</h2>
-                            <p>Dear <strong>${notificationData.name}</strong>,</p>
-                            <p>Our team has reviewed your cooperative membership application and requires some updates before it can be approved.</p>
-                            <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
-                                <p style="margin:0;color:#92400e;"><strong>Note from Admin:</strong><br/>${reason}</p>
-                            </div>
-                            <p>Please log in to update and resubmit your application.</p>
-                            <div style="text-align:center;margin:24px 0;">
-                                <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/cooperatives/onboarding" style="background:#7c3aed;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Update Application</a>
-                            </div>
-                        </div>
-                    `,
-                    metadata: { type: "cooperative_membership" },
-                });
-                if (error) {
-                    logger.error("Resend API Error (Cooperative revision email):", error);
-                }
-            }
-        } catch (emailError) {
-            logger.error('Cooperative revision email failed (non-blocking):', emailError);
+        /*
+         *   #941 THROUGH THE SHARED NOTICE — see admin/_exports.ts for the rule.
+         *   This path emailed and did not ring the bell, the gap all four of this
+         *   platform's revision paths shared.
+         *
+         *   `/cooperatives/onboarding` is kept as the destination and was checked
+         *   to exist — #384 retired `cooperatives/onboarding/success`, not the
+         *   onboarding screen itself.
+         */
+        if (notificationData?.userId) {
+            await notifyMemberDecision({
+                userId: notificationData.userId,
+                userEmail: notificationData.email,
+                recipientName: notificationData.name,
+                subject: 'Your cooperative membership application',
+                outcome: 'revision',
+                reason,
+                link: '/cooperatives/onboarding',
+                linkText: 'Update my application',
+            });
         }
 
         await recordAdminAction({

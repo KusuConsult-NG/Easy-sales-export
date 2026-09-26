@@ -25,6 +25,7 @@ import { applicationsTypedTo, forgetApplicationReads } from "@/lib/application-r
 import { claimableByEmail } from "@/lib/claimable-application";
 import { startedEarly } from "@/lib/started-early";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Submit Farm Nation Onboarding
  */
@@ -154,8 +155,7 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
             const appRef = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc();
 
             // Prepare names
-            const fullName = [validatedData.profile.firstName, validatedData.profile.otherName, validatedData.profile.lastName]
-                .filter(Boolean).join(" ").trim();
+            const fullName = joinFullName(namePartsOf(validatedData.profile));
 
             //   #865 Trimmed once, here, so the hash and the encrypted copy are
             //   taken from the same string. Two independent `.trim()` calls is
@@ -691,8 +691,7 @@ async function _resubmitFarmNationApplicationAction(
             }
         }
 
-        const fullName = [validatedData.profile.firstName, validatedData.profile.otherName, validatedData.profile.lastName]
-            .filter(Boolean).join(" ").trim();
+        const fullName = joinFullName(namePartsOf(validatedData.profile));
 
         //   #865 Trimmed once, as on the submit path, so the hash and the
         //   encrypted copy are taken from the same string.

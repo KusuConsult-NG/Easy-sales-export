@@ -23,6 +23,7 @@ import { nationalIdField } from "@/lib/kyc-validators";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { latestApplication } from "@/lib/latest-application";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * 2. COMPLETE REGISTRATION (Step 2)
  * Submits profile data after payment is confirmed.
@@ -187,8 +188,7 @@ export async function registerCooperativeMemberAction(
             firstName: validatedData.firstName,
             otherName: validatedData.otherName || null,
             lastName: validatedData.lastName,
-            fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName]
-                .filter(Boolean).join(" ").trim(),
+            fullName: joinFullName(namePartsOf(validatedData)),
             dateOfBirth: validatedData.dateOfBirth,
             gender: validatedData.gender,
             email: validatedData.email,
@@ -274,8 +274,7 @@ export async function registerCooperativeMemberAction(
                 firstName: validatedData.firstName,
                 lastName: validatedData.lastName,
                 otherName: validatedData.otherName || null,
-                fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName]
-                    .filter(Boolean).join(" ").trim(),
+                fullName: joinFullName(namePartsOf(validatedData)),
 
                 // Sync other PII for cross-module functionality
                 phone: validatedData.phone,
@@ -819,7 +818,7 @@ export async function resubmitCooperativeApplicationAction(
             firstName: validatedData.firstName,
             otherName: validatedData.otherName || null,
             lastName: validatedData.lastName,
-            fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName].filter(Boolean).join(' '),
+            fullName: joinFullName(namePartsOf(validatedData)),
             dateOfBirth: validatedData.dateOfBirth,
             gender: validatedData.gender,
             email: validatedData.email,
@@ -881,7 +880,7 @@ export async function resubmitCooperativeApplicationAction(
             firstName: validatedData.firstName,
             lastName: validatedData.lastName,
             otherName: validatedData.otherName || null,
-            fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName].filter(Boolean).join(' ').trim(),
+            fullName: joinFullName(namePartsOf(validatedData)),
             phone: validatedData.phone || null,
             gender: validatedData.gender || null,
             stateOfOrigin: validatedData.stateOfOrigin || null,

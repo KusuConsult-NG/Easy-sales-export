@@ -33,6 +33,7 @@ import {
 } from "@/lib/profile-provenance";
 import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
+import { joinFullName } from "@/lib/person-name";
 // ============================================
 // User Verification Toggle
 // ============================================
@@ -939,7 +940,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
              */
             const derivedAuthName  = !isPlaceholder(data.name)     ? data.name     : null;
             const derivedName = derivedFirstName
-                ? [derivedFirstName, data.otherName, bestLastName].filter(Boolean).join(" ").trim()
+                ? joinFullName({ first: derivedFirstName, other: data.otherName, last: bestLastName })
                 : (derivedFullName || derivedAuthName || data.displayName
                     || (bestPhone && bestPhone !== "" ? bestPhone : data.email) || "Unknown");
 

@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { filterByLoanProduct } from "@/lib/loan-product";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * API Route: Get All Loan Applications (Admin Only)
  */
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
                     ...data,
                     // Defensive name chain: structured fields → legacy fullName → name → email
                     userName: (userData?.firstName || userData?.lastName)
-                        ? [userData?.firstName, userData?.otherName, userData?.lastName].filter(Boolean).join(" ")
+                        ? joinFullName(namePartsOf(userData))
                         : (userData?.fullName || userData?.name || userData?.email || "Unknown User"),
                     userEmail: userData?.email || "",
                     appliedAt: data.appliedAt?.toDate?.() || new Date(),

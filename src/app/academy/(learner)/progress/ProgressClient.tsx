@@ -37,7 +37,7 @@ export default function ProgressClient({ initial = null }: {
         if (session?.user?.id) {
             setUserId(session.user.id);
         }
-    }, [session]);
+    }, [session?.user?.id]);
 
     const takeSeed = useServerSeed(initial);
 

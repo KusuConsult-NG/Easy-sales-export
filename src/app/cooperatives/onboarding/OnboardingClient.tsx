@@ -27,6 +27,7 @@ import { FormHomeButton } from "@/components/forms/FormNavButtons";
 
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 interface OnboardingContentProps {
     initialTier: "Member";
     paymentStatus: string; // "pending" | "completed"
@@ -540,8 +541,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         formData.append("firstName", personalInfo.firstName.trim());
         formData.append("lastName", personalInfo.lastName.trim());
         if (personalInfo.otherName?.trim()) formData.append("otherName", personalInfo.otherName.trim());
-        formData.append("fullName", [personalInfo.firstName, personalInfo.otherName, personalInfo.lastName]
-            .filter(Boolean).map(s => s?.trim()).join(" ").trim());
+        formData.append("fullName", joinFullName(namePartsOf(personalInfo)));
         formData.append("dateOfBirth", personalInfo.dateOfBirth);
         formData.append("gender", personalInfo.gender);
         formData.append("email", personalInfo.email);

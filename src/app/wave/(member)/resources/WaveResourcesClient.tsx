@@ -114,7 +114,7 @@ export default function WaveResourcesClient({ initial = null }: { initial?: Wave
         }
 
         checkEligibility();
-    }, [session, sessionStatus, router, takeEligibility, showToast]);
+    }, [session?.user?.id, sessionStatus, router, takeEligibility, showToast]);
 
     // Load resources
     useEffect(() => {

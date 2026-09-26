@@ -19,6 +19,7 @@ import BackToHub from "@/components/common/BackToHub";
 //   spelling twice — see lib/wave-program.
 import { WAVE_NAME_WITH_ACRONYM } from "@/lib/wave-program";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 const NIGERIAN_STATES = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
     "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT", "Gombe",
@@ -259,8 +260,7 @@ export default function WaveBriefingPage() {
         setError("");
 
         // Client-side validation — mirrors server strictNameSchema (min 2 chars)
-        const fullName = [formData.firstName, formData.otherName, formData.lastName]
-            .filter(Boolean).join(" ").trim();
+        const fullName = joinFullName(namePartsOf(formData));
         if (formData.firstName.trim().length < 2) {
             setError("First name must be at least 2 characters.");
             return;
