@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { filterByLoanProduct } from "@/lib/loan-product";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 
 import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
@@ -39,9 +39,21 @@ export async function GET(request: NextRequest) {
          *        agent or an academy_admin could not act on a single row and
          *        could read every borrower and guarantor on the platform.
          */
-        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+        /*
+         *   #951 LIVE RE-VALIDATION, replacing a check on the JWT.
+         *
+         *   It lists every loan application, with the applicant's
+         *   financial position in each one — a read that cannot be un-read.
+         *
+         *   The rule is stated once in lib/stale-authorisation:
+         *   `cooperatives:approve_loans` is IRREVERSIBLE, because a loan creates a
+         *   debt and raises loanBalance, and revoking the admin afterwards does
+         *   not unmake it. #356 measured the window a stale claim buys — hours.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
             return NextResponse.json(
-                { success: false, message: "Admin access required" },
+                { success: false, message: gate.error },
                 { status: 403 }
             );
         }

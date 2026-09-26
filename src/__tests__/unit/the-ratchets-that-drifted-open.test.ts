@@ -189,7 +189,7 @@ describe('#743 — and every population ledger is on it', () => {
             //   REPORTED that improvement — 'IMPROVED to 80… lower the recorded
             //   count' — which under the old `<= 88` ceiling would have been
             //   silent. This line moving is the mechanism working, one finding on.
-            .toContain('ledgerVerdict(jwtOnly.length, 75)');
+            .toContain('ledgerVerdict(jwtOnly.length, 68)');
     });
 
     it('AND THE BEHAVIOURAL BOUNDS ARE LEFT AS BOUNDS', () => {

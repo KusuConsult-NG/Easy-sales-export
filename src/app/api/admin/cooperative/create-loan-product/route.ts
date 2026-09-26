@@ -7,7 +7,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * API Route: Create Loan Product (Admin Only)
@@ -22,10 +22,21 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+        /*
+         *   #951 LIVE RE-VALIDATION, replacing a check on the JWT.
+         *
+         *   It creates a loan product — the terms every later loan is
+         *   written on.
+         *
+         *   The rule is stated once in lib/stale-authorisation:
+         *   `cooperatives:approve_loans` is IRREVERSIBLE, because a loan creates a
+         *   debt and raises loanBalance, and revoking the admin afterwards does
+         *   not unmake it. #356 measured the window a stale claim buys — hours.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
             return NextResponse.json(
-                { success: false, message: "Admin access required" },
+                { success: false, message: gate.error },
                 { status: 403 }
             );
         }

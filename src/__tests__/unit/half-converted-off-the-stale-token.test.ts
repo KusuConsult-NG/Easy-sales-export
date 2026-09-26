@@ -477,6 +477,15 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         //   Thirty-two routes under api/admin still read the token. These two
         //   were converted because they were being read for the first time
         //   anyway and because of what they do with the access.
-        expect(ledgerVerdict(jwtOnly.length, 75)).toBe(LEDGER_HELD);
+        //
+        //   Lowered from 75 by #951, which is also where this ledger stops being
+        //   the only one: a bare count says how much is left and nothing about
+        //   what to do next, which is why four findings each invented a criterion.
+        //   one-rule-for-a-stale-token states the rule — a door must re-read when
+        //   revoking the admin cannot undo what they did — and splits the same
+        //   surface into 34 that must and 34 that may. The seven converted here
+        //   are the loan API routes, picked because approve-loan had re-read the
+        //   database since #748 while reject-loan beside it trusted the token.
+        expect(ledgerVerdict(jwtOnly.length, 68)).toBe(LEDGER_HELD);
     });
 });

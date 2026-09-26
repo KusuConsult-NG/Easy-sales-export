@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 import { isRetired } from "@/lib/record-retirement";
 
 /**
@@ -30,9 +30,21 @@ export async function GET(request: NextRequest) {
         // would take away something an admin can do today. My first pass used
         // manage_products and two existing ratchets caught it — the lockout
         // check by name, and the one asserting nothing asks for that permission.
-        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+        /*
+         *   #951 LIVE RE-VALIDATION, replacing a check on the JWT.
+         *
+         *   It lists the loan products, which is the read half of the
+         *   same surface create/update/delete write.
+         *
+         *   The rule is stated once in lib/stale-authorisation:
+         *   `cooperatives:approve_loans` is IRREVERSIBLE, because a loan creates a
+         *   debt and raises loanBalance, and revoking the admin afterwards does
+         *   not unmake it. #356 measured the window a stale claim buys — hours.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
             return NextResponse.json(
-                { success: false, message: "Admin access required" },
+                { success: false, message: gate.error },
                 { status: 403 }
             );
         }

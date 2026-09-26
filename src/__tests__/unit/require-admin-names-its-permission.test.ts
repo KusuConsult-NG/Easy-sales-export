@@ -279,6 +279,19 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/actions/wave/_wv_admin_withdrawals.ts': ['finance:process_withdrawals'],
         'src/app/api/admin/cooperative/approve-loan/route.ts': ['cooperatives:approve_loans'],
 
+        //   #951 THE SEVEN SIBLINGS. #748 converted approve-loan on the reading
+        //   that a loan creates a debt, and left these on the JWT — including
+        //   reject-loan, in the same directory, deciding the same loan, and
+        //   verify-guarantor, which is the step that makes a loan approvable at
+        //   all. lib/stale-authorisation states the rule they were converted by.
+        'src/app/api/admin/cooperative/create-loan-product/route.ts': ['cooperatives:approve_loans'],
+        'src/app/api/admin/cooperative/delete-loan-product/route.ts': ['cooperatives:approve_loans'],
+        'src/app/api/admin/cooperative/loan-applications/route.ts': ['cooperatives:approve_loans'],
+        'src/app/api/admin/cooperative/loan-products/route.ts': ['cooperatives:approve_loans'],
+        'src/app/api/admin/cooperative/reject-loan/route.ts': ['cooperatives:approve_loans'],
+        'src/app/api/admin/cooperative/update-loan-product/route.ts': ['cooperatives:approve_loans'],
+        'src/app/api/admin/cooperative/verify-guarantor/route.ts': ['cooperatives:approve_loans'],
+
         // Account creation.
         'src/app/actions/admin/_legacy.ts': ['users:create'],
 
@@ -571,7 +584,12 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // no test had named. The count is raised rather than the map loosened,
         // for the reason above: a gate added and forgotten in the EXPECTED map
         // has to fail here.
-        expect(callSites().length).toBe(75);
+        // 75 → 82: #951's seven loan routes. This ledger and
+        // half-converted-off-the-stale-token's BOTH read 75 before this change and
+        // move in opposite directions — call sites up, doors on the token down —
+        // which is the clearest evidence available that each is measuring rather
+        // than reciting.
+        expect(callSites().length).toBe(82);
         expect(SRC.length).toBeGreaterThan(400);
     });
 
