@@ -2,6 +2,7 @@
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
@@ -276,19 +277,25 @@ export async function approveWithdrawalAction(
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        let roles = session.user.roles;
-        if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            // The SAME question as the gate above. This asked isAdmin(), so a
-            // caller the gate refused could be admitted by the stale-session
-            // retry — a fallback that is wider than what it falls back from.
-            if (hasAdminPermission(liveRoles, "finance:process_withdrawals")) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+        /*
+         *   #955 THE DATABASE WAS READ ONLY WHEN THE TOKEN SAID NO — ON A MONEY DOOR.
+         *
+         *   Same shape as the cooperative member doors, and this one gates on
+         *   finance:process_withdrawals, which #951 classifies irreversible because
+         *   money paid out does not come back. #748 converted the withdrawal doors it
+         *   found and did not reach these two.
+         *
+         *   Token first, record only on failure: a revoked admin holding an unexpired
+         *   claim could approve a cooperative payout for as long as it lasted.
+         *
+         *   `roles` is handed to getAdminScope below, so the stale value decided the
+         *   SCOPE of the payout as well as whether it was allowed.
+         */
+        const gate = await requireAdmin("finance:process_withdrawals");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
+        const roles = gate.roles;
 
         const adminId = session.user.id;
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
@@ -551,19 +558,25 @@ export async function rejectWithdrawalAction(
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        let roles = session.user.roles;
-        if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            // The SAME question as the gate above. This asked isAdmin(), so a
-            // caller the gate refused could be admitted by the stale-session
-            // retry — a fallback that is wider than what it falls back from.
-            if (hasAdminPermission(liveRoles, "finance:process_withdrawals")) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+        /*
+         *   #955 THE DATABASE WAS READ ONLY WHEN THE TOKEN SAID NO — ON A MONEY DOOR.
+         *
+         *   Same shape as the cooperative member doors, and this one gates on
+         *   finance:process_withdrawals, which #951 classifies irreversible because
+         *   money paid out does not come back. #748 converted the withdrawal doors it
+         *   found and did not reach these two.
+         *
+         *   Token first, record only on failure: a revoked admin holding an unexpired
+         *   claim could approve a cooperative payout for as long as it lasted.
+         *
+         *   `roles` is handed to getAdminScope below, so the stale value decided the
+         *   SCOPE of the payout as well as whether it was allowed.
+         */
+        const gate = await requireAdmin("finance:process_withdrawals");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
+        const roles = gate.roles;
 
         const adminId = session.user.id;
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);

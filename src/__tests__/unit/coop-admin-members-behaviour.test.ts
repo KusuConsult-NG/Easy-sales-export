@@ -32,6 +32,51 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
+/**
+ * requireAdmin, reading the RECORD — because this suite tests the record
+ * disagreeing with the token.
+ *
+ *   #955 The cooperative doors gate on requireAdmin now. The shared mock in
+ *   lib/testing/require-admin-mock deliberately answers from the SESSION's roles,
+ *   and its own header says why: many suites stub one blanket document read, so a
+ *   mock that read the document would judge the actor by whoever they are acting
+ *   on. It also says which suites must not use it — the ones that "need the
+ *   document to disagree with the token".
+ *
+ *   This is one of those. `admits a permitted admin whose SESSION is stale` seeds
+ *   a USERS row carrying super_admin behind a token carrying only `user`, and the
+ *   whole point of the live gate is that the row wins. The shared mock would
+ *   refuse that caller and the test would read as a regression in the conversion
+ *   that FIXED it.
+ *
+ *   Modelled on admin-legacy-onboarding-behaviour, which the shared mock names as
+ *   the precedent, and it reports the permission the way the real gate does so a
+ *   refusal test can assert WHICH permission was missing.
+ */
+const liveGate = async (permission?: string) => {
+    const { isAdmin, hasAdminPermission } = require('@/lib/admin-permissions');
+    const { COLLECTIONS } = require('@/lib/types/firestore');
+    const mockSession = (globalThis as unknown as { mockRequireSession?: () => unknown })
+        .mockRequireSession;
+    const result: any = mockSession ? await (mockSession as () => any)() : null;
+    const user = result?.session?.user;
+    if (!user) return { error: 'Unauthenticated' };
+
+    //   The MOCKED adapter — the fake store this suite seeds. requireActual here
+    //   reaches the real one and hangs on a connection that does not exist.
+    const { supabaseDb } = require('@/lib/supabase-db');
+    const snap = await supabaseDb.collection(COLLECTIONS.USERS).doc(user.id).get();
+    const roles: string[] = (snap?.exists ? (snap.data() as any)?.roles : undefined)
+        ?? user.roles ?? [];
+
+    if (!isAdmin(roles) || (permission && !hasAdminPermission(roles, permission))) {
+        return { error: `Unauthorized: Permission required - ${permission}` };
+    }
+    return { userId: user.id, roles };
+};
+jest.mock('@/lib/require-admin', () => ({
+    requireAdmin: (p?: string) => liveGate(p),
+}));
 jest.mock('resend', () => ({
     Resend: class { emails = { send: async () => ({ error: null }) }; },
 }));

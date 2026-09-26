@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 
 import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
@@ -22,23 +22,28 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin (with live Firestore roles fallback query)
-        let roles = session.user.roles;
-        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            // The SAME question as the gate above. This asked isAdmin(), so the
-            // stale-session fallback was wider than the check it was falling
-            // back from: a caller the primary gate refused could be admitted by
-            // the retry, which is the opposite of what a fallback is for.
-            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
-                roles = liveRoles;
-            } else {
-                return NextResponse.json(
-                    { success: false, message: "Admin access required" },
-                    { status: 403 }
-                );
-            }
+        /*
+         *   #955 THE DATABASE WAS READ ONLY WHEN THE TOKEN SAID NO.
+         *
+         *   The comment that stood here called the user-record read a "live Firestore
+         *   roles fallback query", and that is exactly the inverted model: the record
+         *   is the authority and the token is the cache, so the record is not a
+         *   fallback for the token — the token is a guess the record settles.
+         *
+         *   As written, a token claiming cooperatives:approve_members was admitted and
+         *   never re-checked; the record was consulted only when the token said no. A
+         *   revoked admin kept approving members for the life of their claim, which
+         *   #356 measured in hours. Its sibling approve-member is the same gate on the same act.
+         *
+         *   The caller's `roles` is gone rather than reassigned: nothing downstream
+         *   read it. The `roles` written further down belongs to the MEMBER.
+         */
+        const gate = await requireAdmin("cooperatives:approve_members");
+        if ("error" in gate) {
+            return NextResponse.json(
+                { success: false, message: gate.error },
+                { status: 403 }
+            );
         }
 
         const { memberId, reason } = await request.json();

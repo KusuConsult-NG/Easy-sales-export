@@ -128,7 +128,7 @@ describe('the instrument, before any number it produces is believed', () => {
         expect(users!.liveGates).toBeGreaterThan(0);
     });
 
-    it('WOULD HAVE MISSED SIX FILES, ONE OF THEM A FIVE-GATE ROLE WRITER', () => {
+    it('WOULD HAVE MISSED SIX FILES, ONE OF THEM A ROLE WRITER ON THE TOKEN', () => {
         /*
          *   The counterfactual, measured rather than argued. Removing the
          *   via-local clause is simulated by keeping only in-call writes.
@@ -148,7 +148,22 @@ describe('the instrument, before any number it produces is believed', () => {
 
         const coop = doors.find((d) => d.file === 'app/actions/cooperative/_coop_admin_members.ts');
         expect(coop?.roleWrites).toHaveLength(3);
-        expect(coop?.tokenGates).toHaveLength(5);
+        expect(coop?.roleWrites.every((w) => w.shape === 'via-local')).toBe(true);
+
+        /*
+         *   #955 THIS USED TO PIN coop.tokenGates AT 5, AND #955 CONVERTED TWO OF
+         *   THEM — so the control failed on the fix it was describing. Fourth time
+         *   in this programme (#952, #953, and admin-permission-gates' fallback
+         *   control in this same finding).
+         *
+         *   "Five gates" was the illustration; the property is that this file's
+         *   role writes are ALL via-local, so an in-call-only scanner loses the file
+         *   entirely — and losing it still costs the ledger a role writer that is on
+         *   the token. That holds at 5 gates and at 1, which is why it is asserted
+         *   this way now. The exact gate count lives in the ledger below, where it
+         *   is meant to move.
+         */
+        expect(coop!.tokenGates.length).toBeGreaterThan(0);
     });
 
     it('does NOT count a response projection as a grant', () => {
@@ -376,8 +391,11 @@ describe('THE LEDGERS', () => {
     });
 
     it('ROLE-WRITING FILES STILL ON THE TOKEN — recorded 10', () => {
-        const RECORDED_FILES = 10;
-        const RECORDED_GATES = 32;
+        //   #955 10 -> 9 files, 32 -> 26 gates: the two _coop_admin_members gates
+        //   and the two _coop_admin_money gates that read the record only when the
+        //   token said no, plus the two cooperative member routes beside them.
+        const RECORDED_FILES = 9;
+        const RECORDED_GATES = 26;
 
         const doors = scanRoleWriteDoors(DIRS, SRC);
         const onToken = roleWritersOnTheToken(doors);
@@ -447,7 +465,9 @@ describe('THE LEDGERS', () => {
          *   fell to zero the clause would be redundant; if it rose, the rule's
          *   own description of its reach would be understating it.
          */
-        const RECORDED_INVISIBLE = 7;
+        //   #955 7 -> 6: _coop_admin_members is converted, and it was one of the
+        //   seven that only the writesRoles clause indicted.
+        const RECORDED_INVISIBLE = 6;
 
         const onToken = roleWritersOnTheToken(scanRoleWriteDoors(DIRS, SRC));
         const invisible = onToken.filter((d) => {
