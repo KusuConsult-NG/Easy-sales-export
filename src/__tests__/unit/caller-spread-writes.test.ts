@@ -63,6 +63,24 @@
  * spread of a differently-named parameter, and every multi-line literal. The
  * AST scan finds 18. The "fourteen sites" figure in security-review-2026-08-10
  * was approximately right and my grep was not.
+ *
+ * AND THE SCAN CAN GO BLIND, WHICH IS WORSE THAN A WRONG GREP — #948
+ * -----------------------------------------------------------------
+ * A wrong grep is wrong out loud. An instrument that stops seeing a shape
+ * reports a smaller number, and a smaller number on a security ledger reads as
+ * progress.
+ *
+ * #612 added `updateExisting` to the adapter — `update()` on a missing document
+ * is a silent no-op in the Supabase shim — and converted sixteen call sites to
+ * it. WRITE_METHODS did not list it, so all sixteen left this scan's view in
+ * that commit, two of them spreading the action's own parameter. The pin for
+ * app/actions/wave/_wv_admin_resources.ts still said 4 and the scan found 2,
+ * and nothing failed: the gate only asked whether a count had GROWN.
+ *
+ * Two things follow, both below. WRITE_METHODS lists updateExisting, with a
+ * fixture that fails if it is ever dropped again; and the pin ratchets
+ * downwards, so a number above the truth has to be explained — as a site that
+ * was fixed, or as the instrument going blind again.
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -72,6 +90,7 @@ import { tmpdir } from 'os';
 import {
     scanFileForCallerSpreadWrites,
     scanForCallerSpreadWrites,
+    WRITE_METHODS,
 } from '@/lib/testing/mass-assignment-scan';
 
 function scan(code: string) {
@@ -139,6 +158,88 @@ describe('the shape it exists for', () => {
         `);
 
         expect(found).toHaveLength(1);
+    });
+
+    it("catches #612's updateExisting, which it was blind to", () => {
+        /*
+         *   #948 THE BLIND SPOT, AS A FIXTURE.
+         *
+         *   `updateExisting` is the adapter method #612 added because `update()`
+         *   on a missing document is a silent no-op in the Supabase shim. Sixteen
+         *   call sites were converted to it, and all of them left this scanner's
+         *   view in that commit — WRITE_METHODS did not list it.
+         *
+         *   Two of them spread the action's own parameter. Both are pinned below;
+         *   the pin was right and the scan had stopped seeing them, which is why
+         *   the ledger went down while nothing was fixed.
+         */
+        const found = scan(`
+            "use server";
+            export async function editThing(id: string, data: { title: string }) {
+                const wrote = await db.collection("things").doc(id).updateExisting({
+                    ...data,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                if (!wrote) return { success: false as const, error: "gone" };
+            }
+        `);
+
+        expect(found).toHaveLength(1);
+        expect(found[0].spread).toBe('data');
+        expect(found[0].named).toEqual(['updatedAt']);
+    });
+
+    it('AND WRITE_METHODS COVERS EVERY DATA-TAKING WRITE ON THE ADAPTER', () => {
+        /*
+         *   #948 THE GENERAL FORM, and the assertion that would have failed on
+         *   the day updateExisting landed rather than months later.
+         *
+         *   A fixture proves the scanner sees the methods somebody thought to
+         *   write a fixture for. This asks the adapter what it can write, which is
+         *   the question that goes stale on its own — the blind spot did not
+         *   arrive as a mistake in this file, it arrived as a new method in
+         *   another one.
+         *
+         *   Read off supabase-db.ts by signature, because a hand-kept second list
+         *   of write methods is the shape that produced the gap.
+         */
+        const adapter = readFileSync(join(process.cwd(), 'src/lib/supabase-db.ts'), 'utf-8');
+
+        const writers = new Set<string>();
+        for (const m of adapter.matchAll(
+            /^\s+(?:async )?([a-zA-Z]+)\((?:ref: SupabaseDocumentReference, )?data: Record<string, any>/gm,
+        )) {
+            writers.add(m[1]);
+        }
+
+        //   Control: the pattern must find the adapter's writes, or an empty set
+        //   would satisfy the assertion below and prove nothing.
+        expect([...writers].sort()).toEqual(['add', 'create', 'set', 'update', 'updateExisting']);
+
+        const missing = [...writers].filter((w) => !WRITE_METHODS.has(w));
+
+        expect({
+            missing,
+            hint: 'A write method the scanner cannot see is a write it cannot check.',
+        }).toEqual({
+            missing: [],
+            hint: 'A write method the scanner cannot see is a write it cannot check.',
+        });
+    });
+
+    it('catches a caller spread into .create(), which is an INSERT', () => {
+        //   #948 Nothing in the tree does this today — payout-outcome's single
+        //   .create() names its fields — so this fixture is the whole of the
+        //   coverage, and it is why `create` was added before somebody needed it.
+        const found = scan(`
+            "use server";
+            export async function recordThing(id: string, data: { note: string }) {
+                await db.collection("things").doc(id).create({ ...data, receivedAt: 1 });
+            }
+        `);
+
+        expect(found).toHaveLength(1);
+        expect(found[0].spread).toBe('data');
     });
 
     it('follows caller data in through await request.json()', () => {
@@ -271,10 +372,19 @@ describe('what it must not flag', () => {
 const KNOWN: Record<string, number> = {
     // Admin-supplied, admin-writable.
     'app/actions/admin/_applications.ts': 1,
-    'app/actions/admin/_settings.ts': 1,
+    //   #948 _settings.ts REMOVED. #317 narrowed it: the write is now
+    //   `{ ...checked.values, updatedBy, updatedAt }`, where `checked.values`
+    //   comes out of checkSystemSettingsPatch and holds exactly the fields
+    //   SYSTEM_SETTINGS_FIELDS declares. The scanner cannot trace that to a
+    //   parameter because it is not one any more. The entry goes so that `added`
+    //   catches it if the bounds-checker is ever removed.
     'app/actions/export-admin.ts': 1,
     'app/actions/wave/_wv_admin_resources.ts': 4,
-    'app/actions/academy/_ac_catalog.ts': 1,
+    //   #948 _ac_catalog.ts REMOVED, for the same reason as its sibling above
+    //   and NOT because of the blind spot: both its spreads are of a parser's
+    //   output — `...validatedData` on create and `...validation.data` on
+    //   update — so adding updateExisting to WRITE_METHODS made the update site
+    //   visible and the scanner still, correctly, declines to flag it.
     // Admin-only route (isAdmin, incl. super_admin) spreading its own JSON body
     // into a quiz document. An admin can write these fields directly, so the
     // spread grants nothing. Surfaced only once the scanner learned to follow
@@ -338,6 +448,49 @@ describe('the codebase', () => {
         expect({ added, grown }).toEqual({ added: [], grown: [] });
     });
 
+    it('AND THE PIN RATCHETS DOWNWARDS TOO — #948', () => {
+        /*
+         *   A pin ABOVE the truth fails here. The gate above only asked about
+         *   `added` and `grown`, so a KNOWN entry describing a site that has gone
+         *   away failed nothing — and the difference was room for that many new
+         *   caller-controlled spreads IN THAT FILE, absorbed in silence, because
+         *   `actual[f] > KNOWN[f]` is false while the slack lasts.
+         *
+         *   The previous note recorded that gap and declined to close it: "a stale
+         *   entry is a claim somebody made that only its author can retire." That
+         *   reasoning protects the wrong thing. The claim a KNOWN entry makes is
+         *   "this spread is safe BECAUSE …"; when the spread is gone the claim is
+         *   not somebody's opinion to preserve, it is slack in a security gate.
+         *
+         *   And it is how #948 stayed invisible. `_wv_admin_resources.ts` was
+         *   pinned at 4 while the scan found 2, because updateExisting had left
+         *   WRITE_METHODS — so the instrument went blind and the gate read that as
+         *   two sites fixed. A ledger that can only be tightened by hand is a
+         *   ledger that records an instrument failure as progress.
+         */
+        const actual: Record<string, number> = {};
+        for (const l of leads) actual[l.file] = (actual[l.file] ?? 0) + 1;
+
+        const shrunk = Object.keys(KNOWN)
+            .filter((f) => (actual[f] ?? 0) < KNOWN[f])
+            .map((f) => `${f}: pinned ${KNOWN[f]}, found ${actual[f] ?? 0}`);
+
+        if (shrunk.length) {
+            throw new Error(
+                `\n\n⬇️  A pin above the truth. Two things do this, and they are\n` +
+                `   opposites — establish WHICH before editing the number:\n\n` +
+                shrunk.map((l) => `  ${l}`).join('\n') +
+                `\n\n1. THE SITE WAS FIXED. Lower the pin, with a note naming what\n` +
+                `   narrowed it. This is the good case.\n` +
+                `2. THE SCANNER WENT BLIND — a new adapter write method that is not\n` +
+                `   in WRITE_METHODS, which is #948 exactly. Open the file and look\n` +
+                `   for the spread before you touch this number.\n`
+            );
+        }
+
+        expect(shrunk).toEqual([]);
+    });
+
     it('the product update route writes a whitelist, not the body', () => {
         // The worst instance the widened scan found. Checked by content as well
         // as by absence from `leads`, because replacing the spread with
@@ -381,24 +534,54 @@ describe('the codebase', () => {
     });
 
     it('still finds the sites that legitimately have one', () => {
-        // Vacuity guard for the two assertions above. A scanner returning []
-        // passes both of them and proves nothing; the count is not zero and must
-        // not become zero silently.
-        //
-        //   #920 10 → 9. One site left the scan because the academy submit door
-        //   now parses its input; see the note in KNOWN. A floor is lowered only
-        //   when the reason is a site that was FIXED, which is why the count is
-        //   recorded here rather than replaced by `> 0`.
-        //
-        //   AND ONE THING THIS GATE DOES NOT NOTICE, recorded while lowering it:
-        //   a KNOWN entry whose site has gone away fails nothing. Only `added`
-        //   and `grown` are checked. Two entries besides the one removed above —
-        //   app/actions/admin/_settings.ts and
-        //   app/actions/academy/_ac_catalog.ts — are already in that state, and
-        //   were before this change. They are left alone deliberately: neither is
-        //   this work's, and a stale entry is a claim somebody made that only its
-        //   author can retire. What it means for a reader is that KNOWN's ten
-        //   entries describe seven live sites.
-        expect(leads.length).toBeGreaterThanOrEqual(9);
+        /*
+         *   Vacuity guard for the assertions above. A scanner returning [] passes
+         *   `added` and `grown` and proves nothing.
+         *
+         *   #948 9 -> 11, AND THE DIRECTION IS THE OPPOSITE OF AN IMPROVEMENT.
+         *   `updateExisting` joined WRITE_METHODS, so two sites the scan had
+         *   stopped seeing are visible again — both in
+         *   app/actions/wave/_wv_admin_resources.ts, both spreading the action's
+         *   own `data` parameter, both there the whole time. Nothing about the
+         *   actions changed. The pin of 4 was right.
+         *
+         *   #920's 10 -> 9 was the good kind: the academy submit door now parses
+         *   its input, so the spread really is of a parser's output. Both movements
+         *   looked identical from here, which is what the downward ratchet above
+         *   exists to stop.
+         *
+         *   THE NUMBER IS EXACT NOW, not a floor. The ratchet makes every KNOWN
+         *   entry equal to its measured count, so the total is determined — and an
+         *   exact total is one more place a silent blind spot has to show up.
+         */
+        const pinned = Object.values(KNOWN).reduce((a, b) => a + b, 0);
+
+        expect(leads.length).toBe(pinned);
+        expect(leads.length).toBe(11);
     });
 });
+
+/**
+ * ── MUTATION LOG, #948 ──────────────────────────────────────────────────────
+ *
+ *   MUTANT                                          CAUGHT BY
+ *   ──────────────────────────────────────────────  ───────────────────────────
+ *   `updateExisting` dropped from WRITE_METHODS      "catches #612's
+ *     (the defect exactly as it shipped)             updateExisting", THE PIN
+ *                                                    RATCHETS DOWNWARDS, and
+ *                                                    "still finds the sites"
+ *   `create` dropped from WRITE_METHODS              WRITE_METHODS COVERS EVERY
+ *                                                    DATA-TAKING WRITE, and the
+ *                                                    .create() fixture
+ *   the adapter-signature pattern broken so the      WRITE_METHODS COVERS EVERY
+ *     coverage claim is vacuous                      DATA-TAKING WRITE (its own
+ *                                                    control on the found set)
+ *   a stale pin put back (`_settings.ts`)             THE PIN RATCHETS
+ *                                                    DOWNWARDS, "still finds"
+ *   a pin raised above a live site, which is          THE PIN RATCHETS
+ *     the slack the old gate could not see            DOWNWARDS, "still finds"
+ *
+ *   ALL FIVE CAUGHT. The two that matter are the first and the last: one is the
+ *   instrument going blind, the other is the gate being unable to notice.
+ */
+

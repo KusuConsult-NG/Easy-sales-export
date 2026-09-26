@@ -209,8 +209,41 @@ export function scanForMassAssignment(dirs: string[], srcDir: string): MassAssig
 // whatever the field order.
 // ---------------------------------------------------------------------------
 
-/** Adapter methods that persist an object literal. */
-const WRITE_METHODS = new Set(["set", "add", "update", "insert", "upsert"]);
+/**
+ * Adapter methods that persist an object literal.
+ *
+ *   #948 `updateExisting` WAS MISSING, AND THE GAP WAS READ AS PROGRESS.
+ *
+ *   #612 added it to the adapter — `update()` on a missing document is a silent
+ *   no-op in the Supabase shim, so sixteen call sites were converted to a method
+ *   that reports whether it wrote. Every one of them left this scanner's view in
+ *   the same commit.
+ *
+ *   MEASURED, not inferred. caller-spread-writes pins
+ *   `app/actions/wave/_wv_admin_resources.ts` at 4 and the scan found 2. The two
+ *   it had stopped finding are `updateExisting({ ...data, … })` where `data` is
+ *   the action's own parameter — the exact shape this half of the file exists to
+ *   find. Both are still there, unchanged, in the tree.
+ *
+ *   The suite's own note read that difference as stale pins: "KNOWN's ten entries
+ *   describe seven live sites." Two of the three really are stale — _settings.ts
+ *   and _ac_catalog.ts were narrowed, by #317 and by a parse — and the third was
+ *   this. A ledger that goes down for two reasons, one of them a fix and one of
+ *   them the measuring instrument going blind, reports both as a fix. That is
+ *   what makes a count without a downward ratchet worse than no count.
+ */
+export const WRITE_METHODS = new Set([
+    "set", "add", "update", "insert", "upsert",
+    //   #612's reporting variant of update().
+    "updateExisting",
+    //   #948 `create` was missing too, and the only site using it today writes
+    //   named fields — so this changes nothing NOW and closes the class. Adding
+    //   it while the list was wrong once is cheaper than finding out the same way
+    //   twice. caller-spread-writes asserts this set covers every data-taking
+    //   write on the adapter, which is the assertion that would have failed the
+    //   day updateExisting landed.
+    "create",
+]);
 
 export interface CallerSpreadWrite {
     file: string;
