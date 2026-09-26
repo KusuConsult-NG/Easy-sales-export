@@ -41,6 +41,12 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
+//   #953 — the withdrawal and broadcast doors this suite drives now ask the LIVE
+//   gate, not the token. The mock still lets roles decide; see
+//   lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null,
     setCache: async () => undefined,
@@ -708,7 +714,25 @@ describe('getAdminWalletWithdrawalsAction — who may read bank account numbers'
         // that hydrates every withdrawing user's account number, account name,
         // bank code, email and phone.
         actAs('admin-x', [role]);
-        expect(await list()).toMatchObject({ success: false, error: 'Unauthorized' });
+
+        /*
+         *   #953 THE REFUSAL STILL HAPPENS; ITS SENTENCE GOT MORE SPECIFIC.
+         *
+         *   This gate moved from the token to requireAdmin, which re-reads the
+         *   caller's roles live. It refuses the same people — asserted below —
+         *   and its message names the permission instead of saying only
+         *   "Unauthorized". #750 chose that deliberately: "a caller who fails
+         *   isAdmin lacks the permission too, making the narrower message both
+         *   accurate and the more actionable of the two."
+         *
+         *   So the assertion asks for the stronger fact rather than the older
+         *   string: refused, AND told which permission it was.
+         */
+        const refused = await list();
+
+        expect(refused).toMatchObject({ success: false });
+        expect((refused as { error?: string }).error)
+            .toContain('finance:process_withdrawals');
     });
 
     it.each([['admin'], ['super_admin']])(
@@ -769,7 +793,26 @@ describe('processWalletWithdrawalAction', () => {
     it.each([['support'], ['marketplace_admin'], ['cooperative_admin'], ['general_user']])(
         'refuses a %s', async (role) => {
             actAs('someone', [role]);
-            expect(await process_('approve')).toMatchObject({ success: false, error: 'Unauthorized' });
+
+            /*
+             *   #953 THE REFUSAL STILL HAPPENS; ITS SENTENCE GOT MORE SPECIFIC.
+             *
+             *   This gate moved from the token to requireAdmin, which re-reads the
+             *   caller's roles live. It refuses the same people — asserted below —
+             *   and its message names the permission instead of saying only
+             *   "Unauthorized". #750 chose that deliberately: "a caller who fails
+             *   isAdmin lacks the permission too, making the narrower message both
+             *   accurate and the more actionable of the two."
+             *
+             *   So the assertion asks for the stronger fact rather than the older
+             *   string: refused, AND told which permission it was.
+             */
+            const refused = await process_('approve');
+
+            expect(refused).toMatchObject({ success: false });
+            expect((refused as { error?: string }).error)
+                .toContain('finance:process_withdrawals');
+            //   And no money moved, which is the half that matters most here.
             expect(paystackPayout).not.toHaveBeenCalled();
         });
 

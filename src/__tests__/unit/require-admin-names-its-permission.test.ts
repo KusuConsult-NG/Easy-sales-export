@@ -277,6 +277,15 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/api/admin/cooperative/mark-withdrawal-completed/route.ts': ['finance:process_withdrawals'],
         'src/app/api/admin/marketplace/withdrawals/route.ts': ['finance:process_withdrawals'],
         'src/app/actions/wave/_wv_admin_withdrawals.ts': ['finance:process_withdrawals'],
+        //   #953 wallet.ts's two — the payout processor and the queue that carries
+        //   bank details. #748 converted their route siblings and left these.
+        'src/app/actions/wallet.ts': ['finance:process_withdrawals', 'finance:process_withdrawals'],
+        //   And the three broadcast doors: the list builder, the sender, and the
+        //   recipient-count estimate. #202 — a demoted admin must not reach every
+        //   member.
+        'src/app/actions/broadcast.ts': ['announcements:manage'],
+        'src/app/api/admin/broadcast/send/route.ts': ['announcements:manage'],
+        'src/app/api/admin/broadcast/estimate/route.ts': ['announcements:manage'],
         'src/app/api/admin/cooperative/approve-loan/route.ts': ['cooperatives:approve_loans'],
 
         //   #951 THE SEVEN SIBLINGS. #748 converted approve-loan on the reading
@@ -602,7 +611,8 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // which is the clearest evidence available that each is measuring rather
         // than reciting.
         // 82 → 97: #952's fifteen loan-action gates.
-        expect(callSites().length).toBe(97);
+        // 97 → 102: #953's wallet.ts (2) and broadcast (3).
+        expect(callSites().length).toBe(102);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

@@ -4,6 +4,7 @@ import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
+import { requireAdmin } from "@/lib/require-admin";
 
 export const maxDuration = 300; // 5 min timeout
 
@@ -47,8 +48,26 @@ export async function POST(req: NextRequest) {
         const { session } = await requireSession();
         // #438: this was isAdmin(...) — true for ANY of the ten admin roles.
         // Named permission because sizing a platform-wide blast is the same decision as sending it, and broadcast/send already asks for this.
-        if (!session?.user || !hasAdminPermission(session.user.roles, "announcements:manage")) {
+        if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+        }
+        /*
+         *   #953 LIVE RE-VALIDATION, replacing a check on the JWT — it counts the recipients a broadcast WOULD reach, which is
+         *   a read of how many members hold each attribute the filter names.
+         *
+         *   lib/stale-authorisation classifies `announcements:manage` as
+         *   IRREVERSIBLE: a message cannot be unsent. #202 settled the same point
+         *   from the other side — a demoted admin must not reach every member — and
+         *   #375 chose this permission for every broadcast surface for that reason.
+         *   #932 converted the money-owed email sender on exactly this reading.
+         *
+         *   The `!session?.user` guard stays: the rate limiter below is keyed on
+         *   `session.user.id`, so this establishes the caller rather than
+         *   re-checking the permission.
+         */
+        const gate = await requireAdmin("announcements:manage");
+        if ("error" in gate) {
+            return NextResponse.json({ success: false, error: gate.error }, { status: 403 });
         }
 
         const rateLimitResult = await estimateLimiter.check(session.user.id);

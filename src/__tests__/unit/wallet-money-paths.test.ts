@@ -48,6 +48,12 @@ const mockCreditOnce = jest.fn() as jest.Mock<any>;
 const mockClaimStatus = jest.fn() as jest.Mock<any>;
 const mockPayout = jest.fn() as jest.Mock<any>;
 
+//   #953 — the withdrawal and broadcast doors this suite drives now ask the LIVE
+//   gate, not the token. The mock still lets roles decide; see
+//   lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/wallet-ledger', () => ({
     debitWalletOnce: (...a: any[]) => mockDebitOnce(...a),
     debitWalletLocked: (...a: any[]) => mockDebitLocked(...a),

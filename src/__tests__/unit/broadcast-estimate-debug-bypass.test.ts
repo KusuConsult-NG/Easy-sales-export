@@ -69,6 +69,41 @@ const requireSession = jest.fn<any>();
 const getCleanBroadcastList = jest.fn<any>();
 const limiterCheck = jest.fn<any>();
 
+/*
+ *   #953 — the estimate route asks the LIVE gate now, and this needs a BESPOKE
+ *   mock rather than the shared requireAdminMock.
+ *
+ *   THE RULE, learned twice: any suite that mocks @/lib/session-guard with its OWN
+ *   function needs its own gate mock. The shared one reads
+ *   `globalThis.mockRequireSession`, which this suite does not set — so it read
+ *   jest.setup's DEFAULT admin, admitted a general_user, and the route then threw
+ *   parsing an absent body. A 500 where the test expected a 403, which looks like
+ *   a route defect and was a mock reading the wrong caller.
+ *
+ *   This one reads the same `requireSession` the route reads, so roles decide.
+ */
+jest.mock('@/lib/require-admin', () => ({
+    requireAdmin: async (permission?: string) => {
+        const { isAdmin, hasAdminPermission } = require('@/lib/admin-permissions');
+        const result = await requireSession();
+        const user = result?.session?.user;
+
+        if (!user) return { error: 'Unauthenticated' };
+        const roles: string[] = user.roles ?? [];
+
+        //   Mirrors the real gate: a named permission is reported even when the
+        //   caller is not an admin at all, because they lack it either way.
+        if (!isAdmin(roles) || (permission && !hasAdminPermission(roles, permission))) {
+            return {
+                error: permission
+                    ? `Unauthorized: Permission required - ${permission}`
+                    : 'Unauthorized: Admin access required',
+            };
+        }
+        return { userId: user.id, roles };
+    },
+}));
+
 jest.mock('@/lib/session-guard', () => ({
     requireSession: (...args: any[]) => requireSession(...args),
 }));

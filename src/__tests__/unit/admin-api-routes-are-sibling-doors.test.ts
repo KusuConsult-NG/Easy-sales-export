@@ -371,8 +371,16 @@ describe('#339 — the permissions chosen are the ones the siblings use', () => 
         const { stripComments } = await import('@/lib/testing/strip-comments');
         const src = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 
+        /*
+         *   #953 wallet.ts's two gates moved to the live layer, for the reason #748
+         *   converted their route siblings: money goes out, and the queue carries
+         *   bank details in the clear. The property is the permission demanded; the
+         *   live form is asserted specifically because dropping back to the token is
+         *   the regression, not a rename.
+         */
         expect(src('src/app/actions/wallet.ts'))
-            .toContain('hasAdminPermission(sessionResult.session.user.roles, "finance:process_withdrawals")');
+            .toContain('await requireAdmin("finance:process_withdrawals")');
+        expect(src('src/app/actions/wallet.ts')).not.toMatch(/hasAdminPermission\(\s*session/);
         expect(src('src/app/actions/farm-nation-admin/_fna_verifications.ts'))
             .toContain('hasAdminPermission(session.user.roles, "land:verify_listings")');
         /*

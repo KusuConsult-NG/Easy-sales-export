@@ -62,6 +62,12 @@ const mockCleanList = jest.fn(async () => ({
 
 // The action records an audit row now. Mocked here rather than left to the
 // real module, which reaches for the database this suite does not stand up.
+//   #953 — the withdrawal and broadcast doors this suite drives now ask the LIVE
+//   gate, not the token. The mock still lets roles decide; see
+//   lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/audit-log', () => ({
     createAuditLog: jest.fn(async () => ({})),
     createAdminAuditLog: jest.fn(async () => ({})),

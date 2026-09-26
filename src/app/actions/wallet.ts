@@ -29,11 +29,12 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalking";
 import { pushWithdrawalDecision } from "@/lib/fcm";
-import { hasAdminPermission, rolesWithPermission } from "@/lib/admin-permissions";
+import { rolesWithPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 import { getFeatureToggle } from "./feature-toggles";
 import { z } from "zod";
 import { paystackBaseUrl } from "@/lib/paystack-host";
+import { requireAdmin } from "@/lib/require-admin";
 import {
     isMarketplaceWalletCheckoutEnabled,
     MARKETPLACE_WALLET_CHECKOUT_REFUSAL,
@@ -897,8 +898,23 @@ async function _processWalletWithdrawalAction(
     if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
     const adminId = sessionResult.session.user.id;
 
-    if (!hasAdminPermission(sessionResult.session.user.roles, "finance:process_withdrawals")) {
-        return { success: false as const, error: "Unauthorized", data: null };
+    /*
+     *   #953 LIVE RE-VALIDATION, replacing a check on the JWT — this APPROVES OR
+     *   REJECTS A PAYOUT.
+     *
+     *   lib/stale-authorisation classifies `finance:process_withdrawals` as
+     *   IRREVERSIBLE, and #748 established the same thing one layer up: it
+     *   converted the withdrawal API ROUTES — mark-withdrawal-completed and
+     *   marketplace/withdrawals — on the reading that "money goes out", and left
+     *   this action beside them still asking the token. A revoked admin holding an
+     *   unexpired claim could move money for as long as it lasted; #356 measured
+     *   that window in hours.
+     *
+     *   `adminId` above stays: it is what the decision is recorded against.
+     */
+    const gate = await requireAdmin("finance:process_withdrawals");
+    if ("error" in gate) {
+        return { success: false as const, error: gate.error, data: null };
     }
 
     const txnRef = db.collection(TXN_COLLECTION).doc(transactionId);
@@ -1213,8 +1229,15 @@ async function _getAdminWalletWithdrawalsAction(options: {
     // read every user's bank details from a queue they are not permitted to act
     // on. Gated on the permission the queue is FOR, which is the same
     // resolution the other bulk-PII readers took.
-    if (!hasAdminPermission(sessionResult.session.user.roles, "finance:process_withdrawals")) {
-        return { success: false as const, error: "Unauthorized" , data: null };
+    /*
+     *   #953 LIVE RE-VALIDATION — the withdrawal QUEUE, and #748 converted its
+     *   route sibling (api/admin/marketplace/withdrawals) for what the rows carry:
+     *   "the queue, with bank details in the clear". A read of somebody's account
+     *   number cannot be un-read by revoking the reader afterwards.
+     */
+    const gate = await requireAdmin("finance:process_withdrawals");
+    if ("error" in gate) {
+        return { success: false as const, error: gate.error , data: null };
     }
 
     const fetchLimit = options.limit || 25;
