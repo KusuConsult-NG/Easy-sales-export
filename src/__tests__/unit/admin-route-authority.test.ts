@@ -344,7 +344,11 @@ describe('isAdmin() is ten roles and the matrix means two', () => {
         // grep -l matches comments too, so two of the survivors are files whose
         // prose mentions the old guard. The structural, per-function assertion
         // lives in admin-permission-gates.test.ts.
-        expect(ledgerVerdict(isAdminGatedRoutes().length, 15)).toBe(LEDGER_HELD);
+        //   #955 15 -> 14: api/admin/cooperative/reject-member converted. Its
+        //   sibling approve-member was already off isAdmin and both are off the
+        //   token now — they read the user record only when the TOKEN said no,
+        //   which admitted a revoked admin and never re-checked them.
+        expect(ledgerVerdict(isAdminGatedRoutes().length, 14)).toBe(LEDGER_HELD);
     });
 
     it('the cooperative money routes among them', () => {

@@ -27,6 +27,18 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const mockClaim = jest.fn() as jest.Mock<any>;
 
+/*
+ *   #955 The cooperative payout doors gate on requireAdmin now — they used to
+ *   read the user record only when the TOKEN said no, so a revoked admin could
+ *   approve a withdrawal for the life of their claim.
+ *
+ *   SHARED mock: this suite drives globalThis.mockRequireSession and owns no
+ *   session-guard mock, so the shared one reads the same session and decides
+ *   against the real PERMISSION_MATRIX.
+ */
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: (...args: any[]) => mockClaim(...args),
     claimStatusTransitionFromAny: jest.fn(),

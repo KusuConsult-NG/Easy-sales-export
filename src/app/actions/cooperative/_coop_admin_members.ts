@@ -5,6 +5,7 @@ import { adminSortKey } from "@/lib/admin-row-sort";
 import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { html } from "@/lib/utils";
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { logger } from '@/lib/logger';
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -279,19 +280,30 @@ async function _updateMemberStatusAction(
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        let roles = session.user.roles;
-        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            // The SAME question as the gate above. This asked isAdmin(), so a
-            // caller the gate refused could be admitted by the stale-session
-            // retry — a fallback that is wider than what it falls back from.
-            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+        /*
+         *   #955 THE DATABASE WAS READ ONLY WHEN THE TOKEN SAID NO.
+         *
+         *   The block this replaces asked the token first and consulted the user
+         *   record ONLY in the failure branch. So a token claiming the permission was
+         *   admitted and never re-checked, while a token LACKING it got a live second
+         *   chance — the newly promoted admin was handled and the newly DEMOTED one
+         *   was not, which is the case #356 measured in hours.
+         *
+         *   The comment that stood here is worth keeping on the record: it noted that
+         *   the fallback used to be WIDER than the gate (isAdmin where the gate asked
+         *   the permission) and narrowed it. That fix was right, and it left the
+         *   ordering alone — which is the half that mattered.
+         *
+         *   `roles` below now carries the LIVE roles unconditionally. It used to carry
+         *   the token's whenever the token passed, so every later decision in this
+         *   function, the member PII gate included, was made from the token in exactly
+         *   the case where the token is wrong.
+         */
+        const gate = await requireAdmin("cooperatives:approve_members");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
+        const roles = gate.roles;
 
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
         const memberDoc = await memberRef.get();
@@ -638,19 +650,30 @@ export async function requestCooperativeRevisionAction(
             return { success: false as const, error: 'Admin access required', data: null };
         }
 
-        let roles = session.user.roles;
-        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            // The SAME question as the gate above. This asked isAdmin(), so a
-            // caller the gate refused could be admitted by the stale-session
-            // retry — a fallback that is wider than what it falls back from.
-            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: 'Admin access required', data: null };
-            }
+        /*
+         *   #955 THE DATABASE WAS READ ONLY WHEN THE TOKEN SAID NO.
+         *
+         *   The block this replaces asked the token first and consulted the user
+         *   record ONLY in the failure branch. So a token claiming the permission was
+         *   admitted and never re-checked, while a token LACKING it got a live second
+         *   chance — the newly promoted admin was handled and the newly DEMOTED one
+         *   was not, which is the case #356 measured in hours.
+         *
+         *   The comment that stood here is worth keeping on the record: it noted that
+         *   the fallback used to be WIDER than the gate (isAdmin where the gate asked
+         *   the permission) and narrowed it. That fix was right, and it left the
+         *   ordering alone — which is the half that mattered.
+         *
+         *   `roles` below now carries the LIVE roles unconditionally. It used to carry
+         *   the token's whenever the token passed, so every later decision in this
+         *   function, the member PII gate included, was made from the token in exactly
+         *   the case where the token is wrong.
+         */
+        const gate = await requireAdmin("cooperatives:approve_members");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
+        const roles = gate.roles;
 
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
         // Two status writes, no balance and no guard to claim. The wrapper made
