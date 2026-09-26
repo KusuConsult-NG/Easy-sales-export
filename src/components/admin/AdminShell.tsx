@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { authErrorCodeFor } from "@/lib/auth-error-codes";
 import { requireSession } from "@/lib/session-guard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import { AdminMfaGraceBanner } from "@/components/admin/AdminMfaGraceBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /**
@@ -75,6 +76,30 @@ export default async function AdminShellContent({ children }: { children: React.
             <AdminSidebar initialRoles={roles} />
 
             <main className="flex-1 lg:pl-64 min-h-screen transition-all">
+                {/**
+                  *   #939 THE ROLLOUT'S WARNING, WHICH UNTIL NOW REACHED NOBODY.
+                  *
+                  *        adminMfaVerdict returned `warn` for every unenrolled
+                  *        administrator for fourteen days and adminMfaGate drops
+                  *        every verdict that is not `enrol`, so the grace window
+                  *        warned no one — and then #937 closed the gate on
+                  *        administrators who had never been told it was coming.
+                  *
+                  *        HERE because this chrome is worn by both surfaces the
+                  *        gate governs: everything under /admin, and
+                  *        /loans/approve, which is not under it. A banner in
+                  *        admin/layout.tsx would miss the second one, which is
+                  *        exactly the bug #617 fixed about this same route.
+                  *
+                  *        The session is already in hand two statements above, so
+                  *        this costs no read. It renders nothing for an
+                  *        administrator who has enrolled.
+                  */}
+                <AdminMfaGraceBanner
+                    roles={roles}
+                    mfaEnabled={sessionResult.session?.user?.mfaEnabled}
+                />
+
                 <div className="w-full">
                     {children}
                 </div>

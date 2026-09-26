@@ -6,7 +6,7 @@
 //   #771 The enforcement date and its grace test, so this file can say what a
 //   missing MFA_SECRET_KEY costs TODAY rather than what it cost when the
 //   description was written. One definition of the deadline, in mfa-policy.
-import { graceActive, MFA_ADMIN_ENFORCE_FROM } from '@/lib/mfa-policy';
+import { adminMfaEnforcementAt, graceActive } from '@/lib/mfa-policy';
 
 interface EnvValidationResult {
     valid: boolean;
@@ -208,6 +208,21 @@ const WHAT_BREAKS: Record<string, string> = {
  *   the note on MFA_SECRET_KEY above. Every other key returns its fixed text,
  *   and an unknown key returns the same fallback the call site used to inline.
  */
+/**
+ * The day enforcement actually begins, as this deployment is configured — #939.
+ *
+ * `MFA_ADMIN_ENFORCE_FROM.slice(0, 10)` was inlined at the two call sites below
+ * it and ignored the override those same call sites branch on. One function, so
+ * the sentence and the gate cannot name different days.
+ *
+ * Exported for the same reason `whatBreaks` is: the two call sites are inside
+ * console.error branches in logEnvValidation, and asserting a date by capturing
+ * stdout is a test of the logger rather than of the rule.
+ */
+export function enforcementDay(env: NodeJS.ProcessEnv = process.env): string {
+    return new Date(adminMfaEnforcementAt(env)).toISOString().slice(0, 10);
+}
+
 export function whatBreaks(
     key: string,
     env: NodeJS.ProcessEnv = process.env,
@@ -599,13 +614,31 @@ export function logEnvValidation() {
             if (degrades.includes('MFA_SECRET_KEY')) {
                 console.error('');
                 console.error(
+                    /*
+                     *   #939 THIS NAMED THE BUILT-IN DATE WHILE THE LINE ABOVE IT
+                     *   OBEYED THE OVERRIDE.
+                     *
+                     *   `graceActive()` honours MFA_ADMIN_GRACE_UNTIL and decides
+                     *   WHICH of these two sentences prints; both sentences then
+                     *   named MFA_ADMIN_ENFORCE_FROM regardless. So the moment an
+                     *   override was set — which is the supported way to extend
+                     *   the window, and it has now been used — the warning read
+                     *   "becomes MANDATORY on 2026-09-26" while the gate was
+                     *   actually closing weeks later. A deadline notice naming a
+                     *   date already in the past is worse than none: the reader
+                     *   concludes the check is stale and stops believing the rest
+                     *   of this output.
+                     *
+                     *   Both branches read the effective instant now, from the
+                     *   same function graceActive asks.
+                     */
                     graceActive()
                         ? `   ⏳ MFA_SECRET_KEY: administrator two-factor becomes MANDATORY on `
-                          + `${MFA_ADMIN_ENFORCE_FROM.slice(0, 10)}. From that date every admin is sent `
+                          + `${enforcementDay()}. From that date every admin is sent `
                           + `to enrol, and enrolment returns 500 without this key — locking every `
                           + `administrator out of /admin. Set it before then.`
                         : `   🚨 MFA_SECRET_KEY IS MISSING AND ADMIN TWO-FACTOR IS NOW MANDATORY `
-                          + `(since ${MFA_ADMIN_ENFORCE_FROM.slice(0, 10)}). Every administrator is being sent `
+                          + `(since ${enforcementDay()}). Every administrator is being sent `
                           + `to enrol and enrolment CANNOT SUCCEED. Set this variable, or set `
                           + `MFA_ADMIN_GRACE_UNTIL to a future date to reopen the window.`,
                 );
