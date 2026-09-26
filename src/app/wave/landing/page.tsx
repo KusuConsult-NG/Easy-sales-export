@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Users, TrendingUp, Globe, Shield, Sparkles, CheckCircle, ChevronLeft, ChevronRight, Home } from "lucide-react";
@@ -65,10 +65,28 @@ export default function WaveLandingPage() {
     const { data: session, status: sessionStatus } = useSession();
     const router = useRouter();
 
+    /*
+     *   #944 THE TWO THINGS THE REDIRECT BELOW ACTUALLY READS, as values.
+     *
+     *   Keyed on the whole `session` this re-ran waveDestinationFor on every
+     *   background refresh. Keying it on `session?.user?.roles` would have looked
+     *   like a narrowing and bought nothing: a re-minted session builds a NEW
+     *   array with the same contents, and React compares dependencies by
+     *   identity — so the joined string is the dependency and useMemo gives the
+     *   effect back a stable array for it.
+     *
+     *   AND THE STATUS IS A DEPENDENCY TOO, which keying on roles alone missed.
+     *   It is read through an `as any` cast, so react-hooks/exhaustive-deps could
+     *   only ask for `session.user`; an approval an administrator makes
+     *   mid-session changes this value and must re-run the redirect.
+     */
+    const roleKey = session?.user?.roles?.join(",") ?? "";
+    const roles = useMemo(() => (roleKey ? roleKey.split(",") : []), [roleKey]);
+    const waveRegStatus = (session?.user as { serviceRegistrations?: { wave?: { status?: string } } } | undefined)
+        ?.serviceRegistrations?.wave?.status ?? null;
+
     useEffect(() => {
-        if (sessionStatus === "authenticated" && session?.user) {
-            const roles = (session.user.roles || []) as string[];
-            const serviceRegistrations = (session.user as any).serviceRegistrations || {};
+        if (sessionStatus === "authenticated") {
 
             /*
              *   #929 — ONE RULE, and this page is where it mattered most.
@@ -80,15 +98,12 @@ export default function WaveLandingPage() {
              *   /wave/application. Anyone the rule sends elsewhere is sent;
              *   landing here is now a decision rather than a fall-through.
              */
-            const destination = waveDestinationFor({
-                roles,
-                waveRegStatus: serviceRegistrations.wave?.status ?? null,
-            });
+            const destination = waveDestinationFor({ roles, waveRegStatus });
             if (destination !== "/wave/landing") {
                 router.replace(destination);
             }
         }
-    }, [sessionStatus, session, router]);
+    }, [sessionStatus, roles, waveRegStatus, router]);
 
 
 

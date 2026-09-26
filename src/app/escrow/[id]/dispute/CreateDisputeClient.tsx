@@ -57,7 +57,7 @@ export default function CreateDisputeClient(props: {
         }
         loadEscrow();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, session, escrowId, router, props.initial]);
+    }, [status, session?.user?.id, escrowId, router, props.initial]);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();

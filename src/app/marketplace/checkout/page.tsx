@@ -135,6 +135,20 @@ const CheckoutRouteMap = dynamicImport(
 export default function CheckoutPage() {
     const router = useRouter();
     const { data: session } = useSession();
+
+    /*
+     *   #944 The three fields this page reads off the session, as primitives.
+     *
+     *   Both effects below were keyed on the whole `session`, so every background
+     *   refresh re-read the cart out of localStorage and re-fetched the profile
+     *   address. And the second one holds a BARE `if (session)`, which is why a
+     *   scan for `session.` followed by a member reported this file as not using
+     *   the session at all — the reading that would have pulled the dependency
+     *   out from under a working checkout.
+     */
+    const userId = session?.user?.id;
+    const userEmail = session?.user?.email;
+    const userName = session?.user?.name;
     const { showToast } = useToast();
     const [cart, setCart] = useState<LocalCartItem[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -549,11 +563,10 @@ export default function CheckoutPage() {
 
     useEffect(() => {
         setIsClient(true);
-        if (session?.user?.email) setEmail(session.user.email);
-        if (session?.user?.name) setRecipientName(session.user.name);
+        if (userEmail) setEmail(userEmail);
+        if (userName) setRecipientName(userName);
 
         // Use user-scoped cart key to match what product page sets
-        const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
 
         // Migrate guest cart to user-scoped cart if logged in
@@ -609,7 +622,7 @@ export default function CheckoutPage() {
         } else {
             router.push("/marketplace");
         }
-    }, [router, session]);
+    }, [router, userId, userEmail, userName]);
 
     useEffect(() => {
         async function loadProfileAddress() {
@@ -637,10 +650,10 @@ export default function CheckoutPage() {
                 console.error("Failed to load user profile address:", err);
             }
         }
-        if (session) {
+        if (userId) {
             loadProfileAddress();
         }
-    }, [session]);
+    }, [userId]);
  
     const handleUpdateQuantity = (productId: string, newQty: number) => {
         const item = cart.find(i => i.id === productId);
@@ -660,7 +673,6 @@ export default function CheckoutPage() {
         });
         setCart(updated);
         setWeight(estimateCartWeight(updated));
-        const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
         localStorage.setItem(cartKey, JSON.stringify(updated));
     };
@@ -669,7 +681,6 @@ export default function CheckoutPage() {
         const updated = cart.filter(i => i.id !== productId);
         setCart(updated);
         setWeight(estimateCartWeight(updated));
-        const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
         if (updated.length === 0) {
             localStorage.removeItem(cartKey);

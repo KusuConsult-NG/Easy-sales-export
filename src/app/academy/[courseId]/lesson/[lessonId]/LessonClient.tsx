@@ -50,6 +50,11 @@ export default function LessonClient(props: {
 
     const router = useRouter();
     const { data: session, status } = useSession();
+
+    //   #944 The id as a primitive, so the two hooks below depend on the value
+    //   rather than on the session object a background refresh re-mints. Both
+    //   read nothing else off the session.
+    const userId = session?.user?.id;
     const { showToast } = useToast();
     const [course, setCourse] = useState<Course | null>(null);
     const [progress, setProgress] = useState<UserProgress | null>(null);
@@ -75,7 +80,7 @@ export default function LessonClient(props: {
         let mounted = true;
 
         async function loadLessonData() {
-            if (status !== "authenticated" || !session?.user) return;
+            if (status !== "authenticated" || !userId) return;
 
             setLoading(true);
             try {
@@ -85,7 +90,7 @@ export default function LessonClient(props: {
                     ? [seed.courseReq, seed.progressReq, seed.lessonProgressData]
                     : await Promise.all([
                         getCourseByIdAction(courseId),
-                        getUserProgressAction(session.user.id, courseId),
+                        getUserProgressAction(userId, courseId),
                         getLessonProgress(lessonId)
                     ]);
 
@@ -133,16 +138,16 @@ export default function LessonClient(props: {
         loadLessonData();
 
         return () => { mounted = false; };
-    }, [courseId, lessonId, session, status, takeSeed]);
+    }, [courseId, lessonId, userId, status, takeSeed]);
 
     // Function to manually refresh lesson data (e.g. after completion)
     const loadLesson = useCallback(async () => {
-        if (!session?.user) return;
+        if (!userId) return;
 
         try {
             const [courseReq, progressReq] = await Promise.all([
                 getCourseByIdAction(courseId),
-                getUserProgressAction(session.user.id, courseId),
+                getUserProgressAction(userId, courseId),
             ]);
             
             const courseData = courseReq.data;
@@ -170,7 +175,7 @@ export default function LessonClient(props: {
         } catch (error) {
             logger.error("Failed to refresh lesson:", error);
         }
-    }, [courseId, lessonId, session]);
+    }, [courseId, lessonId, userId]);
 
     const handleVideoProgress = useCallback(async (progress: number, timeWatched: number) => {
         if (!currentLesson || !courseId) return;

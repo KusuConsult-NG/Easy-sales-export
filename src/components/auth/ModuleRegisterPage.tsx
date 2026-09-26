@@ -99,6 +99,11 @@ function ModuleRegisterContent({
 
     const { data: session } = useSession();
 
+    //   #944 A BOOLEAN, because that is all the redirect below asks. Keyed on
+    //   `session` it re-ran on every background refresh; keyed on
+    //   `session?.user?.id` the rule could not match the bare `if (session)`.
+    const isSignedIn = !!session;
+
     // Handle client-side Login & Redirect after successful registration
     // This removes the server-side "Race Condition" by using standard client auth flow
     useEffect(() => {
@@ -138,7 +143,7 @@ function ModuleRegisterContent({
     // CHECK: If user is already logged in, redirect to the appropriate onboarding flow
     // This prevents logged-in users from seeing the registration form
     useEffect(() => {
-        if (session) {
+        if (isSignedIn) {
             let redirectPath = "/dashboard"; // Default fallback
 
             // Determine redirect path based on platform/module
@@ -153,7 +158,7 @@ function ModuleRegisterContent({
 
             router.replace(redirectPath);
         }
-    }, [session, platforms, router]);
+    }, [isSignedIn, router]);
 
     // Display server action errors as toasts
     useEffect(() => {

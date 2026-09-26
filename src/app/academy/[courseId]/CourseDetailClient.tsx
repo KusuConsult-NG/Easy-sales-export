@@ -43,6 +43,26 @@ export default function CourseDetailClient(props: {
 
     const router = useRouter();
     const { data: session, status } = useSession();
+
+    /*
+     *   #944 HOISTED OUT OF THE HOOKS BELOW, and not only to satisfy the linter.
+     *
+     *   Keying the effects on `session` re-ran them on every background session
+     *   refresh — SessionRefreshListener re-mints the session on a path change,
+     *   useSession hands back a new object, and two server actions fire again.
+     *   Keying them on `session?.user?.id` alone was WRONG IN THE OTHER
+     *   DIRECTION: the effect below also reads the academy plan, so a grant an
+     *   administrator makes mid-session would not have re-run the access check.
+     *
+     *   react-hooks/exhaustive-deps is what caught that, and it could only say
+     *   "missing dependency: session.user" — the plan is read through an `as any`
+     *   cast, which breaks the static path exactly as the middleware cast in #937
+     *   did. Reading it into a named primitive gives the rule something it can
+     *   check and gives the effect the two values it actually depends on.
+     */
+    const userId = session?.user?.id;
+    const academyPlan = (session?.user as { serviceRegistrations?: { academy?: { plan?: string } } } | undefined)
+        ?.serviceRegistrations?.academy?.plan;
     const { showToast } = useToast();
     const [course, setCourse] = useState<Course | null>(null);
     const [progress, setProgress] = useState<UserProgress | null>(null);
@@ -68,7 +88,7 @@ export default function CourseDetailClient(props: {
         let mounted = true;
 
         async function fetchCourse() {
-            if (status !== "authenticated" || !session?.user) return;
+            if (status !== "authenticated" || !userId) return;
 
             setLoading(true);
             try {
@@ -77,12 +97,12 @@ export default function CourseDetailClient(props: {
                     ? [seed.courseReq, seed.progressReq]
                     : await Promise.all([
                     getCourseByIdAction(courseId),
-                    getUserProgressAction(session.user.id, courseId),
+                    getUserProgressAction(userId, courseId),
                 ]);
 
                 if (mounted) {
                     if (courseReq.data) {
-                        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
+                        const userPlan = academyPlan || "free";
                         // #378 A course bought outright opens on the strength of
                         // that, not of the plan. The flag lives on the progress
                         // row, which is already loaded above.
@@ -123,9 +143,9 @@ export default function CourseDetailClient(props: {
 
                         if (!progressReq.data) {
                             // Automatically enroll in the background if they have access but no progress document yet
-                            const enrollResult = await enrollInCourseAction(session.user.id, courseId);
+                            const enrollResult = await enrollInCourseAction(userId, courseId);
                             if (enrollResult.success) {
-                                const newProgressReq = await getUserProgressAction(session.user.id, courseId);
+                                const newProgressReq = await getUserProgressAction(userId, courseId);
                                 setProgress(newProgressReq.data || null);
                             } else {
                                 // The refusal was thrown away — #315.
@@ -174,15 +194,15 @@ export default function CourseDetailClient(props: {
         // instance is, and showToast is useCallback-memoised in ToastContext —
         // so naming them changes no behaviour and stops the effect closing over
         // stale copies.
-    }, [courseId, session, status, router, showToast, takeSeed]);
+    }, [courseId, userId, academyPlan, status, router, showToast, takeSeed]);
 
 
     // Function to manually refresh data
     const loadCourse = useCallback(async () => {
-        if (!session?.user) return;
+        if (!userId) return;
         const [courseReq, progressReq] = await Promise.all([
             getCourseByIdAction(courseId),
-            getUserProgressAction(session.user.id, courseId),
+            getUserProgressAction(userId, courseId),
         ]);
         if (courseReq.data) {
             setCourse(courseReq.data);
@@ -193,7 +213,7 @@ export default function CourseDetailClient(props: {
             // on stale state with a success toast beside it.
             showToast(courseReq.error || "Could not reload this course", "error");
         }
-    }, [courseId, session, showToast]);
+    }, [courseId, userId, showToast]);
 
 
 

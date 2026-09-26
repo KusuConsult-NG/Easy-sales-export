@@ -71,6 +71,11 @@ export default function BuyerQuotesClient({ initial = null }: {
 }) {
     const router = useRouter();
     const { data: session } = useSession();
+
+    //   #944 Hoisted, and the `as any` cast dropped with it. The cast was what
+    //   hid this read from react-hooks/exhaustive-deps, which could then only ask
+    //   for the whole `session?.user` — the object a refresh re-mints.
+    const userId = session?.user?.id;
     const { showToast } = useToast();
     const [loading, setLoading] = useState(initial === null);
     const [quotes, setQuotes] = useState<QuoteRow[]>(initial ?? []);
@@ -139,7 +144,6 @@ export default function BuyerQuotesClient({ initial = null }: {
      */
     const checkout = useCallback((q: QuoteRow) => {
         try {
-            const userId = (session?.user as any)?.id;
             const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
             const saved = localStorage.getItem(cartKey);
             const cart: any[] = saved ? JSON.parse(saved) : [];
@@ -166,7 +170,7 @@ export default function BuyerQuotesClient({ initial = null }: {
             logger.error("Failed to put an agreed quote in the cart:", { error: e });
             showToast("Your browser would not store the cart. Check your privacy settings.", "error");
         }
-    }, [router, session, showToast]);
+    }, [router, userId, showToast]);
 
     return (
         <div className="max-w-5xl mx-auto p-4 lg:p-8">

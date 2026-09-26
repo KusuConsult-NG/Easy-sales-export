@@ -49,6 +49,23 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
 
     const router = useRouter();
     const { data: session, status } = useSession();
+
+    /*
+     *   #944 The two values the authorisation effect below reads, as primitives.
+     *
+     *   Keyed on the whole `session` it re-read the escrow row on every
+     *   background refresh. Keying it on `session?.user?.roles` would have bought
+     *   nothing — a re-minted session builds a new array and React compares by
+     *   identity — so the roles are collapsed to the boolean the body asks for.
+     *
+     *   The check stays hand-written rather than calling isPlatformAdmin: this
+     *   file is one of the entries on #364's STILL_HAND_WRITTEN list, which is
+     *   held at exactly its recorded size while the owner decides which of those
+     *   sites are deliberately different. Narrowing a dependency is not the place
+     *   to settle that.
+     */
+    const userId = session?.user?.id;
+    const isAdminViewer = !!(session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin"));
     const { showToast } = useToast();
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState("");
@@ -84,16 +101,15 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
     // Load escrow data and verify authorization
     useEffect(() => {
         async function checkAuthorization() {
-            if (status !== "authenticated" || !session?.user) return;
+            if (status !== "authenticated" || !userId) return;
 
             const result = takeEscrow() ?? await getEscrowTransactionByIdAction(escrowId);
             if (result.success) {
                 const escrow = result.data;
-                const isBuyer = escrow?.buyerId === session.user.id;
-                const isSeller = escrow?.sellerId === session.user.id;
-                const isAdminUser = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+                const isBuyer = escrow?.buyerId === userId;
+                const isSeller = escrow?.sellerId === userId;
 
-                if (isBuyer || isSeller || isAdminUser) {
+                if (isBuyer || isSeller || isAdminViewer) {
                     setEscrowData(escrow);
                     setAuthorized(true);
                 } else {
@@ -106,8 +122,7 @@ export default function EscrowChatClient({ escrowId, initial = null }: EscrowCha
             }
         }
         checkAuthorization();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, session, escrowId, router, takeEscrow]);
+    }, [status, userId, isAdminViewer, escrowId, router, showToast, takeEscrow]);
 
     const loadMessages = useCallback(async () => {
         try {
