@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * API Route: Reject Cooperative Membership Application
  */
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
         } catch { /* non-blocking */ }
 
         // Send rejection email notification
-        const memberName = `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member';
+        const memberName = joinFullName(namePartsOf(memberData)).trim() || 'Member';
         try {
             const { sendMembershipRejectionEmail } = await import('@/lib/email-notifications');
             await sendMembershipRejectionEmail(

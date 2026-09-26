@@ -13,6 +13,7 @@ import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 async function _getAcademyEnrollmentsAction(options?: {
     limit?: number;
     search?: string;
@@ -70,7 +71,7 @@ async function _getAcademyEnrollmentsAction(options?: {
             const bankDetails = uData.bankDetails || {
                 bankName: uData.bankName || uData.bankAccount?.bankName || "N/A",
                 accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : "N/A"),
                 bankCode: uData.bankCode || uData.bankAccount?.bankCode || "N/A"
             };
 
@@ -78,7 +79,7 @@ async function _getAcademyEnrollmentsAction(options?: {
                 ...e,
                 ...(maySeeBankDetails ? { bankDetails } : {}),
                 userProfile: {
-                    name: uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (uData.name || e.studentName || "Unknown"),
+                    name: uData.firstName ? joinFullName(namePartsOf(uData)).trim() : (uData.name || e.studentName || "Unknown"),
                     email: uData.email || e.studentEmail || "N/A",
                     phone: uData.phone || uData.phoneNumber || "N/A"
                 }

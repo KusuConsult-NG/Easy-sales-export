@@ -53,6 +53,10 @@ export {
     getFarmNationApplicationAction,
     resubmitFarmNationApplicationAction,
     checkFarmNationAccessAction,
+    //   #947 The door an approved member had none of — resubmit admits only
+    //   pending/rejected/revision_required, so somebody already approved was
+    //   turned away rather than un-approved.
+    changeFarmNationRoleAction,
 } from "./_fn_onboarding";
 
 // ─── Admin review (_fn_admin.ts) ─────────────────────────────────────────────

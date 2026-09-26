@@ -12,6 +12,7 @@ import { writeDataExportRecord } from "@/lib/data-export-record";
 import { fillFromSibling, pickDetailRow } from "@/lib/cooperative-member-identity";
 import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
+import { joinFullName } from "@/lib/person-name";
 export async function GET(request: NextRequest) {
     try {
         const session = (await requireSession()).session;
@@ -128,7 +129,7 @@ export async function GET(request: NextRequest) {
                 derivedLastName = fallbackUser.lastName || (fallbackUser.fullName ? fallbackUser.fullName.split(" ").slice(-1)[0] : "");
             }
 
-            const fullName = `${derivedFirstName} ${derivedLastName}`.trim();
+            const fullName = joinFullName({ first: derivedFirstName, last: derivedLastName }).trim();
             const email = data.email || fallbackUser.email || "";
 
             //   One rule, not a seventh copy of it — see canonical/placeholder-names.

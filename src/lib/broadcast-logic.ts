@@ -7,6 +7,7 @@ import { isContactableAccount, isErasedAddress } from "@/lib/contactable-account
 import { isMarketplaceBuyer } from "./broadcast-audience";
 import { isRecentlyActive } from "@/lib/recent-activity";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Values this platform writes when it means "nothing on file".
  *
@@ -441,12 +442,12 @@ async function getUnpaidApplicantsBroadcastList(filters?: BroadcastFilters) {
     const processDoc = (doc: any, isAcademy = false) => {
         const data = doc.data();
         let rawEmail = data.email || data.userEmail;
-        let name = data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || "User";
+        let name = data.fullName || joinFullName(namePartsOf(data)).trim() || "User";
         let state = data.state || data.address?.state || "Unknown";
 
         if (isAcademy && data.personalInfo) {
             rawEmail = rawEmail || data.personalInfo.email;
-            name = data.personalInfo.fullName || `${data.personalInfo.firstName || ''} ${data.personalInfo.lastName || ''}`.trim() || name;
+            name = data.personalInfo.fullName || joinFullName(namePartsOf(data.personalInfo)).trim() || name;
             state = data.personalInfo.state || data.personalInfo.stateOfOrigin || state;
         }
 

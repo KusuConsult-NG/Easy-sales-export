@@ -10,6 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 import {
     AWAITING_REVIEW_STATUSES,
     PURCHASABLE_STATUSES,
@@ -346,7 +347,7 @@ async function _getAdminLandVerificationsAction(options: {
                         bankDetails: data.bankDetails || {
                             bankName: data.bankName || data.bankAccount?.bankName || "N/A",
                             accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? joinFullName(namePartsOf(data)) : "N/A"),
                             bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
                         }
                     };

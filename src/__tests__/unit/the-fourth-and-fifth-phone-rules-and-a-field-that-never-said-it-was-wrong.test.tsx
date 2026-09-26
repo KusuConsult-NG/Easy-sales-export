@@ -82,7 +82,7 @@ import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { stripComments } from '@/lib/testing/strip-comments';
 import { ledgerVerdict, LEDGER_HELD } from '@/lib/testing/ledger';
-import { isNigerianMobile } from '@/lib/phone';
+import { isNigerianMobile, normalisePhone } from '@/lib/phone';
 import { strictNigerianPhoneSchema } from '@/lib/schemas';
 
 jest.mock('next-auth/react', () => ({
@@ -328,10 +328,11 @@ describe('#923 — the fourth and fifth statements of the phone rule', () => {
         };
         walk('src');
 
-        //   Two: lib/phone, which defines the rule, and lib/schemas, whose Zod
-        //   version is the one left alone deliberately — see the next test.
-        expect(owners.sort()).toEqual(['src/lib/phone.ts', 'src/lib/schemas.ts']);
-        expect(ledgerVerdict(owners.length, 2)).toBe(LEDGER_HELD);
+        //   #945 ONE: lib/phone, which defines the rule. lib/schemas asked
+        //   isNigerianMobile instead of carrying a fourth copy of the shape, so
+        //   there is now exactly one statement of which prefixes exist.
+        expect(owners.sort()).toEqual(['src/lib/phone.ts']);
+        expect(ledgerVerdict(owners.length, 1)).toBe(LEDGER_HELD);
 
         //   THE CONTROL for the missing floor: the sweep can still see a rule
         //   where one provably is. A stripper that ate everything would report
@@ -342,22 +343,66 @@ describe('#923 — the fourth and fifth statements of the phone rule', () => {
         ))).toBe(true);
     });
 
-    it('RECORDED, NOT FIXED: the Zod schema still admits what the rule refuses', () => {
-        //   A server gate on public WAVE briefing registration and on the WAVE
-        //   application. Tightening it decides who may register, and refusing a
-        //   real person costs more than storing a number no network issues — so
-        //   the disagreement is costed here rather than closed on my own judgement.
-        const admittedByTheSchemaOnly = ['08212345678', '07512345678', '09512345678', '08512345678'];
+    it('CLOSED by #945: the Zod schema and the rule now agree', () => {
+        /*
+         *   THIS WAS A DELIBERATE DEFERRAL AND I AM OVERRULING IT, so the grounds
+         *   belong here. What it said:
+         *
+         *       "A server gate on public WAVE briefing registration and on the
+         *        WAVE application. Tightening it decides who may register, and
+         *        refusing a real person costs more than storing a number no
+         *        network issues — so the disagreement is costed here rather than
+         *        closed on my own judgement."
+         *
+         *   That reasoning weighed the schema against nothing. MEASURED on the
+         *   pre-change tree, every OTHER phone gate on this platform already
+         *   refused all four of those numbers — PhoneInput, BusinessProfileStep,
+         *   NextOfKinStep, PersonalDetailsStep and lib/security all ask
+         *   isNigerianMobile.
+         *
+         *   So the schema was the only door admitting them, and admitting them
+         *   helped nobody: a woman who registers for a briefing on an 082 number
+         *   cannot then complete the WAVE application, marketplace onboarding or
+         *   the cooperative next-of-kin step. Letting her through the first door
+         *   is the cruelty; the refusal was always coming, two screens later and
+         *   with more of her time spent. Tightening it refuses no one who could
+         *   otherwise have finished.
+         *
+         *   AND THE SCHEMA WAS ALSO TOO STRICT, which the deferral did not weigh
+         *   either. It judged the literal string, so `0803 123 4567` and
+         *   `+234 (0) 803 123 4567` were both refused — the second being the exact
+         *   form strictPhoneSchema's own note calls "one ordinary Nigerian number,
+         *   written the way a business card writes it". The old rule refused real
+         *   people for their punctuation while admitting prefixes no network
+         *   issues. Both halves are fixed by asking isNigerianMobile, which strips
+         *   non-digits before judging.
+         */
+        const onceAdmittedByTheSchemaOnly = ['08212345678', '07512345678', '09512345678', '08512345678'];
 
-        for (const number of admittedByTheSchemaOnly) {
-            expect(strictNigerianPhoneSchema.safeParse(number).success).toBe(true);
+        for (const number of onceAdmittedByTheSchemaOnly) {
+            expect(strictNigerianPhoneSchema.safeParse(number).success).toBe(false);
             expect(isNigerianMobile(number)).toBe(false);
         }
 
-        //   And they agree about the ones that matter most.
+        //   And they still agree about the ones that matter most.
         for (const real of ['08031234567', '+2348031234567']) {
             expect(strictNigerianPhoneSchema.safeParse(real).success).toBe(true);
             expect(isNigerianMobile(real)).toBe(true);
+        }
+    });
+
+    it('AND PUNCTUATION IS NO LONGER A REFUSAL, on either of them', () => {
+        //   The half a registrant feels. Five spellings of one number, all
+        //   accepted and all normalising to the same canonical form — which is
+        //   what the dedup on that collection is keyed on.
+        for (const spelling of [
+            '08030001111', '+2348030001111', '0803 000 1111',
+            '+234 803 000 1111', '+234 (0) 803 000 1111',
+        ]) {
+            expect({ spelling, ok: strictNigerianPhoneSchema.safeParse(spelling).success })
+                .toEqual({ spelling, ok: true });
+            expect({ spelling, canonical: normalisePhone(spelling) })
+                .toEqual({ spelling, canonical: '+2348030001111' });
         }
     });
 });

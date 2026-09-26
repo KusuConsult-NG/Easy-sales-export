@@ -4,6 +4,7 @@ import { CanonicalUserProfile, LATEST_SCHEMA_VERSION } from "./schemas";
 //   _users.ts rather than written out a second time here.
 import { realNameOrBlank, asDisplayString } from "./placeholder-names";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * AGGRESSIVE CANONICAL NORMALIZER (V3)
  * 
@@ -23,9 +24,9 @@ export function normalizeAggressive(
     // 1. Resolve Identity (Strict Priority: WAVE > User > Seller)
     const fullName = cleanVal(uData.fullName) || 
                    cleanVal(uData.displayName) || 
-                   (cleanVal(uData.firstName) && cleanVal(uData.lastName) ? `${uData.firstName} ${uData.lastName}` : null) || 
+                   (cleanVal(uData.firstName) && cleanVal(uData.lastName) ? joinFullName(namePartsOf(uData)) : null) || 
                    cleanVal(wData?.fullName) || 
-                   (cleanVal(wData?.firstName) && cleanVal(wData?.surname) ? `${wData.firstName} ${wData.surname}` : null) ||
+                   (cleanVal(wData?.firstName) && cleanVal(wData?.surname) ? joinFullName(namePartsOf(wData)) : null) ||
                    cleanVal(sData?.businessName) ||
                    "Unknown User";
 

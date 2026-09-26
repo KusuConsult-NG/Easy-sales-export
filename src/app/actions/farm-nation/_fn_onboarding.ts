@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { rolesForFarmNationRole } from "@/lib/farm-nation-roles";
+import { farmNationRoleChange } from "@/lib/farm-nation-role-change";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -633,6 +634,95 @@ async function _getFarmNationApplicationAction(): Promise<ActionResponse<any>> {
 export async function getFarmNationApplicationAction(...args: Parameters<typeof _getFarmNationApplicationAction>) {
     return withFlexibleSafeAction("getFarmNationApplicationAction", _getFarmNationApplicationAction)(...args);
 }
+
+
+/**
+ * Let a settled Farm Nation member ADD the capability they did not pick — #947.
+ *
+ *   There was no path at all. `_resubmitFarmNationApplicationAction` below admits
+ *   only ['pending', 'rejected', 'revision_required'], so an APPROVED member
+ *   asking to also sell was refused outright — not un-approved, as the audit's
+ *   ledger assumed, simply turned away.
+ *
+ *   The decision lives in lib/farm-nation-role-change, and the roles it grants
+ *   come from rolesForFarmNationRole's constants, so this door cannot disagree
+ *   with the onboarding door or the approval door about what "seller" means.
+ *   farm-nation-roles: "ONE RULE, EVERY DOOR ... repairing it at each site is
+ *   what produced it."
+ *
+ *   IT UNIONS AND NEVER REMOVES. See the module for why narrowing is refused
+ *   rather than performed: a member holding approved listings who dropped the
+ *   seller role would keep the listings and lose the screens that manage them.
+ */
+async function _changeFarmNationRoleAction(
+    requestedRole: unknown,
+): Promise<ActionResponse<{ role: string } | null>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+        const userId = session.user.id;
+
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userDocRef.get();
+        if (!userDoc.exists) {
+            return { success: false as const, error: "No Farm Nation registration found.", data: null };
+        }
+
+        const registration = (userDoc.data() as any)?.serviceRegistrations?.farmNation;
+        const verdict = farmNationRoleChange({
+            currentRole: registration?.role,
+            status: registration?.status,
+            requested: requestedRole,
+        });
+
+        if (verdict.kind === "refused") {
+            return { success: false as const, error: verdict.reason, data: null };
+        }
+        if (verdict.kind === "no-change") {
+            //   SUCCESS, not an error. They asked for a state they are already in,
+            //   and a red message would tell them something went wrong when the
+            //   thing they wanted is true. #587 drew this line for the WAVE
+            //   briefing: "ALREADY REGISTERED IS A FACT ABOUT HER, NOT A FAULT IN
+            //   HER."
+            return {
+                success: true as const,
+                error: null,
+                data: { role: String(registration?.role ?? "seller") },
+                meta: { changed: false, message: verdict.reason },
+            } as any;
+        }
+
+        await userDocRef.update({
+            //   arrayUnion, so a role they already hold is untouched and a repeat
+            //   press is idempotent.
+            roles: FieldValue.arrayUnion(...verdict.rolesToAdd),
+            "serviceRegistrations.farmNation.role": verdict.nextRole,
+            "serviceRegistrations.farmNation.roleChangedAt": FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        //   #692 The member reads their own role through the cached profile, and
+        //   the dashboard branches on it — without this the screen keeps offering
+        //   the capability they just took.
+        await invalidateServiceCache(userId, 'farmNation');
+
+        logger.info("[farm-nation] member changed their registered role", {
+            userId, from: registration?.role ?? null, to: verdict.nextRole,
+        });
+
+        return { success: true as const, error: null, data: { role: verdict.nextRole } };
+    } catch (error) {
+        logger.error('changeFarmNationRoleAction error:', error);
+        return { success: false as const, error: 'Could not change what you are registered as.', data: null };
+    }
+}
+
+export const changeFarmNationRoleAction = withFlexibleSafeAction(
+    "changeFarmNationRoleAction", _changeFarmNationRoleAction,
+);
 
 
 /**

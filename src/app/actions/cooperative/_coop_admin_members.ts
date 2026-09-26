@@ -29,6 +29,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { resolveProfileEmail } from "@/lib/profile-email-resolution";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // ============================================================================
 // MEMBER MANAGEMENT
 // ============================================================================
@@ -424,7 +425,7 @@ async function _updateMemberStatusAction(
                 if (userData?.email || memberData?.email) {
                     notificationInfo = {
                         email: userData?.email || memberData.email,
-                        fullName: userData?.fullName || `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member'
+                        fullName: userData?.fullName || joinFullName(namePartsOf(memberData)).trim() || 'Member'
                     };
                 }
 
@@ -486,7 +487,7 @@ async function _updateMemberStatusAction(
                     const initialData = {
                         uid: targetUserId,
                         email: resolvedEmail,
-                        fullName: `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || "Cooperative Member",
+                        fullName: joinFullName(namePartsOf(memberData)).trim() || "Cooperative Member",
                         createdAt: FieldValue.serverTimestamp(),
                         roles: ["cooperative_member"],
                         isVerified: true,
@@ -686,7 +687,7 @@ export async function requestCooperativeRevisionAction(
                 //   rather than on an address.
                 userId,
                 email: memberData?.email,
-                name: memberData?.firstName ? `${memberData.firstName} ${memberData.lastName || ''}`.trim() : 'Member'
+                name: memberData?.firstName ? joinFullName(namePartsOf(memberData)).trim() : 'Member'
             };
         })();
 
@@ -1115,16 +1116,16 @@ export async function getStandardCooperativeMembersAction(
                 const mergedData = mergeMemberIdentity(app, uData, sibling);
 
                 const localName = mergedData.firstName
-                    ? `${mergedData.firstName} ${mergedData.lastName || ''}`.trim()
+                    ? joinFullName(namePartsOf(mergedData)).trim()
                     : (mergedData.fullName || null);
                 const userName = uData.firstName
-                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                    ? joinFullName(namePartsOf(uData)).trim()
                     : (uData.fullName || uData.name || uData.displayName || localName || "");
 
                 const bankDetails = uData.bankDetails || {
                     bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
                     accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : ""),
                     bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
                 };
 
@@ -1231,16 +1232,16 @@ export async function getStandardCooperativeMembersAction(
                 const mergedData = mergeMemberIdentity(app, uData, sibling);
 
                 const localName = mergedData.firstName
-                    ? `${mergedData.firstName} ${mergedData.lastName || ''}`.trim()
+                    ? joinFullName(namePartsOf(mergedData)).trim()
                     : (mergedData.fullName || null);
                 const userName = uData.firstName
-                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                    ? joinFullName(namePartsOf(uData)).trim()
                     : (uData.fullName || uData.name || uData.displayName || localName || "");
 
                 const bankDetails = uData.bankDetails || {
                     bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
                     accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : ""),
                     bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
                 };
 

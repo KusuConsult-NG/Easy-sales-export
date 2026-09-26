@@ -6,6 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { phoneLookupVariants } from "@/lib/phone";
 import { MANUFACTURED_PROFILE_MARKER } from "@/lib/profile-provenance";
+import { joinFullName } from "@/lib/person-name";
 // The flag, the refusal and the seedable-role list live in lib, NOT here: a
 // route.ts may export only its handlers and Next's config keys. See #431's note
 // in lib/retired-endpoints.
@@ -177,13 +178,13 @@ export async function POST(req: Request) {
         const userRecord = await adminAuth.createUser({
             email,
             password,
-            displayName: `${firstName} ${lastName}`.trim(),
+            displayName: joinFullName({ first: firstName, last: lastName }).trim(),
             emailVerified: true,
         });
 
         const userProfile = {
             uid: userRecord.uid,
-            fullName: `${firstName} ${lastName}`.trim(),
+            fullName: joinFullName({ first: firstName, last: lastName }).trim(),
             firstName,
             lastName,
             email,

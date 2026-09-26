@@ -18,6 +18,7 @@ import { resolveProfileEmail } from "@/lib/profile-email-resolution";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 async function _approveFarmNationSellerAction(userId: string): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
@@ -139,7 +140,7 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
                     //   already returned, so the non-null assertion is the
                     //   control flow speaking, not an assumption.
                     email: resolvedEmail!,
-                    fullName: profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : "Farmer",
+                    fullName: profile.firstName ? joinFullName(namePartsOf(profile)).trim() : "Farmer",
                     createdAt: FieldValue.serverTimestamp(),
                     //   What they applied to be, not "farmer" regardless.
                     roles: grantedRoles,

@@ -33,6 +33,7 @@ import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 import { rolesGrantedOnSellerApproval, accountTypeOnSellerApproval } from "@/lib/marketplace-approval-roles";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // ============================================
 // Seller Verification (Marketplace)
 // ============================================
@@ -882,7 +883,7 @@ async function _getMarketplaceUsersAction(options: {
 
             return {
                 id: doc.id,
-                name: data.fullName || data.name || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "Unknown"),
+                name: data.fullName || data.name || (data.firstName && data.lastName ? joinFullName(namePartsOf(data)) : "Unknown"),
                 email: data.email,
                 phone: (() => {
                     //   One rule, not a seventh copy of it — see canonical/placeholder-names.
@@ -911,7 +912,7 @@ async function _getMarketplaceUsersAction(options: {
                     bankDetails: serializeValue(data.bankDetails || {
                         bankName: data.bankName || data.bankAccount?.bankName || "",
                         accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
-                        accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
+                        accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? joinFullName(namePartsOf(data)) : ""),
                         bankCode: data.bankCode || data.bankAccount?.bankCode || ""
                     }) ?? null,
                 } : {}),

@@ -5,6 +5,7 @@
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // node-fetch removed: it ships no type declarations here, and Node 18+
 // has fetch built in, which is what this script runs on.
 
@@ -48,7 +49,7 @@ async function main() {
 
     const matched = allUsers.filter(u => {
         const rd = u.raw_data || {};
-        const name = (rd.fullName || `${rd.firstName||''} ${rd.lastName||''}`).toLowerCase();
+        const name = (rd.fullName || joinFullName(namePartsOf(rd))).toLowerCase();
         return TARGET_NAMES.some(n => name.includes(n.toLowerCase()));
     });
     console.log(`Matched: ${matched.length}\n`);
@@ -56,7 +57,7 @@ async function main() {
     for (const user of matched) {
         const userId = user.id;
         const rd = user.raw_data || {};
-        const name = (rd.fullName || `${rd.firstName||''} ${rd.lastName||''}`).trim();
+        const name = (rd.fullName || joinFullName(namePartsOf(rd))).trim();
         const coopReg = rd.serviceRegistrations?.cooperatives || rd.serviceRegistrations?.cooperative;
 
         console.log(`\n━━━ ${name} (${user.email}) ━━━`);

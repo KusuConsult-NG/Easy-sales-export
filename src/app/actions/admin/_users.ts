@@ -1017,7 +1017,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                     bankDetails: {
                         bankName: bestBankDetails?.bankName || "",
                         accountNumber: bestBankDetails?.accountNumber || "",
-                        accountName: bestBankDetails?.accountName || bestFullName || (bestFirstName && bestLastName ? `${bestFirstName} ${bestLastName}` : ""),
+                        accountName: bestBankDetails?.accountName || bestFullName || (bestFirstName && bestLastName ? joinFullName({ first: bestFirstName, last: bestLastName }) : ""),
                         bankCode: bestBankDetails?.bankCode || ""
                     },
                 } : {}),

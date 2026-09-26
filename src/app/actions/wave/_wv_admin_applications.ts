@@ -349,7 +349,7 @@ async function _approveWaveApplicationAction(
                 const userData = userDoc.data();
                 const userEmail = userData?.email || userData?.userEmail;
                 const userName = userData?.firstName 
-                    ? `${userData.firstName} ${userData.surname || userData.lastName || ""}`.trim()
+                    ? joinFullName(namePartsOf(userData)).trim()
                     : (userData?.name || "Member");
 
                 if (userEmail) {
@@ -501,7 +501,7 @@ async function _rejectWaveApplicationAction(
                 const userData = userDoc.data();
                 const userEmail = userData?.email || userData?.userEmail;
                 const userName = userData?.firstName 
-                    ? `${userData.firstName} ${userData.surname || userData.lastName || ""}`.trim()
+                    ? joinFullName(namePartsOf(userData)).trim()
                     : (userData?.name || "Member");
 
                 if (userEmail) {
