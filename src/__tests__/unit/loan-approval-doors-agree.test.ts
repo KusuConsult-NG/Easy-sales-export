@@ -184,7 +184,21 @@ describe('the general door asks the permission matrix', () => {
         expect(general).not.toContain("roles?.includes('admin')");
         expect(general).not.toContain("roles?.includes('super_admin')");
 
-        const gates = general.match(/hasAdminPermission\(session\.user\.roles, "cooperatives:approve_loans"\)/g) ?? [];
+        /*
+         *   #952 THE GATE COUNT, EITHER LAYER. These moved from
+         *   `hasAdminPermission(session…, "perm")` to `requireAdmin("perm")`,
+         *   which re-reads the caller's roles live. The claim here is that every
+         *   gate in the file asks the MATRIX for this permission rather than naming
+         *   roles — and requireAdmin asks the matrix too, through
+         *   hasAdminPermission, on roles it has just read from the database.
+         *
+         *   The COUNT stays exact. It is what stops a gate being deleted rather
+         *   than converted, which a pattern matching either spelling would
+         *   otherwise allow.
+         */
+        const gates = general.match(
+            /hasAdminPermission\(session\.user\.roles, "cooperatives:approve_loans"\)|requireAdmin\("cooperatives:approve_loans"\)/g,
+        ) ?? [];
         expect(gates.length).toBe(5);
     });
 
@@ -247,7 +261,21 @@ describe('the loan product catalogue is managed by one rule, not two', () => {
         expect(products).not.toContain('roles?.includes("admin")');
         expect(products).not.toContain('roles?.includes("super_admin")');
 
-        const gates = products.match(/hasAdminPermission\([^,]+, "cooperatives:approve_loans"\)/g) ?? [];
+        /*
+         *   #952 THE GATE COUNT, EITHER LAYER. These moved from
+         *   `hasAdminPermission(session…, "perm")` to `requireAdmin("perm")`,
+         *   which re-reads the caller's roles live. The claim here is that every
+         *   gate in the file asks the MATRIX for this permission rather than naming
+         *   roles — and requireAdmin asks the matrix too, through
+         *   hasAdminPermission, on roles it has just read from the database.
+         *
+         *   The COUNT stays exact. It is what stops a gate being deleted rather
+         *   than converted, which a pattern matching either spelling would
+         *   otherwise allow.
+         */
+        const gates = products.match(
+            /hasAdminPermission\([^,]+, "cooperatives:approve_loans"\)|requireAdmin\("cooperatives:approve_loans"\)/g,
+        ) ?? [];
         expect(gates.length).toBe(4);
     });
 

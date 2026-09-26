@@ -486,6 +486,7 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         //   surface into 34 that must and 34 that may. The seven converted here
         //   are the loan API routes, picked because approve-loan had re-read the
         //   database since #748 while reject-loan beside it trusted the token.
-        expect(ledgerVerdict(jwtOnly.length, 68)).toBe(LEDGER_HELD);
+        //   Lowered from 68 by #952: the four loan action files, fifteen gates.
+        expect(ledgerVerdict(jwtOnly.length, 64)).toBe(LEDGER_HELD);
     });
 });

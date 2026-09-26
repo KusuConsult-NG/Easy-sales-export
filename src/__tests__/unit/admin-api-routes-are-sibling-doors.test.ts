@@ -161,6 +161,11 @@ function makeDb() {
     return { collection: (name: string) => query(name), runTransaction: jest.fn() };
 }
 
+//   #952 — the loan actions this suite drives now ask the LIVE gate, not the
+//   token. The mock still lets roles decide; see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/supabase-db', () => {
     const db = makeDb();
     return { supabaseDb: db, getAdminDb: () => db };
@@ -182,7 +187,22 @@ const SUPER_ADMIN = asRoles(['super_admin']);
 const REQUEST = { url: 'https://x.test/api?status=pending' } as any;
 
 async function get(mod: string, session: any, req: any = REQUEST) {
-    global.mockRequireSession.mockResolvedValueOnce(session);
+    /*
+     *   #952 mockResolvedValue, NOT …Once — and the difference was a live 403
+     *   turning into a 200 in this suite.
+     *
+     *   `Once` encoded an assumption that exactly ONE layer reads the session.
+     *   Converting the loan queue onto requireAdmin added a second reader: the
+     *   route consumed the one-shot SUPPORT session, and the gate mock then read
+     *   jest.setup's DEFAULT — a full admin — and admitted a support agent to
+     *   every borrower and guarantor on the platform.
+     *
+     *   A harness artifact rather than a production defect: the real requireAdmin
+     *   calls auth() and reads the caller's row, so it would see `support` either
+     *   way. But the assumption was worth removing, because in production both
+     *   layers do see the same caller, and this now matches that.
+     */
+    global.mockRequireSession.mockResolvedValue(session);
     //   #535 The same roles on the record and in the token, so these tests keep
     //   measuring what they were written to measure — which permission opens
     //   the pack, not whether the caller exists.
@@ -355,8 +375,18 @@ describe('#339 — the permissions chosen are the ones the siblings use', () => 
             .toContain('hasAdminPermission(sessionResult.session.user.roles, "finance:process_withdrawals")');
         expect(src('src/app/actions/farm-nation-admin/_fna_verifications.ts'))
             .toContain('hasAdminPermission(session.user.roles, "land:verify_listings")');
+        /*
+         *   #952 THIS PINNED THE SPELLING, and _loans.ts changed layers: its three
+         *   gates ask requireAdmin now, which re-reads the caller's roles live
+         *   instead of trusting the token. The PROPERTY this control is about is
+         *   that the sibling still demands the same permission, so that is what it
+         *   asserts — and it asserts the live form specifically, because dropping
+         *   back to the token would be the regression, not a rename.
+         */
         expect(src('src/app/actions/admin/_loans.ts'))
-            .toContain('hasAdminPermission(session.user.roles, "cooperatives:approve_loans")');
+            .toContain('await requireAdmin("cooperatives:approve_loans")');
+        expect(src('src/app/actions/admin/_loans.ts'))
+            .not.toMatch(/hasAdminPermission\(\s*session/);
         expect(src('src/app/actions/admin/_marketplace.ts')).toContain('stripPii(canonical)');
     });
 

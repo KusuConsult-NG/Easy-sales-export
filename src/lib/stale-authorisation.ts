@@ -258,8 +258,11 @@ export const OWNER_OR_ADMIN_SHAPE: ReadonlyArray<{
     {
         file: "src/app/actions/loan-actions.ts",
         permission: "cooperatives:approve_loans",
-        why: "getLoanApplicationAction admits the applicant OR an admin. Two more "
-            + "gates in the same file are admin-only and convert plainly, which is "
-            + "why this file is a per-site read rather than a substitution.",
+        why: "getLoanApplication admits the applicant OR an admin. CONVERTED in "
+            + "#952, and kept on this list because the conversion is the shape: the "
+            + "live read sits INSIDE the non-owner branch, so the applicant reading "
+            + "their own loan neither pays for a database read nor is refused. The "
+            + "other four gates in the file are admin-only and converted plainly. "
+            + "Retired when nothing in the file holds this shape any more.",
     },
 ];

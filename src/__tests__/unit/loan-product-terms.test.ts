@@ -65,6 +65,11 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { calculateRepaymentTerms } from '@/lib/loan-terms';
 
+//   #952 — the loan actions this suite drives now ask the LIVE gate, not the
+//   token. The mock still lets roles decide; see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/audit-log', () => ({
     recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),

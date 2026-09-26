@@ -292,6 +292,18 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/api/admin/cooperative/update-loan-product/route.ts': ['cooperatives:approve_loans'],
         'src/app/api/admin/cooperative/verify-guarantor/route.ts': ['cooperatives:approve_loans'],
 
+        //   #952 THE FOUR ACTION FILES, fifteen gates, which #951 named as the
+        //   next bounded set. loan-actions.ts holds one owner-or-admin check —
+        //   getLoanApplicationAction — where the live read sits inside the
+        //   non-owner branch so the applicant reading their own loan is untouched.
+        //   One entry per CALL SITE, which is how this map is keyed: three gates
+        //   in _loans.ts, three in _loans_decisions.ts, five in loan-actions.ts
+        //   and four in loan-products.ts — fifteen.
+        'src/app/actions/admin/_loans.ts': ['cooperatives:approve_loans', 'cooperatives:approve_loans', 'cooperatives:approve_loans'],
+        'src/app/actions/cooperative/_loans_decisions.ts': ['cooperatives:approve_loans', 'cooperatives:approve_loans', 'cooperatives:approve_loans'],
+        'src/app/actions/loan-actions.ts': ['cooperatives:approve_loans', 'cooperatives:approve_loans', 'cooperatives:approve_loans', 'cooperatives:approve_loans', 'cooperatives:approve_loans'],
+        'src/app/actions/loan-products.ts': ['cooperatives:approve_loans', 'cooperatives:approve_loans', 'cooperatives:approve_loans', 'cooperatives:approve_loans'],
+
         // Account creation.
         'src/app/actions/admin/_legacy.ts': ['users:create'],
 
@@ -589,7 +601,8 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // move in opposite directions — call sites up, doors on the token down —
         // which is the clearest evidence available that each is measuring rather
         // than reciting.
-        expect(callSites().length).toBe(82);
+        // 82 → 97: #952's fifteen loan-action gates.
+        expect(callSites().length).toBe(97);
         expect(SRC.length).toBeGreaterThan(400);
     });
 
