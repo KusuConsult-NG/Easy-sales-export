@@ -365,6 +365,53 @@ describe('#589 — what a window has raised, read once', () => {
         expect(windowFundingGoal({ fundingGoal: 100, goal: 900 })).toBe(100);
     });
 
+    it('AND A LEGACY WINDOW GETS THE GOAL DERIVED — #950', () => {
+        /*
+         *   THE DEFECT. This returned `counter(w?.fundingGoal, w?.goal)` — 0 for
+         *   every aggregation window created before `fundingGoal` existed. The
+         *   funded bar and the numbers on /export/windows/[id] sit behind
+         *   `windowFundingGoal(window) > 0`, so those windows fell to the final
+         *   branch and rendered
+         *
+         *       Availability        Open
+         *
+         *   to the next investor — no progress bar, no raised figure, the word
+         *   "Open" on a window that may already have taken everything it was
+         *   raising, because nothing capped it either.
+         *
+         *   The number was never a judgement: it is targetVolume * slotPrice,
+         *   which is what the aggregation creator stores today and what
+         *   admin/_exports.ts has always computed for the same window and thrown
+         *   away. exportWindowFundingGoal derived it, was tested, and had no
+         *   shipping callers at all.
+         */
+        expect(windowFundingGoal({ targetVolume: 1000, slotPrice: 250 })).toBe(250_000);
+
+        //   A STORED GOAL STILL WINS, including one an admin set by hand to
+        //   something other than the product. The backfill script makes the same
+        //   promise — "Never overwritten: an admin may have set this by hand."
+        expect(windowFundingGoal({ fundingGoal: 999, targetVolume: 1000, slotPrice: 250 })).toBe(999);
+        expect(windowFundingGoal({ goal: 888, targetVolume: 1000, slotPrice: 250 })).toBe(888);
+
+        //   A SHIPMENT WINDOW IS RAISING NOTHING, and 0 is the right answer for
+        //   this reader: it puts the screen on the "Availability" branch, which is
+        //   what a private export request should show.
+        expect(windowFundingGoal({ orderId: 'ord_1', quantity: '20t' })).toBe(0);
+
+        //   And a half-written aggregation row stays at 0 rather than producing
+        //   NaN or a goal of 0 that reads as "already full".
+        expect(windowFundingGoal({ targetVolume: 1000 })).toBe(0);
+        expect(windowFundingGoal({ slotPrice: 250 })).toBe(0);
+        expect(windowFundingGoal({ targetVolume: 'lots', slotPrice: 250 })).toBe(0);
+        expect(windowFundingGoal(null)).toBe(0);
+    });
+
+    it('AND THE BAR MOVES FOR ONE, which is the whole visible consequence', () => {
+        //   The percentage is what the style attribute gets. Derived goal, real
+        //   raised figure: a window 60% funded now says so.
+        expect(windowFundedPercent({ currentFunding: 150_000, targetVolume: 1000, slotPrice: 250 })).toBe(60);
+    });
+
     it('AND THE PROGRESS BAR NEVER DIVIDES BY A GOAL OF ZERO', () => {
         expect(windowFundedPercent({ fundedAmount: 50 })).toBe(0);
         expect(windowFundedPercent({ fundedAmount: 50, fundingGoal: 100 })).toBe(50);

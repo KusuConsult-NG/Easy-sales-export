@@ -17,6 +17,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import { isAmountAtLeast } from "@/lib/amount";
 import { lostClaimWasFulfilled, UNFULFILLED_CLAIM_MESSAGE } from "@/lib/claim-outcome";
 import { safeToISOStringOptional, toDateOrNull } from "@/lib/date-utils";
+import { windowFundingGoal } from "@/lib/export-window-funding";
 
 // ============================================
 // Get User Export Investments Action
@@ -516,7 +517,11 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
             return { success: false as const, error: "Export window not found" };
         }
 
-        const fundingGoal = exportWindow.fundingGoal ?? exportWindow.goal ?? 0;
+        //   #950 THROUGH THE SHARED RULE, which derives the goal for a window
+        //   created before `fundingGoal` existed rather than reading 0 and
+        //   waiving the overfunding check. The atomic ceiling below still reads a
+        //   stored column and is unchanged.
+        const fundingGoal = windowFundingGoal(exportWindow as Record<string, unknown>);
         const currentFunded = exportWindow.fundedAmount ?? exportWindow.currentFunding ?? 0;
         const overfunded = fundingGoal > 0 && currentFunded + amount > fundingGoal;
 

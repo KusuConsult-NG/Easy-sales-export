@@ -52,6 +52,16 @@
  * scripts/backfill-export-funding-goals.ts, which is written and deliberately
  * not run here — there is no database to run it against from this branch.
  *
+ * #950 AND "FIXES EVERY READER" WAS NOT TRUE WHEN THIS WAS WRITTEN. The
+ * derivation had no callers outside this file and its sibling suite — every
+ * reader still asked windowFundingGoal in lib/export-window-funding, which read
+ * `fundingGoal ?? goal` and returned 0 for exactly the rows the derivation
+ * existed for. The investor's screen puts the funded bar and the raised figure
+ * behind `windowFundingGoal(window) > 0`, so a legacy window rendered
+ * "Availability: Open" with no progress at all. windowFundingGoal delegates here
+ * now, and both fulfilment pre-checks go through it; the ceiling note above is
+ * still exactly true of the row lock.
+ *
  * The 20% ROI default is NOT changed. It is already correct: both fulfilment
  * paths compute the return as `amount * (returnMultiplier ?? 1.20)`, so a
  * window that records nothing advertises exactly what it pays. Making the page
