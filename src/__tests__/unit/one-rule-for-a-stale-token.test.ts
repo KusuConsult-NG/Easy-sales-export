@@ -265,7 +265,10 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
         //   named as the next bounded set and deliberately left. The `may` side
         //   did not move, which is the check that this was a conversion and not a
         //   reclassification.
-        expect(ledgerVerdict(must.length, 30)).toBe(LEDGER_HELD);
+        //   #953 30 -> 26: wallet.ts's two payout gates and the three broadcast
+        //   doors. The `may` side still has not moved across three conversions,
+        //   which is the running check that none of this was a reclassification.
+        expect(ledgerVerdict(must.length, 26)).toBe(LEDGER_HELD);
     });
 
     it('AND THE REVERSIBLE SIDE IS PINNED TOO, so it cannot grow quietly', () => {
@@ -286,24 +289,50 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
         }
     });
 
-    it('POSITIVE CONTROL: the doors the rule still indicts, and what they do', () => {
+    it('POSITIVE CONTROL: the doors the rule indicts and DOES NOT ask to convert', () => {
         /*
-         *   A ledger over a sweep that matched nothing would also hold.
+         *   A ledger over a sweep that matched nothing would also hold, so the sweep
+         *   has to be shown finding something.
          *
-         *   #952 RE-POINTED THIS. It named the four loan action files, which this
-         *   change converted — the rotting-control shape #943 taught, where a
-         *   control proving the sweep works fails because its subject got fixed.
-         *   It is edited in the change that earns the edit, which is the version of
-         *   that lesson that actually works.
+         *   #953 RE-POINTED IT AT DOORS THAT CANNOT ROT. Twice now this control has
+         *   named the next bounded set and failed when that set was converted —
+         *   #952 on the four loan action files, #953 on wallet.ts and the broadcast
+         *   doors. That is the #943 shape arriving on schedule: a control proving
+         *   the sweep works, failing because its subject got fixed.
          *
-         *   The four named now are the next bounded set, and naming them is the
-         *   point: actions/wallet.ts gates on `finance:process_withdrawals` — MONEY
-         *   OUT, #748's own criterion — and is still on the token, because #748
-         *   converted the withdrawal API routes and not the action beside them.
+         *   The three named now are the three the rule marks must-re-read and this
+         *   file explicitly does NOT ask anyone to convert — the two
+         *   CLASSIFICATION_EXCEPTIONS and the OWNER_OR_ADMIN_SHAPE certificate
+         *   door. They leave the ledger only when somebody gives them a permission
+         *   of their own, which is a matrix change rather than a conversion, and the
+         *   lists above would have to change in the same breath.
+         *
+         *   So ordinary progress cannot rot this control, and the thing that WOULD
+         *   rot it is a decision that should be failing a test.
+         */
+        const { must } = jwtOnlyDoors();
+        const recorded = [
+            ...CLASSIFICATION_EXCEPTIONS.map((e) => e.file),
+            'src/app/api/certificates/[id]/route.ts',
+        ];
+
+        expect(recorded.length).toBeGreaterThan(2);
+        for (const rel of recorded) {
+            expect({ rel, onMustList: must.includes(rel) }).toEqual({ rel, onMustList: true });
+        }
+    });
+
+    it('AND wallet.ts AND THE BROADCAST DOORS ARE CONVERTED — #953', () => {
+        /*
+         *   wallet.ts is the sharpest case #951's measurement turned up: #748
+         *   converted the withdrawal API ROUTES on the reading that money goes out,
+         *   and left the two ACTIONS beside them — the payout processor and the
+         *   queue carrying bank details — still asking the token.
+         *
          *   The three broadcast doors reach every member, which #202 settled a
          *   demoted admin must not.
          */
-        const { must } = jwtOnlyDoors();
+        const { must, may } = jwtOnlyDoors();
 
         for (const rel of [
             'src/app/actions/wallet.ts',
@@ -311,8 +340,30 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
             'src/app/api/admin/broadcast/send/route.ts',
             'src/app/api/admin/broadcast/estimate/route.ts',
         ]) {
-            expect({ rel, onMustList: must.includes(rel) }).toEqual({ rel, onMustList: true });
+            expect({ rel, onLedger: must.includes(rel) || may.includes(rel) })
+                .toEqual({ rel, onLedger: false });
+            //   Per GATE, not per file — M41's lesson. A file keeps its place on
+            //   this list only if NOTHING in it still asks the token.
+            expect({ rel, anyTokenGate: /hasAdminPermission\(\s*session/.test(code(rel)) })
+                .toEqual({ rel, anyTokenGate: false });
         }
+
+        /*
+         *   And wallet.ts keeps `rolesWithPermission`, which is a different helper
+         *   doing a different job — it picks who gets NOTIFIED about a withdrawal.
+         *   Dropping it alongside the gate would have been a silent behaviour change
+         *   in the fan-out.
+         *
+         *   ASSERTED AS A CALL AND AN IMPORT, not as a substring. My first version
+         *   was `toContain('rolesWithPermission')`, and the mutant that renamed it to
+         *   `rolesWithPermissionX` PASSED — the longer name contains the shorter one.
+         *   A substring check on an identifier is satisfied by every name that
+         *   extends it, which is a whole class of mutant walking through.
+         */
+        const wallet = code('src/app/actions/wallet.ts');
+
+        expect(wallet).toContain('import { rolesWithPermission } from "@/lib/admin-permissions"');
+        expect(wallet).toContain('rolesWithPermission("finance:process_withdrawals")');
     });
 
     it('AND THE FIFTEEN LOAN-ACTION GATES ARE CONVERTED, by name', () => {
@@ -364,6 +415,83 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
         //   And the live read is INSIDE that branch, not beside it.
         const branch = src.slice(src.indexOf('if (data.userId !== session.user.id) {'));
         expect(branch.slice(0, 400)).toContain('await requireAdmin("cooperatives:approve_loans")');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#953 — the harness rule this programme kept rediscovering', () => {
+    it('NO SUITE USES THE SHARED GATE MOCK WHILE OWNING ITS OWN SESSION', () => {
+        /*
+         *   FOUND TWICE, THE SECOND TIME AS A 500 THAT LOOKED LIKE A ROUTE DEFECT.
+         *
+         *   lib/testing/require-admin-mock reads `globalThis.mockRequireSession`. A
+         *   suite that mocks @/lib/session-guard with its OWN function does not set
+         *   that global, so the shared mock reads jest.setup's DEFAULT session — a
+         *   full admin — and ADMITS EVERYBODY:
+         *
+         *     curriculum-deletes-retire        "a role without
+         *                                      cooperatives:approve_loans cannot
+         *                                      retire it" returned success: true.
+         *                                      A refusal test that admits everyone.
+         *     broadcast-estimate-debug-bypass  a general_user was admitted, the
+         *                                      route then threw parsing an absent
+         *                                      body, and the suite reported a 500
+         *                                      where it expected a 403.
+         *
+         *   Both have bespoke mocks now. This is the ratchet so the third occurrence
+         *   fails here instead of being diagnosed from scratch — the conversion
+         *   programme has twenty-odd suites to wire and this trap is silent in one
+         *   direction and misleading in the other.
+         */
+        const offenders: string[] = [];
+        const dir = join(ROOT, 'src/__tests__/unit');
+
+        for (const entry of readdirSync(dir)) {
+            if (!/\.tsx?$/.test(entry)) continue;
+            //   THIS FILE, which holds both patterns as literals in the sweep above
+            //   and in the note beside it. A source scanner that reads its own source
+            //   reports itself; excluded by name rather than by a cleverer pattern,
+            //   because the cleverer pattern is the thing that later stops matching.
+            if (entry === 'one-rule-for-a-stale-token.test.ts') continue;
+
+            const src = readFileSync(join(dir, entry), 'utf-8');
+
+            const usesShared = src.includes("require('@/lib/testing/require-admin-mock').requireAdminMock()");
+            const ownsSession = src.includes("jest.mock('@/lib/session-guard'");
+            if (usesShared && ownsSession) offenders.push(entry);
+        }
+
+        expect(offenders).toEqual([]);
+    });
+
+    it('AND THE SHARED MOCK IS ACTUALLY IN USE, or the rule above guards nothing', () => {
+        //   Vacuity guard: if nothing used the shared mock, the sweep would pass
+        //   over an empty set for ever.
+        let users = 0;
+        const dir = join(ROOT, 'src/__tests__/unit');
+        for (const entry of readdirSync(dir)) {
+            if (!/\.tsx?$/.test(entry)) continue;
+            if (readFileSync(join(dir, entry), 'utf-8')
+                .includes("require('@/lib/testing/require-admin-mock').requireAdminMock()")) users++;
+        }
+
+        expect(users).toBeGreaterThan(15);
+    });
+
+    it('and the two that needed a bespoke mock still have one', () => {
+        //   Named, because the shared mock is the obvious thing to reach for and a
+        //   later tidy-up would reach for it.
+        for (const rel of [
+            'src/__tests__/unit/curriculum-deletes-retire.test.ts',
+            'src/__tests__/unit/broadcast-estimate-debug-bypass.test.ts',
+        ]) {
+            const src = readFileSync(join(ROOT, rel), 'utf-8');
+
+            expect({ rel, bespoke: src.includes("jest.mock('@/lib/require-admin', () => ({") })
+                .toEqual({ rel, bespoke: true });
+            expect({ rel, shared: src.includes("requireAdminMock()") })
+                .toEqual({ rel, shared: false });
+        }
     });
 });
 
@@ -472,8 +600,7 @@ describe('#951 — the exceptions are few, real, and say what retires them', () 
  *     throwing                                       THROWS
  *   `cooperatives:approve_loans` moved to the        it answers the four earlier
  *     reversible side — the loosening that would     findings, both halves of THE
- *     make this whole change a no-op                 LEDGER, the POSITIVE CONTROL,
- *                                                    THE OWNER-OR-ADMIN SHAPE
+ *     make the whole rule a no-op                    LEDGER, and more
  *   reject-loan reverted to the token                ALL SEVEN ASK requireAdmin,
  *                                                    EACH REFUSAL … 403, THE
  *                                                    LEDGER, THE SEVEN … OFF BOTH
@@ -484,17 +611,24 @@ describe('#951 — the exceptions are few, real, and say what retires them', () 
  *     requireAdmin refuses the applicant             getLoanApplication STILL
  *                                                    ADMITS THE APPLICANT
  *   the live read moved OUTSIDE the owner branch      the same test
- *   the recorded must-count raised back to 34         THE LEDGER
+ *   one of wallet.ts's two gates reverted             wallet.ts AND THE BROADCAST
+ *                                                    DOORS ARE CONVERTED
+ *   the recorded must-count raised                    THE LEDGER
  *
- *   M41 — ONE OF _loans.ts's THREE GATES REVERTED TO THE TOKEN — SURVIVED THE
- *   FIRST VERSION OF THIS SUITE, and that is the most useful line in the table.
- *   The ledger's sweep is per FILE: a file holding any requireAdmin call leaves
- *   the jwt-only list, and the `live` assertion was satisfied by the two gates
- *   still converted. #532's ratchet caught it — "no file asks the database in one
- *   place and the token in another" — along with five of #750's behavioural
- *   tests, which is that criterion earning the note in lib/stale-authorisation
- *   saying it is not subsumed. The claim is now also made directly here, because
- *   a suite that names four files should not need a sibling to keep them honest.
+ *   TWO SURVIVED FIRST, AND BOTH ARE MORE USEFUL THAN THE ROWS ABOVE.
  *
- *   ALL NINE CAUGHT, and the tenth is why the ninth assertion exists.
+ *   M41 — ONE OF _loans.ts's THREE GATES REVERTED. The ledger's sweep is per FILE:
+ *   a file holding any requireAdmin call leaves the jwt-only list, and the `live`
+ *   assertion was satisfied by the two gates still converted. #532's ratchet caught
+ *   it, along with five of #750's behavioural tests, which is that criterion
+ *   earning its note in lib/stale-authorisation. Every named-file assertion here
+ *   now also checks that NO gate in the file still asks the token.
+ *
+ *   M46 — `rolesWithPermission` RENAMED TO `rolesWithPermissionX`. My assertion was
+ *   `toContain('rolesWithPermission')`, and the longer name contains the shorter
+ *   one. A substring check on an identifier is satisfied by every name that extends
+ *   it. It asserts the import statement and the call site now. The typecheck would
+ *   have caught that particular mutant anyway; the assertion was still saying less
+ *   than it looked like it said, which is the defect class this whole audit is about
+ *   turned on my own test.
  */

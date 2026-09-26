@@ -200,7 +200,14 @@ describe('who may broadcast to the whole platform', () => {
         // "announcements:manage" is the matrix's own name for this, and it
         // belongs to super_admin and admin alone. See
         // admin-permission-gates.test.ts for the full sweep.
-        expect(route).toContain('hasAdminPermission(session.user.roles, "announcements:manage")');
+        //   #953 THE SEND ROUTE MOVED TO THE LIVE GATE. requireAdmin re-reads the
+        //   caller's roles from the database and then asks the matrix for this same
+        //   permission, so the property — this route demands announcements:manage,
+        //   not bare isAdmin — is unchanged and now holds against a revoked admin
+        //   with an unexpired token too. The live form is asserted specifically
+        //   because dropping back to the token is the regression, not a rename.
+        expect(route).toContain('await requireAdmin("announcements:manage")');
+        expect(route).not.toMatch(/hasAdminPermission\(\s*session/);
         expect(route).not.toContain('!isAdmin(session.user.roles)');
     });
 

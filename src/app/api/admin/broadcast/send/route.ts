@@ -12,10 +12,10 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
 import { recordAdminAction } from "@/lib/audit-log";
+import { requireAdmin } from "@/lib/require-admin";
 
 export const maxDuration = 300; // 5 min timeout for Pro plan
 
@@ -66,8 +66,19 @@ export async function POST(req: NextRequest) {
         const db = getAdminDb();
 
         // Verify admin role
-        if (!hasAdminPermission(session.user.roles, "announcements:manage")) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+        /*
+         *   #953 LIVE RE-VALIDATION, replacing a check on the JWT — it SENDS the broadcast. Of the three doors on this
+         *   permission, this is the one that cannot be taken back.
+         *
+         *   lib/stale-authorisation classifies `announcements:manage` as
+         *   IRREVERSIBLE: a message cannot be unsent. #202 settled the same point
+         *   from the other side — a demoted admin must not reach every member — and
+         *   #375 chose this permission for every broadcast surface for that reason.
+         *   #932 converted the money-owed email sender on exactly this reading.
+         */
+        const gate = await requireAdmin("announcements:manage");
+        if ("error" in gate) {
+            return NextResponse.json({ success: false, error: gate.error }, { status: 403 });
         }
 
         // Throttled, which it was not.

@@ -8,6 +8,7 @@ import { isAdmin, hasAdminPermission } from '@/lib/admin-permissions';
 
 import { getCleanBroadcastList, type BroadcastAudience, type BroadcastFilters } from '@/lib/broadcast-logic';
 import { recordAdminAction } from "@/lib/audit-log";
+import { requireAdmin } from "@/lib/require-admin";
 
 export interface BroadcastLog { id: string;
     subject: string;
@@ -56,8 +57,18 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!hasAdminPermission(session.user.roles, "announcements:manage")) {
-            return { success: false as const, error: "Unauthorized. Admin access required.", data: null };
+        /*
+         *   #953 LIVE RE-VALIDATION, replacing a check on the JWT — it builds the recipient list every broadcast is sent to.
+         *
+         *   lib/stale-authorisation classifies `announcements:manage` as
+         *   IRREVERSIBLE: a message cannot be unsent. #202 settled the same point
+         *   from the other side — a demoted admin must not reach every member — and
+         *   #375 chose this permission for every broadcast surface for that reason.
+         *   #932 converted the money-owed email sender on exactly this reading.
+         */
+        const gate = await requireAdmin("announcements:manage");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
         logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
 
