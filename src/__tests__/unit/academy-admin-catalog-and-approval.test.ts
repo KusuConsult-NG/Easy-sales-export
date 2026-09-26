@@ -168,10 +168,34 @@ describe('the two approval endpoints', () => {
     });
 
     it('and its guard is the wider one — academy_admin included', () => {
+        /*
+         *   #954 THE PROPERTY, NOT THE SPELLING — the sixth suite in this
+         *   programme to have pinned one.
+         *
+         *   What this test is for is that the guard is WIDER than users:update:
+         *   an academy_admin reviews academy applications. That is true of the
+         *   token form and of the live form, so asserting the token form made a
+         *   layer-independent property fail when only the layer changed.
+         *
+         *   It is now read off the matrix, which is where the answer actually
+         *   lives, plus the gate naming that permission. Both halves are needed:
+         *   the matrix alone would pass if the gate named something else, and the
+         *   gate alone would pass if the matrix stopped granting it.
+         */
+        //   Through hasAdminPermission rather than the matrix data, which is
+        //   module-private — and this is the better assertion regardless: it is
+        //   the decision procedure the gate actually runs.
+        const { hasAdminPermission } = require('@/lib/admin-permissions');
         const src = code(REVIEW);
 
-        expect(src).toContain('hasAdminPermission(session.user.roles, "users:update")');
-        expect(src).toContain('session.user.roles?.includes("academy_admin")');
+        expect(src).toContain('requireAdmin("academy:approve_applications")');
+        expect(hasAdminPermission(['academy_admin'], 'academy:approve_applications')).toBe(true);
+        expect(hasAdminPermission(['academy_admin'], 'users:update')).toBe(false);
+
+        //   And the two forms it must NOT go back to: the token read, and the
+        //   role literal that reached academy_admin outside the matrix.
+        expect(src).not.toContain('hasAdminPermission(session.user.roles, "users:update")');
+        expect(src).not.toContain('roles?.includes("academy_admin")');
     });
 
     it('the barrel still names the canonical one, and only it', () => {

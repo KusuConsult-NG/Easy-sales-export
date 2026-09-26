@@ -35,6 +35,14 @@ import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { auth } from '@/lib/auth';
 
+//   #954 The academy review gates moved to requireAdmin, which reads live roles.
+//   This suite drives globalThis.mockRequireSession and does NOT own a
+//   session-guard mock of its own, so the SHARED gate mock is the right one: it
+//   reads that same global and decides against the real PERMISSION_MATRIX, so a
+//   role without the permission is still refused here.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null,
     setCache: async () => undefined,
@@ -133,12 +141,24 @@ describe('getPendingAcademyApplicationsAction', () => {
 
     it('refuses an ordinary user', async () => {
         actAs('user-1', ['user']);
-        expect(((await pending()) as any).error).toContain('users:update');
+        //   #954 The refusal is unchanged; the permission it NAMES is. The door
+        //   never required users:update — it admitted academy_admin, who holds it
+        //   nowhere — so naming academy:approve_applications is the accurate form.
+        const refused = (await pending()) as any;
+        expect(refused.success).toBe(false);
+        expect(refused.error).toContain('academy:approve_applications');
     });
 
     it('admits an academy_admin, who has no users:update', async () => {
         // The asymmetry this action carries deliberately: reviewing academy
         // applications is an academy responsibility, not a user-management one.
+        //
+        //   #954 STILL TRUE, AND NOW SAID THROUGH THE MATRIX. This used to hold
+        //   because the gate carried a role literal beside the permission. The
+        //   matrix grants academy:approve_applications to super_admin, admin and
+        //   academy_admin — exactly the set the literal and the permission admitted
+        //   between them — so the same people get in, and they keep getting in when
+        //   the matrix changes instead of the gate silently disagreeing with it.
         actAs('academy-1', ['academy_admin']);
         expect((await pending()).success).toBe(true);
     });

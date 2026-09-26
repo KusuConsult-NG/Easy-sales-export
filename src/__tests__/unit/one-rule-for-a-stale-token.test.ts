@@ -9,7 +9,10 @@
  *   #356 established the cost — a JWT role claim "keeps its value for hours after
  *   the database loses it" — and requireAdmin exists to re-read live. Then #532
  *   took the files that disagreed with themselves, #748 the four doors money
- *   leaves by, #750 the two role-writing files whole, #932 the live bank balance
+ *   leaves by, #750 the two writes that can mint a super_admin whole (#954
+ *   corrects an earlier draft of this line that called them "the two
+ *   role-writing files" — eleven more write fixed participant roles and #750
+ *   deferred them on purpose), #932 the live bank balance
  *   and the member-email sender.
  *
  *   Every pick was sound. None of them said what the SEVENTY-SIXTH door should
@@ -268,7 +271,44 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
         //   #953 30 -> 26: wallet.ts's two payout gates and the three broadcast
         //   doors. The `may` side still has not moved across three conversions,
         //   which is the running check that none of this was a reclassification.
-        expect(ledgerVerdict(must.length, 26)).toBe(LEDGER_HELD);
+        //   #954 26 -> 24: the two academy review files, four gates, three of
+        //   which WRITE ROLES — #750's criterion, in files #750 deliberately
+        //   deferred because they grant fixed participant roles rather than
+        //   super_admin. Deferred is not fixed, and nothing was watching them. All four carried a ROLE LITERAL beside the permission,
+        //   which is why they were invisible to this ledger's classification: a
+        //   role name is not a permission, so mustRevalidateLive had nothing to
+        //   decide on. The `may` side has now held across four conversions.
+        expect(ledgerVerdict(must.length, 24)).toBe(LEDGER_HELD);
+    });
+
+    it('AND THIS LEDGER COUNTS ONE SPELLING OF TWO, WHICH IT NOW SAYS OUT LOUD', () => {
+        /*
+         *   #954 THE SILENCE THAT MADE THREE HONEST IMPROVEMENTS MISLEADING.
+         *
+         *   Every count above — 75, 68, 34, 30, 26, 24 — comes from sweeping
+         *   `hasAdminPermission(`. `isAdmin(session.user.roles)` reads the same JWT
+         *   array and refuses on the same stale claim, and there are 56 of those in
+         *   door position: 53 refusals and 3 positive admin fast-paths.
+         *
+         *   Nothing above is wrong. The problem is what it does not say: the door
+         *   backlog is a little under twice what this ledger reports, and the number
+         *   falling three findings in a row read as the whole picture improving.
+         *   That is #948's finding — a ledger that moves for two reasons and reports
+         *   one — in the form where the second reason is a defect class it never saw.
+         *
+         *   This test exists so the omission cannot go quiet again: it fails if the
+         *   second sweep stops finding doors, which is the only way the claim
+         *   "counted elsewhere" could become false without anyone noticing.
+         */
+        const { scanIsAdminDoors } = require('@/lib/testing/role-write-doors');
+        const second = scanIsAdminDoors(['app', 'lib', 'components'], join(process.cwd(), 'src'));
+        const doors = second.filter((d: { kind: string }) => d.kind !== 'binding');
+
+        expect(doors.length).toBeGreaterThan(0);
+        //   Held exactly in role-writers-are-not-on-the-token, which is where the
+        //   ledger for this spelling lives. Asserted loosely here on purpose: two
+        //   suites pinning one number is two places to forget.
+        expect(doors.length).toBeGreaterThanOrEqual(50);
     });
 
     it('AND THE REVERSIBLE SIDE IS PINNED TOO, so it cannot grow quietly', () => {

@@ -7,8 +7,9 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { isAdmin } from "@/lib/admin-permissions";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { stripPii, stripSecrets } from "@/lib/admin-pii";
@@ -25,9 +26,24 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
-            !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const , data: null };
+        /*
+         *   #954 LIVE RE-VALIDATION, AND THE LAST OF THE FOUR ROLE LITERALS.
+         *
+         *   The PENDING QUEUE — the list an admin works from. It writes nothing,
+         *   so #750's role-write criterion is not what puts it here; #537 is, and
+         *   #537 named this exact gate in the comment just below: it "admits any
+         *   `academy_admin` on the stale token". That finding masked the bank
+         *   columns and left the door itself alone.
+         *
+         *   A read of somebody's account number cannot be un-read by revoking the
+         *   reader afterwards, which is the irreversibility rule's "cannot be
+         *   un-seen" half. With the gate on the token a revoked admin still
+         *   reached the queue and the applicant names and emails in it; the bank
+         *   columns were simply masked on the way out.
+         */
+        const gate = await requireAdmin("academy:approve_applications");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const, data: null };
         }
 
         /**
@@ -43,7 +59,10 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
          *        #535's ratchet passed this file because the file CONTAINS
          *        `mayRevealMemberPii(`. It does, twice, in the other two.
          */
-        const maySeeBankDetails = await mayRevealMemberPii("academy:approve_applications");
+        //   #758 The live gate above already resolved these roles; passing them
+        //   keeps ONE rule for who may see bank details without reading the
+        //   caller's row a second time.
+        const maySeeBankDetails = await mayRevealMemberPii("academy:approve_applications", gate.roles);
 
         const snapshot = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where("status", "==", "pending")

@@ -330,7 +330,30 @@ describe('#537(b) — the export obeys the same restriction as the screen', () =
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#537(c) — the two the containment check could not see', () => {
-    it('THE ACADEMY PENDING QUEUE WITHHOLDS BANK DETAILS FROM A ROLE THAT MAY NOT APPROVE', async () => {
+    it('THE ACADEMY PENDING QUEUE REFUSES A ROLE THAT MAY NOT APPROVE — no row to mask', async () => {
+        /*
+         *   #954 THIS ASSERTION GOT STRONGER, AND IT IS THE CONVERSION WORKING.
+         *
+         *   It used to read "WITHHOLDS BANK DETAILS", and expected a row back with
+         *   the columns masked. That was the most #537 could do: the door's own
+         *   gate was `hasAdminPermission(roles, "users:update") ||
+         *   roles.includes("academy_admin")` on the TOKEN, so a demoted admin
+         *   reached the queue whatever the record said, and mayRevealMemberPii —
+         *   which does read the record — could only strip the columns on the way
+         *   out. #537's own comment named that gate as admitting "any
+         *   academy_admin on the stale token".
+         *
+         *   The gate reads the record now, so this caller does not reach the queue
+         *   at all: refused, with no row to mask. A demoted admin seeing nothing is
+         *   strictly stronger than a demoted admin seeing masked rows, and it is
+         *   what the irreversibility rule asks for — a read of somebody's account
+         *   number cannot be un-read by revoking the reader afterwards.
+         *
+         *   mayRevealMemberPii STAYS at the call site. For this door the two
+         *   conditions now coincide, so it masks nothing today; it is kept because
+         *   it is the thing that still holds if the gate is ever widened again,
+         *   which is exactly how this door came to need it the first time.
+         */
         actAs(ADMIN, ['academy_admin'], ['support']);
         store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',
@@ -347,17 +370,23 @@ describe('#537(c) — the two the containment check could not see', () => {
             await import('@/app/actions/academy/_ac_admin_applications');
 
         const result = await getPendingAcademyApplicationsAction();
-        const row = ((result.data ?? []) as Record<string, unknown>[])[0];
 
-        expect(row).toBeDefined();
-        expect(row.bankDetails).toBeUndefined();
-        expect(JSON.stringify(row)).not.toContain(ACCOUNT_NUMBER);
+        expect(result.success).toBe(false);
+        expect(String(result.error)).toContain('academy:approve_applications');
+        //   The guarantee #537 was after, in its stronger form: the number is not
+        //   in the response at all, because there is no response to put it in.
+        expect(JSON.stringify(result)).not.toContain(ACCOUNT_NUMBER);
+        expect(result.data ?? []).toEqual([]);
     });
 
     it('AND HANDS THEM TO ONE THAT MAY', async () => {
-        //   The token stays `academy_admin` — the action's OWN gate is what
-        //   admits the caller to the queue, and it is deliberately untouched.
-        //   Only the record changes, because only the record decides the fields.
+        //   The token stays `academy_admin` and only the record changes.
+        //
+        //   #954 The comment here used to say the action's own gate was
+        //   "deliberately untouched", and that is no longer true — it reads the
+        //   record now too. This test is unaffected because the record is
+        //   super_admin, which both the gate and the PII check admit; it is the
+        //   positive control for the refusal above.
         actAs(ADMIN, ['academy_admin'], ['super_admin']);
         store.seed(COLLECTIONS.USERS, BORROWER, { mfaEnabled: true,
             fullName: 'Adaeze Obi',

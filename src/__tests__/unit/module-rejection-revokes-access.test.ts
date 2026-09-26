@@ -87,6 +87,33 @@ jest.mock('@/lib/session-guard', () => ({
     requireSession: (...a: any[]) => mockRequireSession(...a),
 }));
 
+/*
+ *   #954 A BESPOKE requireAdmin, BECAUSE THIS SUITE OWNS ITS SESSION.
+ *
+ *   The academy and admin rejection paths gate on requireAdmin now, which reads
+ *   live roles. The SHARED mock in lib/testing/require-admin-mock reads
+ *   globalThis.mockRequireSession — a global this suite never sets, because it
+ *   mocks session-guard with the local above. It would therefore have resolved
+ *   jest.setup's default admin and admitted the `support` role that the test at
+ *   line 166 exists to see REFUSED.
+ *
+ *   That failure is silent in exactly the wrong direction, so this reads the same
+ *   session the rest of the suite drives and decides against the real matrix.
+ */
+jest.mock('@/lib/require-admin', () => ({
+    requireAdmin: async (permission?: string) => {
+        const { isAdmin, hasAdminPermission } = require('@/lib/admin-permissions');
+        const result = await mockRequireSession();
+        const user = result?.session?.user;
+        if (!user) return { error: 'Unauthenticated' };
+        const roles = user.roles ?? [];
+        if (!isAdmin(roles) || (permission && !hasAdminPermission(roles, permission))) {
+            return { error: `Unauthorized: Permission required - ${permission}` };
+        }
+        return { userId: user.id, roles };
+    },
+}));
+
 const mockClaim = jest.fn() as jest.Mock<any>;
 jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: (...a: any[]) => mockClaim(...a),
