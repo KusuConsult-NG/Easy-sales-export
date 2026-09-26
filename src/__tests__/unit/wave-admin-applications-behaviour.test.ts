@@ -24,6 +24,15 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
+/*
+ *   #956 The doors this suite exercises gate on requireAdmin now, which reads
+ *   live roles. SHARED mock: this suite drives globalThis.mockRequireSession and
+ *   owns no session-guard mock of its own, so the shared one reads the same
+ *   session and decides against the real PERMISSION_MATRIX.
+ */
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('resend', () => ({
     Resend: class { emails = { send: async () => ({ error: null }) }; },
 }));

@@ -88,6 +88,15 @@ const OWNER = 'owner-1';
 const STRANGER = 'stranger-1';
 const ADMIN = 'admin-1';
 
+/*
+ *   #956 The doors this suite exercises gate on requireAdmin now, which reads
+ *   live roles. SHARED mock: this suite drives globalThis.mockRequireSession and
+ *   owns no session-guard mock of its own, so the shared one reads the same
+ *   session and decides against the real PERMISSION_MATRIX.
+ */
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
     recordAdminAction: jest.fn(async () => undefined),
