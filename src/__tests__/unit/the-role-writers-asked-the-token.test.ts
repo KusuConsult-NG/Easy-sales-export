@@ -491,7 +491,7 @@ describe('#750 — and the stale-JWT ledger recorded the progress', () => {
         //   live profile. Both live-checked from the start, so the ledger above
         //   does not move a third time.
         expect(code('src/__tests__/unit/require-admin-names-its-permission.test.ts'))
-            .toContain('expect(callSites().length).toBe(106)');
+            .toContain('expect(callSites().length).toBe(112)');
     });
 });
 

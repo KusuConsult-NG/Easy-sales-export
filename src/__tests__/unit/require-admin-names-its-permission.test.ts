@@ -538,6 +538,37 @@ describe('#375 — every gate names its permission, and the exception is stated'
          */
         'src/app/actions/academy/_ac_admin_review.ts': Array(3).fill('academy:approve_applications'),
         'src/app/actions/academy/_ac_admin_applications.ts': ['academy:approve_applications'],
+
+        /**
+         * #955. The cooperative doors that READ THE DATABASE ONLY WHEN THE TOKEN
+         * SAID NO.
+         *
+         * These four files did not gate on the token outright — they read the user
+         * record. Backwards: `if (!hasAdminPermission(TOKEN, P)) { read the record;
+         * retry }`. The record was consulted only in the token's FAILURE branch, so
+         * a token claiming the permission was admitted and never checked against
+         * the record. The newly promoted admin was handled; the newly DEMOTED one
+         * was not, which is the direction #356 measured in hours.
+         *
+         * An earlier finding stood right here and narrowed the retry, which used to
+         * ask isAdmin() where the gate asked the permission — a fallback wider than
+         * what it fell back from. That fix was right and left the ordering alone.
+         *
+         * The AUDIENCE is unchanged: the permissions are the ones the gates already
+         * named. What changed is that the record decides, always, and that `roles`
+         * downstream carries the live value — it used to carry the token's whenever
+         * the token passed, so the member PII decision in _coop_admin_members and
+         * the payout SCOPE in _coop_admin_money were also made from the token in
+         * exactly the case where the token is wrong.
+         *
+         * _coop_admin_money's two gate on finance:process_withdrawals, which #951
+         * calls irreversible because money paid out does not come back. #748
+         * converted the withdrawal doors it found and did not reach these.
+         */
+        'src/app/actions/cooperative/_coop_admin_members.ts': Array(2).fill('cooperatives:approve_members'),
+        'src/app/actions/cooperative/_coop_admin_money.ts': Array(2).fill('finance:process_withdrawals'),
+        'src/app/api/admin/cooperative/approve-member/route.ts': ['cooperatives:approve_members'],
+        'src/app/api/admin/cooperative/reject-member/route.ts': ['cooperatives:approve_members'],
     };
 
     it('EVERY GATE NAMES THE PERMISSION ITS ACTION NEEDS', () => {
@@ -644,12 +675,13 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // than reciting.
         // 82 → 97: #952's fifteen loan-action gates.
         // 97 → 102: #953's wallet.ts (2) and broadcast (3).
-        // 102 → 106: #954's four academy review gates. The opposite-direction
+        // 102 → 106: #954's four academy review gates.
+        // 106 → 112: #955's six cooperative gates. The opposite-direction
         // check above holds again — call sites 102 → 106 while
         // half-converted-off-the-stale-token's doors go 60 → 58 — and on this
         // finding it is worth more than usual, because 106 counts the gates that
         // exist and 58 counts one of the two spellings of the gates that should.
-        expect(callSites().length).toBe(106);
+        expect(callSites().length).toBe(112);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

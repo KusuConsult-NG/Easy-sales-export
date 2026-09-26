@@ -80,6 +80,7 @@ import {
 } from '@/lib/admin-permissions';
 import { isAdmin as roleUtilsIsAdmin } from '@/lib/role-utils';
 import { ALL_USER_ROLES, isUserRole } from '@/lib/types/roles';
+import { ledgerVerdict, LEDGER_HELD } from '@/lib/testing/ledger';
 
 // Server actions AND route handlers. Both are reachable over HTTP; a route is
 // if anything the more exposed of the two, and thirteen of them carried the
@@ -556,15 +557,98 @@ describe('the stale-session fallback asks the gate\'s own question', () => {
         expect(bad).toEqual([]);
     });
 
+    it('THE ORDERING IS THE DEFECT, NOT ONLY THE WIDTH — the six #955 converted', () => {
+        /*
+         *   #955 The test above asks whether the retry is WIDER than the gate it
+         *   retries. That was a real defect and it was fixed. It is not the whole
+         *   defect, and fixing it left the worse half standing:
+         *
+         *       if (!hasAdminPermission(TOKEN, P)) {   // token first
+         *           const live = <read the user record>;
+         *           if (hasAdminPermission(live, P)) { roles = live; }
+         *           else { refuse; }
+         *       }
+         *
+         *   Both halves ask the same question, so the width test passes. But the
+         *   record is consulted ONLY when the token says no. A token that CLAIMS the
+         *   permission is admitted and never checked against the record — so the
+         *   newly promoted admin is handled and the newly DEMOTED one is not, which
+         *   is the direction that matters and the one #356 measured in hours.
+         *
+         *   There is a second half. `roles` kept the TOKEN's value whenever the token
+         *   passed, and it is read downstream: the member PII decision in
+         *   _coop_admin_members and the payout SCOPE in _coop_admin_money. So the
+         *   stale value decided more than admission.
+         *
+         *   Asserted per FILE and per COUNT, so a gate cannot be deleted instead of
+         *   converted, and so the shape cannot come back to a file that was cleaned.
+         */
+        const CONVERTED: ReadonlyArray<readonly [string, string, number]> = [
+            ['src/app/actions/cooperative/_coop_admin_members.ts', 'cooperatives:approve_members', 2],
+            ['src/app/actions/cooperative/_coop_admin_money.ts', 'finance:process_withdrawals', 2],
+            ['src/app/api/admin/cooperative/approve-member/route.ts', 'cooperatives:approve_members', 1],
+            ['src/app/api/admin/cooperative/reject-member/route.ts', 'cooperatives:approve_members', 1],
+        ];
+
+        for (const [file, permission, gates] of CONVERTED) {
+            const src = strip(readFileSync(join(process.cwd(), file), 'utf-8'));
+            const live = src.match(new RegExp(`requireAdmin\\("${permission}"\\)`, 'g')) ?? [];
+
+            expect({ file, live: live.length }).toEqual({ file, live: gates });
+            //   And the shape is gone for THIS permission: no token read of it, and
+            //   no retry branch that promotes liveRoles over it.
+            expect({ file, token: src.includes(`hasAdminPermission(roles, "${permission}")`) })
+                .toEqual({ file, token: false });
+
+            /*
+             *   The RETRY is `if (hasAdminPermission(liveRoles, P)) { roles = live }`,
+             *   not any mention of liveRoles.
+             *
+             *   A looser check failed here, correctly: _coop_admin_members still reads
+             *   `hasAdminPermission(liveRoles, "cooperatives:approve_members")` as a
+             *   bare expression, for the member PII decision inside a function whose
+             *   own gate is bare isAdmin() and is NOT converted — one of the five left
+             *   for the width decision. That read is right where it is: liveRoles
+             *   there really are live.
+             */
+            const retry = new RegExp(
+                `if\\s*\\(\\s*hasAdminPermission\\(\\s*liveRoles\\s*,\\s*"${permission}"\\s*\\)\\s*\\)`,
+            );
+            expect({ file, retry: retry.test(src) }).toEqual({ file, retry: false });
+        }
+    });
+
     it('and there really are fallbacks to check, so this is not vacuous', () => {
-        // If the shape were refactored away this assertion would pass by
-        // matching nothing.
+        /*
+         *   If the shape were refactored away this assertion would pass by
+         *   matching nothing — so it counts the files that still carry it.
+         *
+         *   #955 LOWERED 6 -> 5, AND THIS CONTROL IS NOW ON A COUNTDOWN. It is the
+         *   third time in this programme that a control proving a sweep works has
+         *   failed because its subject got fixed (#952 and #953 were the others),
+         *   and this time the subject is going away for good: the fallback shape
+         *   IS the defect, not a neighbour of it.
+         *
+         *   `if (!tokenCheck) { read the record; retry }` asks the record only when
+         *   the token says no, so a token that claims the permission is admitted and
+         *   never re-checked. #955 converted the six that named a permission. The
+         *   five left all gate on bare isAdmin(), and converting those means CHOOSING
+         *   a permission, which narrows from ten admin roles to two or three — a
+         *   policy decision, not a substitution.
+         *
+         *   RETIREMENT, stated so it is not floored at zero by whoever gets there:
+         *   when this reaches 0, DELETE this test, the mismatch test above, and the
+         *   BLOCK regex both use. A test guarding a shape that no longer exists
+         *   passes forever and reads like coverage.
+         */
+        const RECORDED = 5;
+
         let files = 0;
         for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
             if (strip(readFileSync(file, 'utf-8')).includes('liveRoles')) files++;
         }
 
-        expect(files).toBeGreaterThanOrEqual(6);
+        expect(ledgerVerdict(files, RECORDED)).toBe(LEDGER_HELD);
     });
 });
 

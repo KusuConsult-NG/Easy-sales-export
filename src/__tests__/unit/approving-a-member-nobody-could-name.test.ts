@@ -58,6 +58,38 @@ jest.mock('@/lib/session-guard', () => ({
     requireSession: (...a: any[]) => mockRequireSession(...a),
 }));
 
+/*
+ *   #955 A BESPOKE requireAdmin, BECAUSE THIS SUITE OWNS ITS SESSION.
+ *
+ *   The cooperative member doors gate on requireAdmin now. The shared mock reads
+ *   globalThis.mockRequireSession — a global this suite never sets, because it
+ *   mocks session-guard with the local above — so it would have resolved
+ *   jest.setup's default admin instead of this suite's actor. That is the trap
+ *   #952 and #953 each met once and one-rule-for-a-stale-token now sweeps for.
+ *
+ *   It reads the seeded USERS row, which is what the real gate does and what this
+ *   suite already seeds for admin-1.
+ */
+jest.mock('@/lib/require-admin', () => ({
+    requireAdmin: async (permission?: string) => {
+        const { isAdmin, hasAdminPermission } = require('@/lib/admin-permissions');
+        const { COLLECTIONS } = require('@/lib/types/firestore');
+        const result = await mockRequireSession();
+        const user = result?.session?.user;
+        if (!user) return { error: 'Unauthenticated' };
+
+        const { supabaseDb } = require('@/lib/supabase-db');
+        const snap = await supabaseDb.collection(COLLECTIONS.USERS).doc(user.id).get();
+        const roles: string[] = (snap?.exists ? (snap.data() as any)?.roles : undefined)
+            ?? user.roles ?? [];
+
+        if (!isAdmin(roles) || (permission && !hasAdminPermission(roles, permission))) {
+            return { error: `Unauthorized: Permission required - ${permission}` };
+        }
+        return { userId: user.id, roles };
+    },
+}));
+
 jest.mock('@/lib/cooperative-admin-scope', () => ({ getAdminScope: async () => null }));
 
 jest.mock('@/lib/cache-invalidation', () => ({
