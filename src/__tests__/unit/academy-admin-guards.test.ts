@@ -31,7 +31,11 @@
  * Every other endpoint here was read and found correct, and the properties are
  * asserted below rather than left in a commit message:
  *
- *   approve / reject / updatePayment    users:update or academy_admin
+ *   approve / reject / updatePayment    #954: requireAdmin("academy:approve_applications"),
+ *                                      live. Was `users:update` OR the ROLE LITERAL
+ *                                      `roles.includes("academy_admin")`, which named a
+ *                                      permission the door did not require and reached
+ *                                      academy_admin outside the matrix entirely.
  *   upsertCourse, getEnrollments,
  *   getStats, getApplicationStats,
  *   getInstructors, getCourses,
@@ -63,6 +67,14 @@ const LEARNER = 'learner-1';
 const APP = 'app-1';
 
 const mockAdminAuditLog = jest.fn(async () => ({})) as jest.Mock<any>;
+
+//   #954 The academy review gates moved to requireAdmin, which reads live roles.
+//   This suite drives globalThis.mockRequireSession and does NOT own a
+//   session-guard mock of its own, so the SHARED gate mock is the right one: it
+//   reads that same global and decides against the real PERMISSION_MATRIX, so a
+//   role without the permission is still refused here.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
 
 jest.mock('@/lib/audit-log', () => ({
     recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),

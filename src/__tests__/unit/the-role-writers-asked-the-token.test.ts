@@ -470,7 +470,7 @@ describe('#750 — and the stale-JWT ledger recorded the progress', () => {
          *   would have been silence and the slack would have grown again.
          */
         expect(code('src/__tests__/unit/half-converted-off-the-stale-token.test.ts'))
-            .toContain('ledgerVerdict(jwtOnly.length, 60)');
+            .toContain('ledgerVerdict(jwtOnly.length, 58)');
     });
 
     it('AND THE NAMED-PERMISSION CENSUS COUNTED THE TWELVE NEW GATES (73 AS OF THE CONSOLIDATION)', () => {
@@ -491,7 +491,7 @@ describe('#750 — and the stale-JWT ledger recorded the progress', () => {
         //   live profile. Both live-checked from the start, so the ledger above
         //   does not move a third time.
         expect(code('src/__tests__/unit/require-admin-names-its-permission.test.ts'))
-            .toContain('expect(callSites().length).toBe(102)');
+            .toContain('expect(callSites().length).toBe(106)');
     });
 });
 

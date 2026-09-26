@@ -14,7 +14,15 @@ import type { AdminPermission } from "@/lib/admin-permissions";
  *     #532   the three files that disagreed with THEMSELVES — one function on the
  *            live gate, another in the same file still on the token
  *     #748   the four doors money leaves by
- *     #750   the two role-writing files, converted WHOLE
+ *     #750   the two writes that can put "super_admin" into a roles array,
+ *            converted WHOLE. NOT "the two role-writing files" — an earlier
+ *            draft of this line said that, and #954 corrects it: #750 scoped
+ *            itself precisely and said so, noting that "every other
+ *            role-touching write uses arrayUnion with a fixed participant
+ *            role". Eleven such files exist and all eleven gate on the token.
+ *            #750 set them aside as the lesser risk, correctly; nobody went
+ *            back for them, and this summary's missing qualifier is part of
+ *            why.
  *     #932   two of the ten unreached API routes: the company's live bank
  *            balance, and the sender of money-owed emails to members
  *
@@ -199,6 +207,114 @@ export function mustRevalidateLive(permission: AdminPermission): boolean {
         + `REVERSIBLE_PERMISSIONS with the reason.`,
     );
 }
+
+/**
+ * The same question for a door, which is not always one permission.
+ *
+ *   #954 THE RULE WAS WRITTEN FOR A DOOR NAMING ONE PERMISSION AND NOT WRITING
+ *   ROLES. Measuring the next set found that neither holds generally, and both
+ *   gaps let a door off the list rather than onto it.
+ *
+ * ── A DISJUNCTION TAKES THE MAXIMUM, NOT THE MINIMUM ────────────────────────
+ *
+ *   Three gates in actions/admin/_exports.ts admit `users:update` OR
+ *   `export:approve_applications` — one irreversible by the list above, one
+ *   reversible. mustRevalidateLive is total over PERMISSIONS and had no answer
+ *   for a door naming two, and "whichever I look up first" is exactly the ad hoc
+ *   that #951 exists to end.
+ *
+ *   The rule itself settles it, because of what it is a statement about: "acting
+ *   on stale authorisation produces an effect that revoking the admin cannot
+ *   undo." The EFFECT belongs to the door. It does not change depending on which
+ *   branch of an || let the caller in. An export_admin rejecting an export
+ *   application on an eight-hour-stale token does precisely what an admin doing
+ *   it would do.
+ *
+ *   So the maximum. Taking the minimum would give the export_admin a stale
+ *   window on the very act the admin beside them is re-checked for, which is not
+ *   a rule, it is a coin toss decided by the order of two operands.
+ *
+ * ── A ROLE WRITE IS IRREVERSIBLE WHATEVER PERMISSION THE GATE NAMES ─────────
+ *
+ *   Ten files write a member's `roles` array and still decide from the token.
+ *   SEVEN of them gate entirely on permissions this file calls reversible —
+ *   `cooperatives:approve_members`, `wave:approve_applications`,
+ *   `farm_nation:verify_applications`, `land:verify_listings`,
+ *   `marketplace:approve_sellers`, `marketplace:suspend_sellers` — every one of
+ *   which the reversible list above places, correctly, among the editorial queues
+ *   that should NOT pay for a database read per request. The other three reach an
+ *   irreversible permission somewhere in the file and were already indicted by
+ *   the per-permission rule alone.
+ *
+ *   The permissions are classified right and the doors are still wrong, which is
+ *   the per-permission proxy failing in the direction the header only admitted
+ *   for two certificate routes. `cooperatives:approve_members` names a
+ *   reversible act — a membership approved is a membership revoked. The door
+ *   granting it writes `roles`, and #750's compounding case then applies in
+ *   full: the grant outlives the granter's own revocation, and nobody goes
+ *   looking for access that was granted legitimately eight hours ago.
+ *
+ *   So the door's own behaviour overrides its permission's classification in the
+ *   one direction that is safe — towards the live read, never away from it.
+ *
+ *   role-writers-are-not-on-the-token sweeps for this rather than listing it —
+ *   not because #750 got its count wrong (it did not; see the correction above)
+ *   but because the eleven it deliberately deferred were then carried in prose,
+ *   by a summary of a summary, and prose cannot tell you it has gone stale.
+ */
+export function mustRevalidateLiveForDoor(door: {
+    /** Every permission the gate admits. A disjunction takes the maximum. */
+    readonly permissions: readonly AdminPermission[];
+    /** Does the door write a member's `roles` array? Forces a live read. */
+    readonly writesRoles?: boolean;
+}): boolean {
+    if (door.permissions.length === 0) {
+        throw new Error(
+            "stale-authorisation: a door was classified with no permissions. A gate "
+            + "admitting nobody by permission is either dead or decides from something "
+            + "that is not the matrix — a role literal, most likely. See "
+            + "NO_ROLE_LITERALS_IN_GATES.",
+        );
+    }
+
+    //   The maximum over the disjuncts, and the role write on top of it. Both
+    //   only ever move a door TOWARDS the live read; nothing here can take one
+    //   off the list, which is deliberate — a rule that can downgrade a door is
+    //   a rule somebody will reach for to make a conversion unnecessary.
+    if (door.writesRoles) return true;
+    return door.permissions.some((p) => mustRevalidateLive(p));
+}
+
+/**
+ * Why a gate may not decide from a role NAME.
+ *
+ *   #365 closed this shape in _exports.ts and _marketplace.ts, recording that
+ *   there the role literal "admitted nobody the permissions did not". Four gates
+ *   in the academy still carry it, and there it admits somebody the permission
+ *   does not:
+ *
+ *       if (!hasAdminPermission(session.user.roles, "users:update") &&
+ *           !session.user.roles?.includes("academy_admin")) { refuse }
+ *
+ *   users:update is super_admin and admin. academy_admin holds it nowhere, and
+ *   reaches these four doors solely through the literal.
+ *
+ *   The set it admits — super_admin, admin, academy_admin — is exactly the set
+ *   holding `academy:approve_applications`. That coincidence is the defect and
+ *   not the defence: the gate is spelling a permission out by hand, so it stops
+ *   agreeing with the matrix the moment the matrix moves in either direction,
+ *   and the refusal it prints ("Permission required - users:update") already
+ *   names a permission it does not actually require.
+ *
+ *   It is also why these four were invisible here. mustRevalidateLive is total
+ *   over permissions and a role name is not one, so the door ledger had nothing
+ *   to classify — while three of the four write `roles`, which is the most
+ *   irreversible act on the list.
+ */
+export const NO_ROLE_LITERALS_IN_GATES =
+    "An authorisation gate decides from a permission, never from a role name. A "
+    + "role literal cannot be classified by the irreversibility rule, hand-copies "
+    + "a set the matrix already defines, and silently stops agreeing with it.";
 
 /**
  * Doors the permission classifies one way and their actual effect classifies the

@@ -506,6 +506,38 @@ describe('#375 — every gate names its permission, and the exception is stated'
          * Two gates: POST grants, DELETE revokes.
          */
         'src/app/api/admin/add-roles/route.ts': Array(2).fill('users:update'),
+
+        /**
+         * #954. The two academy review files, four gates, and the last four ROLE
+         * LITERALS in the tree.
+         *
+         * Each gate read `!hasAdminPermission(roles, "users:update") &&
+         * !roles?.includes("academy_admin")`, so it refused with "Permission
+         * required - users:update" at a door that did not require users:update —
+         * academy_admin holds it nowhere and reached these four solely through the
+         * literal.
+         *
+         * The AUDIENCE is unchanged, which is the same shape as #526 above:
+         * users:update is super_admin and admin, academy:approve_applications is
+         * those two plus academy_admin, and that is exactly the set the permission
+         * and the literal admitted between them. What changed is that the matrix
+         * decides it, so the gate keeps agreeing with the matrix when the matrix
+         * moves instead of silently diverging.
+         *
+         * Three gates in _ac_admin_review: approve writes
+         * `roles: arrayUnion("academy_participant")` and creates the user document
+         * when none exists, reject writes `arrayRemove(...moduleGrantRoles)`, and
+         * record-payment writes `serviceRegistrations.academy.plan` — the field
+         * checkCourseAccess reads to decide which course tiers a learner may enrol
+         * in. #750's criterion, in files #750's bounded set did not reach.
+         *
+         * One in _ac_admin_applications: the pending queue, whose rows carry
+         * applicant bank details. #537 masked the columns and named this very gate
+         * as admitting "any academy_admin on the stale token"; the gate itself was
+         * left alone.
+         */
+        'src/app/actions/academy/_ac_admin_review.ts': Array(3).fill('academy:approve_applications'),
+        'src/app/actions/academy/_ac_admin_applications.ts': ['academy:approve_applications'],
     };
 
     it('EVERY GATE NAMES THE PERMISSION ITS ACTION NEEDS', () => {
@@ -612,7 +644,12 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // than reciting.
         // 82 → 97: #952's fifteen loan-action gates.
         // 97 → 102: #953's wallet.ts (2) and broadcast (3).
-        expect(callSites().length).toBe(102);
+        // 102 → 106: #954's four academy review gates. The opposite-direction
+        // check above holds again — call sites 102 → 106 while
+        // half-converted-off-the-stale-token's doors go 60 → 58 — and on this
+        // finding it is worth more than usual, because 106 counts the gates that
+        // exist and 58 counts one of the two spellings of the gates that should.
+        expect(callSites().length).toBe(106);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

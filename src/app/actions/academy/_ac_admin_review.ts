@@ -9,8 +9,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
@@ -33,9 +33,29 @@ async function _approveAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
-            !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const , data: null };
+        /*
+         *   #954 LIVE RE-VALIDATION, AND THE ROLE LITERAL REPLACED BY THE
+         *   PERMISSION IT WAS SPELLING OUT BY HAND.
+         *
+         *   This door writes `roles: FieldValue.arrayUnion("academy_participant")`
+         *   and CREATES the user document when none exists. #750's criterion is
+         *   exactly this: a grant outlives the granter's own revocation, and
+         *   nobody goes looking for access that was granted legitimately eight
+         *   hours ago. #356 measured that window in hours.
+         *
+         *   The gate it replaces read `!hasAdminPermission(roles, "users:update")
+         *   && !roles?.includes("academy_admin")`. users:update is super_admin and
+         *   admin; academy_admin holds it nowhere and reached this door solely
+         *   through the literal. The set the two admitted together — super_admin,
+         *   admin, academy_admin — is exactly the set holding
+         *   academy:approve_applications, so this refuses and admits the same
+         *   people today while saying it through the matrix, which is what makes
+         *   it keep agreeing when the matrix moves. The old refusal named
+         *   users:update, which the door did not actually require.
+         */
+        const gate = await requireAdmin("academy:approve_applications");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const, data: null };
         }
 
         // 1. Get Application
@@ -203,9 +223,18 @@ async function _rejectAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
-            !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const , data: null };
+        /*
+         *   #954 LIVE RE-VALIDATION — and this one WRITES ROLES too, in the
+         *   revoking direction: `arrayRemove(...moduleGrantRoles("academy"))`.
+         *
+         *   #750 converted the role-writing files WHOLE rather than gate by gate,
+         *   and the reason applies here: a file that asks the database to grant a
+         *   role and the token to take one away is #532's disagreement-with-itself
+         *   in its most consequential form.
+         */
+        const gate = await requireAdmin("academy:approve_applications");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const, data: null };
         }
 
         // 1. Get Application
@@ -350,9 +379,21 @@ async function _updateAcademyApplicationPaymentAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
-            !session.user.roles?.includes("academy_admin")) {
-            return { success: false, error: "Unauthorized: Permission required", data: null };
+        /*
+         *   #954 LIVE RE-VALIDATION, AND THE ROLE LITERAL GONE.
+         *
+         *   Recording a payment writes `serviceRegistrations.academy.plan`, and
+         *   that field is the ACCESS KEY: checkCourseAccess reads it to decide
+         *   which course tiers a learner may enrol in. So this door hands out paid
+         *   course access, and the courses a learner consumes on a grant made
+         *   eight hours after the granter was revoked are consumed for good.
+         *
+         *   The permission is the one the matrix already gives the role the literal
+         *   admitted — see the gate above.
+         */
+        const gate = await requireAdmin("academy:approve_applications");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
 
         const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);

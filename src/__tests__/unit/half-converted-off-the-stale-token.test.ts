@@ -489,6 +489,15 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         //   Lowered from 68 by #952: the four loan action files, fifteen gates.
         //   Lowered from 64 by #953: wallet.ts's two payout gates and the three
         //   broadcast doors.
-        expect(ledgerVerdict(jwtOnly.length, 60)).toBe(LEDGER_HELD);
+        //   Lowered from 60 by #954: the two academy review files, four gates —
+        //   three of which write a member's roles or their academy plan, and all
+        //   four of which carried a role literal beside the permission.
+        //
+        //   #954 ALSO MEASURED WHAT THIS NUMBER DOES NOT COVER. It counts
+        //   `hasAdminPermission(` only, and `isAdmin(session.user.roles)` is a
+        //   second spelling of the same defect with 56 doors of its own. Held in
+        //   role-writers-are-not-on-the-token; named here so 58 is not read as the
+        //   whole surface.
+        expect(ledgerVerdict(jwtOnly.length, 58)).toBe(LEDGER_HELD);
     });
 });
