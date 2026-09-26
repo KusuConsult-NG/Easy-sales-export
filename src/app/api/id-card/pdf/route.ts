@@ -139,6 +139,21 @@ async function fetchAsBase64(url: string): Promise<{ b64: string; mime: string }
         const mime = res.headers.get("content-type") || "image/jpeg";
         if (!mime.startsWith("image/")) return null;
 
+        /*
+         *   #940 AND NOT AN SVG, WHICH `image/` ADMITS.
+         *
+         *   A passport photo is a photograph. sharp will happily rasterise an
+         *   SVG, and an SVG is a document with a rendering engine behind it —
+         *   the one input shape on this path that is executable rather than
+         *   merely decoded. Every other check on this function exists because
+         *   this server fetches a stored value and hands it to a native library;
+         *   this is the same reasoning, for the format where it matters most.
+         */
+        if (mime.startsWith("image/svg")) {
+            logger.warn("[id-card] refused an SVG passport photo — a photograph is expected", { mime });
+            return null;
+        }
+
         const declared = Number(res.headers.get("content-length") ?? NaN);
         if (Number.isFinite(declared) && declared > MAX_PHOTO_BYTES) return null;
 
@@ -147,6 +162,89 @@ async function fetchAsBase64(url: string): Promise<{ b64: string; mime: string }
 
         return { b64: Buffer.from(buf).toString("base64"), mime };
     } catch {
+        return null;
+    }
+}
+
+/**
+ * The passport photo, ready to composite — or null, and the card renders without it.
+ *
+ *   #940 AN UNDECODABLE PHOTO TOOK THE WHOLE CARD DOWN.
+ *
+ *   Seen in production twice in seven seconds:
+ *
+ *       [/api/id-card/pdf] ID card generation error:
+ *       "Input buffer contains unsupported image format" at Sharp.toBuffer
+ *
+ *   fetchAsBase64 checked the host, the status, the size and that the
+ *   content-type began with `image/`. That last one is a check on the CLAIM, not
+ *   on the bytes — and measured against this sharp build, that exact message is
+ *   produced only by a body sharp cannot identify at all: an HTML page, a JSON
+ *   error, or a PDF. Not HEIC, which this build decodes; not AVIF or a truncated
+ *   JPEG, which fail with different messages. So something upstream served a
+ *   non-image under an image content-type, and the header check waved it through.
+ *
+ *   THE CAUSE IS UPSTREAM AND THE CONSEQUENCE WAS NOT. buildSVG already takes
+ *   `hasPhoto` and draws a placeholder frame, so this member's card would have
+ *   rendered perfectly well without their photo. Instead the route threw and they
+ *   got no ID card at all — a 500 on a download, for a cosmetic input.
+ *
+ *   SO THE DECODE IS THE CHECK. There is no list of permitted formats here to
+ *   drift out of date against whatever sharp was built with: the work that can
+ *   fail is attempted, and if it fails the photo is dropped. That also settles a
+ *   subtler case a format allowlist would miss — a format sharp can IDENTIFY but
+ *   this build cannot DECODE. AVIF is exactly that today: `sharp.format.avif`
+ *   reports no buffer input, so a metadata probe would pass and toBuffer would
+ *   throw.
+ *
+ *   AND IT RETURNS THE FINISHED BUFFER, not a flag. The SVG is built from
+ *   `hasPhoto`, and it used to be built BEFORE the photo was decoded — so a
+ *   decode that failed after the SVG said "there is a photo" would leave a
+ *   transparent hole where the portrait belongs. Deciding both from one value
+ *   means the card cannot claim a photo it does not have.
+ */
+async function resolvePassportPhoto(url: string): Promise<Buffer | null> {
+    const fetched = await fetchAsBase64(url);
+    if (!fetched) return null;
+
+    const raw = Buffer.from(fetched.b64, "base64");
+
+    try {
+        //   Cover-fit from the top: a passport photo's subject is the face, and
+        //   cropping a portrait from the centre takes the chin off.
+        const resized = await sharp(raw)
+            .resize(PHOTO_W, PHOTO_H, { fit: "cover", position: "top" })
+            .png()
+            .toBuffer();
+
+        const mask = Buffer.from(
+            `<svg width="${PHOTO_W}" height="${PHOTO_H}">
+                <rect width="${PHOTO_W}" height="${PHOTO_H}" rx="10" fill="white"/>
+            </svg>`
+        );
+
+        return await sharp(resized)
+            .composite([{ input: mask, blend: "dest-in" }])
+            .png()
+            .toBuffer();
+    } catch (error) {
+        /*
+         *   warn, not error: the card is still produced. An error here would page
+         *   somebody about a member who is holding a valid ID card with a
+         *   placeholder portrait, and bury the 500s that actually matter.
+         *
+         *   The mime and the byte count are logged because they are what
+         *   identifies the upstream culprit — "image/jpeg, 4kb" reads very
+         *   differently from "image/jpeg, 2MB".
+         */
+        logger.warn(
+            "[id-card] passport photo could not be decoded — card rendered without it",
+            {
+                mime: fetched.mime,
+                bytes: raw.byteLength,
+                reason: error instanceof Error ? error.message : String(error),
+            },
+        );
         return null;
     }
 }
@@ -365,13 +463,22 @@ export async function POST(req: NextRequest) {
             passportPhotoUrl = null,
         } = card.data as Record<string, any>;
 
-        // Fetch passport photo as base64
-        let photoData: { b64: string; mime: string } | null = null;
+        /*
+         *   The photo, already decoded, resized and masked — or null.
+         *
+         *   #940 This was `fetchAsBase64`, and the bytes were not decoded until
+         *   after the SVG had been built from `hasPhoto: !!photoData`. A body that
+         *   sharp could not read then threw, and the whole download 500'd on what
+         *   is a cosmetic input. resolvePassportPhoto does the decode here, so
+         *   `photo` is a fact rather than a promise about one.
+         *
+         *   A relative value used to be resolved against req.url, which made this
+         *   server fetch its own origin. Photo URLs are absolute Cloudinary or
+         *   ImageKit links; anything else is refused by isAllowedPhotoUrl.
+         */
+        let photo: Buffer | null = null;
         if (passportPhotoUrl) {
-            // A relative value used to be resolved against req.url, which made
-            // this server fetch its own origin. Photo URLs are absolute
-            // Cloudinary links; anything else is refused by isAllowedPhotoUrl.
-            photoData = await fetchAsBase64(String(passportPhotoUrl));
+            photo = await resolvePassportPhoto(String(passportPhotoUrl));
         }
 
         // Build SVG (photo slot left transparent — will be composited)
@@ -379,40 +486,21 @@ export async function POST(req: NextRequest) {
             fullName, memberNumber, gender,
             stateOfOrigin, joinedAt, validUntil,
             membershipTier,
-            hasPhoto: !!photoData,
+            //   One value decides both the placeholder and the composite, so the
+            //   card cannot draw a photo slot it has nothing to put in.
+            hasPhoto: !!photo,
         });
 
         // Convert SVG → PNG base using sharp with explicit CR80 print density
         let sharpPipeline = sharp(Buffer.from(svg)).withMetadata({ density: 267 }).png();
 
-        // Composite photo on top if available
-        if (photoData) {
-            // Resize photo to fit the slot, rounded corners via a mask
-            const photoBuffer = Buffer.from(photoData.b64, "base64");
-
-            // Resize photo to slot dimensions with cover-fit
-            const resizedPhoto = await sharp(photoBuffer)
-                .resize(PHOTO_W, PHOTO_H, { fit: "cover", position: "top" })
-                .png()
-                .toBuffer();
-
-            // Create a rounded-corner mask matching the slot
-            const mask = Buffer.from(
-                `<svg width="${PHOTO_W}" height="${PHOTO_H}">
-                    <rect width="${PHOTO_W}" height="${PHOTO_H}" rx="10" fill="white"/>
-                </svg>`
-            );
-
-            // Apply mask to photo
-            const maskedPhoto = await sharp(resizedPhoto)
-                .composite([{ input: mask, blend: "dest-in" }])
-                .png()
-                .toBuffer();
-
-            // Composite masked photo onto the card at the correct position
+        //   Already resized and masked by resolvePassportPhoto — the resizing that
+        //   used to live here is what could throw, and it belongs beside the
+        //   fallback that handles it rather than inline in the happy path.
+        if (photo) {
             sharpPipeline = sharp(Buffer.from(svg))
                 .composite([{
-                    input: maskedPhoto,
+                    input: photo,
                     left: PHOTO_X,
                     top: PHOTO_Y,
                     blend: "over",
