@@ -235,6 +235,49 @@ export interface TokenGate {
      * a bare role-name check — see findRoleLiteralGates.
      */
     readonly forgivenByRoleLiteral: boolean;
+    /**
+     * WHERE THE ROLES CAME FROM, which decides whether this is a defect at all.
+     *
+     *   "token"   — `hasAdminPermission(session.user.roles, P)`. The stale read.
+     *   "live"    — `hasAdminPermission(liveRoles, P)`, `gate.roles`, a document
+     *               read. Correct code; not backlog.
+     *   "unknown" — a variable whose provenance the call site does not show:
+     *               `callerRoles`, `roles`, `viewer.roles`, `userRoles`.
+     */
+    readonly source: "token" | "live" | "unknown";
+}
+
+/**
+ * Classify the first argument of a hasAdminPermission call.
+ *
+ *   #956 THIS SCANNER COUNTED A LIVE READ AS A TOKEN READ, AND MINE WAS THE
+ *        LOOSE ONE.
+ *
+ *   #532's sweep has always been `/hasAdminPermission\(\s*session/` — it requires
+ *   the token in the first argument, and its counts were never wrong. The version
+ *   I wrote in #954 matched any `hasAdminPermission(` at all, so
+ *   _coop_admin_members.ts stayed on the role-writer ledger after #955 converted
+ *   its gates: what was left is line 846, `hasAdminPermission(liveRoles, …)`,
+ *   feeding the member PII decision from roles that really are live.
+ *
+ *   Measured across the tree: 138 calls — 107 token, 5 live, 26 whose first
+ *   argument is a variable the call site does not explain.
+ *
+ *   THE DIRECTION MATTERS AND IS WHY THIS IS A CLASSIFICATION RATHER THAN A
+ *   FILTER. Narrowing the sweep LOWERS the count, which reads exactly like
+ *   progress — #948's finding is that a count falling because the instrument went
+ *   blind cannot be told from a count falling because sites were fixed. So the
+ *   "unknown" bucket is carried and pinned rather than dropped into either side:
+ *   a new unclassifiable call fails a test instead of quietly landing in whichever
+ *   bucket happens to be convenient.
+ */
+export function rolesSourceOf(firstArg: string): TokenGate["source"] {
+    const arg = firstArg.trim();
+    if (/\blive/i.test(arg) || /\bgate\.roles\b/.test(arg)) return "live";
+    //   A document read is live by construction.
+    if (/\.data\(\)|Doc\??\.|Snap\??\./.test(arg)) return "live";
+    if (/\bsession\b|\btoken\b/.test(arg)) return "token";
+    return "unknown";
 }
 
 /**
@@ -259,6 +302,7 @@ export function findTokenGates(stripped: string): TokenGate[] {
             line: lineOf(stripped, m.index!),
             permission,
             forgivenByRoleLiteral: /roles\??\.includes\(\s*["'][^"']+["']\s*\)/.test(expr),
+            source: rolesSourceOf(m[1]),
         });
     }
     return gates;
@@ -476,9 +520,25 @@ export function scanRoleWriteDoors(dirs: readonly string[], srcDir: string): Rol
     return doors;
 }
 
-/** The role-writing doors that still decide authorisation from the token. */
+/**
+ * The role-writing doors that still decide authorisation from the token.
+ *
+ *   #956 Counts TOKEN-sourced gates only. It used to count every
+ *   hasAdminPermission call, which kept _coop_admin_members.ts on this ledger
+ *   after #955 converted its gates — for a `hasAdminPermission(liveRoles, …)`
+ *   read that is correct. A ledger that cannot reach zero stops being read.
+ */
 export function roleWritersOnTheToken(doors: readonly RoleWriteDoor[]): RoleWriteDoor[] {
-    return doors.filter((d) => d.tokenGates.length > 0);
+    return doors.filter((d) => d.tokenGates.some((g) => g.source === "token"));
+}
+
+/** Gates whose first argument the call site does not explain — pinned, not guessed. */
+export function unclassifiedRoleSources(
+    doors: readonly RoleWriteDoor[],
+): Array<{ readonly file: string; readonly line: number }> {
+    return doors.flatMap((d) =>
+        d.tokenGates.filter((g) => g.source === "unknown").map((g) => ({ file: d.file, line: g.line })),
+    );
 }
 
 /**

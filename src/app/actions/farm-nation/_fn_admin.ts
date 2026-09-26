@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -48,9 +49,23 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         // _verifyPropertyAction — which is the third admin action here and was
         // already guarded. One of three checked and two not is the shape this
         // audit keeps finding.
-        const { hasAdminPermission } = await import("@/lib/admin-permissions");
-        if (!hasAdminPermission(session?.user?.roles, "farm_nation:verify_applications")) {
-            return { success: false as const, error: "Unauthorized", data: null, meta: null };
+        /*
+         *   #956 LIVE RE-VALIDATION — and this file WRITES ROLES in three places
+         *   (`roles: grantedRoles` on a created user document, an arrayUnion of the
+         *   granted roles, and an arrayRemove of moduleGrantRoles("farm-nation")).
+         *
+         *   farm_nation:verify_applications and land:verify_listings are both on
+         *   #951's REVERSIBLE list, correctly — a verification is un-verified. The
+         *   door granting it writes roles, so mustRevalidateLiveForDoor indicts it
+         *   on the writesRoles clause #954 added: the grant outlives the granter's
+         *   own revocation, and nobody goes looking for access granted legitimately
+         *   eight hours ago.
+         *
+         *   The permission is unchanged, so the audience is unchanged.
+         */
+        const gate = await requireAdmin("farm_nation:verify_applications");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null, meta: null };
         }
 
         //   EVERY PROFILE THIS APPLICANT OWNS. An admin is verifying a named
@@ -233,9 +248,23 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         // anybody with an account, and the record would name the caller as
         // `rejectedBy` — an audit trail agreeing with an action nobody was
         // entitled to take.
-        const { hasAdminPermission } = await import("@/lib/admin-permissions");
-        if (!hasAdminPermission(session?.user?.roles, "farm_nation:verify_applications")) {
-            return { success: false as const, error: "Unauthorized", data: null, meta: null };
+        /*
+         *   #956 LIVE RE-VALIDATION — and this file WRITES ROLES in three places
+         *   (`roles: grantedRoles` on a created user document, an arrayUnion of the
+         *   granted roles, and an arrayRemove of moduleGrantRoles("farm-nation")).
+         *
+         *   farm_nation:verify_applications and land:verify_listings are both on
+         *   #951's REVERSIBLE list, correctly — a verification is un-verified. The
+         *   door granting it writes roles, so mustRevalidateLiveForDoor indicts it
+         *   on the writesRoles clause #954 added: the grant outlives the granter's
+         *   own revocation, and nobody goes looking for access granted legitimately
+         *   eight hours ago.
+         *
+         *   The permission is unchanged, so the audience is unchanged.
+         */
+        const gate = await requireAdmin("farm_nation:verify_applications");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null, meta: null };
         }
 
         //   EVERY PROFILE THIS APPLICANT OWNS. An admin is verifying a named
@@ -365,9 +394,23 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
         const { session } = sessionResult;
         
         // Check admin role
-        const { hasAdminPermission } = await import("@/lib/admin-permissions");
-        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
-            return { success: false as const, error: "Unauthorized", data: null, meta: null };
+        /*
+         *   #956 LIVE RE-VALIDATION — and this file WRITES ROLES in three places
+         *   (`roles: grantedRoles` on a created user document, an arrayUnion of the
+         *   granted roles, and an arrayRemove of moduleGrantRoles("farm-nation")).
+         *
+         *   farm_nation:verify_applications and land:verify_listings are both on
+         *   #951's REVERSIBLE list, correctly — a verification is un-verified. The
+         *   door granting it writes roles, so mustRevalidateLiveForDoor indicts it
+         *   on the writesRoles clause #954 added: the grant outlives the granter's
+         *   own revocation, and nobody goes looking for access granted legitimately
+         *   eight hours ago.
+         *
+         *   The permission is unchanged, so the audience is unchanged.
+         */
+        const gate = await requireAdmin("land:verify_listings");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null, meta: null };
         }
 
         const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);

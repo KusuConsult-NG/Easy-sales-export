@@ -68,10 +68,17 @@ export async function getAuditLogsAction(filters: { userId?: string;
         //
         // Deliberately NOT switched to hasAdminPermission(roles, "audit:read"),
         // even though that is the matrix's own answer, because the matrix grants
-        // "audit:read" to NINE roles — moderator, support, and every module
-        // admin. Routing this through it would open the platform's activity log
-        // to support agents in the course of tightening the export, which is a
-        // policy change wearing the clothes of a bug fix.
+        // "audit:read" to ALL TEN roles — moderator, support, every module admin,
+        // AND admin and super_admin. Routing this through it would open the
+        // platform's activity log to support agents in the course of tightening the
+        // export, which is a policy change wearing the clothes of a bug fix.
+        //
+        // #956: this said NINE. The enumeration was the module admins plus
+        // moderator and support, and it left out the two roles nobody would think
+        // to doubt — so the number undercounted the very breadth the sentence is
+        // warning about. rolesWithPermission("audit:read") returns ten. The
+        // reasoning stands unchanged and is stronger with the right count: this is
+        // one of only TWO permissions in the matrix as wide as isAdmin itself.
         //
         // So the code and the matrix disagree here, in the opposite direction to
         // the export below: the matrix is broader than the code. Which is right

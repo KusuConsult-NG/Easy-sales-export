@@ -498,6 +498,10 @@ describe('#532 — the ratchet: no file may be half-converted', () => {
         //   second spelling of the same defect with 56 doors of its own. Held in
         //   role-writers-are-not-on-the-token; named here so 58 is not read as the
         //   whole surface.
-        expect(ledgerVerdict(jwtOnly.length, 58)).toBe(LEDGER_HELD);
+        //   Lowered from 58 by #956: the eight role-writing gates whose permissions
+        //   were already named — three in farm-nation/_fn_admin, two in
+        //   wave/_wv_admin_applications, one in each of the three marketplace
+        //   seller routes. No width change: same permissions, read live.
+        expect(ledgerVerdict(jwtOnly.length, 53)).toBe(LEDGER_HELD);
     });
 });

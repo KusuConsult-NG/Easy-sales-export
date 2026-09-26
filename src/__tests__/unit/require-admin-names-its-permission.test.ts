@@ -569,6 +569,30 @@ describe('#375 — every gate names its permission, and the exception is stated'
         'src/app/actions/cooperative/_coop_admin_money.ts': Array(2).fill('finance:process_withdrawals'),
         'src/app/api/admin/cooperative/approve-member/route.ts': ['cooperatives:approve_members'],
         'src/app/api/admin/cooperative/reject-member/route.ts': ['cooperatives:approve_members'],
+
+        /**
+         * #956. Five role-writing files whose gates already NAMED their permission,
+         * so converting them changed only where the roles are read — the audience is
+         * identical.
+         *
+         * All five gate on permissions #951 calls REVERSIBLE, and correctly: a
+         * verification is un-verified, a suspended seller un-suspended. They are
+         * here because they WRITE ROLES, which is the clause #954 added — the grant
+         * outlives the granter's own revocation, so the door is irreversible even
+         * where the permission is not.
+         *
+         * _fn_admin writes roles three times (a created user document, an arrayUnion
+         * of the granted roles, an arrayRemove of moduleGrantRoles("farm-nation")).
+         * _wv_admin_applications writes three. Each marketplace seller route writes
+         * one.
+         */
+        'src/app/actions/farm-nation/_fn_admin.ts': [
+            'farm_nation:verify_applications', 'farm_nation:verify_applications', 'land:verify_listings',
+        ],
+        'src/app/actions/wave/_wv_admin_applications.ts': Array(2).fill('wave:approve_applications'),
+        'src/app/api/admin/marketplace/approve-seller/route.ts': ['marketplace:approve_sellers'],
+        'src/app/api/admin/marketplace/reject-seller/route.ts': ['marketplace:suspend_sellers'],
+        'src/app/api/admin/marketplace/suspend-seller/route.ts': ['marketplace:suspend_sellers'],
     };
 
     it('EVERY GATE NAMES THE PERMISSION ITS ACTION NEEDS', () => {
@@ -676,12 +700,13 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // 82 → 97: #952's fifteen loan-action gates.
         // 97 → 102: #953's wallet.ts (2) and broadcast (3).
         // 102 → 106: #954's four academy review gates.
-        // 106 → 112: #955's six cooperative gates. The opposite-direction
+        // 106 → 112: #955's six cooperative gates.
+        // 112 → 120: #956's eight role-writing gates. The opposite-direction
         // check above holds again — call sites 102 → 106 while
         // half-converted-off-the-stale-token's doors go 60 → 58 — and on this
         // finding it is worth more than usual, because 106 counts the gates that
         // exist and 58 counts one of the two spellings of the gates that should.
-        expect(callSites().length).toBe(112);
+        expect(callSites().length).toBe(120);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

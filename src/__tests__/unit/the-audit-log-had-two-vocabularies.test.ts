@@ -114,6 +114,15 @@ const mockClaim = jest.fn(async (opts: any) => {
     return { claimed: true, status: current.status, exists: true };
 }) as jest.Mock<any>;
 
+/*
+ *   #956 The doors this suite exercises gate on requireAdmin now, which reads
+ *   live roles. SHARED mock: this suite drives globalThis.mockRequireSession and
+ *   owns no session-guard mock of its own, so the shared one reads the same
+ *   session and decides against the real PERMISSION_MATRIX.
+ */
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: (...a: any[]) => (mockClaim as any)(...a),
     claimStatusTransitionFromAny: (...a: any[]) => (mockClaim as any)(...a),

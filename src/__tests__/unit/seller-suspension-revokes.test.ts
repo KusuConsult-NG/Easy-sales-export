@@ -56,6 +56,36 @@ const mockRequireSession = jest.fn() as jest.Mock<any>;
 jest.mock('@/lib/session-guard', () => ({
     requireSession: (...a: any[]) => mockRequireSession(...a),
 }));
+/*
+ *   #956 A BESPOKE requireAdmin, BECAUSE THIS SUITE OWNS ITS SESSION.
+ *
+ *   The marketplace seller routes gate on requireAdmin now. The shared mock reads
+ *   globalThis.mockRequireSession — a global this suite never sets, because it
+ *   mocks session-guard with the local above — so it would have resolved
+ *   jest.setup's default admin instead of this suite's actor, admitting callers
+ *   the tests exist to see refused. That is the trap #952 and #953 each met once
+ *   and one-rule-for-a-stale-token sweeps for.
+ */
+jest.mock('@/lib/require-admin', () => ({
+    requireAdmin: async (permission?: string) => {
+        const { isAdmin, hasAdminPermission } = require('@/lib/admin-permissions');
+        const { COLLECTIONS } = require('@/lib/types/firestore');
+        const result = await mockRequireSession();
+        const user = result?.session?.user;
+        if (!user) return { error: 'Unauthenticated' };
+
+        //   The MOCKED adapter — the fake store this suite seeds.
+        const { supabaseDb } = require('@/lib/supabase-db');
+        const snap = await supabaseDb.collection(COLLECTIONS.USERS).doc(user.id).get();
+        const roles: string[] = (snap?.exists ? (snap.data() as any)?.roles : undefined)
+            ?? user.roles ?? [];
+
+        if (!isAdmin(roles) || (permission && !hasAdminPermission(roles, permission))) {
+            return { error: `Unauthorized: Permission required - ${permission}` };
+        }
+        return { userId: user.id, roles };
+    },
+}));
 
 let store: FakeDbHandle;
 

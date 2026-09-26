@@ -8,7 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { sendSellerRejectionEmail } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * API Route: Reject Seller Verification (Admin Only)
@@ -24,9 +24,19 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!hasAdminPermission(session.user.roles, "marketplace:suspend_sellers")) {
+        /*
+         *   #956 LIVE RE-VALIDATION — this route writes a member's roles, so the
+         *   writesRoles clause #954 added indicts it even though
+         *   marketplace:approve_sellers / suspend_sellers sit on #951's reversible
+         *   list. Suspending a seller is reversible; the ROLE the act grants or
+         *   removes outlives the admin who did it, which is #750's criterion.
+         *
+         *   The permission is unchanged, so the audience is unchanged.
+         */
+        const gate = await requireAdmin("marketplace:suspend_sellers");
+        if ("error" in gate) {
             return NextResponse.json(
-                { success: false, message: "Admin access required" },
+                { success: false, message: gate.error },
                 { status: 403 }
             );
         }

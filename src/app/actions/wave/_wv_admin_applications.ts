@@ -4,8 +4,9 @@ import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { isAdmin } from "@/lib/admin-permissions";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -207,8 +208,16 @@ async function _approveWaveApplicationAction(
             return { success: false as const, error: "Not authenticated" , data: null };
         }
 
-        if (!hasAdminPermission(session.user.roles, "wave:approve_applications")) {
-            return { success: false as const, error: "Unauthorized" , data: null };
+        /*
+         *   #956 LIVE RE-VALIDATION — three role writes in this file, same reading
+         *   as the Farm Nation admin doors. wave:approve_applications is reversible
+         *   as a permission and this door is not, because it grants a role.
+         *
+         *   The permission is unchanged, so the audience is unchanged.
+         */
+        const gate = await requireAdmin("wave:approve_applications");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error , data: null };
         }
 
         let targetUserId: string | undefined;
@@ -417,8 +426,16 @@ async function _rejectWaveApplicationAction(
             return { success: false as const, error: "Not authenticated" };
         }
 
-        if (!hasAdminPermission(session.user.roles, "wave:approve_applications")) {
-            return { success: false as const, error: "Unauthorized" };
+        /*
+         *   #956 LIVE RE-VALIDATION — three role writes in this file, same reading
+         *   as the Farm Nation admin doors. wave:approve_applications is reversible
+         *   as a permission and this door is not, because it grants a role.
+         *
+         *   The permission is unchanged, so the audience is unchanged.
+         */
+        const gate = await requireAdmin("wave:approve_applications");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error };
         }
 
         let targetUserId: string | undefined;

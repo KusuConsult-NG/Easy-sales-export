@@ -56,6 +56,8 @@ import {
     scanRoleLiteralGates,
     scanIsAdminDoors,
     roleWritersOnTheToken,
+    unclassifiedRoleSources,
+    rolesSourceOf,
 } from '@/lib/testing/role-write-doors';
 import {
     mustRevalidateLive,
@@ -164,6 +166,62 @@ describe('the instrument, before any number it produces is believed', () => {
          *   is meant to move.
          */
         expect(coop!.tokenGates.length).toBeGreaterThan(0);
+    });
+
+    it('TELLS A TOKEN READ FROM A LIVE ONE — mine did not, and #532\'s always has', () => {
+        /*
+         *   #956 THE LOOSE SWEEP WAS MINE.
+         *
+         *   #532's ledger has always been `/hasAdminPermission\(\s*session/` — the
+         *   token in the first argument — and its counts were never wrong. The
+         *   version I wrote in #954 matched any hasAdminPermission call, so
+         *   _coop_admin_members.ts stayed on the ledger below after #955 converted
+         *   its gates: what remained is line 846, hasAdminPermission(liveRoles, …),
+         *   feeding the member PII decision from roles that really are live. A
+         *   ledger that cannot reach zero stops being read.
+         *
+         *   Measured tree-wide: 138 calls, 107 token, 5 live, 26 whose first
+         *   argument is a variable the call site does not explain.
+         *
+         *   A CLASSIFICATION, NOT A FILTER, and the direction is why. Narrowing a
+         *   sweep LOWERS a count, which reads exactly like progress — #948's finding
+         *   is that a count falling because the instrument went blind cannot be told
+         *   from one falling because sites were fixed. So "unknown" is carried and
+         *   pinned below rather than dropped into whichever bucket is convenient.
+         */
+        expect(rolesSourceOf('session.user.roles')).toBe('token');
+        expect(rolesSourceOf('session?.user?.roles')).toBe('token');
+
+        expect(rolesSourceOf('liveRoles')).toBe('live');
+        expect(rolesSourceOf('[...liveRoles]')).toBe('live');
+        expect(rolesSourceOf('gate.roles')).toBe('live');
+        expect(rolesSourceOf('userDoc.data()?.roles')).toBe('live');
+
+        //   Names that say nothing about provenance. Guessing either way is the
+        //   mistake; they get their own bucket.
+        expect(rolesSourceOf('callerRoles')).toBe('unknown');
+        expect(rolesSourceOf('roles')).toBe('unknown');
+        expect(rolesSourceOf('viewer.roles')).toBe('unknown');
+    });
+
+    it('and the live read in _coop_admin_members is NOT on the backlog', () => {
+        //   The concrete instance. #955 converted this file's two token gates; the
+        //   hasAdminPermission(liveRoles, …) left behind is correct code, and the
+        //   loose sweep kept the file listed as though it were not.
+        const doors = scanRoleWriteDoors(DIRS, SRC);
+        const coop = doors.find((d) => d.file === 'app/actions/cooperative/_coop_admin_members.ts');
+
+        expect(coop).toBeDefined();
+        expect(coop!.tokenGates.map((g) => g.source)).toEqual(['live']);
+        expect(roleWritersOnTheToken(doors).map((d) => d.file))
+            .not.toContain('app/actions/cooperative/_coop_admin_members.ts');
+    });
+
+    it('NO GATE HAS AN UNCLASSIFIABLE ROLES SOURCE — pinned so a new one is noticed', () => {
+        //   Zero today among role-writing files. Pinned rather than assumed,
+        //   because "unknown" is the bucket that would otherwise absorb a real
+        //   token read and make the ledger look finished.
+        expect(unclassifiedRoleSources(scanRoleWriteDoors(DIRS, SRC))).toEqual([]);
     });
 
     it('does NOT count a response projection as a grant', () => {
@@ -391,11 +449,27 @@ describe('THE LEDGERS', () => {
     });
 
     it('ROLE-WRITING FILES STILL ON THE TOKEN — recorded 10', () => {
-        //   #955 10 -> 9 files, 32 -> 26 gates: the two _coop_admin_members gates
-        //   and the two _coop_admin_money gates that read the record only when the
-        //   token said no, plus the two cooperative member routes beside them.
-        const RECORDED_FILES = 9;
-        const RECORDED_GATES = 26;
+        /*
+         *   #955 10 -> 9 files, 32 -> 26 gates: the cooperative gates that read the
+         *   record only when the token said no.
+         *
+         *   #956 9 -> 3 files, 26 -> 17 gates, AND IT MOVED FOR TWO REASONS. Reported
+         *   separately because #948's whole finding is that a ledger reporting the net
+         *   of two causes tells you nothing:
+         *
+         *     9 -> 8 files, 26 -> 25 gates   THE INSTRUMENT, not progress. The sweep
+         *                                    counted hasAdminPermission(liveRoles, …)
+         *                                    in _coop_admin_members as a token read.
+         *     8 -> 3 files, 25 -> 17 gates   REAL: eight gates converted — three in
+         *                                    _fn_admin, two in _wv_admin_applications,
+         *                                    one in each marketplace seller route.
+         *
+         *   What is left is the three admin/* files, deliberately: _exports.ts (7,
+         *   three of them users:update OR export:approve_applications disjunctions
+         *   that requireAdmin(P) cannot express), _academy.ts (5), _marketplace.ts (5).
+         */
+        const RECORDED_FILES = 3;
+        const RECORDED_GATES = 17;
 
         const doors = scanRoleWriteDoors(DIRS, SRC);
         const onToken = roleWritersOnTheToken(doors);
@@ -465,9 +539,24 @@ describe('THE LEDGERS', () => {
          *   fell to zero the clause would be redundant; if it rose, the rule's
          *   own description of its reach would be understating it.
          */
-        //   #955 7 -> 6: _coop_admin_members is converted, and it was one of the
-        //   seven that only the writesRoles clause indicted.
-        const RECORDED_INVISIBLE = 6;
+        /*
+         *   #955 7 -> 6. #956 6 -> ZERO, which is the end state and needs saying.
+         *
+         *   Every role-writing gate still on the token now sits in one of the three
+         *   admin/* files, and those name users:update and content:approve among
+         *   others — permissions #951 already calls irreversible. So the
+         *   per-permission rule alone indicts all of them and the writesRoles clause
+         *   has no remaining subject in the tree.
+         *
+         *   THE CLAUSE IS NOT THEREFORE UNTESTED, and that distinction is the reason
+         *   this is recorded rather than deleted: the loop below is vacuous at zero,
+         *   but `a role write forces a live read even on a reversible permission`
+         *   above exercises mustRevalidateLiveForDoor directly against every entry in
+         *   REVERSIBLE_PERMISSIONS. That is what keeps the clause honest once its
+         *   instances are gone, and it is what would catch a NEW all-reversible role
+         *   writer — which is the case the clause exists for.
+         */
+        const RECORDED_INVISIBLE = 0;
 
         const onToken = roleWritersOnTheToken(scanRoleWriteDoors(DIRS, SRC));
         const invisible = onToken.filter((d) => {

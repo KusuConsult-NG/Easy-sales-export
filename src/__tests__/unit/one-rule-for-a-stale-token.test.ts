@@ -315,9 +315,27 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
         //   A door moved here by widening the reversible list would be a real
         //   loosening, and it would show up as this count rising rather than as
         //   the count above falling.
+        /*
+         *   #956 34 -> 29, AND THIS IS THE FIRST TIME THIS SIDE HAS MOVED.
+         *
+         *   Four findings reported it unmoved as the running check that each
+         *   conversion was a conversion and not a reclassification. It has moved
+         *   now, DOWNWARD, and the two directions mean opposite things: this count
+         *   RISING would be a door reclassified as reversible, which is the
+         *   loosening the pin exists to catch. Falling means doors left the ledger
+         *   because they were converted.
+         *
+         *   Five files, and all five gate on permissions this rule calls reversible
+         *   — farm_nation:verify_applications, land:verify_listings,
+         *   wave:approve_applications, marketplace:approve_sellers and
+         *   marketplace:suspend_sellers. They were converted because they WRITE
+         *   ROLES, which is #954's writesRoles clause, not because anything was
+         *   reclassified. The `must` side above is unchanged at 24, which is the
+         *   cross-check: nothing moved between the two lists.
+         */
         const { may } = jwtOnlyDoors();
 
-        expect(ledgerVerdict(may.length, 34)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(may.length, 29)).toBe(LEDGER_HELD);
     });
 
     it('AND THE SEVEN CONVERTED ARE OFF BOTH LISTS, BY NAME', () => {
