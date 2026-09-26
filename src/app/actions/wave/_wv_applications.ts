@@ -33,6 +33,7 @@ import { afterResponse } from "@/lib/after-response";
 //   spelling twice — see lib/wave-program.
 import { WAVE_FULL_NAME, WAVE_FORMAL_NAME } from "@/lib/wave-program";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 /*
  *   #905 THE SCHEMA MOVED TO lib/wave-application-fields, UNCHANGED.
@@ -383,8 +384,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 firstName: validatedData.firstName,
                 lastName: validatedData.surname,
                 otherName: validatedData.otherNames || null,
-                fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
-                    .filter(Boolean).join(" ").trim(),
+                fullName: joinFullName(namePartsOf(validatedData)),
                 phone: applicantPhone,
                 ...identityFieldsToSet,
                 stateOfOrigin: validatedData.stateOfOrigin,
@@ -426,13 +426,11 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 },
                 // Bank Details
                 bankAccountNumber: validatedData.accountNumber,
-                bankAccountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
-                    .filter(Boolean).join(" ").trim(),
+                bankAccountName: joinFullName(namePartsOf(validatedData)),
                 bankDetails: {
                     accountNumber: validatedData.accountNumber,
                     bankName: validatedData.bankName,
-                    accountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
-                        .filter(Boolean).join(" ").trim(),
+                    accountName: joinFullName(namePartsOf(validatedData)),
                     bankCode: ""
                 },
                 updatedAt: FieldValue.serverTimestamp()
@@ -1071,8 +1069,7 @@ async function _resubmitWaveApplicationAction(
                 firstName: validatedData.firstName,
                 lastName: validatedData.surname,
                 otherName: validatedData.otherNames || null,
-                fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
-                    .filter(Boolean).join(" ").trim(),
+                fullName: joinFullName(namePartsOf(validatedData)),
                 phone: applicantPhone,
                 ...identityFieldsToSet,
                 stateOfOrigin: validatedData.stateOfOrigin,
@@ -1114,13 +1111,11 @@ async function _resubmitWaveApplicationAction(
                 },
                 // Bank Details
                 bankAccountNumber: validatedData.accountNumber,
-                bankAccountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
-                    .filter(Boolean).join(" ").trim(),
+                bankAccountName: joinFullName(namePartsOf(validatedData)),
                 bankDetails: {
                     accountNumber: validatedData.accountNumber,
                     bankName: validatedData.bankName,
-                    accountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
-                        .filter(Boolean).join(" ").trim(),
+                    accountName: joinFullName(namePartsOf(validatedData)),
                     bankCode: ""
                 },
                 updatedAt: FieldValue.serverTimestamp()

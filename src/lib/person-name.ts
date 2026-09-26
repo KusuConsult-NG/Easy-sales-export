@@ -112,7 +112,16 @@ export function splitFullName(fullName: string | null | undefined): NameParts {
  * normalised, for every name. That property is the whole point: the round trip
  * that corrupted a name is now the round trip that cannot.
  */
-export function joinFullName(parts: Partial<NameParts> | null | undefined): string {
+export function joinFullName(
+    /*
+     *   #943 WIDENED TO ADMIT null PARTS. The body already coerces with
+     *   `String(p ?? "")`, so null was always handled; the TYPE refused it, and
+     *   two call sites in export onboarding hold `string | null` locals. Coercing
+     *   at those two sites would have put a `?? undefined` in the caller to
+     *   satisfy a signature that lies about what the function accepts.
+     */
+    parts: Partial<Record<keyof NameParts, string | null | undefined>> | null | undefined,
+): string {
     return [parts?.first, parts?.other, parts?.last]
         .map((p) => String(p ?? "").trim())
         .filter(Boolean)
@@ -132,11 +141,31 @@ export function namePartsOf(row: {
     otherName?: unknown;
     lastName?: unknown;
     fullName?: unknown;
+    /**
+     *   #943 WAVE AND SHIPMENTS SPELL TWO OF THESE DIFFERENTLY.
+     *
+     *   Six files store a name as `firstName / otherNames / surname`; eleven
+     *   store `firstName / otherName / lastName`. one-door-parsed-and-the-other-
+     *   did-not recorded that difference as the reason the WAVE copies were left
+     *   out of #452's consolidation: "a mapping change of its own rather than a
+     *   substitution".
+     *
+     *   The mapping belongs HERE rather than in a second reader beside this one.
+     *   Two functions that each answer "what are this row's name parts" is the
+     *   exact shape #452 was about — it cost three copies disagreeing and
+     *   duplicating people's middle names once per profile save. A reader that
+     *   knows both vocabularies cannot drift from itself.
+     *
+     *   Read only when the primary spelling is absent, so a row carrying both
+     *   keeps the one #452 settled on.
+     */
+    otherNames?: unknown;
+    surname?: unknown;
 } | null | undefined): NameParts {
     const stored = {
         first: String(row?.firstName ?? "").trim(),
-        other: String(row?.otherName ?? "").trim(),
-        last: String(row?.lastName ?? "").trim(),
+        other: String(row?.otherName ?? row?.otherNames ?? "").trim(),
+        last: String(row?.lastName ?? row?.surname ?? "").trim(),
     };
 
     // Any stored part means the row was written with them; a person with one

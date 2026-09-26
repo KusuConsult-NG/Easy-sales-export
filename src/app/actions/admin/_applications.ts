@@ -16,6 +16,7 @@ import { nationalIdField } from "@/lib/kyc-validators";
 import { nubanAccountNumber } from "@/lib/validations/shared";
 import { notifyMemberRecordEdited } from "@/lib/admin-edit-notice";
 
+import { joinFullName } from "@/lib/person-name";
 // ============================================
 // Admin Edit Application with Audit Trail
 // ============================================
@@ -296,7 +297,7 @@ async function _editApplicationAction(params: {
             const newOtherName = has("otherName") ? val("otherName") : (docData?.otherName || "");
             let computedFullName = "";
             if (has("firstName") || has("lastName") || has("otherName")) {
-                computedFullName = [newFirstName, newOtherName, newLastName].filter(Boolean).join(" ").trim();
+                computedFullName = joinFullName({ first: newFirstName, other: newOtherName, last: newLastName });
             }
 
             if (has("firstName")) {

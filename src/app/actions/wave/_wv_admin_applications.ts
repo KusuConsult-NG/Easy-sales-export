@@ -29,6 +29,7 @@ import { SEARCH_RESULT_CAP } from "@/lib/admin-search-helper";
 //   six layers of mock or not at all.
 import { sortIsInMemory, sortResolvedRows } from "@/lib/admin-row-sort";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // ============================================================================
 // APPLICATIONS MANAGEMENT
 // ============================================================================
@@ -263,7 +264,7 @@ async function _approveWaveApplicationAction(
                     await userRef.set({
                         uid: targetUserId,
                         email: appData?.email || appData?.userEmail || "",
-                        fullName: [appData?.firstName, appData?.otherNames, appData?.surname].filter(Boolean).join(" ").trim() || "WAVE Participant",
+                        fullName: joinFullName(namePartsOf(appData)) || "WAVE Participant",
                         createdAt: FieldValue.serverTimestamp(),
                         roles: ["wave_participant"],
                         isVerified: true,
@@ -309,11 +310,11 @@ async function _approveWaveApplicationAction(
                 // Sync bank details if available
                 if (appData?.accountNumber) {
                     updates.bankAccountNumber = appData.accountNumber;
-                    updates.bankAccountName = appData.bankAccountName || [appData.firstName, appData.otherNames, appData.surname].filter(Boolean).join(" ").trim();
+                    updates.bankAccountName = appData.bankAccountName || joinFullName(namePartsOf(appData));
                     updates.bankDetails = {
                         accountNumber: appData.accountNumber,
                         bankName: appData.bankName || "",
-                        accountName: appData.bankAccountName || [appData.firstName, appData.otherNames, appData.surname].filter(Boolean).join(" ").trim(),
+                        accountName: appData.bankAccountName || joinFullName(namePartsOf(appData)),
                         bankCode: appData.bankCode || ""
                     };
                 }

@@ -12,6 +12,7 @@ import { revealedIdentityFields } from "@/lib/kyc-identity-store";
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { isPlaceholderName } from "@/lib/canonical/placeholder-names";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /** #779 What an exporter without the live permission sees in those columns. */
 const WITHHELD_IDENTITY = {
     ninNumber: "Withheld",
@@ -101,7 +102,7 @@ export async function GET(request: NextRequest) {
                 : WITHHELD_IDENTITY;
 
             const derivedName = data.firstName
-                ? [data.firstName, data.otherName, data.lastName].filter(Boolean).join(" ").trim()
+                ? joinFullName(namePartsOf(data))
                 : (data.fullName || data.name || data.displayName || data.email || "Unknown");
             
             const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : "";

@@ -36,6 +36,7 @@ import { applicationsTypedTo, forgetApplicationReads } from "@/lib/application-r
 import { startedEarly } from "@/lib/started-early";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
+import { joinFullName } from "@/lib/person-name";
 export async function submitExportOnboardingAction(
     prevState: any,
     formData: FormData
@@ -189,8 +190,7 @@ export async function submitExportOnboardingAction(
         const profileFirstName = validatedData.profile.firstName;
         const profileLastName  = validatedData.profile.lastName;
         const profileOtherName = validatedData.profile.otherName || null;
-        const computedFullName = [profileFirstName, profileOtherName, profileLastName]
-            .filter(Boolean).join(" ").trim();
+        const computedFullName = joinFullName({ first: profileFirstName, other: profileOtherName, last: profileLastName });
 
         batch.update(userRef, { "serviceRegistrations.export.status": "pending_approval",
             "serviceRegistrations.export.paymentStatus": "completed",
@@ -896,8 +896,7 @@ export async function resubmitExportApplicationAction(
         const profileFirstName = validatedData.profile.firstName;
         const profileLastName  = validatedData.profile.lastName;
         const profileOtherName = validatedData.profile.otherName || null;
-        const computedFullName = [profileFirstName, profileOtherName, profileLastName]
-            .filter(Boolean).join(" ").trim();
+        const computedFullName = joinFullName({ first: profileFirstName, other: profileOtherName, last: profileLastName });
 
         batch.update(db.collection(COLLECTIONS.USERS).doc(userId), { 
             'serviceRegistrations.export.status': 'pending_approval',

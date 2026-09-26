@@ -118,8 +118,44 @@ const code = (rel: string) =>
  * (newOtherName, profileOtherName, resolvedOtherName), and a case-sensitive
  * sweep reported them as already folded in.
  */
-function inlineJoins(): { hits: string[]; files: number; occurrences: number } {
+/** How many inline name joins one piece of source holds. Shared with the control. */
+function countInlineJoinsIn(src: string): number {
     const INLINE = /\[[^\]]*[Oo]ther(?:Name|Names)\b[^\]]*\]\s*\.?\s*filter\(Boolean\)/g;
+    const NOT_A_NAME = /\b(?:email|phone|userId)\b|\.id\b/i;
+
+    return [...src.matchAll(INLINE)].filter((m) => !NOT_A_NAME.test(m[0])).length;
+}
+
+function inlineJoins(): { hits: string[]; files: number; occurrences: number } {
+    /*
+     *   #943 THE FIRST VERSION OF THIS COUNTED SEARCH HAYSTACKS AS NAME JOINS.
+     *
+     *   It matched any bracket containing an otherName token followed by
+     *   `.filter(Boolean)` — which is also the shape of
+     *
+     *       const searchString = [m.id, m.userId, m.firstName, m.lastName,
+     *                             m.fullName, m.otherNames, m.email, m.phone]
+     *           .filter(Boolean).join(" ").toLowerCase();
+     *
+     *   Three of the thirty-three occurrences were that: two in
+     *   _coop_admin_members and one in _academy. Converting them to joinFullName
+     *   would have DELETED the id, email and phone from a search index and
+     *   broken the admin search on both screens — a sweep doing real damage
+     *   while reporting an improvement.
+     *
+     *   So the ledger was 20 files / 33 occurrences and the real inline-name-join
+     *   count was 20 / 30. The ledger's own note was right that a swept ledger
+     *   beats a hand-listed one, and it was still only as good as its pattern.
+     *
+     *   DISCRIMINATED BY WHAT IS IN THE BRACKET, not by the variable's name. The
+     *   first attempt excluded brackets near an identifier called `searchString`
+     *   and missed `docSearchString` — sniffing names is how the original pattern
+     *   went wrong in the first place. A name join contains the three name parts
+     *   and nothing else; a haystack carries an id, an email or a phone number,
+     *   and no name join has any business with those.
+     */
+    const INLINE = /\[[^\]]*[Oo]ther(?:Name|Names)\b[^\]]*\]\s*\.?\s*filter\(Boolean\)/g;
+    const NOT_A_NAME = /\b(?:email|phone|userId)\b|\.id\b/i;
     const hits: string[] = [];
     let occurrences = 0;
 
@@ -131,7 +167,10 @@ function inlineJoins(): { hits: string[]; files: number; occurrences: number } {
                 continue;
             }
             if (!/\.tsx?$/.test(entry.name)) continue;
-            const found = [...readFileSync(join(ROOT, rel), 'utf8').matchAll(INLINE)].length;
+            const src = readFileSync(join(ROOT, rel), 'utf8');
+            //   Through countInlineJoinsIn, so the walker and the control cannot
+            //   disagree about what counts — which is this ledger's own subject.
+            const found = countInlineJoinsIn(src);
             if (found) { hits.push(rel); occurrences += found; }
         }
     };
@@ -629,26 +668,72 @@ describe('#920 — one rule for joining a name', () => {
         //   disagreement starts.
         const { files, occurrences } = inlineJoins();
 
-        expect(ledgerVerdict(files, 20)).toBe(LEDGER_HELD);
-        expect(ledgerVerdict(occurrences, 33)).toBe(LEDGER_HELD);
+        //   #943 CLOSED. Every inline name join goes through joinFullName now,
+        //   including the six that spell the parts `otherNames`/`surname` — the
+        //   mapping this note called "a change of its own" lives in namePartsOf,
+        //   because two readers of "what are this row's name parts" is the exact
+        //   shape #452 cost three copies of.
+        expect(ledgerVerdict(files, 0)).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(occurrences, 0)).toBe(LEDGER_HELD);
     });
 
-    it('and neither file this fix touched is on it any more', () => {
-        //   The sweep's own control: a ledger that counted nothing would also
-        //   hold. Both doors of the action used to spell the join out — two of
-        //   the thirty-five occurrences the first sweep found.
-        const { hits } = inlineJoins();
+    it('AND THE FILES THAT HELD ONE NOW CALL THE HELPER', () => {
+        /*
+         *   #943 This used to assert three files were ABSENT from a non-empty
+         *   ledger, with `hits.length > 0` as its vacuity guard. With the ledger
+         *   at zero that guard fails and the absences are trivially true — so it
+         *   asserts the positive instead: the substitution landed, rather than the
+         *   sweep having stopped seeing it. The vacuity guard's job moved to the
+         *   fixture control below, where it cannot rot as sites are converted.
+         *
+         *   A spread of modules on purpose: WAVE spells the parts
+         *   `otherNames`/`surname` and the cooperative spells them
+         *   `otherName`/`lastName`, and both go through the one reader now.
+         */
+        const CONVERTED = [
+            'src/app/actions/wave/_wv_applications.ts',
+            'src/app/actions/cooperative/_coop_registration.ts',
+            'src/app/actions/farm-nation/_fn_onboarding.ts',
+            'src/app/api/admin/cooperative/loan-applications/route.ts',
+            'src/app/cooperatives/onboarding/OnboardingClient.tsx',
+        ];
 
+        for (const rel of CONVERTED) {
+            const src = code(rel);
+            expect({ rel, joins: src.includes('joinFullName(') })
+                .toEqual({ rel, joins: true });
+        }
+
+        //   And the files the original fix touched are still clean.
+        const { hits } = inlineJoins();
         expect(hits).not.toContain(ACTION);
         expect(hits).not.toContain(CLIENT);
         expect(hits).not.toContain('src/lib/firestore-serialize.ts');
-        expect(hits.length).toBeGreaterThan(0);
     });
 
     it('POSITIVE CONTROL: the sweep really can see an inline join', () => {
-        //   Asserted against a file the ledger names, so a sweep broken into
-        //   matching nothing cannot pass the count above by accident.
-        expect(inlineJoins().hits).toContain('src/app/actions/wave/_wv_applications.ts');
+        /*
+         *   #943 RE-POINTED AT A FIXTURE, not at a file. This asserted the sweep
+         *   could find a join in _wv_applications — which was true until that file
+         *   was converted, at which point a control proving the sweep works
+         *   started failing because the sweep's subject had been fixed. A control
+         *   that rots as the ledger closes is a control that will be deleted at
+         *   exactly the wrong moment.
+         *
+         *   The pattern is exercised against both shapes directly: the one that
+         *   IS a name join and the search haystack that is not.
+         */
+        const NAME_JOIN = '[a.firstName, a.otherNames, a.surname].filter(Boolean).join(" ")';
+        const HAYSTACK = '[m.id, m.firstName, m.otherNames, m.email, m.phone].filter(Boolean).join(" ")';
+
+        expect(countInlineJoinsIn(NAME_JOIN)).toBe(1);
+        expect(countInlineJoinsIn(HAYSTACK)).toBe(0);
+    });
+
+    it('and no file in the tree carries one any more', () => {
+        //   The other half of the control above: the pattern works AND finds
+        //   nothing, rather than finding nothing because it stopped working.
+        expect(inlineJoins().hits).toEqual([]);
     });
 
     it('and lib/person-name is the one place that DEFINES it', () => {

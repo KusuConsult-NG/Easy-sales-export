@@ -7,6 +7,7 @@ import { FormInput, FormSelect } from "@/components/ui/FormField";
 import { IdInput } from "@/components/ui/IdInput";
 import { isObviouslyFakeId, fakeIdErrorMessage } from "@/lib/kyc-validators";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 const NIGERIAN_STATES = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
     "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu",
@@ -96,8 +97,7 @@ export default function ProfileStep({ onNext, onBack, onChange, initialData }: P
     function handleSubmit(ev: React.FormEvent) {
         ev.preventDefault();
         if (validate()) {
-            const fullName = [formData.firstName, formData.otherName, formData.lastName]
-                .filter(Boolean).join(" ").trim();
+            const fullName = joinFullName(namePartsOf(formData));
             onNext({ profile: { ...formData, fullName } });
         }
     };

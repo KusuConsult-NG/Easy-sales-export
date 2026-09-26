@@ -25,6 +25,7 @@ import { atomicUpdateUser } from '@/lib/services/userService';
 import { invalidateUserCache } from '@/lib/cache-invalidation';
 import { hashData } from '@/lib/security';
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type KYCVerificationResult = ActionResponse<{ isMatch: boolean; status?: string }>;
@@ -325,9 +326,7 @@ async function _saveKYCProfileAction(payload: { firstName: string;
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        const computedFullName = [payload.firstName, payload.otherNames, payload.lastName]
-            .filter(Boolean)
-            .join(' ');
+        const computedFullName = joinFullName(namePartsOf(payload));
 
         // Build root user update
         const rootUpdate: Record<string, unknown> = { 'kyc.firstName': payload.firstName,
