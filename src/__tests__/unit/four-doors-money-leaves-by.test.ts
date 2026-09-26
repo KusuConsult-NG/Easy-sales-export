@@ -155,7 +155,7 @@ describe('#748 — and the ledger recorded the progress', () => {
          *   population rather than merely gaining a second gate.
          */
         expect(code('src/__tests__/unit/half-converted-off-the-stale-token.test.ts'))
-            .toContain('ledgerVerdict(jwtOnly.length, 75)');
+            .toContain('ledgerVerdict(jwtOnly.length, 68)');
     });
 
     it('AND THE LEDGER IS STILL AN EXACT PIN, NOT A CEILING', () => {

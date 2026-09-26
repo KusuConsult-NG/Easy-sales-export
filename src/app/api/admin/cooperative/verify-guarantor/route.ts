@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "@/lib/firestore-compat";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 import { recordsAGuarantor } from "@/lib/loan-approval-policy";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
 import { recordAdminAction } from "@/lib/audit-log";
@@ -22,10 +22,22 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+        /*
+         *   #951 LIVE RE-VALIDATION, replacing a check on the JWT.
+         *
+         *   It verifies a guarantor, which is the step that makes a loan
+         *   approvable at all — so a stale token here is the precondition for the
+         *   approval approve-loan now refuses.
+         *
+         *   The rule is stated once in lib/stale-authorisation:
+         *   `cooperatives:approve_loans` is IRREVERSIBLE, because a loan creates a
+         *   debt and raises loanBalance, and revoking the admin afterwards does
+         *   not unmake it. #356 measured the window a stale claim buys — hours.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
             return NextResponse.json(
-                { success: false, message: "Admin access required" },
+                { success: false, message: gate.error },
                 { status: 403 }
             );
         }
