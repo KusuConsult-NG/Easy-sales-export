@@ -15,6 +15,7 @@ import {
     COURSE_LEVELS,
     DEFAULT_COURSE_CATEGORY,
     DEFAULT_COURSE_LEVEL,
+    type CourseCategory,
     type CourseLevel,
 } from "@/lib/academy-course-fields";
 
@@ -91,7 +92,10 @@ export default function CourseManagerPage() {
         tier: "foundation" | "standard" | "elite";
         level: CourseLevel;
         duration: string;
-        category: string;
+        //   #949 `string` until the Course type declared the field. It is one of
+        //   the five COURSE_CATEGORIES, and typing it here is what makes the
+        //   `...courseDetailsForm` patch below assignable without a cast.
+        category: CourseCategory;
     }>({
         title: "",
         description: "",
@@ -129,7 +133,7 @@ export default function CourseManagerPage() {
                     //   learners before deciding what to change it to.
                     level: (data.level as CourseLevel) || DEFAULT_COURSE_LEVEL,
                     duration: data.duration || "",
-                    category: (data as { category?: string }).category || DEFAULT_COURSE_CATEGORY,
+                    category: data.category || DEFAULT_COURSE_CATEGORY,
                 });
             } else {
                 toast.error("Course not found");
@@ -882,7 +886,7 @@ export default function CourseManagerPage() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                             <select
                                 value={courseDetailsForm.category}
-                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, category: e.target.value })}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, category: e.target.value as CourseCategory })}
                                 className="w-full px-4 py-2 border rounded-lg"
                             >
                                 {COURSE_CATEGORIES.map((c) => (

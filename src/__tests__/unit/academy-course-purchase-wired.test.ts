@@ -292,7 +292,18 @@ describe('#378 — the screens offer the purchase instead of ejecting', () => {
 
         expect(cat).toMatch(/const purchasable = Number\(course\.price \?\? 0\) > 0/);
         expect(cat).toMatch(/const visible = hasAccess \|\| isEnrolled \|\| purchasable/);
-        expect(cat).toMatch(/matchesSearch && matchesLevel && matchesTier && visible/);
+        /*
+         *   #949 THIS PINNED THE WHOLE CONJUNCTION, `matchesSearch &&
+         *   matchesLevel && matchesTier && visible`, and broke on a FOURTH filter
+         *   being added — the category one, which is unrelated to #378's finding.
+         *
+         *   A `visible` computed and not returned is the defect this guards, so
+         *   the assertion has to reach the return statement; it does not have to
+         *   enumerate what else is in it. Pinning the neighbours makes every new
+         *   filter a failure here, and a test that fails for unrelated reasons is
+         *   a test somebody edits without reading.
+         */
+        expect(cat).toMatch(/return matchesSearch &&[^;]*\bvisible\b\s*;/);
     });
 
     it('and an enrolled course stays listed whatever the plan says', () => {

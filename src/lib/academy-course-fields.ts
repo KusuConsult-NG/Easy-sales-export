@@ -43,11 +43,23 @@ export type CourseLevel = (typeof COURSE_LEVELS)[number];
 /**
  * The categories the create form has always offered.
  *
- *   KEPT, AND NOW ACTUALLY SENT. Nothing READS `course.category` yet — the
+ *   KEPT, SENT, AND NOW READ. #930 made the create form actually send this;
+ *   #949 gave it a reader.
+ *
+ *   The note here used to say: "Nothing READS `course.category` yet — the
  *   catalogue filters on level and tier — so this is recorded rather than
- *   displayed, which is a smaller wrong than a select that discards the answer
- *   it asked for. A category filter is a product decision and needs a reader;
- *   until there is one, the value is at least on the row for it to read.
+ *   displayed … A category filter is a product decision and needs a reader."
+ *
+ *   The second half was doing more work than it could carry. The catalogue's
+ *   panel is headed "Search & Filter Catalog" and already held a search box, a
+ *   DIFFICULTY filter and a PLAN TIER filter — level and tier being stored by the
+ *   same admin form, in the same submit, and read the same way. So the third
+ *   filter was the third of three, not a new idea about the product, and the
+ *   alternative on the table was to stop asking and discard five values already
+ *   on the rows.
+ *
+ *   The LABELS are what a learner types, which is why the catalogue's search
+ *   haystack carries the label and not the slug: nobody types "market-entry".
  */
 export const COURSE_CATEGORIES = [
     { value: "export-basics", label: "Export Basics" },

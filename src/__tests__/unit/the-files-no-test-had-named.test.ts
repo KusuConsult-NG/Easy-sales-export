@@ -1018,7 +1018,15 @@ describe('how much of the application no test has named', () => {
          *   Nothing READS course.category yet, so it is recorded rather than
          *   displayed — a smaller wrong than a select that discards the answer it
          *   asked for. A category filter needs a reader, which is the owner's
-         *   call. The edit screen gained all three fields, because the courses
+         *   call.
+         *
+         *   #949 CLOSED, AND THE "OWNER'S CALL" PART WAS WRONG. The catalogue's own
+         *   panel already filtered on level and on tier — both stored by the same
+         *   form, in the same submit — so the category filter was the third of
+         *   three rather than a product decision, and the only other honest option
+         *   was to stop asking. It is live, with the label in the search haystack
+         *   too, and a-category-nobody-could-search mounts the screen and drives
+         *   it. The edit screen gained all three fields, because the courses
          *   already stored are the ones carrying the invented values, and it also
          *   refuses a blank duration in a sentence naming the field rather than
          *   relaying the schema's after a round trip.

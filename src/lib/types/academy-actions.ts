@@ -30,6 +30,7 @@
  */
 
 import type { FieldValue, Timestamp } from "@/lib/firestore-compat";
+import type { CourseCategory } from "@/lib/academy-course-fields";
 
 export interface Course {
     id?: string;
@@ -39,6 +40,14 @@ export interface Course {
     duration: string; // e.g., "4 weeks"
     level: "beginner" | "intermediate" | "advanced";
     tier?: "free" | "foundation" | "standard" | "elite";
+    /**
+     *   #949 DECLARED HERE AT LAST. The create and edit forms have collected a
+     *   category from five options and the actions have stored it since #930, and
+     *   this type — the one the catalogue reads a course through — did not admit
+     *   it, so the only way to read the value was a cast. A field the database
+     *   holds and the type denies is a field every reader has to lie about.
+     */
+    category?: CourseCategory;
     price: number; // 0 for free
     modules: CourseModule[];
     thumbnail?: string;
