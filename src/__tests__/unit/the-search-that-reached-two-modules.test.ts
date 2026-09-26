@@ -180,11 +180,34 @@ describe('#825 Farm Nation — the registrant list never queried the registrants
         expect({ search, found: rowIds(res) }).toEqual({ search, found: [HER] });
     }, 60_000);
 
-    it('AND THE ROW IT RETURNS IS LABELLED WITH THE NAME THAT WAS SEARCHED', async () => {
-        //   Finding the document is only half of it. If the row came back
-        //   labelled "Unknown" the admin still could not act on it.
+    it('AND THE ROW IT RETURNS IS LABELLED WITH HER WHOLE NAME', async () => {
+        /*
+         *   Finding the document is only half of it. If the row came back
+         *   labelled "Unknown" the admin still could not act on it.
+         *
+         *   #946 THIS ASSERTION USED TO EXPECT "AISHAT ABUBAKAR" — her middle
+         *   name dropped. The fixture above carries `otherName: 'Yahaya'`
+         *   deliberately, so the expectation was pinning the defect: the
+         *   registrant list built its label as
+         *   `${profile.firstName} ${profile.lastName || ''}`, one of 92 two-part
+         *   joins that discarded the middle name across 38 files.
+         *
+         *   #452's finding is exactly this asymmetry — "Ada Chidinma Obi" on the
+         *   admin users screen and "Ada Obi" on another, so a search for the
+         *   middle name matched nothing. The label goes through
+         *   joinFullName(namePartsOf(...)) now, and CI caught this expectation
+         *   rather than the fix being wrong.
+         */
         const res = await registrants({ search: 'ABUBAKAR' });
-        expect((res.data as any[])[0]?.user?.name).toBe('AISHAT ABUBAKAR');
+        expect((res.data as any[])[0]?.user?.name).toBe('AISHAT Yahaya ABUBAKAR');
+    }, 60_000);
+
+    it('AND HER MIDDLE NAME IS SEARCHABLE, which is what dropping it cost', async () => {
+        //   The point of carrying it. An admin who knows her as Yahaya could not
+        //   find her while the label and the search text both omitted it.
+        const res = await registrants({ search: 'Yahaya' });
+
+        expect(rowIds(res)).toEqual([HER]);
     }, 60_000);
 
     it('AND THE ACCOUNT NAME STILL WORKS — this widens the search, it does not move it', async () => {
