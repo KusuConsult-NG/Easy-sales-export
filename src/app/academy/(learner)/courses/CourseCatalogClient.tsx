@@ -24,6 +24,7 @@ import { getCoursesAction, getEnrolledCoursesWithDetailsAction, enrollInCourseAc
 import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";
 import { checkCourseAccess } from "@/lib/academy-plan";
+import { COURSE_CATEGORIES } from "@/lib/academy-course-fields";
 import { formatCurrency } from "@/lib/utils";
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 
@@ -72,6 +73,23 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedLevel, setSelectedLevel] = useState<string>("all");
     const [selectedTier, setSelectedTier] = useState<string>("all");
+    /*
+     *   #949 THE FIRST READER `course.category` HAS EVER HAD.
+     *
+     *   The admin create and edit forms have offered five categories and the
+     *   actions have stored the answer since #930, and nothing anywhere read it.
+     *   academy-course-fields said so in as many words — "Nothing READS
+     *   course.category yet … a category filter is a product decision and needs a
+     *   reader" — and recorded it rather than displaying it, on the grounds that
+     *   storing an unread answer is a smaller wrong than a select that discards
+     *   it.
+     *
+     *   It is a smaller wrong and it is still one. This panel already filters on
+     *   level and on tier, both stored the same way and both offered in the same
+     *   admin form, so the third filter is the same shape as the two beside it
+     *   rather than a new idea about the product.
+     */
+    const [selectedCategory, setSelectedCategory] = useState<string>("all");
     const [sortBy, setSortBy] = useState<string>("newest");
 
     const userId = session?.user?.id;
@@ -172,7 +190,16 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
      */
     const query = searchQuery.toLowerCase();
     const filteredCourses = courses.filter((course) => {
-        const haystack = [course.title, course.description, (course as any).instructor]
+        /*
+         *   #949 THE CATEGORY'S LABEL IS IN THE HAYSTACK, not its stored value.
+         *
+         *   A learner types "Logistics", not "logistics-shipping": the value is a
+         *   slug the admin form never shows anyone. Searching the slug would have
+         *   been a reader in name only.
+         */
+        const categoryLabel = COURSE_CATEGORIES
+            .find((c) => c.value === course.category)?.label;
+        const haystack = [course.title, course.description, (course as any).instructor, categoryLabel]
             .filter((v): v is string => typeof v === "string")
             .join(" ")
             .toLowerCase();
@@ -180,6 +207,14 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
 
         const matchesLevel = selectedLevel === "all" || course.level === selectedLevel;
         const matchesTier = selectedTier === "all" || (course.tier || "free") === selectedTier;
+        /*
+         *   A course stored WITHOUT a category stays visible under "All
+         *   Categories" and is absent from every named one, which is the honest
+         *   answer: the rows written before #930 carry no category, and putting
+         *   them under a default would file somebody's course as Export Basics on
+         *   no evidence. #212's class — a missing field read as a value.
+         */
+        const matchesCategory = selectedCategory === "all" || course.category === selectedCategory;
 
         /**
          *   #378 A COURSE THAT CAN BE BOUGHT IS NOT HIDDEN.
@@ -204,7 +239,7 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
         const purchasable = Number(course.price ?? 0) > 0;
         const visible = hasAccess || isEnrolled || purchasable;
 
-        return matchesSearch && matchesLevel && matchesTier && visible;
+        return matchesSearch && matchesLevel && matchesTier && matchesCategory && visible;
     }).sort((a, b) => {
         if (sortBy === "a-z") {
             return a.title.localeCompare(b.title);
@@ -326,7 +361,7 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
                     <h2 className="text-lg font-bold text-slate-900">Search & Filter Catalog</h2>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                     {/* Search Input */}
                     <div className="relative">
                         <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -370,6 +405,28 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
                         </select>
                     </div>
 
+                    {/* Category filter — #949, the first reader course.category has had */}
+                    <div>
+                        <select
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-700 text-sm shadow-xs cursor-pointer"
+                        >
+                            <option value="all">All Categories</option>
+                            {/*
+                              *   From the shared list, not five more literals. The
+                              *   three levels had been written out four times before
+                              *   academy-course-fields existed and the forms needed a
+                              *   fifth; a hand-typed copy here is how the catalogue
+                              *   and the admin form start disagreeing about what a
+                              *   category is.
+                              */}
+                            {COURSE_CATEGORIES.map((c) => (
+                                <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {/* Sort Options */}
                     <div>
                         <select
@@ -390,12 +447,13 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
                     <h3 className="text-xl font-bold text-slate-900">
                         Available Courses ({filteredCourses.length})
                     </h3>
-                    {(searchQuery || selectedLevel !== "all" || selectedTier !== "all") && (
+                    {(searchQuery || selectedLevel !== "all" || selectedTier !== "all" || selectedCategory !== "all") && (
                         <button
                             onClick={() => {
                                 setSearchQuery("");
                                 setSelectedLevel("all");
                                 setSelectedTier("all");
+                                setSelectedCategory("all");
                             }}
                             className="text-indigo-600 hover:text-indigo-700 text-sm font-semibold transition"
                         >
@@ -411,13 +469,14 @@ export default function CourseCatalogClient({ initial = null, standing = null }:
                         <Compass className="w-16 h-16 text-slate-300 mx-auto mb-4 animate-pulse" />
                         <h4 className="text-lg font-bold text-slate-900 mb-1">No Courses Match Your Criteria</h4>
                         <p className="text-slate-600 text-sm mb-6 max-w-sm mx-auto">
-                            Try loosening your search terms or checking a different difficulty level.
+                            Try loosening your search terms, or a different difficulty level or category.
                         </p>
                         <button
                             onClick={() => {
                                 setSearchQuery("");
                                 setSelectedLevel("all");
                                 setSelectedTier("all");
+                                setSelectedCategory("all");
                             }}
                             className="px-5 py-2.5 bg-slate-950 text-white font-semibold rounded-xl text-sm hover:bg-slate-800 transition"
                         >

@@ -548,7 +548,21 @@ export interface Course {
     currency?: "NGN" | "USD";
     imageUrl?: string;
     thumbnail?: string;
-    category?: "export" | "farming" | "business" | "compliance" | string;
+    /**
+     *   #949 THIS SAID `"export" | "farming" | "business" | "compliance" | string`
+     *   AND SO SAID NOTHING: the trailing `| string` admits every value, so the
+     *   four names read as a constraint and were decoration. Three of them are not
+     *   categories this product has ever offered.
+     *
+     *   The five below are COURSE_CATEGORIES in lib/academy-course-fields, which
+     *   the admin form renders and the actions store — only "compliance"
+     *   overlapped. Spelled out rather than imported, for the same reason the
+     *   modules shape above is structural: this module stays free of a dependency
+     *   on an academy-specific one. academy-course-fields-are-one-list asserts the
+     *   two agree, so a category added there and not here fails a test instead of
+     *   drifting.
+     */
+    category?: "export-basics" | "compliance" | "logistics" | "market-entry" | "finance";
     level: "beginner" | "intermediate" | "advanced";
     /**
      *   #336 ONE ENROLMENT TALLY, FOUR NAMES.

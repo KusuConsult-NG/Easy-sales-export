@@ -44,6 +44,11 @@
  *   displayed. That is a smaller wrong than a select which discards the answer
  *   it asked for, and a category filter needs a reader — the owner's call.
  *
+ *   #949 IT HAS ONE, and calling it the owner's call was overcautious: the
+ *   catalogue panel already filtered on level and on tier, both stored by this
+ *   same form in this same submit, so the category filter was the third of three.
+ *   a-category-nobody-could-search covers it by mounting the catalogue.
+ *
  * ── WHY THIS MOUNTS BOTH FORMS ──────────────────────────────────────────────
  *
  *   A source ratchet cannot tell a field that renders from a field that is
