@@ -458,47 +458,55 @@ describe('#663 — requireAdmin, RUN rather than read', () => {
         expect(stripped).toContain("MFA_ADMIN_GRACE_UNTIL = '2000-01-01T00:00:00.000Z'");
     });
 
-    it('RECORDED: the grace window warned nobody, and the gate is why', () => {
+    it('CLOSED: the grace window warns now, and the gate is still not how', () => {
         /*
-         *   #936 A MEASUREMENT WORTH WRITING DOWN, found while working out how
-         *   much notice administrators actually had before tonight.
+         *   #936 RECORDED THIS AS A LIMITATION AND #939 CLOSED IT. The original
+         *   note, kept because the reasoning is the finding:
          *
-         *   adminMfaVerdict has three outcomes — ok, WARN, enrol — and warn
-         *   carries a sentence. adminMfaGate, its only caller on the request
-         *   path, does:
+         *       "adminMfaVerdict has three outcomes — ok, WARN, enrol — and warn
+         *        carries a sentence. adminMfaGate, its only caller on the request
+         *        path, does `if (verdict.outcome !== "enrol") return null;`. So for
+         *        the whole fourteen-day window the verdict said warn, the gate
+         *        threw the sentence away, and nothing on any screen mentioned it.
+         *        An administrator's first notice was being redirected to the setup
+         *        page on the day enforcement began."
          *
-         *       if (verdict.outcome !== "enrol") return null;
+         *   It also named its own closing condition: "building it now changes
+         *   nothing unless the owner extends MFA_ADMIN_GRACE_UNTIL, which is their
+         *   call about a security control, not mine." The owner has since set the
+         *   override and asked for the banner, so both halves of that condition
+         *   are met and the ledger is closed rather than re-pinned.
          *
-         *   So for the whole fourteen-day window the verdict said "warn", the
-         *   gate threw the sentence away, and nothing on any screen mentioned it.
-         *   An administrator's first notice was being redirected to the setup
-         *   page on the day enforcement began.
-         *
-         *   NOT STRANDED, and that distinction matters: the redirect goes to
-         *   MFA_SETUP_PATH, which is the screen that fixes it, and the API's 403
-         *   carries the same sentence. Nobody is locked out — they are asked,
-         *   abruptly, on a date nobody told them about.
-         *
-         *   NOT FIXED HERE. Rendering the warning is an admin-surface banner, and
-         *   the window it would have warned during has closed — so building it now
-         *   changes nothing unless the owner extends MFA_ADMIN_GRACE_UNTIL, which
-         *   is their call about a security control, not mine. This asserts the
-         *   current truth so it cannot be mistaken for working, and so whoever
-         *   wires the warning has a test telling them to update this note.
+         *   WHAT DID NOT CHANGE, AND IS THE POINT OF KEEPING THIS TEST HERE: the
+         *   gate still drops every verdict that is not `enrol`. The warning is not
+         *   a block and was never going to be one — an administrator inside the
+         *   window is warned AND let through, which is what mfa-policy's header
+         *   promised all along. The reader that was missing is a banner in the
+         *   admin chrome, not a branch in the gate.
          */
         const policy = code('src/lib/mfa-policy.ts');
 
-        //   The warn outcome exists and carries a reason.
-        expect(policy).toContain('| { outcome: "warn"; reason: string }');
-        //   And the gate on the request path drops everything that is not "enrol".
+        //   The warn outcome now carries the DATE as well as the sentence — a
+        //   warning without one is a mood. See #939 in mfa-policy.
+        expect(policy).toContain('| { outcome: "warn"; reason: string; enforcementAt: number }');
+        //   And the gate on the request path still drops everything but "enrol".
         expect(policy).toContain('if (verdict.outcome !== "enrol") return null;');
 
-        //   Nothing renders it: no admin surface reads the warn outcome.
-        const readers = ['src/middleware.ts', 'src/lib/require-admin.ts'];
-        for (const rel of readers) {
+        //   UNCHANGED, and deliberately: neither request-path gate reads `warn`.
+        //   Teaching middleware to render would be a gate that draws UI.
+        const gates = ['src/middleware.ts', 'src/lib/require-admin.ts'];
+        for (const rel of gates) {
             expect({ rel, renders: code(rel).includes('"warn"') || code(rel).includes("'warn'") })
                 .toEqual({ rel, renders: false });
         }
+
+        //   WHAT IS NEW: something finally reads it. The admin chrome asks the
+        //   policy for a notice and renders one, on both surfaces the gate
+        //   governs. Without this line the ledger above could be "closed" by
+        //   deleting it.
+        expect(code('src/components/admin/AdminShell.tsx')).toContain('<AdminMfaGraceBanner');
+        expect(code('src/components/admin/AdminMfaGraceBanner.tsx'))
+            .toContain('adminMfaGraceNotice(');
     });
 
     it('AND STILL REFUSES A NON-ADMIN FOR THE ORIGINAL REASON', async () => {

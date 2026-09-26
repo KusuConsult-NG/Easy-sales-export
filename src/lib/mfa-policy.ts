@@ -174,17 +174,44 @@ export function graceActive(
     env: NodeJS.ProcessEnv = process.env,
     now: number = Date.now(),
 ): boolean {
-    const override = env.MFA_ADMIN_GRACE_UNTIL ? Date.parse(env.MFA_ADMIN_GRACE_UNTIL) : NaN;
-    const until = Number.isNaN(override) ? Date.parse(MFA_ADMIN_ENFORCE_FROM) : override;
+    return adminMfaEnforcementAt(env) > now;
+}
 
-    return until > now;
+/**
+ * The instant enforcement begins, after the override has had its say.
+ *
+ *   #939 graceActive() answered "is the window open" and threw the DATE away,
+ *   which is the one fact a warning has to carry. A banner that says "two-factor
+ *   authentication will be required soon" is not a warning, it is a mood; the
+ *   administrator needs to know whether they have a fortnight or an afternoon.
+ *
+ *   graceActive now asks THIS rather than keeping its own copy of the override
+ *   rule. Two readings of `MFA_ADMIN_GRACE_UNTIL` that could disagree about when
+ *   enforcement starts is the shape of #353, #648 and #659, and here the two
+ *   would disagree about a security deadline: the gate closing on a day the
+ *   banner never named.
+ *
+ *   The typo rule is unchanged and lives here now — an unparseable override
+ *   falls back to the built-in date, because a valve that fails open on a typo
+ *   is not a valve.
+ */
+export function adminMfaEnforcementAt(env: NodeJS.ProcessEnv = process.env): number {
+    const override = env.MFA_ADMIN_GRACE_UNTIL ? Date.parse(env.MFA_ADMIN_GRACE_UNTIL) : NaN;
+
+    return Number.isNaN(override) ? Date.parse(MFA_ADMIN_ENFORCE_FROM) : override;
 }
 
 export type MfaVerdict =
     /** Nothing required of this account. */
     | { outcome: "ok" }
-    /** Required, not enrolled, and the window has not closed yet. */
-    | { outcome: "warn"; reason: string }
+    /**
+     * Required, not enrolled, and the window has not closed yet.
+     *
+     *   #939 `enforcementAt` rides along because the warning is useless without
+     *   it, and because a caller that re-derived it could name a different day
+     *   than the gate enforces.
+     */
+    | { outcome: "warn"; reason: string; enforcementAt: number }
     /** Required, not enrolled. Send them to MFA_SETUP_PATH. */
     | { outcome: "enrol"; reason: string };
 
@@ -206,7 +233,75 @@ export function adminMfaVerdict(
         "Two-factor authentication is required for administrator accounts. "
         + "Set it up under Profile → Security to continue.";
 
-    return graceActive(env, now) ? { outcome: "warn", reason } : { outcome: "enrol", reason };
+    const enforcementAt = adminMfaEnforcementAt(env);
+
+    return enforcementAt > now
+        ? { outcome: "warn", reason, enforcementAt }
+        : { outcome: "enrol", reason };
+}
+
+/** Under this much left and the banner stops being furniture. */
+export const MFA_GRACE_URGENT_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * What the admin chrome should tell this account about the deadline, if anything.
+ */
+export type MfaGraceNotice = {
+    /** When the gate closes. */
+    enforcementAt: number;
+    /** How long is left. Always positive — a notice with nothing left is `null`. */
+    msLeft: number;
+    /** Whole days left, floored: 0 on the final day. */
+    daysLeft: number;
+    /** Whole hours left, floored. What the banner says once `urgent`. */
+    hoursLeft: number;
+    /** Inside MFA_GRACE_URGENT_MS. The banner changes colour and wording. */
+    urgent: boolean;
+};
+
+/**
+ * The grace-window warning — #939.
+ *
+ *   #937 IS WHY THIS EXISTS, AND IT IS WORTH BEING PLAIN ABOUT THAT. The
+ *   enforcement date passed at midnight and every administrator was redirected
+ *   into the enrolment screen and back out of it, in a loop, because the session
+ *   never carried `mfaEnabled`. That was one defect. The reason NOBODY SAW IT
+ *   COMING was a second one:
+ *
+ *       adminMfaVerdict has returned `warn` for fourteen days, and
+ *       adminMfaGate drops every verdict that is not `enrol`.
+ *
+ *   So the warning state was computed correctly, on every admin request, for a
+ *   fortnight, and shown to no one. The rollout's whole safety mechanism — tell
+ *   them before you lock them out — was wired to nothing, which is the same
+ *   finding as #663 one layer up.
+ *
+ *   RETURNS null RATHER THAN A NOTICE WITH A FLAG. A caller that has to read
+ *   `notice.shouldShow` is a caller that can forget to, and this is the second
+ *   time that mistake would have cost an administrator their admin panel.
+ *   Absent means nothing to say: not an administrator, already enrolled, or the
+ *   window has closed and the gate is doing the talking now.
+ */
+export function adminMfaGraceNotice(
+    account: { roles?: readonly string[] | null; mfaEnabled?: boolean | null },
+    env: NodeJS.ProcessEnv = process.env,
+    now: number = Date.now(),
+): MfaGraceNotice | null {
+    const verdict = adminMfaVerdict(account, env, now);
+    //   Asked of the verdict rather than re-deciding it here. If this banner
+    //   could appear for an account the gate does not govern, it would be
+    //   telling somebody a deadline that will never apply to them.
+    if (verdict.outcome !== "warn") return null;
+
+    const msLeft = verdict.enforcementAt - now;
+
+    return {
+        enforcementAt: verdict.enforcementAt,
+        msLeft,
+        daysLeft: Math.floor(msLeft / (24 * 60 * 60 * 1000)),
+        hoursLeft: Math.floor(msLeft / (60 * 60 * 1000)),
+        urgent: msLeft <= MFA_GRACE_URGENT_MS,
+    };
 }
 
 
