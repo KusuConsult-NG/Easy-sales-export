@@ -109,13 +109,22 @@ describe('#523 — every loan decision asks the same question', () => {
     });
 
     it('AND EVERY GATE IN THEM IS cooperatives:approve_loans', () => {
-        //   Stronger than banning one string: whatever permission these files
-        //   ask for, it has to be that one.
+        /*
+         *   Stronger than banning one string: whatever permission these files ask
+         *   for, it has to be that one.
+         *
+         *   #952 READS EITHER LAYER. These gates moved from
+         *   `hasAdminPermission(session…, "perm")` — the token — to
+         *   `requireAdmin("perm")`, which re-reads the caller's roles live. WHICH
+         *   permission is demanded is what this test is about, and that does not
+         *   depend on which layer demands it. A pattern matching only the old
+         *   spelling would have failed on the fix and said nothing about the rule.
+         */
         const seen = new Set<string>();
         for (const p of LOAN_DECISION_FILES) {
-            for (const m of code(p).matchAll(/hasAdminPermission\([^,]+,\s*"([^"]+)"\)/g)) {
-                seen.add(m[1]);
-            }
+            const body = code(p);
+            for (const m of body.matchAll(/hasAdminPermission\([^,]+,\s*"([^"]+)"\)/g)) seen.add(m[1]);
+            for (const m of body.matchAll(/requireAdmin\(\s*"([^"]+)"\s*\)/g)) seen.add(m[1]);
         }
 
         expect([...seen].sort()).toEqual(['cooperatives:approve_loans']);
@@ -127,21 +136,43 @@ describe('#523 — every loan decision asks the same question', () => {
         for (const p of LOAN_DECISION_FILES) {
             const body = code(p);
             expect(body.length).toBeGreaterThan(1000);
-            expect(body).toContain('hasAdminPermission(');
+            //   #952 Either layer — see the note above. A file with no gate of any
+            //   kind is what this control exists to catch.
+            expect({ p, gated: /hasAdminPermission\(|requireAdmin\(/.test(body) })
+                .toEqual({ p, gated: true });
         }
 
         const gateCount = LOAN_DECISION_FILES
-            .map((p) => [...code(p).matchAll(/hasAdminPermission\(/g)].length)
+            .map((p) => [...code(p).matchAll(/hasAdminPermission\(|requireAdmin\(/g)].length)
             .reduce((a, b) => a + b, 0);
         expect(gateCount).toBeGreaterThanOrEqual(8);
     });
 
     it('and the reject path specifically names the stronger permission', () => {
-        //   The one line the finding is about, pinned as well as the rule — a
-        //   sweep that counted gates could be satisfied by deleting one.
+        /*
+         *   The one line the finding is about, pinned as well as the rule — a sweep
+         *   that counted gates could be satisfied by deleting one.
+         *
+         *   #952 THE SENTENCE MOVED WITHOUT CHANGING. _loans.ts used to spell its
+         *   own refusal; it relays `gate.error` now. requireAdmin produces the
+         *   IDENTICAL string — #750 chose it deliberately, recording that a
+         *   non-admin is told which permission they lack because "a caller who
+         *   fails isAdmin lacks the permission too, making the narrower message
+         *   both accurate and the more actionable of the two".
+         *
+         *   So the refused caller reads exactly what they read before. Asserted in
+         *   two halves, because either alone would be satisfiable without the other:
+         *   this file demands the strong permission, and the gate it delegates to
+         *   is what turns that into the sentence.
+         */
         const body = code('src/app/actions/admin/_loans.ts');
 
-        expect(body).toContain('Unauthorized: Permission required - cooperatives:approve_loans');
-        expect(body).not.toContain('Permission required - finance:read');
+        expect(body).toContain('await requireAdmin("cooperatives:approve_loans")');
+        expect(body).not.toContain('finance:read');
+
+        //   The gate's own wording, so a reworded refusal there fails HERE too —
+        //   which is the point of relaying it rather than copying it.
+        expect(code('src/lib/require-admin.ts'))
+            .toContain('`Unauthorized: Permission required - ${permission}`');
     });
 });

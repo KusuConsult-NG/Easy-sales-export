@@ -16,12 +16,12 @@ import { ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-locati
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { logger } from "@/lib/logger";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 import { creditWalletOnce, debitWalletLocked, claimSingleOpenLoanApplication } from "@/lib/wallet-ledger";
+import { requireAdmin } from "@/lib/require-admin";
 import {
     needsDualControl,
     guarantorBlocksApproval,
@@ -214,7 +214,28 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
         // codebase went wrong. Five checks in this file, all the same
         // substitution; `admin` and `super_admin` both hold the permission, so
         // nobody who could act before loses the ability.
-        if (data.userId !== session.user.id && !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized to view this loan", loan: null, data: null };
+        if (data.userId !== session.user.id) {
+            /*
+             *   #952 THE ADMIN BRANCH ONLY, and that is the whole point of doing
+             *   this per site rather than by substitution.
+             *
+             *   A bare `await requireAdmin(...)` here would refuse the APPLICANT
+             *   reading their own loan — they are not an admin at all — and would
+             *   put a database read in front of every member opening their own
+             *   application. The identity comparison stays in front of it, so the
+             *   live read happens only for somebody reading a loan that is not
+             *   theirs.
+             *
+             *   THE REFUSAL MESSAGE CHANGES, DELIBERATELY. It was "Unauthorized to
+             *   view this loan"; it relays requireAdmin's own sentence now. That
+             *   loses a little resource-specific phrasing for a member and gains
+             *   the MFA sentence for an administrator whose second factor has
+             *   lapsed — which is #937, the morning an admin met a silent refusal
+             *   and reported the admin panel as broken.
+             */
+            const gate = await requireAdmin("cooperatives:approve_loans");
+            if ("error" in gate) { return { success: false as const, error: gate.error, loan: null, data: null };
+            }
         }
 
         const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
@@ -230,7 +251,15 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
 export async function getPendingLoanApplications() { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only", loans: [], data: null };
+    /*
+     *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it lists every pending loan application.
+     *
+     *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+     *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and revoking
+     *   the admin afterwards does not unmake it.
+     */
+    const gate = await requireAdmin("cooperatives:approve_loans");
+    if ("error" in gate) { return { success: false as const, error: gate.error, loans: [], data: null };
     }
 
     try { const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
@@ -264,7 +293,15 @@ export async function approveLoanApplication(
 ) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only", data: null };
+    /*
+     *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it APPROVES the loan.
+     *
+     *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+     *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and revoking
+     *   the admin afterwards does not unmake it.
+     */
+    const gate = await requireAdmin("cooperatives:approve_loans");
+    if ("error" in gate) { return { success: false as const, error: gate.error, data: null };
     }
 
     try {
@@ -512,7 +549,16 @@ export async function approveLoanApplication(
 export async function disburseLoan(loanId: string, disbursementNotes?: string) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
-    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only"};
+    /*
+     *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it DISBURSES the loan. Money leaving is #748's own
+     *   criterion for the four doors it converted.
+     *
+     *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+     *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and revoking
+     *   the admin afterwards does not unmake it.
+     */
+    const gate = await requireAdmin("cooperatives:approve_loans");
+    if ("error" in gate) { return { success: false as const, error: gate.error};
     }
 
     try {
@@ -673,7 +719,16 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
 export async function getLoanStatistics() { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only", stats: null, data: null };
+    /*
+     *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it reads the loan book's totals — every member's
+     *   outstanding balance, in aggregate.
+     *
+     *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+     *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and revoking
+     *   the admin afterwards does not unmake it.
+     */
+    const gate = await requireAdmin("cooperatives:approve_loans");
+    if ("error" in gate) { return { success: false as const, error: gate.error, stats: null, data: null };
     }
 
     try { // Optimization: Select only necessary fields to reduce bandwidth

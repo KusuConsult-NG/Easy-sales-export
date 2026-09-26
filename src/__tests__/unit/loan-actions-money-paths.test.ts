@@ -36,6 +36,11 @@ const mockClaimFromAny = jest.fn() as jest.Mock<any>;
 const mockCreditWalletOnce = jest.fn() as jest.Mock<any>;
 const mockDebitWalletLocked = jest.fn() as jest.Mock<any>;
 
+//   #952 — the loan actions this suite drives now ask the LIVE gate, not the
+//   token. The mock still lets roles decide; see lib/testing/require-admin-mock.
+jest.mock('@/lib/require-admin', () =>
+    require('@/lib/testing/require-admin-mock').requireAdminMock());
+
 jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: jest.fn(),
     claimStatusTransitionFromAny: (...args: any[]) => mockClaimFromAny(...args),

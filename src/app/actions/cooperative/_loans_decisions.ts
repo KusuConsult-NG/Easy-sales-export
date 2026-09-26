@@ -13,13 +13,13 @@ import {
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 import { requireSession } from "@/lib/session-guard";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication, OPEN_LOAN_STATUSES } from "@/lib/loan-application-location";
 import { isCooperativeLoan } from "@/lib/loan-product";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * Admin: Approve loan
@@ -35,8 +35,26 @@ export async function approveLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user?.id) {
+            return { success: false as const, error: "Not authenticated", data: null };
+        }
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it APPROVES the loan, under the dual-control rule — so a
+         *   stale token could supply either signature, or both.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and
+         *   revoking the admin afterwards does not unmake it. #951 converted the
+         *   seven loan API routes on that rule and recorded these action files as
+         *   the next bounded set.
+         *
+         *   The id guard stays: it is what establishes `effectiveAdminId` below,
+         *   which every write and audit entry in this function is attributed to.
+         *   It is not a second permission check.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
 
         const effectiveAdminId = session.user.id;
@@ -301,8 +319,26 @@ export async function rejectLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user?.id) {
+            return { success: false as const, error: "Not authenticated", data: null };
+        }
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it REFUSES the loan, which is a decision about somebody's
+         *   application recorded against the admin who made it.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and
+         *   revoking the admin afterwards does not unmake it. #951 converted the
+         *   seven loan API routes on that rule and recorded these action files as
+         *   the next bounded set.
+         *
+         *   The id guard stays: it is what establishes `effectiveAdminId` below,
+         *   which every write and audit entry in this function is attributed to.
+         *   It is not a second permission check.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
 
         const effectiveAdminId = session.user.id;
@@ -395,8 +431,26 @@ export async function disburseLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user?.id) {
+            return { success: false as const, error: "Not authenticated", data: null };
+        }
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it DISBURSES the loan. This is money leaving, which is
+         *   #748's own criterion for the four doors it converted.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and
+         *   revoking the admin afterwards does not unmake it. #951 converted the
+         *   seven loan API routes on that rule and recorded these action files as
+         *   the next bounded set.
+         *
+         *   The id guard stays: it is what establishes `effectiveAdminId` below,
+         *   which every write and audit entry in this function is attributed to.
+         *   It is not a second permission check.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
+            return { success: false as const, error: gate.error, data: null };
         }
 
         const effectiveAdminId = session.user.id;

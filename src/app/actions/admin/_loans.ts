@@ -16,12 +16,12 @@ import { needsDualControl } from "@/lib/loan-approval-policy";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { LoanApplicationReviewSchema } from "@/lib/schemas";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 import { OPEN_LOAN_STATUSES } from "@/lib/loan-application-location";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
 import { joinFullName, namePartsOf } from "@/lib/person-name";
+import { requireAdmin } from "@/lib/require-admin";
 // ============================================
 // Loan Application Management (Admin)
 // ============================================
@@ -31,8 +31,27 @@ async function _getPendingLoanApplications(limit = 50, lastDocId?: string): Prom
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const, data: null };
+        if (!session?.user) {
+            return { error: "Not authenticated", success: false as const, data: null };
+        }
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it lists every pending loan application, with the
+         *   applicant's financial position in each one.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and
+         *   revoking the admin afterwards does not unmake it. #951 converted the
+         *   seven loan API routes on that rule and recorded these action files as
+         *   the next bounded set.
+         *
+         *   The `!session?.user` guard above stays. It is not a second permission
+         *   check — #748's "a redundant check that can only produce false refusals
+         *   is not defence in depth" — it is what establishes the user for the
+         *   audit fields this function writes.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const, data: null };
         }
 
         const loanCol = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
@@ -137,8 +156,27 @@ async function _approveLoanApplication(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const };
+        if (!session?.user) {
+            return { error: "Not authenticated", success: false as const };
+        }
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it APPROVES the loan, which is the act that raises
+         *   loanBalance.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and
+         *   revoking the admin afterwards does not unmake it. #951 converted the
+         *   seven loan API routes on that rule and recorded these action files as
+         *   the next bounded set.
+         *
+         *   The `!session?.user` guard above stays. It is not a second permission
+         *   check — #748's "a redundant check that can only produce false refusals
+         *   is not defence in depth" — it is what establishes the user for the
+         *   audit fields this function writes.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const };
         }
 
         const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
@@ -502,8 +540,29 @@ async function _rejectLoanApplication(
          *   Next.js server actions are invocable by any authenticated client, so
          *   "no page calls this" is not a mitigation; it is why nobody noticed.
          */
-        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const };
+        if (!session?.user) {
+            return { error: "Not authenticated", success: false as const };
+        }
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it REFUSES the loan. #523 already found this gate
+         *   asking for a read permission while every sibling asked for this one;
+         *   a refusal is a decision about somebody's application and is recorded
+         *   against the admin who made it.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan creates a debt and raises loanBalance, and
+         *   revoking the admin afterwards does not unmake it. #951 converted the
+         *   seven loan API routes on that rule and recorded these action files as
+         *   the next bounded set.
+         *
+         *   The `!session?.user` guard above stays. It is not a second permission
+         *   check — #748's "a redundant check that can only produce false refusals
+         *   is not defence in depth" — it is what establishes the user for the
+         *   audit fields this function writes.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) {
+            return { error: gate.error, success: false as const };
         }
 
         const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });

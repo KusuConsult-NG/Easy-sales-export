@@ -51,6 +51,44 @@ import { stripComments } from '@/lib/testing/strip-comments';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
+/*
+ *   #952 — the loan-product actions this suite drives now ask the LIVE gate.
+ *
+ *   A BESPOKE MOCK, NOT THE SHARED ONE, and the shared one's own docstring says
+ *   why: "Suites that need the document to disagree with the token … keep their
+ *   own bespoke mock and say so."
+ *
+ *   The shared requireAdminMock reads `globalThis.mockRequireSession`. This suite
+ *   declares its OWN `mockRequireSession` below and mocks @/lib/session-guard with
+ *   it, so the shared mock read jest.setup's DEFAULT session instead — a full
+ *   admin — and admitted everybody. That turned "a role without
+ *   cooperatives:approve_loans cannot retire it" from a refusal into a success,
+ *   which is how a mock becomes a control that reads as present and is none.
+ *
+ *   This one reads the same session the ACTION reads, so roles still decide.
+ */
+jest.mock('@/lib/require-admin', () => ({
+    requireAdmin: async (permission?: string) => {
+        const { isAdmin, hasAdminPermission } = require('@/lib/admin-permissions');
+        const result = await mockRequireSession();
+        const user = result?.session?.user;
+
+        if (!user) return { error: 'Unauthenticated' };
+        const roles: string[] = user.roles ?? [];
+
+        //   Mirrors the real gate: a named permission is reported even when the
+        //   caller is not an admin at all, because they lack it either way.
+        if (!isAdmin(roles) || (permission && !hasAdminPermission(roles, permission))) {
+            return {
+                error: permission
+                    ? `Unauthorized: Permission required - ${permission}`
+                    : 'Unauthorized: Admin access required',
+            };
+        }
+        return { userId: user.id, roles };
+    },
+}));
+
 jest.mock('@/lib/redis', () => ({
     getCached: async () => null, setCache: async () => undefined,
     deleteCache: async () => undefined, redis: null,

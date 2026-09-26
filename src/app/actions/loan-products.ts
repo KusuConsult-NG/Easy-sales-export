@@ -4,11 +4,11 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { FieldValue } from "@/lib/firestore-compat";
 import { retirementPatch, isRetired } from "@/lib/record-retirement";
+import { requireAdmin } from "@/lib/require-admin";
 
 export interface LoanProduct { id?: string;
     name: string;
@@ -135,7 +135,20 @@ export async function getAdminLoanProductsAction(options: { limit?: number;
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
         
-        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
+        }
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it lists the loan products as an ADMIN sees them, which is
+         *   the read half of the surface the three writers below change.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan product is the terms every later loan is written
+         *   on, and the loans already written on it are not undone by revoking the
+         *   admin who set them. #951 converted the four loan-product API ROUTES on
+         *   that rule; these are their action siblings.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) { return { success: false as const, error: gate.error, data: null };
         }
 
         const fetchLimit = options.limit || 20;
@@ -172,7 +185,17 @@ export async function createAdminLoanProductAction(data: Omit<LoanProduct, "id">
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         
-        if (!hasAdminPermission(sessionResult.session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it CREATES a loan product.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan product is the terms every later loan is written
+         *   on, and the loans already written on it are not undone by revoking the
+         *   admin who set them. #951 converted the four loan-product API ROUTES on
+         *   that rule; these are their action siblings.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) { return { success: false as const, error: gate.error, data: null };
         }
 
         const invalid = validateLoanProduct(data, { partial: false });
@@ -207,7 +230,17 @@ export async function updateAdminLoanProductAction(productId: string, data: Part
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         
-        if (!hasAdminPermission(sessionResult.session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it REWRITES a loan product's terms.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan product is the terms every later loan is written
+         *   on, and the loans already written on it are not undone by revoking the
+         *   admin who set them. #951 converted the four loan-product API ROUTES on
+         *   that rule; these are their action siblings.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) { return { success: false as const, error: gate.error, data: null };
         }
 
         const patch = pickProductFields(data);
@@ -247,7 +280,18 @@ export async function deleteAdminLoanProductAction(productId: string) { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         
-        if (!hasAdminPermission(sessionResult.session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
+        /*
+         *   #952 LIVE RE-VALIDATION, replacing a check on the JWT — it REMOVES a loan product, and the owner's standing instruction
+         *   is that nothing is destroyed.
+         *
+         *   lib/stale-authorisation classifies `cooperatives:approve_loans` as
+         *   IRREVERSIBLE: a loan product is the terms every later loan is written
+         *   on, and the loans already written on it are not undone by revoking the
+         *   admin who set them. #951 converted the four loan-product API ROUTES on
+         *   that rule; these are their action siblings.
+         */
+        const gate = await requireAdmin("cooperatives:approve_loans");
+        if ("error" in gate) { return { success: false as const, error: gate.error, data: null };
         }
 
         const docRef = db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId);

@@ -260,7 +260,12 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
          */
         const { must } = jwtOnlyDoors();
 
-        expect(ledgerVerdict(must.length, 34)).toBe(LEDGER_HELD);
+        //
+        //   #952 34 -> 30. The four loan ACTION files, fifteen gates, which #951
+        //   named as the next bounded set and deliberately left. The `may` side
+        //   did not move, which is the check that this was a conversion and not a
+        //   reclassification.
+        expect(ledgerVerdict(must.length, 30)).toBe(LEDGER_HELD);
     });
 
     it('AND THE REVERSIBLE SIDE IS PINNED TOO, so it cannot grow quietly', () => {
@@ -281,14 +286,39 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
         }
     });
 
-    it('POSITIVE CONTROL: the four loan ACTION files are still on the must side', () => {
+    it('POSITIVE CONTROL: the doors the rule still indicts, and what they do', () => {
         /*
-         *   A ledger over a sweep that matched nothing would also hold, and this
-         *   control cannot rot the way #943's did: these four are named as
-         *   DELIBERATELY LEFT, so the day they are converted the ledger drops and
-         *   this test is edited in the same change that earns the edit.
+         *   A ledger over a sweep that matched nothing would also hold.
+         *
+         *   #952 RE-POINTED THIS. It named the four loan action files, which this
+         *   change converted — the rotting-control shape #943 taught, where a
+         *   control proving the sweep works fails because its subject got fixed.
+         *   It is edited in the change that earns the edit, which is the version of
+         *   that lesson that actually works.
+         *
+         *   The four named now are the next bounded set, and naming them is the
+         *   point: actions/wallet.ts gates on `finance:process_withdrawals` — MONEY
+         *   OUT, #748's own criterion — and is still on the token, because #748
+         *   converted the withdrawal API routes and not the action beside them.
+         *   The three broadcast doors reach every member, which #202 settled a
+         *   demoted admin must not.
          */
         const { must } = jwtOnlyDoors();
+
+        for (const rel of [
+            'src/app/actions/wallet.ts',
+            'src/app/actions/broadcast.ts',
+            'src/app/api/admin/broadcast/send/route.ts',
+            'src/app/api/admin/broadcast/estimate/route.ts',
+        ]) {
+            expect({ rel, onMustList: must.includes(rel) }).toEqual({ rel, onMustList: true });
+        }
+    });
+
+    it('AND THE FIFTEEN LOAN-ACTION GATES ARE CONVERTED, by name', () => {
+        //   The other half of the re-pointing: the four files leave the ledger, and
+        //   that has to be asserted or the count above absorbs a revert.
+        const { must, may } = jwtOnlyDoors();
 
         for (const rel of [
             'src/app/actions/admin/_loans.ts',
@@ -296,8 +326,44 @@ describe('#951 — the ledger, keyed on the rule instead of on a total', () => {
             'src/app/actions/loan-actions.ts',
             'src/app/actions/loan-products.ts',
         ]) {
-            expect({ rel, onMustList: must.includes(rel) }).toEqual({ rel, onMustList: true });
+            expect({ rel, onLedger: must.includes(rel) || may.includes(rel) })
+                .toEqual({ rel, onLedger: false });
+            expect({ rel, live: code(rel).includes('await requireAdmin("cooperatives:approve_loans")') })
+                .toEqual({ rel, live: true });
+
+            /*
+             *   AND NOT ONE GATE LEFT ON THE TOKEN, which is a stronger claim than
+             *   the two above and the reason it is here.
+             *
+             *   M41 in the table below SURVIVED the first version of this test:
+             *   reverting ONE of _loans.ts's three gates passed everything, because
+             *   the ledger's sweep is per FILE — a file holding any requireAdmin
+             *   call drops off the jwt-only list entirely — and `live` was satisfied
+             *   by the two gates that remained.
+             *
+             *   #532's ratchet did catch it, and that is its whole purpose: "no file
+             *   asks the database in one place and the token in another." Relying on
+             *   a sibling suite for a claim this one makes by name is still wrong, so
+             *   the claim is made directly.
+             */
+            expect({ rel, anyTokenGate: /hasAdminPermission\(\s*session/.test(code(rel)) })
+                .toEqual({ rel, anyTokenGate: false });
         }
+    });
+
+    it('AND THE OWNER BRANCH OF getLoanApplication STILL ADMITS THE APPLICANT', () => {
+        /*
+         *   The one that could not be a substitution. A bare `await
+         *   requireAdmin(...)` would refuse the applicant reading their OWN loan —
+         *   they are not an admin — and would add a database read to every member
+         *   opening their own application. The identity comparison stays in front.
+         */
+        const src = code('src/app/actions/loan-actions.ts');
+
+        expect(src).toMatch(/if \(data\.userId !== session\.user\.id\) \{/);
+        //   And the live read is INSIDE that branch, not beside it.
+        const branch = src.slice(src.indexOf('if (data.userId !== session.user.id) {'));
+        expect(branch.slice(0, 400)).toContain('await requireAdmin("cooperatives:approve_loans")');
     });
 });
 
@@ -362,10 +428,20 @@ describe('#951 — the exceptions are few, real, and say what retires them', () 
         for (const { file, permission } of OWNER_OR_ADMIN_SHAPE) {
             expect({ file, exists: existsSync(join(ROOT, file)) }).toEqual({ file, exists: true });
 
-            //   The shape is really there: an identity comparison guarding the
-            //   permission check in the same condition.
+            /*
+             *   The shape is really there: an identity comparison against the
+             *   caller, deciding whether the admin check is reached at all.
+             *
+             *   #952 LOOSENED FROM `&&`. This asked for the two joined in one
+             *   condition — `x !== session.user.id && !hasAdminPermission(...)` —
+             *   and converting loan-actions.ts SPLITS them, which is the whole
+             *   repair: the live read moves inside the non-owner branch. An
+             *   assertion that only matched the unconverted spelling would have
+             *   failed on the fix, which is #949's lesson about pinning a shape
+             *   rather than a property.
+             */
             const src = code(file);
-            expect({ file, shape: /!==\s*session\.user\.id\s*&&/.test(src) })
+            expect({ file, shape: /!==\s*session\.user\.id/.test(src) })
                 .toEqual({ file, shape: true });
             expect({ file, perm: src.includes(`"${permission}"`) }).toEqual({ file, perm: true });
             //   And the permission it holds really is one the rule calls irreversible,
@@ -387,33 +463,38 @@ describe('#951 — the exceptions are few, real, and say what retires them', () 
  *
  *   MUTANT                                          CAUGHT BY
  *   ──────────────────────────────────────────────  ───────────────────────────
- *   `security:view_logs` dropped from both sets,     EVERY PERMISSION IN THE
- *     so the rule has a hole and mustRevalidateLive  MATRIX IS CLASSIFIED, and
- *     throws mid-sweep                               both halves of THE LEDGER
+ *   `security:view_logs` dropped from both sets      EVERY PERMISSION IN THE
+ *                                                    MATRIX IS CLASSIFIED, both
+ *                                                    halves of THE LEDGER
  *   `users:export` added to BOTH sets                NO PERMISSION IS ON BOTH
  *                                                    SIDES
  *   mustRevalidateLive returns false instead of      AN UNCLASSIFIED PERMISSION
- *     throwing on an unknown permission              THROWS
+ *     throwing                                       THROWS
  *   `cooperatives:approve_loans` moved to the        it answers the four earlier
  *     reversible side — the loosening that would     findings, both halves of THE
  *     make this whole change a no-op                 LEDGER, the POSITIVE CONTROL,
- *                                                    and THE OWNER-OR-ADMIN SHAPE
+ *                                                    THE OWNER-OR-ADMIN SHAPE
  *   reject-loan reverted to the token                ALL SEVEN ASK requireAdmin,
- *                                                    EACH REFUSAL STILL CARRIES A
- *                                                    403, THE LEDGER, and THE
- *                                                    SEVEN … OFF BOTH LISTS
- *   verify-guarantor returns 401 instead of 403       EACH REFUSAL STILL CARRIES A
+ *                                                    EACH REFUSAL … 403, THE
+ *                                                    LEDGER, THE SEVEN … OFF BOTH
+ *   verify-guarantor returns 401 not 403              EACH REFUSAL STILL CARRIES A
  *                                                    403 AND THE GATE'S OWN
  *                                                    MESSAGE
+ *   the owner guard dropped, so a bare               THE OWNER BRANCH OF
+ *     requireAdmin refuses the applicant             getLoanApplication STILL
+ *                                                    ADMITS THE APPLICANT
+ *   the live read moved OUTSIDE the owner branch      the same test
+ *   the recorded must-count raised back to 34         THE LEDGER
  *
- *   ALL SIX CAUGHT. The fourth is the one the suite exists for: moving one
- *   permission across the rule would turn a security change into a no-op while
- *   every file still read as converted, and five separate assertions refuse it.
+ *   M41 — ONE OF _loans.ts's THREE GATES REVERTED TO THE TOKEN — SURVIVED THE
+ *   FIRST VERSION OF THIS SUITE, and that is the most useful line in the table.
+ *   The ledger's sweep is per FILE: a file holding any requireAdmin call leaves
+ *   the jwt-only list, and the `live` assertion was satisfied by the two gates
+ *   still converted. #532's ratchet caught it — "no file asks the database in one
+ *   place and the token in another" — along with five of #750's behavioural
+ *   tests, which is that criterion earning the note in lib/stale-authorisation
+ *   saying it is not subsumed. The claim is now also made directly here, because
+ *   a suite that names four files should not need a sibling to keep them honest.
  *
- *   AND THE SUITE CAUGHT ME ONCE, WHICH IS WORTH MORE THAN THE TABLE. I wrote
- *   "and all three are GET handlers" about the exception list. qr/verify is a
- *   POST, and api/certificates/[id] exports only DELETE and destroys a
- *   certificate record — so it was never an exception, it is an owner-or-admin
- *   SHAPE, and the rule was right about it all along. The assertion I could not
- *   satisfy is why OWNER_OR_ADMIN_SHAPE exists.
+ *   ALL NINE CAUGHT, and the tenth is why the ninth assertion exists.
  */
