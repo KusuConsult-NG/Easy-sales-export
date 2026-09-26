@@ -34,6 +34,7 @@ import {
 } from "@/app/actions/farm-nation";
 import { formatDateOrDash } from "@/lib/date-utils";
 
+import { changeFarmNationRoleAction } from "@/app/actions/farm-nation";
 function formatCurrency(amount: any) {
     const value = Number(amount);
     const safeAmount = isNaN(value) ? 0 : value;
@@ -75,6 +76,36 @@ export default function FarmNationDashboardClient({ initial = null }: {
      */
     initial?: FarmNationDashboardStats | null;
 }) {
+    //   #947 The role-change affordance's own state. Deliberately local: it is one
+    //   button whose result is a page refresh, not a value other screens read.
+    const [roleBusy, setRoleBusy] = useState(false);
+    const [roleNotice, setRoleNotice] = useState<string | null>(null);
+
+    const changeRole = async (next: "buyer" | "seller" | "both") => {
+        setRoleBusy(true);
+        setRoleNotice(null);
+        try {
+            const res: any = await changeFarmNationRoleAction(next);
+            if (!res?.success) {
+                setRoleNotice(res?.error ?? "Could not change what you are registered as.");
+                return;
+            }
+            //   A no-change answer arrives as SUCCESS with a sentence — asking for
+            //   something you already have is not a fault. See the action.
+            if (res?.meta?.message) {
+                setRoleNotice(res.meta.message);
+                return;
+            }
+            //   Reload rather than patching state: the dashboard's whole shape is
+            //   keyed on the role, and the session's cached copy has just changed.
+            window.location.reload();
+        } catch {
+            setRoleNotice("Could not change what you are registered as.");
+        } finally {
+            setRoleBusy(false);
+        }
+    };
+
     const [loading, setLoading] = useState(initial === null);
     const [stats, setStats] = useState<FarmNationDashboardStats | null>(initial);
     const [error, setError] = useState<string | null>(null);
@@ -126,6 +157,23 @@ export default function FarmNationDashboardClient({ initial = null }: {
     }
 
     const isSeller = stats.role === "seller" || stats.role === "both";
+    /*
+     *   #947 WHAT THEY ARE NOT, AND HAD NO WAY TO BECOME.
+     *
+     *   A member picks buyer, seller or both at onboarding, and this dashboard
+     *   branches on that choice throughout — the owner's requirement that a
+     *   seller does not see buyer features. What did not exist was any way to
+     *   change it: resubmitFarmNationApplicationAction admits only
+     *   pending/rejected/revision_required, so an APPROVED member asking to also
+     *   sell was refused outright.
+     *
+     *   Offered only when there is something to add. A member already registered
+     *   as "both" sees nothing, because the answer to "want the other one?" is
+     *   already yes — and narrowing is refused on the server for a reason the
+     *   rule module states: live listings whose owner can no longer manage them.
+     */
+    const missingSide: "buyer" | "seller" | null =
+        stats.role === "buyer" ? "seller" : stats.role === "seller" ? "buyer" : null;
 
     return (
         <div className="space-y-8">
@@ -139,6 +187,39 @@ export default function FarmNationDashboardClient({ initial = null }: {
                     Back to Dashboard
                 </Link>
             </div>
+
+            {missingSide && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold text-emerald-900">
+                                {missingSide === "seller"
+                                    ? "Want to list land as well as buy it?"
+                                    : "Want to buy land as well as list it?"}
+                            </p>
+                            <p className="mt-1 text-sm text-emerald-800">
+                                {missingSide === "seller"
+                                    ? "You are registered as a buyer. Adding selling lets you submit "
+                                      + "listings — each one is still inspected and approved before it "
+                                      + "appears. You keep everything you have now."
+                                    : "You are registered as a seller. Adding buying lets you make "
+                                      + "offers on other listings. You keep everything you have now."}
+                            </p>
+                            {roleNotice && (
+                                <p className="mt-2 text-sm font-medium text-emerald-900">{roleNotice}</p>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => changeRole(missingSide === "seller" ? "both" : "both")}
+                            disabled={roleBusy}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                            {roleBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {missingSide === "seller" ? "Add selling" : "Add buying"}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Header */}
             <div className="flex items-start justify-between">
