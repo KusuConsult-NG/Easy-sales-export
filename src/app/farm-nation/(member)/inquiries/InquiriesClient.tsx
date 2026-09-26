@@ -43,7 +43,7 @@ export default function InquiriesClient({ initial = null }: {
         if (status === "authenticated") {
             loadInquiries();
         }
-    }, [status, session, router, initial]);
+    }, [status, session?.user?.id, router, initial]);
 
     if (loading) {
         return (

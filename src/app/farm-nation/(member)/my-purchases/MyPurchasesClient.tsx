@@ -157,7 +157,7 @@ This document serves as a record of the purchase agreement initiated through Eas
             loadPurchases();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, session]);;
+    }, [status]);;
 
     const filteredPurchases = purchases.filter(purchase => {
         if (filterStatus === "all") return true;
