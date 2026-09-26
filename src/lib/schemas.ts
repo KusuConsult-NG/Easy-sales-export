@@ -6,6 +6,7 @@ import { personNameField } from '@/lib/types/person-name-field';
 import { phoneNumberField } from '@/lib/types/phone-number-field';
 import { ALL_USER_ROLES } from "@/lib/types/roles";
 
+import { isNigerianMobile } from "@/lib/phone";
 // ============================================
 // STRICT UNIFIED PII VALIDATORS (Anti-Abuse)
 // ============================================
@@ -49,8 +50,45 @@ export const strictEmailSchema = z.string()
  */
 export const strictPhoneSchema = phoneNumberField(7);
 
+/**
+ * A Nigerian MOBILE number, judged on its digits — #945.
+ *
+ *   THIS WAS A THIRD COPY OF A RULE #919 HAD ALREADY SETTLED, AND IT WAS WRONG
+ *   IN BOTH DIRECTIONS.
+ *
+ *       was:  /^(\+234|0)[789]\d{9}$/
+ *
+ *   TOO PERMISSIVE. lib/phone records the finding in as many words: "Nigerian
+ *   mobile prefixes are 070, 071, 080, 081, 090 and 091 — so `[789][01]` is the
+ *   real set and `[789]\d` wrongly admits 072…079, 082…089 and 092…099."
+ *   #919 found two functions of one name disagreeing on exactly that digit and
+ *   consolidated them; this schema was the copy nobody folded in.
+ *
+ *   AND TOO STRICT, which is the half a registrant feels. It judged the literal
+ *   string, so measured against it:
+ *
+ *       08031234567            accepted
+ *       0803 123 4567          REFUSED
+ *       +234 803 123 4567      REFUSED
+ *       +234 (0) 803 123 4567  REFUSED
+ *       0803-123-4567          REFUSED
+ *       2348031234567          REFUSED   (how a number pasted from WhatsApp reads)
+ *       +23408031234567        REFUSED   (the national 0 kept — unambiguous)
+ *
+ *   That fourth one is the form strictPhoneSchema above was explicitly fixed
+ *   for: "one ordinary Nigerian number, written the way a business card writes
+ *   it". The same defect, on the stricter sibling, left in place.
+ *
+ *   IT IS LIVE ON A PUBLIC PATH. actions/briefing is the only caller — the WAVE
+ *   briefing registration, where a woman signing up for a seat was told
+ *   "Invalid Nigerian phone number" for putting spaces in it.
+ *
+ *   Asked of isNigerianMobile now, which strips non-digits before judging and
+ *   holds the one statement of the prefix set. The message keeps both example
+ *   spellings because both are still accepted.
+ */
 export const strictNigerianPhoneSchema = z.string()
-    .regex(/^(\+234|0)[789]\d{9}$/, "Invalid Nigerian phone number (e.g., +2348012345678 or 08012345678)");
+    .refine(isNigerianMobile, "Invalid Nigerian phone number (e.g., +2348012345678 or 08012345678)");
 
 /**
  * Login Schema

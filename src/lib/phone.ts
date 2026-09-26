@@ -8,9 +8,42 @@
  *
  * Returns null for strings that cannot be normalised to a 13-digit +234 number.
  */
+/**
+ * The digits of a Nigerian number, with the trunk 0 removed after the country
+ * code — #945.
+ *
+ *   `+234 (0) 803 000 1111` is one ordinary Nigerian number written the way a
+ *   business card writes it, and the country code followed by the national trunk
+ *   `0` is fourteen digits rather than thirteen. Both readers below tripped on
+ *   that, in different ways:
+ *
+ *     normalisePhone     `p.length >= 13` admitted fourteen and returned them
+ *                        unchanged, so ONE number had TWO canonical forms:
+ *                        08030001111 -> +2348030001111
+ *                        +234 (0) 803 000 1111 -> +23408030001111
+ *                        A malformed canonical is a number no dedup query can
+ *                        ever match again.
+ *
+ *     isNigerianMobile   had no fourteen-digit case at all, so it refused the
+ *                        form strictPhoneSchema's own note calls "one ordinary
+ *                        Nigerian number, written the way a business card writes
+ *                        it" — the two validators disagreeing about one
+ *                        notation, which is exactly what #919 consolidated them
+ *                        to stop.
+ *
+ *   The trunk 0 is unambiguous: no Nigerian number is fourteen digits otherwise.
+ */
+function nigerianDigits(raw: string | null | undefined): string {
+    const digits = String(raw ?? '').replace(/\D/g, '');
+
+    return digits.length === 14 && digits.startsWith('2340')
+        ? '234' + digits.slice(4)
+        : digits;
+}
+
 export function normalisePhone(raw: string | null | undefined): string | null {
     if (!raw) return null;
-    let p = String(raw).replace(/\D/g, '');
+    let p = nigerianDigits(raw);
     if (p.startsWith('0')) p = '234' + p.slice(1);
     if (p.startsWith('234') && p.length >= 13) return '+' + p;
     if (p.length >= 10) return '+234' + p.slice(-10);
@@ -23,7 +56,9 @@ export function normalisePhone(raw: string | null | undefined): string | null {
  */
 export function normalisePhoneLoose(raw: string | null | undefined): string | null {
     if (!raw) return null;
-    let p = String(raw).replace(/\D/g, '');
+    //   #945 Same reading as normalisePhone: a display form must not disagree
+    //   with the canonical one about which digits the number has.
+    let p = nigerianDigits(raw);
     if (p.startsWith('0')) p = '234' + p.slice(1);
     if (p.length < 10) return null;
     return '+' + p;
@@ -120,7 +155,10 @@ export function phoneLookupVariants(raw: string | null | undefined): string[] {
 export function isNigerianMobile(phone: string | null | undefined): boolean {
     if (!phone) return false;
 
-    const cleaned = String(phone).replace(/\D/g, '');
+    //   #945 Through nigerianDigits, so the trunk 0 after the country code is
+    //   read the same way here as in normalisePhone. The two disagreeing about
+    //   one notation is what #919 consolidated them to stop.
+    const cleaned = nigerianDigits(phone);
 
     if (cleaned.length === 11 && cleaned.startsWith('0')) return /^0[789][01]\d{8}$/.test(cleaned);
     if (cleaned.length === 13 && cleaned.startsWith('234')) return /^234[789][01]\d{8}$/.test(cleaned);
