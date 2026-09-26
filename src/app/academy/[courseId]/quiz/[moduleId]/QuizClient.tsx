@@ -81,7 +81,7 @@ export default function QuizClient(
             loadQuiz();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, session, courseId, moduleId]);
+    }, [status, session?.user?.id, courseId, moduleId]);
 
     // Resume quiz if timer is already in localStorage
     useEffect(() => {

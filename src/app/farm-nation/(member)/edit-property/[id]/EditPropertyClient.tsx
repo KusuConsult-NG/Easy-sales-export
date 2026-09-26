@@ -32,6 +32,11 @@ export default function EditPropertyClient(props: {
     const takeSeed = useServerSeed(props.initial ?? null);
     const router = useRouter();
     const { data: session } = useSession();
+
+    //   #944 The id as a primitive. The effect below only asks whether somebody
+    //   is signed in; keyed on the session object it re-read the property on
+    //   every background refresh.
+    const userId = session?.user?.id;
     const { showToast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -102,7 +107,7 @@ export default function EditPropertyClient(props: {
 
     useEffect(() => {
         async function loadProperty() {
-            if (!session?.user) return;
+            if (!userId) return;
 
             try {
                 const result = takeSeed() ?? await getPropertyByIdAction(params.id);
@@ -166,7 +171,7 @@ export default function EditPropertyClient(props: {
         }
 
         loadProperty();
-    }, [params.id, session, router, showToast, takeSeed]);
+    }, [params.id, userId, router, showToast, takeSeed]);
 
     const toggleCategory = (value: string) => {
         setFormData(prev => {

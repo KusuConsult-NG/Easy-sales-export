@@ -38,6 +38,21 @@ export default function ProfileClient({ initialProfile = null }: {
     initialProfile?: any | null;
 }) {
     const { data: session, update } = useSession();
+
+    /*
+     *   #944 The four fields this screen seeds its form from, as primitives.
+     *
+     *   Keyed on the whole `session` the effect re-fetched the profile and the
+     *   MFA status on every background refresh. Keying it on id + email + name
+     *   was still WRONG: the form also seeds `gender` off the session, through an
+     *   `as any` cast — and the cast is why react-hooks/exhaustive-deps could
+     *   only ask for `session.user` rather than naming the field. Same shape as
+     *   the middleware cast in #937: the check existed and was talked out of.
+     */
+    const userId = session?.user?.id;
+    const userEmail = session?.user?.email;
+    const userName = session?.user?.name;
+    const userGender = (session?.user as { gender?: string } | undefined)?.gender;
     const { showToast } = useToast();
 
     const { run: guardRun } = useSessionExpiry();
@@ -177,18 +192,18 @@ export default function ProfileClient({ initialProfile = null }: {
             if (result.success && result.data?.profile) {
                 const p = result.data.profile;
                 const splitName = (n: string) => { const parts = (n || "").trim().split(/\s+/).filter(Boolean); return { first: parts[0] || "", last: parts.slice(1).join(" ") }; };
-                const nameFallback = splitName(session?.user?.name || "");
+                const nameFallback = splitName(userName || "");
                 setUserData({
                     firstName: p.firstName || nameFallback.first,
                     lastName: p.lastName || nameFallback.last,
                     otherName: p.otherName || "",
-                    email: p.email || session?.user?.email || "",
+                    email: p.email || userEmail || "",
                     phone: p.phone || "",
                     location: p.location || "",
                     bio: p.bio || "",
                     identityDocument: p.identityDocument || "",
                     photoURL: p.photoURL || "",
-                    gender: (p.gender || (session?.user as any)?.gender || "").toLowerCase() as any,
+                    gender: (p.gender || userGender || "").toLowerCase() as any,
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
 
@@ -221,16 +236,16 @@ export default function ProfileClient({ initialProfile = null }: {
                 } else {
                     setRawPhone(savedPhone);
                 }
-            } else if (session?.user) {
+            } else if (userId) {
                 const splitName = (n: string) => { const parts = (n || "").trim().split(/\s+/).filter(Boolean); return { first: parts[0] || "", last: parts.slice(1).join(" ") }; };
-                const { first, last } = splitName(session.user.name || "");
+                const { first, last } = splitName(userName || "");
                 setUserData(prev => ({
                     ...prev,
                     firstName: first,
                     lastName: last,
                     otherName: "",
-                    email: session?.user?.email || "",
-                    gender: ((session?.user as any)?.gender || "").toLowerCase() as any,
+                    email: userEmail || "",
+                    gender: (userGender || "").toLowerCase() as any,
                 }));
             }
             
@@ -260,13 +275,13 @@ export default function ProfileClient({ initialProfile = null }: {
             setIsFetching(false);
         }
 
-        if (session?.user) {
+        if (userId) {
             loadProfile();
         }
         //   `takeSeed` is stable — useCallback with no dependencies — so listing
         //   it cannot re-run this effect. It is listed because the rule is
         //   right: a hook read inside an effect belongs in its dependencies.
-    }, [session, takeSeed]);
+    }, [userId, userEmail, userName, userGender, takeSeed]);
 
     async function handleSave() {
         setIsLoading(true);

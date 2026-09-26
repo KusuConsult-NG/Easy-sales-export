@@ -148,7 +148,7 @@ export default function CheckoutClient({ initial = null }: {
             loadProperty(); // Call loadProperty here
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [propertyId, status, session, params.propertyId, router]);
+    }, [propertyId, status, session?.user?.email, session?.user?.name, params.propertyId, router]);
 
     /*
      *   #869 THE OFFER, RESOLVED AGAINST THE LISTING'S OWN FLAGS.

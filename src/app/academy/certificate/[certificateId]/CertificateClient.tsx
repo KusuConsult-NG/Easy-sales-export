@@ -22,6 +22,11 @@ export default function CertificateClient({ initial = null }: {
     const params = useParams();
     const router = useRouter();
     const { data: session, status } = useSession();
+
+    //   #944 The id as a primitive: this effect reads nothing else off the
+    //   session, and keying it on the object re-ran two server actions on every
+    //   background refresh.
+    const userId = session?.user?.id;
     const { showToast } = useToast();
 
     const courseId = params.certificateId as string;
@@ -38,18 +43,25 @@ export default function CertificateClient({ initial = null }: {
         if (initial !== null) return;
 
         async function fetchCertificateData() {
-            if (!session) {
+            /*
+             *   #944 WAS `if (!session)`, WHICH FIRED WHILE THE SESSION WAS STILL
+             *   LOADING. `status` is "loading" before next-auth answers and
+             *   `session` is null throughout, so a learner on a slow connection
+             *   was pushed to /auth/login — which, being authenticated, bounced
+             *   them straight back. Asking `status` says what the redirect means.
+             */
+            if (status === "unauthenticated") {
                 router.push("/auth/login?callbackUrl=/academy");
                 return;
             }
 
-            if (status !== "authenticated" || !session?.user) return;
+            if (status !== "authenticated" || !userId) return;
 
             setLoading(true);
             try {
                 const [courseReq, progressReq] = await Promise.all([
                     getCourseByIdAction(courseId),
-                    getUserProgressAction(session.user.id, courseId),
+                    getUserProgressAction(userId, courseId),
                 ]);
 
                 if (mounted) {
@@ -67,7 +79,7 @@ export default function CertificateClient({ initial = null }: {
         fetchCertificateData();
 
         return () => { mounted = false; };
-    }, [courseId, session, status, router, initial]);
+    }, [courseId, userId, status, router, initial]);
 
 
 

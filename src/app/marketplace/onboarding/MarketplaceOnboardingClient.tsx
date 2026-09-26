@@ -268,11 +268,13 @@ export default function MarketplaceOnboardingClient({ initial = null }: {
                 logger.error("Failed to check Marketplace status:", error);
             }
         };
-        if (session?.user) {
+        //   #944 `userId`, not `session?.user`: the object is re-minted by every
+        //   background refresh, and this is the only thing the body asks of it.
+        if (userId) {
             checkStatus();
         }
 
-    }, [session, status, router, DRAFT_KEY, takeSeed]);
+    }, [userId, status, router, DRAFT_KEY, takeSeed]);
 
     // Show loading while checking auth
     if (status === "loading") {
