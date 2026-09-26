@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseDocumentSnapshot } from "@/lib/supabase-db";
 import { filterByOwner, ownedProfileIdsFor } from "@/lib/owned-profile-ids";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // ============================================
 // MEMBER ID CARD
 // ============================================
@@ -213,7 +214,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 
         // Check cooperative member record firstName and lastName
         if (!resolvedName && d) {
-            const coopName = `${d.firstName || ""} ${d.lastName || ""}`.trim();
+            const coopName = joinFullName(namePartsOf(d)).trim();
             if (!isPlaceholder(coopName)) resolvedName = coopName;
         }
 
@@ -223,7 +224,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 userData?.name,
                 userData?.fullName,
                 session.user.name,
-                d ? `${d.firstName || ""} ${d.lastName || ""}` : ""
+                d ? joinFullName(namePartsOf(d)) : ""
             ];
             for (const cand of candidates) {
                 if (cand && !isPlaceholder(cand.trim())) {
@@ -235,7 +236,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 
         // Fall back cleanly if everything is empty or placeholder
         if (!resolvedName) {
-            const rawName = (userData?.name || userData?.fullName || session.user.name || (d ? `${d.firstName || ""} ${d.lastName || ""}` : "")).trim();
+            const rawName = (userData?.name || userData?.fullName || session.user.name || (d ? joinFullName(namePartsOf(d)) : "")).trim();
             if (rawName && !isPlaceholder(rawName)) {
                 resolvedName = rawName;
             } else {

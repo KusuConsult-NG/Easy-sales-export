@@ -17,6 +17,7 @@ import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { notifyMemberDecision } from "@/lib/member-decision-notice";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Academy Admin Actions - Application Approval/Rejection
  */
@@ -76,7 +77,7 @@ async function _approveAcademyApplicationAction(
                 transaction.set(userRef, {
                     uid: userId,
                     email: pi.email || appData.email || "",
-                    fullName: pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Learner"),
+                    fullName: pi.fullName || (pi.firstName ? joinFullName(namePartsOf(pi)).trim() : "Learner"),
                     createdAt: FieldValue.serverTimestamp(),
                     roles: ["academy_participant"],
                     isVerified: true,

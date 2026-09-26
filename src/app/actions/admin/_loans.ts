@@ -21,6 +21,7 @@ import { notifyLoanDecision } from "@/lib/loan-decision-notice";
 import { OPEN_LOAN_STATUSES } from "@/lib/loan-application-location";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // ============================================
 // Loan Application Management (Admin)
 // ============================================
@@ -87,7 +88,7 @@ async function _getPendingLoanApplications(limit = 50, lastDocId?: string): Prom
                         bankDetails: {
                             bankName: data.bankName || data.bankAccount?.bankName || "",
                             accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? joinFullName(namePartsOf(data)) : ""),
                             bankCode: data.bankCode || data.bankAccount?.bankCode || ""
                         }
                     };

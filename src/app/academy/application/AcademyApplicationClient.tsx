@@ -17,7 +17,6 @@ import { useServerSeed } from "@/hooks/useServerSeed";
 import { AlertTriangle } from "lucide-react";
 import { FormHomeButton } from "@/components/forms/FormNavButtons";
 import { joinFullName, namePartsOf } from "@/lib/person-name";
-
 import ListLoadFailed from "@/components/common/ListLoadFailed";
 
 interface PersonalInfoData {
@@ -643,7 +642,7 @@ export default function AcademyApplicationClient(
             /*
              *   #920 THE ONE JOIN RULE, not a ninth spelling of it.
              *
-             *   This was `${firstName} ${lastName}`.trim() — the MIDDLE NAME
+             *   This was joinFullName({ first: firstName, last: lastName }).trim() — the MIDDLE NAME
              *   LEFT OUT — while the server writes the learner's user row as
              *   [firstName, otherName, lastName]. PersonalInfoStep collects
              *   otherName, so a learner who filled it in produced two names for

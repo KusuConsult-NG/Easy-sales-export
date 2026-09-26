@@ -622,7 +622,7 @@ async function _requestAcademyRevisionAction(
             try {
                 const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
                 const email = userDoc.data()?.email;
-                const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Applicant';
+                const name = appData?.personalInfo?.firstName ? joinFullName(namePartsOf(appData.personalInfo)).trim() : appData?.personalInfo?.fullName || 'Applicant';
                 if (email) {
                 const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || 'Easy Sales Export Academy <info@easysalesexport.com>',

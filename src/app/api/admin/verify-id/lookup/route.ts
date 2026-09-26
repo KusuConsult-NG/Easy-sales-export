@@ -8,6 +8,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * GET /api/admin/verify-id/lookup
  * Lookup a member by memberNumber or email for admin ID verification
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
         const member = {
             id: userDoc.id,
             fullName: userData.fullName || userData.name ||
-                `${membData?.firstName || ""} ${membData?.lastName || ""}`.trim() || "Unknown",
+                joinFullName(namePartsOf(membData)).trim() || "Unknown",
             email: userData.email || membData?.email || "",
             memberNumber: membData?.memberNumber || userData.memberNumber || "—",
             role: (userData.roles || []).join(", ") || "member",

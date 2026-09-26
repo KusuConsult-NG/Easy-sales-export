@@ -27,6 +27,7 @@ import { startedEarly } from "@/lib/started-early";
 import { isLiveUserRow } from "@/lib/user-identity";
 import { readUserDocOnce } from "@/lib/current-user-doc";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /** How many members one directory read will return. */
 const DIRECTORY_ROW_CAP = 2000;
 
@@ -596,7 +597,7 @@ async function _getDirectoryMembersAction(): Promise<
 
                 return {
                     id: doc.id,
-                    name: `${data.firstName} ${data.lastName}`,
+                    name: joinFullName(namePartsOf(data)),
                     role: "Member",
                     location: [lga, state].filter(Boolean).join(", "),
                     occupation: text(data.occupation),

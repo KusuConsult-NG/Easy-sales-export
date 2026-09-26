@@ -29,6 +29,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { isRecentlyActive } from "@/lib/recent-activity";
 import { sellerCategoryMatches } from "@/lib/seller-category";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
     return dbState.toLowerCase().includes(filterState.toLowerCase()); }
@@ -467,7 +468,7 @@ async function collectSmsRecipients(
 
                 // Prefer phone from the member doc, fall back to user profile
                 const phone = m.phone || m.phoneNumber || (uData ? uData.phone || uData.phoneNumber : null);
-                const name = m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : (uData ? uData.fullName || uData.name : "Member") || "Member";
+                const name = m.firstName ? joinFullName(namePartsOf(m)).trim() : (uData ? uData.fullName || uData.name : "Member") || "Member";
 
                 if (phone) add(phone, name);
             }
@@ -496,7 +497,7 @@ async function collectSmsRecipients(
                 }
 
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
-                add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || a.name || "Applicant");
+                add(a.phone || a.alternativePhone || a.phoneNumber, joinFullName(namePartsOf(a)).trim() || a.name || "Applicant");
             }
             break;
         }
@@ -614,7 +615,7 @@ async function collectSmsRecipients(
                 }
 
                 if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
-                add(a.profile?.phone, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
+                add(a.profile?.phone, a.profile?.fullName || joinFullName(namePartsOf(a.profile)).trim() || "Farm Nation User");
             }
 
             // Supplement: processedPayments for farm_nation
@@ -680,7 +681,7 @@ async function collectSmsRecipients(
                 if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = m.phone || m.phoneNumber || uData?.phone || uData?.phoneNumber;
-                const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative User";
+                const name = m.fullName || joinFullName(namePartsOf(m)).trim() || uData?.fullName || uData?.name || "Cooperative User";
                 if (phone) add(phone, name);
             }
 
@@ -691,7 +692,7 @@ async function collectSmsRecipients(
                 const userState = pi.state || pi.stateOfOrigin || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = pi.phone || a.phone || a.phoneNumber;
-                if (phone) add(phone, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
+                if (phone) add(phone, pi.fullName || joinFullName(namePartsOf(pi)).trim() || "Academy User");
             }
             break;
         }
@@ -724,7 +725,7 @@ async function collectSmsRecipients(
                  *   rule rather than by accident" #697 asked for.
                  */
                 if (r.userId && nonContactable.has(String(r.userId))) continue;
-                add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
+                add(r.phone || r.phoneNumber, r.name || joinFullName(namePartsOf(r)).trim() || "Registrant");
             }
             break;
         }

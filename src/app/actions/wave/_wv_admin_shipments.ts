@@ -12,6 +12,7 @@ import { getLogisticsProvider } from "@/lib/logistics";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { estimatedDeliveryFrom } from "@/lib/delivery-estimate";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /** #510 The bound on the shipments listing, matching the admin content queues. */
 const WAVE_SHIPMENT_PAGE_SIZE = 500;
 
@@ -48,7 +49,7 @@ async function _createWaveShipmentAction(data: {
 
         const memberData = memberDoc.data();
         const memberName = memberData?.firstName 
-            ? `${memberData.firstName} ${memberData.surname || memberData.lastName || ""}`.trim()
+            ? joinFullName(namePartsOf(memberData)).trim()
             : (memberData?.name || "Member");
 
         let finalTrackingNumber = trackingNumber;

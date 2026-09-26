@@ -53,6 +53,7 @@ import { useSession } from "next-auth/react";
 import { useAdminData } from "@/hooks/useAdminData";
 import { statText, statMoney } from "@/lib/admin-stat-display";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 const STATUS_CONFIG: Record<string, { label: string; badge: string; icon: React.ElementType }> = {
     pending: { label: "Pending", badge: "bg-gray-100 text-gray-700", icon: Clock },
     funded: { label: "Funded", badge: "bg-blue-100 text-blue-800", icon: DollarSign },
@@ -309,8 +310,8 @@ export default function AdminEscrowPage() {
                                             <p className="font-bold text-gray-900 text-base mb-1 truncate">{tx.productName}</p>
 
                                             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600">
-                                                <span>Buyer: <span className="font-semibold text-gray-900">{tx.buyerDetails?.firstName ? `${tx.buyerDetails.firstName} ${tx.buyerDetails.lastName}` : (tx.buyerEmail ?? tx.buyerId?.slice(0, 8))}</span></span>
-                                                <span>Seller: <span className="font-semibold text-gray-900">{tx.sellerDetails?.firstName ? `${tx.sellerDetails.firstName} ${tx.sellerDetails.lastName}` : (tx.sellerEmail ?? tx.sellerId?.slice(0, 8))}</span></span>
+                                                <span>Buyer: <span className="font-semibold text-gray-900">{tx.buyerDetails?.firstName ? joinFullName(namePartsOf(tx.buyerDetails)) : (tx.buyerEmail ?? tx.buyerId?.slice(0, 8))}</span></span>
+                                                <span>Seller: <span className="font-semibold text-gray-900">{tx.sellerDetails?.firstName ? joinFullName(namePartsOf(tx.sellerDetails)) : (tx.sellerEmail ?? tx.sellerId?.slice(0, 8))}</span></span>
                                             </div>
 
                                             {tx.paymentReference && (
@@ -408,14 +409,14 @@ export default function AdminEscrowPage() {
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Buyer</span>
                                 <span className="font-semibold text-gray-900 text-right">
-                                    {modal.tx.buyerDetails?.firstName ? `${modal.tx.buyerDetails.firstName} ${modal.tx.buyerDetails.lastName}` : (modal.tx.buyerEmail ?? modal.tx.buyerId?.slice(0, 12))}
+                                    {modal.tx.buyerDetails?.firstName ? joinFullName(namePartsOf(modal.tx.buyerDetails)) : (modal.tx.buyerEmail ?? modal.tx.buyerId?.slice(0, 12))}
                                     <br /><span className="text-[10px] font-mono text-gray-400">{modal.tx.buyerDetails?.email || "No Email"}</span>
                                 </span>
                             </div>
                             <div className="flex justify-between border-b border-gray-100 pb-2">
                                 <span className="text-gray-500">Seller</span>
                                 <span className="font-semibold text-gray-900 text-right">
-                                    {modal.tx.sellerDetails?.firstName ? `${modal.tx.sellerDetails.firstName} ${modal.tx.sellerDetails.lastName}` : (modal.tx.sellerEmail ?? modal.tx.sellerId?.slice(0, 12))}
+                                    {modal.tx.sellerDetails?.firstName ? joinFullName(namePartsOf(modal.tx.sellerDetails)) : (modal.tx.sellerEmail ?? modal.tx.sellerId?.slice(0, 12))}
                                     <br /><span className="text-[10px] font-mono text-gray-400">{modal.tx.sellerDetails?.email || "No Email"}</span>
                                 </span>
                             </div>

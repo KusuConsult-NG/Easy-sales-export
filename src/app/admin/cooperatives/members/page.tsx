@@ -23,6 +23,7 @@ import AdminReadFailed from "@/components/admin/AdminReadFailed";
 //   nothing. Both are on the allow-list now.
 import { COOPERATIVE_EDITABLE_FIELDS, seedEditDraft } from "@/lib/admin-editable-fields";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 type MembershipApplication = {
     id: string;
     userId: string;
@@ -191,13 +192,13 @@ export default function CooperativeMembersPage() {
             return da - db;
         }
         if (sortBy === "name-asc") {
-            const nameA = a.user?.name || `${a.data?.firstName || ''} ${a.data?.lastName || ''}`.trim() || "";
-            const nameB = b.user?.name || `${b.data?.firstName || ''} ${b.data?.lastName || ''}`.trim() || "";
+            const nameA = a.user?.name || joinFullName(namePartsOf(a.data)).trim() || "";
+            const nameB = b.user?.name || joinFullName(namePartsOf(b.data)).trim() || "";
             return nameA.localeCompare(nameB);
         }
         if (sortBy === "name-desc") {
-            const nameA = a.user?.name || `${a.data?.firstName || ''} ${a.data?.lastName || ''}`.trim() || "";
-            const nameB = b.user?.name || `${b.data?.firstName || ''} ${b.data?.lastName || ''}`.trim() || "";
+            const nameA = a.user?.name || joinFullName(namePartsOf(a.data)).trim() || "";
+            const nameB = b.user?.name || joinFullName(namePartsOf(b.data)).trim() || "";
             return nameB.localeCompare(nameA);
         }
         if (sortBy === "legacy-first") {

@@ -18,6 +18,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { inspectionRefusal } from "@/lib/land-inspection";
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 import {
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
@@ -99,7 +100,7 @@ async function _getPendingLandListings(limit = 50): Promise<ActionResponse<any[]
             const bankDetails = uData.bankDetails || {
                 bankName: uData.bankName || uData.bankAccount?.bankName || "",
                 accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : ""),
                 bankCode: uData.bankCode || uData.bankAccount?.bankCode || ""
             };
 

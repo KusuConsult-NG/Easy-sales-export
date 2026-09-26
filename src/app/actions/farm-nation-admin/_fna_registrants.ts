@@ -234,7 +234,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
              *   The row's label is built at the hydration step below:
              *
              *       const userName = profile.firstName
-             *           ? `${profile.firstName} ${profile.lastName || ''}`.trim()
+             *           ? joinFullName(namePartsOf(profile)).trim()
              *           : (profile.fullName || uData.fullName || uData.name || "Unknown");
              *
              *   — the APPLICATION's `profile`, preferred over the account. So
@@ -378,7 +378,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             
             // Reconstruct the userName
             const userName = profile.firstName 
-                ? `${profile.firstName} ${profile.lastName || ''}`.trim() 
+                ? joinFullName(namePartsOf(profile)).trim() 
                 : (profile.fullName || uData.fullName || uData.name || "Unknown");
 
             // Canonical bankDetails injection — for the callers entitled to it.

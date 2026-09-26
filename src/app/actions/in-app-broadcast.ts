@@ -53,6 +53,7 @@ import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audi
 import { recordAdminAction } from "@/lib/audit-log";
 import { sellerCategoryMatches } from "@/lib/seller-category";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 export type NotificationType = Notification["type"];
 
 export interface InAppBroadcastFilters { audience: InAppAudience;
@@ -168,7 +169,7 @@ export async function collectRecipientUserIds(
                 if (excludeIds.has(uid)) continue;
                 const userState = m.state || (m.address && m.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
-                if (uid) add(uid, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
+                if (uid) add(uid, m.firstName ? joinFullName(namePartsOf(m)).trim() : "Member");
             }
 
             // 3. Supplement: wave_applications
@@ -178,7 +179,7 @@ export async function collectRecipientUserIds(
                 const uid = a.userId || d.id;
                 if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
-                if (uid) add(uid, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
+                if (uid) add(uid, joinFullName(namePartsOf(a)).trim() || "Applicant");
             }
 
             // 4. Supplement: academy_applications
@@ -198,7 +199,7 @@ export async function collectRecipientUserIds(
                 const uid = r.userId || d.id;
                 if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(r.state, filters.state)) continue;
-                if (uid) add(uid, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
+                if (uid) add(uid, r.name || joinFullName(namePartsOf(r)).trim() || "Registrant");
             }
 
             // 6. Supplement: farm_nation_applications
@@ -208,7 +209,7 @@ export async function collectRecipientUserIds(
                 const uid = a.userId || d.id;
                 if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
-                if (uid) add(uid, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
+                if (uid) add(uid, a.profile?.fullName || joinFullName(namePartsOf(a.profile)).trim() || "Farm Nation User");
             }
 
             // 7. Supplement: export_applications
@@ -320,7 +321,7 @@ export async function collectRecipientUserIds(
 
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
 
-                add(uid, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
+                add(uid, m.firstName ? joinFullName(namePartsOf(m)).trim() : "Member");
             }
             break;
         }
@@ -345,7 +346,7 @@ export async function collectRecipientUserIds(
                 }
 
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
-                if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
+                if (a.userId) add(a.userId, joinFullName(namePartsOf(a)).trim() || "Applicant");
             }
             break;
         }
@@ -426,7 +427,7 @@ export async function collectRecipientUserIds(
                 }
 
                 if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
-                if (a.userId) add(a.userId, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
+                if (a.userId) add(a.userId, a.profile?.fullName || joinFullName(namePartsOf(a.profile)).trim() || "Farm Nation User");
             }
             break;
         }
@@ -439,7 +440,7 @@ export async function collectRecipientUserIds(
             for (const d of (await stream).docs) {
                 const r = d.data();
                 if (filters.state && !isStateMatch(r.state, filters.state)) continue;
-                if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
+                if (r.userId) add(r.userId, r.name || joinFullName(namePartsOf(r)).trim() || "Registrant");
             }
             break;
         }
@@ -469,7 +470,7 @@ export async function collectRecipientUserIds(
                 const uData = coopUserMap.get(m.userId);
                 if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
-                const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative User";
+                const name = m.fullName || joinFullName(namePartsOf(m)).trim() || uData?.fullName || uData?.name || "Cooperative User";
                 add(m.userId, name);
             }
 
@@ -480,7 +481,7 @@ export async function collectRecipientUserIds(
                 const pi = a.personalInfo || {};
                 const userState = pi.state || pi.stateOfOrigin || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
-                add(a.userId, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
+                add(a.userId, pi.fullName || joinFullName(namePartsOf(pi)).trim() || "Academy User");
             }
             break;
         }

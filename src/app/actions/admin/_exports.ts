@@ -26,13 +26,14 @@ import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  *   #825 THE EXPORT APPROVAL QUEUE PRINTED THE WORD "undefined" AS A NAME.
  *
  *   What stood at both hydration sites in this file, twice, identically:
  *
  *       const userName = uData.name || uData.firstName
- *           ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+ *           ? joinFullName(namePartsOf(uData)).trim()
  *           : (profile?.fullName || kycName || "Unknown User");
  *
  *   `||` binds tighter than `?:`, so that reads as
@@ -69,7 +70,7 @@ function exportApplicantName(
     kycName: string | null,
 ): string {
     const fromAccount = uData?.firstName
-        ? `${uData.firstName} ${uData.lastName || ""}`.trim()
+        ? joinFullName(namePartsOf(uData)).trim()
         : "";
     return fromAccount
         || uData?.name
@@ -853,7 +854,7 @@ async function _getStandardExportApplicationsAction(options: {
                 const uData = (userMap.get(app.userId as string) || {}) as any;
                 const kyc = (app.kyc || {}) as any;
                 const profile = (app.profile || {}) as any;
-                const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
+                const kycName = kyc?.kycData?.firstName ? joinFullName(namePartsOf(kyc.kycData)).trim() : null;
                 //   #825 — see exportApplicantName. This read "undefined" for
                 //   any account with `name` and no `firstName`.
                 const userName = exportApplicantName(uData, profile, kycName);
@@ -878,7 +879,7 @@ async function _getStandardExportApplicationsAction(options: {
                 const bankDetails = uData.bankDetails || {
                     bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
                     accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : ""),
                     bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
                 };
 
@@ -933,7 +934,7 @@ async function _getStandardExportApplicationsAction(options: {
                 const uData = (userMap.get(app.userId as string) || {}) as any;
                 const kyc = (app.kyc || {}) as any;
                 const profile = (app.profile || {}) as any;
-                const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
+                const kycName = kyc?.kycData?.firstName ? joinFullName(namePartsOf(kyc.kycData)).trim() : null;
                 //   #825 — see exportApplicantName. This read "undefined" for
                 //   any account with `name` and no `firstName`.
                 const userName = exportApplicantName(uData, profile, kycName);
@@ -958,7 +959,7 @@ async function _getStandardExportApplicationsAction(options: {
                 const bankDetails = uData.bankDetails || {
                     bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
                     accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : ""),
                     bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
                 };
 

@@ -11,6 +11,7 @@ import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/ca
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { approvalReadiness } from "@/lib/cooperative-approval-readiness";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * API Route: Approve Cooperative Membership Application
  */
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
                 txn.set(userRef, {
                     uid: userId,
                     email: memberData?.email || "",
-                    fullName: `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || "Cooperative Member",
+                    fullName: joinFullName(namePartsOf(memberData)).trim() || "Cooperative Member",
                     createdAt: FieldValue.serverTimestamp(),
                     roles: ["cooperative_member"],
                     isVerified: true,
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
         } catch { /* non-blocking */ }
 
         // Send approval email notification
-        const memberName = `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member';
+        const memberName = joinFullName(namePartsOf(memberData)).trim() || 'Member';
         try {
             const { sendMembershipApprovalEmail } = await import('@/lib/email-notifications');
             await sendMembershipApprovalEmail(

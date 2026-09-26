@@ -14,6 +14,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Get global stats for Farm Nation admin dashboard
  */
@@ -211,7 +212,7 @@ async function _getFarmNationTransactionsAction(options: {
                                 bankDetails: data.bankDetails || {
                                     bankName: data.bankName || data.bankAccount?.bankName || "N/A",
                                     accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                                    accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                                    accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? joinFullName(namePartsOf(data)) : "N/A"),
                                     bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
                                 }
                             }

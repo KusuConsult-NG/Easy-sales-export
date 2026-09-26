@@ -23,6 +23,7 @@ import { humanise } from "@/lib/humanise";
 import AdminReadFailed from "@/components/admin/AdminReadFailed";
 import { statText } from "@/lib/admin-stat-display";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 const DISPUTE_REASON_LABELS: Record<string, string> = {
     not_received: "Item Not Received",
     wrong_item: "Wrong Item",
@@ -328,7 +329,7 @@ export default function AdminDisputesPage() {
                                                 <p className="text-xs font-bold text-gray-400 uppercase mb-1">Buyer</p>
                                                 <div className="flex flex-col">
                                                     <span className="font-semibold text-gray-900">
-                                                        {(dispute as any).buyerDetails?.firstName ? `${(dispute as any).buyerDetails.firstName} ${(dispute as any).buyerDetails.lastName}` : (dispute.buyerId?.slice(0, 8) || "Unknown")}
+                                                        {(dispute as any).buyerDetails?.firstName ? joinFullName(namePartsOf((dispute as any).buyerDetails)) : (dispute.buyerId?.slice(0, 8) || "Unknown")}
                                                     </span>
                                                     <span className="text-[10px] text-gray-500">{(dispute as any).buyerDetails?.email || "No email"}</span>
                                                 </div>
@@ -337,7 +338,7 @@ export default function AdminDisputesPage() {
                                                 <p className="text-xs font-bold text-gray-400 uppercase mb-1">Seller</p>
                                                 <div className="flex flex-col">
                                                     <span className="font-semibold text-gray-900">
-                                                        {(dispute as any).sellerDetails?.firstName ? `${(dispute as any).sellerDetails.firstName} ${(dispute as any).sellerDetails.lastName}` : (dispute.sellerId?.slice(0, 8) || "Unknown")}
+                                                        {(dispute as any).sellerDetails?.firstName ? joinFullName(namePartsOf((dispute as any).sellerDetails)) : (dispute.sellerId?.slice(0, 8) || "Unknown")}
                                                     </span>
                                                     <span className="text-[10px] text-gray-500">{(dispute as any).sellerDetails?.email || "No email"}</span>
                                                 </div>

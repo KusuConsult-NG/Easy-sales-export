@@ -30,6 +30,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 
+import { joinFullName } from "@/lib/person-name";
 export async function autoProvisionZereCooperative(userId: string, email: string) {
     if (!isPaymentBypassAccount(email)) return;
     
@@ -168,7 +169,7 @@ export async function autoProvisionLegacyCooperative(userId: string, userData: a
                 userId,
                 firstName,
                 lastName,
-                fullName: resolvedName || `${firstName} ${lastName}`,
+                fullName: resolvedName || joinFullName({ first: firstName, last: lastName }),
                 email: userData.email || "",
                 phone: userData.phone || "08000000000",
                 membershipTier: "Member",

@@ -21,6 +21,7 @@ import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 // ============================================
 // Academy Application Management (Admin)
 // ============================================
@@ -141,7 +142,7 @@ async function _getAcademyApplicationsAction(options: {
             const bankDetails = uData.bankDetails || {
                 bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
                 accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : ""),
                 bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
             };
 
@@ -365,7 +366,7 @@ async function _approveAcademyApplicationAction(
                 uid: userId,
                 email: pi.email || appData.email || "",
                 fullName: pi.fullName
-                    || (pi.firstName ? `${pi.firstName} ${pi.lastName || ""}`.trim() : "Learner"),
+                    || (pi.firstName ? joinFullName(namePartsOf(pi)).trim() : "Learner"),
                 createdAt: FieldValue.serverTimestamp(),
             }, { merge: true });
         }

@@ -16,6 +16,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { resolveApplicationPlan } from "@/lib/academy-plan";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Get Pending Academy Applications (Admin)
  */
@@ -71,14 +72,14 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
             const bankDetails = maySeeBankDetails ? (uData.bankDetails || {
                 bankName: uData.bankName || uData.bankAccount?.bankName || "N/A",
                 accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? joinFullName(namePartsOf(uData)) : "N/A"),
                 bankCode: uData.bankCode || uData.bankAccount?.bankCode || "N/A"
             }) : undefined;
 
             return {
                 ...app,
                 userProfile: {
-                    name: uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (uData.name || pi.fullName || "Unknown"),
+                    name: uData.firstName ? joinFullName(namePartsOf(uData)).trim() : (uData.name || pi.fullName || "Unknown"),
                     email: uData.email || pi.email || "N/A",
                     phone: uData.phone || uData.phoneNumber || pi.phone || "N/A"
                 },
@@ -435,8 +436,8 @@ async function _getStandardAcademyApplicationsAction(options: {
                 const pi = (app.personalInfo || {}) as any;
                 
                 const userName = uData.firstName
-                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                    : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Unknown User"));
+                    ? joinFullName(namePartsOf(uData)).trim()
+                    : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? joinFullName(namePartsOf(pi)).trim() : "Unknown User"));
 
                 const mergedData = {
                     ...uData,
@@ -556,8 +557,8 @@ async function _getStandardAcademyApplicationsAction(options: {
                 const pi = (app.personalInfo || {}) as any;
                 
                 const userName = uData.firstName
-                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                    : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Unknown User"));
+                    ? joinFullName(namePartsOf(uData)).trim()
+                    : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? joinFullName(namePartsOf(pi)).trim() : "Unknown User"));
 
                 const mergedData = {
                     ...uData,

@@ -500,7 +500,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         //   address to write to, and it is the expression this block always
         //   used.
         const notificationEmail = session.user.email || validatedData.email;
-        const applicantName = `${validatedData.firstName} ${validatedData.surname}`;
+        const applicantName = joinFullName(namePartsOf(validatedData));
         const applicantState = validatedData.stateOfResidence;
 
         afterResponse("wave-application-notifications", async () => {

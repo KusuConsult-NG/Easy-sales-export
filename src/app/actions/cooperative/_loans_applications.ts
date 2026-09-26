@@ -18,6 +18,7 @@ import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 import { ownedProfileIdsFor, filterByOwner } from "@/lib/owned-profile-ids";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Submit loan application
  */
@@ -687,7 +688,7 @@ export async function getAdminLoanApplicationsAction(options: {
              *        real name. Two doors onto one field, disagreeing — and the
              *        one a human reads before releasing money was the wrong one.
              */
-            const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A");
+            const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? joinFullName(namePartsOf(user)) : "N/A");
             const bankCode = user.bankDetails?.bankCode || app.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A";
 
             const bankDetails = maySeeBankDetails
@@ -714,7 +715,7 @@ export async function getAdminLoanApplicationsAction(options: {
                  */
                 interestRate: app.interestRate || DEFAULT_MONTHLY_INTEREST_RATE,
                 appliedAt: appAppliedAt,
-                userName: app.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.fullName || "Unknown"),
+                userName: app.fullName || (user.firstName && user.lastName ? joinFullName(namePartsOf(user)) : user.fullName || "Unknown"),
                 userEmail: app.userEmail || user.email || "",
                 // The flattened copies are the same data under other names, so
                 // they follow the same gate.
@@ -901,7 +902,7 @@ export async function getAdminLoanApplicationsExportAction(options: {
             const bankDetails = user.bankDetails || {
                 bankName: loan.bankName || user.bankName || user.bankAccount?.bankName || "N/A",
                 accountNumber: loan.accountNumber || user.accountNumber || user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A",
-                accountName: loan.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A"),
+                accountName: loan.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? joinFullName(namePartsOf(user)) : "N/A"),
                 bankCode: loan.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A"
             };
 

@@ -19,6 +19,7 @@ import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission, isAdmin, isPlat
 import { adminIsReachableBy, memberModules } from "@/lib/conversation-scope";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
+import { joinFullName, namePartsOf } from "@/lib/person-name";
 /**
  * Get all conversations for the current user
  */
@@ -643,7 +644,7 @@ export async function getApprovedCooperativeMembersAction(): Promise<{
 
             members.push({
                 uid: doc.id,
-                fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim() || d.fullName || "—",
+                fullName: joinFullName(namePartsOf(d)).trim() || d.fullName || "—",
                 email: d.email || "",
                 memberNumber,
                 stateOfOrigin: d.stateOfOrigin || "",
