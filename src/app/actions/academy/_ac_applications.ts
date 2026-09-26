@@ -24,6 +24,43 @@ import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { latestApplication } from "@/lib/latest-application";
 
+
+/**
+ * Every reason this payload was refused, in one sentence.
+ *
+ *   #942 BOTH DOORS REPORTED `issues[0]?.message` AND DROPPED THE REST.
+ *
+ *   With the required fields now constrained, an application loaded from a
+ *   historical row can be refused for three blanks at once — and reporting one
+ *   of them means the applicant fixes it, resubmits, is refused again, and
+ *   learns the next one. Three round trips to be told three things the server
+ *   knew on the first.
+ *
+ *   That asymmetry is also what made the tightening unsafe to ship before:
+ *   one-door-parsed-and-the-other-did-not deferred it because a refusal the
+ *   applicant cannot act on would strand them. A sentence naming every field
+ *   they must fill is the thing that makes the constraint kind rather than
+ *   merely correct.
+ *
+ *   DEDUPED AND BOUNDED. Two issues on one field (trim and min, say) would
+ *   otherwise print the same sentence twice, and a payload that is wrong in
+ *   twenty ways should not produce a paragraph — after four, it says so.
+ */
+function refusalFrom(
+    //   Typed structurally rather than as z.ZodError, so this file does not take
+    //   a zod import for one parameter type. Both callers pass a real ZodError.
+    error: { issues: ReadonlyArray<{ message?: string }> },
+): string {
+    const seen: string[] = [];
+    for (const issue of error.issues) {
+        const message = issue.message;
+        if (message && !seen.includes(message)) seen.push(message);
+    }
+    if (seen.length === 0) return "Validation failed";
+    if (seen.length <= 4) return seen.join(" ");
+    return `${seen.slice(0, 4).join(" ")} (and ${seen.length - 4} more.)`;
+}
+
 const ACADEMY_REGISTRATION_FEE = 0;
 
 /**
@@ -96,7 +133,7 @@ async function _submitAcademyApplicationAction(
         if (!validation.success) {
             return {
                 success: false as const,
-                error: validation.error.issues[0]?.message || "Validation failed",
+                error: refusalFrom(validation.error),
                 data: null,
             };
         }
@@ -679,7 +716,7 @@ async function _resubmitAcademyApplicationAction(
         // Validate input
         const validation = AcademyApplicationInputSchema.safeParse(data);
         if (!validation.success) {
-            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null };
+            return { success: false as const, error: refusalFrom(validation.error), data: null };
         }
 
         const validatedData = validation.data;

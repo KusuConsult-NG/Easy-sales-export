@@ -400,7 +400,7 @@ describe('#920 — what the parse does NOT fix, stated rather than implied', () 
         }
     });
 
-    it('and the schema requires none of them to be non-empty', () => {
+    it('AND THE SCHEMA NOW REQUIRES EVERY ONE OF THEM TO BE NON-EMPTY — #942', () => {
         const blank = form({
             personalInfo: Object.fromEntries(
                 REQUIRED_BY_THE_FORM.filter((f) => f !== 'email').map((f) => [f, '']),
@@ -408,16 +408,15 @@ describe('#920 — what the parse does NOT fix, stated rather than implied', () 
             interests: { learningPaths: [], goals: '' },
         });
 
-        //   email is the exception, and it is the exception BECAUSE #912 gave it
-        //   a real field type. The rest are bare z.string().
-        expect(AcademyApplicationInputSchema.safeParse(blank).success).toBe(true);
+        expect(AcademyApplicationInputSchema.safeParse(blank).success).toBe(false);
 
-        //   And blanking the address is what the schema does refuse.
+        //   And blanking the address is still refused — email was always the
+        //   exception, BECAUSE #912 gave it a real field type.
         expect(AcademyApplicationInputSchema.safeParse(
             form({ personalInfo: { email: '' } })).success).toBe(false);
     });
 
-    it('THE LEDGER — how many of the nine the schema constrains', () => {
+    it('THE LEDGER — how many of the nine the schema constrains: 9 of 9', () => {
         const shape: Record<string, any> =
             (AcademyApplicationInputSchema as any).shape.personalInfo.shape;
         const constrained = REQUIRED_BY_THE_FORM.filter((field) => {
@@ -425,18 +424,49 @@ describe('#920 — what the parse does NOT fix, stated rather than implied', () 
             return at ? !at.safeParse('').success : false;
         });
 
-        //   One: email. Raise this and record which field gained a floor and
-        //   what was measured about the rows already stored.
-        expect(constrained).toEqual(['email']);
-        expect(ledgerVerdict(constrained.length, 1)).toBe(LEDGER_HELD);
+        expect(constrained.sort()).toEqual([...REQUIRED_BY_THE_FORM].sort());
+        expect(ledgerVerdict(constrained.length, REQUIRED_BY_THE_FORM.length))
+            .toBe(LEDGER_HELD);
     });
 
-    it('so a blank submission still reaches the learner\'s user row', async () => {
-        //   Recorded as live, not fixed. The seven fields the submit action
-        //   syncs onto users are overwritten with whatever arrives.
+    it('AND EVERY REFUSAL NAMES ITS FIELD, which is what made this safe to tighten', () => {
+        /*
+         *   #942 THE DEFERRAL'S REASON WAS SOUND AND WAS ABOUT THE MESSAGE, NOT
+         *   THE RULE. This file recorded: "Tightening it would refuse
+         *   resubmission of historical rows that the edit form loads back into
+         *   itself, and how many of those carry a blank is not measurable from
+         *   here."
+         *
+         *   Refusing is correct — a field the form calls required should be
+         *   filled. What would have stranded somebody is WHICH refusal: both
+         *   doors reported `issues[0]?.message`, and a bare `.min(1)` says
+         *   "String must contain at least 1 character(s)". A sentence naming no
+         *   field, on a form they cannot then fix.
+         */
+        const shape: Record<string, any> =
+            (AcademyApplicationInputSchema as any).shape.personalInfo.shape;
+
+        for (const field of REQUIRED_BY_THE_FORM.filter((f) => f !== 'email')) {
+            const result = shape[field].safeParse('');
+            const message = result.success ? '' : result.error.issues[0]?.message ?? '';
+
+            expect({ field, named: /required\.$/.test(message) })
+                .toEqual({ field, named: true });
+            //   The control: zod's own wording must not be what reaches a member.
+            expect({ field, generic: /at least 1 character/.test(message) })
+                .toEqual({ field, generic: false });
+        }
+    });
+
+    it('SO A BLANK SUBMISSION NO LONGER REACHES THE LEARNER\'S USER ROW', async () => {
+        //   The point of the whole ledger entry. The submit door syncs seven of
+         //  these onto the user record, so a blank here is how a user comes to
+         //  have no surname and no state.
         seedUser();
+        const before = readUser();
         const { submitAcademyApplicationAction } = await actions();
-        await submitAcademyApplicationAction(form({
+
+        const result: any = await submitAcademyApplicationAction(form({
             personalInfo: {
                 firstName: '', lastName: '', otherName: '', fullName: '',
                 phone: '', gender: '', state: '', lga: '', occupation: '',
@@ -444,10 +474,28 @@ describe('#920 — what the parse does NOT fix, stated rather than implied', () 
             },
         }));
 
-        expect(readUser()).toMatchObject({
-            firstName: '', lastName: '', fullName: '',
-            phone: '', gender: '', stateOfOrigin: '', lga: '',
-        });
+        expect(result?.success).toBe(false);
+        //   Refused, and the row is untouched rather than half-overwritten.
+        expect(readUser()).toEqual(before);
+    });
+
+    it('and the refusal lists SEVERAL missing fields at once, not one per attempt', async () => {
+        /*
+         *   Otherwise the applicant fixes one, resubmits, is refused again, and
+         *   learns the next — three round trips to be told three things the
+         *   server knew on the first.
+         */
+        seedUser();
+        const { submitAcademyApplicationAction } = await actions();
+
+        const result: any = await submitAcademyApplicationAction(form({
+            personalInfo: { firstName: '', lastName: '', phone: '' },
+        }));
+
+        expect(result?.success).toBe(false);
+        const named = ['First name', 'Last name', 'Phone number']
+            .filter((label) => String(result?.error ?? '').includes(label));
+        expect(named.length).toBeGreaterThanOrEqual(2);
     });
 });
 

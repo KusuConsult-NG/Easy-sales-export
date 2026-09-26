@@ -480,6 +480,19 @@ async function _requestExportApplicationRevisionAction(
          *   The module holds the wording now, carries `recipientName` so this
          *   keeps its greeting, and puts the link in the email as a button — the
          *   `link` field had been bell-only since #690.
+         *
+         *   #394'S TOMBSTONE, KEPT. The block removed here carried the note that
+         *   this send was once `await resend.emails.send({...})` with its result
+         *   thrown away — Resend RETURNS its errors rather than throwing them, so
+         *   a refused or rate-limited export decision email was invisible: not
+         *   logged, not retried, not noticed. Five sends across the platform had
+         *   that shape.
+         *
+         *   The marker stays because every-decision-email-is-retried scans for it
+         *   to prove its own sweep reads code and not the notes explaining what
+         *   was removed — deleting the tombstone along with the code turned that
+         *   test red, which is the check working. The lesson now lives where the
+         *   sending does, in member-decision-notice.
          */
         await notifyMemberDecision({
             userId,
