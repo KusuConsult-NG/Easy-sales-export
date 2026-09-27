@@ -251,7 +251,40 @@ describe('#517 — one failure does not take the whole dashboard down', () => {
 
         const res = await stats();
 
-        expect(res.platformOverview.revenueAvailable).toBe(false);
+        /**
+         *   #960 THIS ASSERTED `revenueAvailable` FALSE, AND THAT WAS THE DEFECT
+         *        WRITTEN DOWN AS THE EXPECTATION.
+         *
+         *   Read what the scenario is. `breakReads(USERS, 'count')` rejects USERS
+         *   count reads and nothing else. Revenue comes from an AGGREGATE over
+         *   PROCESSED_PAYMENTS, which is not broken here — so the revenue figure
+         *   was read successfully, and this line asserted the dashboard reports it
+         *   as unavailable. Two lines below, the comment reads "The figures that
+         *   DID read are still here."
+         *
+         *   Both cannot be true, and the owner is the one who found out which:
+         *
+         *       Total Users      Unavailable   Could not be read — retry shortly
+         *       Total Revenue    Unavailable   Could not reach Paystack or the
+         *                                      database — retry shortly
+         *
+         *   getPlatformMetrics awaited its user count INSIDE THE RETURN OBJECT,
+         *   uncaught, so a count timing out threw the whole method; the caller's
+         *   rejected branch cannot tell which read failed, so it zeroed revenue
+         *   too and set this flag false. A users-table timeout was reported to an
+         *   administrator as a payment provider being unreachable.
+         *
+         *   THIS DESCRIBE BLOCK IS NAMED "one failure does not take the whole
+         *   dashboard down". The fix is that principle applied one level further
+         *   in, so the assertion gets stronger rather than weaker: the count is
+         *   named as unavailable, and the revenue that was read is reported as
+         *   read.
+         */
+        expect(res.platformOverview.revenueAvailable).toBe(true);
+        expect(res.platformOverview.unavailableFigures).toContain('totalUsers');
+        //   And not the figure that came back from the untouched aggregate.
+        expect(res.platformOverview.unavailableFigures).not.toContain('totalTransactions');
+
         // The figures that DID read are still here.
         expect(res.revenueByMonth).toHaveLength(6);
         expect(res.counts).toBeDefined();

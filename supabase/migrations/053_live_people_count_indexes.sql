@@ -1,0 +1,198 @@
+-- ============================================================================
+-- 053  THE TWO SCANS BEHIND "TOTAL USERS — UNAVAILABLE"
+--
+-- THE OWNER, from the live admin dashboard:
+--
+--     Total Users      Unavailable   Could not be read — retry shortly
+--     Active Users     1,034         Logged in recently
+--     Total Revenue    Unavailable   Could not reach Paystack or the database
+--     Pending Escrows  3             Requires attention
+--
+-- and, about the first line: "we fixed this and its repeating".
+--
+-- It is repeating, and it is the SAME defect as the one already recorded in
+-- src/__tests__/pg/the-two-user-scans-that-timed-out.test.ts — a filter on a
+-- key inside `raw_data`, which is not a native column, so Postgres reads every
+-- row of a 42,845-row, 106 MB table to evaluate it. Production logs 57014,
+-- statement_timeout, against `users`.
+--
+-- That finding fixed THREE such sites: the admin search box, the GDPR purge,
+-- and module_registration_counts (044/045). lib/user-population.ts
+-- countLivePeople has two more, and they run on EVERY admin dashboard load.
+-- The earlier fix was real; it did not cover these, and #747/#804 added them
+-- afterwards while building the tombstone subtraction.
+--
+--     const [allSnap, erasedSnap, pointing] = await Promise.all([
+--         query.count().get(),                                     -- 1
+--         query.where("deleted", "==", true).count().get(),         -- 2
+--         query.where("_migratedTo", "!=", "")
+--              .select("_migratedTo", "deleted").all().get(),       -- 3
+--     ]);
+--
+-- ── MEASURED, NOT ASSUMED ───────────────────────────────────────────────────
+--
+-- Against a local PostgreSQL 16 (scripts/local-postgres.sh, all 51 prior
+-- migrations applied) seeded to 42,845 rows — production's figure, from 047's
+-- own header — with the live distribution: ~2% erased, ~0.3% carrying a
+-- pointer. EXPLAIN (ANALYZE, BUFFERS):
+--
+--   READ 2   count where deleted = 'true'
+--     before   Seq Scan on users, 856 rows matched       39.816 ms
+--     after    Index Only Scan idx_users_deleted_true     1.039 ms
+--
+--   READ 3   the rows carrying a pointer
+--     before   Seq Scan on users, 142 rows matched       33.884 ms
+--     after    Bitmap Index Scan …_migrated_to_present    0.585 ms
+--              — and that "after" is WITH 042's index also present, which is
+--                the production shape and is load-bearing. See the three-way
+--                measurement below: the partial index alone is not used.
+--
+--   READ 1   count(*), no predicate
+--              Seq Scan, unavoidable and cheap            8.928 ms
+--              — count(*) needs no column value, so it never detoasts
+--                raw_data. Left alone: there is no index that makes an exact
+--                unfiltered count of a table cheaper than reading its row
+--                headers, and this one is not the problem.
+--
+-- The timings are directional — a local warm cache on a 34 MB seed is not a
+-- shared instance on 106 MB — and the PLAN is the durable claim. That is the
+-- rule the-two-user-scans-that-timed-out already set: "A millisecond threshold
+-- on shared CI hardware is a flake generator … 'Index Scan' is the direct
+-- statement." src/__tests__/pg/the-count-that-read-every-row.test.ts asserts
+-- the plans.
+--
+-- ── WHY READ 3 WAS SCANNING THOUGH 042 ALREADY INDEXED THE FIELD ────────────
+--
+-- 042 created idx_users_migrated_to on ((raw_data ->> '_migratedTo')), NOT
+-- partial. The query asks `<> ''`, and Postgres does not use a plain btree for
+-- an inequality against a scalar — it would have to walk the whole index, which
+-- is no better than walking the table. Measured above: Seq Scan, with that
+-- index present.
+--
+-- A PARTIAL index is used, and this is the part worth recording because it is
+-- not obvious: Postgres proves that `raw_data->>'_migratedTo' <> ''` IMPLIES
+-- `raw_data->>'_migratedTo' IS NOT NULL` — `<>` is strict, so it cannot be true
+-- of NULL — and a query whose predicate implies the index predicate may use it.
+--
+-- ── 042 MUST NOT BE DROPPED, AND THIS IS THE MEASUREMENT THAT SAYS SO ────────
+--
+-- The first draft of this file said 042's index was redundant now and left it
+-- alone only out of caution. That was wrong, and measuring it is what showed it.
+-- On an 8,000-row probe with 26 rows carrying a pointer:
+--
+--     indexes present                         plan                      time
+--     ─────────────────────────────────────── ───────────────────────── ───────
+--     the new partial one only                Seq Scan                  6.507 ms
+--     partial + 042's non-partial             Index Scan using PARTIAL  0.102 ms
+--     042's non-partial only (today)          Seq Scan                  3.912 ms
+--
+-- NEITHER INDEX WORKS ALONE. The partial one can answer the query and the
+-- planner will not choose it; the non-partial one cannot answer the query at
+-- all. With the partial index alone the estimate was rows=7,960 against an
+-- actual 26 — a bare JSONB expression carries no statistics, so `<> ''` looks
+-- like it matches nearly every row and a sequential scan looks cheaper.
+--
+-- 051's header states the mechanism, about a different column: "an expression
+-- index carries statistics a bare JSONB expression does not." 042 is that
+-- expression index. It supplies the selectivity estimate; the partial index
+-- supplies the cheap access path; the query needs both. Dropping 042 would
+-- return read 3 to a sequential scan while leaving an index in place that looks
+-- like it should have prevented one — the worst of the three states, because it
+-- would look fixed.
+--
+-- So: 296 kB for 042 plus 16 kB for the partial one, and both are load-bearing.
+--
+-- ── WHY PARTIAL ─────────────────────────────────────────────────────────────
+--
+-- Both predicates match a handful of the 42,845: 856 erased and 142 pointing,
+-- in the seeded distribution. A full index on either field would carry 42,845
+-- entries, almost all of them NULL, to answer a question about a few hundred
+-- rows. Measured sizes on that seed:
+--
+--     idx_users_deleted_true            16 kB
+--     idx_users_migrated_to_present     16 kB
+--     idx_users_migrated_to (042, full) 296 kB
+--
+-- ── THE PREDICATES MATCH WHAT THE ADAPTER ACTUALLY EMITS ────────────────────
+--
+-- A partial index is used only when the query's predicate implies the index's,
+-- so the literal matters. lib/supabase-db.ts applyJsonbFilter:
+--
+--     case '==':  return query.eq(jsonPath, String(value));
+--     case '!=':  return query.neq(jsonPath, String(value));
+--
+-- `String(true)` is 'true', so `where("deleted", "==", true)` becomes
+-- `raw_data->>'deleted' = 'true'` — the text 'true', not a boolean — and
+-- `where("_migratedTo", "!=", "")` becomes `<> ''`. The predicates below are
+-- written to those exact shapes. If either ever changes, the index is silently
+-- unused rather than wrong, which is why the plan is asserted in a test.
+--
+-- ── NOT `CONCURRENTLY`, for #469's reason ───────────────────────────────────
+--
+-- 041 records it: CONCURRENTLY cannot run inside a transaction, the deploy
+-- runner wraps each migration in one, and scripts/build-deploy-sql.mjs rejects
+-- CONCURRENTLY outright. A CONCURRENTLY migration is not merely slower to
+-- apply — it does not apply at all, and sits unapplied while everyone assumes
+-- it is live.
+--
+-- ── SAFE TO APPLY, AND NOT REQUIRED FOR CORRECTNESS ─────────────────────────
+--
+-- Adds two indexes. No table rewritten, no column added, no row touched. Both
+-- statements are IF NOT EXISTS, so a timed-out run leaves nothing half-built
+-- and re-running is free. Building these takes an ACCESS SHARE lock — reads and
+-- writes continue — and over a few hundred qualifying rows it is near instant.
+--
+-- The code is correct without this and merely slower, the same standing as 042.
+-- The application-side half of this finding ships independently: a failing
+-- count no longer takes the revenue figure down with it, so this migration
+-- being unapplied costs a retry, not a blank dashboard.
+-- ============================================================================
+
+SET lock_timeout = '5s';
+
+-- ── 1. The erased count ─────────────────────────────────────────────────────
+--
+--   `deleted` is the tombstone field (lib/user-population.ts TOMBSTONE_FIELDS).
+--   Its sibling `deletedAt` got a partial index in 047; this one did not, and
+--   it is the one countLivePeople counts on every dashboard load.
+
+CREATE INDEX IF NOT EXISTS idx_users_deleted_true
+    ON public.users ((raw_data ->> 'deleted'))
+    WHERE raw_data ->> 'deleted' = 'true';
+
+-- ── 2. The rows carrying a supersession pointer ─────────────────────────────
+--
+--   IS NOT NULL rather than <> '': the index predicate has to be the WEAKER
+--   statement so that the query's `<> ''` implies it. Written the other way
+--   round the index would still be used for `<> ''` and would miss a row
+--   holding an empty-string pointer, which is a row #804's self-pointer rule
+--   has an opinion about.
+
+CREATE INDEX IF NOT EXISTS idx_users_migrated_to_present
+    ON public.users ((raw_data ->> '_migratedTo'))
+    WHERE raw_data ->> '_migratedTo' IS NOT NULL;
+
+RESET lock_timeout;
+
+
+-- ─── VERIFY. Read-only. Run after the indexes exist. ───────────────────────
+--
+-- Both plans must say Index Only Scan / Bitmap Index Scan. If either still says
+-- Seq Scan on a table this size, the planner has stale statistics — run
+-- `ANALYZE public.users;` and look again.
+--
+--   EXPLAIN (ANALYZE, BUFFERS)
+--   SELECT count(*) FROM public.users WHERE raw_data->>'deleted' = 'true';
+--
+--   EXPLAIN (ANALYZE, BUFFERS)
+--   SELECT raw_data->>'_migratedTo', raw_data->>'deleted'
+--   FROM public.users WHERE raw_data->>'_migratedTo' <> '';
+--
+-- And the sizes, which are the argument for partial:
+--
+--   SELECT indexrelname, pg_size_pretty(pg_relation_size(indexrelid))
+--   FROM pg_stat_user_indexes
+--   WHERE relname = 'users'
+--     AND indexrelname IN ('idx_users_deleted_true',
+--                          'idx_users_migrated_to_present',
+--                          'idx_users_migrated_to');

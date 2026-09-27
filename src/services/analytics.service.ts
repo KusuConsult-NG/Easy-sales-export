@@ -178,7 +178,25 @@ export class AnalyticsService implements AnalyticsServiceContract {
              *   function serve both — the total counts over the whole
              *   collection, the active figure over the recently-touched window.
              */
-            const [totalUsers, activeUsers, fundedEscrowsSnap] = await Promise.all([
+            /**
+             *   #960 THE SAME RULE AS getPlatformMetrics, AND THIS SITE HAD IT
+             *        AT THE WRONG GRANULARITY TOO.
+             *
+             *   This was `Promise.all`, so one failing read rejected into the
+             *   catch below and returned THREE unavailable figures. Honest, and
+             *   coarse: `activeEscrows` is a different collection entirely, and a
+             *   `users` count timing out has nothing to say about how many
+             *   escrows hold money. The catch is still there for a failure that
+             *   really does take everything — it just no longer speaks for reads
+             *   that succeeded.
+             *
+             *   The two user figures fail together far more often than not, since
+             *   countLivePeople reads the same table twice, but they are still
+             *   reported separately: "together in practice" is not a reason to
+             *   report them as one, and it is the assumption that made this
+             *   coarse in the first place.
+             */
+            const [totalUsersResult, activeUsersResult, fundedEscrowsResult] = await Promise.allSettled([
                 countLivePeople(db.collection(COLLECTIONS.USERS)),
                 countLivePeople(recentlyTouched()),
                 // An escrow holding money is `funded`: marketplace/_payment.ts
@@ -187,11 +205,24 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "funded").count().get()
             ]);
 
+            const unavailable: string[] = [];
+            const health = figureReader(unavailable, "PlatformHealthMetrics");
+
+            const totalUsers = health("totalUsers", totalUsersResult, (v) => v);
+            const activeUsers = health("activeUsers", activeUsersResult, (v) => v);
+            const activeEscrows = health(
+                "activeEscrows", fundedEscrowsResult, (v) => v.data().count ?? 0,
+            );
+
             return {
                 totalUsers,
                 activeUsers,
-                activeEscrows: fundedEscrowsSnap.data().count ?? 0,
-                lastCalculatedAt: new Date().toISOString()
+                activeEscrows,
+                lastCalculatedAt: new Date().toISOString(),
+                //   Absent when everything was read, so a caller testing
+                //   membership sees no claim rather than an empty one — the same
+                //   distinction #753 drew for unavailableFigures.
+                ...(unavailable.length > 0 ? { unavailable } : {}),
             };
         } catch (error) {
             logger.error("Failed to fetch platform health metrics:", error);
@@ -232,7 +263,55 @@ export class AnalyticsService implements AnalyticsServiceContract {
         //   not begin until it came back — two round trips in series for two
         //   reads that share nothing. `countLivePeople` is itself three
         //   parallel reads, so the wait was for the slowest of those.
-        const totalUsersPromise = countLivePeople(db.collection(COLLECTIONS.USERS));
+        /**
+         *   #960 AND ITS REJECTION USED TO TAKE THE REVENUE FIGURE WITH IT,
+         *        THEN BLAME PAYSTACK FOR IT.
+         *
+         *   The owner, from the live dashboard, on the screen #753 was written
+         *   for:
+         *
+         *       Total Users     Unavailable   Could not be read — retry shortly
+         *       Active Users    1,034         Logged in recently
+         *       Total Revenue   Unavailable   Could not reach Paystack or the
+         *                                     database — retry shortly
+         *       Pending Escrows 3             Requires attention
+         *
+         *   Two tiles out, two tiles fine — and the two that are out are exactly
+         *   the ones this function returns together.
+         *
+         *   THE REVENUE READ WAS PROBABLY FINE. It sits in a try/catch forty
+         *   lines below and degrades on its own to `revenueAvailable: false`.
+         *   This count did not: it was awaited INSIDE THE RETURN OBJECT, so a
+         *   rejection threw out of the whole method, the caller took its
+         *   `rejected` branch, and that branch sets `totalRevenue = 0` and
+         *   `revenueAvailable = false` because it cannot tell which read failed.
+         *   So the screen said "could not reach Paystack or the database" on
+         *   evidence it did not have — a sentence about a third party, shown
+         *   because a count of the `users` table timed out.
+         *
+         *   #753's rule is the one this file already states: "a figure that
+         *   could not be read is unavailable, and the figures that WERE read are
+         *   still worth showing." It was applied to the CALLER of this method
+         *   and not inside it, so the granularity stopped one level too shallow
+         *   — the same shape #753 itself recorded, a correct rule applied to
+         *   some of the places it names.
+         *
+         *   Settled here rather than at the call site because only here is it
+         *   known WHICH read failed. The caller gets a figure and a flag and no
+         *   longer has to guess.
+         */
+        const totalUsersPromise: Promise<{ ok: boolean; value: number }> =
+            countLivePeople(db.collection(COLLECTIONS.USERS)).then(
+                (value) => ({ ok: true, value }),
+                (reason) => {
+                    logger.error(
+                        "[PlatformMetrics] Live-people count failed. Reporting Total Users as "
+                        + "unavailable and keeping the revenue figure, which is read separately.",
+                        { reason: String(reason) },
+                    );
+                    return { ok: false, value: 0 };
+                },
+            );
 
         let totalRevenue = 0;
         let totalTransactions = 0;
@@ -304,10 +383,19 @@ export class AnalyticsService implements AnalyticsServiceContract {
             );
         }
 
+        const users = await totalUsersPromise;
+
         return {
             totalRevenue,
             totalTransactions,
-            totalUsers: await totalUsersPromise,
+            totalUsers: users.value,
+            /**
+             *   #960 — per-figure, beside revenueAvailable and for the same
+             *   reason. The two figures this method returns fail independently,
+             *   so they have to be reported independently or one outage is
+             *   attributed to the other.
+             */
+            totalUsersAvailable: users.ok,
             revenueAvailable: revenueSource !== null,
             revenueSource,
             revenueIsPartial,
@@ -862,6 +950,15 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 revenueAvailable = metricsResult.value.revenueAvailable;
                 //   #665 — copied beside its sibling, which is where it was dropped.
                 revenueIsPartial = metricsResult.value.revenueIsPartial;
+                /*
+                 *   #960 — the count can now fail WITHOUT the revenue figure
+                 *   failing, which is what the owner's screen was reporting as
+                 *   one outage in two tiles. `totalUsers` is marked here and
+                 *   revenue keeps whatever it actually read.
+                 */
+                if (!metricsResult.value.totalUsersAvailable) {
+                    unavailableFigures.push("totalUsers");
+                }
             } else {
                 logger.error("[DashboardStats] platform metrics failed", {
                     reason: String(metricsResult.reason),
