@@ -74,6 +74,45 @@
  *
  *   A valve that fails OPEN on a typo is not a valve, so an unparseable
  *   override is ignored and the built-in date stands.
+ *
+ * ── #958 ENFORCEMENT IS OFF UNTIL SWITCHED ON, AND THE DEADLINE ARRIVED ─────
+ *
+ *   THE ARGUMENT ABOVE FOR A DATE RATHER THAN A FLAG LOST, ON THE EVIDENCE IT
+ *   ITSELF WROTE DOWN.
+ *
+ *   MFA_ADMIN_ENFORCE_FROM is 2026-09-26. On 2026-09-27 the owner reported "the
+ *   admin portal is not loading". It was loading; it was redirecting every
+ *   administrator to MFA_SETUP_PATH, because the deadline had passed 38 hours
+ *   earlier and — as this file has said since #663 — NOT ONE ADMINISTRATOR
+ *   ACCOUNT HAS MFA. All ten admin roles were locked out at once, `support` and
+ *   `moderator` included.
+ *
+ *   #887 predicted the morning precisely: "every administrator is bounced out of
+ *   /admin onto a page that does not explain itself. Bounced, retried, bounced
+ *   again is indistinguishable from 'the admin login is broken', which is a
+ *   sentence this platform's owner has had to write too often." It then fixed the
+ *   page's wording and shipped the deadline anyway. A prediction that is acted on
+ *   only cosmetically is a prediction wasted.
+ *
+ *   So enforcement now requires MFA_ADMIN_ENFORCE to be switched ON. Absent it,
+ *   an unenrolled administrator is neither refused nor warned: the verdict is
+ *   `ok`, because with enforcement removed nothing IS required of them, and any
+ *   other answer would have the grace banner counting down to a deadline that is
+ *   not coming.
+ *
+ *   The owner asked for the enforcement to be removed. That is their call to
+ *   make, and it is the posture most platforms run: MFA available, enrolment
+ *   encouraged, nobody locked out of their own admin panel by a calendar. What
+ *   is NOT removed is the machinery — the gate, the redirect, the banner, the
+ *   per-request document read. Setting MFA_ADMIN_ENFORCE=true restores every bit
+ *   of it, with MFA_ADMIN_ENFORCE_FROM and MFA_ADMIN_GRACE_UNTIL governing when,
+ *   exactly as designed.
+ *
+ *   READ THE DEFAULT AS A STATEMENT OF FACT: on this deployment, an
+ *   administrator without a second factor is not stopped by anything. Do not
+ *   read the date above and conclude otherwise — that is the defect class this
+ *   whole audit is about, and putting one in the security policy would be the
+ *   worst place for it.
  */
 
 /*
@@ -195,6 +234,22 @@ export function graceActive(
  *   falls back to the built-in date, because a valve that fails open on a typo
  *   is not a valve.
  */
+/**
+ * Is the admin MFA lockout switched on at all?
+ *
+ *   #958 Default FALSE. See the header: the deadline arrived, every
+ *   administrator was locked out of /admin at once because none had enrolled,
+ *   and the owner asked for the enforcement removed.
+ *
+ *   Only the exact string "true" enables it. A valve that fails OPEN on a typo is
+ *   not a valve, and the direction of that rule is unchanged by this switch —
+ *   here "open" means locked out, so an unparseable value leaves administrators
+ *   able to work rather than shut out by a mistyped variable.
+ */
+export function adminMfaEnforcementEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+    return env.MFA_ADMIN_ENFORCE === "true";
+}
+
 export function adminMfaEnforcementAt(env: NodeJS.ProcessEnv = process.env): number {
     const override = env.MFA_ADMIN_GRACE_UNTIL ? Date.parse(env.MFA_ADMIN_GRACE_UNTIL) : NaN;
 
@@ -228,6 +283,20 @@ export function adminMfaVerdict(
 ): MfaVerdict {
     if (!mfaEnrolmentRequired(account.roles)) return { outcome: "ok" };
     if (account.mfaEnabled === true) return { outcome: "ok" };
+
+    /*
+     *   #958 ENFORCEMENT REMOVED UNLESS SWITCHED ON — and `ok` is the honest
+     *   answer, not `warn`.
+     *
+     *   `warn` carries `enforcementAt`, and adminMfaGraceNotice counts down to it.
+     *   Returning `warn` with enforcement off would render a banner promising a
+     *   deadline in NEGATIVE hours — a screen stating something untrue, which is
+     *   the class of defect this audit exists to remove.
+     *
+     *   `ok` means nothing is required of this account. With the lockout off,
+     *   that is exactly the case.
+     */
+    if (!adminMfaEnforcementEnabled(env)) return { outcome: "ok" };
 
     const reason =
         "Two-factor authentication is required for administrator accounts. "

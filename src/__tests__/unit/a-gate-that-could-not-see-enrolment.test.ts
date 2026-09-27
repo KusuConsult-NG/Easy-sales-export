@@ -68,8 +68,14 @@ const CONFIG = 'src/lib/auth.config.ts';
 const AUTH = 'src/lib/auth.ts';
 
 /** Enforcement is on; the grace override is not what is being tested here. */
+//   #958 MFA_ADMIN_ENFORCE — the admin MFA lockout is OPT-IN now, default OFF.
+//   The 2026-09-26 deadline locked every administrator out of /admin at once
+//   (none had enrolled; all ten admin roles) and the owner asked for the
+//   enforcement removed. These fixtures set it so the enforcement machinery
+//   stays exercised — what changed is that a deployment has to ask for it.
 const ENFORCING = {
     NODE_ENV: 'test', MFA_ADMIN_GRACE_UNTIL: '2000-01-01T00:00:00.000Z',
+    MFA_ADMIN_ENFORCE: 'true',
 } as NodeJS.ProcessEnv;
 const NOW = Date.parse('2026-09-26T12:00:00.000Z');
 

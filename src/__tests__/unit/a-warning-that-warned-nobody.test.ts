@@ -66,7 +66,14 @@ const DAY = 24 * HOUR;
 /** A window open until this instant, and a clock a known distance from it. */
 const WINDOW_UNTIL = '2026-10-10T00:00:00.000Z';
 const CLOSES_AT = Date.parse(WINDOW_UNTIL);
-const openEnv = { NODE_ENV: 'test', MFA_ADMIN_GRACE_UNTIL: WINDOW_UNTIL } as NodeJS.ProcessEnv;
+//   #958 MFA_ADMIN_ENFORCE — the admin MFA lockout is OPT-IN now, default OFF.
+//   The 2026-09-26 deadline locked every administrator out of /admin at once
+//   (none had enrolled; all ten admin roles) and the owner asked for the
+//   enforcement removed. These fixtures set it so the enforcement machinery
+//   stays exercised — what changed is that a deployment has to ask for it.
+const openEnv = {
+    NODE_ENV: 'test', MFA_ADMIN_GRACE_UNTIL: WINDOW_UNTIL, MFA_ADMIN_ENFORCE: 'true',
+} as NodeJS.ProcessEnv;
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#939 — the deadline is a fact the policy will now hand over', () => {

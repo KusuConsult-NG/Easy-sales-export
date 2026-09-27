@@ -81,7 +81,14 @@ const code = (rel: string) => stripComments(read(rel), { label: rel });
  * enforcement date — so these assertions are about the enforced world and do
  * not quietly become assertions about the grace window when the clock moves.
  */
-const NO_GRACE: NodeJS.ProcessEnv = { NODE_ENV: 'test' } as NodeJS.ProcessEnv;
+//   #958 MFA_ADMIN_ENFORCE — the admin MFA lockout is OPT-IN now, default OFF.
+//   The 2026-09-26 deadline locked every administrator out of /admin at once
+//   (none had enrolled; all ten admin roles) and the owner asked for the
+//   enforcement removed. These fixtures set it so the enforcement machinery
+//   stays exercised — what changed is that a deployment has to ask for it.
+const NO_GRACE: NodeJS.ProcessEnv = {
+    NODE_ENV: 'test', MFA_ADMIN_ENFORCE: 'true',
+} as NodeJS.ProcessEnv;
 const NOW = Date.parse('2026-10-01T12:00:00.000Z');
 
 /** An instant before it, which is where production sits on the day this ships. */
@@ -132,7 +139,8 @@ describe('#663 — who has to have a second factor', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#663 — the rollout valve expires, and fails closed', () => {
-    const withGrace = (v: string) => ({ NODE_ENV: 'test', MFA_ADMIN_GRACE_UNTIL: v } as NodeJS.ProcessEnv);
+    const withGrace = (v: string) =>
+        ({ NODE_ENV: 'test', MFA_ADMIN_GRACE_UNTIL: v, MFA_ADMIN_ENFORCE: 'true' } as NodeJS.ProcessEnv);
 
     it('NOTHING CHANGES ON THE DAY THIS DEPLOYS', () => {
         /*
@@ -324,6 +332,7 @@ describe('#663 — requireAdmin, RUN rather than read', () => {
         (await import('@/lib/require-admin')).requireAdmin();
 
     const ORIGINAL_GRACE = process.env.MFA_ADMIN_GRACE_UNTIL;
+    const ORIGINAL_ENFORCE = process.env.MFA_ADMIN_ENFORCE;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -339,11 +348,25 @@ describe('#663 — requireAdmin, RUN rather than read', () => {
          *   is. This is also the documented way to bring the date forward.
          */
         process.env.MFA_ADMIN_GRACE_UNTIL = '2000-01-01T00:00:00.000Z';
+
+        /*
+         *   #958 AND ENFORCEMENT SWITCHED ON, for the same reason the date is
+         *   brought forward above: the lockout is opt-in now and off by default,
+         *   so without this the guard admits and the block tests nothing.
+         *
+         *   Restored in afterEach beside the grace override — #958's own suite
+         *   asserts the DEFAULT, and a leaked `true` here would make that suite
+         *   pass for the wrong reason.
+         */
+        process.env.MFA_ADMIN_ENFORCE = 'true';
     });
 
     afterEach(() => {
         if (ORIGINAL_GRACE === undefined) delete process.env.MFA_ADMIN_GRACE_UNTIL;
         else process.env.MFA_ADMIN_GRACE_UNTIL = ORIGINAL_GRACE;
+
+        if (ORIGINAL_ENFORCE === undefined) delete process.env.MFA_ADMIN_ENFORCE;
+        else process.env.MFA_ADMIN_ENFORCE = ORIGINAL_ENFORCE;
     });
 
     it('REFUSES AN ADMINISTRATOR WHO HAS NOT ENROLLED', async () => {

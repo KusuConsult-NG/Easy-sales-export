@@ -72,8 +72,17 @@ const PROFILE = 'src/app/profile/ProfileClient.tsx';
 const code = (rel: string) =>
     stripComments(readFileSync(join(ROOT, rel), 'utf8'), { label: rel });
 
-/** An environment with no MFA_ADMIN_GRACE_UNTIL, so the built-in date decides. */
-const NO_ENV = {} as NodeJS.ProcessEnv;
+/**
+ * An environment with no MFA_ADMIN_GRACE_UNTIL, so the built-in date decides.
+ *
+ *   #958 MFA_ADMIN_ENFORCE — the lockout is opt-in now and off by default, after
+ *   the 2026-09-26 deadline locked every administrator out of /admin. Set here so
+ *   the refusal this suite asserts still happens.
+ *
+ *   `as unknown as` because a POPULATED object does not overlap ProcessEnv enough
+ *   for a direct assertion (TS2352); the empty `{}` this replaced did.
+ */
+const NO_ENV = { MFA_ADMIN_ENFORCE: 'true' } as unknown as NodeJS.ProcessEnv;
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#886 — a refusal is not an empty list', () => {
