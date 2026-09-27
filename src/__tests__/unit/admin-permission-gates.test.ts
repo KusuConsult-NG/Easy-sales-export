@@ -666,7 +666,25 @@ describe('the stale-session fallback asks the gate\'s own question', () => {
          *   has no token check to fall back from, so the fallback is deleted rather
          *   than retargeted. That is a later batch of #962, not this one.
          */
-        const RECORDED = 4;
+        /*
+         *   #962 BATCH 2: 4 -> 3, AND THIS ONE IS PROGRESS — unlike the 5 -> 4
+         *   above, which was a miscount corrected.
+         *
+         *   cooperative/_coop_admin_reports.ts carried three of these, and they
+         *   are gone: the gate reads the row unconditionally now, so there is no
+         *   token check left to fall back FROM and the fallback was deleted
+         *   rather than retargeted. The retirement condition in the note above
+         *   said converting these "means CHOOSING a permission, which narrows
+         *   from ten admin roles to two or three — a policy decision". The owner
+         *   decided the other way: live read, keep all ten. So it became a
+         *   substitution after all.
+         *
+         *   Three files left: admin/_users.ts, admin/_applications.ts, cms.ts.
+         *   When this reaches 0, delete this test, the mismatch test above, and
+         *   the BLOCK regex both use — a test guarding a shape that no longer
+         *   exists passes forever and reads like coverage.
+         */
+        const RECORDED = 3;
 
         let files = 0;
         for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {

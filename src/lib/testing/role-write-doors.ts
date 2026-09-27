@@ -592,7 +592,25 @@ export function findIsAdminDoors(stripped: string): IsAdminDoor[] {
             : -1;
         const body = ifOpen >= 0 && ifOpen < m.index! ? ifBodyAfter(stripped, ifOpen) : "";
         const decides = /\breturn\b|\bthrow\b|NextResponse|redirect\(|notFound\(/.test(body);
-        const negated = /!\s*(?:await\s+)?isAdmin\(\s*session/.test(stmt);
+        /*
+         *   #962 THE NEGATION TEST MUST NOT DEPEND ON WHAT IS INSIDE THE CALL.
+         *
+         *   This was `/!\s*(?:await\s+)?isAdmin\(\s*session/` — it required the
+         *   word `session` after the paren. Converting a door to
+         *   `!isAdmin(await liveRolesForDoor(...))` therefore made `negated`
+         *   false, and all twenty-six converted doors were silently reclassified
+         *   from `refusal` to `admission`.
+         *
+         *   The DOOR TOTAL hid it, because it sums both kinds — so 70 held while
+         *   the split underneath it was wrong. That is the same failure as the
+         *   two before it in this finding: a number that stays right while what it
+         *   is made of stops being.
+         *
+         *   Read backwards from the call instead. A `!` immediately before
+         *   `isAdmin(`, across any spelling of its argument, is what negation is.
+         */
+        const beforeCall = stripped.slice(Math.max(0, m.index! - 24), m.index!);
+        const negated = /!\s*(?:await\s+)?$/.test(beforeCall);
 
         let kind: IsAdminDoor["kind"];
         if (bound) kind = "binding";

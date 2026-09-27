@@ -94,6 +94,12 @@ jest.mock('@/lib/cache-invalidation', () => ({
     invalidateAllCaches: jest.fn(async () => ({})),
 }));
 
+jest.mock('@/lib/live-door-roles', () =>
+    //   #962 — these gates read the caller's row now, so the row is kept in
+    //   agreement with the session these tests set. The provenance property is
+    //   measured in a-door-that-read-the-row-without-charging-the-owner, not here.
+    require('@/lib/testing/live-door-roles-mock').liveRolesForDoorMock());
+
 /**
  * isAdmin and hasAdminPermission are NOT mocked — the real ones run against the
  * roles set here. That is deliberate: mocking them would mean these tests assert

@@ -560,8 +560,16 @@ describe('THE LEDGERS', () => {
          *   conversion has to show up as a GAIN somewhere rather than only as a
          *   decrease — which is the shape that hid this.
          */
-        const RECORDED_TOKEN_DOORS = 48;
-        const RECORDED_LIVE_DOORS = 18;
+        /*
+         *   #962 BATCH 2: 48 -> 35 on the token, 18 -> 31 live. Thirteen more —
+         *   academy/_ac_admin_applications (3), _ac_admin_catalog (2),
+         *   _ac_admin_reports (2), admin-analytics (3), and cooperative/
+         *   _coop_admin_reports (3). Total still 70; every door that left the
+         *   token arrived at `live`, which is the invariant the third assertion
+         *   below checks.
+         */
+        const RECORDED_TOKEN_DOORS = 35;
+        const RECORDED_LIVE_DOORS = 31;
         const RECORDED_OWNER_OR_ADMIN = 15;
 
         /*

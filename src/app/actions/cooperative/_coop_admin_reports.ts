@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAdminScope } from "@/lib/cooperative-admin-scope";
@@ -33,15 +34,29 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        let roles = session.user.roles;
+        /*
+         *   #962 THE RECORD IS READ ALWAYS, NOT ONLY WHEN THE TOKEN SAYS NO.
+         *
+         *   This was the stale-session fallback: `if (!isAdmin(tokenRoles))` then
+         *   re-read and retry. It asks the database exactly when the token
+         *   REFUSES, so a token still claiming admin after the role was revoked
+         *   was admitted and never re-checked — the half that matters for
+         *   security, and what admin-permission-gates counts as a defect.
+         *
+         *   Its ledger recorded why it had not been converted: the remaining
+         *   fallbacks "all gate on bare isAdmin(), and converting those means
+         *   CHOOSING a permission, which narrows from ten admin roles to two or
+         *   three — a policy decision, not a substitution." The owner has now
+         *   made that decision the other way — live read, KEEP all ten roles — so
+         *   it IS a substitution, and the fallback is deleted rather than
+         *   retargeted: there is no token check left to fall back from.
+         *
+         *   `roles` still carries the answer into getAdminScope below, and it is
+         *   now the row's answer rather than the token's.
+         */
+        const roles = await liveRolesForDoor(session.user?.id);
         if (!isAdmin(roles)) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, roles);
@@ -353,15 +368,29 @@ export async function getContributionReportsAction(): Promise<ActionResponse<any
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        let roles = session.user.roles;
+        /*
+         *   #962 THE RECORD IS READ ALWAYS, NOT ONLY WHEN THE TOKEN SAYS NO.
+         *
+         *   This was the stale-session fallback: `if (!isAdmin(tokenRoles))` then
+         *   re-read and retry. It asks the database exactly when the token
+         *   REFUSES, so a token still claiming admin after the role was revoked
+         *   was admitted and never re-checked — the half that matters for
+         *   security, and what admin-permission-gates counts as a defect.
+         *
+         *   Its ledger recorded why it had not been converted: the remaining
+         *   fallbacks "all gate on bare isAdmin(), and converting those means
+         *   CHOOSING a permission, which narrows from ten admin roles to two or
+         *   three — a policy decision, not a substitution." The owner has now
+         *   made that decision the other way — live read, KEEP all ten roles — so
+         *   it IS a substitution, and the fallback is deleted rather than
+         *   retargeted: there is no token check left to fall back from.
+         *
+         *   `roles` still carries the answer into getAdminScope below, and it is
+         *   now the row's answer rather than the token's.
+         */
+        const roles = await liveRolesForDoor(session.user?.id);
         if (!isAdmin(roles)) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, roles);
@@ -495,15 +524,29 @@ export async function getRecentActivityAction(): Promise<ActionResponse<any>> {
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        let roles = session.user.roles;
+        /*
+         *   #962 THE RECORD IS READ ALWAYS, NOT ONLY WHEN THE TOKEN SAYS NO.
+         *
+         *   This was the stale-session fallback: `if (!isAdmin(tokenRoles))` then
+         *   re-read and retry. It asks the database exactly when the token
+         *   REFUSES, so a token still claiming admin after the role was revoked
+         *   was admitted and never re-checked — the half that matters for
+         *   security, and what admin-permission-gates counts as a defect.
+         *
+         *   Its ledger recorded why it had not been converted: the remaining
+         *   fallbacks "all gate on bare isAdmin(), and converting those means
+         *   CHOOSING a permission, which narrows from ten admin roles to two or
+         *   three — a policy decision, not a substitution." The owner has now
+         *   made that decision the other way — live read, KEEP all ten roles — so
+         *   it IS a substitution, and the fallback is deleted rather than
+         *   retargeted: there is no token check left to fall back from.
+         *
+         *   `roles` still carries the answer into getAdminScope below, and it is
+         *   now the row's answer rather than the token's.
+         */
+        const roles = await liveRolesForDoor(session.user?.id);
         if (!isAdmin(roles)) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, roles);

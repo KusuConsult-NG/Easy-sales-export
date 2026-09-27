@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -27,7 +28,7 @@ async function _getAcademyEnrollmentsAction(options?: {
             return { success: false, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized", data: null };
         }
 
@@ -125,7 +126,7 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             return { success: false, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized", data: null };
         }
 
