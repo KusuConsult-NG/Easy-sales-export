@@ -195,6 +195,48 @@ describe('#926 — two consents that name documents /terms does not contain', ()
         }
     });
 
+    it('AND THE SCOPE IS TWO MODULES OF SIX, WHICH IS A BIGGER GAP THAN TWO WORDS', () => {
+        /*
+         *   #957 WHAT #926 MEASURED, AND THE THING IT DID NOT SAY.
+         *
+         *   #926 measured "escrow" and "investment" at zero each, which reads as two
+         *   clauses missing from an otherwise appropriate document. Measured against
+         *   the platform's own module vocabulary it is not that.
+         *
+         *   /terms §1 scopes itself: "live export training programs, recorded digital
+         *   courses, educational materials, and cooperative-related services". §5
+         *   narrows it again: "All trainings are provided for educational purposes
+         *   only." Those are a TRAINING COMPANY's terms.
+         *
+         *   The platform runs six modules, holds members' money in escrow, and takes
+         *   investment into export windows. Counted below, /terms names Academy (as
+         *   training and courses) and Cooperatives, and NONE of Marketplace, Farm
+         *   Nation, WAVE, land, escrow, investment, sellers, buyers or shipments.
+         *
+         *   That matters to whoever briefs the lawyer: the instruction is not "add an
+         *   escrow clause and an investment clause", it is "the document describes a
+         *   smaller business than the one operating". Recorded here rather than acted
+         *   on, for #926's reason — every available fix is drafting or is a change to
+         *   what an applicant agrees to, and both are the owner's.
+         */
+        const terms = code(TERMS).toLowerCase();
+        const UNNAMED = [
+            'marketplace', 'farm nation', 'wave', 'land',
+            'escrow', 'investment', 'seller', 'buyer', 'shipment',
+        ];
+        const RECORDED_UNNAMED = UNNAMED.length;
+
+        const missing = UNNAMED.filter((word) => !terms.includes(word));
+        expect(ledgerVerdict(missing.length, RECORDED_UNNAMED)).toBe(LEDGER_HELD);
+
+        //   POSITIVE CONTROL: it does name the two modules it covers, so "names
+        //   nothing" is not what is being measured — a blank file would satisfy the
+        //   assertion above and mean nothing.
+        for (const covered of ['training', 'course', 'cooperative']) {
+            expect(terms).toContain(covered);
+        }
+    });
+
     it('THE LEDGER — consents naming a document their link does not contain', () => {
         //   Two. Lower this when /terms gains the sections, and say which.
         //   Raising it means a third consent was written against a document
