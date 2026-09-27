@@ -291,8 +291,8 @@ describe('#484 — and the window is removed, not merely made honest', () => {
          *        cares about: the roles are derived from THIS caller, by an
          *        identifier the request supplies, and are not a constant.
          */
-        expect(layout).toMatch(/const roles = await liveRolesForPortal\(/);
-        expect(layout).toMatch(/liveRolesForPortal\(\s*sessionResult\.session\??\.?\??\.user\?\.id\s*\)/);
+        expect(layout).toMatch(/const roles = await liveRolesForDoor\(/);
+        expect(layout).toMatch(/liveRolesForDoor\(\s*sessionResult\.session\??\.?\??\.user\?\.id\s*\)/);
 
         //   The direction that would make the prop meaningless: a hardcoded list.
         expect(layout).not.toMatch(/initialRoles=\{\[/);

@@ -10,6 +10,7 @@ import { isEligibleForLoan, getTierInterestRate, DEFAULT_MONTHLY_INTEREST_RATE }
 import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
@@ -333,7 +334,7 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
         const sessionResult = await requireSession();
         if (!sessionResult.session) return [];
         const { session } = sessionResult;
-        if (!session?.user?.id || (session.user.id !== userId && !isAdmin(session.user.roles))) {
+        if (!session?.user?.id || (session.user.id !== userId && !isAdmin(await liveRolesForDoor(session.user?.id)))) {
             return [];
         }
 
@@ -373,7 +374,7 @@ export async function getPendingLoanApplicationsAction(): Promise<LoanApplicatio
         const sessionResult = await requireSession();
         if (!sessionResult.session) return [];
         const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id || !isAdmin(await liveRolesForDoor(session.user?.id))) {
             return [];
         }
 
@@ -781,7 +782,7 @@ export async function getAdminLoanApplicationsExportAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id || !isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -971,7 +972,7 @@ export async function getAdminLoanStatsAction(): Promise<
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , stats: null };
         const { session } = sessionResult;
 
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id || !isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized" , stats: null };
         }
 

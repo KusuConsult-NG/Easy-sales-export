@@ -37,6 +37,24 @@ function actAs(id: string, roles: string[] = ['user']): void {
         session: { user: { id, roles, email: `${id}@example.com`, name: id } },
         error: null,
     }));
+
+    /*
+     *   #962 AND THE ROW AGREES WITH THE TOKEN, because the door no longer takes
+     *   the token's word for it.
+     *
+     *   _loans_applications' four gates read the caller's row through
+     *   lib/live-door-roles now — a revoked administrator used to keep these
+     *   actions for up to two minutes on a stale claim. Three tests here set an
+     *   admin by putting roles on the SESSION and then expected to be served:
+     *   "while an admin may read anybody's", the pending queue spanning both
+     *   collections, and the statistics count.
+     *
+     *   Seeded rather than mocked, deliberately. installFakeDb gives this suite a
+     *   real store, so the real helper can read a real row and these tests keep
+     *   exercising production's path. A module mock would have been less work and
+     *   would have stopped proving anything about the read.
+     */
+    store?.seed(COLLECTIONS.USERS, id, { id, roles, email: `${id}@example.com` });
 }
 
 /** Savings the member is recorded as holding. Every rule below runs on THIS. */

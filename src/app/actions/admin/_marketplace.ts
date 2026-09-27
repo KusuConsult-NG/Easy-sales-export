@@ -15,6 +15,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { stripPii } from "@/lib/admin-pii";
@@ -420,7 +421,7 @@ async function _getStandardSellerVerificationsAction(
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated", data: null };
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -731,7 +732,7 @@ async function _getMarketplaceUsersAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -999,7 +1000,7 @@ async function _getAdminSellerStatsAction(): Promise<ActionResponse<{ total: num
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const { session } = sessionResult;
 
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id || !isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -1200,7 +1201,7 @@ async function _getAdminProductsAction(options: {
         // Narrowing this to content:approve would blind marketplace_admin to
         // its own backlog. The gate that needed tightening is the write —
         // _reviewProductAction below.
-        if (!session?.user || !isAdmin(session.user.roles)) {
+        if (!session?.user || !isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

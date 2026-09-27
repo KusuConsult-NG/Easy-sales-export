@@ -50,6 +50,12 @@ jest.mock('@/lib/status-transition', () => ({
     claimStatusTransitionFromAny: (args: unknown) => claimStatusTransitionFromAny(args),
     claimStatusTransition: (args: unknown) => claimStatusTransitionFromAny(args),
 }));
+jest.mock('@/lib/live-door-roles', () =>
+    //   #962 — the door reads the row now; this keeps it agreeing with the
+    //   session these tests set. See lib/testing/live-door-roles-mock for why
+    //   that is not a weakening of the property it replaced.
+    require('@/lib/testing/live-door-roles-mock').liveRolesForDoorMock());
+
 
 let store: FakeDbHandle;
 

@@ -2,7 +2,7 @@ import { requireSession } from "@/lib/session-guard";
 import { redirect } from "next/navigation";
 import DashboardClient from "./DashboardClient";
 import { adminLandingPath } from "@/lib/admin-permissions";
-import { liveRolesForPortal } from "@/lib/admin-portal-roles";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 
 export default async function AdminDashboard() {
     const sessionResult = await requireSession();
@@ -25,7 +25,7 @@ export default async function AdminDashboard() {
      *        Shared with AdminShell through lib/current-user-doc, so the layout
      *        and this page cost ONE read between them, not two.
      */
-    const roles = await liveRolesForPortal(sessionResult.session.user?.id);
+    const roles = await liveRolesForDoor(sessionResult.session.user?.id);
 
     /**
      *   #458 THIS RESTATED THE LANDING RULE THAT actions/auth.ts ALREADY

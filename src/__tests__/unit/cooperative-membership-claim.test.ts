@@ -293,7 +293,27 @@ describe('a membership document id is not a user id', () => {
         // id would be harmless.
         const action = fn(APPLICATIONS, 'getUserLoanApplicationsAction');
 
-        expect(action).toContain('session.user.id !== userId && !isAdmin(session.user.roles)');
+        /*
+         *   #962 THE SPELLING MOVED; THE PROPERTY DID NOT.
+         *
+         *   This pinned the exact text
+         *   `session.user.id !== userId && !isAdmin(session.user.roles)`. That
+         *   gate now reads the caller's row instead of the token — a revoked
+         *   administrator used to keep this action for up to two minutes — so it
+         *   reads `!isAdmin(await liveRolesForDoor(...))`.
+         *
+         *   What this test is for is the VACUITY GUARD above it: passing the
+         *   wrong id is only harmful if the action refuses a mismatch. So it
+         *   asserts the mismatch is compared and refused, and leaves the roles
+         *   expression to the suites whose subject that is.
+         *
+         *   NOTE THE ORDER IS STILL ASSERTED. The ownership test must come FIRST,
+         *   because `&&` short-circuits and that is what keeps an ordinary member
+         *   reading their own list from paying a database read —
+         *   OWNER_OR_ADMIN_SHAPE's requirement, measured in
+         *   a-door-that-read-the-row-without-charging-the-owner.
+         */
+        expect(action).toMatch(/session\.user\.id !== userId\s*&&\s*!isAdmin\(/);
         expect(action).toContain('return [];');
     });
 });

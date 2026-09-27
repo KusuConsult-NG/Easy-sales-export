@@ -255,7 +255,18 @@ describe('the admin review action', () => {
         // blind marketplace_admin to its own backlog.
         const list = src.slice(src.indexOf('async function _getAdminProductsAction'),
             src.indexOf('async function _getAdminProductsAction') + 1200);
-        expect(list).toContain('isAdmin(session.user.roles)');
+        /*
+         *   #962 — still isAdmin, and that is the whole claim of the comment
+         *   above: narrowing the LIST would blind marketplace_admin to its own
+         *   backlog. What changed is where the roles come from — the row, not the
+         *   token — so the assertion names the predicate and not the argument.
+         *
+         *   `isAdmin(` with no permission string beside it is the property. A
+         *   later hand tightening this to requireAdmin("something") is exactly
+         *   what this must keep catching.
+         */
+        expect(list).toMatch(/isAdmin\(/);
+        expect(list).not.toMatch(/requireAdmin\(\s*["']/);
 
         // The WRITE asks the permission matrix. isAdmin() is true for all six
         // module admins, so an academy_admin could publish a marketplace

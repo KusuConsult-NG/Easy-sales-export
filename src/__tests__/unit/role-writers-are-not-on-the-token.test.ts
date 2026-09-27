@@ -537,7 +537,31 @@ describe('THE LEDGERS', () => {
          *   token count falls as doors are converted, which is the work.
          */
         const RECORDED_DOORS = 70;
-        const RECORDED_TOKEN_DOORS = 61;
+        /**
+         *   #962 61 -> 48, AND THE TOTAL DID NOT MOVE. Both halves matter.
+         *
+         *   Thirteen doors now read the row: export-admin.ts (5),
+         *   admin/_marketplace.ts (4), cooperative/_loans_applications.ts (4).
+         *   The owner's decision was live read, KEEP isAdmin's ten roles — so
+         *   `support` and `moderator` lose nothing, and this is a security fix
+         *   with no width change. RECORDED_OWNER_OR_ADMIN is unchanged at 15 for
+         *   the same reason.
+         *
+         *   THE FIRST ATTEMPT AT THIS LEDGER LIED, AND IT LIED THE WAY #954's
+         *   HEADER SAYS LEDGERS LIE. Converting a door gives it an argument that
+         *   is a CALL — `isAdmin(await liveRolesForDoor(...))` — which matched
+         *   neither of the scan's two patterns, so the thirteen VANISHED instead
+         *   of moving. The door total fell 70 -> 57, token fell 61 -> 48, and
+         *   live did not move at all. Two of those three numbers were right and
+         *   the thirteen looked like progress.
+         *
+         *   A ledger must not lose sight of a door for being FIXED. The scan has
+         *   a third pattern now, and the live count below is asserted so a
+         *   conversion has to show up as a GAIN somewhere rather than only as a
+         *   decrease — which is the shape that hid this.
+         */
+        const RECORDED_TOKEN_DOORS = 48;
+        const RECORDED_LIVE_DOORS = 18;
         const RECORDED_OWNER_OR_ADMIN = 15;
 
         /*
@@ -578,6 +602,18 @@ describe('THE LEDGERS', () => {
             doors.filter((d) => d.source === 'token').length,
             RECORDED_TOKEN_DOORS,
         )).toBe(LEDGER_HELD);
+
+        /*
+         *   #962 — the counterweight. `token` falling is only progress if the
+         *   doors went somewhere; this says where. A door lost to a scanner blind
+         *   spot lowers the first number and not this one, which is precisely
+         *   what happened on the first attempt.
+         */
+        const live = doors.filter((d) => d.source === 'live').length;
+        expect({ live }).toEqual({ live: RECORDED_LIVE_DOORS });
+        //   And the three sources still account for every door.
+        expect(live + doors.filter((d) => d.source === 'token').length
+            + doors.filter((d) => d.source === 'unknown').length).toBe(doors.length);
         expect(ledgerVerdict(
             doors.filter((d) => d.ownerOrAdmin).length,
             RECORDED_OWNER_OR_ADMIN,

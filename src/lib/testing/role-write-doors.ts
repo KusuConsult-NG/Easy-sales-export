@@ -518,13 +518,38 @@ export function findIsAdminDoors(stripped: string): IsAdminDoor[] {
      *   is one door, not two. Getting that wrong would inflate the ledger and
      *   look like newly-found work.
      */
-    const sites = new Map<number, { text: string; arg: string | null }>();
+    const sites = new Map<number, { text: string; arg: string | null; callee?: string }>();
     for (const m of stripped.matchAll(/isAdmin\(\s*session[^)]*\)/g)) {
         sites.set(m.index!, { text: m[0], arg: null });
     }
     for (const m of stripped.matchAll(/isAdmin\(\s*([A-Za-z_$][\w$]*)\s*\)/g)) {
         if (sites.has(m.index!)) continue;
         sites.set(m.index!, { text: m[0], arg: m[1] });
+    }
+
+    /*
+     *   #962 A THIRD SHAPE, AND LEAVING IT OUT MADE THIS LEDGER LIE THE WAY
+     *        #954's HEADER SAYS LEDGERS LIE.
+     *
+     *   Converting a door to a live read gives it an argument that is a CALL:
+     *
+     *       if (!isAdmin(await liveRolesForDoor(session.user?.id)))
+     *
+     *   which is neither `isAdmin(session…)` nor `isAdmin(<identifier>)`. So the
+     *   first thirteen conversions VANISHED from the scan instead of moving to
+     *   `live`: the door total fell 70 -> 57, the token count fell 61 -> 48, and
+     *   the live count did not move at all. Two of those three numbers were
+     *   right, and the missing thirteen looked like progress in exactly the way
+     *   #954 recorded — "the number went DOWN three times in a row and looked
+     *   like progress."
+     *
+     *   A ledger must not lose sight of a door for being FIXED. Classified by the
+     *   function's name through rolesSourceOf, which is how every other
+     *   provenance in this module is decided.
+     */
+    for (const m of stripped.matchAll(/isAdmin\(\s*(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/g)) {
+        if (sites.has(m.index!)) continue;
+        sites.set(m.index!, { text: m[0], arg: null, callee: m[1] });
     }
 
     for (const [index, site] of [...sites.entries()].sort((a, b) => a[0] - b[0])) {
@@ -547,9 +572,13 @@ export function findIsAdminDoors(stripped: string): IsAdminDoor[] {
          *   is whatever its assignment says, and "unknown" when this resolver
          *   cannot see one rather than a guess in either direction.
          */
-        const source: TokenGate["source"] = site.arg === null
-            ? "token"
-            : resolveRolesSource(stripped, site.arg, m.index!);
+        const source: TokenGate["source"] = site.callee !== undefined
+            //   #962 — an argument that is a call: classify by the callee's name,
+            //   so liveRolesForDoor reads `live` rather than disappearing.
+            ? rolesSourceOf(site.callee)
+            : site.arg === null
+                ? "token"
+                : resolveRolesSource(stripped, site.arg, m.index!);
 
         //   The `if` this call belongs to, and the body that `if` controls.
         //

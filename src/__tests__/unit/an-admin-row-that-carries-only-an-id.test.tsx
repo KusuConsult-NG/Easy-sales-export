@@ -215,6 +215,40 @@ const NOT_REACHED = [
     'escrow',
 ];
 
+/**
+ * The screen's text once it stops changing, rather than after a fixed wait.
+ *
+ *   #962 A 60ms SLEEP, AND ONE EXTRA `await` IN THE DATA PATH MADE IT FLAKY.
+ *
+ *   Both renders below waited `setTimeout(r, 60)` and then compared textContent.
+ *   #962 converted admin/_marketplace.ts's gates to read the caller's row
+ *   instead of the token, which adds one await to that screen's path — and
+ *   marketplace/reviews then reported `reached: false` in the full 1,065-suite
+ *   run while passing on its own. Nothing was broken; 60ms was simply no longer
+ *   enough under load.
+ *
+ *   RAISING THE NUMBER WOULD BE THE WRONG FIX. This repository says so about
+ *   millisecond thresholds elsewhere — "a millisecond threshold on shared CI
+ *   hardware is a flake generator" — and the next await would put it back. So
+ *   the timing ASSUMPTION goes instead: poll until the DOM settles, return as
+ *   soon as it does, and give up after a bound rather than sleeping for it.
+ *
+ *   The empty-text guard matters for the two redirect stubs in NOT_REACHED: they
+ *   render nothing, so "unchanged" is true immediately and would return on the
+ *   first poll. They wait out the bound and come back empty, which is the
+ *   correct answer for them.
+ */
+async function settledText(container: HTMLElement): Promise<string> {
+    let previous = '';
+    for (let poll = 0; poll < 40; poll++) {
+        await new Promise((r) => setTimeout(r, 25));
+        const now = container.textContent ?? '';
+        if (now.length > 0 && now === previous) return now;
+        previous = now;
+    }
+    return previous;
+}
+
 beforeEach(() => {
     jest.clearAllMocks();
     ROWS = [ROW];
@@ -228,17 +262,16 @@ describe('#601 — admin screens against a row that carries only an id', () => {
 
             ROWS = [ROW];
             const { container } = render(<Screen />);
-            await new Promise(r => setTimeout(r, 60));
-            const withRow = container.textContent;
+            const withRow = await settledText(container);
 
             //   The same screen with NO rows. If the output is identical, the
             //   fixture never got into the render path.
             ROWS = [];
             const { container: withoutRow } = render(<Screen />);
-            await new Promise(r => setTimeout(r, 60));
+            const withoutRowText = await settledText(withoutRow);
             ROWS = [ROW];
 
-            const reached = withoutRow.textContent !== withRow;
+            const reached = withoutRowText !== withRow;
             expect({ name, reached }).toEqual({ name, reached: !NOT_REACHED.includes(name) });
         });
     }

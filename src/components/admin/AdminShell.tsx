@@ -64,10 +64,10 @@ export default async function AdminShellContent({ children }: { children: React.
      *
      *        The owner reported exactly that, twice, and enrolling a second
      *        factor changed nothing because MFA was never what was refusing
-     *        them. lib/admin-portal-roles carries the rule and the cost.
+     *        them. lib/live-door-roles carries the rule and the cost.
      */
-    const { liveRolesForPortal } = await import("@/lib/admin-portal-roles");
-    const roles = await liveRolesForPortal(sessionResult.session?.user?.id);
+    const { liveRolesForDoor } = await import("@/lib/live-door-roles");
+    const roles = await liveRolesForDoor(sessionResult.session?.user?.id);
     const { isAdmin } = await import("@/lib/admin-permissions");
 
     if (!isAdmin(roles)) {
