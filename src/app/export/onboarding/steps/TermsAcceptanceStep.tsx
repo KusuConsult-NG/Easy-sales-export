@@ -109,8 +109,15 @@ export function TermsAcceptanceStep({
                             </div>
                             <p className="text-sm text-slate-600">
                                 I have read and agree to the{" "}
+                                {/*
+                                  *   #961 — /terms/investment, not /terms. This
+                                  *   link told an investor they had read the
+                                  *   "Investment Terms and Conditions" and sent
+                                  *   them to a page with no investment section
+                                  *   at all.
+                                  */}
                                 <a
-                                    href="/terms"
+                                    href="/terms/investment"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-orange-600 hover:underline"
@@ -162,8 +169,13 @@ export function TermsAcceptanceStep({
                             </div>
                             <p className="text-sm text-slate-600">
                                 I agree to the{" "}
+                                {/*
+                                  *   #961 — /terms/escrow. "for fund protection"
+                                  *   promised an agreement about somebody's money
+                                  *   and linked to a page that had none.
+                                  */}
                                 <a
-                                    href="/terms"
+                                    href="/terms/escrow"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-orange-600 hover:underline"

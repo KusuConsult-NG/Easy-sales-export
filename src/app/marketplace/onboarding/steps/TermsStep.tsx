@@ -22,7 +22,7 @@ interface TermsStepProps {
 export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalStep, isSubmitting }: TermsStepProps) {
     const terms = [
         {
-            title: "Marketplace Terms of Service",
+            title: "Marketplace Terms and Conditions",
             points: [
                 "Comply with all product listing guidelines",
                 "Provide accurate product information",
@@ -135,7 +135,7 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
                             rel="noopener noreferrer"
                             className="text-green-600 hover:text-green-700 font-medium"
                         >
-                            Terms of Service
+                            Terms and Conditions
                         </a>
                         {" "}and{" "}
                         <a

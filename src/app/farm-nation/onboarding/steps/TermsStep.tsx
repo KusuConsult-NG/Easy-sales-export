@@ -57,7 +57,7 @@ export default function TermsStep({ onNext, onBack, onChange, initialData, isSub
                         <FileText className="w-6 h-6 text-teal-600 shrink-0 mt-1" />
                         <div>
                             <h3 className="text-lg font-bold text-slate-900 mb-2">
-                                Farm Nation Terms of Service
+                                Farm Nation Terms and Conditions
                             </h3>
                             <div className="space-y-2 text-sm text-slate-900 max-h-64 overflow-y-auto">
                                 <p className="font-semibold">Key Points:</p>
@@ -83,7 +83,7 @@ export default function TermsStep({ onNext, onBack, onChange, initialData, isSub
                         <span className="text-sm text-slate-900 group-hover:text-teal-600 transition-colors">
                             I have read and agree to the{" "}
                             <Link href="/terms" target="_blank" className="text-teal-600 hover:underline font-medium">
-                                Terms of Service
+                                Terms and Conditions
                             </Link>{" "}
                             <span className="text-red-500">*</span>
                         </span>

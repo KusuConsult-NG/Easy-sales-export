@@ -159,14 +159,63 @@ describe('#926 — the refund policy can be reached', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#926 — two consents that name documents /terms does not contain', () => {
-    it('the step really does name them, and really does link to /terms', () => {
-        //   Without this the ledger below is arguing with nobody.
+describe('#926 — two consents that named documents /terms does not contain', () => {
+    /**
+     *   #961 RETIRED AS A DEFECT RECORD, KEPT AS A FIX RECORD.
+     *
+     *   #926's assertions here described the world it found: both consents named
+     *   a document and both linked to /terms, which contains neither. That was
+     *   the measurement, and it was right.
+     *
+     *   The owner has since decided the repair — placeholder pages plus honest
+     *   consents, not drafted terms, because investment and escrow terms for a
+     *   flow where somebody commits funds are a lawyer's work. So
+     *   /terms/investment and /terms/escrow now exist, each stating in its own
+     *   words that the module-specific terms are not published yet and naming
+     *   what IS in force, and the two consents point there.
+     *
+     *   This block therefore asserts the OPPOSITE of what it used to, and that
+     *   is not the ledger going soft: the general rule now lives in
+     *   a-consent-to-a-document-nobody-could-read, which sweeps EVERY consent in
+     *   the app rather than these two, and pins the count at zero. What stays
+     *   here is the part specific to #926 — that these particular two are
+     *   repaired, and that /terms itself is still a training company's document.
+     */
+    it('THE TWO CONSENTS NOW LINK TO THEIR OWN DOCUMENTS, not to /terms', () => {
         const step = code(STEP);
 
+        //   Still named — the labels were not the defect.
         expect(step).toContain('Investment Terms and Conditions');
         expect(step).toContain('Escrow Service Terms');
-        expect((step.match(/href="\/terms"/g) ?? []).length).toBe(2);
+
+        //   And each now goes somewhere that is about it.
+        expect(step).toContain('href="/terms/investment"');
+        expect(step).toContain('href="/terms/escrow"');
+
+        /*
+         *   ZERO, where #926 measured two. The bare /terms link on this step is
+         *   gone: the general terms are still reachable, from the two pages
+         *   above, which is where a member who wants them should land.
+         */
+        expect((step.match(/href="\/terms"/g) ?? []).length).toBe(0);
+    });
+
+    it('AND BOTH OF THOSE PAGES EXIST AND ADMIT WHAT THEY LACK', () => {
+        /*
+         *   The half that makes the redirect above honest rather than a longer
+         *   path to the same nothing. A page that merely carried the title would
+         *   satisfy the link assertions and mislead worse than the original.
+         */
+        for (const rel of ['src/app/terms/investment/page.tsx',
+            'src/app/terms/escrow/page.tsx']) {
+            const page = raw(rel);
+
+            expect({ rel, admits: page.includes('not yet published') })
+                .toEqual({ rel, admits: true });
+            //   And says what governs in the meantime.
+            expect({ rel, points: page.includes('href="/terms"') })
+                .toEqual({ rel, points: true });
+        }
     });
 
     it('and it will not let an applicant past without ticking all four', () => {
@@ -177,7 +226,12 @@ describe('#926 — two consents that name documents /terms does not contain', ()
         expect(step).toContain('disabled={!allAccepted || isSubmitting}');
     });
 
-    it('THE MEASUREMENT: /terms contains neither word', () => {
+    it('THE MEASUREMENT: /terms contains neither word — still true, and still worth saying', () => {
+        /*
+         *   #961 — unchanged by the repair, deliberately. The consents no longer
+         *   point here, so this is no longer a broken promise; it is the scope
+         *   finding below, which is the owner's and their advisers' to close.
+         */
         const terms = raw(TERMS);
 
         expect(terms.toLowerCase()).not.toContain('escrow');
