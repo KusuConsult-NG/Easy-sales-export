@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { waveDestinationFor } from "@/lib/wave-access";
 
@@ -17,7 +17,41 @@ import { waveDestinationFor } from "@/lib/wave-access";
  *   lives, so a status added to one cannot be missed by the other.
  */
 export default async function WAVEPage() {
-    const session = await auth();
+    /*
+     *   #966 THIS CALLED auth() DIRECTLY, AND IT WAS THE LAST PLACE IN THE TREE
+     *        THAT DECIDED ANYTHING FROM A RAW JWT SESSION.
+     *
+     *        Every sibling front door — wave/(member), academy/(learner),
+     *        export/(app), cooperatives/(member), marketplace/buyer and /seller,
+     *        farm-nation/(member) — reaches checkModuleAccess through
+     *        requireSession or requireHubRegistration. This one did not, so the
+     *        roles it handed the gate had had none of what requireSession does:
+     *        no force-sync against the row, no ban check, no suspension check, no
+     *        sessionsValidFrom revocation, and no fail-closed refusal of an
+     *        elevated session it could not verify.
+     *
+     *        #965 measured that difference by execution. It is the one shape where
+     *        #356's sentence — a role claim "keeps its value for hours after the
+     *        database loses it" — is still literally true, and forty-four doors
+     *        were converted under #951 on the strength of it while this one sat
+     *        uncounted, because the ledger counted isAdmin spellings and this file
+     *        asks checkModuleAccess.
+     *
+     *        AND IT UNDERMINED THIS FILE'S OWN PURPOSE. #929 exists because the
+     *        destination must follow the member's WAVE registration status; the
+     *        status was read off `session.user.serviceRegistrations`, which on a
+     *        raw session is whatever the token carried when it was minted.
+     *        requireSession force-syncs serviceRegistrations from the row beside
+     *        the roles, so an applicant whose status changed to
+     *        `revision_required` an hour ago is now sent where #929 says rather
+     *        than by an hour-old copy of it.
+     *
+     *        No change to where a signed-out caller goes: requireSession returns a
+     *        null session for them exactly as auth() returned null, and the
+     *        marketing page is still the answer.
+     */
+    const sessionResult = await requireSession();
+    const session = sessionResult.session;
 
     if (session?.user?.id) {
         const roles = session.user.roles || [];
