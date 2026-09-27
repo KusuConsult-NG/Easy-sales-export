@@ -271,8 +271,31 @@ describe('#484 — and the window is removed, not merely made honest', () => {
         const layout = readFileSync('src/components/admin/AdminShell.tsx', 'utf-8');
 
         expect(layout).toMatch(/<AdminSidebar\s+initialRoles=\{roles\}/);
-        //   And `roles` there is the session's, not a literal.
-        expect(layout).toContain('const roles = sessionResult.session?.user?.roles || []');
+
+        /*
+         *   And `roles` there is the CALLER'S, not a literal — which is the whole
+         *   anti-vacuity point above.
+         *
+         *   #959 THIS PINNED THE STATEMENT RATHER THAN THE PROPERTY, and broke on
+         *        its own subject's improvement. It asserted the exact text
+         *        `const roles = sessionResult.session?.user?.roles || []`, so when
+         *        the guard stopped trusting the token and started reading the row
+         *        — the fix for an administrator being bounced to /dashboard — this
+         *        went red on a change that makes #484's own claim MORE true: the
+         *        nav drawn on the server is now built from the database, so the
+         *        client's useSession override can no longer replace a correct nav
+         *        with a stale one.
+         *
+         *        Seventh instance in this audit of a vacuity control failing on
+         *        the fix to the thing it was guarding. Re-pointed at what #484
+         *        cares about: the roles are derived from THIS caller, by an
+         *        identifier the request supplies, and are not a constant.
+         */
+        expect(layout).toMatch(/const roles = await liveRolesForPortal\(/);
+        expect(layout).toMatch(/liveRolesForPortal\(\s*sessionResult\.session\??\.?\??\.user\?\.id\s*\)/);
+
+        //   The direction that would make the prop meaningless: a hardcoded list.
+        expect(layout).not.toMatch(/initialRoles=\{\[/);
     });
 
     it('and the placeholder is still reachable for a caller that has no roles to give', () => {

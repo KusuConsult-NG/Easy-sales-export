@@ -40,15 +40,27 @@ const WINDOW_UNTIL = '2026-10-10T00:00:00.000Z';
 const CLOSES_AT = Date.parse(WINDOW_UNTIL);
 
 const ORIGINAL_GRACE = process.env.MFA_ADMIN_GRACE_UNTIL;
+/*
+ *   #958 AND ENFORCEMENT SWITCHED ON. The admin MFA lockout is opt-in now and off
+ *   by default — the 2026-09-26 deadline locked every administrator out of /admin
+ *   at once and the owner asked for it removed. The banner only exists while
+ *   enforcement is COMING, so this suite sets the flag; without it adminMfaVerdict
+ *   returns `ok`, adminMfaGraceNotice returns null and the banner renders nothing.
+ */
+const ORIGINAL_ENFORCE = process.env.MFA_ADMIN_ENFORCE;
 
 beforeEach(() => {
     //   SET, never deleted-and-hoped. #936 is the run where ten tests went red at
     //   midnight because they leaned on the wall clock; both sides of the
     //   deadline are pinned explicitly here.
     process.env.MFA_ADMIN_GRACE_UNTIL = WINDOW_UNTIL;
+    process.env.MFA_ADMIN_ENFORCE = 'true';
 });
 
 afterEach(() => {
+    if (ORIGINAL_ENFORCE === undefined) delete process.env.MFA_ADMIN_ENFORCE;
+    else process.env.MFA_ADMIN_ENFORCE = ORIGINAL_ENFORCE;
+
     if (ORIGINAL_GRACE === undefined) {
         delete process.env.MFA_ADMIN_GRACE_UNTIL;
     } else {

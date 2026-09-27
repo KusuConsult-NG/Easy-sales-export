@@ -57,8 +57,21 @@ import { attachActorEmails } from '@/lib/audit-actor';
 /** The row shape the reader passes; spelled out so inference keeps both fields. */
 type Row = { userId?: string; userEmail?: string };
 
-/** An empty environment, typed as one — the helpers take a full ProcessEnv. */
-const NO_ENV = {} as NodeJS.ProcessEnv;
+/**
+ * A minimal environment, typed as one — the helpers take a full ProcessEnv.
+ *
+ *   #958 MFA_ADMIN_ENFORCE — the admin MFA lockout is OPT-IN now, default OFF.
+ *   The 2026-09-26 deadline locked every administrator out of /admin at once
+ *   (none had enrolled; all ten admin roles) and the owner asked for the
+ *   enforcement removed. Set here so the enforcement machinery stays exercised;
+ *   what changed is that a deployment has to ask for it.
+ *
+ *   `as unknown as` because a POPULATED object does not overlap ProcessEnv enough
+ *   for a direct assertion — TS2352. The empty `{}` this replaced did. It is the
+ *   same idiom envWith below already uses, and the isolated jest run missed it:
+ *   jest transpiles without typechecking, so only the full gate saw it.
+ */
+const NO_ENV = { MFA_ADMIN_ENFORCE: 'true' } as unknown as NodeJS.ProcessEnv;
 const envWith = (vars: Record<string, string>) => vars as unknown as NodeJS.ProcessEnv;
 import { whatBreaks } from '@/lib/env-validator';
 import { MFA_ADMIN_ENFORCE_FROM, adminMfaVerdict } from '@/lib/mfa-policy';

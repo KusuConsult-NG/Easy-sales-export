@@ -93,10 +93,23 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
  * Calculate where to redirect the user AFTER they have successfully logged in.
  * This is called by the client component after client-side signIn() succeeds.
  *
- * Bug fix: was querying Firestore by email (.where('email','==',email)), which
- * is a full collection scan (slow, needs index) and fails silently if the stored
- * email field differs. Now uses auth() to get the userId for a direct O(1) doc
- * lookup. Falls back to email query if no session is ready yet.
+ * It reads the session's OWN document by id — a direct O(1) lookup, and the same
+ * row, by the same key, that every admin gate will consult when the person
+ * arrives. The email query survives underneath it as a fallback for a session
+ * whose id names no row.
+ *
+ *   #959 THAT PARAGRAPH USED TO BE WRITTEN IN THE PAST TENSE AND WAS NOT TRUE.
+ *
+ *        It said: "Bug fix: was querying Firestore by email
+ *        (.where('email','==',email)), which is a full collection scan (slow,
+ *        needs index) and fails silently if the stored email field differs. Now
+ *        uses auth() to get the userId for a direct O(1) doc lookup. Falls back
+ *        to email query if no session is ready yet."
+ *
+ *        There was no doc lookup anywhere in this function. The email query was
+ *        the only path, so the "fallback" decided where every single sign-in on
+ *        the platform landed — and the sentence describing the fix sat directly
+ *        above the code that still had the bug.
  */
 export async function getPostLoginRedirect(email: string) { try {
         let userData: FirestoreUser | null = null;
@@ -119,11 +132,14 @@ export async function getPostLoginRedirect(email: string) { try {
         // about auth() deadlocks in server actions, and a generic redirect is
         // the safe outcome of one.
         let sessionEmail: string | null = null;
+        let sessionUserId: string | null = null;
         try {
             const session = await auth();
             sessionEmail = session?.user?.email ?? null;
+            sessionUserId = session?.user?.id ?? null;
         } catch {
             sessionEmail = null;
+            sessionUserId = null;
         }
         if (!sessionEmail) {
             return { error: null, success: true as const, data: { redirectUrl: '/dashboard' } };
@@ -134,13 +150,71 @@ export async function getPostLoginRedirect(email: string) { try {
             });
         }
 
-        // Direct query by email - robust, fast.
-        const userSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-            .where('email', '==', sessionEmail.toLowerCase())
-            .limit(1)
-            .get());
-        if (!userSnapshot.empty) {
-            userData = userSnapshot.docs[0].data() as FirestoreUser;
+        /**
+         *   #959 THREE READERS ANSWERED "IS THIS PERSON AN ADMIN", AND THIS ONE
+         *        WAS KEYED DIFFERENTLY FROM THE TWO THAT DECIDE ADMISSION.
+         *
+         *          lib/auth.ts authorize() -> getUserProfile(uid)    by uid
+         *              becomes token.roles, which the portal's doors read
+         *          lib/require-admin.ts requireAdmin()               by uid
+         *              guards every admin action
+         *          THIS FUNCTION                                    by EMAIL
+         *              decides where login sends you
+         *
+         *        An email query that matches nothing leaves userData null and
+         *        this function returns '/dashboard' — silently, and
+         *        indistinguishably from "you are not an administrator". So an
+         *        administrator signs in with admin credentials and lands on the
+         *        member dashboard, which is what the owner reported.
+         *
+         *        THE CONDITION IS KNOWN TO EXIST HERE, not hypothesised. The
+         *        docstring above named it — "fails silently if the stored email
+         *        field differs" — and this platform has both shapes:
+         *        scripts/backfill-blank-profile-emails.ts exists because two
+         *        admin approval paths wrote FORTY-NINE profiles with
+         *        `email: ""`, and admin/_legacy.ts writes `email: data.email`
+         *        unnormalised at nine sites while registration lowercases at
+         *        four. A row whose stored address is blank, differently cased or
+         *        absent cannot be found by this query, whatever its roles say.
+         *
+         *        READ THE SESSION'S OWN ROW FIRST. Same document, same key, same
+         *        client as requireAdmin — getAdminDb() returns the very object
+         *        lib/current-user-doc reads through, so this is not a second
+         *        opinion about a different row. Login can no longer promise a
+         *        portal the door will refuse, nor withhold one it would open.
+         *
+         *        THE EMAIL QUERY STAYS, as the fallback it was always documented
+         *        to be. A migrated account whose session id names no row still
+         *        has to be found — that is the shape resolveActiveUser walks for
+         *        getUserProfile — and being second means the collection scan is
+         *        paid only by the accounts that need one, instead of by every
+         *        login on the platform.
+         *
+         *        WHY NO TEST CAUGHT IT. jest.setup.js's global recorder makes
+         *        `where()` a no-op, so a suite asserting "an admin lands on
+         *        /admin" passes whatever field the query filters on. The five
+         *        suites that drive this function could not tell a uid lookup from
+         *        an email one. The new suite installs lib/testing/fake-db, where
+         *        the key is real, and seeds a row the email query CANNOT find.
+         */
+        const ownRowId = sessionUserId;
+        if (ownRowId) {
+            const ownDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                .doc(ownRowId)
+                .get());
+            if (ownDoc.exists) {
+                userData = ownDoc.data() as FirestoreUser;
+            }
+        }
+
+        if (!userData) {
+            const userSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                .where('email', '==', sessionEmail.toLowerCase())
+                .limit(1)
+                .get());
+            if (!userSnapshot.empty) {
+                userData = userSnapshot.docs[0].data() as FirestoreUser;
+            }
         }
 
         if (userData) { const userRoles = userData.roles || ['general_user'];
