@@ -13,6 +13,7 @@ import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { updateTag } from "next/cache";
 import { retirementPatch } from "@/lib/record-retirement";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -874,7 +875,7 @@ async function _getPendingLandListingsAction(): Promise<ActionResponse<LandListi
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session?.user?.roles)) { 
+        if (!isAdmin(await liveRolesForDoor(session?.user?.id))) { 
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 

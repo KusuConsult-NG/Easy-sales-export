@@ -5,6 +5,7 @@ import { COLLECTIONS } from '@/lib/types/firestore';
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { isAdmin, hasAdminPermission } from '@/lib/admin-permissions';
+import { liveRolesForDoor } from '@/lib/live-door-roles';
 
 import { getCleanBroadcastList, type BroadcastAudience, type BroadcastFilters } from '@/lib/broadcast-logic';
 import { recordAdminAction } from "@/lib/audit-log";
@@ -147,7 +148,7 @@ export async function getBroadcastHistoryAction(): Promise<
         if (!sessionResult.session) {
             return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         }
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(sessionResult.session.user?.id))) {
             return { success: false as const, error: "Unauthorized. Admin access required.", data: null };
         }
 

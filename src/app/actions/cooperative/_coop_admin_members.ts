@@ -11,6 +11,7 @@ import { notifyMemberDecision } from "@/lib/member-decision-notice";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { stripPii } from "@/lib/admin-pii";
@@ -46,15 +47,9 @@ async function _getAllMembersAction(options?: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        let roles = session.user.roles;
+        const roles = await liveRolesForDoor(session.user?.id);
         if (!isAdmin(roles)) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         /**
@@ -568,11 +563,34 @@ async function _updateMemberStatusAction(
                 const { invalidateUserCache } = await import('@/lib/cache-invalidation');
                 await invalidateUserCache(targetUserId);
                 await invalidateAdminGlobalStats();
-                // Clear scoped coop stats
-                const adminScope = await getAdminScope(sessionResult.session.user.id, sessionResult.session.user.roles);
-                if (adminScope) {
-                    await deleteCache(`admin:coop-stats:${adminScope}`);
-                    await deleteCache(`admin:coop-reports:${adminScope}`);
+                /*
+                 *   Clear scoped coop stats — under the SAME scope the write was
+                 *   authorised against.
+                 *
+                 *   #963 THIS RECOMPUTED THE SCOPE FROM THE TOKEN, HAVING SPENT THE
+                 *        WHOLE FUNCTION DECIDING IT FROM THE ROW.
+                 *
+                 *        `memberScope` above is getAdminScope(id, gate.roles) — the
+                 *        live set requireAdmin resolved, and the scope this write was
+                 *        actually checked against. This line asked getAdminScope again
+                 *        with session.user.roles, the TOKEN's set, so a caller whose
+                 *        token and row disagree got two different scopes out of one
+                 *        function: the row's scope decided what they were allowed to
+                 *        change, and the token's scope decided which cache key was
+                 *        cleared.
+                 *
+                 *        Where they differ the wrong key is deleted and the right one
+                 *        survives, so the cooperative whose member just changed goes on
+                 *        being served the figure from before the change. Not an
+                 *        authorisation hole — the door above already held — but a stale
+                 *        number with no mechanism to correct itself, which is how the
+                 *        "State vs. Truth" bug this block exists to kill comes back.
+                 *
+                 *        One scope per function, resolved once, from the row.
+                 */
+                if (memberScope) {
+                    await deleteCache(`admin:coop-stats:${memberScope}`);
+                    await deleteCache(`admin:coop-reports:${memberScope}`);
                 }
             }
         } catch (cacheErr) {

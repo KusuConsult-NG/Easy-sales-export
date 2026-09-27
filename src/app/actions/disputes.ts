@@ -5,6 +5,7 @@
 "use server";
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { filterByOwner, isOwnedBySession, ownedProfileIds } from "@/lib/owned-profile-ids";
 import { logger } from '@/lib/logger';
 import { disputeStatusesForFilter, isDisputeSettled, DISPUTE_TERMINAL_STATUSES } from "@/lib/dispute-status";
@@ -1046,7 +1047,7 @@ async function _getAdminDisputeStatsAction(): Promise<
         if (!sessionResult.session?.user?.id) {
             return { success: false as const, error: "Authentication required", data: null };
         }
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(sessionResult.session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

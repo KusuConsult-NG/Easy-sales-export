@@ -490,7 +490,7 @@ describe('THE LEDGERS', () => {
         }
     });
 
-    it('THE SECOND SPELLING — isAdmin doors, recorded 70 of which 61 are on the token', () => {
+    it('THE SECOND SPELLING — isAdmin doors, recorded 70 of which 17 are still on the token', () => {
         /*
          *   The count #951, #952 and #953 never took. 53 refusals and 3 positive
          *   admin fast-paths, against the 60 `hasAdminPermission` doors those
@@ -568,8 +568,44 @@ describe('THE LEDGERS', () => {
          *   token arrived at `live`, which is the invariant the third assertion
          *   below checks.
          */
-        const RECORDED_TOKEN_DOORS = 35;
-        const RECORDED_LIVE_DOORS = 31;
+        /*
+         *   #963 BATCH 3: 35 -> 17 on the token, 31 -> 49 live. Eighteen more, and
+         *   the two numbers move by the same eighteen in opposite directions, which
+         *   is the only shape a conversion is allowed to have here.
+         *
+         *   Sixteen were the plain `!isAdmin(session.user.roles)` refusal —
+         *   admin/_exports (2), farm-nation-admin/_fna_finance (2),
+         *   _fna_registrants (2), _fna_verifications (1),
+         *   wave/_wv_admin_applications (2), _wv_admin_withdrawals (1),
+         *   api/admin/marketplace/seller-verifications (1), data-export-audit (1),
+         *   broadcast (1), disputes (1), marketplace/_escrow_actions (1),
+         *   land-listings (1).
+         *
+         *   The last two were the stale-session fallback — cooperative/
+         *   _coop_admin_members and _coop_admin_money, the final pair of the shape
+         *   #535 named and #956 began retiring: `let roles = session.user.roles`,
+         *   then read the row ONLY when the token was too narrow. So the row was
+         *   consulted in every case except the one the pattern existed for.
+         *
+         *   AND `all` FELL 87 -> 85 WITH `bindings` 17 -> 15, WHICH IS NOT A SCAN
+         *   GOING BLIND. Each fallback block carried a SECOND isAdmin call — the
+         *   inner `if (isAdmin(liveRoles))` that decided whether to widen `roles` —
+         *   and the scan classified those two as bindings. Replacing the block with
+         *   one live read deletes them. Two calls removed, two bindings fewer,
+         *   `doors` (refusal + admission) untouched at 70. Recorded here because
+         *   #962's lesson is that a number which moves for a second reason must say
+         *   so, and a binding count falling silently is indistinguishable from the
+         *   blind spot that hid thirteen doors.
+         *
+         *   What is left on the token is 17, and it is no longer a queue of
+         *   like-for-like substitutions: 14 are the ownerOrAdmin shape, where the
+         *   live read has to sit inside the non-owner branch or every member pays a
+         *   read to act on their own row, and 3 are admissions — resource-actions,
+         *   wave/_member, hub-guard — which short-circuit to a full answer rather
+         *   than refusing. Each needs a per-site decision, not this batch's edit.
+         */
+        const RECORDED_TOKEN_DOORS = 17;
+        const RECORDED_LIVE_DOORS = 49;
         const RECORDED_OWNER_OR_ADMIN = 15;
 
         /*

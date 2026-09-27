@@ -18,6 +18,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ExportOnboardingReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { stripPii } from "@/lib/admin-pii";
 import { moduleGrantRoles } from "@/lib/module-grant-roles";
 import { atomicUpdateUser } from "@/lib/services/userService";
@@ -538,7 +539,7 @@ async function _getExportApplicationsStatsAction(): Promise<ActionResponse<any>>
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated", data: null };
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -638,7 +639,7 @@ async function _getStandardExportApplicationsAction(options: {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated", data: null };
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
 
         }
