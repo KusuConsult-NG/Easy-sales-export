@@ -263,7 +263,7 @@ describe('#959 — which row answers, when two rows could', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#959 — the door now reads the row, so login cannot promise what it refuses', () => {
     /**
-     * liveRolesForPortal is what both admin doors ask. Exercised directly:
+     * liveRolesForDoor is what both admin doors ask. Exercised directly:
      * AdminShell and app/admin/page.tsx are server components whose refusal is a
      * `redirect()` throw, and what is worth pinning is the ANSWER they refuse on,
      * not Next's control flow.
@@ -279,8 +279,8 @@ describe('#959 — the door now reads the row, so login cannot promise what it r
             store.seed(COLLECTIONS.USERS, row.id, row);
         }
 
-        const { liveRolesForPortal } = await import('@/lib/admin-portal-roles');
-        return liveRolesForPortal(userId);
+        const { liveRolesForDoor } = await import('@/lib/live-door-roles');
+        return liveRolesForDoor(userId);
     }
 
     it('A GRANTED ADMINISTRATOR IS ADMITTED THOUGH THE TOKEN HAS NOT CAUGHT UP', async () => {
@@ -441,7 +441,7 @@ describe('#959 — the claim in the source, asserted rather than trusted', () =>
         ]) {
             const src = stripComments(read(file), { minRetainedRatio: 0 });
 
-            expect({ file, live: src.includes('liveRolesForPortal') })
+            expect({ file, live: src.includes('liveRolesForDoor') })
                 .toEqual({ file, live: true });
 
             //   The token's roles are no longer assigned to anything this file

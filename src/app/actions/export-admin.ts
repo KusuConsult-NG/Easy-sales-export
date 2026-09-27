@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { logger } from "@/lib/logger";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { recordAdminAction } from "@/lib/audit-log";
@@ -44,7 +45,7 @@ export async function getAdminExportCatalogAction(options: { limit?: number;
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) {
+        if (!session?.user || !isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -141,7 +142,7 @@ export async function getExportRequestStatsAction(): Promise<{ success: true; er
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error, data: null };
         const { session } = sessionResult;
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const db = getAdminDb();
@@ -173,7 +174,7 @@ export async function getExportCatalogStatsAction(): Promise<{ success: true; er
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error, data: null };
         const { session } = sessionResult;
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const db = getAdminDb();
@@ -229,7 +230,7 @@ export async function getAdminPendingExportProductsAction(): Promise<
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user || !isAdmin(await liveRolesForDoor(session.user?.id))) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const db = getAdminDb();
@@ -312,7 +313,7 @@ export async function getAdminExportOrdersAction(): Promise<
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized access", data: null };
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) { return { success: false as const, error: "Unauthorized access", data: null };
         }
 
         const db = getAdminDb();

@@ -75,6 +75,12 @@ jest.mock('@/app/actions/notifications', () => ({
     createNotificationAction: jest.fn(async () => ({})),
     createBulkNotificationsAction: jest.fn(async () => ({})),
 }));
+jest.mock('@/lib/live-door-roles', () =>
+    //   #962 — the door reads the row now; this keeps it agreeing with the
+    //   session these tests set. See lib/testing/live-door-roles-mock for why
+    //   that is not a weakening of the property it replaced.
+    require('@/lib/testing/live-door-roles-mock').liveRolesForDoorMock());
+
 
 function setSession(id: string | null, roles: string[] = []) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve(

@@ -3,7 +3,17 @@ import "server-only";
 import { readUserDocOnce } from "@/lib/current-user-doc";
 
 /**
- * The roles the ADMIN PORTAL'S DOOR judges, read from the database.
+ * The roles a DOOR judges, read from the database rather than from the token.
+ *
+ *   #962 RENAMED FROM liveRolesForPortal, BECAUSE IT IS NOT ONLY THE PORTAL'S.
+ *
+ *   #959 built this for the two screens that gate the admin portal. The owner
+ *   has since decided the rule for every remaining door that judges the token:
+ *   read the row, keep isAdmin()'s ten roles, so `support` and `moderator` lose
+ *   nothing. That makes this the shared helper for all of them, and
+ *   "ForPortal" a name that says something the code does not do — which is the
+ *   defect class this whole audit is about. Renamed before the first caller
+ *   outside the portal, not after.
  *
  *   #959 THE DOOR THAT GATES THE ENTIRE ADMIN PORTAL ASKED THE TOKEN.
  *
@@ -64,7 +74,7 @@ import { readUserDocOnce } from "@/lib/current-user-doc";
  *   would invite exactly the "fall back to the token" line that reintroduces
  *   the revocation window this exists to close.
  */
-export async function liveRolesForPortal(userId: string | null | undefined): Promise<string[]> {
+export async function liveRolesForDoor(userId: string | null | undefined): Promise<string[]> {
     if (!userId) return [];
 
     try {

@@ -641,11 +641,59 @@ describe('the stale-session fallback asks the gate\'s own question', () => {
          *   BLOCK regex both use. A test guarding a shape that no longer exists
          *   passes forever and reads like coverage.
          */
-        const RECORDED = 5;
+        /**
+         *   #962 5 -> 4, AND THIS IS NOT PROGRESS. IT IS A MISCOUNT CORRECTED.
+         *
+         *   Nothing was converted away from the fallback shape here. The count was
+         *   `.includes('liveRoles')`, and src/app/api/admin/add-roles/route.ts
+         *   carries `liveRolesOf` — a different identifier sharing the prefix. So
+         *   the recorded 5 was always FOUR real fallback files plus one false
+         *   positive, and this ratchet had one unit of slack: precisely the "room
+         *   for N new instances that no test would notice" its own failure message
+         *   warns about.
+         *
+         *   It surfaced because #962's `liveRolesForDoor` added three more false
+         *   positives and pushed the count to 8, which read as three new defects.
+         *   There were none. Word-bounding the test found the fourth that had been
+         *   there all along.
+         *
+         *   THE RETIREMENT CONDITION BELOW IS NOW REACHABLE, and the owner has
+         *   made the decision it was waiting on. It says the five left "all gate on
+         *   bare isAdmin(), and converting those means CHOOSING a permission, which
+         *   narrows from ten admin roles to two or three — a policy decision". The
+         *   owner chose the other way: live read, KEEP all ten roles. So these four
+         *   convert by substitution after all — `isAdmin(await liveRolesForDoor(id))`
+         *   has no token check to fall back from, so the fallback is deleted rather
+         *   than retargeted. That is a later batch of #962, not this one.
+         */
+        const RECORDED = 4;
 
         let files = 0;
         for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
-            if (strip(readFileSync(file, 'utf-8')).includes('liveRoles')) files++;
+            /*
+             *   #962 A WORD BOUNDARY, NOT A SUBSTRING — AND THIS LEDGER REPORTED A
+             *        DEFECT THAT DID NOT EXIST BECAUSE IT LACKED ONE.
+             *
+             *   This was `.includes('liveRoles')`, counting the local variable the
+             *   fallback shape declares. #962 added lib/live-door-roles'
+             *   `liveRolesForDoor`, which CONTAINS that string — so three files
+             *   that had been converted AWAY from trusting the token were counted
+             *   as carrying the fallback, and the ledger read 8 against a recorded
+             *   5: "a new instance of this class was added — fix it rather than
+             *   raising the number." There was no new instance. The count was
+             *   measuring its own blind spot.
+             *
+             *   M46's rule, and the THIRD time it has bitten in one sitting:
+             *   never assert an identifier with a substring test. The others were
+             *   `toContain('idx_users_migrated_to')` matching
+             *   `idx_users_migrated_to_present`, and before that
+             *   `rolesWithPermission` matching `rolesWithPermissionX`.
+             *
+             *   `\bliveRoles\b` does not match `liveRolesForDoor`, because the F
+             *   after it is a word character. The shape this counts is the local
+             *   variable, and that is now what it counts.
+             */
+            if (/\bliveRoles\b/.test(strip(readFileSync(file, 'utf-8')))) files++;
         }
 
         expect(ledgerVerdict(files, RECORDED)).toBe(LEDGER_HELD);
