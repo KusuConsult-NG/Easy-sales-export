@@ -24,8 +24,26 @@
  * /api/kyc/verify-bank-account resolves against Paystack for real.
  *
  * So identity verification is wired on this platform. BVN and NIN are the two
- * that skip it, and their routes import qoreIdService without ever calling it —
- * which is the evidence that the call was removed rather than never written.
+ * that skip it.
+ *
+ *   #967 THIS PARAGRAPH USED TO END: "and their routes import qoreIdService
+ *        without ever calling it — which is the evidence that the call was
+ *        removed rather than never written."
+ *
+ *        Both routes now have ZERO occurrences of qoreid or qoreIdService. The
+ *        dead import went when #485 parked the provider and recorded the parking
+ *        in lib/identity-verification, which states the provider once — as
+ *        IDENTITY_PROVIDER = 'none' — so that a name scattered through thirty
+ *        files is not a name somebody re-wires by accident.
+ *
+ *        Corrected because the sentence sent a reader looking for evidence that
+ *        is no longer there, and the conclusion it invites — that these routes
+ *        silently fake a provider call — is not what the code does. They answer
+ *        `checked: false` and `method: 'self_declared'`, both callers read that
+ *        flag, and FinancialStep renders different text on it.
+ *
+ *        Found by executing this suite's subject rather than reading it, which is
+ *        the same pass that found requireSession had never been run.
  *
  * THE ROUTE PATH WAS NOT COVERED
  * ------------------------------
