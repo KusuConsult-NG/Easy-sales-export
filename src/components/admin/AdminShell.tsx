@@ -50,7 +50,24 @@ export default async function AdminShellContent({ children }: { children: React.
         redirect(`/auth/login?error=${authErrorCodeFor(errorMessage)}`);
     }
 
-    const roles = sessionResult.session?.user?.roles || [];
+    /**
+     *   #959 THE GUARD TRAVELS WITH THE CHROME — AND NOW IT ASKS THE DATABASE.
+     *
+     *        The header above says "A page that draws the admin sidebar has, by
+     *        construction, already refused everyone `isAdmin` rejects." True
+     *        about PLACEMENT, and that was the claim being made. What it did not
+     *        say, and what a reader would assume, is which `roles` those are:
+     *        this line read `session.user.roles`, the two-minute-old JWT claim,
+     *        while requireAdmin — the gate on every action these screens invoke
+     *        — reads the row by id. So the portal could refuse an administrator
+     *        that every action inside it would have admitted.
+     *
+     *        The owner reported exactly that, twice, and enrolling a second
+     *        factor changed nothing because MFA was never what was refusing
+     *        them. lib/admin-portal-roles carries the rule and the cost.
+     */
+    const { liveRolesForPortal } = await import("@/lib/admin-portal-roles");
+    const roles = await liveRolesForPortal(sessionResult.session?.user?.id);
     const { isAdmin } = await import("@/lib/admin-permissions");
 
     if (!isAdmin(roles)) {
@@ -72,6 +89,11 @@ export default async function AdminShellContent({ children }: { children: React.
               *        that window does not exist. useSession still overrides it
               *        the moment it resolves, so a role revoked mid-session
               *        still takes the link away.
+              *
+              *   #959 AND THEY ARE NOW THE LIVE ONES, which makes this strictly
+              *        better than it was: the nav drawn on the server is built
+              *        from the row, so the client's useSession override can no
+              *        longer replace a correct nav with a stale one.
               */}
             <AdminSidebar initialRoles={roles} />
 
@@ -91,9 +113,18 @@ export default async function AdminShellContent({ children }: { children: React.
                   *        admin/layout.tsx would miss the second one, which is
                   *        exactly the bug #617 fixed about this same route.
                   *
-                  *        The session is already in hand two statements above, so
-                  *        this costs no read. It renders nothing for an
-                  *        administrator who has enrolled.
+                  *        It renders nothing for an administrator who has
+                  *        enrolled.
+                  *
+                  *   #959 THIS USED TO SAY "the session is already in hand two
+                  *        statements above, so this costs no read". That stopped
+                  *        being true when the guard above started reading the
+                  *        row, so it is corrected rather than left: the roles
+                  *        cost ONE read for this whole request, shared with
+                  *        app/admin/page.tsx through lib/current-user-doc's memo.
+                  *        `mfaEnabled` is still the token's copy, which is what
+                  *        middleware's own gate judges — the two agree by
+                  *        construction, and the banner is advisory either way.
                   */}
                 <AdminMfaGraceBanner
                     roles={roles}

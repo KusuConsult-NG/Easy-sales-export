@@ -490,7 +490,7 @@ describe('THE LEDGERS', () => {
         }
     });
 
-    it('THE SECOND SPELLING — isAdmin(session…) doors, recorded 56', () => {
+    it('THE SECOND SPELLING — isAdmin doors, recorded 70 of which 61 are on the token', () => {
         /*
          *   The count #951, #952 and #953 never took. 53 refusals and 3 positive
          *   admin fast-paths, against the 60 `hasAdminPermission` doors those
@@ -505,8 +505,64 @@ describe('THE LEDGERS', () => {
          *   a database read to act on their own row and is then refused for not
          *   being an admin.
          */
-        const RECORDED_DOORS = 56;
+        /*
+         *   #959 THIS LEDGER MOVED 56 -> 70 FOR TWO REASONS AND BOTH ARE STATED,
+         *        WHICH IS #948'S RULE. Reporting the net would hide each behind
+         *        the other.
+         *
+         *   LEG ONE, AND IT IS NOT PROGRESS: +14 DOORS THE SCAN COULD NOT SEE.
+         *   The regex was `isAdmin\(\s*session[^)]*\)` — the roles named inside
+         *   the call. Fourteen doors name them one line earlier instead:
+         *
+         *       const roles = sessionResult.session?.user?.roles || [];
+         *       if (!isAdmin(roles)) redirect("/dashboard");
+         *
+         *   That is components/admin/AdminShell.tsx, THE DOOR EVERY OTHER ADMIN
+         *   SCREEN SITS BEHIND, and it was not in the 56. The owner reported being
+         *   refused by it — "my admin credentials takes me to the users dashboard
+         *   not the admin portal" — while every admin ACTION admitted them, and
+         *   this ledger had no row for the thing that was refusing them.
+         *
+         *   A count that cannot see the largest instance of what it counts is
+         *   worse than no count: 75 -> 64 -> 60 -> 56 read as four rounds of
+         *   progress while the biggest door was never in the denominator.
+         *
+         *   LEG TWO, AND IT IS ONE DOOR: AdminShell now reads the row, so of the
+         *   70 it is `live` rather than `token`. Without that fix this would be 62
+         *   token and 4 live; it is 61 and 5.
+         *
+         *   WHY THE TOKEN COUNT IS NOW THE HEADLINE. 70 counts doors; 61 counts
+         *   the ones still deciding from a two-minute-old JWT claim, which is what
+         *   #951 is working down. The total can only fall as files are deleted; the
+         *   token count falls as doors are converted, which is the work.
+         */
+        const RECORDED_DOORS = 70;
+        const RECORDED_TOKEN_DOORS = 61;
         const RECORDED_OWNER_OR_ADMIN = 15;
+
+        /*
+         *   The four doors whose roles this resolver cannot follow, named rather
+         *   than left in a bucket — because "unknown" is where a token door goes
+         *   to hide, and an unnamed bucket that grows is indistinguishable from one
+         *   that is merely imprecise. Each checked by hand:
+         *
+         *     admin/_users.ts:1380      judges the roles the REQUEST proposes
+         *                               ("cannot remove your own admin
+         *                               privileges"), not an authorisation read.
+         *                               Not a door at all, strictly.
+         *     admin-permissions.ts:578  adminLandingPath — the RULE, a parameter.
+         *     admin-permissions.ts:753  adminSiloRedirect — the RULE, a parameter.
+         *     module-access-check.ts:125 isAdmin(jwtRoles) — genuinely a token
+         *                               door, and a function parameter, so no
+         *                               number of resolution hops reaches it. The
+         *                               one real gap, recorded as one.
+         */
+        const RECORDED_UNKNOWN = 4;
+        const UNKNOWN_SITES = [
+            'app/actions/admin/_users.ts',
+            'lib/admin-permissions.ts',
+            'lib/module-access-check.ts',
+        ];
 
         const all = scanIsAdminDoors(DIRS, SRC);
         const doors = all.filter((d) => d.kind === 'refusal' || d.kind === 'admission');
@@ -519,9 +575,38 @@ describe('THE LEDGERS', () => {
 
         expect(ledgerVerdict(doors.length, RECORDED_DOORS)).toBe(LEDGER_HELD);
         expect(ledgerVerdict(
+            doors.filter((d) => d.source === 'token').length,
+            RECORDED_TOKEN_DOORS,
+        )).toBe(LEDGER_HELD);
+        expect(ledgerVerdict(
             doors.filter((d) => d.ownerOrAdmin).length,
             RECORDED_OWNER_OR_ADMIN,
         )).toBe(LEDGER_HELD);
+
+        const unknown = doors.filter((d) => d.source === 'unknown');
+        expect(ledgerVerdict(unknown.length, RECORDED_UNKNOWN)).toBe(LEDGER_HELD);
+        //   And they are the four that were checked, not four others.
+        expect([...new Set(unknown.map((d) => d.file))].sort()).toEqual(UNKNOWN_SITES);
+    });
+
+    it('AND THE DOOR THAT GATES THE WHOLE PORTAL READS THE ROW — #959, pinned', () => {
+        /*
+         *   The one conversion this finding made, asserted by provenance rather
+         *   than by count, so it cannot be satisfied by some other door moving.
+         *
+         *   app/admin/page.tsx is the OTHER half of the same bounce and is not
+         *   here, because it does not call isAdmin — it asks adminLandingPath,
+         *   which is a third spelling this scan still does not sweep. Recorded as
+         *   a known limit rather than implied away: the behavioural coverage for
+         *   that door is in the-portal-that-sent-you-to-the-other-dashboard.
+         */
+        const doors = scanIsAdminDoors(DIRS, SRC)
+            .filter((d) => d.file === 'components/admin/AdminShell.tsx');
+
+        expect(doors.length).toBeGreaterThan(0);
+        for (const d of doors) {
+            expect({ line: d.line, source: d.source }).toEqual({ line: d.line, source: 'live' });
+        }
     });
 
     it('SEVEN OF THE TEN ARE INVISIBLE TO THE PER-PERMISSION RULE — the claim, checked', () => {

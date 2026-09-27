@@ -367,6 +367,103 @@ export interface IsAdminDoor {
     readonly kind: "refusal" | "admission" | "binding";
     /** `session.user.id !== someoneElse && !isAdmin(…)` — needs a per-site edit. */
     readonly ownerOrAdmin: boolean;
+    /**
+     * Where the list this door judges came from.
+     *
+     *   #959 THE SCAN MATCHED `isAdmin(session…)` AND NOTHING ELSE, SO THE DOOR
+     *        GATING THE ENTIRE ADMIN PORTAL WAS NOT IN THE LEDGER OF 56.
+     *
+     *        components/admin/AdminShell.tsx did the same thing one line apart:
+     *
+     *            const roles = sessionResult.session?.user?.roles || [];
+     *            if (!isAdmin(roles)) redirect("/dashboard");
+     *
+     *        Identical in effect to `isAdmin(session.user.roles)` and invisible to
+     *        a regex anchored on the word `session` INSIDE the call. So did
+     *        app/admin/page.tsx, via adminLandingPath. Between them they are the
+     *        door every other admin screen sits behind, and the owner reported
+     *        being refused by them while every admin action admitted them.
+     *
+     *        A ledger that cannot see the largest instance of what it counts is
+     *        worse than no ledger: it went down three times and looked like
+     *        progress. So the argument is now resolved to its assignment and
+     *        classified, rather than pattern-matched where it is used.
+     *
+     *   "token"   — resolves to a session/JWT expression. What this rule counts.
+     *   "live"    — resolves to a database read. Already converted.
+     *   "unknown" — a function parameter, a destructure, or an expression this
+     *               resolver does not follow. Counted SEPARATELY and floored, so a
+     *               door cannot become invisible by moving its roles one hop
+     *               further from the call — which is exactly how the two above
+     *               stayed hidden.
+     */
+    readonly source: TokenGate["source"];
+}
+
+/**
+ * The expression a local `const`/`let`/`var` was last assigned from, before `at`.
+ *
+ * Deliberately shallow: one hop, same file, textual. It resolves the shape that
+ * hid AdminShell's door — an assignment a line or two above its use — and returns
+ * null for anything else rather than guessing, so the caller records "unknown"
+ * instead of a wrong answer. An unknown that should have been a token is a
+ * ledger that reads low, which is why the counts of both are asserted.
+ */
+export function assignedFrom(stripped: string, name: string, at: number): string | null {
+    if (!/^[A-Za-z_$][\w$]*$/.test(name)) return null;
+
+    const re = new RegExp(`(?:const|let|var)\\s+${name}\\s*(?::[^=;]*)?=\\s*([^;]+);`, "g");
+    let best: string | null = null;
+    for (const m of stripped.matchAll(re)) {
+        if (m.index! >= at) break;
+        //   LAST assignment before the call, not the first: a re-assignment is
+        //   what the door actually judges.
+        best = m[1];
+    }
+    return best;
+}
+
+/**
+ * Where the roles an `isAdmin(<ident>)` door judges came from — up to TWO hops.
+ *
+ *   #959 ONE HOP LEFT SIX DOORS UNCLASSIFIED AND THREE OF THEM WERE RESOLVABLE
+ *        BY EYE, so the ledger read low on the live side rather than honestly.
+ *
+ *        Two of the three are the same shape twice — the shape requireAdmin
+ *        itself uses:
+ *
+ *            const data  = userDoc.data();
+ *            const roles = data?.roles || [];
+ *            if (!isAdmin(roles)) …
+ *
+ *        A live door, and the most important one in the file, reported as
+ *        "unknown" because the read is one identifier further away than the
+ *        resolver looked. actions/admin-content.ts:164 is the same again.
+ *
+ *        Two hops, and no more. The third unresolved case —
+ *        module-access-check's `isAdmin(jwtRoles)` — is a function PARAMETER, so
+ *        no number of hops reaches it; it stays unknown and the ledger names it.
+ *        Stopping at two is the difference between resolving a shape that exists
+ *        twice and writing a general-purpose evaluator, which is not what a test
+ *        harness should contain.
+ */
+export function resolveRolesSource(
+    stripped: string,
+    name: string,
+    at: number,
+): TokenGate["source"] {
+    const first = assignedFrom(stripped, name, at);
+    if (first === null) return "unknown";
+
+    const direct = rolesSourceOf(first);
+    if (direct !== "unknown") return direct;
+
+    //   `X?.roles || []` / `X.roles` — resolve X and classify THAT.
+    const hop = first.match(/([A-Za-z_$][\w$]*)\s*\??\.\s*roles\b/);
+    if (!hop) return "unknown";
+
+    const second = assignedFrom(stripped, hop[1], at);
+    return second === null ? "unknown" : rolesSourceOf(second);
 }
 
 /** The body an `if` at `condOpen` controls: its block, or its single statement. */
@@ -409,7 +506,29 @@ function ifBodyAfter(src: string, condOpen: number): string {
  */
 export function findIsAdminDoors(stripped: string): IsAdminDoor[] {
     const found: IsAdminDoor[] = [];
+
+    /*
+     *   #959 TWO PATTERNS, DEDUPED BY POSITION.
+     *
+     *   The first is the original: the roles named inline, `isAdmin(session…)`.
+     *   The second is a bare identifier, `isAdmin(roles)`, whose provenance is
+     *   resolved from its assignment — the spelling that hid AdminShell's door.
+     *
+     *   Keyed by match index so `isAdmin(session)` — which both patterns match —
+     *   is one door, not two. Getting that wrong would inflate the ledger and
+     *   look like newly-found work.
+     */
+    const sites = new Map<number, { text: string; arg: string | null }>();
     for (const m of stripped.matchAll(/isAdmin\(\s*session[^)]*\)/g)) {
+        sites.set(m.index!, { text: m[0], arg: null });
+    }
+    for (const m of stripped.matchAll(/isAdmin\(\s*([A-Za-z_$][\w$]*)\s*\)/g)) {
+        if (sites.has(m.index!)) continue;
+        sites.set(m.index!, { text: m[0], arg: m[1] });
+    }
+
+    for (const [index, site] of [...sites.entries()].sort((a, b) => a[0] - b[0])) {
+        const m = { index, 0: site.text } as unknown as RegExpMatchArray;
         const line = lineOf(stripped, m.index!);
         //   The statement this call sits in: back to the previous ; { or }, so a
         //   condition spanning lines is included whole.
@@ -421,6 +540,16 @@ export function findIsAdminDoors(stripped: string): IsAdminDoor[] {
         const stmt = stripped.slice(from, m.index! + m[0].length);
 
         const bound = /(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=]*)?=\s*(?:await\s+)?[^;]*isAdmin\(/.test(stmt);
+
+        /*
+         *   #959 — the provenance of the list being judged. An inline
+         *   `isAdmin(session…)` is a token read by construction; a bare identifier
+         *   is whatever its assignment says, and "unknown" when this resolver
+         *   cannot see one rather than a guess in either direction.
+         */
+        const source: TokenGate["source"] = site.arg === null
+            ? "token"
+            : resolveRolesSource(stripped, site.arg, m.index!);
 
         //   The `if` this call belongs to, and the body that `if` controls.
         //
@@ -444,6 +573,7 @@ export function findIsAdminDoors(stripped: string): IsAdminDoor[] {
         found.push({
             line,
             kind,
+            source,
             ownerOrAdmin: /!==\s*session|\.id\s*!==|\bisOwner\b|\bisParty\b|\bhasAccess\b|isOwnedBySession/.test(stmt),
         });
     }
