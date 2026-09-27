@@ -31,6 +31,56 @@ import type { AdminPermission } from "@/lib/admin-permissions";
  *   chooses a bounded set — and so that a count of 75 becomes a prioritised list
  *   instead of an undifferentiated backlog.
  *
+ * ── FIRST, WHAT A DOOR ACTUALLY RECEIVES — #965, MEASURED ───────────────────
+ *
+ *   The #356 sentence above — a JWT role claim "keeps its value for hours after
+ *   the database loses it" — is the premise this whole rule rests on, and it is
+ *   TRUE OF A RAW TOKEN AND NOT OF WHAT requireSession RETURNS. Four findings
+ *   converted doors on the strength of it without anyone running the guard.
+ *
+ *   requireSession force-syncs the live roles over the token before it returns:
+ *
+ *       const clonedSession = { ...session, user: {
+ *           ...session.user, roles: data?.roles || session.user.roles || [] } };
+ *
+ *   where `data` is the caller's row, from CacheKeys.userProfile or a live read.
+ *   Measured by execution in the-token-the-guard-had-already-replaced:
+ *
+ *     ROW PRESENT     the door sees the ROW's roles. A revoked administrator
+ *                     whose token still claims admin is judged on the reduced
+ *                     list. `isAdmin(session.user.roles)` was ALREADY live here.
+ *
+ *     ROW ABSENT      session-guard auto-repairs — it WRITES a row with
+ *                     roles: ["general_user"] and syncs that. A token claiming
+ *                     super_admin against no row yields a general_user session,
+ *                     durably. The account is downgraded, not admitted.
+ *
+ *     READ THREW      an elevated session is refused outright; the door is never
+ *                     reached. An ordinary member rides the blip out.
+ *
+ *   SO THERE IS NO CASE IN WHICH A DOOR BEHIND requireSession JUDGES ADMIN ROLES
+ *   THAT CAME FROM THE TOKEN. The exposure this rule addresses is narrower than
+ *   "hours", and it is two things:
+ *
+ *     1. THE CACHE WINDOW. `data` may come from CacheKeys.userProfile, TTL 300
+ *        seconds. invalidateUserCache is called by the role writers, so the
+ *        window is usually zero — but it is 300 seconds wherever a write path
+ *        forgets, and a forgotten invalidation is invisible.
+ *
+ *     2. DOORS NOT BEHIND THAT SYNC. A route reading the JWT directly gets no
+ *        force-sync at all. module-access-check's `isAdmin(jwtRoles)` is the one
+ *        this audit has named; it takes its roles as a parameter, which is why no
+ *        number of resolution hops reaches it.
+ *
+ *   WHAT THIS DOES NOT DO IS RETIRE THE RULE. Reading the row per door is still
+ *   stricter than depending on an upstream guard having synced, and #532's
+ *   criterion — one file must not ask the database in one function and the token
+ *   in another — is untouched by any of this. What changes is the SEVERITY a
+ *   conversion may claim, and the direction of the risk: liveRolesForDoor fails
+ *   closed on a missing row, so converting a door whose caller may legitimately
+ *   have none trades a stale-role window for a lockout. #964 reverted three
+ *   conversions on exactly that ground.
+ *
  * ── THE RULE: IRREVERSIBILITY ───────────────────────────────────────────────
  *
  *   A door must re-read the database when acting on stale authorisation produces
