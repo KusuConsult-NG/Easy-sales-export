@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -44,15 +45,9 @@ async function _getAllTransactionsAction(options?: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        let roles = session.user.roles;
+        const roles = await liveRolesForDoor(session.user?.id);
         if (!isAdmin(roles)) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
-                roles = liveRoles;
-            } else {
-                return { success: false as const, error: "Unauthorized", data: null };
-            }
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         /**

@@ -8,6 +8,8 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { editApplicationAction } from '@/app/actions/admin';
 import { logger } from '@/lib/logger';
 
+
+
 describe('editApplicationAction Unit Tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -19,6 +21,20 @@ describe('editApplicationAction Unit Tests', () => {
                 userId: "test-user-id",
                 firstName: "Ada",
                 lastName: "Okonkwo",
+                /*
+                 *   #963 — the door asks users:update of the caller's ROW now, not of
+                 *   the roles on the session, so the row has to carry them or an
+                 *   administrator is refused.
+                 *
+                 *   Put here rather than behind a module mock for two reasons. The row
+                 *   IS what the door reads, so this is the honest fixture. And a
+                 *   jest.mock() would not have worked in this file at all: `jest` is
+                 *   imported from '@jest/globals' above, and babel-plugin-jest-hoist
+                 *   only lifts calls on the GLOBAL jest — so the factory would have
+                 *   registered after editApplicationAction was already imported and
+                 *   done nothing, which is exactly what it did on the first attempt.
+                 */
+                roles: ["admin"],
             })
         }));
 

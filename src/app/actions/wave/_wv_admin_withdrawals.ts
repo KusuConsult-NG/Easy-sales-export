@@ -7,6 +7,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { requireAdmin } from "@/lib/require-admin";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
@@ -43,7 +44,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized" };
         }
 

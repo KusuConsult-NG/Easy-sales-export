@@ -7,6 +7,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/lib/audit-log";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -20,7 +21,7 @@ async function _getAcademyInstructorsAction(): Promise<ActionResponse<any[]>> {
             return { success: false, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized", data: null };
         }
 
@@ -56,7 +57,7 @@ async function _getAcademyCoursesAction(options?: {
             return { success: false, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized", data: null };
         }
 

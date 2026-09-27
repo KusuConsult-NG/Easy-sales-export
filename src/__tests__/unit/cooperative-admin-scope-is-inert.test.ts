@@ -217,17 +217,39 @@ describe('what the function actually answers', () => {
 });
 
 describe('the guards that depend on it', () => {
-    it('all ten call sites are still present', async () => {
+    it('all nine call sites are still present', async () => {
         // If the scoping is ever wired up, these are what start firing. If one
         // is deleted in the meantime, the eventual repair is silently smaller
         // than it looks. Counted, not matched: membership cannot tell one call
         // site from ten — and counting is what corrected the figure, since the
         // grep this was first written from was eyeballed as nine.
+        /*
+         *   #963 10 -> 9, AND THE ONE THAT WENT WAS A SECOND ANSWER TO A QUESTION
+         *        THE FUNCTION HAD ALREADY ANSWERED.
+         *
+         *        _coop_admin_members' membership-status action resolved the scope
+         *        once from the row — getAdminScope(id, gate.roles), where gate.roles
+         *        is what requireAdmin read — and used it to refuse a cross-cooperative
+         *        write. Then, in the cache-invalidation block at the end, it called
+         *        getAdminScope AGAIN with session.user.roles, the TOKEN's set, to
+         *        build the cache key.
+         *
+         *        So one function produced two scopes from two sources. Where they
+         *        differ the wrong `admin:coop-stats:` key is deleted and the right one
+         *        survives, and the cooperative whose member just changed goes on being
+         *        served the figure from before the change — the "State vs. Truth" bug
+         *        that block exists to kill, reintroduced by the block itself.
+         *
+         *        The fix reuses the scope already resolved, so the count is 9 because
+         *        a DUPLICATE went, not because a guard was dropped. The test below
+         *        pins the surviving IDOR guard by name for exactly this reason: a
+         *        number falling is not evidence of which one fell.
+         */
         const total = CONSUMERS.reduce(
             (n, rel) => n + (source(rel).match(/getAdminScope\(/g) ?? []).length, 0,
         );
 
-        expect(total).toBe(10);
+        expect(total).toBe(9);
     });
 
     it('the IDOR guard this audit added is one of them', () => {

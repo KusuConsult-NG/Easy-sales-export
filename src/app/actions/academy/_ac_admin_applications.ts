@@ -10,6 +10,7 @@ import { requireSession } from "@/lib/session-guard";
 import { requireAdmin } from "@/lib/require-admin";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { stripPii, stripSecrets } from "@/lib/admin-pii";
@@ -127,7 +128,7 @@ async function _getAcademyApplicationStatsAction(): Promise<ActionResponse<any>>
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         // Ensure user has admin permissions
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized", data: null };
         }
 
@@ -215,7 +216,7 @@ async function _getStandardAcademyApplicationsAction(options: {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated", data: null };
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized", data: null };
         }
 
@@ -727,7 +728,7 @@ async function _logAcademyExportAction(details: any): Promise<ActionResponse<nul
         // is the evidence an incident is reconstructed from, and this platform
         // has an open data-exposure incident. A record anybody can write to is
         // not evidence.
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized", data: null };
         }
 

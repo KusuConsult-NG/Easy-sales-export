@@ -61,6 +61,23 @@ jest.mock('@/services', () => ({
     },
 }));
 
+/*
+ *   #962 NO live-door-roles MOCK HERE, AND THAT IS THE POINT.
+ *
+ *   The other suites touching converted gates mock lib/live-door-roles so the
+ *   row agrees with the session they set. This one must NOT: its third test
+ *   —"re-reads the roles from the database when the session is stale" — seeds a
+ *   session saying `user` and a ROW saying `admin`, and asserts the row wins.
+ *   A mock that answers from the session would return `user` and turn the one
+ *   test proving this file's security property into a test of the mock.
+ *
+ *   It has a real store, so the real helper reads a real row. Which is also why
+ *   the conversion did not change this test's expectation: the fallback it was
+ *   written for is gone, and reading the row UNCONDITIONALLY gives the same
+ *   answer in the permissive direction while closing the revoked-admin window
+ *   the fallback left open.
+ */
+
 let store: FakeDbHandle;
 
 const TXNS = COLLECTIONS.COOPERATIVE_TRANSACTIONS;
@@ -74,6 +91,24 @@ function actAs(id: string | null, roles: string[] = ['super_admin']): void {
             ? { session: null, error: { error: 'Authentication required' } }
             : { session: { user: { id, roles, email: `${id}@example.com` } }, error: null },
     ));
+
+    /*
+     *   #962 AND THE ROW AGREES BY DEFAULT — but only by default.
+     *
+     *   These gates read the caller's row now instead of the token, so every test
+     *   that establishes an admin by putting roles on the SESSION needed the row
+     *   to carry them too. Seeded here rather than in fourteen places.
+     *
+     *   SEEDED FIRST, SO A TEST CAN DISAGREE ON PURPOSE. "re-reads the roles from
+     *   the database when the session is stale" calls actAs with ['user'] and then
+     *   seeds the row with ['admin'] — its seed lands after this one and wins,
+     *   which is exactly the promotion-not-yet-in-the-JWT case it exists to prove.
+     *   That is why this suite does NOT mock lib/live-door-roles: the real helper
+     *   has to read the real row for that test to mean anything.
+     */
+    if (id !== null) {
+        store?.seed(COLLECTIONS.USERS, id, { id, roles, email: `${id}@example.com` });
+    }
 }
 
 beforeEach(() => {
@@ -284,7 +319,26 @@ describe('getCooperativeStatsAction — admin scoping', () => {
     it('a scoped admin sees only their own cooperative\'s money', async () => {
         actAs('coop-admin', ['cooperative_admin']);
         store.seed(COLLECTIONS.USERS, 'coop-admin', {
-            roles: ['cooperative_admin', 'admin'], cooperativeId: 'coop-a',
+            /*
+             *   #962 `admin` REMOVED, AND THE FIXTURE NOW SAYS WHAT THE TEST IS
+             *        CALLED.
+             *
+             *   This row carried ['cooperative_admin', 'admin'] while the session
+             *   carried ['cooperative_admin'] alone. The gate used to judge the
+             *   SESSION, so the scope was computed from the narrow list and the
+             *   test passed. Reading the ROW — which is the fix — hands
+             *   getAdminScope a list containing plain `admin`, and
+             *   isPlatformAdmin(...) returns a null scope: unrestricted. The sums
+             *   then covered coop-b as well, which is exactly what these four
+             *   tests exist to forbid.
+             *
+             *   So the fixture was describing a PLATFORM admin in a test named
+             *   "a scoped admin". The disagreement between token and row hid it.
+             *   `admin` is dropped rather than the assertion loosened, because
+             *   cooperative_admin already satisfies isAdmin() and the scope is the
+             *   subject here.
+             */
+            roles: ['cooperative_admin'], cooperativeId: 'coop-a',
         });
         seedTxn('mine', { cooperativeId: 'coop-a', amount: 1000 });
         seedTxn('theirs', { cooperativeId: 'coop-b', amount: 999999 });
@@ -301,7 +355,7 @@ describe('getCooperativeStatsAction — admin scoping', () => {
     it('and the metrics service is asked for that scope too', async () => {
         actAs('coop-admin', ['cooperative_admin']);
         store.seed(COLLECTIONS.USERS, 'coop-admin', {
-            roles: ['cooperative_admin', 'admin'], cooperativeId: 'coop-a',
+            roles: ['cooperative_admin'], cooperativeId: 'coop-a',
         });
 
         await stats();
@@ -441,7 +495,7 @@ describe('getContributionReportsAction', () => {
     it('a scoped admin reports only their own cooperative', async () => {
         actAs('coop-admin', ['cooperative_admin']);
         store.seed(COLLECTIONS.USERS, 'coop-admin', {
-            roles: ['cooperative_admin', 'admin'], cooperativeId: 'coop-a',
+            roles: ['cooperative_admin'], cooperativeId: 'coop-a',
         });
         seedTxn('mine', { cooperativeId: 'coop-a', amount: 1000, userId: 'm1' });
         seedTxn('theirs', { cooperativeId: 'coop-b', amount: 999999, userId: 'm2' });
@@ -516,7 +570,7 @@ describe('getRecentActivityAction', () => {
     it('a scoped admin sees only their own cooperative\'s activity', async () => {
         actAs('coop-admin', ['cooperative_admin']);
         store.seed(COLLECTIONS.USERS, 'coop-admin', {
-            roles: ['cooperative_admin', 'admin'], cooperativeId: 'coop-a',
+            roles: ['cooperative_admin'], cooperativeId: 'coop-a',
         });
         seedTxn('mine', { cooperativeId: 'coop-a', userId: 'm1' });
         seedTxn('theirs', { cooperativeId: 'coop-b', userId: 'm2' });

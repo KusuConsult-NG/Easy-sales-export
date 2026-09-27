@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
@@ -26,7 +27,7 @@ async function _getFarmNationVerificationStatsAction(): Promise<ActionResponse<{
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 

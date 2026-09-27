@@ -17,6 +17,7 @@ import { serializeValue, serializeDocs } from "@/lib/firestore-serialize";
 import { smsEscrowReleased } from "@/lib/africastalking";
 import { pushEscrowReleased } from "@/lib/fcm";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import {
     ESCROW_STATUSES,
     ESCROW_DISPUTEABLE_STATUSES,
@@ -1037,7 +1038,7 @@ async function _getEscrowStatsAdmin(): Promise<
         if (!sessionResult.session?.user?.id) {
             return { success: false as const, error: "Authentication required", data: null };
         }
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(sessionResult.session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

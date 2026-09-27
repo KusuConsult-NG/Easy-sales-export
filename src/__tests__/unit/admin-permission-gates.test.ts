@@ -522,6 +522,38 @@ describe('the stale-session fallback asks the gate\'s own question', () => {
      * That is not a hypothetical — narrowing the gates in this pass introduced
      * it in four places before this assertion caught them.
      */
+    /**
+     * True when `src` carries the stale-session fallback shape.
+     *
+     * The fingerprint is a MUTABLE binding initialised from the token's roles that
+     * is later reassigned — see the note above fallbackShapeFiles for why that, and
+     * not the name `liveRoles`, is what the defect actually is.
+     *
+     * Deliberately textual and deliberately narrow in one direction only: it can
+     * miss a shape spelled in some third way nobody has written yet, and it must
+     * NOT fire on the converted form. A false positive here would send whoever hits
+     * it to "fix" a gate that is already right, which is how the old instrument
+     * spent three batches reporting _coop_admin_members as a defect.
+     */
+    function carriesFallbackShape(src: string): boolean {
+        //   A `let` (never a `const` — the reassignment is the point) whose
+        //   initialiser reads roles off the session.
+        const DECL = /\blet\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]*)?=\s*[^;]*\bsession\b[^;]*\.roles\b[^;]*;/g;
+
+        for (const m of src.matchAll(DECL)) {
+            const name = m[1];
+            const after = src.slice(m.index! + m[0].length);
+            /*
+             *   A later plain reassignment of that same binding. `=` not `==`/`===`,
+             *   and not `+=` and friends, so a comparison is not mistaken for the
+             *   widening step.
+             */
+            const REASSIGN = new RegExp(`(?<![=!<>+\\-*/%&|^])\\b${name}\\s*=\\s*(?!=)`);
+            if (REASSIGN.test(after)) return true;
+        }
+        return false;
+    }
+
     function fallbackMismatches(): string[] {
         const bad: string[] = [];
         const BLOCK = /if \(!(isAdmin\(roles\)|hasAdminPermission\(roles, "([a-z_]+:[a-z_]+)"\))\)[\s\S]{0,600}?if \((isAdmin\(liveRoles\)|hasAdminPermission\(liveRoles, "([a-z_]+:[a-z_]+)"\))\)/g;
@@ -618,85 +650,125 @@ describe('the stale-session fallback asks the gate\'s own question', () => {
         }
     });
 
-    it('and there really are fallbacks to check, so this is not vacuous', () => {
-        /*
-         *   If the shape were refactored away this assertion would pass by
-         *   matching nothing — so it counts the files that still carry it.
-         *
-         *   #955 LOWERED 6 -> 5, AND THIS CONTROL IS NOW ON A COUNTDOWN. It is the
-         *   third time in this programme that a control proving a sweep works has
-         *   failed because its subject got fixed (#952 and #953 were the others),
-         *   and this time the subject is going away for good: the fallback shape
-         *   IS the defect, not a neighbour of it.
-         *
-         *   `if (!tokenCheck) { read the record; retry }` asks the record only when
-         *   the token says no, so a token that claims the permission is admitted and
-         *   never re-checked. #955 converted the six that named a permission. The
-         *   five left all gate on bare isAdmin(), and converting those means CHOOSING
-         *   a permission, which narrows from ten admin roles to two or three — a
-         *   policy decision, not a substitution.
-         *
-         *   RETIREMENT, stated so it is not floored at zero by whoever gets there:
-         *   when this reaches 0, DELETE this test, the mismatch test above, and the
-         *   BLOCK regex both use. A test guarding a shape that no longer exists
-         *   passes forever and reads like coverage.
-         */
-        /**
-         *   #962 5 -> 4, AND THIS IS NOT PROGRESS. IT IS A MISCOUNT CORRECTED.
-         *
-         *   Nothing was converted away from the fallback shape here. The count was
-         *   `.includes('liveRoles')`, and src/app/api/admin/add-roles/route.ts
-         *   carries `liveRolesOf` — a different identifier sharing the prefix. So
-         *   the recorded 5 was always FOUR real fallback files plus one false
-         *   positive, and this ratchet had one unit of slack: precisely the "room
-         *   for N new instances that no test would notice" its own failure message
-         *   warns about.
-         *
-         *   It surfaced because #962's `liveRolesForDoor` added three more false
-         *   positives and pushed the count to 8, which read as three new defects.
-         *   There were none. Word-bounding the test found the fourth that had been
-         *   there all along.
-         *
-         *   THE RETIREMENT CONDITION BELOW IS NOW REACHABLE, and the owner has
-         *   made the decision it was waiting on. It says the five left "all gate on
-         *   bare isAdmin(), and converting those means CHOOSING a permission, which
-         *   narrows from ten admin roles to two or three — a policy decision". The
-         *   owner chose the other way: live read, KEEP all ten roles. So these four
-         *   convert by substitution after all — `isAdmin(await liveRolesForDoor(id))`
-         *   has no token check to fall back from, so the fallback is deleted rather
-         *   than retargeted. That is a later batch of #962, not this one.
-         */
-        const RECORDED = 4;
-
-        let files = 0;
+    /**
+     *   THE SHAPE, DETECTED BY ITS FINGERPRINT RATHER THAN BY A VARIABLE NAME.
+     *
+     *   #963 THE COUNT THAT GUARDED THIS CLASS COUNTED THE WORD `liveRoles`, AND
+     *        BY THE END IT WAS WRONG IN BOTH DIRECTIONS AT ONCE.
+     *
+     *        Too high: cooperative/_coop_admin_members declares a `liveRoles` in a
+     *        function that reads the row UNCONDITIONALLY and gates on it — the
+     *        correct form, the thing the whole sweep was converting TOWARDS, counted
+     *        as an instance of the defect.
+     *
+     *        Too low: admin/_applications carried a real fallback that the BLOCK
+     *        regex could not see, because it bound the gate to a name first —
+     *        `const isAuthorizedSession = hasAdminPermission(roles, …); if
+     *        (!isAuthorizedSession) { … }` — where every other instance tested the
+     *        call inline. So the last one in the tree was never checked by the
+     *        mismatch test that exists to check it.
+     *
+     *        The recorded note was wrong too: it named admin/_users.ts and cms.ts
+     *        as two of the three remaining, and neither has carried the shape in
+     *        code for some time — they mention `liveRoles` only in comments, which
+     *        strip() removes before counting. The real three were
+     *        admin/_applications, _coop_admin_members (the false positive) and
+     *        _coop_admin_money.
+     *
+     *   WHAT THE SHAPE ACTUALLY IS, independent of spelling: a MUTABLE binding
+     *   initialised from the token's roles, which is later REASSIGNED. The
+     *   reassignment is the defect — it says the token's list was provisional and
+     *   gets replaced by the row's, but only on the branch where the token failed.
+     *   A `const` read of the row needs no reassignment and cannot express it.
+     *
+     *   That fingerprint does not care whether the gate is isAdmin or a permission,
+     *   inline or bound, or what the row read is called.
+     */
+    function fallbackShapeFiles(): string[] {
+        const found: string[] = [];
         for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
-            /*
-             *   #962 A WORD BOUNDARY, NOT A SUBSTRING — AND THIS LEDGER REPORTED A
-             *        DEFECT THAT DID NOT EXIST BECAUSE IT LACKED ONE.
-             *
-             *   This was `.includes('liveRoles')`, counting the local variable the
-             *   fallback shape declares. #962 added lib/live-door-roles'
-             *   `liveRolesForDoor`, which CONTAINS that string — so three files
-             *   that had been converted AWAY from trusting the token were counted
-             *   as carrying the fallback, and the ledger read 8 against a recorded
-             *   5: "a new instance of this class was added — fix it rather than
-             *   raising the number." There was no new instance. The count was
-             *   measuring its own blind spot.
-             *
-             *   M46's rule, and the THIRD time it has bitten in one sitting:
-             *   never assert an identifier with a substring test. The others were
-             *   `toContain('idx_users_migrated_to')` matching
-             *   `idx_users_migrated_to_present`, and before that
-             *   `rolesWithPermission` matching `rolesWithPermissionX`.
-             *
-             *   `\bliveRoles\b` does not match `liveRolesForDoor`, because the F
-             *   after it is a word character. The shape this counts is the local
-             *   variable, and that is now what it counts.
-             */
-            if (/\bliveRoles\b/.test(strip(readFileSync(file, 'utf-8')))) files++;
+            const src = strip(readFileSync(file, 'utf-8'));
+            if (carriesFallbackShape(src)) found.push(relative(process.cwd(), file));
         }
+        return found;
+    }
 
-        expect(ledgerVerdict(files, RECORDED)).toBe(LEDGER_HELD);
+    it('THE SHAPE IS EXTINCT — no gate in the guarded trees widens a token list', () => {
+        /*
+         *   #963 3 -> 0, AND THE CLASS IS CLOSED.
+         *
+         *   Batch 3 converted the last three: cooperative/_coop_admin_members,
+         *   _coop_admin_money and admin/_applications. Each now reads the row
+         *   unconditionally and asks the SAME question it asked before — no
+         *   permission was chosen, no width changed, and there is no token check
+         *   left to fall back from, so the fallback was deleted rather than
+         *   retargeted.
+         *
+         *   THIS IS A PROHIBITION, NOT A RATCHET AT ZERO, and that is deliberate.
+         *   The retirement note this replaces said to DELETE this test and the
+         *   mismatch test when the count reached 0, because "a test guarding a
+         *   shape that no longer exists passes forever and reads like coverage".
+         *   That is true of a test that can only fire on an existing instance. It
+         *   is not true of one that forbids the shape across the whole tree: that
+         *   has a live subject — every file in GUARDED_TREES — and it is the thing
+         *   which stops the ten conversions being undone one gate at a time by
+         *   whoever next meets a stale token and reaches for the obvious fix.
+         *
+         *   The vacuity control is the test below, and it is the reason a zero here
+         *   can be believed: a detector that has stopped detecting also reports zero.
+         */
+        expect(fallbackShapeFiles()).toEqual([]);
+    });
+
+    it('and the detector still recognises the shape in BOTH spellings it ever had', () => {
+        /*
+         *   Without this, the assertion above is satisfied by any regex that no
+         *   longer matches anything — which is exactly how the old count came to
+         *   report a converted file as a defect and a real defect as nothing at all.
+         *
+         *   Both fixtures are the historical article, reduced: the inline form the
+         *   nine cooperative gates carried, and the bound form admin/_applications
+         *   carried and the old regex could not see.
+         */
+        const INLINE = `
+            let roles = session.user.roles;
+            if (!isAdmin(roles)) {
+                const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+                const liveRoles = liveUserDoc.data()?.roles;
+                if (isAdmin(liveRoles)) { roles = liveRoles; } else { return unauthorized; }
+            }
+        `;
+        const BOUND = `
+            let roles = session.user.roles;
+            const isAuthorizedSession = hasAdminPermission(roles, "users:update");
+            if (!isAuthorizedSession) {
+                const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+                const liveRoles = liveUserDoc.data()?.roles;
+                const isAuthorizedLive = hasAdminPermission(liveRoles, "users:update");
+                if (!isAuthorizedLive) { return unauthorized; }
+                roles = liveRoles;
+            }
+        `;
+        expect({ inline: carriesFallbackShape(INLINE) }).toEqual({ inline: true });
+        expect({ bound: carriesFallbackShape(BOUND) }).toEqual({ bound: true });
+
+        //   And it does not cry fallback at the converted form, which is what the
+        //   old count did to _coop_admin_members.
+        const CONVERTED = `
+            const roles = await liveRolesForDoor(session.user?.id);
+            if (!isAdmin(roles)) { return unauthorized; }
+        `;
+        //   Nor at an unconditional live read that happens to name its variable
+        //   liveRoles — the shape the old instrument could not tell from the defect.
+        const UNCONDITIONAL = `
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = userDoc.data()?.roles;
+            if (!isAdmin(liveRoles)) { return unauthorized; }
+            const maySeePii = hasAdminPermission(liveRoles, "cooperatives:approve_members");
+        `;
+        expect({ converted: carriesFallbackShape(CONVERTED) }).toEqual({ converted: false });
+        expect({ unconditional: carriesFallbackShape(UNCONDITIONAL) })
+            .toEqual({ unconditional: false });
     });
 });
 

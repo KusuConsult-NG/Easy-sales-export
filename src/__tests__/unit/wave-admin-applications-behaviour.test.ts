@@ -120,6 +120,22 @@ function seedApplicant(extra: Record<string, unknown> = {}): void {
 
 // ─── approval ────────────────────────────────────────────────────────────────
 
+jest.mock('@/lib/live-door-roles', () =>
+    /*
+     *   #963 — the gate in this file reads the caller's ROW now, not the roles on
+     *   the session. These tests establish an administrator by setting roles on the
+     *   session, so the row is kept in agreement with it: that is the ordinary case
+     *   (a session minted after the grant) and the provenance of the roles is not
+     *   this suite's subject.
+     *
+     *   IT IS NOT COVERAGE OF WHAT THE CONVERSION FIXED. A mock answering from the
+     *   session cannot show that production does not. The property — the row is read
+     *   and the token is not trusted — is measured in
+     *   a-door-that-read-the-row-without-charging-the-owner.
+     */
+    require('@/lib/testing/live-door-roles-mock').liveRolesForDoorMock());
+
+
 describe('approving a WAVE application', () => {
     beforeEach(() => {
         seedApplication();

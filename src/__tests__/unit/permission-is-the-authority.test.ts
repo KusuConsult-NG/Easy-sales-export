@@ -131,10 +131,47 @@ describe('#365 — the permission is the authority, not a suggestion', () => {
     });
 
     it('nor the application decision', () => {
-        const src = code('src/app/actions/admin/_applications.ts');
+        /*
+         *   #963 THIS PINNED THE TWO SPELLINGS, AND BOTH ARE GONE — because the
+         *        thing they spelled was the stale-session fallback, and #365's
+         *        property is better served without it.
+         *
+         *        It asserted:
+         *
+         *            const isAuthorizedSession = hasAdminPermission(roles, "users:update");
+         *            const isAuthorizedLive = hasAdminPermission(liveRoles, "users:update");
+         *
+         *        — the gate, and the retry against a re-read of the row. #365's
+         *        finding is that the PERMISSION is the authority rather than a role
+         *        literal, and that held for both lines. What it could not say is
+         *        that asking twice was the defect: the row was read only when the
+         *        token's answer was no, so a revoked administrator whose token
+         *        still named the role was admitted on the token and never
+         *        re-checked. It was the last instance of that shape in the tree.
+         *
+         *        Re-pointed at the property rather than the text, which is what a
+         *        ratchet failing on its own subject's fix calls for. The permission
+         *        is still the authority; it is now asked ONCE, of the row. Same
+         *        permission, same admissible callers, one decision.
+         */
+        const body = fn('src/app/actions/admin/_applications.ts', '_editApplicationAction');
 
-        expect(src).toContain('const isAuthorizedSession = hasAdminPermission(roles, "users:update");');
-        expect(src).toContain('const isAuthorizedLive = hasAdminPermission(liveRoles, "users:update");');
+        //   The permission names the authority, and the list it judges is the ROW's.
+        expect(body).toMatch(
+            /hasAdminPermission\(\s*await liveRolesForDoor\([^)]*\)\s*,\s*"users:update"\s*\)/,
+        );
+
+        //   Asked ONCE. Two calls here is the fallback shape returning, whatever
+        //   it is named — and the count is the only thing that can say so, since
+        //   both calls would name the right permission.
+        expect({ asks: (body.match(/hasAdminPermission\(/g) ?? []).length }).toEqual({ asks: 1 });
+
+        //   And no role literal forgives the refusal — #365's original subject.
+        expect(body).not.toMatch(/includes\(\s*["']super_admin["']\s*\)/);
+        expect(body).not.toMatch(/includes\(\s*["']admin["']\s*\)/);
+
+        //   Nor does the token decide it any more.
+        expect(body).not.toMatch(/hasAdminPermission\(\s*(?:roles|session[^,]*\.roles)\s*,/);
     });
 
     it('REMOVING THE FALLBACK ADMITS NOBODY LESS — the three permissions already cover it', () => {

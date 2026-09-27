@@ -99,6 +99,16 @@ function actAs(id: string, roles: string[]): void {
         session: { user: { id, roles, email: `${id}@example.com`, name: id } },
         error: null,
     }));
+
+    /*
+     *   #963 — the WAVE admin doors read the caller's ROW now, not the roles on the
+     *   session, so establishing an administrator means putting the roles where the
+     *   door looks. Seeded first, so a test that wants the row to DISAGREE with the
+     *   token can still override it with its own seed afterwards.
+     */
+    store.seed(COLLECTIONS.USERS, id, {
+        ...(store.get(COLLECTIONS.USERS, id) ?? {}), roles, email: `${id}@example.com`,
+    });
 }
 
 beforeEach(() => {

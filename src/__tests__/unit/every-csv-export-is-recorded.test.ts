@@ -172,6 +172,15 @@ describe('#309 — the recording action, executed', () => {
             session: { user: { id: ADMIN, email: 'a@e.com', roles: ['super_admin'] } },
             error: null,
         }));
+        /*
+         *   #963 — recordDataExportAction's door reads the caller's ROW now, not the
+         *   roles on the session, so the session above is no longer enough to make
+         *   this caller an administrator. Seeded rather than mocked: the sibling
+         *   describe below already seeds this same row, the fake db is right here,
+         *   and a module mock would have answered from the session — which is the
+         *   one thing the door deliberately stopped doing.
+         */
+        store.seed(COLLECTIONS.USERS, ADMIN, { roles: ['super_admin'], email: 'a@e.com' });
     });
 
     const record = async (dataset: string, details?: any) =>

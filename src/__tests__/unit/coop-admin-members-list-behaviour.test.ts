@@ -156,6 +156,8 @@ function seedMemberUser(id: string, extra: Record<string, unknown> = {}): void {
 const ids = (res: any) => (res.data as any[]).map((m) => m.id);
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+
 describe('getAllMembersAction', () => {
     const all = async (options?: any) =>
         (await (await actions()).getAllMembersAction(options)) as any;
@@ -250,9 +252,27 @@ describe('getAllMembersAction', () => {
     });
 
     it('a scoped admin sees only their own cooperative', async () => {
+        /*
+         *   #963 THE ROW SAID `admin` AND THE TEST NAME SAID SCOPED, AND ONLY THE
+         *        TOKEN BEING TRUSTED KEPT THE TWO FROM MEETING.
+         *
+         *        The fixture seeded roles: ['cooperative_admin', 'admin'] while the
+         *        session carried ['cooperative_admin'] alone. This action's gate used
+         *        to judge the SESSION, so getAdminScope was handed the narrow list,
+         *        returned 'coop-a', and the assertion passed. Now the gate reads the
+         *        row, getAdminScope sees `admin`, short-circuits to null — the
+         *        behaviour the sibling test below pins deliberately — and a test
+         *        called "sees only their own cooperative" got both cooperatives.
+         *
+         *        The fixture was wrong, not the fix: a scoped administrator is one
+         *        who is NOT a platform admin. The disagreement between token and row
+         *        had been hiding a fixture that contradicted its own name. Second
+         *        instance of this exact shape; the first was in
+         *        cooperative-admin-reports-behaviour.
+         */
         actAs('coop-admin', ['cooperative_admin']);
         store.seed(COLLECTIONS.USERS, 'coop-admin', {
-            roles: ['cooperative_admin', 'admin'], cooperativeId: 'coop-a',
+            roles: ['cooperative_admin'], cooperativeId: 'coop-a',
         });
         seedMember('mine', { cooperativeId: 'coop-a' });
         seedMember('theirs', { cooperativeId: 'coop-b' });

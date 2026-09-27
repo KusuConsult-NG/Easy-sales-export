@@ -2,6 +2,7 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
 // #528 The rule that validates the dataset and writes the row lives in
@@ -81,7 +82,7 @@ async function _recordDataExportAction(
         }
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

@@ -2,6 +2,7 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { analyticsService } from "@/services";
 
 
@@ -79,7 +80,7 @@ export async function getDashboardStatsAction(options?: {
     const sessionResult = await requireSession();
     if (!sessionResult.session) return null;
     const { session } = sessionResult;
-    if (!isAdmin(session.user.roles)) {
+    if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
         return null;
     }
 
@@ -124,7 +125,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     }
     const { session } = sessionResult;
 
-    if (!isAdmin(session.user.roles)) {
+    if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
         return {
             success: false,
             error: "You do not have admin access to view financial data.",
@@ -160,7 +161,7 @@ export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistra
     const sessionResult = await requireSession();
     if (!sessionResult.session) throw new Error("Unauthorized");
     const { session } = sessionResult;
-    if (!isAdmin(session.user.roles)) {
+    if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
         throw new Error("Unauthorized");
     }
     return analyticsService.getModuleRegistrationStats();

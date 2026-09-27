@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session-guard";
 import { requireAdmin } from "@/lib/require-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 // #535 One rule for who may see a member's bank details and ID papers.
 import { mayRevealMemberPii } from "@/lib/member-pii-visibility";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -45,7 +46,7 @@ async function _getWaveApplicationsAction(): Promise<
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -603,7 +604,7 @@ async function _getStandardWaveApplicationsAction(options: {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
-        if (!isAdmin(session.user.roles)) {
+        if (!isAdmin(await liveRolesForDoor(session.user?.id))) {
             return { success: false as const, error: "Unauthorized" };
         }
 

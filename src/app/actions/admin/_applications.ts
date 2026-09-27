@@ -11,6 +11,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { liveRolesForDoor } from "@/lib/live-door-roles";
 import { z } from "zod";
 import { nationalIdField } from "@/lib/kyc-validators";
 import { nubanAccountNumber } from "@/lib/validations/shared";
@@ -130,20 +131,33 @@ async function _editApplicationAction(params: {
             return { error: "Unauthorized: admin or users:update role required", success: false as const };
         }
 
-        let roles = session.user.roles;
-        // #365. The two role literals were redundant — users:update is held by
-        // super_admin and admin and nobody else — and they meant the matrix
-        // could not revoke this. The permission is the authority.
-        const isAuthorizedSession = hasAdminPermission(roles, "users:update");
-        
-        if (!isAuthorizedSession) {
-            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const liveRoles = liveUserDoc.data()?.roles;
-            const isAuthorizedLive = hasAdminPermission(liveRoles, "users:update");
-            if (!isAuthorizedLive) {
-                return { error: "Unauthorized: admin or users:update role required", success: false as const };
-            }
-            roles = liveRoles;
+        /*
+         *   #365. The two role literals were redundant — users:update is held by
+         *   super_admin and admin and nobody else — and they meant the matrix
+         *   could not revoke this. The permission is the authority.
+         *
+         *   #963 AND THIS WAS THE LAST STALE-SESSION FALLBACK IN THE TREE, IN THE
+         *        ONE SPELLING THE INSTRUMENT THAT COUNTS THEM COULD NOT SEE.
+         *
+         *        It read:
+         *
+         *            const isAuthorizedSession = hasAdminPermission(roles, "users:update");
+         *            if (!isAuthorizedSession) { ...read the row, ask again... }
+         *
+         *        Same shape as the nine before it — the row is consulted ONLY when
+         *        the token is too NARROW, so a revoked admin whose token still
+         *        names the role sails through on the token and the row is never
+         *        read in the one case the pattern exists for. The difference is
+         *        that the others tested the call inline, `if (!hasAdminPermission(
+         *        roles, …))`, and this one bound it to a name first. The regex in
+         *        admin-permission-gates required the inline form, so this file was
+         *        counted by variable name and never checked by the mismatch test.
+         *
+         *        No width change: the row is read unconditionally now and asked
+         *        the SAME permission it always asked.
+         */
+        if (!hasAdminPermission(await liveRolesForDoor(session.user?.id), "users:update")) {
+            return { error: "Unauthorized: admin or users:update role required", success: false as const };
         }
 
         const { collection: collectionName, docId, fields, editNote } = params;
