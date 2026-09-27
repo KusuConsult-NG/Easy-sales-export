@@ -323,8 +323,32 @@ describe('the backfill for rows that predate both fields', () => {
     });
 
     it('and never overwriting a goal somebody set by hand', () => {
-        expect(source('scripts/backfill-export-funding-goals.ts'))
-            .toContain('Never overwritten: an admin may have set this by hand.');
+        /*
+         *   #967 THIS PINNED THE COMMENT, AND THE COMMENT MOVED.
+         *
+         *   It asserted the script contained the sentence "Never overwritten: an
+         *   admin may have set this by hand." The decision that sentence describes
+         *   was extracted to planRow so a test could reach it, and this went red on
+         *   a refactor that changed no behaviour at all.
+         *
+         *   Which is the lesson the test DIRECTLY ABOVE already records, about this
+         *   same script: "A test pinned to an implementation detail held the detail
+         *   in place and said nothing about the behaviour." It then asserted the
+         *   behaviour instead. This one kept grepping for prose.
+         *
+         *   So it asserts the rule now, by running it. A hand-set goal comes back
+         *   already-correct — nothing is written — and that is true whatever any
+         *   comment says, or whether one exists.
+         */
+        const { planRow } = require('../../../scripts/export-funding-goal-kind');
+
+        expect(planRow({ windowKind: 'aggregation', targetVolume: 200, slotPrice: 5000, fundingGoal: 750_000 }))
+            .toEqual({ outcome: 'already-correct' });
+
+        //   And the control: the same row WITHOUT a hand-set goal is written, so
+        //   the assertion above is about the goal and not about inertia.
+        expect(planRow({ windowKind: 'aggregation', targetVolume: 200, slotPrice: 5000 }))
+            .toMatchObject({ outcome: 'patch', patch: { fundingGoal: 1_000_000 } });
     });
 });
 

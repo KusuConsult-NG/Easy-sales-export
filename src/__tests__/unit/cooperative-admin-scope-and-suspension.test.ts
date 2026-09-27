@@ -86,7 +86,18 @@ describe('what cooperative access is actually granted by', () => {
         // writing membershipStatus revoked nothing.
         const access = code(MODULE_ACCESS);
 
-        expect(access).toContain('if (hasAppAccess(jwtRoles, app))');
+        /*
+         *   #966 THIS PINNED THE PARAMETER'S OLD NAME, WHICH WAS RENAMED FOR BEING
+         *        WRONG — it was `jwtRoles`, and no live caller has ever passed raw
+         *        JWT roles to it.
+         *
+         *   The premise this test states is that cooperative access is granted by
+         *   the ROLE or the registration status, either alone. That does not depend
+         *   on what the roles parameter is called, so it is asserted on the shape
+         *   instead: Layer 1 gates on the caller's roles via hasAppAccess, and the
+         *   status list is the other half.
+         */
+        expect(access).toMatch(/if \(hasAppAccess\(\s*[A-Za-z_$][\w$]*\s*,\s*app\s*\)\)/);
         expect(access).toContain('const VALID_STATUSES = ["approved", "active"];');
     });
 

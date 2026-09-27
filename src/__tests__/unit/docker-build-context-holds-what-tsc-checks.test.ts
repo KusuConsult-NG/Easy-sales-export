@@ -177,7 +177,7 @@ describe('#402 — the build context holds every file the type-check compiles', 
         expect(violations(excludedRoots('.railwayignore'))).toEqual([]);
     });
 
-    it('and the checker names the eight files that actually broke, when asked to', () => {
+    it('and the checker names EVERY file that reaches into scripts/, when asked to', () => {
         /**
          * THE CONTROL. Run against the configuration that failed — scripts/ and
          * e2e/ dropped — the checker must produce the list of files that would
@@ -195,6 +195,20 @@ describe('#402 — the build context holds every file the type-check compiles', 
          * Growing this list is expected when a new test reaches into scripts/.
          * What must not happen is an entry DISAPPEARING, which would mean the
          * checker had stopped seeing a real import.
+         *
+         *   #967 THE TENTH, AND THE NAME STOPPED COUNTING.
+         *
+         *   the-write-nobody-had-executed imports the export backfill's row
+         *   decision, for the same reason its two siblings import that script's
+         *   arithmetic: the owner is asked to run it with --apply against
+         *   production and the decision about which rows get written was
+         *   unreachable until it was extracted.
+         *
+         *   The title said "the eight files that actually broke" and the list has
+         *   held nine since #427 — the note above already had to explain that
+         *   drift once. A count in a test name that grows by design will go stale
+         *   every time, so the name now states the PROPERTY and the original eight
+         *   stay recorded here, where the history belongs.
          */
         expect(violations(new Set(), ['scripts', 'e2e'])).toEqual([
             'playwright.config.ts',
@@ -202,6 +216,7 @@ describe('#402 — the build context holds every file the type-check compiles', 
             'src/__tests__/unit/export-window-kind-and-goal.test.ts',
             'src/__tests__/unit/maintenance-scripts-are-inside-the-gates.test.ts',
             'src/__tests__/unit/maintenance-scripts-do-not-overstate.test.ts',
+            'src/__tests__/unit/the-write-nobody-had-executed.test.ts',
             'src/scripts/backfill_academy_plans.ts',
             'src/scripts/backfill_versions.ts',
             'src/scripts/mark-unpaid.ts',

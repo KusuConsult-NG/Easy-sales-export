@@ -61,7 +61,7 @@ import { createClient } from '@supabase/supabase-js';
 import { existsSync } from 'fs';
 import { config as loadEnv } from 'dotenv';
 import { isApply, modeBanner, targetHost } from './_maintenance-guard';
-import { kindOf, goalOf } from './export-funding-goal-kind';
+import { planRow } from './export-funding-goal-kind';
 
 if (existsSync('.env.development.local')) loadEnv({ path: '.env.development.local' });
 loadEnv({ path: '.env.local' });
@@ -131,30 +131,32 @@ async function readWindows(): Promise<void> {
         for (const row of data) {
             const raw = (row.raw_data ?? {}) as Record<string, any>;
             const id = String(row.id);
-            const kind = kindOf(raw);
 
-            const patch: Record<string, unknown> = {};
-            if (raw.windowKind !== kind) patch.windowKind = kind;
+            /*
+             *   #967 THE DECISION MOVED TO export-funding-goal-kind, UNCHANGED.
+             *
+             *   It used to be inlined here, which made it unreachable: this
+             *   module creates its Supabase client at import time, so no test
+             *   could import it to exercise the branches — and
+             *   maintenance-scripts-do-not-overstate already recorded this script
+             *   as one of three nothing executes. The owner is asked to run this
+             *   with --apply against production, so the part that decides WHICH
+             *   rows get written is the part that most wanted a test.
+             *
+             *   planRow returns the same four outcomes in the same order.
+             *   the-write-nobody-had-executed drives every one of them.
+             */
+            const plan = planRow(raw);
 
-            let goal: number | null = null;
-            if (kind === 'aggregation') {
-                const existing = Number(raw.fundingGoal);
-                if (Number.isFinite(existing) && existing > 0) {
-                    // Never overwritten: an admin may have set this by hand.
-                    if (Object.keys(patch).length === 0) { alreadyDone++; continue; }
-                } else {
-                    goal = goalOf(raw);
-                    if (goal === null) {
-                        skipped.push({ id, reason: 'aggregation window with no usable targetVolume x slotPrice' });
-                        if (Object.keys(patch).length === 0) continue;
-                    } else {
-                        patch.fundingGoal = goal;
-                    }
-                }
-            }
+            if (plan.outcome === 'already-correct') { alreadyDone++; continue; }
 
-            if (Object.keys(patch).length === 0) { alreadyDone++; continue; }
-            planned.push({ id, kind, goal, patch });
+            if (plan.outcome === 'skip') { skipped.push({ id, reason: plan.reason }); continue; }
+
+            //   A row can be reported unusable AND still carry a kind correction.
+            //   See planRow's note: the goal is what could not be computed; the
+            //   kind is a separate fact that could.
+            if (plan.skipReason) skipped.push({ id, reason: plan.skipReason });
+            planned.push({ id, kind: plan.kind, goal: plan.goal, patch: plan.patch });
         }
 
         if (data.length < PAGE) break;

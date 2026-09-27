@@ -82,11 +82,33 @@ const APP_TO_ROLES: Partial<Record<AppIdentifier, string[]>> = {
  */
 export async function checkModuleAccess(
     userId: string,
-    jwtRoles: UserRole[],
+    /**
+     *   #966 THIS PARAMETER WAS NAMED FOR A PROVENANCE IT NEVER HAD, AND THE NAME
+     *        COST A WHOLE AUDIT PASS.
+     *
+     *   It was called jwtRoles. Every one of the eighteen callers passes
+     *   `session.user.roles` from a session obtained through requireSession or
+     *   requireHubRegistration — and #965 measured that requireSession force-syncs
+     *   those roles from the caller's ROW before returning. So it has never, at any
+     *   live call site, received the raw JWT claims its name promised.
+     *
+     *   #951's ledger recorded the isAdmin call below as the one door no resolution
+     *   hop could reach, and therefore as the single genuine remaining exposure in
+     *   the tree — which is the conclusion any reader draws from that name. A batch
+     *   was planned to convert it. What was actually reaching an authorisation
+     *   predicate from a raw session was app/wave/page.tsx, and this function could
+     *   not have told anyone: by the time roles arrive here, their provenance is
+     *   gone.
+     *
+     *   Hence callerRoles, which says what it is rather than where a reader might
+     *   guess it came from. Provenance is the CALLER's to get right, and
+     *   no-gate-decides-from-a-raw-session is what holds them to it now.
+     */
+    callerRoles: UserRole[],
     app: AppIdentifier
 ): Promise<boolean> {
     // ── Layer 1: JWT check (fast, no DB) ─────────────────────────────────────
-    if (hasAppAccess(jwtRoles, app)) {
+    if (hasAppAccess(callerRoles, app)) {
         /*
          *   AND ACADEMY CANNOT USE THIS FAST PATH, which is the whole reason
          *   the payment gate below is worth anything.
@@ -122,7 +144,7 @@ export async function checkModuleAccess(
          *   module admin is carved out with them rather than discovered
          *   locked out.
          */
-        if (app !== "academy" || isAdmin(jwtRoles)) {
+        if (app !== "academy" || isAdmin(callerRoles)) {
             return true;
         }
     }
