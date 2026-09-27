@@ -195,9 +195,44 @@ describe('#747 — and every reported user figure goes through it', () => {
         const src = code('src/services/analytics.service.ts');
 
         expect(src).toContain('countLivePeople(db.collection(COLLECTIONS.USERS))');
-        //   AND IT IS THE TOTAL, not some other figure that happens to call it:
-        //   the value reaches the returned `totalUsers`.
-        expect(src).toContain('totalUsers: await totalUsersPromise');
+
+        /**
+         *   #960 AND THIS IS THE SECOND TIME THIS LINE HAS PINNED A SPELLING
+         *        RATHER THAN THE PROPERTY.
+         *
+         *   #905 loosened it once already — the note above says so in its own
+         *   words, "pinning it there was pinning the wrong thing" — and then
+         *   re-pinned a different exact string, `totalUsers: await
+         *   totalUsersPromise`. That broke again the moment the count had to be
+         *   SETTLED rather than awaited bare, which is the fix for the owner's
+         *   dashboard reading:
+         *
+         *       Total Users      Unavailable   Could not be read
+         *       Total Revenue    Unavailable   Could not reach Paystack or the
+         *                                      database
+         *
+         *   Awaiting the count inside the return object meant a count timing out
+         *   threw the whole method, and the caller — unable to tell which read
+         *   failed — discarded a revenue figure it had successfully read and
+         *   blamed a payment provider for a `users` timeout.
+         *
+         *   What #747 actually cares about is that the figure reported as
+         *   `totalUsers` is the one countLivePeople produced, and not some other
+         *   count. So the CHAIN is followed by name — whatever the await is bound
+         *   to is what `totalUsers` must read — which holds however the settling
+         *   is spelled and still fails if somebody returns a different figure.
+         *
+         *   The stronger guarantee is behavioural and lives in
+         *   one-count-failed-and-paystack-got-the-blame: it mocks countLivePeople
+         *   to return 42,003 and asserts the dashboard reports 42,003. A source
+         *   grep cannot do that, which is why it is named here rather than
+         *   reimplemented.
+         */
+        expect(src).toMatch(/totalUsersPromise[\s\S]{0,160}?countLivePeople\(/);
+
+        const awaited = src.match(/const (\w+)\s*=\s*await totalUsersPromise/);
+        expect(awaited).not.toBeNull();
+        expect(src).toMatch(new RegExp(`totalUsers:\\s*${awaited![1]}\\b`));
         //   And the raw count this finding replaced has not crept back.
         expect(src).not.toMatch(/db\.collection\(COLLECTIONS\.USERS\)\.count\(\)/);
     });

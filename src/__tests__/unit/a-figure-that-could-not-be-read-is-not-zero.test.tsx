@@ -348,7 +348,35 @@ describe('#753 — and the service is what names them', () => {
          *   Measured, not guessed — a first draft of the original test guessed
          *   6 and 2.
          */
-        expect({ viaHelper, viaPush }).toEqual({ viaHelper: 16, viaPush: 2 });
+        /*
+         *   #960 viaPush IS 3 NOW, AND THE THIRD ONE IS THE OPPOSITE OF THE
+         *        OTHER TWO — which is the whole point of the change that added it.
+         *
+         *   The note above explains 2 as "the metrics branches, where a single
+         *   rejection blanks several figures at once and the helper does not
+         *   fit". That branch is why the owner's dashboard read:
+         *
+         *       Total Users     Unavailable   Could not be read
+         *       Total Revenue   Unavailable   Could not reach Paystack or the
+         *                                     database
+         *
+         *   getPlatformMetrics awaited its user count INSIDE THE RETURN OBJECT,
+         *   uncaught, so a count timing out threw the whole method and the
+         *   rejected branch — unable to tell which read failed — zeroed the
+         *   revenue that had just been read successfully and blamed Paystack for
+         *   it.
+         *
+         *   The third push is in the FULFILLED branch and names ONE figure:
+         *   getPlatformMetrics now settles the count itself and reports
+         *   `totalUsersAvailable` beside `revenueAvailable`, so the two figures
+         *   it returns fail independently. It is a push rather than `settled(…)`
+         *   because what arrives is a boolean flag, not a PromiseSettledResult.
+         *
+         *   The blanket branch below it is unchanged and still right: it covers a
+         *   rejection that really does take everything, and after this change
+         *   that is the only way to reach it.
+         */
+        expect({ viaHelper, viaPush }).toEqual({ viaHelper: 16, viaPush: 3 });
 
         /*
          *   And the one definition really is one: the declaration plus its call
@@ -367,7 +395,27 @@ describe('#753 — and the service is what names them', () => {
          *   guard — see eight-timeouts-became-eight-zeros, which fails if any
          *   of the eight goes back to `?? 0`.
          */
-        expect([...src.matchAll(/figureReader\(/g)]).toHaveLength(4);
+        /*
+         *   #960 FIVE, AND THE FIFTH EXPOSED A BLIND SPOT IN THE ASSERTION ABOVE.
+         *
+         *   The fifth is getPlatformHealthMetrics, which was `Promise.all` — so
+         *   one failing read returned THREE unavailable figures, `activeEscrows`
+         *   among them, which is a different collection and had been read fine. A
+         *   `users` count timing out has nothing to say about how many escrows
+         *   hold money. It is allSettled and per-figure now.
+         *
+         *   AND `viaHelper` DID NOT MOVE FOR IT. That count matches `= settled(`
+         *   — one binding NAME — and this reader is bound to `health`. So a second
+         *   reader under any other name is invisible to it, and a ledger that
+         *   cannot see a new instance of what it counts is the failure this audit
+         *   keeps finding in its own instruments.
+         *
+         *   Counting `figureReader(` instead of a binding name is the version that
+         *   cannot be evaded by choosing a different variable, which is why this
+         *   line is now the one carrying the weight and `viaHelper` is a detail
+         *   about one of the readers.
+         */
+        expect([...src.matchAll(/figureReader\(/g)]).toHaveLength(5);
         expect([...src.matchAll(/into\.push\(/g)]).toHaveLength(1);
     });
 

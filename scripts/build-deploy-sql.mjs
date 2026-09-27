@@ -504,6 +504,32 @@ const EXPECTED = [
              "landing before it is slow rather than broken.",
     },
     {
+        n: "053",
+        why: "idx_users_deleted_true and idx_users_migrated_to_present — the " +
+             "two scans behind 'Total Users — Unavailable' on the admin " +
+             "dashboard, reported by the owner as 'we fixed this and its " +
+             "repeating'. It is repeating: the-two-user-scans-that-timed-out " +
+             "fixed three sites of this exact shape (a filter on a key inside " +
+             "raw_data, which is not a native column, so Postgres reads every " +
+             "row of a 42,845-row / 106 MB table) and lib/user-population " +
+             "countLivePeople has two more that run on EVERY dashboard load. " +
+             "#747/#804 added them afterwards while building the tombstone " +
+             "subtraction. Measured on a 42,845-row seed with all 51 prior " +
+             "migrations applied: the erased count went Seq Scan 39.8 ms -> " +
+             "Index Only Scan 1.0 ms, and the pointer read Seq Scan 33.9 ms " +
+             "-> Bitmap Index Scan 0.6 ms. The second one was scanning even " +
+             "though 042 already indexes that field, because 042 is NOT " +
+             "partial and Postgres will not use a plain btree for `<>`; a " +
+             "PARTIAL index is used, since `<> ''` is strict and therefore " +
+             "implies the index's IS NOT NULL predicate. Both are 16 kB " +
+             "against 042's 296 kB because both predicates match a few " +
+             "hundred of the 42,845. Changes no row and is not required for " +
+             "correctness, so a deploy landing before it is slow rather than " +
+             "broken — and the application half of this finding ships " +
+             "independently, so the dashboard degrades per figure instead of " +
+             "blaming Paystack for a users-table timeout.",
+    },
+    {
         n: "052",
         why: "missing_schema_objects — the function that answers 'is the " +
              "schema this code was written against the schema it is running " +
