@@ -48,6 +48,13 @@ let client: Client | null = null;
 const TAG = 'pg904b';
 
 const MIGRATION_042 = 'supabase/migrations/042_users_migrated_to_index.sql';
+/*
+ *   #960 — 053 puts a SECOND index on the same expression
+ *   (`idx_users_migrated_to_present`, partial on IS NOT NULL) for
+ *   countLivePeople's `<> ''` read. The control below has to drop both to show
+ *   a scan, and it has to restore both.
+ */
+const MIGRATION_053 = 'supabase/migrations/053_live_people_count_indexes.sql';
 
 const sql = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
 
@@ -117,7 +124,34 @@ dbDescribe('#904 — 042 makes the backward pointer search a keyed lookup', () =
     it('THE NEW HALF: `_migratedTo` uses an index, not a scan', async () => {
         const plan = await planFor('_migratedTo');
 
-        expect(plan).toContain('idx_users_migrated_to');
+        /*
+         *   #960 NOT `toContain`, AND NOT 042's NAME EITHER. Two corrections in
+         *        one line, and measuring is what separated them.
+         *
+         *   `toContain('idx_users_migrated_to')` also matches
+         *   `idx_users_migrated_to_present`, which 053 adds on the same
+         *   expression — so this assertion would have passed with 042's index
+         *   dropped entirely, the exact thing it exists to catch. That is M46's
+         *   rule in a new place: never assert an identifier with toContain.
+         *
+         *   Tightening it to 042's exact name then failed, for a reason worth
+         *   recording rather than working around: the planner now picks the
+         *   PARTIAL index for this equality lookup, because it is far smaller —
+         *
+         *       Index Scan using idx_users_migrated_to_present on users
+         *
+         *   — and that is a perfectly good keyed lookup. What #904 is about is
+         *   that this search is KEYED rather than a scan; which of two valid
+         *   indexes the planner reaches for is its business. So the assertion
+         *   names either, exactly, and the control below is what proves an index
+         *   is doing the work.
+         *
+         *   042 is NOT thereby redundant. countLivePeople's `<> ''` read needs
+         *   its statistics to choose the partial index at all — three
+         *   configurations measured in 053's header. It has simply stopped being
+         *   the index that serves THIS query.
+         */
+        expect(plan).toMatch(/\b(idx_users_migrated_to|idx_users_migrated_to_present)\b/);
         expect(plan).not.toContain('Seq Scan');
     }, 300_000);
 
@@ -134,13 +168,37 @@ dbDescribe('#904 — 042 makes the backward pointer search a keyed lookup', () =
          *   rebuilt inside one test so the suite leaves the schema as it found
          *   it.
          */
+        /*
+         *   #960 IT TOOK TWO DROPS AFTER 053, AND FINDING THAT OUT IS THE POINT
+         *        OF HAVING A CONTROL AT ALL.
+         *
+         *   This dropped `idx_users_migrated_to` alone and asserted a scan. 053
+         *   adds `idx_users_migrated_to_present` — partial, on the SAME
+         *   expression — so after that migration the equality lookup was served
+         *   by the surviving index and the plan came back:
+         *
+         *       Bitmap Index Scan on idx_users_migrated_to_present
+         *         Index Cond: ((raw_data ->> '_migratedTo') = 'pg904b-u4001')
+         *
+         *   A control that no longer degrades proves nothing about the index it
+         *   was written for, so both come out and both go back.
+         *
+         *   AND IT SAYS SOMETHING TRUE ABOUT THE TWO INDEXES: the partial one is
+         *   enough for an EQUALITY lookup on its own. It is not enough for
+         *   countLivePeople's `<> ''` read, which needs 042's statistics to be
+         *   chosen at all — measured three ways in 053's header. So 042 stays
+         *   load-bearing for that query while being redundant for this one, and
+         *   neither fact makes the other wrong.
+         */
         await client!.query('drop index if exists idx_users_migrated_to');
+        await client!.query('drop index if exists idx_users_migrated_to_present');
         try {
             expect(await planFor('_migratedTo')).toContain('Seq Scan');
         } finally {
             await client!.query(sql(MIGRATION_042));
+            await client!.query(sql(MIGRATION_053));
         }
-        expect(await planFor('_migratedTo')).toContain('idx_users_migrated_to');
+        expect(await planFor('_migratedTo')).toMatch(/\bidx_users_migrated_to\b/);
     }, 300_000);
 
     it('AND THE INDEX IS VALID — one that exists is not one that works', async () => {
