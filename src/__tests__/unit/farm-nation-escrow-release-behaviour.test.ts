@@ -351,6 +351,16 @@ describe('getFarmNationTransactionsAction', () => {
 
     it('returns an empty list rather than failing', async () => {
         store.clear();
+        /*
+         *   #963 — store.clear() empties the WHOLE fake db, the caller's own user row
+         *   included, and this action's door reads that row now. So without this the
+         *   test stopped being about an empty database and became about an
+         *   unauthorised caller: it got Unauthorized, not [].
+         *
+         *   Re-establishing the administrator keeps the subject where it was — no
+         *   transactions must read as an empty list, not as a failure.
+         */
+        actAs(ADMIN, ['admin']);
         expect(await list()).toMatchObject({ success: true, data: [] });
     });
 });

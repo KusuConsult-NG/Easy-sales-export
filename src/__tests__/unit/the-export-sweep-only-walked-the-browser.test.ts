@@ -360,6 +360,23 @@ describe('#528 — one rule, not four copies of it', () => {
     const write = async (entry: any) =>
         (await import('@/lib/data-export-record')).writeDataExportRecord(entry);
 
+    beforeEach(() => {
+        /*
+         *   #963 — the LAST test here drives recordDataExportAction, whose door reads
+         *   the caller's ROW now rather than the roles on the session, so the caller
+         *   needs a row that carries them.
+         *
+         *   Seeded HERE and not in the shared beforeEach, which is where it went
+         *   first: COLLECTIONS.USERS is the population the platform-users export
+         *   counts, so an admin row added for every test made that export find three
+         *   people where its fixture says two. The door needed a row; the export
+         *   needed its population left alone. Scoping the seed to the describe that
+         *   drives the door satisfies both, rather than editing the other test's
+         *   expectation to absorb it.
+         */
+        store.seed(COLLECTIONS.USERS, ADMIN, { roles: ['super_admin'], email: 'admin@example.com' });
+    });
+
     it('AN UNKNOWN DATASET IS REFUSED RATHER THAN FILED', async () => {
         //   The rule logAcademyExportAction had to be fixed for once already:
         //   "A record anybody can write to is not evidence."

@@ -138,6 +138,25 @@ async function release() {
     return releaseFarmNationEscrowAction(TXN);
 }
 
+jest.mock('@/lib/live-door-roles', () =>
+    /*
+     *   #963 — the gate this suite drives reads the caller's ROW now, not the roles
+     *   on the session. These tests establish an administrator by setting roles on
+     *   the session, so the row is kept in agreement with it: the ordinary case, a
+     *   session minted after the grant, and the provenance of the roles is not this
+     *   suite's subject.
+     *
+     *   Mocked rather than seeded because this suite has no fake db — it drives the
+     *   global firestore recorder, where the row a doc().get() returns is whatever
+     *   the recorder is set to return and not something a test can put there.
+     *
+     *   NOT COVERAGE OF WHAT THE CONVERSION FIXED: a mock answering from the session
+     *   cannot show that production does not. That property is measured in
+     *   a-door-that-read-the-row-without-charging-the-owner.
+     */
+    require('@/lib/testing/live-door-roles-mock').liveRolesForDoorMock());
+
+
 describe('releaseFarmNationEscrowAction — nothing is claimed until it can be finished', () => {
     beforeEach(() => {
         jest.clearAllMocks();
