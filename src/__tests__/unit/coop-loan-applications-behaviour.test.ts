@@ -71,6 +71,8 @@ beforeEach(() => {
     // row whatsoever could file an application for any amount they cared to
     // claim savings for. Nine tests in this file passed on that shape.
     store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
+        /* #969 a membership old enough to clear the three-month rule. A real member row always carries createdAt, and approved ones approvedAt; seeding neither made these fixtures refuse on "start date could not be read" — right for the fixture, wrong for what is being measured. */
+        approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
         userId: MEMBER, savingsBalance: SAVINGS, membershipStatus: 'active',
     });
 });

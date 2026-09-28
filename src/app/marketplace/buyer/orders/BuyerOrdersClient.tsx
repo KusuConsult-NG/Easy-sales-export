@@ -11,7 +11,7 @@ import { Package, Clock, CheckCircle, XCircle, Search, Eye, AlertCircle, Loader2
 import Link from "next/link";
 import { getBuyerOrdersAction, confirmOrderReceiptAction, cancelOrderAction } from "@/app/actions/marketplace";
 import { useServerSeed } from "@/hooks/useServerSeed";
-import { CONFIRM_RECEIPT_PROMPT, CONFIRM_RECEIPT_SUCCESS } from "@/lib/escrow-release-copy";
+import { CONFIRM_RECEIPT_PROMPT, CONFIRM_RECEIPT_SUCCESS, ESCROW_HELD_UNTIL_RELEASE } from "@/lib/escrow-release-copy";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
@@ -190,7 +190,10 @@ export default function BuyerOrdersClient({ initial = null }: {
                         My Orders
                     </h1>
                     <p className="text-slate-600">
-                        Track and manage all your marketplace orders. All payments are held in <span className="font-bold text-primary">Escrow</span> until you confirm receipt.
+                        {/* #968 "until you confirm receipt" promised that inaction held the
+                            money. After the five-day dispatch release it does not, so the
+                            sentence comes from the module that owns both deadlines. */}
+                        Track and manage all your marketplace orders. {ESCROW_HELD_UNTIL_RELEASE}
                     </p>
                 </div>
             </div>

@@ -290,10 +290,13 @@ export async function submitLoanApplicationAction(formData: {
                 return acc + (data.amount || 0);
             }, 0);
 
+            //   #969 memberRow.data is the same row savingsBalance was read
+            //   from at line 145, so the duration check costs no extra read.
             const eligibility = isEligibleForLoan(
                 savingsBalance,
                 formData.amount,
-                currentLoanBalance
+                currentLoanBalance,
+                memberRow.data,
             );
 
             if (!eligibility.eligible) {

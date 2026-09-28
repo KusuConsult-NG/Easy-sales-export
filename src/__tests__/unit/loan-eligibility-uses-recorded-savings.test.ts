@@ -115,6 +115,8 @@ function filed(): Record<string, unknown>[] {
 /** A membership row keyed the way most writers key it. */
 function seedMember(data: Record<string, unknown> = {}) {
     store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
+        /* #969 a membership old enough to clear the three-month rule. A real member row always carries createdAt, and approved ones approvedAt; seeding neither made these fixtures refuse on "start date could not be read" — right for the fixture, wrong for what is being measured. */
+        approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
         userId: MEMBER, savingsBalance: SAVINGS, membershipStatus: 'active', ...data,
     });
 }
@@ -202,6 +204,8 @@ describe('#345 — and the member is found however their row is keyed', () => {
         // joinCooperativeAction writes exactly this: `membershipsRef.doc()`.
         // A doc-id read misses it, and the miss reads as "not a member".
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'auto-generated-abc123', {
+        /* #969 a membership old enough to clear the three-month rule. A real member row always carries createdAt, and approved ones approvedAt; seeding neither made these fixtures refuse on "start date could not be read" — right for the fixture, wrong for what is being measured. */
+        approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
             userId: MEMBER, savingsBalance: SAVINGS, membershipStatus: 'active',
         });
 
@@ -215,6 +219,8 @@ describe('#345 — and the member is found however their row is keyed', () => {
         // The other half. getCooperativeApplicationAction heals exactly this
         // shape on the fly, which is how we know such rows exist.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
+        /* #969 a membership old enough to clear the three-month rule. A real member row always carries createdAt, and approved ones approvedAt; seeding neither made these fixtures refuse on "start date could not be read" — right for the fixture, wrong for what is being measured. */
+        approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
             savingsBalance: SAVINGS, membershipStatus: 'active',
         });
 
@@ -225,6 +231,8 @@ describe('#345 — and the member is found however their row is keyed', () => {
         // The lookup's fallback is a query. A query that filtered on nothing
         // would return the first row in the collection and admit anybody.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'somebody-else', {
+        /* #969 a membership old enough to clear the three-month rule. A real member row always carries createdAt, and approved ones approvedAt; seeding neither made these fixtures refuse on "start date could not be read" — right for the fixture, wrong for what is being measured. */
+        approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
             userId: 'somebody-else', savingsBalance: 5_000_000, membershipStatus: 'active',
         });
 
@@ -240,6 +248,8 @@ describe('#345 — and the member is found however their row is keyed', () => {
         // the same money `balance`. Reading `savingsBalance` alone scored such
         // a member at zero and refused every loan they were entitled to.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
+        /* #969 a membership old enough to clear the three-month rule. A real member row always carries createdAt, and approved ones approvedAt; seeding neither made these fixtures refuse on "start date could not be read" — right for the fixture, wrong for what is being measured. */
+        approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
             userId: MEMBER, balance: 100_000, membershipStatus: 'active',
         });
 

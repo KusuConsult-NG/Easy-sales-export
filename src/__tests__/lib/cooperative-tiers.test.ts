@@ -12,6 +12,20 @@ import {
     COOPERATIVE_TIERS,
 } from '@/lib/cooperative-tiers';
 
+/**
+ *   #969 A MEMBERSHIP OLD ENOUGH TO GET PAST THE DURATION GATE.
+ *
+ *   isEligibleForLoan now requires three months of active membership, and checks
+ *   it BEFORE the amount rules — so without this, every assertion below about a
+ *   contribution floor or a borrowing cap would come back refused for the wrong
+ *   reason. The ones expecting `false` would still pass, while measuring nothing.
+ *
+ *   The new parameter is REQUIRED rather than optional precisely so that this file
+ *   had to be visited and this decision made deliberately. See
+ *   lib/cooperative-membership-age.
+ */
+const LONG_STANDING_MEMBER = { approvedAt: new Date(Date.now() - 400 * 86_400_000) };
+
 describe('Cooperative Tier System', () => {
     describe('calculateUserTier', () => {
         it('should always return Member tier', () => {
@@ -39,7 +53,7 @@ describe('Cooperative Tier System', () => {
     describe('isEligibleForLoan', () => {
         it('should reject if contribution is below minimum', () => {
             // minContribution is 5000 per COOPERATIVE_TIERS.Member
-            const result = isEligibleForLoan(3000, 10000, 0);
+            const result = isEligibleForLoan(3000, 10000, 0, LONG_STANDING_MEMBER);
             expect(result.eligible).toBe(false);
             expect(result.reason).toContain('Minimum');
         });
@@ -49,27 +63,27 @@ describe('Cooperative Tier System', () => {
         // 3, letting a member borrow six times more than intended.
         it('should reject if requested amount plus active loan exceeds half of savings', () => {
             // 20k saved -> max 10k. 8k requested + 4k outstanding = 12k.
-            const result = isEligibleForLoan(20000, 8000, 4000);
+            const result = isEligibleForLoan(20000, 8000, 4000, LONG_STANDING_MEMBER);
             expect(result.eligible).toBe(false);
             expect(result.reason).toContain('exceeds your maximum limit');
         });
 
         it('should reject a loan above half of savings', () => {
             // 20k saved -> max 10k. Request 15k.
-            const result = isEligibleForLoan(20000, 15000, 0);
+            const result = isEligibleForLoan(20000, 15000, 0, LONG_STANDING_MEMBER);
             expect(result.eligible).toBe(false);
             expect(result.reason).toContain('exceeds your maximum limit');
         });
 
         it('should approve a loan within half of savings', () => {
             // 20k saved -> max 10k. Request 6k.
-            const result = isEligibleForLoan(20000, 6000, 0);
+            const result = isEligibleForLoan(20000, 6000, 0, LONG_STANDING_MEMBER);
             expect(result.eligible).toBe(true);
         });
 
         it('should approve a loan at exactly half of savings', () => {
             // 20k saved -> max exactly 10k.
-            const result = isEligibleForLoan(20000, 10000, 0);
+            const result = isEligibleForLoan(20000, 10000, 0, LONG_STANDING_MEMBER);
             expect(result.eligible).toBe(true);
         });
     });

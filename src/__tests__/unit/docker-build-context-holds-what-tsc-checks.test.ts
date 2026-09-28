@@ -209,6 +209,19 @@ describe('#402 — the build context holds every file the type-check compiles', 
          *   drift once. A count in a test name that grows by design will go stale
          *   every time, so the name now states the PROPERTY and the original eight
          *   stay recorded here, where the history belongs.
+         *
+         *   #968 THE ELEVENTH, AND FOR THE SAME REASON AS THE TENTH.
+         *
+         *   the-backlog-nobody-will-be-paid-from imports the backlog
+         *   classifier out of scripts/. The escrows that predate the five-day
+         *   dispatch release can never be paid automatically, the owner chose to
+         *   report rather than pay them, and the per-row decision behind that
+         *   report needs a production database to reach — so it was extracted to
+         *   be testable, exactly as the export backfill's was.
+         *
+         *   It also pins the two constants that module had to duplicate, since
+         *   scripts/ cannot import through the `@/` alias. That is the check which
+         *   makes the copies safe, and it is the reason this entry exists at all.
          */
         expect(violations(new Set(), ['scripts', 'e2e'])).toEqual([
             'playwright.config.ts',
@@ -216,6 +229,7 @@ describe('#402 — the build context holds every file the type-check compiles', 
             'src/__tests__/unit/export-window-kind-and-goal.test.ts',
             'src/__tests__/unit/maintenance-scripts-are-inside-the-gates.test.ts',
             'src/__tests__/unit/maintenance-scripts-do-not-overstate.test.ts',
+            'src/__tests__/unit/the-backlog-nobody-will-be-paid-from.test.ts',
             'src/__tests__/unit/the-write-nobody-had-executed.test.ts',
             'src/scripts/backfill_academy_plans.ts',
             'src/scripts/backfill_versions.ts',

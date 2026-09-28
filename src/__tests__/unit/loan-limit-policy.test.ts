@@ -76,7 +76,7 @@ const PRODUCT = {
 function membershipSnapshot(savingsBalance: number) {
     return {
         empty: false,
-        docs: [{ id: USER_ID, data: () => ({ userId: USER_ID, savingsBalance, membershipStatus: 'active' }) }],
+        docs: [{ id: USER_ID, data: () => ({ userId: USER_ID, savingsBalance, membershipStatus: 'active', approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(), }) }],
     };
 }
 
@@ -105,7 +105,7 @@ function withSavingsKeyedById(savingsBalance: number) {
         if (key === USER_ID) {
             return Promise.resolve({
                 exists: true, id: USER_ID,
-                data: () => ({ savingsBalance, membershipStatus: 'active' }),
+                data: () => ({ savingsBalance, membershipStatus: 'active', approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(), }),
             });
         }
         if (key === 'cooperative_members') return Promise.resolve({ empty: true, docs: [] });

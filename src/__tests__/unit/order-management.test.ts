@@ -61,8 +61,14 @@ describe('updateOrderStatusAction Unit Tests', () => {
         }));
 
         (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            //   `docs`/`empty` as well as the document shape. #968 made the
+            //   "shipped" branch read the order's escrow rows too, to stamp the
+            //   dispatch time the payout clock runs from — so this handle is now
+            //   read as a query result on BOTH branches, not just "delivered".
+            //   Without them escrowDocs is undefined and the action dies on
+            //   "not iterable", which looks like a refusal rather than a gap.
             exists: true,
-            data: () => mockOrderData,
+            data: () => mockOrderData, docs: [], empty: true,
         }));
 
         const result = await updateOrderStatusAction("order-1", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-1" });
@@ -97,8 +103,14 @@ describe('updateOrderStatusAction Unit Tests', () => {
         }));
 
         (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            //   `docs`/`empty` as well as the document shape. #968 made the
+            //   "shipped" branch read the order's escrow rows too, to stamp the
+            //   dispatch time the payout clock runs from — so this handle is now
+            //   read as a query result on BOTH branches, not just "delivered".
+            //   Without them escrowDocs is undefined and the action dies on
+            //   "not iterable", which looks like a refusal rather than a gap.
             exists: true,
-            data: () => mockOrderData,
+            data: () => mockOrderData, docs: [], empty: true,
         }));
 
         const result = await updateOrderStatusAction("order-2", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-2" });
@@ -166,8 +178,14 @@ describe('updateOrderStatusAction Unit Tests', () => {
         }));
 
         (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            //   `docs`/`empty` as well as the document shape. #968 made the
+            //   "shipped" branch read the order's escrow rows too, to stamp the
+            //   dispatch time the payout clock runs from — so this handle is now
+            //   read as a query result on BOTH branches, not just "delivered".
+            //   Without them escrowDocs is undefined and the action dies on
+            //   "not iterable", which looks like a refusal rather than a gap.
             exists: true,
-            data: () => mockOrderData,
+            data: () => mockOrderData, docs: [], empty: true,
         }));
 
         const result = await updateOrderStatusAction("order-4", "shipped", undefined, { method: "carrier", carrier: "GIG Logistics", trackingNumber: "TRK-ORDER-4" });
@@ -202,8 +220,14 @@ describe('updateOrderStatusAction Unit Tests', () => {
         }));
 
         (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            //   `docs`/`empty` as well as the document shape. #968 made the
+            //   "shipped" branch read the order's escrow rows too, to stamp the
+            //   dispatch time the payout clock runs from — so this handle is now
+            //   read as a query result on BOTH branches, not just "delivered".
+            //   Without them escrowDocs is undefined and the action dies on
+            //   "not iterable", which looks like a refusal rather than a gap.
             exists: true,
-            data: () => mockOrderData,
+            data: () => mockOrderData, docs: [], empty: true,
         }));
 
         // Reset the mock call counts
@@ -321,7 +345,14 @@ describe('updateOrderStatusAction Unit Tests', () => {
             exists: true, data: () => mockOrderData,
         }));
         (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
-            exists: true, data: () => mockOrderData,
+            //   `docs`/`empty` as well as the document shape. #968 made the
+            //   "shipped" branch read the order's escrow rows too, to stamp the
+            //   dispatch time the payout clock runs from — so this handle is now
+            //   read as a query result on BOTH branches, not just "delivered".
+            //   Without them escrowDocs is undefined and the action dies on
+            //   "not iterable", which looks like a refusal rather than a gap.
+            exists: true,
+            data: () => mockOrderData, docs: [], empty: true,
         }));
         (global as any).mockFirestoreUpdate.mockClear();
 

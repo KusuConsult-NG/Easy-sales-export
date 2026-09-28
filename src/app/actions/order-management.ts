@@ -27,7 +27,7 @@ import {
     type ShipmentRecord,
 } from "@/lib/shipment-record";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
-import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
+import { ESCROW_RELEASABLE_FROM, ESCROW_DISPATCH_RELEASABLE_FROM, normaliseEscrowStatus, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
 import { hasReservedStock } from "@/lib/order-status";
 import { canSetOrderStatus, orderStatusRefusal } from "@/lib/order-status-authority";
 import { scopeOrderToSeller } from "@/lib/order-scope";
@@ -130,9 +130,13 @@ async function _updateOrderStatusAction(
         let shipmentRecord: ShipmentRecord | null = null;
         let finalTrackingNumber = trackingNumber;
 
-        // Query associated escrow transactions if the status becomes delivered
+        //   Query associated escrow transactions when the status becomes
+        //   delivered, or SHIPPED — #968 added the second case. Dispatch now
+        //   starts a payout clock of its own, and the timestamp it runs from has
+        //   to reach the escrow rows, because the cron queries escrow and cannot
+        //   join back to the order.
         let escrowDocs: any[] = [];
-        if (newStatus === "delivered") {
+        if (newStatus === "delivered" || newStatus === "shipped") {
             const escrowQuery = await runQueryWithRetry(() => db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("orderId", "==", orderId)
                 .get());
@@ -250,6 +254,40 @@ async function _updateOrderStatusAction(
                 //   timeline has no shipped event to show, which is how the
                 //   invented journey came to be filling that space.
                 updateData.shippedAt = FieldValue.serverTimestamp();
+
+                /*
+                 *   #968 DISPATCH STARTS THE UNCONFIRMED PAYOUT CLOCK, so the
+                 *   escrow rows need the timestamp it runs from.
+                 *
+                 *   Denormalised rather than joined: api/cron/release-escrow
+                 *   queries ESCROW_TRANSACTIONS and there is no join to reach
+                 *   the order's own `shippedAt`. Same field name on purpose —
+                 *   it is the same fact about the same shipment, and giving the
+                 *   copy a second name is how two readers end up disagreeing
+                 *   about which one is authoritative.
+                 *
+                 *   SCOPED, not blind. Only the statuses the cron can release
+                 *   from are stamped — ESCROW_DISPATCH_RELEASABLE_FROM states
+                 *   the set and why each of the others is excluded. Writing it
+                 *   onto every row for the order would put a live payout
+                 *   deadline on a DISPUTED escrow, and on rows already
+                 *   released, refunded or cancelled.
+                 *
+                 *   Not a claim: this adds a timestamp, it does not move a
+                 *   status, so there is no transition for two callers to race
+                 *   for. A second dispatch of the same order restamps the same
+                 *   field with a later time, which is the correct answer to
+                 *   "when were these goods sent out".
+                 */
+                for (const escrowDoc of escrowDocs) {
+                    const escrowStatus = normaliseEscrowStatus(escrowDoc.data()?.status);
+                    if (!escrowStatus) continue;
+                    if (!ESCROW_DISPATCH_RELEASABLE_FROM.includes(escrowStatus)) continue;
+                    await escrowDoc.ref.update({
+                        shippedAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                }
             }
             if (newStatus === "delivered") {
                 updateData.deliveredAt = FieldValue.serverTimestamp();

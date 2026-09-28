@@ -68,24 +68,53 @@ let CLAIMED: Set<string> = new Set();
 let LEDGER_BALANCE = 0;
 
 function makeCollection(path: string): any {
-    // `where` FILTERS on equality. A no-op version let both escrow loops pick up
-    // the same seeded row — loop 2 queries status == "funded" and loop 3
+    // `where` FILTERS on equality, on `in`, and — #968 — on FIELD PRESENCE for
+    // range operators. A no-op version let both escrow loops pick up the same
+    // seeded row — loop 2 queries the statuses awaiting confirmation and loop 3
     // status == "delivered" — so every credit appeared twice and the counts
     // looked like a double payout. It was not one: the shared reference meant
-    // the ledger refused the second, which is the property this fix adds. But a
+    // the ledger refused the second, which is the property that fix added. But a
     // harness that cannot tell the two loops apart cannot test either of them.
-    // Range filters pass through: every fixture here is deliberately old.
+    //
+    //   `in` was added when loop 2 stopped asking for a single status. Without
+    //   it the two loops collapsed back into one again, for the same reason.
+    //
+    //   ABSENCE IS MODELLED, ORDERING IS NOT, and that asymmetry is deliberate.
+    //   A range filter here drops any row where the field is missing and keeps
+    //   every row where it is present, because "a document without the field
+    //   does not match" is the ENTIRE mechanism that keeps #968 from paying the
+    //   pre-existing backlog. A harness that let an unstamped row through would
+    //   make the backlog test below assert nothing. Ordering is not modelled
+    //   because every fixture here is deliberately old, which the fixtures say.
     const filters: Array<[string, string, any]> = [];
     const q: any = {
         where: (f: string, op: string, v: any) => { filters.push([f, op, v]); return q; },
         orderBy: () => q, limit: () => q, all: () => q, select: () => q,
-        get: async () => {
+        //   Shared by `get` and `count`, so an aggregate cannot report a
+        //   different population than a read of the same query would return.
+        //   #968's backlog figure is a subtraction of two counts, and the whole
+        //   number is wrong if the two disagree about what the filters mean.
+        matching: () => {
             let rows = Object.entries(DOCS[path] ?? {});
+            const RANGE = ['<', '<=', '>', '>='];
             for (const [f, op, v] of filters) {
                 if (op === '==') rows = rows.filter(([, d]) => (d as any)[f] === v);
+                else if (op === 'in') {
+                    const set = Array.isArray(v) ? v : [v];
+                    rows = rows.filter(([, d]) => set.includes((d as any)[f]));
+                } else if (RANGE.includes(op)) {
+                    rows = rows.filter(([, d]) => (d as any)[f] !== undefined && (d as any)[f] !== null);
+                }
             }
+            return rows;
+        },
+        count: () => ({
+            get: async () => ({ data: () => ({ count: q.matching().length }) }),
+        }),
+        get: async () => {
+            const rows = q.matching();
             return {
-                docs: rows.map(([id, data]) => ({ id, data: () => data })),
+                docs: rows.map(([id, data]: [string, any]) => ({ id, data: () => data })),
                 empty: rows.length === 0,
             };
         },
@@ -152,13 +181,36 @@ async function runCron() {
 
 const OLD = new Date(Date.now() - 40 * 86_400_000).toISOString();
 
-/** A funded escrow past its 7-day release window. */
-function fundedEscrow(id: string, extra: Record<string, unknown> = {}) {
+/**
+ * A funded escrow dispatched longer ago than the unconfirmed window — #968.
+ *
+ * This used to carry `releaseRequestedAt`, the trigger of the seven-day loop
+ * that had no caller and therefore never fired. Loop 2 now runs from `shippedAt`,
+ * stamped at dispatch, so that is what makes a row due.
+ */
+function dispatchedEscrow(id: string, extra: Record<string, unknown> = {}) {
     return {
         [id]: {
             sellerId: 'seller-1', buyerId: 'buyer-1',
             amount: 100_000, productName: 'Cocoa', orderId: 'ord-1',
-            status: 'funded', releaseRequestedAt: OLD,
+            status: 'funded', shippedAt: OLD,
+            ...extra,
+        },
+    };
+}
+
+/**
+ * The same escrow with NO dispatch stamp — a row that predates #968.
+ *
+ * Funded, old, never confirmed, and not payable: there is no `shippedAt` for the
+ * five days to run from. This is the backlog the owner chose not to pay.
+ */
+function unstampedEscrow(id: string, extra: Record<string, unknown> = {}) {
+    return {
+        [id]: {
+            sellerId: 'seller-1', buyerId: 'buyer-1',
+            amount: 100_000, productName: 'Cocoa', orderId: 'ord-1',
+            status: 'funded',
             ...extra,
         },
     };
@@ -189,10 +241,10 @@ beforeEach(() => {
 });
 
 describe('the seller is paid the net, not the gross', () => {
-    it('THE test: the 7-day auto-release withholds the platform fee', async () => {
+    it('THE test: the unconfirmed dispatch auto-release withholds the platform fee', async () => {
         // The defect, executed. ₦100,000 gross with ₦5,000 fee recorded paid
         // the seller ₦100,000; it now pays the ₦95,000 the escrow says.
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('esc-1', {
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('esc-1', {
             netAmount: 95_000, platformFee: 5_000,
         });
 
@@ -215,10 +267,52 @@ describe('the seller is paid the net, not the gross', () => {
         expect(CREDITS[0].amount).toBe(95_000);
     });
 
+    it('AND AN ESCROW WITH NO DISPATCH STAMP IS NOT PAID AT ALL — the #968 backlog', async () => {
+        /*
+         *   THE OWNER'S DECISION, EXECUTED. Re-pointing loop 2 at dispatch made
+         *   every escrow whose order shipped long ago instantly payable, and the
+         *   rows already sitting in the collection when it shipped are a backlog
+         *   nobody has reviewed. Asked what the first run should do, the owner
+         *   chose: report it, do not pay it.
+         *
+         *   Nothing enforces that but the absence of the field. There is no
+         *   activation date to keep in step with a deploy and no flag to leave
+         *   switched the wrong way — a row written before #968 has no `shippedAt`,
+         *   and `where("shippedAt", "<=", …)` does not match a document that does
+         *   not have it.
+         *
+         *   So this is the test that the money stays put, and it is the only
+         *   thing standing between an unreviewed backlog and a batch payout.
+         *   Delete the range-presence filter from the harness above and it passes
+         *   vacuously, which is why that filter has its own note.
+         */
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = unstampedEscrow('esc-backlog', {
+            netAmount: 95_000, platformFee: 5_000,
+        });
+
+        await runCron();
+
+        expect(CREDITS).toHaveLength(0);
+    });
+
+    it('and the cron REPORTS that backlog rather than reading zero as nothing-to-do', async () => {
+        //   A count of zero payouts is indistinguishable from an empty
+        //   collection unless the rows that were skipped are named. `unstamped`
+        //   is how the owner sees the size of what is waiting.
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = unstampedEscrow('esc-backlog', {
+            netAmount: 95_000, platformFee: 5_000,
+        });
+
+        const body = await runCron();
+
+        expect(body.escrowTransactions.processed).toBe(0);
+        expect(body.escrowTransactions.unstamped).toBeGreaterThan(0);
+    });
+
     it('an escrow written before the fee existed still pays its gross', async () => {
         // The fallback both siblings use. Without it, an old row with no
         // netAmount would pay 0 — which is worse than paying the gross.
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('esc-3');
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('esc-3');
 
         await runCron();
 
@@ -230,7 +324,7 @@ describe('the seller is paid the net, not the gross', () => {
         for (const bad of [0, -5, 'lots', null]) {
             jest.resetModules();
             CREDITS = []; CLAIMED = new Set(); LEDGER_BALANCE = 0; WRITES = [];
-            DOCS = { [COLLECTIONS.ESCROW_TRANSACTIONS]: fundedEscrow('esc-4', { netAmount: bad as any }) };
+            DOCS = { [COLLECTIONS.ESCROW_TRANSACTIONS]: dispatchedEscrow('esc-4', { netAmount: bad as any }) };
 
             await runCron();
 
@@ -240,7 +334,7 @@ describe('the seller is paid the net, not the gross', () => {
 
     it('the history rows and the ledger record the SAME figure that was paid', async () => {
         // #91/#113's shape: telling the seller one number and moving another.
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('esc-5', { netAmount: 95_000 });
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('esc-5', { netAmount: 95_000 });
 
         await runCron();
 
@@ -255,7 +349,7 @@ describe('the seller is paid the net, not the gross', () => {
 
 describe('the credit goes through the ledger primitive', () => {
     it('it is claimed under a reference, so a re-run cannot pay twice', async () => {
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('esc-6', { netAmount: 95_000 });
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('esc-6', { netAmount: 95_000 });
 
         await runCron();
         const balanceAfterFirst = LEDGER_BALANCE;
@@ -273,7 +367,7 @@ describe('the credit goes through the ledger primitive', () => {
     it('the reference is the SAME one the admin path uses', async () => {
         // So an admin release and a timer release of one escrow cannot both
         // pay. Two doors, one claim.
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('esc-7', { netAmount: 95_000 });
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('esc-7', { netAmount: 95_000 });
 
         await runCron();
 
@@ -286,7 +380,7 @@ describe('the credit goes through the ledger primitive', () => {
         // platform_revenue_totals() sums processed_payments rows whose status
         // is 'completed'. An escrow release is platform-held money going OUT;
         // recording it completed would add every payout to reported revenue.
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('esc-8', { netAmount: 95_000 });
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('esc-8', { netAmount: 95_000 });
 
         await runCron();
 
@@ -297,8 +391,8 @@ describe('the credit goes through the ledger primitive', () => {
         // The exact loss the old set-branch caused: both would have taken
         // `tx.set(walletRef, { balance })` and the last write would have won.
         DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = {
-            ...fundedEscrow('esc-a', { netAmount: 30_000 }),
-            ...fundedEscrow('esc-b', { netAmount: 20_000 }),
+            ...dispatchedEscrow('esc-a', { netAmount: 30_000 }),
+            ...dispatchedEscrow('esc-b', { netAmount: 20_000 }),
         };
 
         await runCron();
@@ -321,7 +415,7 @@ describe('the credit goes through the ledger primitive', () => {
 
 describe('the history rows cannot duplicate themselves', () => {
     it('their ids are derived from the escrow, not random', async () => {
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('esc-9', { netAmount: 95_000 });
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('esc-9', { netAmount: 95_000 });
 
         await runCron();
 
@@ -334,7 +428,7 @@ describe('the history rows cannot duplicate themselves', () => {
         // It was `ESCROW-RELEASE-${escrowId.substring(0, 8)}`. Truncating an id
         // to make a key is #104 exactly — there five characters of a seller id
         // collided for two sellers on one order.
-        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = fundedEscrow('escrow-with-a-long-id', { netAmount: 95_000 });
+        DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = dispatchedEscrow('escrow-with-a-long-id', { netAmount: 95_000 });
 
         await runCron();
 
@@ -348,8 +442,8 @@ describe('the history rows cannot duplicate themselves', () => {
     it('two escrows sharing an 8-character prefix get separate ledger rows', async () => {
         // The collision the truncation allowed, executed.
         DOCS[COLLECTIONS.ESCROW_TRANSACTIONS] = {
-            ...fundedEscrow('abcdefgh-one', { netAmount: 10_000 }),
-            ...fundedEscrow('abcdefgh-two', { netAmount: 20_000 }),
+            ...dispatchedEscrow('abcdefgh-one', { netAmount: 10_000 }),
+            ...dispatchedEscrow('abcdefgh-two', { netAmount: 20_000 }),
         };
 
         await runCron();

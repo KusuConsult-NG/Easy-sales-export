@@ -74,7 +74,7 @@ describe('POST /api/cooperative/apply-loan — amount validation', () => {
             userId: USER_ID,
             membershipStatus: 'active',
             paymentStatus: 'completed',
-            savingsBalance: 1_000_000,
+            savingsBalance: 1_000_000, approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
         }),
     };
     const PRODUCT = {

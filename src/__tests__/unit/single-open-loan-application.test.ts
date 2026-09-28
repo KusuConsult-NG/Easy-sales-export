@@ -164,7 +164,7 @@ describe('cooperative/_actions — _applyForLoanAction', () => {
         // not need them.
         setDocs({
             userId: 'member-1',
-            savingsBalance: 500_000,
+            savingsBalance: 500_000, approvedAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
             interestRate: 10,
             durationMonths: 12,
         });
