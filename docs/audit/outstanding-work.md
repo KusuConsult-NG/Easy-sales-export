@@ -1,32 +1,50 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a`, `c3da88ea`, `c2f415f9` and now at `d8f73a01`.** Every line below was
-checked against the tree, not carried forward.
+`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a`, `c3da88ea`, `c2f415f9`, `d8f73a01`
+and now at `535466ef`.** Every line below was checked against the tree, not
+carried forward.
+
+**THIS FILE HAD GONE STALE IN THREE PLACES, WHICH BY ITS OWN RULE IS WORSE THAN
+BEING ABSENT** — see the sentence below about a status document that contradicts
+the repository. All three are corrected at `535466ef`:
+
+- the gate numbers said 719 suites / 13,015 tests; the tree is at 1,072 / 18,127;
+- the Upstash entry still carried a 🔑 "needs a credential" heading while its own
+  body ended `RESOLVED BY #716`;
+- `Apply supabase/deploy.sql` was still ☐ and written around "all 33 migrations",
+  and has since been **answered against production**: see §1.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 719 suites / 13,015 tests green** — and
-green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
-world after #663's enforcement date. The version before this one said 12,930
-across 712.
+**Gate at `535466ef`: build clean, 1,072 suites / 18,127 tests green**, with
+`tsc --noEmit` and lint clean. The version before this one said 719 suites /
+13,015 tests, and the one before that 12,930 across 712.
 
-**And every database suite was run for real**, against the local stack
-`scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
-schema, all 34 migrations, RLS on:
+**WHAT WAS RE-RUN AT THIS REVISION, AND WHAT WAS NOT.** This is stated rather
+than the old table refreshed, because the honest answer differs per suite and
+carrying four numbers forward when one was measured is the exact failure this
+file's own rule is about.
 
 | | |
 |---|---|
-| `test:pg` | **13 suites, 199 passed, 0 skipped** |
-| `test:db` | **17 suites, 161 passed** |
-| `test:integration` | **5 suites, 31 passed** |
-| Playwright, full | **26 spec files, 362 passed, 8.9 minutes**, against a production build |
+| `test` (unit) | **1,072 suites, 18,127 passed** — re-run in full |
+| `test:pg` | **28 suites, 319 passed, 52 skipped** — re-run against a real PostgreSQL 16 started by `scripts/local-postgres.sh`. The 52 skips are the PostgREST adapter blocks, correctly skipped: that path has no PostgREST in front of it. |
+| Production schema | **in sync — 72 expected indexes and functions all present**, through `053_live_people_count_indexes.sql`, verified against the live project on 2026-09-28. This is what retires the `deploy.sql` entry in §1. |
+| `test:db` | **NOT re-run here.** It needs PostgREST, so it needs `supabase start` and Docker, which this environment does not have. |
+| `test:integration` | **NOT re-run here**, same reason. |
+| Playwright, full | **NOT re-run here.** CI's `e2e-smoke` job covers it and passed on this revision. |
+
+CI runs every one of them on each push and passed on `535466ef`, so nothing in
+the list above is unmeasured — it is measured *there* rather than here, and
+saying which is the point.
 
 A status document that contradicts the repository is worse than none — it is
 read and believed — so these numbers are re-read from a full run each time this
-file is touched.
+file is touched, and any suite that was not re-run is named as such instead of
+having its previous number repeated.
 
 Gate for every item marked done: `npm run build` then `npm run test`, green, with
 the change mutation-tested against a control.
@@ -135,7 +153,12 @@ nobody has to remember to come back and edit YAML. Until they are set:
 - a **daily** config check fails loudly naming what is missing
 - a manual run fails hard, because a person is waiting on it
 
-### 🔑 Set `UPSTASH_REDIS_REST_URL` / `_TOKEN`
+### ✅ (#716) Set `UPSTASH_REDIS_REST_URL` / `_TOKEN` — resolved
+
+**The heading on this entry said 🔑 — "needs a credential nobody here has" —
+while its own last paragraph said `RESOLVED BY #716`.** Corrected at `535466ef`.
+An entry whose mark contradicts its body is read by its mark, and this list's
+whole purpose is to say what is still owed.
 
 Without them every rate limiter and cache uses a **per-instance in-memory
 fallback that does not share state between server instances**.
@@ -187,14 +210,42 @@ reporting collapsed them into the second.
 the owner is actually in is the state the log describes. The half-configured
 reporting from #661 stands unchanged.
 
-### ☐ Apply `supabase/deploy.sql` — the question "are they applied?" is retired
+### ✅ Apply `supabase/deploy.sql` — ANSWERED AGAINST PRODUCTION, 2026-09-28
+
+**The owner ran the migration audit against the live project and it came back
+in sync:** all **72** expected indexes and functions present, through
+`053_live_people_count_indexes.sql`. That is the question this entry existed to
+ask, and it now has a measured answer rather than an instruction.
+
+So `035` — #652's overselling fix, described below as "the one defect on this
+list that is live in production" — **is applied.** It is no longer live.
+
+Two things this does not close, and they are stated so the ✅ is not read wider
+than it is:
+
+- **`022` is still deliberately excluded** from the bundle, for the reason given
+  below (`CREATE INDEX CONCURRENTLY` cannot run in a transaction). The audit
+  expects 72 objects and found 72; `022`'s indexes are not among them by design.
+- **Row-level security** is the one section that changes behaviour rather than
+  replacing a function with itself. The audit counts objects, so an in-sync
+  verdict does not by itself prove RLS is ON. If that matters, check it directly.
+
+The rest of this entry is kept because the reasoning is what made the question
+answerable, and the re-running-is-free measurement still holds.
 
 **This stopped being a research task (#660).** The answer used to require
 running `node scripts/build-deploy-sql.mjs` and pasting the output, which is a
 toolchain the person doing the pasting does not have. The generated bundle is
-**committed** now — `supabase/deploy.sql`, all 33 migrations in dependency
-order — and a ratchet regenerates it on every test run and compares byte for
-byte, so it cannot drift from the migrations.
+**committed** now — `supabase/deploy.sql`, every migration in dependency order —
+and a ratchet regenerates it on every test run and compares byte for byte, so it
+cannot drift from the migrations.
+
+*(This said "all 33 migrations" until `535466ef`. The tree passed 50 some time
+ago — `scripts/local-postgres.sh` applies 52 — which is exactly why the count is
+no longer written here: the ratchet is the guarantee, and a number in prose is
+one more thing that goes stale silently. Same lesson as the test name in
+docker-build-context-holds-what-tsc-checks, which was renamed to state its
+property after its count drifted twice.)*
 
 And the question does not need answering, because **re-running it is provably
 free**. Measured, not claimed: a fresh PostgreSQL 16 with `supabase/schema.sql`,

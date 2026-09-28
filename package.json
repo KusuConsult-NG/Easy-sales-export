@@ -53,6 +53,7 @@
     "backfill:fixsav": "tsx scripts/backfill-fixed-savings-ledger.ts",
     "backfill:exportgoals": "tsx scripts/backfill-export-funding-goals.ts",
     "escrow:backlog": "tsx scripts/escrow-unconfirmed-backlog.ts",
+    "escrow:void": "tsx scripts/void-test-escrow.ts",
     "backfill:enrolledcount": "tsx scripts/backfill-academy-enrolled-count.ts",
     "backfill:blankemails": "tsx scripts/backfill-blank-profile-emails.ts",
     "backfill:membernames": "tsx scripts/backfill-member-names.ts",

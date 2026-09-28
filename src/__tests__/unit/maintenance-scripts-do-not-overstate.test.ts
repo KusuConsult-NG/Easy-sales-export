@@ -69,6 +69,15 @@ function read(rel: string): string {
 
 /** Every maintenance script that writes to the database. */
 const WRITING_SCRIPTS = [
+    //   #971 — voids ONE named escrow, from a status it just reported, to
+    //   'cancelled'. It deletes nothing: every field the row had it keeps, plus
+    //   why it was voided and by what. The id is a required argument with no
+    //   default, because a script that voids escrows and defaults to any of them
+    //   is one keystroke from voiding the wrong one. It refuses 'delivered' (a
+    //   buyer has confirmed and is owed goods or a refund), 'disputed' (a person
+    //   is deciding) and the settled statuses (the money has gone, and the record
+    //   must keep saying where).
+    'scripts/void-test-escrow.ts',
     'scripts/backfill-academy-enrolled-count.ts',
     //   Diffs processed_payments against the Paystack transaction list in both
     //   directions. The ONLY thing --apply writes is raw_data.paidAt on rows
