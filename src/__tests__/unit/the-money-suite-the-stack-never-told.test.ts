@@ -74,6 +74,7 @@ const stripHash = (src: string) =>
     src.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
 
 const UP = stripHash(read('scripts/local-stack/up.sh'));
+const BARE_PG = stripHash(read('scripts/local-postgres.sh'));
 const PREPUSH = stripHash(read('.husky/pre-push'));
 const JEST_ENV = read('scripts/local-stack/jest-env.js');
 const CI = read('.github/workflows/ci.yml');
@@ -182,6 +183,126 @@ describe('#672 — and the push gate runs both suites CI runs', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#970 — and the OTHER local database says where it is too', () => {
+    /*
+     *   THE SAME DEFECT AS #672, ON THE PATH #672 DID NOT TOUCH.
+     *
+     *   There are two ways to bring up the money database. up.sh starts the full
+     *   Supabase stack and — since #672 — writes LOCAL_PG_URL into
+     *   .env.development.local. scripts/local-postgres.sh starts a bare postgres
+     *   with no Docker and no PostgREST, which is the lighter path and the one
+     *   the pg suite actually needs.
+     *
+     *   That script PRINTED its export line as advice and persisted nothing. A
+     *   git hook is spawned in a fresh shell, so a variable exported in the
+     *   operator's terminal never reached .husky/pre-push, and the gate reported
+     *   "NO DATABASE SUITE RUN" on every push however faithfully the advice was
+     *   followed. #672's sentence applies unchanged: the value existed, the
+     *   reader existed, and nothing carried one to the other.
+     *
+     *   MEASURED, through the gate's own resolution block:
+     *
+     *     stale stack file only        NO DATABASE SUITE RUN (declared 54322, dead)
+     *     after npm run pg:start       runs the suite against 55432/app
+     *     after npm run pg:stop        NO DATABASE SUITE RUN again — no false claim
+     *     explicit LOCAL_PG_URL        wins over both, as CI requires
+     *
+     *   MUTATION-TESTED. Against a green baseline:
+     *
+     *     revert to printing the export line, persisting nothing   KILLED
+     *     stop stops removing the declaration                      KILLED
+     *     rank the stale stack file above the lifecycle file       KILLED
+     *     delete the .local-pg-url branch outright                 KILLED
+     *
+     *   THE THIRD MUTANT SURVIVED TWICE BEFORE IT KILLED ANYTHING, and both
+     *   reasons were mine rather than the test's. The first attempt never applied
+     *   — the pattern contained `\t`, which Python read as a literal tab, so the
+     *   replace silently matched nothing and sixteen passing tests looked like a
+     *   surviving mutant. The second attempt applied but my verification checked
+     *   the unstripped file, so it compared against this hook's own COMMENTS
+     *   mentioning .env.development.local rather than the branch.
+     *
+     *   Once it genuinely applied it killed the assertion, and the assertion was
+     *   then re-anchored on the whole `if` line: matching the bare filename could
+     *   land on the warning text further down, and would have gone on passing if
+     *   the branch were deleted. The fourth mutant exists to hold that.
+     *
+     *   A mutant that does not change the file is not a surviving mutant, and the
+     *   only way to know the difference is to assert that the mutation landed.
+     */
+    it('local-postgres.sh WRITES its URL, it does not only print it', () => {
+        //   The #672 property, mirrored. `echo "  export LOCAL_PG_URL=..."` is
+        //   advice; a file is a fact the hook can read.
+        expect(BARE_PG).toMatch(/>\s*"\$REPO_ROOT\/\.local-pg-url"/);
+    });
+
+    it('AND ITS STOP REMOVES IT, so it cannot become #691\'s stale declaration', () => {
+        /*
+         *   The whole reason this file may outrank the stack's. #691 was a URL
+         *   left on disk by a database whose container had been reclaimed, which
+         *   made this gate report the money SQL as failing while the money SQL
+         *   was fine. A declaration with no lifecycle earns no authority.
+         */
+        const stop = BARE_PG.slice(BARE_PG.indexOf('cmd_stop()'));
+        expect(stop).toMatch(/rm -f "\$REPO_ROOT\/\.local-pg-url"/);
+    });
+
+    it('AND IT IS THE DATABASE THE SCRIPT ACTUALLY STARTED, not a second spelling', () => {
+        //   #672's sibling assertion, for the same reason: a URL that names a
+        //   different port or database than the server just started is worse than
+        //   none, because the gate then probes something real and finds nothing.
+        expect(BARE_PG).toMatch(/PORT="\$\{LOCAL_PG_PORT:-55432\}"/);
+        expect(BARE_PG).toMatch(/DBNAME="app"/);
+        expect(BARE_PG).toMatch(/local url="postgres:\/\/postgres@127\.0\.0\.1:\$PORT\/\$DBNAME"/);
+    });
+
+    it('AND THE GATE READS IT, RANKED ABOVE THE STACK FILE', () => {
+        /*
+         *   Order is the assertion, not merely presence. Both files can exist at
+         *   once, and only one of them stops meaning something when its server
+         *   goes away — so when they disagree, the one with a lifecycle is the
+         *   one to believe.
+         */
+        expect(PREPUSH).toContain('.local-pg-url');
+
+        /*
+         *   ANCHORED ON THE WHOLE `if` LINE, not the bare filename. Both names
+         *   also appear in the warning text further down, and .env.development.local
+         *   appears in this hook's own comments — so an indexOf on the filename
+         *   alone can land on prose rather than on the branch it means to order,
+         *   and would keep passing if the branch were deleted outright.
+         *
+         *   Found by mutation: the first version of this assertion survived
+         *   swapping the two blocks, and the mutant that proved it had itself
+         *   silently no-opped twice first — once because Python read `\t` in the
+         *   pattern as a tab, once because the verification matched a comment.
+         */
+        const explicit = PREPUSH.indexOf('PG_URL="$LOCAL_PG_URL"');
+        const bare = PREPUSH.indexOf('[ -f .local-pg-url ]');
+        const stack = PREPUSH.indexOf('[ -f .env.development.local ]');
+
+        expect(explicit).toBeGreaterThan(-1);
+        expect(bare).toBeGreaterThan(-1);
+        expect(stack).toBeGreaterThan(-1);
+        expect(bare).toBeGreaterThan(explicit);
+        expect(stack).toBeGreaterThan(bare);
+    });
+
+    it('AND THE REFUSAL NAMES THE LIGHTWEIGHT PATH, not only the Docker stack', () => {
+        //   #322: a refusal that does not say what to do reads as a broken gate.
+        //   Telling somebody to start the full stack when a two-command bare
+        //   postgres would do is how the advice gets ignored.
+        expect(PREPUSH).toContain('npm run pg:start');
+    });
+
+    it('AND THE STATE FILE IS NOT COMMITTABLE', () => {
+        //   It names a port on one machine. Tracked, it would be exactly the
+        //   stale cross-machine declaration this whole finding is about.
+        expect(read('.gitignore')).toMatch(/^\.local-pg-url$/m);
+    });
+});
+
 describe('#672 — and CI, which was never the one fooled, still cannot skip quietly', () => {
     it('THE WORKFLOW STILL ASSERTS THE DATABASE BEFORE RUNNING THE SUITE', () => {
         /*

@@ -71,9 +71,29 @@ if [ $? -ne 0 ]; then
 fi
 echo "✅ Unit tests passed — push proceeding."
 
-# The stack writes LOCAL_PG_URL into .env.development.local (#672); an explicit
-# environment variable still wins, which is what CI relies on.
+# WHERE THE MONEY DATABASE IS, FROM THREE SOURCES IN ORDER OF AUTHORITY.
+#
+#   1. an explicit LOCAL_PG_URL — what CI relies on, so it must win;
+#   2. .local-pg-url, written by scripts/local-postgres.sh while it is running
+#      and deleted by its stop (#970);
+#   3. .env.development.local, written by scripts/local-stack/up.sh (#672).
+#
+# 2 OUTRANKS 3 BECAUSE ONLY ONE OF THEM HAS A LIFECYCLE. The stack's file
+# survives the stack — that is the stale declaration #691 was written about, and
+# the reason the branch below probes the port instead of trusting the string. The
+# bare-postgres file is removed when its server stops, so when both exist the
+# one that still means something is the one that can stop meaning it.
+#
+# #970: local-postgres.sh used to PRINT its export line and persist nothing. A
+# git hook runs in a fresh shell, so a variable exported in the operator's
+# terminal never arrived here, and this gate reported "NO DATABASE SUITE RUN" on
+# every push however faithfully that advice was followed — the money SQL
+# unchecked locally on the documented lightweight path. #672 is the same defect
+# on the other path.
 PG_URL="$LOCAL_PG_URL"
+if [ -z "$PG_URL" ] && [ -f .local-pg-url ]; then
+  PG_URL=$(tr -d ' \t\r\n' < .local-pg-url)
+fi
 if [ -z "$PG_URL" ] && [ -f .env.development.local ]; then
   PG_URL=$(grep -E '^[[:space:]]*LOCAL_PG_URL[[:space:]]*=' .env.development.local | tail -n 1 | cut -d= -f2- | tr -d '"'"'"' ')
 fi
@@ -92,14 +112,15 @@ fi
 if [ -z "$PG_URL" ]; then
   echo "⚠️  NO DATABASE SUITE RUN. The money SQL (locks, wallet debits, claim"
   echo "   transitions) was NOT checked — CI will run it and can still go red."
-  echo "   To check it here first: ./scripts/local-stack/up.sh"
+  echo "   To check it here first: npm run pg:start   (bare postgres, no Docker)"
+  echo "   or the full stack:      ./scripts/local-stack/up.sh"
 elif ! node scripts/pg-reachable.js "$PG_URL"; then
   echo "⚠️  NO DATABASE SUITE RUN. A database is DECLARED at"
   echo "      $PG_URL"
   echo "   and nothing answered on that port, so the money SQL was NOT checked."
-  echo "   Either start the stack — ./scripts/local-stack/up.sh — or remove the"
-  echo "   stale LOCAL_PG_URL from .env.development.local. CI will run this suite"
-  echo "   either way and can still go red."
+  echo "   Either start a database — npm run pg:start, or ./scripts/local-stack/up.sh"
+  echo "   — or remove the stale LOCAL_PG_URL from .env.development.local. CI will"
+  echo "   run this suite either way and can still go red."
 else
   echo "🗄  Running the database suite (money SQL)..."
   LOCAL_PG_URL="$PG_URL" npm run test:pg
