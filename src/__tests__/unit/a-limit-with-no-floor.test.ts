@@ -79,6 +79,20 @@ const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8
 const MAX = getTierMaxDuration('Member');
 
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   #969 A MEMBERSHIP OLD ENOUGH TO GET PAST THE DURATION GATE.
+ *
+ *   isEligibleForLoan now requires three months of active membership, and checks
+ *   it BEFORE the amount rules — so without this, every assertion below about a
+ *   contribution floor or a borrowing cap would come back refused for the wrong
+ *   reason. The ones expecting `false` would still pass, while measuring nothing.
+ *
+ *   The new parameter is REQUIRED rather than optional precisely so that this file
+ *   had to be visited and this decision made deliberately. See
+ *   lib/cooperative-membership-age.
+ */
+const LONG_STANDING_MEMBER = { approvedAt: new Date(Date.now() - 400 * 86_400_000) };
+
 describe('#745 — the mechanism: a loop that never runs charges no interest', () => {
     /** The amortisation exactly as the action computes it. */
     function interestKobo(amountKobo: number, monthlyRate: number, n: any): number {
@@ -154,19 +168,19 @@ describe('#745 — and the amount rule has a floor', () => {
     const CONTRIBUTION = COOPERATIVE_TIERS.Member.minContribution * 10;
 
     it('ZERO AND NEGATIVE ARE REFUSED', () => {
-        expect(isEligibleForLoan(CONTRIBUTION, 0, 0).eligible).toBe(false);
-        expect(isEligibleForLoan(CONTRIBUTION, -50_000, 0).eligible).toBe(false);
-        expect(isEligibleForLoan(CONTRIBUTION, -50_000, 0).reason).toContain('greater than zero');
+        expect(isEligibleForLoan(CONTRIBUTION, 0, 0, LONG_STANDING_MEMBER).eligible).toBe(false);
+        expect(isEligibleForLoan(CONTRIBUTION, -50_000, 0, LONG_STANDING_MEMBER).eligible).toBe(false);
+        expect(isEligibleForLoan(CONTRIBUTION, -50_000, 0, LONG_STANDING_MEMBER).reason).toContain('greater than zero');
     });
 
     it('AND A NEGATIVE OUTSTANDING BALANCE IS REFUSED', () => {
         //   It is the other operand of `requested + outstanding > maxLoan`, and
         //   a negative there makes room the member does not have.
-        expect(isEligibleForLoan(CONTRIBUTION, 1_000, -1_000_000).eligible).toBe(false);
+        expect(isEligibleForLoan(CONTRIBUTION, 1_000, -1_000_000, LONG_STANDING_MEMBER).eligible).toBe(false);
     });
 
     it('AND A LEGITIMATE REQUEST IS STILL ELIGIBLE', () => {
-        expect(isEligibleForLoan(CONTRIBUTION, 1_000, 0)).toEqual({ eligible: true });
+        expect(isEligibleForLoan(CONTRIBUTION, 1_000, 0, LONG_STANDING_MEMBER)).toEqual({ eligible: true });
     });
 });
 

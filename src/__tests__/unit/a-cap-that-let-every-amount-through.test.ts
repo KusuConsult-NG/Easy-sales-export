@@ -71,6 +71,20 @@ const ROOT = process.cwd();
 const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8'), { label: rel });
 
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   #969 A MEMBERSHIP OLD ENOUGH TO GET PAST THE DURATION GATE.
+ *
+ *   isEligibleForLoan now requires three months of active membership, and checks
+ *   it BEFORE the amount rules — so without this, every assertion below about a
+ *   contribution floor or a borrowing cap would come back refused for the wrong
+ *   reason. The ones expecting `false` would still pass, while measuring nothing.
+ *
+ *   The new parameter is REQUIRED rather than optional precisely so that this file
+ *   had to be visited and this decision made deliberately. See
+ *   lib/cooperative-membership-age.
+ */
+const LONG_STANDING_MEMBER = { approvedAt: new Date(Date.now() - 400 * 86_400_000) };
+
 describe('#744 — the mechanism: a comparison against NaN refuses nobody', () => {
     it('BOTH DIRECTIONS ARE FALSE, WHICH IS WHY READING THE GUARD SHOWS NOTHING', () => {
         const cap = (undefined as unknown as number) * 5;
@@ -116,7 +130,7 @@ describe('#744 — and isEligibleForLoan had the same trap on both of its checks
 
     it('AN UNREADABLE CONTRIBUTION NO LONGER CLEARS THE MINIMUM', () => {
         //   `NaN < floor` is false, so the floor admitted it.
-        const r = isEligibleForLoan(undefined as unknown as number, 1_000_000, 0);
+        const r = isEligibleForLoan(undefined as unknown as number, 1_000_000, 0, LONG_STANDING_MEMBER);
 
         expect(r.eligible).toBe(false);
         expect(r.reason).toContain('Minimum contribution');
@@ -130,7 +144,7 @@ describe('#744 — and isEligibleForLoan had the same trap on both of its checks
          *   the requested amount makes it 0, and `0 > maxLoan` is false — the
          *   guard reinstated facing the wrong way.
          */
-        const r = isEligibleForLoan(500_000, NaN, 0);
+        const r = isEligibleForLoan(500_000, NaN, 0, LONG_STANDING_MEMBER);
 
         expect(r.eligible).toBe(false);
         expect(r.reason).toContain('could not be read');
@@ -139,14 +153,14 @@ describe('#744 — and isEligibleForLoan had the same trap on both of its checks
     it('AND AN UNREADABLE OUTSTANDING BALANCE IS REFUSED TOO', () => {
         //   It is the other half of `requested + outstanding > maxLoan`, and a
         //   zero there understates the total, which admits more.
-        expect(isEligibleForLoan(500_000, 1_000, NaN).eligible).toBe(false);
+        expect(isEligibleForLoan(500_000, 1_000, NaN, LONG_STANDING_MEMBER).eligible).toBe(false);
     });
 
     it('AND A MEMBER WHO QUALIFIES IS STILL ELIGIBLE', () => {
         //   The guard that all of the above needs: a rule that refused
         //   everybody would pass every assertion in this block.
         const contribution = FLOOR * 10;
-        const r = isEligibleForLoan(contribution, 1, 0);
+        const r = isEligibleForLoan(contribution, 1, 0, LONG_STANDING_MEMBER);
 
         expect(r).toEqual({ eligible: true });
     });
@@ -155,7 +169,7 @@ describe('#744 — and isEligibleForLoan had the same trap on both of its checks
         const contribution = FLOOR * 10;
         const over = getMaxLoanAmount(contribution) + 1;
 
-        expect(isEligibleForLoan(contribution, over, 0).eligible).toBe(false);
+        expect(isEligibleForLoan(contribution, over, 0, LONG_STANDING_MEMBER).eligible).toBe(false);
     });
 });
 

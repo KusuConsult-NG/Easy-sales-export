@@ -76,6 +76,7 @@ beforeEach(() => {
     store.seed(COLLECTIONS.USERS, OLD, { email: 'member@example.com', _migratedTo: LIVE });
     store.seed(COLLECTIONS.USERS, STRANGER, { email: 'other@example.com' });
     store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, LIVE, {
+        approvedAt: MEMBER_SINCE,
         userId: LIVE, savingsBalance: SAVINGS, membershipStatus: 'active',
     });
     actAs(LIVE);
@@ -97,6 +98,32 @@ const apply = async () => {
         guarantorPhone: '08031111111',
     });
 };
+
+/**
+ *   #969 A MEMBERSHIP OLD ENOUGH TO GET PAST THE DURATION GATE.
+ *
+ *   isEligibleForLoan now requires three months of active membership, and checks
+ *   it BEFORE the amount rules — so without this, every assertion below about a
+ *   contribution floor or a borrowing cap would come back refused for the wrong
+ *   reason. The ones expecting `false` would still pass, while measuring nothing.
+ *
+ *   The new parameter is REQUIRED rather than optional precisely so that this file
+ *   had to be visited and this decision made deliberately. See
+ *   lib/cooperative-membership-age.
+ */
+const LONG_STANDING_MEMBER = { approvedAt: new Date(Date.now() - 400 * 86_400_000) };
+
+/**
+ *   And the same date on every SEEDED member row, because the doors below read
+ *   it out of the store rather than taking it as an argument.
+ *
+ *   A member row with no dates at all is not a realistic fixture: both creation
+ *   sites in _coop_registration.ts write `createdAt`, and approve-member writes
+ *   `approvedAt`. Seeding neither made these rows refuse on "membership start
+ *   date could not be read" — the correct answer to the fixture, and the wrong
+ *   one for what these tests measure.
+ */
+const MEMBER_SINCE = new Date(Date.now() - 400 * 86_400_000).toISOString();
 
 describe('one borrower, one open loan — across every profile they own', () => {
     it('THE test — an open loan under the OLD profile refuses a new application', async () => {
@@ -163,8 +190,8 @@ describe('one borrower, one open loan — across every profile they own', () => 
         //   bar stands. It is tested directly against isEligibleForLoan.
         const { isEligibleForLoan } = await import('@/lib/cooperative-tiers');
 
-        expect(isEligibleForLoan(SAVINGS, AMOUNT, 90_000).eligible).toBe(false);
-        expect(isEligibleForLoan(SAVINGS, AMOUNT, 0).eligible).toBe(true);
+        expect(isEligibleForLoan(SAVINGS, AMOUNT, 90_000, LONG_STANDING_MEMBER).eligible).toBe(false);
+        expect(isEligibleForLoan(SAVINGS, AMOUNT, 0, LONG_STANDING_MEMBER).eligible).toBe(true);
     });
 });
 
@@ -191,6 +218,7 @@ describe('the third door bars what the other two bar', () => {
         //   shared fixture above does not set — another refusal ahead of the
         //   bar, and another way for these assertions to mean nothing.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, LIVE, {
+        approvedAt: MEMBER_SINCE,
             userId: LIVE, savingsBalance: SAVINGS, membershipStatus: 'active',
             paymentStatus: 'completed',
         });
@@ -336,6 +364,7 @@ describe("a member's own records, across the profiles they own", () => {
         store.seed(COLLECTIONS.USERS, LIVE, { email: 'member@example.com' });
         store.seed(COLLECTIONS.USERS, OLD, { email: 'member@example.com', _migratedTo: LIVE });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, OLD, {
+        approvedAt: MEMBER_SINCE,
             userId: OLD, savingsBalance: SAVINGS, membershipStatus: 'active',
         });
 
@@ -351,9 +380,11 @@ describe("a member's own records, across the profiles they own", () => {
         store.seed(COLLECTIONS.USERS, LIVE, { email: 'member@example.com' });
         store.seed(COLLECTIONS.USERS, OLD, { email: 'member@example.com', _migratedTo: LIVE });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, OLD, {
+        approvedAt: MEMBER_SINCE,
             userId: OLD, savingsBalance: 1, membershipStatus: 'active',
         });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, LIVE, {
+        approvedAt: MEMBER_SINCE,
             userId: LIVE, savingsBalance: SAVINGS, membershipStatus: 'active',
         });
 
@@ -411,6 +442,7 @@ describe('the registration fee is not charged twice', () => {
 
     it('THE test — an active membership under the OLD profile refuses a second one', async () => {
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, OLD, {
+        approvedAt: MEMBER_SINCE,
             userId: OLD, membershipStatus: 'active', paymentStatus: 'completed',
         });
 
@@ -422,6 +454,7 @@ describe('the registration fee is not charged twice', () => {
 
     it('and a suspended one under the old profile is not buyable back', async () => {
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, OLD, {
+        approvedAt: MEMBER_SINCE,
             userId: OLD, membershipStatus: 'suspended',
         });
 
@@ -435,6 +468,7 @@ describe('the registration fee is not charged twice', () => {
         //   The other half of the walk: joinCooperativeAction keys its row by
         //   an auto id with `userId` as a field.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'auto-generated-id', {
+        approvedAt: MEMBER_SINCE,
             userId: OLD, membershipStatus: 'active', paymentStatus: 'completed',
         });
 
@@ -450,6 +484,7 @@ describe('the registration fee is not charged twice', () => {
     it("VACUITY CONTROL: another member's membership does not refuse them", async () => {
         store.seed(COLLECTIONS.USERS, STRANGER, { email: 'other@example.com' });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, STRANGER, {
+        approvedAt: MEMBER_SINCE,
             userId: STRANGER, membershipStatus: 'active', paymentStatus: 'completed',
         });
 
@@ -463,6 +498,7 @@ describe('the registration fee is not charged twice', () => {
         //   not any row at all. Widened to refuse on existence it would strand
         //   every half-registered member at the payment step for ever.
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, OLD, {
+        approvedAt: MEMBER_SINCE,
             userId: OLD, membershipStatus: 'pending', paymentStatus: 'pending',
         });
 
@@ -731,6 +767,7 @@ describe('the fixed-savings debit stays on the live row', () => {
         store.clear();
         store.seed(COLLECTIONS.USERS, LIVE, { email: 'member@example.com' });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'auto-generated-id', {
+        approvedAt: MEMBER_SINCE,
             userId: LIVE, savingsBalance: SAVINGS, membershipStatus: 'active',
         });
 
@@ -748,6 +785,7 @@ describe('the fixed-savings debit stays on the live row', () => {
         store.clear();
         store.seed(COLLECTIONS.USERS, LIVE, { email: 'member@example.com' });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, LIVE, {
+        approvedAt: MEMBER_SINCE,
             savingsBalance: SAVINGS, membershipStatus: 'active',
         });
 

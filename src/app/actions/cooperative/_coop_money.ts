@@ -655,7 +655,10 @@ async function _applyForLoanAction(
         // reading one field scored such a member at zero savings and refused
         // every loan they were entitled to.
         const savingsBalance = readCooperativeBalance(membershipData);
-        const eligibility = isEligibleForLoan(savingsBalance, amount, 0);
+        //   #969 the membership row carries the duration rule's dates. Passed
+        //   rather than defaulted: the parameter is required precisely so a
+        //   path that forgot it cannot compile.
+        const eligibility = isEligibleForLoan(savingsBalance, amount, 0, membershipData);
         if (!eligibility.eligible) {
             throw new Error(eligibility.reason ?? "You are not eligible for this loan amount.");
         }

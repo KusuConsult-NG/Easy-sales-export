@@ -185,7 +185,10 @@ async function applyLoanHandler(request: NextRequest) {
         // #345 read through the shared reader: a legacy row keeps this money under
         // `balance`, and reading only `savingsBalance` on one scored it as zero.
         const totalSavings = readCooperativeBalance(membershipData);
-        const eligibility = isEligibleForLoan(totalSavings, amount, 0);
+        //   #969 and the membership period, from the same row this route already
+        //   read for the savings figure. This route is the one that had never
+        //   applied the contribution floor either — see the note above.
+        const eligibility = isEligibleForLoan(totalSavings, amount, 0, membershipData);
         if (!eligibility.eligible) {
             return NextResponse.json(
                 { success: false, message: eligibility.reason ?? "You are not eligible for this loan amount." },

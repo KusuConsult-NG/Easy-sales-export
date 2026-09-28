@@ -4,6 +4,13 @@
  */
 
 import { installmentDueDate } from "@/lib/loan-schedule-dates";
+import {
+    LOAN_MIN_MEMBERSHIP_MONTHS,
+    hasMinimumMembership,
+    membershipActiveSince,
+    membershipDurationRefusal,
+    type MembershipDates,
+} from "@/lib/cooperative-membership-age";
 import { numberOrZero } from "@/lib/numbers";
 
 export type CooperativeTier = "Member";
@@ -97,7 +104,29 @@ export function getMaxLoanAmount(totalContribution: number): number {
 export function isEligibleForLoan(
     totalContribution: number,
     requestedAmount: number,
-    currentLoanBalance: number = 0
+    currentLoanBalance: number = 0,
+    /**
+     *   #969 THE MEMBERSHIP ROW, FOR THE DURATION RULE — AND IT IS REQUIRED.
+     *
+     *   The brief given to counsel said loans "require minimum active membership
+     *   duration". Nothing checked one. The owner confirmed the rule and set the
+     *   period at three months; lib/cooperative-membership-age holds it.
+     *
+     *   NOT OPTIONAL, deliberately, and this is the whole design decision. An
+     *   optional parameter would let all three existing call sites keep compiling
+     *   untouched while the new gate quietly did nothing — a rule that exists in
+     *   the source and not in the product, which is the exact defect class this
+     *   audit keeps finding. Required makes tsc name every path that has to
+     *   supply it, so the compiler enforces the rollout instead of my memory.
+     *
+     *   `null` is accepted and REFUSES, rather than being rejected by the type.
+     *   A caller that genuinely has no membership row — there is none today — must
+     *   get the refusing answer, not a compile error it would work around by
+     *   passing an empty object.
+     */
+    membership: MembershipDates | null,
+    /** Injected in tests. Real callers take the default. */
+    now: Date = new Date(),
 ): { eligible: boolean; reason?: string } {
     /*
      *   #744 — the same NaN trap twice over in this function. The floor below
@@ -140,6 +169,25 @@ export function isEligibleForLoan(
     }
     if (outstanding < 0) {
         return { eligible: false, reason: "The recorded loan balance is invalid." };
+    }
+
+    /*
+     *   #969 THE MEMBERSHIP PERIOD, CHECKED BEFORE ANY OF THE MONEY RULES.
+     *
+     *   Placed here on purpose. The two checks above are data-sanity refusals —
+     *   an unreadable request is not a policy decision. Everything below is about
+     *   the AMOUNT, and a member who has not been in the cooperative long enough
+     *   cannot fix that by depositing more, so telling them about the ₦5,000 floor
+     *   or their borrowing limit first would send them to do something that will
+     *   not help. #322: the refusal has to name the thing actually in the way.
+     *
+     *   The date rule and the "cannot tell means no" direction both live in
+     *   lib/cooperative-membership-age — see its header for why `joinedAt` is not
+     *   the field, and why an unreadable date refuses.
+     */
+    const activeSince = membershipActiveSince(membership);
+    if (!hasMinimumMembership(activeSince, LOAN_MIN_MEMBERSHIP_MONTHS, now)) {
+        return { eligible: false, reason: membershipDurationRefusal(activeSince) };
     }
 
     if (contribution < COOPERATIVE_TIERS.Member.minContribution) {
