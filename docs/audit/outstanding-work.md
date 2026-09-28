@@ -31,7 +31,8 @@ file's own rule is about.
 | | |
 |---|---|
 | `test` (unit) | **1,072 suites, 18,127 passed** — re-run in full |
-| `test:pg` | **28 suites, 319 passed, 52 skipped** — re-run against a real PostgreSQL 16 started by `scripts/local-postgres.sh`. The 52 skips are the PostgREST adapter blocks, correctly skipped: that path has no PostgREST in front of it. |
+| `test:pg` | **28 suites, 319 passed, 52 skipped** at `535466ef`; **323 passed** after #972 below — re-run against a real PostgreSQL 16 started by `scripts/local-postgres.sh`. The 52 skips are the PostgREST adapter blocks, correctly skipped: that path has no PostgREST in front of it. |
+| `test:pg` under index bloat | **323 passed at BOTH ends of a 4,000x range** — 7 index pages after a full REINDEX, and 41,781 pages over an 1,089-page heap after seeding and deleting 300,000 rows. Measured because four of this suite's assertions turned out to be reading that number rather than the schema: see #972. |
 | Production schema | **in sync — 72 expected indexes and functions all present**, through `053_live_people_count_indexes.sql`, verified against the live project on 2026-09-28. This is what retires the `deploy.sql` entry in §1. |
 | `test:db` | **NOT re-run here.** It needs PostgREST, so it needs `supabase start` and Docker, which this environment does not have. |
 | `test:integration` | **NOT re-run here**, same reason. |
@@ -40,6 +41,24 @@ file's own rule is about.
 CI runs every one of them on each push and passed on `535466ef`, so nothing in
 the list above is unmeasured — it is measured *there* rather than here, and
 saying which is the point.
+
+**#972 — FOUR `test:pg` ASSERTIONS WERE MEASURING HOW OFTEN THE SUITE HAD BEEN
+RUN.** One of them failed on a commit that touched none of it, twenty minutes
+after the same code passed, and running the file alone reproduced it. The cause
+is not in the application: the suites here seed tens of thousands of rows into
+`users`, `document_collections`, `marketplace_orders` and `processed_payments`
+and delete them again, and VACUUM returns the freed index pages to the index
+rather than to the filesystem — so index files grow every run and never shrink.
+`idx_users_raw_created_at` had reached 237 pages over a 135-page heap, for 5,000
+rows that need 8, and **an index larger than the table it indexes is one the
+planner is right to refuse.** The four assertions sat at 10%, 20%, 30% and 8%
+selectivity, close enough to the crossover that the index file's size decided
+them. Each now asks reachability with the index *priced to lose* — which owes
+nothing to a cost estimate — and asserts the planner's preference separately, on
+a rebuilt index, reporting both page counts when it fails so the next reader sees
+bloat instead of "unused". Nothing in production changed and nothing needed to:
+this was a test-fixture defect throughout, and the figures above are the control
+that says so.
 
 A status document that contradicts the repository is worse than none — it is
 read and believed — so these numbers are re-read from a full run each time this
