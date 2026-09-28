@@ -113,3 +113,7 @@ e2e/tmp/
 #   audit trail the #715 revert needed and it is also exactly the file that
 #   must never reach a commit.
 maintenance-runs/
+
+# Written by scripts/local-postgres.sh while a bare local postgres is running,
+# and removed by its stop. .husky/pre-push reads it to find the money database.
+.local-pg-url

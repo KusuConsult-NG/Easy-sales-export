@@ -126,10 +126,36 @@ cmd_start() {
     fns=$("${PSQL[@]}" -d "$DBNAME" -tAc "
         select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public';")
-    echo "Ready: postgres://postgres@127.0.0.1:$PORT/$DBNAME  ($fns functions)"
+    local url="postgres://postgres@127.0.0.1:$PORT/$DBNAME"
+    echo "Ready: $url  ($fns functions)"
+
+    #   #970 AND NOW IT SAYS WHERE, IN A PLACE THE PUSH GATE READS.
+    #
+    #   #672 is this defect on the other local path: up.sh brought up exactly
+    #   the database the money suite needs and did not tell it where, so
+    #   `npm run test:pg` reported "166 skipped, 34 passed" — success, having
+    #   run none of the locking or wallet SQL. That was fixed by writing
+    #   LOCAL_PG_URL into .env.development.local.
+    #
+    #   This script had the same gap in a quieter form: it PRINTED the export
+    #   line as advice and persisted nothing. A git hook is spawned in a fresh
+    #   shell, so a variable exported by hand in the operator's terminal never
+    #   reaches it — .husky/pre-push would go on reporting "NO DATABASE SUITE
+    #   RUN" on every push no matter how faithfully the advice was followed.
+    #
+    #   Written to its own file rather than into .env.development.local, which
+    #   belongs to up.sh's stack: that file also points the app at a PostgREST
+    #   on 54321, and overwriting its database URL with this bare postgres —
+    #   which has no PostgREST in front of it — would break `next dev` to fix
+    #   a push gate.
+    #
+    #   The file has a LIFECYCLE, which is the point. cmd_stop removes it, so it
+    #   cannot become the stale declaration #691 was written about: a URL left
+    #   behind by a database that is gone.
+    printf '%s\n' "$url" > "$REPO_ROOT/.local-pg-url"
+
     echo
-    echo "  export LOCAL_PG_URL=postgres://postgres@127.0.0.1:$PORT/$DBNAME"
-    echo "  npm run test:pg"
+    echo "  npm run test:pg          # or just push — the pre-push gate finds it now"
 }
 
 cmd_stop() {
@@ -137,6 +163,14 @@ cmd_stop() {
         run_pg pg_ctl -D "$DATADIR/data" -m immediate stop >/dev/null 2>&1 || true
     fi
     rm -rf "$DATADIR"
+
+    #   #970 The declaration goes with the database it declares. Leaving it
+    #   would recreate #691 exactly — a URL on disk for a server that has been
+    #   shut down, which made the push gate fail the money SQL while the money
+    #   SQL was fine. Unconditional: the file may exist from a start whose
+    #   datadir has already been reclaimed.
+    rm -f "$REPO_ROOT/.local-pg-url"
+
     echo "Stopped and removed $DATADIR"
 }
 
