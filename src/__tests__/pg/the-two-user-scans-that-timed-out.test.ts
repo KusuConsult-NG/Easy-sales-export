@@ -48,6 +48,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
 import { dbDescribe, PG_URL } from '@/lib/testing/pg-harness';
+import { prefixUpperBound } from '@/lib/admin-search-helper';
 
 const TABLE = 'users_scan_probe';
 
@@ -130,6 +131,62 @@ afterAll(async () => {
  *   the statistics or a Postgres version nudged that choice — a test that
  *   breaks on a correct plan teaches everybody to ignore it.
  */
+/**
+ * Does this database's collation let the planner turn `LIKE 'x%'` into a range?
+ *
+ *   #970 THE THIRD ASSERTION BELOW IS COLLATION-DEPENDENT AND DID NOT SAY SO.
+ *
+ *   It asserts that a plain b-tree does NOT serve `LIKE 'Adedayo%'`, so the
+ *   adapter must keep emitting an explicit range. That is true under a real
+ *   locale, where Postgres cannot compute a safe upper bound for the prefix.
+ *
+ *   Under the C collation it is FALSE. Byte ordering makes the bound trivial, so
+ *   the planner rewrites the predicate itself and the plain index serves it:
+ *
+ *       Bitmap Index Scan on idx_users_scan_probe_full_name
+ *         Index Cond: (... >= 'Adedayo') AND (... < 'Adedayp')
+ *
+ *   CI runs `supabase start`, whose postgres has a real locale, so the assertion
+ *   held there and nobody saw this. scripts/local-postgres.sh runs initdb with
+ *   whatever locale the machine has, and a container with no locale set gives C —
+ *   so the documented lightweight path disagreed with CI about a planner fact.
+ *
+ *   It surfaced the moment #970 made the push gate actually RUN this suite on
+ *   that path. Before then the suite never ran locally, so a test that could only
+ *   pass under one collation looked green everywhere.
+ *
+ *   Stated as a precondition rather than deleted, because the property is real and
+ *   worth holding where it applies — the same shape as dbDescribe skipping without
+ *   a database and restDescribe without a PostgREST.
+ *
+ *   MUTATION-TESTED, because a precondition is the easiest place to hide a test
+ *   that no longer asserts anything:
+ *
+ *     force the precondition true (claim a real locale)   KILLED — "Expected SEQ,
+ *                                                         Received INDEX", the
+ *                                                         original failure, so C
+ *                                                         genuinely cannot satisfy
+ *                                                         it and this guard is not
+ *                                                         an excuse
+ *     break the C-path assertion                          KILLED, so the branch
+ *                                                         taken under C is not
+ *                                                         vacuous either
+ *
+ *   The first mutant PASSED on the first attempt, and the harness was why: run with
+ *   `-t` on this test's name alone, the test that CREATES the index is filtered out,
+ *   so the LIKE has no index to use and falls back to SEQ for a reason that has
+ *   nothing to do with collation. These three tests are order-dependent and have to
+ *   be mutated as a file. Recorded because "the mutant survived" and "my filter
+ *   removed the setup" look identical in the output.
+ */
+async function likeNeedsAnExplicitRange(): Promise<boolean> {
+    const { rows } = await client!.query(
+        `SELECT datcollate FROM pg_database WHERE datname = current_database()`,
+    );
+    const collate = String(rows[0]?.datcollate ?? '');
+    return !/^(C|POSIX|C\.UTF-?8)$/i.test(collate);
+}
+
 async function scanKindFor(sql: string, params: unknown[] = []): Promise<'SEQ' | 'INDEX'> {
     const { rows } = await client!.query(`EXPLAIN (FORMAT JSON) ${sql}`, params);
     const plan = JSON.stringify(rows[0]['QUERY PLAN']);
@@ -181,8 +238,24 @@ dbDescribe('#57014 — the admin search box stops reading the whole users table'
             `SELECT id FROM ${TABLE} WHERE raw_data->>'fullName' LIKE 'Adedayo%' LIMIT 30`,
         );
 
-        //   Recorded rather than required: this is the shape the index does
-        //   NOT serve, which is why the helper must keep emitting a range.
+        /*
+         *   Recorded rather than required: this is the shape the index does
+         *   NOT serve, which is why the helper must keep emitting a range.
+         *
+         *   #970 — only under a collation where the planner cannot extract the
+         *   prefix bound itself. Under C it can, and the plain b-tree serves the
+         *   LIKE as a range, which makes this expectation false rather than
+         *   merely flaky. See likeNeedsAnExplicitRange above.
+         */
+        if (!(await likeNeedsAnExplicitRange())) {
+            //   The stronger statement, and it holds in BOTH collations: whatever
+            //   the planner does with a LIKE, what the adapter emits is a range.
+            //   That is the thing the production code must keep doing, and this
+            //   assertion does not depend on the locale to say it.
+            expect(prefixUpperBound('Adedayo')).toBe('Adedayp');
+            return;
+        }
+
         expect(kind).toBe('SEQ');
     });
 });
