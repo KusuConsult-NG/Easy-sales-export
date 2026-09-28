@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { getOrderByIdForSellerAction } from "@/app/actions/order-management";
 import { updateOrderStatusAction, getTrackingUpdatesAction } from "@/app/actions/order-management";
-import { SELLER_AWAITING_AUTO_RELEASE, SELLER_COMPLETED_NOT_RELEASED } from "@/lib/escrow-release-copy";
+import { SELLER_AWAITING_AUTO_RELEASE, SELLER_COMPLETED_NOT_RELEASED, DISPATCH_NOTICE_FOR_SELLER } from "@/lib/escrow-release-copy";
 import ShipmentFields from "@/components/marketplace/ShipmentFields";
 import type { ShipmentRecord } from "@/lib/shipment-record";
 import { useToast } from "@/contexts/ToastContext";
@@ -267,6 +267,16 @@ export default function SellerOrderDetailClient(
                 {order.status === "shipped" && (
                     <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                         <p className="font-semibold text-blue-900 mb-1">🚚 Order Shipped</p>
+                        {/*
+                            #968 A shipped order now has a payout date, and this
+                            is the screen a seller looks at to find it. Without
+                            it the only party told about the five-day window was
+                            the buyer, and the seller — whose money it is —
+                            would have learned the rule by being paid.
+                        */}
+                        <p className="text-sm text-blue-800 mb-3 font-medium">
+                            {DISPATCH_NOTICE_FOR_SELLER}
+                        </p>
                         {/*
                             "Tracking: N/A" was what a buyer saw whenever the
                             seller had no waybill — or, worse, an invented

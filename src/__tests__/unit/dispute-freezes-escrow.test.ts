@@ -36,6 +36,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
+    ESCROW_DISPATCH_RELEASABLE_FROM,
     ESCROW_FREEZABLE_STATUSES,
     ESCROW_RELEASABLE_FROM,
     ESCROW_REFUNDABLE_FROM,
@@ -197,19 +198,35 @@ describe('what it records when it could not freeze', () => {
 });
 
 describe('the guard the cron depends on', () => {
-    it('the cron still selects only funded escrows', () => {
-        // If this ever widens, freezing the escrow stops being sufficient and this
-        // whole fix needs revisiting.
-        const src = code(CRON);
-
-        expect(src).toContain('.where("status", "==", "funded")');
-        expect(src).toContain('.where("releaseRequestedAt", "<=", thresholdTimestamp)');
+    /*
+     *   THESE TWO USED TO READ THE CRON'S SOURCE for `.where("status", "==",
+     *   "funded")` and `from: "funded"`, and #968 widened both — the dispatch
+     *   loop now selects and claims every status in
+     *   ESCROW_DISPATCH_RELEASABLE_FROM.
+     *
+     *   Re-pointed at the PROPERTY rather than re-typed with the new strings.
+     *   What this describes is not which words are in the route; it is that
+     *   freezing an escrow is SUFFICIENT to stop the payout. A source match
+     *   cannot tell the difference between a set that preserves that and one
+     *   that does not, so it would have passed on a change that broke the very
+     *   thing it was guarding — which is how it came to be asserting a status
+     *   this loop no longer uses.
+     */
+    it('every status the cron releases from is one a dispute can freeze', () => {
+        // If this ever widens to a status a dispute cannot move the row off,
+        // freezing stops being sufficient and this whole fix needs revisiting.
+        for (const status of ESCROW_DISPATCH_RELEASABLE_FROM) {
+            expect(ESCROW_FREEZABLE_STATUSES).toContain(status);
+        }
+        expect(ESCROW_DISPATCH_RELEASABLE_FROM.length).toBeGreaterThan(0);
     });
 
-    it('and claims from funded, so a frozen escrow is refused twice over', () => {
-        const src = code(CRON);
-        expect(src).toContain('from: "funded"');
-        expect(src).toContain('to: "released"');
+    it('and "disputed" is not one of them, so a frozen escrow is refused twice over', () => {
+        //   Twice over: the QUERY does not select a disputed row, and the CLAIM
+        //   would refuse it even if the query did. Both have to hold — the query
+        //   is a snapshot and a dispute can land between it and the claim.
+        expect(ESCROW_DISPATCH_RELEASABLE_FROM).not.toContain('disputed');
+        expect(code(CRON)).toContain('to: "released"');
     });
 
     it('the escrow-keyed path still freezes too, so both agree', () => {

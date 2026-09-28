@@ -7,8 +7,13 @@ import { exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { ESCROW_DELIVERED_AUTO_RELEASE_MS } from "@/lib/escrow-release-copy";
-import { claimStatusTransition } from "@/lib/status-transition";
+import {
+    ESCROW_DELIVERED_AUTO_RELEASE_MS,
+    ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS,
+    ESCROW_UNCONFIRMED_AUTO_RELEASE_MS,
+} from "@/lib/escrow-release-copy";
+import { ESCROW_DISPATCH_RELEASABLE_FROM } from "@/lib/escrow-status";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { createAdminAuditLog } from "@/lib/audit-log";
 // The notification ACTION now requires a session, which a cron run does not
@@ -23,9 +28,14 @@ export const dynamic = 'force-dynamic';
 const MAX_BATCH_SIZE = 50;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Escrow auto-release threshold: if a seller requested release and no dispute
-// was raised within this many days, auto-release to seller.
-const ESCROW_AUTO_RELEASE_DAYS = 7;
+//   BOTH AUTO-RELEASE WINDOWS NOW COME FROM lib/escrow-release-copy — #968.
+//
+//   `const ESCROW_AUTO_RELEASE_DAYS = 7` used to sit here, a bare number in a
+//   route, feeding notification copy that no screen agreed with because no
+//   screen mentioned it. That is the drift #390 extracted the 24-hour window to
+//   stop, and this constant was left behind by that pass. Its replacement is
+//   exported beside the sentences that state it to a buyer, so the timer and the
+//   disclosure cannot come apart.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -314,28 +324,57 @@ async function processExportWindows(now: Timestamp) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Loop 2: Escrow Transactions (marketplace / standalone escrow)
-// Finds FUNDED escrow transactions where:
-//   - releaseRequestedAt is set (seller asked for release)
-//   - No active dispute (status is still "funded", not "disputed")
-//   - More than ESCROW_AUTO_RELEASE_DAYS days have elapsed since request
+// Loop 2: DISPATCHED BUT NEVER CONFIRMED — #968
 //
-// This gives the buyer time to raise a dispute after the seller ships.
-// If no dispute is raised within the window, funds auto-release to seller.
+// Finds escrow rows where:
+//   - the order was dispatched more than ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS
+//     ago (`shippedAt`, stamped by _updateOrderStatusAction at dispatch)
+//   - the status is still one of ESCROW_DISPATCH_RELEASABLE_FROM — so the buyer
+//     has NOT confirmed (that moves the row to "delivered", where loop 3 takes
+//     over with a 24-hour window) and has NOT disputed (that freezes it)
+//
+// WHAT THIS LOOP USED TO BE, and why it was worse than broken. It queried
+// `releaseRequestedAt <= now - 7 days`, and the only writer of that field was
+// requestEscrowReleaseAction, which had no caller. So it had never fired — which
+// meant a buyer who simply never came back left the seller's money in escrow FOR
+// EVER, with no path to payment that did not depend on the buyer choosing to act.
+//
+// THE BACKLOG IS NOT PAID, deliberately. An escrow written before #968 shipped
+// carries no `shippedAt` at all, and a `where` on a missing field does not match
+// it, so those rows are structurally out of reach of the query above rather than
+// filtered out by a date somebody has to maintain. That is the owner's decision
+// and it is REPORTED rather than left to be inferred from a count of zero: see
+// `unstamped` below, and scripts/escrow-unconfirmed-backlog.ts, which reads the
+// orders and classifies them properly for a human to release by hand.
 // ─────────────────────────────────────────────────────────────────────────────
 async function processEscrowTransactions(now: Timestamp) {
-    const thresholdMs = Date.now() - ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000;
+    const thresholdMs = Date.now() - ESCROW_UNCONFIRMED_AUTO_RELEASE_MS;
     const thresholdTimestamp = Timestamp.fromMillis(thresholdMs);
 
+    //   NO INDEX IS ADDED FOR THIS, DELIBERATELY. The pair (status, shippedAt)
+    //   is a new composite predicate over document_collections, and reaching for
+    //   an expression index is the reflex. 022_jsonb_expression_indexes.sql
+    //   already measured that question and answered it: at this size Postgres
+    //   sequential-scans these tables and is right to, and creating the index
+    //   costs write throughput on every insert for nothing. That migration also
+    //   states its own re-measure trigger — document_collections past ~100,000
+    //   rows, or one collection_name past ~50,000 — which is the condition to
+    //   revisit this under, not a hunch about a new query being slow.
     const snapshot = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-        .where("status", "==", "funded")
-        .where("releaseRequestedAt", "<=", thresholdTimestamp)
+        .where("status", "in", [...ESCROW_DISPATCH_RELEASABLE_FROM])
+        .where("shippedAt", "<=", thresholdTimestamp)
         .limit(MAX_BATCH_SIZE)
         .get();
 
-    if (snapshot.empty) return { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
+    //   The rows this loop is declining to pay. Counted even when there is
+    //   nothing to release, because "processed: 0" on its own reads as "no
+    //   unconfirmed orders exist" when it can equally mean "there are twelve and
+    //   none of them carries a dispatch stamp".
+    const unstamped = await countUnstampedEscrows();
 
-    const stats = { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
+    if (snapshot.empty) return { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0, unstamped };
+
+    const stats = { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0, unstamped };
 
     const results = await Promise.allSettled(snapshot.docs.map(async (doc) => {
         const data = doc.data();
@@ -351,18 +390,26 @@ async function processEscrowTransactions(now: Timestamp) {
         // which takes no lock — so two overlapping runs both saw "funded" and
         // both credited the seller's wallet. The compare-and-swap also still
         // does the job the guard was there for: a buyer filing a dispute moves
-        // the status off "funded", and this then refuses to release.
-        const claim = await claimStatusTransition({
+        // the status off the set below, and this then refuses to release.
+        //
+        //   #968 fromAny, not `from: "funded"`. The query admits every status in
+        //   ESCROW_DISPATCH_RELEASABLE_FROM, and a single-status claim would have
+        //   silently refused every `in_transit` row the query returned — a loop
+        //   that looks like it is working and pays a subset of what it selected.
+        //   The set is the SAME constant the query and the dispatch stamp use, so
+        //   the three cannot drift apart.
+        const claim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: doc.id,
-            from: "funded",
+            fromAny: [...ESCROW_DISPATCH_RELEASABLE_FROM],
             to: "released",
             patch: { releasedBy: "cron", releasedAt: new Date().toISOString() },
         });
 
         if (!claim.claimed) {
             logger.info(
-                `[Cron] Escrow ${escrowId} is '${claim.status ?? "missing"}', not 'funded' — skipping auto-release.`
+                `[Cron] Escrow ${escrowId} is '${claim.status ?? "missing"}', not awaiting `
+                + `confirmation — skipping dispatch auto-release.`
             );
             return;
         }
@@ -411,7 +458,7 @@ async function processEscrowTransactions(now: Timestamp) {
             // NOT "completed": platform_revenue_totals() sums completed rows,
             // and an escrow release is platform-held money going OUT.
             status: "disbursement",
-            metadata: { escrowId, orderId: data.orderId ?? "", productName, trigger: "auto_release_after_7_days" },
+            metadata: { escrowId, orderId: data.orderId ?? "", productName, trigger: "auto_release_unconfirmed_after_dispatch" },
         });
 
         // claimed:false means an earlier attempt already credited this escrow.
@@ -435,7 +482,7 @@ async function processEscrowTransactions(now: Timestamp) {
                 balanceBefore,
                 balanceAfter,
                 reference: escrowId,
-                description: `Payout for order #${data.orderId || escrowId} (Escrow auto-released after 7d)`,
+                description: `Payout for order #${data.orderId || escrowId} (Escrow auto-released ${ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS}d after dispatch, unconfirmed)`,
                 status: "completed",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
@@ -468,8 +515,8 @@ async function processEscrowTransactions(now: Timestamp) {
             userId: "cron",
             targetId: escrowId,
             targetType: "escrow_transaction",
-            metadata: { amount, sellerId, buyerId, trigger: "auto_release_after_7_days" },
-            details: `Automated release: ${ESCROW_AUTO_RELEASE_DAYS}d window elapsed with no dispute`,
+            metadata: { amount, sellerId, buyerId, trigger: "auto_release_unconfirmed_after_dispatch" },
+            details: `Automated release: dispatched ${ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS}d ago, buyer never confirmed, no dispute raised`,
         });
 
         // Notify seller
@@ -477,7 +524,7 @@ async function processEscrowTransactions(now: Timestamp) {
             userId: sellerId,
             type: "escrow",
             title: "Escrow Funds Auto-Released",
-            message: `₦${amount.toLocaleString()} for "${productName}" has been automatically released to your account after the ${ESCROW_AUTO_RELEASE_DAYS}-day dispute window elapsed.`,
+            message: `₦${amount.toLocaleString()} for "${productName}" has been automatically released to your account: it was dispatched ${ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS} days ago and the buyer did not confirm receipt or raise a dispute.`,
             link: `/escrow/${escrowId}`,
             linkText: "View Escrow",
         }).catch(e => logger.error(`[Cron: Escrow] Seller notification failed for ${escrowId}:`, e));
@@ -487,7 +534,7 @@ async function processEscrowTransactions(now: Timestamp) {
             userId: buyerId,
             type: "escrow",
             title: "Escrow Transaction Completed",
-            message: `The escrow for "${productName}" has been automatically completed. The ${ESCROW_AUTO_RELEASE_DAYS}-day dispute window has elapsed.`,
+            message: `The escrow for "${productName}" has been released to the seller. It was dispatched ${ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS} days ago and was not confirmed or disputed before the deadline.`,
             link: `/escrow/${escrowId}`,
             linkText: "View Escrow",
         }).catch(e => logger.error(`[Cron: Escrow] Buyer notification failed for ${escrowId}:`, e));
@@ -507,6 +554,47 @@ async function processEscrowTransactions(now: Timestamp) {
 
     logger.info(`[Cron: EscrowTransactions] Processed ${stats.processed}. Success: ${stats.succeeded}. Skipped: ${stats.skipped}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
     return stats;
+}
+
+/**
+ * How many escrows are awaiting confirmation with NO dispatch stamp — #968.
+ *
+ * These are the rows the loop above structurally cannot pay: escrows that were
+ * already sitting in the collection when the five-day rule shipped, plus orders
+ * that genuinely have not been dispatched yet. The two are not separated here,
+ * and saying so is the point — scripts/escrow-unconfirmed-backlog.ts reads the
+ * ORDERS to tell them apart, which is a join this route deliberately does not do
+ * on every cron tick.
+ *
+ * WHY IT IS A SUBTRACTION. There is no "field is absent" predicate on this
+ * adapter, so the stamped rows are counted with a `<=` against a date no real
+ * shipment can exceed — the same (status, shippedAt) index the paying query
+ * uses — and taken off the total. Two aggregate counts, no documents read.
+ *
+ * Reported rather than logged: a number that only reaches the log is a number
+ * nobody reads until they already suspect something.
+ */
+async function countUnstampedEscrows(): Promise<number> {
+    try {
+        const col = () => db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("status", "in", [...ESCROW_DISPATCH_RELEASABLE_FROM]);
+
+        const [awaiting, stamped] = await Promise.all([
+            col().count().get(),
+            col().where("shippedAt", "<=", Timestamp.fromMillis(Date.UTC(3000, 0, 1))).count().get(),
+        ]);
+
+        const total = Number(awaiting.data().count ?? 0);
+        const withStamp = Number(stamped.data().count ?? 0);
+        //   Floored: an inconsistent pair of counts across two reads must not
+        //   report a negative backlog, which reads as a bug in the wrong place.
+        return Math.max(0, total - withStamp);
+    } catch (error) {
+        //   A failed count must not fail the payouts. -1 says "not measured",
+        //   which is honest, where 0 would claim an empty backlog.
+        logger.error("[Cron: EscrowTransactions] Unstamped backlog count failed", error);
+        return -1;
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

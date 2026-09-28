@@ -17,7 +17,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { ESCROW_DELIVERED_AUTO_RELEASE_HOURS } from "@/lib/escrow-release-copy";
+import { ESCROW_DELIVERED_AUTO_RELEASE_HOURS, DISPATCH_NOTICE_FOR_BUYER } from "@/lib/escrow-release-copy";
 
 // ---------------------------------------------------------------------------
 // Internal: write a single notification document
@@ -223,6 +223,21 @@ export async function notifyPaymentReceived(params: {
 
 /**
  * Notify buyer when their order has been shipped.
+ *
+ *   #968 THIS IS NOW THE ONLY DISCLOSURE THAT REACHES A BUYER WHO NEVER COMES
+ *   BACK, so it carries the deadline.
+ *
+ *   Dispatch starts a five-day clock on the buyer's money: after it, the escrow
+ *   is released to the seller with no confirmation from anybody. Unlike the
+ *   24-hour window, which a buyer opens themselves by pressing Confirm and is
+ *   told about in the dialog, this one runs whether or not they ever open the app
+ *   again — so a notification that says only "on its way" is the whole of what
+ *   they get before the money moves.
+ *
+ *   The sentence comes from lib/escrow-release-copy rather than being typed here.
+ *   This function is one of SIX places that described the release rule in #390's
+ *   measurement, and the reason no two of them agreed is that each had its own
+ *   copy of the number.
  */
 export async function notifyOrderShipped(params: {
     buyerId: string;
@@ -236,7 +251,7 @@ export async function notifyOrderShipped(params: {
         userId: buyerId,
         type: "transaction",
         title: "Your Order Has Been Shipped 🚚",
-        message: `Order #${orderNumber} is on its way!${trackingNote}`,
+        message: `Order #${orderNumber} is on its way!${trackingNote} ${DISPATCH_NOTICE_FOR_BUYER}`,
         link: `/marketplace/buyer/orders/${orderId}`,
         linkText: "Track Order",
     });

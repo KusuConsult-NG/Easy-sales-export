@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { getOrderByIdAction } from "@/app/actions/orders";
 import { confirmOrderReceiptAction, cancelOrderAction } from "@/app/actions/marketplace";
-import { CONFIRM_RECEIPT_PROMPT, CONFIRM_RECEIPT_SUCCESS } from "@/lib/escrow-release-copy";
+import { CONFIRM_RECEIPT_PROMPT, CONFIRM_RECEIPT_SUCCESS, ESCROW_HELD_UNTIL_RELEASE } from "@/lib/escrow-release-copy";
 import { getTrackingUpdatesAction } from "@/app/actions/order-management";
 import type { TrackingUpdate } from "@/lib/logistics";
 import { useToast } from "@/contexts/ToastContext";
@@ -244,7 +244,10 @@ export default function BuyerOrderDetailClient({ initial = null }: {
                         <div>
                             <p className="font-semibold text-purple-900 text-sm">Payment Secured in Escrow</p>
                             <p className="text-purple-700 text-xs mt-0.5">
-                                Funds are locked and will only release to the seller once you confirm receipt.
+                                {/* #968 "will ONLY release once you confirm" was true until
+                                    dispatch started a clock of its own. Both deadlines now
+                                    come from lib/escrow-release-copy. */}
+                                {ESCROW_HELD_UNTIL_RELEASE}
                             </p>
                         </div>
                     </div>

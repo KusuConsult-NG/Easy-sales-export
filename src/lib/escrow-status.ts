@@ -98,6 +98,36 @@ export const ESCROW_RELEASABLE_FROM: readonly EscrowStatus[] = [
 ];
 
 /**
+ * What the DISPATCH clock may release from — #968.
+ *
+ * The five-day unconfirmed auto-release (see lib/escrow-release-copy) both
+ * STAMPS and RELEASES against this set, from two different files, which is why
+ * it is a constant rather than a list in each:
+ *
+ *   _updateOrderStatusAction stamps `shippedAt` onto the escrow rows in these
+ *   statuses when the seller marks the order shipped;
+ *   api/cron/release-escrow claims from exactly these statuses five days later.
+ *
+ * A stamp on a row the cron cannot release is a clock nobody is running, and a
+ * release from a status the stamp never reaches is a payout with no deadline
+ * behind it. Both are silent.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and why each would be a defect:
+ *
+ *   "delivered"  belongs to the 24-hour loop. A buyer who confirms must keep
+ *                the full 24 hours this platform promises them, and a second
+ *                clock able to fire inside that window would cut short exactly
+ *                the hours a dispute is for.
+ *   "disputed"   is frozen. That is the whole point of the freeze.
+ *   "pending"    was never funded — no money reached the platform — so there is
+ *                nothing to release and ESCROW_RELEASABLE_FROM excludes it too.
+ */
+export const ESCROW_DISPATCH_RELEASABLE_FROM: readonly EscrowStatus[] = [
+    "funded",
+    "in_transit",
+];
+
+/**
  * What a refund may be claimed from.
  *
  * NOT "pending". A pending escrow was never funded — no money reached the

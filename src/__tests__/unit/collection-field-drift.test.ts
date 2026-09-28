@@ -75,8 +75,10 @@
  *
  * TRIAGED AND NOT CHANGED
  * -----------------------
- *   ESCROW_TRANSACTIONS.releaseRequestedAt   written on a transition, not at
- *                                            create. Correct.
+ *   ESCROW_TRANSACTIONS.shippedAt            written at dispatch, not at
+ *                                            create. Correct, and load-bearing:
+ *                                            see the entry itself. (Was
+ *                                            releaseRequestedAt until #968.)
  *   WALLET_TRANSACTIONS balanceBefore/After  order-management.ts writes a row
  *                                            without them and the wallet
  *                                            statement UI renders them, so that
@@ -146,12 +148,23 @@ describe('the scanner reads the write surface', () => {
         'COURSE_ENROLLMENTS | READER-EXPECTS src/lib/academy-course-progress.ts ensureCourseEnrolmentRecord never writes resolvedUserId — queried by readers':
             'same — the field is read for recovery only',
 
-        //   A field stamped when a release is REQUESTED cannot be written by the
-        //   site that creates the escrow.
-        'ESCROW_TRANSACTIONS | READER-EXPECTS src/app/actions/marketplace/_payment_orders.ts _initializeOrderPaymentAction never writes releaseRequestedAt — queried by readers':
-            'set later by the release-request path; a creation site has nothing to put there',
-        'ESCROW_TRANSACTIONS | READER-EXPECTS src/infrastructure/payments/service.ts result never writes releaseRequestedAt — queried by readers':
-            'same — written when a release is requested, not when the escrow is created',
+        /*
+         *   A field stamped at DISPATCH cannot be written by the site that
+         *   creates the escrow — #968 replaced `releaseRequestedAt` with
+         *   `shippedAt` here, and the two entries moved with it.
+         *
+         *   The absence is not incidental: it IS the mechanism. An escrow row
+         *   with no `shippedAt` is one the five-day unconfirmed release cannot
+         *   reach, which is how the backlog that existed when that rule shipped
+         *   stays unpaid until a human reviews it. A creation site that started
+         *   writing this field — with a placeholder, a null, or the created-at
+         *   time — would put every new escrow on a payout clock that begins
+         *   before the goods have moved.
+         */
+        'ESCROW_TRANSACTIONS | READER-EXPECTS src/app/actions/marketplace/_payment_orders.ts _initializeOrderPaymentAction never writes shippedAt — queried by readers':
+            'stamped at dispatch by _updateOrderStatusAction; a creation site has nothing to put there, and a placeholder would start the payout clock early',
+        'ESCROW_TRANSACTIONS | READER-EXPECTS src/infrastructure/payments/service.ts result never writes shippedAt — queried by readers':
+            'same — written when the seller marks the order shipped, not when the escrow is created',
 
         'NOTIFICATIONS | DIVERGENT-KEYS src/app/actions/marketplace/_quotes.ts _submitQuoteRequestAction omits linkText':
             'the link label falls back to a default; cosmetic, and the row is not invisible',

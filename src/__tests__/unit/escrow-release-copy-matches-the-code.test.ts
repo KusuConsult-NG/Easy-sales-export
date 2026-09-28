@@ -38,13 +38,20 @@
  *   silently is that it names the window and the dispute deadline, so those
  *   are asserted as facts the sentence must contain, not as strings.
  *
- *   TWO SENTENCES WERE MEASURED AND LEFT ALONE — "funds are locked and will
- *   only release once you confirm receipt", and the list header's version of
- *   it. With the seven-day loop unreachable (requestEscrowReleaseAction has no
- *   caller, so releaseRequestedAt is never written), confirming really is the
- *   buyer-side trigger and both are true. There is an assertion below that the
- *   seven-day path is still unreachable, because the day somebody wires it up,
- *   those two sentences become false and nothing else would notice.
+ *   TWO SENTENCES WERE MEASURED AND LEFT ALONE BY #390, AND #968 CAME FOR THEM
+ *   — "funds are locked and will only release once you confirm receipt", and the
+ *   list header's version of it. Both were true while the only automatic release
+ *   ran from a status the buyer put the row in: confirming really was the
+ *   buyer-side trigger. #390 said so and left them, and recorded that the day
+ *   somebody wired up the seven-day loop they would become false.
+ *
+ *   That day was #968, and it did not arrive by somebody wiring up the old
+ *   action — it arrived by the loop being re-pointed at DISPATCH, which the
+ *   seller does. Inaction no longer holds the money. Both sentences are now
+ *   ESCROW_HELD_UNTIL_RELEASE, which names both deadlines, and the assertion
+ *   below is re-pointed with them: the property that matters is no longer "the
+ *   seven-day path is unreachable" but "no release path runs from a field the
+ *   copy does not describe".
  *
  *   MUTATION-TESTED, WITH A CONTROL. Against a green baseline:
  *
@@ -83,6 +90,10 @@ import {
     CONFIRM_RECEIPT_SUCCESS,
     SELLER_AWAITING_AUTO_RELEASE,
     SELLER_COMPLETED_NOT_RELEASED,
+    ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS,
+    DISPATCH_NOTICE_FOR_BUYER,
+    DISPATCH_NOTICE_FOR_SELLER,
+    ESCROW_HELD_UNTIL_RELEASE,
 } from '@/lib/escrow-release-copy';
 
 const SRC = join(process.cwd(), 'src');
@@ -217,40 +228,63 @@ describe('#390 — no screen states the rule by hand any more', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#390 — the assumption the surviving copy rests on', () => {
-    it('THE SEVEN-DAY RELEASE PATH IS STILL UNREACHABLE', () => {
-        /**
-         * Two sentences were measured as TRUE and left alone: escrow releases
-         * to the seller only once the buyer confirms receipt. That holds
-         * because the cron's other loop — release a "funded" escrow seven days
-         * after `releaseRequestedAt` — can never fire: the only writer of that
-         * field is requestEscrowReleaseAction, and nothing calls it.
-         *
-         * If somebody wires that action to a button, a seller can be paid
-         * without the buyer confirming anything, and those two sentences become
-         * false. Nothing else in the suite would notice, so this does.
+describe('#968 — no release path runs from a field the copy does not describe', () => {
+    /*
+     *   THIS CONTROL REPLACES "THE SEVEN-DAY RELEASE PATH IS STILL UNREACHABLE".
+     *
+     *   That test guarded a real thing: the copy on the buyer's screens assumed
+     *   only a buyer could start a payout, and the seven-day loop would have
+     *   falsified it. It asserted the loop stayed dead by walking the tree for
+     *   callers of requestEscrowReleaseAction.
+     *
+     *   #968 retired the assumption instead of the loop. Dispatch now starts a
+     *   payout, the copy says so, and "is the old action still uncalled" no
+     *   longer protects anything — it would sit green while a THIRD trigger was
+     *   added from some other field, which is the same defect one field along.
+     *
+     *   So the property is stated directly: every field the cron runs a release
+     *   deadline from must be one the shared copy module describes to the person
+     *   whose money it is. `shippedAt` is described (DISPATCH_NOTICE_FOR_BUYER,
+     *   ESCROW_HELD_UNTIL_RELEASE); `releaseRequestedAt` is not, and must
+     *   therefore not gate a release.
+     */
+    it('THE CRON RUNS NO RELEASE DEADLINE FROM releaseRequestedAt', () => {
+        //   The retired seven-day trigger. requestEscrowReleaseAction still
+        //   exists and still writes this field — it was NOT deleted, because
+        //   deleting it was not asked for — so what has to stay true is that the
+        //   cron does not pay anybody because of it.
+        const cron = code(CRON);
+        expect(cron).not.toContain('releaseRequestedAt');
+    });
+
+    it('and the deadline it DOES run from is the one the buyer is told about', () => {
+        const cron = code(CRON);
+        expect(cron).toContain('shippedAt');
+
+        //   Both sentences a buyer can reach must name the dispatch window, or
+        //   the clock is running somewhere they were never shown.
+        for (const sentence of [DISPATCH_NOTICE_FOR_BUYER, ESCROW_HELD_UNTIL_RELEASE]) {
+            expect(sentence).toContain(String(ESCROW_UNCONFIRMED_AUTO_RELEASE_DAYS));
+        }
+    });
+
+    it('and the dispatch notification carries it, because that is all a silent buyer gets', () => {
+        /*
+         *   A buyer who never opens the app again is still paid out of. The
+         *   24-hour window sits behind a button they press, so a dialog is a
+         *   fair place to state it; this one starts whatever they do, and the
+         *   shipped notification is the only thing that reaches them first.
          */
-        const lifecycle = code('app/actions/marketplace/_escrow_lifecycle.ts');
-        expect(lifecycle).toContain('releaseRequestedAt');
+        const notifications = code('lib/marketplace-notifications.ts');
+        expect(notifications).toContain('DISPATCH_NOTICE_FOR_BUYER');
+    });
 
-        const callers: string[] = [];
-        const walk = (dir: string) => {
-            for (const entry of require('fs').readdirSync(dir)) {
-                const full = join(dir, entry);
-                if (require('fs').statSync(full).isDirectory()) {
-                    if (entry === '__tests__' || entry === 'node_modules') continue;
-                    walk(full);
-                } else if (/\.tsx?$/.test(entry)) {
-                    const rel = full.slice(SRC.length + 1);
-                    if (rel.startsWith('app/actions/marketplace/_escrow_lifecycle')) continue;
-                    if (/requestEscrowReleaseAction/.test(stripComments(readFileSync(full, 'utf-8'), { label: rel }))) {
-                        callers.push(rel);
-                    }
-                }
-            }
-        };
-        walk(SRC);
-
-        expect(callers).toEqual([]);
+    it('and the window is a shared constant, not a number typed into the route', () => {
+        //   #390's rule, applied to the second window: the bare
+        //   `ESCROW_AUTO_RELEASE_DAYS = 7` that used to live in the route is what
+        //   let its notification copy drift from every screen.
+        const cron = code(CRON);
+        expect(cron).toContain('ESCROW_UNCONFIRMED_AUTO_RELEASE_MS');
+        expect(cron).not.toMatch(/const\s+ESCROW_AUTO_RELEASE_DAYS\s*=/);
     });
 });

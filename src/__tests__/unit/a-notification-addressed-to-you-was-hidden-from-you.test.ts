@@ -190,7 +190,12 @@ describe('#634 — the sweep, checked against answers known independently', () =
         //   rather than of a regex's opinion — so it is re-read, not relaxed.
         expect(at('src/app/actions/marketplace/_escrow_lifecycle.ts', 117))
             .toMatchObject({ type: 'escrow', to: 'data.buyerId' });
-        expect(at('src/lib/marketplace-notifications.ts', 373))
+        //   373 -> 388: #968 added a note above notifyOrderShipped
+        //   explaining why the dispatch notification now carries the five-day
+        //   payout deadline — it is the only disclosure that reaches a buyer who
+        //   never opens the app again. Re-read, not relaxed, for the reason
+        //   stated above.
+        expect(at('src/lib/marketplace-notifications.ts', 388))
             .toMatchObject({ type: 'escrow', to: 'buyerId' });
         expect(at('src/app/actions/export-booking.ts', 435))
             .toMatchObject({ type: 'export', to: 'booking.userId' });
