@@ -29,17 +29,43 @@
  *   unpaid, and either locks them out or sends them a demand for money.
  *
  *   So most of what follows is not about the write. It is one case per reader.
+ *
+ * ── #975 AND THEN THE OWNER NARROWED THE RULE ───────────────────────────────
+ *
+ *   "paid enrolment or legacy members (admin can't grant access until user
+ *   pays)."
+ *
+ *   The split above was correct and stays: money and a grant are still two
+ *   questions. What changed is that only the first one opens the module.
+ *   `isAcademyEntitled` — "paid OR granted" — is DELETED rather than narrowed,
+ *   because a predicate that said one thing and now says another is one edit
+ *   from silently meaning the first thing again, and all ten of its callers read
+ *   as though the wider meaning were intended. They ask `isAcademyPaid` now.
+ *
+ *   AND THE TWO ADMIN DOORS STOPPED WRITING `waived`. Leaving them would have
+ *   had an admin press Approve, see it succeed, and the learner still be locked
+ *   out — a screen and a gate disagreeing in silence, which is worse than the
+ *   bookkeeping lie this file was originally written about. They leave the fee
+ *   explicitly `pending` instead, and say so in the message they return.
+ *
+ *   MUTATION LOG, each mutant verified to have landed:
+ *
+ *     isAcademyPaid accepts a waiver again        5 tests   KILLED
+ *     academyGrantFields writes "waived" again    5 tests   KILLED
+ *     a caller of the deleted union is re-added   1 test    KILLED
+ *     reword this header                          SURVIVED, intended
  */
 
+import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
 
 import {
     ACADEMY_GRANTED_STATUSES,
     ACADEMY_PAID_STATUSES,
+    ACADEMY_UNPAID_STATUS,
     ADMIN_GRANT_SOURCE,
     academyGrantFields,
-    isAcademyEntitled,
     isAcademyGranted,
     isAcademyPaid,
 } from "@/lib/academy-entitlement";
@@ -90,20 +116,34 @@ describe("the two questions are no longer one question", () => {
         expect(isAcademyGranted("completed")).toBe(false);
     });
 
-    it("but both open the module", () => {
-        expect(isAcademyEntitled("completed")).toBe(true);
-        expect(isAcademyEntitled("waived")).toBe(true);
+    it("#975 THE test: ONLY MONEY OPENS THE MODULE", () => {
+        /*
+         *   THE OWNER: "paid enrolment or legacy members (admin can't grant
+         *   access until user pays)."
+         *
+         *   This read `isAcademyEntitled("waived") === true` and asserted that a
+         *   grant opens Academy exactly as a payment does. That was the right
+         *   reading of the previous instruction, which asked for grants to be
+         *   RECORDED honestly rather than to stop working. It is not the rule any
+         *   more, and `isAcademyEntitled` is deleted rather than narrowed so the
+         *   union cannot quietly come back.
+         */
+        expect(isAcademyPaid("completed")).toBe(true);
+        expect(isAcademyPaid("waived")).toBe(false);
     });
 
-    it("and neither opens it for somebody who has done nothing", () => {
+    it("and nothing opens it for somebody who has done nothing", () => {
         for (const nothing of ["pending", "unpaid", "failed", "abandoned", "", null, undefined, 0]) {
-            expect(isAcademyEntitled(nothing)).toBe(false);
+            expect(isAcademyPaid(nothing)).toBe(false);
         }
     });
 
     it("reads the spellings a JSONB round-trip and a careless caller produce", () => {
-        expect(isAcademyEntitled("  Completed ")).toBe(true);
-        expect(isAcademyEntitled("WAIVED")).toBe(true);
+        expect(isAcademyPaid("  Completed ")).toBe(true);
+        //   Still recognised AS A GRANT — an administrator has to be able to see
+        //   one — it simply no longer counts as payment.
+        expect(isAcademyPaid("WAIVED")).toBe(false);
+        expect(isAcademyGranted("  WAIVED ")).toBe(true);
     });
 
     it("keeps `successful`, which two readers accepted before this module", () => {
@@ -124,11 +164,21 @@ describe("the two questions are no longer one question", () => {
 describe("what an admin grant records", () => {
     const grant = academyGrantFields("admin-7", "NOW");
 
-    it("is a grant, not a completed payment", () => {
-        expect(grant.paymentStatus).toBe("waived");
-        expect(grant.paymentStatus).not.toBe("completed");
-        expect(ACADEMY_GRANTED_STATUSES).toContain(grant.paymentStatus);
+    it("#975 leaves the fee OWED, and says so in the field that decides", () => {
+        /*
+         *   This asserted `paymentStatus === "waived"`. A waiver no longer opens
+         *   the module, so writing one would have left these two doors reporting
+         *   success for a place the gate then refuses — an admin pressing
+         *   Approve, seeing it work, and the learner still locked out.
+         *
+         *   WRITTEN EXPLICITLY, NOT OMITTED: a learner may carry a stale
+         *   `completed` or `waived` from an earlier write, and leaving the field
+         *   alone would let it survive a decision that means the opposite.
+         */
+        expect(grant.paymentStatus).toBe(ACADEMY_UNPAID_STATUS);
         expect(ACADEMY_PAID_STATUSES).not.toContain(grant.paymentStatus as never);
+        expect(ACADEMY_GRANTED_STATUSES).not.toContain(grant.paymentStatus as never);
+        expect(isAcademyPaid(grant.paymentStatus)).toBe(false);
     });
 
     it("names who decided and when — the shape _ac_admin_review already had", () => {
@@ -191,7 +241,7 @@ describe("no reader is left behind", () => {
         ["the student count", METRICS],
     ])("%s asks the shared rule", (_label, rel) => {
         //   codeBody, not codeOnly: the import alone must not satisfy this.
-        expect(codeBody(rel)).toContain("isAcademyEntitled(");
+        expect(codeBody(rel)).toContain("isAcademyPaid(");
     });
 
     it.each([
@@ -232,15 +282,24 @@ describe("no reader is left behind", () => {
         }
     });
 
-    it("and an unpaid-applicant broadcast still cannot reach a granted learner", () => {
-        //   Those audiences query `paymentStatus in ["pending","unpaid","failed"]`.
-        //   "waived" is not among them, so a grant is excluded by the query
-        //   itself — but only while that list stays free of it.
+    it("#975 and an unpaid-applicant broadcast now REACHES a granted learner", () => {
+        /*
+         *   THE DIRECTION REVERSED, AND THAT IS CORRECT. This asserted a grant
+         *   could not be reached by a "you have not paid" broadcast, because
+         *   "waived" was not in the audience query — the learner was in, so
+         *   chasing them would have been wrong.
+         *
+         *   A granted learner now owes the fee, so they SHOULD be chased, and
+         *   academyGrantFields writes `pending`, which is the first value in that
+         *   audience list. Nothing about the query changes; what changed is what
+         *   the doors write into it.
+         */
         for (const rel of [SMS, IN_APP]) {
             const src = codeOnly(rel);
             expect(src).toContain('["pending", "unpaid", "failed"]');
             expect(src).not.toContain('"waived"');
         }
+        expect(academyGrantFields("admin-7", "NOW").paymentStatus).toBe("pending");
     });
 
     it("the cooperative readers are untouched — this is an Academy change", () => {
@@ -254,20 +313,39 @@ describe("no reader is left behind", () => {
 });
 
 describe("revenue counts money and only money", () => {
-    it("a grant is not paid, however entitled it makes the learner", () => {
+    it("a grant adds nothing to revenue and opens nothing", () => {
         const grant = academyGrantFields("admin-7", "NOW");
 
-        expect(isAcademyEntitled(grant.paymentStatus)).toBe(true);
         expect(isAcademyPaid(grant.paymentStatus)).toBe(false);
+        expect(Number(grant.paymentAmount) || 0).toBe(0);
     });
 
-    it("so the two predicates cannot be collapsed into one", () => {
-        //   If a refactor ever makes isAcademyPaid and isAcademyEntitled agree,
-        //   the distinction this whole change exists for is gone.
-        const disagreeOn = ["waived"].filter(
-            (s) => isAcademyEntitled(s) !== isAcademyPaid(s),
-        );
+    it("#975 and NOTHING IN THE TREE STILL ASKS THE OLD UNION", () => {
+        /*
+         *   The ratchet for this change. `isAcademyEntitled` returned "paid OR
+         *   granted" and had ten callers, every one of which read as though the
+         *   wider meaning were intended. It is deleted rather than redefined —
+         *   a predicate that said one thing and now says another is one edit from
+         *   silently meaning the first thing again — and this fails if the name
+         *   returns anywhere, in source or in a test.
+         */
+        //   CODE LINES ONLY. This suite, and the two modules it is about, discuss
+        //   the deleted predicate by name in their headers — that is the record
+        //   of the change, not a caller — so a bare `grep -rl` matches itself and
+        //   the ratchet could never go green while being documented.
+        //   ASSEMBLED, NOT WRITTEN OUT. A sweep for a name cannot contain that
+        //   name: the first version matched its own grep string and reported
+        //   itself as the last caller. Building the needle from two halves keeps
+        //   the literal out of the tree being swept.
+        const needle = "isAcademy" + "Entitled";
+        const hits = execSync(`grep -rn '${needle}' src/ || true`, { encoding: "utf8" })
+            .split("\n")
+            .filter(Boolean)
+            .filter((line) => {
+                const text = line.replace(/^[^:]*:\d+:/, "").trim();
+                return !text.startsWith("*") && !text.startsWith("//") && !text.startsWith("/*");
+            });
 
-        expect(disagreeOn).toEqual(["waived"]);
+        expect({ stillAskingTheOldUnion: hits }).toEqual({ stillAskingTheOldUnion: [] });
     });
 });

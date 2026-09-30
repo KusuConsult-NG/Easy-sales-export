@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { adminSortKey } from "@/lib/admin-row-sort";
-import { isAcademyEntitled } from "@/lib/academy-entitlement";
+import { isAcademyPaid } from "@/lib/academy-entitlement";
 import {
     FileText, CheckCircle, XCircle, Loader2, Filter,
     Search, Eye, BookOpen, GraduationCap, DollarSign,
@@ -146,7 +146,7 @@ function ApplicationDetailModal({
 }) {
     const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
-        status: isAcademyEntitled(app.paymentStatus) ? "completed" : "pending",
+        status: isAcademyPaid(app.paymentStatus) ? "completed" : "pending",
         amount: app.paymentAmount || 0,
         plan: app.plan || "registration",
     });
@@ -713,8 +713,8 @@ export default function AdminAcademyApplicationsPage() {
             // Apply payment filter just like the UI
             exportApps = exportApps.filter((a: any) => {
                 if (config.payment === "all") return true;
-                if (config.payment === "completed") return isAcademyEntitled(a.paymentStatus);
-                return !isAcademyEntitled(a.paymentStatus);
+                if (config.payment === "completed") return isAcademyPaid(a.paymentStatus);
+                return !isAcademyPaid(a.paymentStatus);
             });
 
             // Apply registry filter just like the UI

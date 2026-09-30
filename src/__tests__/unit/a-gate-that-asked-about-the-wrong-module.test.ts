@@ -150,7 +150,7 @@ const OWNED_READERS: Record<Module, string[]> = {
         'cooperativeTierForPerson', 'getUserTierAction', 'findCooperativeMemberRow',
         'findCooperativeMemberRowForPerson', 'memberStatusOf', 'COOPERATIVE_MEMBERS',
     ],
-    academy: ['isAcademyEntitled'],
+    academy: ['isAcademyPaid'],
     wave: [],
     export: [],
     'farm-nation': [],

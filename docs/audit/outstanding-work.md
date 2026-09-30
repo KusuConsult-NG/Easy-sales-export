@@ -42,6 +42,33 @@ CI runs every one of them on each push and passed on `535466ef`, so nothing in
 the list above is unmeasured — it is measured *there* rather than here, and
 saying which is the point.
 
+**#975 — AN ADMIN COULD OPEN ACADEMY WITHOUT A PAYMENT, AND NOW CANNOT.** The
+owner, stating the rule: *"paid enrolment or legacy members (admin can't grant
+access until user pays)."* The gate decided access on `isAcademyEntitled`, which
+was `isAcademyPaid(status) || isAcademyGranted(status)` — so a `paymentStatus:
+"waived"` written by either admin door opened the module exactly as money did.
+That was the correct reading of the PREVIOUS instruction (*"fix the admin
+approval writing paymentStatus completed without a payment"*), which asked for
+grants to be recorded honestly, not abolished; this narrows it. **The union
+predicate is deleted rather than redefined** — all ten callers read as though the
+wider meaning were intended — and every one now asks `isAcademyPaid`. Academy is
+excluded from the role fast path, so that single predicate closes the module to a
+waived place through every layer. **The two admin doors stopped writing `waived`
+and now leave the fee explicitly `pending`**, and say so in the message they
+return: leaving them would have had an admin press Approve, see it succeed, and
+the learner still be locked out. Legacy is untouched — it travels on `_isLegacy`
+/ `legacyOnboardedBy`. Mutation-tested: 3 killed, including a ratchet that fails
+if any caller of the deleted union returns.
+
+**⚠️ MEASURE BEFORE MERGING #975.** Nothing counted the affected population, so
+`npm run academy:granted` (read-only, no `--apply`) now reports three groups:
+learners on `waived` who **lose access when this deploys**; the six on
+`completed` with no `paymentVerifiedBy` and no `processed_payments` row, who
+**keep** access because `completed` is still a paid status and who are reported
+anyway because the owner's rule covers them too; and legacy members, unaffected.
+Each waived learner is a decision — a scholarship is not a misclick — and this
+must not be merged before that list has been read.
+
 **#973 — A FARM NATION PURCHASE GATE ASKED ABOUT THE COOPERATIVE.** Reported by
 the owner from users: *"there is a gate that tells them they are not part of
 cooperative which is not supposed to be so."* Four doors on the land-purchase

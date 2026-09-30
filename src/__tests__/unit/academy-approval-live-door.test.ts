@@ -93,7 +93,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { isAcademyEntitled, isAcademyPaid } from '@/lib/academy-entitlement';
+import { isAcademyPaid } from '@/lib/academy-entitlement';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { ALL_ADMIN_ROLES, hasAdminPermission } from '@/lib/admin-permissions';
@@ -192,7 +192,8 @@ describe('#277 — approving a learner with no profile row', () => {
 
         expect(user.serviceRegistrations?.academy?.status).toBe('approved');
         // Entitled, so the gate opens — see lib/academy-entitlement.
-        expect(isAcademyEntitled(user.serviceRegistrations?.academy?.paymentStatus)).toBe(true);
+        //   #975 — approving no longer settles the fee. See lib/academy-entitlement.
+        expect(isAcademyPaid(user.serviceRegistrations?.academy?.paymentStatus)).toBe(false);
     });
 
     it('AS A GRANT, NOT AS A PAYMENT NOBODY MADE', async () => {
@@ -204,7 +205,10 @@ describe('#277 — approving a learner with no profile row', () => {
         const { user } = await approve({ seedUser: null });
         const reg = user.serviceRegistrations?.academy;
 
-        expect(reg?.paymentStatus).toBe('waived');
+        //   #975 — an admin decision no longer settles the fee, so it leaves the
+        //   learner explicitly unpaid rather than writing a waiver the module
+        //   gate would refuse anyway. See lib/academy-entitlement.
+expect(reg?.paymentStatus).toBe('pending');
         expect(isAcademyPaid(reg?.paymentStatus)).toBe(false);
 
         expect(reg?.entitlementSource).toBe('admin_grant');

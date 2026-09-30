@@ -243,14 +243,25 @@ describe('submitAcademyApplicationAction', () => {
         expect(onlyApp().status).toBe('pending');
     });
 
-    it('A WAIVED PLACE LETS THEM THROUGH TOO — a grant is a decision, not a shortfall', async () => {
-        //   academyGrantFields writes paymentStatus: "waived" when an admin opens
-        //   a place without a payment. Refusing it would punish the learner for
-        //   the platform's own generosity.
+    it('#975 A WAIVED PLACE NO LONGER LETS THEM THROUGH', async () => {
+        /*
+         *   THIS ASSERTED THE OPPOSITE, and its reasoning was sound while the
+         *   rule was: "refusing it would punish the learner for the platform's
+         *   own generosity."
+         *
+         *   THE OWNER NARROWED THE RULE: "paid enrolment or legacy members
+         *   (admin can't grant access until user pays)." A waiver is no longer
+         *   generosity the platform extends, so a place carrying one is a place
+         *   that has not been paid for, and this door refuses it exactly as it
+         *   refuses any other unpaid applicant.
+         *
+         *   NOTHING WRITES `waived` ANY MORE — academyGrantFields leaves
+         *   `pending` — so this covers the rows already carrying one.
+         */
         seedUser({ serviceRegistrations: { academy: { paymentStatus: 'waived' } } });
         const { submitAcademyApplicationAction } = await actions();
-        expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: true });
-        expect(onlyApp().status).toBe('pending');
+
+        expect(await submitAcademyApplicationAction(form())).toMatchObject({ success: false });
     });
 
     it('AN UNPAID APPLICANT IS REFUSED, and no row is written', async () => {

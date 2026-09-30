@@ -16,7 +16,7 @@
 "use server";
 
 import { getAdminDb } from "@/lib/supabase-db";
-import { isAcademyEntitled } from "@/lib/academy-entitlement";
+import { isAcademyPaid } from "@/lib/academy-entitlement";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -360,7 +360,7 @@ export async function collectRecipientUserIds(
                 let currentStatus = a.status || "pending";
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
                 
-                if (currentStatus !== "approved" && !isAcademyEntitled(a.paymentStatus)) {
+                if (currentStatus !== "approved" && !isAcademyPaid(a.paymentStatus)) {
                     continue; // Skip unpaid Academy applications
                 }
 
