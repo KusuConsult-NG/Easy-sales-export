@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { SaveItemButton } from "@/components/saved/SaveItemButton";
 import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
-import { getUserTierAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
 import { imageSrcOrNull, renderableImages } from "@/lib/first-image";
 

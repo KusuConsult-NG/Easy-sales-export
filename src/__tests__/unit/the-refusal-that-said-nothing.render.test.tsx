@@ -111,91 +111,82 @@ beforeEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#814 — a buyer who is not a member is told why', () => {
-    beforeEach(() => {
-        getUserTierAction.mockResolvedValue({ success: true, data: { tier: null, totalContributions: 0 } });
-    });
-
-    it('THE REASON IS ON THE SCREEN', async () => {
-        render(<CheckoutClient initial={null} />);
-
-        expect(await screen.findByText(/Cooperative membership is required/i)).toBeInTheDocument();
-        expect(screen.getByText(/sold to cooperative members/i)).toBeInTheDocument();
-    });
-
-    it('AND SO IS THE WAY OUT OF IT', async () => {
-        //   Naming the obstacle without naming the remedy is half a message.
-        render(<CheckoutClient initial={null} />);
-
-        expect(await screen.findByRole('button', { name: /join the cooperative/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /back to property/i })).toBeInTheDocument();
-    });
-
-    it('IT DOES NOT BOUNCE THEM SILENTLY — the defect', async () => {
-        //   THE test. The old guard pushed to the property page and said
-        //   nothing, so the buyer landed on a listing that also says nothing.
-        render(<CheckoutClient initial={null} />);
-
-        await screen.findByText(/Cooperative membership is required/i);
-        expect(push).not.toHaveBeenCalledWith('/farm-nation/property/plot-1');
-    });
-
-    it('AND THE FORM IS NOT RENDERED BEHIND THE MESSAGE', async () => {
-        //   Refusing on screen while still drawing the form would invite them
-        //   to fill in a purchase that cannot complete.
-        render(<CheckoutClient initial={null} />);
-
-        await screen.findByText(/Cooperative membership is required/i);
-        expect(screen.queryByText(/Complete your purchase request/i)).not.toBeInTheDocument();
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('#814 — a check that could not answer is not a pass', () => {
-    it('A FAILED MEMBERSHIP READ SAYS SO, rather than rendering the form', async () => {
-        getUserTierAction.mockResolvedValue({ success: false, error: 'Action failed', data: null });
-
-        render(<CheckoutClient initial={null} />);
-
-        expect(await screen.findByText(/could not check your membership/i)).toBeInTheDocument();
-        expect(screen.queryByText(/Complete your purchase request/i)).not.toBeInTheDocument();
-    });
-
-    it('AND SAYS NOTHING WAS CHARGED, which is the thing they will worry about', async () => {
-        getUserTierAction.mockResolvedValue({ success: false, error: 'Action failed', data: null });
-
-        render(<CheckoutClient initial={null} />);
-
-        expect(await screen.findByText(/nothing has been charged/i)).toBeInTheDocument();
-    });
-
-    it('AND A THROWN READ IS THE SAME, not an unhandled rejection', async () => {
-        getUserTierAction.mockRejectedValue(new Error('network'));
-
-        render(<CheckoutClient initial={null} />);
-
-        expect(await screen.findByText(/could not check your membership/i)).toBeInTheDocument();
-    });
-
-    it('and it is told apart from not being a member', async () => {
-        //   Two different situations needing two different things said. Folding
-        //   them together would tell a paying member to go and join.
-        getUserTierAction.mockResolvedValue({ success: false, error: 'Action failed', data: null });
-
-        render(<CheckoutClient initial={null} />);
-
-        await screen.findByText(/could not check your membership/i);
-        expect(screen.queryByText(/Cooperative membership is required/i)).not.toBeInTheDocument();
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('#814 — and a member still reaches checkout', () => {
+describe('#973 — a signed-in buyer reaches checkout, member or not', () => {
     /**
-     * The direction that must not move. A guard that refused everybody would
-     * pass every assertion above and close Farm Nation sales entirely.
+     *   #814's TWO DESCRIBES WERE HERE, AND THE OWNER OVERRULED THE RULE THEY
+     *   PINNED.
+     *
+     *   "there is a gate that tells them they are not part of cooperative which
+     *   is not supposed to be so."
+     *
+     *   #814 was right that the old refusal was silent — a buyer pressed Buy,
+     *   landed back on the listing and was told nothing — and it gave the
+     *   refusal words. It never asked whether the refusal was correct. It was
+     *   not: app/actions/farm-nation-payment.ts traces the rule to a February
+     *   2026 audit commit's `tier !== "Premium"` check, a cooperative tier this
+     *   platform has since deleted.
+     *
+     *   INVERTED RATHER THAN DELETED. Each test below fails if the gate, or its
+     *   "we could not check your membership" sibling, comes back.
      */
-    it('POSITIVE CONTROL: A MEMBER SEES THE CHECKOUT FORM', async () => {
+    it('THE test: A NON-MEMBER SEES THE CHECKOUT FORM', async () => {
+        //   The tier action is still mocked and still answers "not a member".
+        //   The form must render anyway.
+        getUserTierAction.mockResolvedValue({ success: true, data: { tier: null, totalContributions: 0 } });
+
+        render(<CheckoutClient initial={null} />);
+
+        await waitFor(() =>
+            expect(screen.getByText(/Complete your purchase request/i)).toBeInTheDocument());
+    });
+
+    it('AND IS NOT SHOWN A MEMBERSHIP REFUSAL', async () => {
+        getUserTierAction.mockResolvedValue({ success: true, data: { tier: null, totalContributions: 0 } });
+
+        render(<CheckoutClient initial={null} />);
+
+        await waitFor(() =>
+            expect(screen.getByText(/Complete your purchase request/i)).toBeInTheDocument());
+        expect(screen.queryByText(/Cooperative membership is required/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Join the cooperative/i)).not.toBeInTheDocument();
+    });
+
+    it('AND A TIER READ THAT FAILS DOES NOT STOP THEM EITHER', async () => {
+        /*
+         *   #814 gave a failed read its own screen with a retry, which was right
+         *   while the rule existed — a read that did not answer is not a pass.
+         *   With no rule there is nothing to read, so a cooperative outage must
+         *   not close land sales.
+         */
+        getUserTierAction.mockResolvedValue({ success: false, error: 'Action failed', data: null });
+
+        render(<CheckoutClient initial={null} />);
+
+        await waitFor(() =>
+            expect(screen.getByText(/Complete your purchase request/i)).toBeInTheDocument());
+        expect(screen.queryByText(/could not check your membership/i)).not.toBeInTheDocument();
+    });
+
+    it('AND THE SCREEN DOES NOT ASK THE COOPERATIVE ANYTHING', async () => {
+        //   The assertion that catches a gate reworded rather than removed.
+        getUserTierAction.mockResolvedValue({ success: true, data: { tier: null, totalContributions: 0 } });
+
+        render(<CheckoutClient initial={null} />);
+
+        await waitFor(() =>
+            expect(screen.getByText(/Complete your purchase request/i)).toBeInTheDocument());
+        expect(getUserTierAction).not.toHaveBeenCalled();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#814 — and the paths that still hold', () => {
+    /**
+     * The direction that must not move. #973 removed a gate; it must not have
+     * removed the form, and it must not have changed where a visitor with no
+     * account is sent.
+     */
+    it('POSITIVE CONTROL: A MEMBER STILL SEES THE CHECKOUT FORM', async () => {
         getUserTierAction.mockResolvedValue({ success: true, data: { tier: 'Member', totalContributions: 50_000 } });
 
         render(<CheckoutClient initial={null} />);

@@ -363,21 +363,39 @@ describe('listPropertyAction', () => {
             .toMatchObject({ success: false, error: 'User not found' });
     });
 
-    it('requires cooperative membership', async () => {
+    /*
+     *   #973 THESE TWO ASSERTED A COOPERATIVE REQUIREMENT, AND THE OWNER
+     *   OVERRULED IT: "there is a gate that tells them they are not part of
+     *   cooperative which is not supposed to be so."
+     *
+     *   The door they covered carried the comment `// Check user tier (Premium
+     *   required)` above a test of `serviceRegistrations.cooperatives.status` —
+     *   a cooperative tier this platform deleted. See the note in
+     *   app/actions/farm-nation-payment.ts for the whole trail.
+     *
+     *   Inverted, not deleted: these fail if the requirement comes back.
+     */
+    it('DOES NOT REQUIRE COOPERATIVE MEMBERSHIP — #973', async () => {
         store.seed(COLLECTIONS.USERS, OWNER, { email: 'ada@example.com' });
         const { listPropertyAction } = await actions();
-        expect(((await listPropertyAction(listingInput())) as any).error)
-            .toContain('Cooperative membership required');
-        expect(store.size(LISTINGS)).toBe(0);
+
+        const res = (await listPropertyAction(listingInput())) as any;
+
+        expect(res.error ?? '').not.toContain('Cooperative membership required');
     });
 
-    it('refuses a membership that is only pending', async () => {
+    it('AND A PENDING COOPERATIVE REGISTRATION IS NOT A REFUSAL EITHER', async () => {
         seedCoopMember({ serviceRegistrations: { cooperatives: { status: 'pending' } } });
         const { listPropertyAction } = await actions();
-        expect(((await listPropertyAction(listingInput())) as any).success).toBe(false);
+
+        const res = (await listPropertyAction(listingInput())) as any;
+
+        expect(res.error ?? '').not.toMatch(/cooperative/i);
     });
 
-    it.each(['active', 'approved'])('accepts a %s membership', async (status) => {
+    it.each(['active', 'approved'])('and a %s membership is still accepted', async (status) => {
+        //   The direction that must not move: removing a gate must not have
+        //   broken the people who could already list.
         seedCoopMember({ serviceRegistrations: { cooperatives: { status } } });
         const { listPropertyAction } = await actions();
         expect(await listPropertyAction(listingInput())).toMatchObject({ success: true });

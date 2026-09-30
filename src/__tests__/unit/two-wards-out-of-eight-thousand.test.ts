@@ -36,6 +36,24 @@
  *   unmatched, and the 93 that did not get NOTHING, which is what all 8,780 had
  *   before.
  *
+ *   #974 RE-RAN BOTH GENERATORS AND THE FIGURES MOVED. The ward table gained the
+ *   two LGAs #789 excluded as numerically named — they are the register's own
+ *   names, see scripts/build-wards.ts — and the polling-unit join gained two LGA
+ *   aliases and a rule for the "Ward <number>" prefix one register writes and the
+ *   other does not:
+ *
+ *                              #792      #974
+ *       LGAs with wards         772       774
+ *       wards                 8,780     8,800
+ *       wards with a PU list  8,687     8,741
+ *       wards with none          93        59
+ *       polling units       172,000   173,017
+ *
+ *   The 59 that remain are LGAs where the two registers list DIFFERENT wards
+ *   rather than the same ward spelled differently — Sokoto's Binji is nine of
+ *   them, and the two lists share one name out of ten. Nothing here invents a
+ *   polling unit to close that: those wards keep the typed answer.
+ *
  * ── MUTATION LOG ────────────────────────────────────────────────────────────
  *
  *     pollingUnitsFor returning the whole shard for any ward       KILLED
@@ -90,14 +108,18 @@ describe('#792 — the register is there, and it is the real one', () => {
         }
         const totalWards = Object.values(WARDS_BY_STATE_AND_LGA).reduce((n, w) => n + w.length, 0);
 
-        expect(wards).toBeGreaterThanOrEqual(8600);
-        expect(wards / totalWards).toBeGreaterThan(0.98);
-        expect(units).toBeGreaterThan(170_000);
+        //   #974 RATCHETED. These floors were 8,600 / 0.98 / 170,000, which the
+        //   93-gap state also satisfied — so the ledger could have slipped back
+        //   to it without failing. They are the measured figures now, less a
+        //   small margin for a future source refresh that trades a few names.
+        expect(wards).toBeGreaterThanOrEqual(8_700);
+        expect(wards / totalWards).toBeGreaterThan(0.99);
+        expect(units).toBeGreaterThan(172_500);
     });
 
     it('AND NOT ONE POLLING UNIT IS A BARE NUMBER', () => {
         /*
-         *   #774's rule, one level down and swept over all 172,000: "PU 001" is
+         *   #774's rule, one level down and swept over all 173,017: "PU 001" is
          *   not a place, and a number that matches nothing on a voter's card is
          *   not an answer. A single survivor would be the defect.
          */
@@ -223,7 +245,8 @@ describe('#792 — the form asks for one ward at a time', () => {
 
     it('AND A TYPED ANSWER IS STILL ACCEPTED', () => {
         /*
-         *   93 wards have no list, and a unit can be missing from one that does.
+         *   59 wards have no list (#974; 93 before it), and a unit can be
+         *   missing from one that does.
          *   A required dropdown on an incomplete list is #789's cooperative
          *   blocker waiting to happen again.
          */
@@ -246,7 +269,7 @@ describe('#792 — the form asks for one ward at a time', () => {
          *
          *   It does not survive re-examination: the only caller is the WAVE
          *   application form, which is BEHIND A LOGIN. A session check costs a
-         *   member nothing, and public access left 172,000 records free to
+         *   member nothing, and public access left 173,017 records free to
          *   enumerate for callers who have no use for them.
          */
         const p = 'src/app/api/locations/polling-units/route.ts';

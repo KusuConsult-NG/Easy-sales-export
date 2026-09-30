@@ -42,6 +42,73 @@ CI runs every one of them on each push and passed on `535466ef`, so nothing in
 the list above is unmeasured — it is measured *there* rather than here, and
 saying which is the point.
 
+**#973 — A FARM NATION PURCHASE GATE ASKED ABOUT THE COOPERATIVE.** Reported by
+the owner from users: *"there is a gate that tells them they are not part of
+cooperative which is not supposed to be so."* Four doors on the land-purchase
+path refused a buyer who was not a cooperative member — the action that charges
+the card, `initiatePropertyPurchaseAction`, the legacy `listPropertyAction`, and a
+full-screen refusal on checkout. **None was ever a decision:** `git log -S` traces
+all four to `9adac845` ("Phase 5 Security Audit", February 2026), whose other
+changes are genuine fixes, and whose ward here was a check that the buyer's
+cooperative tier was `"Premium"` — a tier retired when the cooperative went to one
+flat ₦10,000 fee. `_fn_listings.ts` still carried the comment `// Check user tier
+(Premium required)` above a test of `serviceRegistrations.cooperatives.status`.
+**#815 was mine and made it worse:** finding the rule only in the screen, I
+enforced it in the action that takes the money without asking whether it was
+right. All four are gone; nothing replaces them, because the application's own
+routing already said so — checkout and the browse pages sit outside the `(member)`
+group, which gates on Farm Nation's own access. Gating on *that* was rejected too:
+it requires an admin-approved application while onboarding writes `pending`. The
+16 tests that pinned the old rule are **inverted, not deleted**, and a ratchet
+(`a-gate-that-asked-about-the-wrong-module.test.ts`) now walks every module's files
+and fails when one reads another's role, registration or membership helper against
+a written-down list. **The sweep found no other blocking cross-module gate:** the
+four remaining cross-module reads are all WAVE reading Academy Elite, and every one
+is a *grant* that widens eligibility — verified one at a time.
+
+**#974 — TWO LGAs HAD AN EMPTY WARD DROPDOWN, AND 93 WARDS HAD NO POLLING UNITS.**
+Reported by the owner: *"verify if you have all the Wards and PUs populated because
+some users couldn't find some of the wards and PUs in the drop down."* Measured
+against both published copies of the INEC register:
+
+| | before | after |
+|---|---|---|
+| LGAs with a ward list | 772 of 774 | **774 of 774** |
+| wards | 8,780 | **8,800** |
+| wards with a polling-unit list | 8,687 | **8,741** |
+| wards with none | 93 | **59** |
+| polling units | 172,000 | **173,017** |
+| LGAs handing back an empty ward list | 2 | **0** |
+
+The two missing LGAs were **excluded on purpose**, and that was the defect. Abia's
+Ugwunagbo is named "Ward One … Ward Ten" and Cross River's Calabar Municipality
+"One … Ten", and #789 dropped them under #774's rule that a bare number is not the
+name of a place. That rule is right about what it was written for — a hand-written
+`MOCK_WARDS["default"]` offering "Ward 1 … Ward 10" for 772 LGAs — and wrong here:
+these are the register's own names. Two independently packaged copies agree name
+for name **including the typo "Eigth"**, and INEC lists 492 polling units between
+them. The inconsistency settled it: Calabar **South** numbers its wards "One (1) …
+Twelve (12)" and has been offered all along, because a parenthesised digit fails
+the regex — one state, two adjacent LGAs, one convention, opposite treatment. The
+test that asserted no numbered ward names exist now asserts the stronger thing:
+the only numbered names are the two LGAs', and **each must carry polling units in
+the other register** to be admitted. The polling-unit join also gained two LGA
+aliases (`CALABAR MUNICIPALITY`, `NASARAWA EGGON`) and a rule for the
+`Ward <number>` prefix one register writes and the other does not (Rivers's Bonny
+and Tai, 20 wards).
+
+**The 59 that remain are not a spelling problem and are not being guessed at.**
+They are LGAs where the two registers list *different* wards — Sokoto's Binji is
+nine of them and the two lists share one name in ten. Those wards appear in the
+dropdown; their polling-unit field takes a typed answer. No polling unit is
+invented to close the gap.
+
+**NOT a defect, measured and recorded so nobody re-runs it:** the owner also
+reported *"Jos north doesn't have wards and PU"*. Jos North is complete — 14 wards,
+which is exactly what INEC lists, and 895 polling units — verified through
+`getWards`, `pollingUnitsFor` and a render of the real form, which draws all 14
+options. Whatever was seen there was not missing data.
+
 **#972 — FOUR `test:pg` ASSERTIONS WERE MEASURING HOW OFTEN THE SUITE HAD BEEN
 RUN.** One of them failed on a commit that touched none of it, twenty minutes
 after the same code passed, and running the file alone reproduced it. The cause
