@@ -27,7 +27,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { isAcademyEntitled, isAcademyPaid } from '@/lib/academy-entitlement';
+import { isAcademyGranted, isAcademyPaid } from '@/lib/academy-entitlement';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
@@ -113,8 +113,13 @@ describe('approving an academy application', () => {
         // A GRANT, NOT A PAYMENT. This read 'completed' — approval claiming
         // money had arrived, with nothing in the door that verifies any. The
         // learner is still entitled; the record just no longer lies about why.
-        expect(user.serviceRegistrations.academy.paymentStatus).toBe('waived');
-        expect(isAcademyEntitled(user.serviceRegistrations.academy.paymentStatus)).toBe(true);
+        //   #975 — an admin decision no longer settles the fee, so it leaves the
+        //   learner explicitly unpaid rather than writing a waiver the module
+        //   gate would refuse anyway. See lib/academy-entitlement.
+expect(user.serviceRegistrations.academy.paymentStatus).toBe('pending');
+        //   #975 — an admin decision records the plan and who made it; it no longer
+        //   settles the fee, so the learner reads as unpaid until they pay.
+        expect(isAcademyPaid(user.serviceRegistrations.academy.paymentStatus)).toBe(false);
         expect(isAcademyPaid(user.serviceRegistrations.academy.paymentStatus)).toBe(false);
         expect(user.serviceRegistrations.academy.grantedBy).toBeTruthy();
         expect(user.serviceRegistrations.academy.paymentVerifiedBy).toBeNull();
@@ -255,8 +260,10 @@ describe('manual enrolment', () => {
         expect(user.serviceRegistrations.academy.status).toBe('active');
         expect(user.serviceRegistrations.academy.plan).toBe('elite');
         // Manual enrolment is a grant too — see the approval case above.
-        expect(user.serviceRegistrations.academy.paymentStatus).toBe('waived');
-        expect(isAcademyEntitled(user.serviceRegistrations.academy.paymentStatus)).toBe(true);
+        expect(user.serviceRegistrations.academy.paymentStatus).toBe('pending');
+        //   #975 — an admin decision records the plan and who made it; it no longer
+        //   settles the fee, so the learner reads as unpaid until they pay.
+        expect(isAcademyPaid(user.serviceRegistrations.academy.paymentStatus)).toBe(false);
         expect(user.serviceRegistrations.academy.grantedBy).toBeTruthy();
     });
 
@@ -292,8 +299,8 @@ describe('manual enrolment', () => {
             expect(app.plan).toBe('foundation');
             // The applications carry the grant too, so an admin reading one
             // sees the same story the registration tells.
-            expect(app.paymentStatus).toBe('waived');
-            expect(isAcademyEntitled(app.paymentStatus)).toBe(true);
+            expect(app.paymentStatus).toBe('pending');
+            expect(isAcademyPaid(app.paymentStatus)).toBe(false);
             expect(Number(app.paymentAmount) || 0).toBe(0);
         }
     });

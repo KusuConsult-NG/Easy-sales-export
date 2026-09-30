@@ -253,19 +253,31 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
             return { success: false as const, error: LEGACY_LISTING_RETIRED_MESSAGE, data: null, meta: null };
         }
 
-        // Check user tier (Premium required)
+        /*
+         *   #973 AND THE SAME RULE HERE, GONE FOR THE SAME REASON. This is the
+         *   door whose own comment read `// Check user tier (Premium required)`
+         *   above a test of `serviceRegistrations.cooperatives.status` — the
+         *   fossil that proves none of these four was a decision about land.
+         *
+         *   Listing is behind `legacyFarmNationListingEnabled()` and that flag
+         *   is unset everywhere in this repository, so nobody reaches this today.
+         *   Fixed anyway: a retired path that still carries the rule is how the
+         *   rule comes back when somebody revives the path.
+         *
+         *   THE USER READ STAYS, and `tsc` is why I know: the same `userDoc` the
+         *   gate stood on also supplies ownerName/ownerEmail/ownerPhone on the
+         *   listing 130 lines below. Deleting the read with the rule compiled
+         *   under jest and failed the typecheck — the gate was two jobs in one
+         *   read, and only one of them was wrong.
+         */
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await userRef.get();
 
-        if (!userDoc.exists) { 
+        if (!userDoc.exists) {
             return { success: false as const, data: null, error: "User not found", meta: null };
         }
 
         const userData = userDoc.data()!;
-        const coopStatus = userData.serviceRegistrations?.cooperatives?.status || userData.serviceRegistrations?.cooperative?.status;
-        if (!coopStatus || (coopStatus !== "approved" && coopStatus !== "active")) { 
-            return { success: false as const, error: "Cooperative membership required to list properties. Please complete your cooperative registration.", data: null, meta: null };
-        }
 
         // Validate with Zod
         const { farmNationListingSchema } = await import("@/lib/validations/land");

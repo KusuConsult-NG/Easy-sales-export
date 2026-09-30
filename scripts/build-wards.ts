@@ -179,7 +179,8 @@ const sourceByState = new Map<string, { name: string; lgas: any }>();
 for (const state of Object.keys(raw)) sourceByState.set(key(state), { name: state, lgas: raw[state] });
 
 const out: Record<string, string[]> = {};
-const report: any = { matched: 0, exact: 0, prefix: 0, alias: 0, unmatched: [] as string[], excluded: [] as string[], wards: 0 };
+const report: any = { matched: 0, exact: 0, prefix: 0, alias: 0, unmatched: [] as string[],
+    excluded: [] as string[], numberNamed: [] as string[], wards: 0 };
 
 for (const [appState, appLgas] of Object.entries(NIGERIAN_LOCATIONS)) {
     const srcStateName = STATE_ALIASES[key(appState)] ?? appState;
@@ -228,11 +229,60 @@ for (const [appState, appLgas] of Object.entries(NIGERIAN_LOCATIONS)) {
         }
         const wards = [...seen.values()].sort((a: string, b: string) => a.localeCompare(b));
 
-        if (wards.length === 0 || wards.every((w: string) => BARE_WARD_NUMBER.test(w))) {
-            //   Nothing here a form can tell an applicant that she does not
-            //   already know. She types it instead — see getWards.
+        /*
+         *   #974 THE RULE AGAINST A FABRICATED LIST WAS SUPPRESSING A REAL ONE.
+         *
+         *   THE OWNER: "verify if you have all the Wards and PUs populated
+         *   because some users couldn't find some of the wards and PUs in the
+         *   drop down."
+         *
+         *   This used to read `wards.length === 0 || wards.every(BARE_WARD_NUMBER)`,
+         *   and the second clause excluded exactly two LGAs — Abia's Ugwunagbo and
+         *   Cross River's Calabar Municipality — whose wards this register names
+         *   "Ward One … Ward Ten" and "One … Ten". #774's rule, which the clause
+         *   came from, is right about what it was written for: the OLD code
+         *   offered "Ward 1 … Ward 10" as the ward list for 772 of 774 LGAs from a
+         *   hand-written `MOCK_WARDS["default"]`, and a number that matches
+         *   nothing on a voter's card is not an answer.
+         *
+         *   BUT THAT PLACEHOLDER IS GONE — #774 deleted it — so every name
+         *   reaching this line now comes from the register, and these two are not
+         *   fabrications. They are what INEC publishes. The evidence is a
+         *   cross-check, which is the same check #789 used and the only one that
+         *   settles it:
+         *
+         *     temikeezy (this source)  Ugwunagbo: Ward One … Ward Ten
+         *     sadiqsalau/inec-ng-data  Ugwunagbo: WARD ONE … WARD TEN, 160 units
+         *     temikeezy                Calabar Municipality: One … Eigth … Ten
+         *     sadiqsalau               Calabar Municipality: ONE … EIGTH … TEN,
+         *                                                    332 units
+         *
+         *   Two independently published copies of the register agree name for
+         *   name, INCLUDING the typo "Eigth"/"EIGTH", and the second lists 492
+         *   polling units between them. A shared typo is a shared source, not two
+         *   people inventing the same fiction.
+         *
+         *   AND THE INCONSISTENCY IS THE PROOF IT WAS A REGEX AND NOT A JUDGEMENT.
+         *   Cross River's Calabar SOUTH numbers its wards the same way — "One (1)
+         *   … Twelve (12)" — and has been offered on the form all along, because
+         *   the parenthesised digit makes the name fail BARE_WARD_NUMBER. Two
+         *   adjacent LGAs in one state, one naming convention, opposite treatment,
+         *   decided by punctuation.
+         *
+         *   So the exclusion is now emptiness alone. The count is the control:
+         *   admitting these brings the table to INEC's own published 774 LGAs and
+         *   8,809 wards, and a rule that had let junk in would overshoot it.
+         *
+         *   BARE_WARD_NUMBER stays, and is still used — it now REPORTS which LGAs
+         *   are numerically named instead of dropping them, so the next reader
+         *   meets the fact rather than rediscovering it.
+         */
+        if (wards.length === 0) {
             report.excluded.push(`${appState}|${appLga}`);
             continue;
+        }
+        if (wards.every((w: string) => BARE_WARD_NUMBER.test(w))) {
+            report.numberNamed.push(`${appState}|${appLga}`);
         }
 
         out[`${appState}|${appLga}`] = wards;
@@ -279,6 +329,7 @@ console.log(JSON.stringify({
     lgasWithWards: report.matched,
     wards: report.wards,
     matchedExact: report.exact, matchedByTruncation: report.prefix, matchedByAlias: report.alias,
-    excludedAsNumbersOnly: report.excluded,
+    excludedAsEmpty: report.excluded,
+    numberNamedButOFFERED: report.numberNamed,   //   #974 — the register's own names
     unmatched: report.unmatched,
 }, null, 2));

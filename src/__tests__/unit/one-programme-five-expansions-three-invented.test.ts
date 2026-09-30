@@ -409,50 +409,73 @@ describe('#774(c) — a ward list names wards', () => {
         expect(alausa.some(pu => /^\s*(PU\s*)?\d+\s*$/i.test(pu))).toBe(false);
     });
 
-    it('AND NO NUMBERED PLACEHOLDER SURVIVES ANYWHERE IN THE REGISTER', () => {
+    it('AND THE ONLY NUMBERED WARD NAMES ARE ONES THE REGISTER ITSELF CARRIES', async () => {
         /*
-         *   #789 RESTATED, AND IT HAD GONE VACUOUS — which is worth saying
-         *   plainly, because it PASSED while asserting nothing.
+         *   #974 THIS ASSERTED THAT NO WARD NAME IS A BARE NUMBER, AND THE OWNER
+         *   REPORTED WHAT THAT COST: "verify if you have all the Wards and PUs
+         *   populated because some users couldn't find some of the wards and PUs
+         *   in the drop down."
          *
-         *   It read the slice of locations.ts between `VERIFIED_WARDS` and
-         *   `VERIFIED_PUs`, which is where the two hand-written LGAs used to
-         *   live. The real register now lives in a generated module, so that
-         *   slice holds 544 characters of declaration and comment and not one
-         *   ward name. `not.toMatch(/"Ward \d+"/)` over a string with no wards
-         *   in it is true for the same reason it is useless.
+         *   The rule came from #774, which is right about what it was written
+         *   for: the old code offered "Ward 1 … Ward 10" as the ward list for 772
+         *   of 774 LGAs out of a hand-written `MOCK_WARDS["default"]`, and a
+         *   number that matches nothing on a voter's card is not an answer.
          *
-         *   So it sweeps the VALUES now — every one of the 8,778 names the
-         *   forms can actually offer — and it asks the real question rather
-         *   than the 2024 spelling of it. A ward name that is ONLY a number is
-         *   not a name, in any of the three ways this register writes one:
+         *   BUT THE PLACEHOLDER IS GONE, and two LGAs really are named this way.
+         *   Abia's Ugwunagbo is "Ward One … Ward Ten" and Cross River's Calabar
+         *   Municipality is "One … Ten" IN THE REGISTER, and #789 excluded both
+         *   for their shape — so 774 LGAs' worth of applicants got a ward list
+         *   and those two got an empty dropdown.
          *
-         *       "Ward 4"      digits            "PU 001"
-         *       "Ward IV"     roman numerals
-         *       "Ward One"    words             "One"   ← no prefix at all
+         *   SO THE QUESTION CHANGES FROM SHAPE TO PROVENANCE, and the assertion
+         *   gets STRONGER rather than weaker. A numbered ward name is allowed only
+         *   where the register vouches for it, and the corroboration is the
+         *   polling-unit list: these names come from temikeezy's copy, the units
+         *   come from INEC's, the two were packaged independently, and a name
+         *   that carries units in the second is a name the second also has. A
+         *   fabricated "Ward 3" would have none, and would fail here.
          *
-         *   The last shape is the one the old assertion could never have
-         *   caught: Cross River's Calabar Municipality is written "One … Ten"
-         *   with no "Ward" in front of it. Both it and Abia's Ugwunagbo are
-         *   excluded by the generator for exactly this, so their applicants
-         *   type instead — see scripts/build-wards.ts.
+         *   THE INCONSISTENCY THAT SETTLED IT. Cross River's Calabar SOUTH
+         *   numbers its wards "One (1) … Twelve (12)" and has been offered all
+         *   along, because a parenthesised digit fails the regex. One state, two
+         *   adjacent LGAs, one convention, opposite treatment — decided by
+         *   punctuation rather than by whether the name was real.
          */
         const NUMBER_WORDS = 'one|two|three|four|five|six|seven|eight|eigth|nine|ten'
             + '|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty';
         const BARE = new RegExp(`^(?:ward|pu)?\\s*(?:\\d+|[ivxlc]+|${NUMBER_WORDS})$`, 'i');
 
-        const offences: string[] = [];
+        const numbered: string[] = [];
         for (const [composite, wards] of Object.entries(WARDS_BY_STATE_AND_LGA)) {
-            for (const w of wards) if (BARE.test(w)) offences.push(`${composite} -> ${w}`);
+            for (const w of wards) if (BARE.test(w)) numbered.push(`${composite} -> ${w}`);
         }
-        expect(offences).toEqual([]);
 
-        //   Vacuity guard for the guard: the sweep must be looking at a real
-        //   register, not an empty object.
+        //   EXACTLY the two LGAs, and every one of their wards. Not "few" — a
+        //   count would let a third slip in.
+        const lgas = [...new Set(numbered.map((n) => n.split(' -> ')[0]))].sort();
+        expect({ lgas }).toEqual({ lgas: ['Abia|Ugwunagbo', 'Cross River|Calabar Municipal'] });
+        expect(numbered).toHaveLength(20);
+
+        //   AND EACH IS CORROBORATED BY THE OTHER REGISTER. This is the whole
+        //   argument: a name nobody publishes has no polling units under it.
+        //
+        //   Imported here rather than at the top, matching the test above: the
+        //   module is `server-only` and the shards are five megabytes, so the
+        //   suite pays for it only in the tests that ask.
+        const { pollingUnitsFor } = await import('@/lib/polling-units');
+        for (const entry of numbered) {
+            const [composite, ward] = entry.split(' -> ');
+            const [state, lga] = composite.split('|');
+            const units = await pollingUnitsFor(state, lga, ward);
+            expect({ entry, hasUnits: units.length > 0 }).toEqual({ entry, hasUnits: true });
+        }
+
+        //   Vacuity guard: the sweep must be looking at a real register.
         const total = Object.values(WARDS_BY_STATE_AND_LGA).reduce((n, w) => n + w.length, 0);
-        expect(Object.keys(WARDS_BY_STATE_AND_LGA).length).toBeGreaterThan(750);
-        expect(total).toBeGreaterThan(8000);
+        expect(Object.keys(WARDS_BY_STATE_AND_LGA).length).toBe(774);
+        expect(total).toBeGreaterThan(8_700);
 
-        //   and the rule itself bites, or the empty result above means nothing
+        //   and the rule itself bites, or the list above means nothing
         expect(BARE.test('Ward 4')).toBe(true);
         expect(BARE.test('Ward One')).toBe(true);
         expect(BARE.test('One')).toBe(true);

@@ -18,7 +18,7 @@
  */
 
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
-import { isAcademyEntitled } from "@/lib/academy-entitlement";
+import { isAcademyPaid } from "@/lib/academy-entitlement";
 import { invalidateServiceCache } from "@/lib/cache-invalidation";
 import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import {
@@ -312,17 +312,26 @@ export async function checkModuleAccess(
          *   Refusing the module to somebody who has bought a course in it would
          *   be a worse defect than the one being closed.
          */
-        //   A GRANT OPENS THE MODULE TOO. The two admin doors used to write
-        //   `paymentStatus: "completed"` for a place nobody paid for, so this
-        //   gate admitted them without knowing it was doing so. They write
-        //   "waived" now — a deliberate decision, still entitling — and the
-        //   vocabulary lives in lib/academy-entitlement so this gate and the
-        //   four other readers of the field cannot drift apart again.
-        //
-        //   isAcademyEntitled, not isAcademyPaid: refusing a learner an admin
-        //   deliberately let in would be a worse defect than the one being
-        //   closed, which is the same reasoning as the enrolment note above.
-        const isAcademyPaid = (value: unknown): boolean => isAcademyEntitled(value);
+        /*
+         *   #975 A GRANT NO LONGER OPENS THE MODULE.
+         *
+         *   THE OWNER: "paid enrolment or legacy members (admin can't grant
+         *   access until user pays)."
+         *
+         *   This line read `const isAcademyPaid = (value) => isAcademyEntitled(
+         *   value)` — a local alias whose NAME said paid and whose BODY accepted
+         *   a waiver, so the gate below looked payment-gated while admitting
+         *   anything an admin had opened. The union predicate is gone (see
+         *   lib/academy-entitlement) and this now reads the imported
+         *   `isAcademyPaid` directly, so the name and the behaviour agree.
+         *
+         *   THIS IS THE WHOLE LEVER, and that is worth stating because it looks
+         *   too small to be. Layer 1 deliberately refuses Academy the role fast
+         *   path (see the note above), so EVERY Academy decision reaches
+         *   `academyPaidOnRecord`, and every branch of that asks this predicate.
+         *   Changing it here closes the module to a waived place through all of
+         *   them at once.
+         */
 
         let academyEntitlementCache: boolean | null = null;
 

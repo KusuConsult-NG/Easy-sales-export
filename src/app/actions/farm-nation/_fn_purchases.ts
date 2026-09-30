@@ -55,20 +55,16 @@ async function _initiatePropertyPurchaseAction(
             return { success: false as const, error: "Property is no longer available", data: null, meta: null };
         }
 
-        // Check user tier
-        const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
-        const userDoc = await userRef.get();
-
-        if (!userDoc.exists) { 
-            return { success: false as const, error: "User not found", data: null, meta: null };
-        }
-
-        const userData = userDoc.data()!;
-        const coopStatus = userData.serviceRegistrations?.cooperatives?.status || userData.serviceRegistrations?.cooperative?.status;
-        if (!coopStatus || (coopStatus !== "approved" && coopStatus !== "active")) { 
-            return { success: false as const, error: "Cooperative membership required. Please complete your cooperative registration.", data: null, meta: null };
-        }
-
+        /*
+         *   #973 NO COOPERATIVE CHECK HERE ANY MORE — see the long note in
+         *   app/actions/farm-nation-payment.ts for where this rule came from
+         *   (a February 2026 audit commit's `tier !== "Premium"`, a tier the
+         *   platform has since deleted) and why a signed-in buyer may buy land.
+         *
+         *   The `users` row was read ONLY to reach `serviceRegistrations`, so
+         *   the read goes with the rule rather than being left to cost a round
+         *   trip for nothing.
+         */
         // ── CLAIM THE PROPERTY, THEN RECORD THE PURCHASE ──────
         //
         // The availability check used to live inside runTransaction, which

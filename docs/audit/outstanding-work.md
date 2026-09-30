@@ -1,32 +1,163 @@
 # Outstanding work
 
 **Rewritten 2026-09-11 at `0ba8cd92`; updated at `d846ec45`, `e10f19b5`,
-`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a`, `c3da88ea`, `c2f415f9` and now at `d8f73a01`.** Every line below was
-checked against the tree, not carried forward.
+`a96f6546`, `78e267f7`, `cdc7af71`, `cc99f65a`, `c3da88ea`, `c2f415f9`, `d8f73a01`
+and now at `535466ef`.** Every line below was checked against the tree, not
+carried forward.
+
+**THIS FILE HAD GONE STALE IN THREE PLACES, WHICH BY ITS OWN RULE IS WORSE THAN
+BEING ABSENT** — see the sentence below about a status document that contradicts
+the repository. All three are corrected at `535466ef`:
+
+- the gate numbers said 719 suites / 13,015 tests; the tree is at 1,072 / 18,127;
+- the Upstash entry still carried a 🔑 "needs a credential" heading while its own
+  body ended `RESOLVED BY #716`;
+- `Apply supabase/deploy.sql` was still ☐ and written around "all 33 migrations",
+  and has since been **answered against production**: see §1.
 
 **The cron change is verified, not assumed:** run 780 of Scheduled Jobs,
 2026-09-11 12:30 UTC, `HTTP 200 {"success":true,"processed":0}` — the first
 successful scheduled run since 22 August. See §1.
 
-**Gate at this revision: build clean, 719 suites / 13,015 tests green** — and
-green again with `MFA_ADMIN_GRACE_UNTIL` set to the year 2000, which is the
-world after #663's enforcement date. The version before this one said 12,930
-across 712.
+**Gate at `535466ef`: build clean, 1,072 suites / 18,127 tests green**, with
+`tsc --noEmit` and lint clean. The version before this one said 719 suites /
+13,015 tests, and the one before that 12,930 across 712.
 
-**And every database suite was run for real**, against the local stack
-`scripts/local-stack/up.sh` brings up — real PostgreSQL 16, real PostgREST, the
-schema, all 34 migrations, RLS on:
+**WHAT WAS RE-RUN AT THIS REVISION, AND WHAT WAS NOT.** This is stated rather
+than the old table refreshed, because the honest answer differs per suite and
+carrying four numbers forward when one was measured is the exact failure this
+file's own rule is about.
 
 | | |
 |---|---|
-| `test:pg` | **13 suites, 199 passed, 0 skipped** |
-| `test:db` | **17 suites, 161 passed** |
-| `test:integration` | **5 suites, 31 passed** |
-| Playwright, full | **26 spec files, 362 passed, 8.9 minutes**, against a production build |
+| `test` (unit) | **1,072 suites, 18,127 passed** — re-run in full |
+| `test:pg` | **28 suites, 319 passed, 52 skipped** at `535466ef`; **323 passed** after #972 below — re-run against a real PostgreSQL 16 started by `scripts/local-postgres.sh`. The 52 skips are the PostgREST adapter blocks, correctly skipped: that path has no PostgREST in front of it. |
+| `test:pg` under index bloat | **323 passed at BOTH ends of a 4,000x range** — 7 index pages after a full REINDEX, and 41,781 pages over an 1,089-page heap after seeding and deleting 300,000 rows. Measured because four of this suite's assertions turned out to be reading that number rather than the schema: see #972. |
+| Production schema | **in sync — 72 expected indexes and functions all present**, through `053_live_people_count_indexes.sql`, verified against the live project on 2026-09-28. This is what retires the `deploy.sql` entry in §1. |
+| `test:db` | **NOT re-run here.** It needs PostgREST, so it needs `supabase start` and Docker, which this environment does not have. |
+| `test:integration` | **NOT re-run here**, same reason. |
+| Playwright, full | **NOT re-run here.** CI's `e2e-smoke` job covers it and passed on this revision. |
+
+CI runs every one of them on each push and passed on `535466ef`, so nothing in
+the list above is unmeasured — it is measured *there* rather than here, and
+saying which is the point.
+
+**#975 — AN ADMIN COULD OPEN ACADEMY WITHOUT A PAYMENT, AND NOW CANNOT.** The
+owner, stating the rule: *"paid enrolment or legacy members (admin can't grant
+access until user pays)."* The gate decided access on `isAcademyEntitled`, which
+was `isAcademyPaid(status) || isAcademyGranted(status)` — so a `paymentStatus:
+"waived"` written by either admin door opened the module exactly as money did.
+That was the correct reading of the PREVIOUS instruction (*"fix the admin
+approval writing paymentStatus completed without a payment"*), which asked for
+grants to be recorded honestly, not abolished; this narrows it. **The union
+predicate is deleted rather than redefined** — all ten callers read as though the
+wider meaning were intended — and every one now asks `isAcademyPaid`. Academy is
+excluded from the role fast path, so that single predicate closes the module to a
+waived place through every layer. **The two admin doors stopped writing `waived`
+and now leave the fee explicitly `pending`**, and say so in the message they
+return: leaving them would have had an admin press Approve, see it succeed, and
+the learner still be locked out. Legacy is untouched — it travels on `_isLegacy`
+/ `legacyOnboardedBy`. Mutation-tested: 3 killed, including a ratchet that fails
+if any caller of the deleted union returns.
+
+**⚠️ MEASURE BEFORE MERGING #975.** Nothing counted the affected population, so
+`npm run academy:granted` (read-only, no `--apply`) now reports three groups:
+learners on `waived` who **lose access when this deploys**; the six on
+`completed` with no `paymentVerifiedBy` and no `processed_payments` row, who
+**keep** access because `completed` is still a paid status and who are reported
+anyway because the owner's rule covers them too; and legacy members, unaffected.
+Each waived learner is a decision — a scholarship is not a misclick — and this
+must not be merged before that list has been read.
+
+**#973 — A FARM NATION PURCHASE GATE ASKED ABOUT THE COOPERATIVE.** Reported by
+the owner from users: *"there is a gate that tells them they are not part of
+cooperative which is not supposed to be so."* Four doors on the land-purchase
+path refused a buyer who was not a cooperative member — the action that charges
+the card, `initiatePropertyPurchaseAction`, the legacy `listPropertyAction`, and a
+full-screen refusal on checkout. **None was ever a decision:** `git log -S` traces
+all four to `9adac845` ("Phase 5 Security Audit", February 2026), whose other
+changes are genuine fixes, and whose ward here was a check that the buyer's
+cooperative tier was `"Premium"` — a tier retired when the cooperative went to one
+flat ₦10,000 fee. `_fn_listings.ts` still carried the comment `// Check user tier
+(Premium required)` above a test of `serviceRegistrations.cooperatives.status`.
+**#815 was mine and made it worse:** finding the rule only in the screen, I
+enforced it in the action that takes the money without asking whether it was
+right. All four are gone; nothing replaces them, because the application's own
+routing already said so — checkout and the browse pages sit outside the `(member)`
+group, which gates on Farm Nation's own access. Gating on *that* was rejected too:
+it requires an admin-approved application while onboarding writes `pending`. The
+16 tests that pinned the old rule are **inverted, not deleted**, and a ratchet
+(`a-gate-that-asked-about-the-wrong-module.test.ts`) now walks every module's files
+and fails when one reads another's role, registration or membership helper against
+a written-down list. **The sweep found no other blocking cross-module gate:** the
+four remaining cross-module reads are all WAVE reading Academy Elite, and every one
+is a *grant* that widens eligibility — verified one at a time.
+
+**#974 — TWO LGAs HAD AN EMPTY WARD DROPDOWN, AND 93 WARDS HAD NO POLLING UNITS.**
+Reported by the owner: *"verify if you have all the Wards and PUs populated because
+some users couldn't find some of the wards and PUs in the drop down."* Measured
+against both published copies of the INEC register:
+
+| | before | after |
+|---|---|---|
+| LGAs with a ward list | 772 of 774 | **774 of 774** |
+| wards | 8,780 | **8,800** |
+| wards with a polling-unit list | 8,687 | **8,741** |
+| wards with none | 93 | **59** |
+| polling units | 172,000 | **173,017** |
+| LGAs handing back an empty ward list | 2 | **0** |
+
+The two missing LGAs were **excluded on purpose**, and that was the defect. Abia's
+Ugwunagbo is named "Ward One … Ward Ten" and Cross River's Calabar Municipality
+"One … Ten", and #789 dropped them under #774's rule that a bare number is not the
+name of a place. That rule is right about what it was written for — a hand-written
+`MOCK_WARDS["default"]` offering "Ward 1 … Ward 10" for 772 LGAs — and wrong here:
+these are the register's own names. Two independently packaged copies agree name
+for name **including the typo "Eigth"**, and INEC lists 492 polling units between
+them. The inconsistency settled it: Calabar **South** numbers its wards "One (1) …
+Twelve (12)" and has been offered all along, because a parenthesised digit fails
+the regex — one state, two adjacent LGAs, one convention, opposite treatment. The
+test that asserted no numbered ward names exist now asserts the stronger thing:
+the only numbered names are the two LGAs', and **each must carry polling units in
+the other register** to be admitted. The polling-unit join also gained two LGA
+aliases (`CALABAR MUNICIPALITY`, `NASARAWA EGGON`) and a rule for the
+`Ward <number>` prefix one register writes and the other does not (Rivers's Bonny
+and Tai, 20 wards).
+
+**The 59 that remain are not a spelling problem and are not being guessed at.**
+They are LGAs where the two registers list *different* wards — Sokoto's Binji is
+nine of them and the two lists share one name in ten. Those wards appear in the
+dropdown; their polling-unit field takes a typed answer. No polling unit is
+invented to close the gap.
+
+**NOT a defect, measured and recorded so nobody re-runs it:** the owner also
+reported *"Jos north doesn't have wards and PU"*. Jos North is complete — 14 wards,
+which is exactly what INEC lists, and 895 polling units — verified through
+`getWards`, `pollingUnitsFor` and a render of the real form, which draws all 14
+options. Whatever was seen there was not missing data.
+
+**#972 — FOUR `test:pg` ASSERTIONS WERE MEASURING HOW OFTEN THE SUITE HAD BEEN
+RUN.** One of them failed on a commit that touched none of it, twenty minutes
+after the same code passed, and running the file alone reproduced it. The cause
+is not in the application: the suites here seed tens of thousands of rows into
+`users`, `document_collections`, `marketplace_orders` and `processed_payments`
+and delete them again, and VACUUM returns the freed index pages to the index
+rather than to the filesystem — so index files grow every run and never shrink.
+`idx_users_raw_created_at` had reached 237 pages over a 135-page heap, for 5,000
+rows that need 8, and **an index larger than the table it indexes is one the
+planner is right to refuse.** The four assertions sat at 10%, 20%, 30% and 8%
+selectivity, close enough to the crossover that the index file's size decided
+them. Each now asks reachability with the index *priced to lose* — which owes
+nothing to a cost estimate — and asserts the planner's preference separately, on
+a rebuilt index, reporting both page counts when it fails so the next reader sees
+bloat instead of "unused". Nothing in production changed and nothing needed to:
+this was a test-fixture defect throughout, and the figures above are the control
+that says so.
 
 A status document that contradicts the repository is worse than none — it is
 read and believed — so these numbers are re-read from a full run each time this
-file is touched.
+file is touched, and any suite that was not re-run is named as such instead of
+having its previous number repeated.
 
 Gate for every item marked done: `npm run build` then `npm run test`, green, with
 the change mutation-tested against a control.
@@ -135,7 +266,12 @@ nobody has to remember to come back and edit YAML. Until they are set:
 - a **daily** config check fails loudly naming what is missing
 - a manual run fails hard, because a person is waiting on it
 
-### 🔑 Set `UPSTASH_REDIS_REST_URL` / `_TOKEN`
+### ✅ (#716) Set `UPSTASH_REDIS_REST_URL` / `_TOKEN` — resolved
+
+**The heading on this entry said 🔑 — "needs a credential nobody here has" —
+while its own last paragraph said `RESOLVED BY #716`.** Corrected at `535466ef`.
+An entry whose mark contradicts its body is read by its mark, and this list's
+whole purpose is to say what is still owed.
 
 Without them every rate limiter and cache uses a **per-instance in-memory
 fallback that does not share state between server instances**.
@@ -187,14 +323,42 @@ reporting collapsed them into the second.
 the owner is actually in is the state the log describes. The half-configured
 reporting from #661 stands unchanged.
 
-### ☐ Apply `supabase/deploy.sql` — the question "are they applied?" is retired
+### ✅ Apply `supabase/deploy.sql` — ANSWERED AGAINST PRODUCTION, 2026-09-28
+
+**The owner ran the migration audit against the live project and it came back
+in sync:** all **72** expected indexes and functions present, through
+`053_live_people_count_indexes.sql`. That is the question this entry existed to
+ask, and it now has a measured answer rather than an instruction.
+
+So `035` — #652's overselling fix, described below as "the one defect on this
+list that is live in production" — **is applied.** It is no longer live.
+
+Two things this does not close, and they are stated so the ✅ is not read wider
+than it is:
+
+- **`022` is still deliberately excluded** from the bundle, for the reason given
+  below (`CREATE INDEX CONCURRENTLY` cannot run in a transaction). The audit
+  expects 72 objects and found 72; `022`'s indexes are not among them by design.
+- **Row-level security** is the one section that changes behaviour rather than
+  replacing a function with itself. The audit counts objects, so an in-sync
+  verdict does not by itself prove RLS is ON. If that matters, check it directly.
+
+The rest of this entry is kept because the reasoning is what made the question
+answerable, and the re-running-is-free measurement still holds.
 
 **This stopped being a research task (#660).** The answer used to require
 running `node scripts/build-deploy-sql.mjs` and pasting the output, which is a
 toolchain the person doing the pasting does not have. The generated bundle is
-**committed** now — `supabase/deploy.sql`, all 33 migrations in dependency
-order — and a ratchet regenerates it on every test run and compares byte for
-byte, so it cannot drift from the migrations.
+**committed** now — `supabase/deploy.sql`, every migration in dependency order —
+and a ratchet regenerates it on every test run and compares byte for byte, so it
+cannot drift from the migrations.
+
+*(This said "all 33 migrations" until `535466ef`. The tree passed 50 some time
+ago — `scripts/local-postgres.sh` applies 52 — which is exactly why the count is
+no longer written here: the ratchet is the guarantee, and a number in prose is
+one more thing that goes stale silently. Same lesson as the test name in
+docker-build-context-holds-what-tsc-checks, which was renamed to state its
+property after its count drifted twice.)*
 
 And the question does not need answering, because **re-running it is provably
 free**. Measured, not claimed: a fresh PostgreSQL 16 with `supabase/schema.sql`,

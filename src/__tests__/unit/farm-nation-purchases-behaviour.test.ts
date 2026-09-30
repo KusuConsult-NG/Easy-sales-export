@@ -183,13 +183,29 @@ describe('initiatePropertyPurchaseAction', () => {
         expect(await initiate()).toMatchObject({ success: false, error: 'Property not found' });
     });
 
-    it('refuses a buyer with no cooperative membership', async () => {
+    it('ADMITS A BUYER WITH NO COOPERATIVE MEMBERSHIP — #973', async () => {
+        /*
+         *   THIS ASSERTED A REFUSAL, AND THE OWNER OVERRULED IT: "there is a gate
+         *   that tells them they are not part of cooperative which is not supposed
+         *   to be so."
+         *
+         *   Farm Nation sells land; the cooperative is a savings service. The
+         *   whole trail — a February 2026 audit commit's `tier !== "Premium"`, a
+         *   tier this platform deleted — is in app/actions/farm-nation-payment.ts,
+         *   and the ratchet that stops it returning is in
+         *   a-gate-that-asked-about-the-wrong-module.test.ts.
+         */
         store.seed(USERS, BUYER, {});
-        expect(await initiate()).toMatchObject({ success: false });
-        expect(listing().status).toBe('available');
+
+        const res = await initiate() as any;
+
+        expect(res).toMatchObject({ success: true });
+        expect(res.error ?? '').not.toMatch(/cooperative/i);
     });
 
-    it.each(['approved', 'active'])('admits a %s cooperative member', async (status) => {
+    it.each(['approved', 'active'])('and a %s cooperative member is still admitted', async (status) => {
+        //   The direction that must not move: removing a gate must not have
+        //   broken the buyers who could already get through it.
         seedMember(BUYER, status);
         expect(await initiate()).toMatchObject({ success: true });
     });

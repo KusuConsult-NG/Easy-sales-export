@@ -267,7 +267,9 @@ export function isValidLGA(state: string, lga: string): boolean {
  *   "do a deep search and find them. they are available and you know where to
  *   find these details. Its public information and accessible to everyone."
  *
- *   They were right, and the sweep is done: 772 of 774 LGAs, 8,778 wards, from
+ *   They were right, and the sweep is done: ALL 774 LGAs, 8,800 wards (#974;
+ *   772 and 8,780 until it restored the two LGAs #789 excluded for naming their
+ *   wards by number — the register's own names, see scripts/build-wards.ts), from
  *   two independently published copies of the INEC register that were measured
  *   against each other before either was used. scripts/build-wards.ts holds the
  *   sources, the cross-check, the hand-verified spelling aliases, and what it
@@ -331,7 +333,7 @@ export function getWards(lga: string, state?: string): string[] {
      *   #789 AND THE STATE IS PART OF THE QUESTION NOW.
      *
      *   With two LGAs in the table this was keyed on the LGA name alone and it
-     *   did not matter. With all 772 it does: six LGA names belong to two states
+     *   did not matter. With all 774 it does: six LGA names belong to two states
      *   each, so a name-only lookup would hand a woman in Surulere, Oyo the ward
      *   list for Surulere, Lagos — and she would pick one, and it would look
      *   like an answer for the rest of the record's life.
@@ -371,7 +373,7 @@ export function hasVerifiedWards(lga: string, state?: string): boolean {
  *   Garki against a hundred and sixty-nine. A dropdown offering four of
  *   eighty-four is a claim that those are the choices.
  *
- *   The real register is 172,000 units, about five megabytes, so it cannot be a
+ *   The real register is 173,017 units, about five megabytes, so it cannot be a
  *   synchronous function in a module the browser downloads. It is sharded by
  *   state and read on the server: see lib/polling-units.ts and
  *   /api/locations/polling-units.

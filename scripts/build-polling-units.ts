@@ -82,6 +82,28 @@ const base = (s: string): string =>
 /** Rule 2: this source writes the numeral I as the digit 1, and O as 0. */
 const wardKey = (s: string): string => base(s).replace(/1/g, "i").replace(/0/g, "o");
 
+/**
+ * Rule 2b: #974 — THE WARD-NUMBER PREFIX ONE REGISTER WRITES AND THE OTHER DOES
+ * NOT.
+ *
+ *   Rivers's Bonny and Tai reached this generator with every ward unmatched, and
+ *   the two lists are the same places under two labelling conventions:
+ *
+ *     ours (temikeezy)   Ward I Oro-Igwe   Ward VII (Nonwa)   Ward X (Ban-Ogoi)
+ *     INEC register      ORO-IGWE          NONWA              BAN-OGOI
+ *
+ *   So a leading "Ward <number>" is dropped before comparing — numerals, roman
+ *   numerals or words, the same three spellings BARE covers. THE REMAINDER STILL
+ *   HAS TO MATCH EXACTLY inside the one LGA, so this cannot attach a ward to the
+ *   wrong place; it only stops a prefix hiding a name that is already there.
+ *
+ *   IT IS APPLIED AS A SECOND ATTEMPT, never instead of the first. A ward whose
+ *   real name begins with a number keeps its own key, and only a ward that
+ *   matched nothing is asked again without the prefix.
+ */
+const stripWardNumber = (s: string): string =>
+    String(s).replace(/^\s*ward\s+(?:\d+|[ivxlc]+|one|two|three|four|five|six|seven|eight|eigth|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b[\s.:-]*/i, "").trim();
+
 /** Rule 3: "ISIALA MBANO (UMUELEMAI)" is the LGA plus its headquarters town. */
 const lgaKey = (s: string): string => base(String(s).replace(/\s*\([^)]*\)\s*$/, ""));
 
@@ -109,10 +131,20 @@ const LGA_ALIASES: Record<string, string> = {
     "Bauchi|Damban": "DAMBAM",
     "Borno|Maiduguri": "MAIDUGURI M. C.",
     "Cross River|Yakuur": "YAKURR",
+    //   #974 — "Municipal" on the platform's list, "MUNICIPALITY" in this
+    //   register. build-wards.ts has carried the same alias all along; this
+    //   generator did not, so the LGA #974 just restored to the ward table
+    //   would have arrived with no polling units.
+    "Cross River|Calabar Municipal": "CALABAR MUNICIPALITY",
     "Edo|Uhunmwonde": "UHUNMWODE",
     "Gombe|Yamaltu/Deba": "YALMALTU/ DEBA",
     "Imo|Ezinihitte": "EZINIHITTE MBAISE",
     "Imo|Unuimo": "ONUIMO (OKWE)",
+    //   #974 — this register writes Nasarawa Eggon with two Gs and the
+    //   platform's list with one. Confirmed by the wards it brings: Agunji,
+    //   Alogani, Mada Station, Nasarawa Eggon, Ubbe, Umme — Nasarawa Eggon's
+    //   own, and the LGA had NO polling units on the form before this line.
+    "Nasarawa|Nasarawa Egon": "NASARAWA EGGON",
     "Jigawa|Biriniwa": "BIRNIWA",
     "Jigawa|Kiri Kasama": "KIRIKA SAMMA",
     "Kano|Dambatta": "DANBATA",
@@ -161,10 +193,10 @@ for (const s of raw) {
 }
 
 type Report = {
-    exact: number; roman: number; unique: number; deduced: number;
+    exact: number; roman: number; unique: number; deduced: number; prefixed: number;
     unmatchedWards: string[]; unmatchedLgas: string[]; units: number;
 };
-const report: Report = { exact: 0, roman: 0, unique: 0, deduced: 0, unmatchedWards: [], unmatchedLgas: [], units: 0 };
+const report: Report = { exact: 0, roman: 0, unique: 0, deduced: 0, prefixed: 0, unmatchedWards: [], unmatchedLgas: [], units: 0 };
 
 /** Closeness, only ever used to pick a UNIQUE candidate inside one LGA. */
 function closeMatches(needle: string, hay: string[]): string[] {
@@ -229,8 +261,16 @@ for (const [composite, wards] of Object.entries(WARDS_BY_STATE_AND_LGA)) {
 
     for (const w of wards) {
         const hit = avail.get(wardKey(w));
-        if (hit) { avail.delete(wardKey(w)); take(w, hit, "exact"); }
-        else pending.push(w);
+        if (hit) { avail.delete(wardKey(w)); take(w, hit, "exact"); continue; }
+
+        //   #974 — and again without the "Ward <number>" prefix, which is a
+        //   labelling difference and not a different place. See stripWardNumber.
+        const bare = stripWardNumber(w);
+        if (bare && bare !== w) {
+            const hit2 = avail.get(wardKey(bare));
+            if (hit2) { avail.delete(wardKey(bare)); take(w, hit2, "prefixed"); continue; }
+        }
+        pending.push(w);
     }
 
     const still: string[] = [];
@@ -250,7 +290,11 @@ for (const [composite, wards] of Object.entries(WARDS_BY_STATE_AND_LGA)) {
 }
 
 const TOTAL = Object.values(WARDS_BY_STATE_AND_LGA).reduce((n, w) => n + w.length, 0);
-const covered = report.exact + report.unique + report.deduced;
+//   #974 — `prefixed` belongs in this sum. It was left out when the rule was
+//   added and the summary then under-reported coverage by the 20 wards it had
+//   just recovered, while the shards on disk were correct. A total that does
+//   not name every way a ward can be matched drifts the moment one is added.
+const covered = report.exact + report.prefixed + report.unique + report.deduced;
 if (covered < TOTAL * 0.9) {
     console.error(`REFUSING: only ${covered} of ${TOTAL} wards matched a polling-unit list.`);
     process.exit(1);
@@ -298,9 +342,11 @@ console.log(JSON.stringify({
     coveragePercent: Math.round((covered / TOTAL) * 100),
     pollingUnits: report.units,
     matchedExact: report.exact,
+    matchedByDroppingWardNumber: report.prefixed,
     matchedUniqueClose: report.unique,
     matchedByDeduction: report.deduced,
-    unmatchedLgas: report.unmatchedLgas.length,
-    unmatchedWards: report.unmatchedWards.length,
+    unmatchedLgas: report.unmatchedLgas,
+    unmatchedWardCount: report.unmatchedWards.length,
+    unmatchedWards: report.unmatchedWards,
     states: Object.keys(out).length,
 }, null, 2));

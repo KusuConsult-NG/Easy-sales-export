@@ -36,14 +36,21 @@
  *
  *   RUN AGAINST A LOCAL CLUSTER; skipped, loudly, without one:
  *
- *       ./scripts/local-stack/up.sh
- *       LOCAL_PG_URL=postgres://postgres@127.0.0.1:54322/postgres npm run test:pg
+ *       npm run pg:start                                    # Postgres alone, 55432
+ *       LOCAL_PG_URL="$(cat .local-pg-url)" npm run test:pg
+ *
+ *   #337 taught local-postgres.sh to write .local-pg-url and the push hook to
+ *   read it. `npm run test:pg` was NOT taught the same thing — it reads only
+ *   LOCAL_PG_URL — so the variable is still passed here on purpose.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
 import { readFileSync } from 'fs';
-import { dbDescribe as sharedDbDescribe, restDescribe } from '@/lib/testing/pg-harness';
+import {
+    dbDescribe as sharedDbDescribe, restDescribe,
+    explainPlan, planWithTheIndexPricedToLose, indexAndHeapPages, rebuildIndex,
+} from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
@@ -109,6 +116,94 @@ const dbDescribe = sharedDbDescribe;
  *        leaving those wrong is how this reached the next suite in the first
  *        place.
  */
+/**
+ *   #972 AND THEN IT WENT RED AGAIN — ON A CLUSTER, NOT ON A CHANGE.
+ *
+ *        #673 above fixed "this test measured the ROWS the previous suite left
+ *        behind". It did not fix the other thing a previous suite leaves behind.
+ *
+ *        THE #051 FILTER TEST BELOW FAILED ON A COMMIT THAT TOUCHED NONE OF
+ *        THIS, twenty minutes after the same code passed. Running the file alone
+ *        reproduced it twice, so it was not a flake. Measured on the exact query,
+ *        over the exact 5,000 rows this file seeds:
+ *
+ *            idx_users_raw_created_at      the plan, and its cost
+ *            ────────────────────────      ──────────────────────────────────
+ *              8 pages (freshly built)     Bitmap Index Scan        156.55
+ *             87 pages                     Bitmap Index Scan        192.55
+ *            237 pages                     Seq Scan                 236.33
+ *
+ *        THE INDEX HAD GROWN LARGER THAN THE TABLE IT INDEXES: 237 pages of
+ *        index over a 135-page heap, for 5,000 rows that need 8. Sibling suites
+ *        seed tens of thousands of users and delete them, and VACUUM gives index
+ *        pages back to the INDEX, never to the filesystem — so the file grows
+ *        across runs and never shrinks. At 237 pages the bitmap scan's start-up
+ *        cost alone (105.68) is most of the sequential scan's whole total
+ *        (235.00), and CHOOSING THE SEQUENTIAL SCAN IS THE PLANNER BEING RIGHT.
+ *
+ *        So one assertion was reading the cluster's history and reporting it as
+ *        a missing index. It was also asking two questions at once, and only one
+ *        of them is answerable from a cost estimate:
+ *
+ *        1. CAN the dashboard's predicate use an index AT ALL? That is #051's
+ *           actual finding — a btree on the COLUMN cannot serve a filter on the
+ *           JSON KEY — and it must not depend on what anything costs. Asked with
+ *           THE INDEX PRICED TO LOSE — random_page_cost = 1000, so no cost
+ *           accident can explain it being chosen — AND sequential scans then
+ *           discouraged, `enable_seqscan = off` being a preference and not a
+ *           prohibition. Measured, all three, on the same 5,000 rows:
+ *
+ *               random_page_cost=1000                  Seq Scan          208.33
+ *               ... and seqscan off                    Bitmap Index Scan  1124.55
+ *               ... and 051's index DROPPED     Seq Scan, 10000000207.06
+ *
+ *           The index is five times the cheaper plan's cost and still appears,
+ *           because it is the only thing that FITS. No page count, row count or
+ *           statistic enters into it — which is exactly what the assertion below
+ *           it cannot say for itself. This is also the distinction 022 is about: that index was
+ *           present and UNUSABLE for its query, which pg_indexes cannot tell you
+ *           and a cost comparison tells you only by accident.
+ *
+ *        2. DOES the planner prefer it? Worth keeping — an index nothing scans is
+ *           not a fix — but it is only a fair question about an index
+ *           proportionate to its rows, which is the state production's index is
+ *           in and this one was not. So the seed rebuilds that one index, and the
+ *           test reports both page counts when it fails, so the next reader sees
+ *           bloat instead of re-deriving it.
+ *
+ *        TWO FIXES I MEASURED AND REJECTED, recorded so nobody re-runs them:
+ *
+ *            vacuum (analyze)    marked all 135 heap pages all-visible; the plan
+ *                                did not move. What is being compared is the
+ *                                index FILE's size, and VACUUM does not shrink
+ *                                it.
+ *
+ *            more rows, or a     the selectivity is already the dashboard's own:
+ *            narrower range      526 rows of 5,000, one month out of 300 days.
+ *                                Changing it would make the test easier to pass
+ *                                and stop it resembling the query that timed out.
+ *
+ *        MUTATION-TESTED, each mutant verified to have landed, and the bloated
+ *        mutants run against an index re-bloated to 244-495 pages first, because
+ *        a mutant run on a pristine cluster would have proved nothing:
+ *
+ *          051's index does not exist          both assertions      KILLED
+ *          the seed stops rebuilding it        preference only      KILLED
+ *          enable_seqscan off -> on            capability only      KILLED
+ *          drop the random_page_cost pricing   capability only      KILLED
+ *          capability names the COLUMN index   capability only      KILLED
+ *          the probe stops using a transaction both assertions      KILLED
+ *          `set local` -> bare `set`           EQUIVALENT, not a survivor:
+ *                                              Postgres reverts a SET on
+ *                                              ROLLBACK, measured, so inside
+ *                                              this helper the two are the same
+ *                                              statement.
+ *
+ *        THE SECOND AND THIRD ROWS ARE THE POINT. One mutant kills only the
+ *        preference assertion and the other only the capability assertion, on
+ *        the same cluster, in the same run — which is the evidence that the two
+ *        tests ask different questions rather than the same one twice.
+ */
 const TAG = 'plan-probe-467';
 
 /** Enough rows that an index scan genuinely beats a sequential one. */
@@ -149,8 +244,27 @@ const seedProbeRows = async () => {
          on conflict (id) do nothing`,
         [TAG, PROBE_ROWS],
     );
+    /*
+     *   #972 REBUILT, NOT MERELY ANALYSED — see the note above. This index file
+     *   grows every time a sibling suite seeds tens of thousands of rows into
+     *   `users` and deletes them, and at 237 pages over a 135-page heap the
+     *   planner correctly refuses it. Without this the test below reads the
+     *   cluster's history rather than the schema.
+     *
+     *   NARROW ON PURPOSE: this one index, not `reindex table`. The suite next
+     *   door asserts that a role scan reads the whole table WITHOUT an index,
+     *   and shrinking indexes nobody asked about is how this file's problem
+     *   becomes that file's problem.
+     */
+    await rebuildIndex(client!, 'idx_users_raw_created_at');
     await client!.query('analyze public.users');
 };
+
+/*
+ *   #651's rule, applied to #972: the planner probe and the page counts live in
+ *   lib/testing/pg-harness, because the-indexes-022-could-not-deploy needs the
+ *   same two questions and a rule written twice is a rule waiting to drift.
+ */
 
 beforeAll(async () => {
     if (!REQUESTED) return;
@@ -278,19 +392,73 @@ dbDescribe('#051 — and the chart that filtered the OTHER createdAt', () => {
      *   Nothing asked whether the FILTER the dashboard actually issues could
      *   use anything at all.
      */
-    it('THE FILTER THE DASHBOARD ISSUES USES AN INDEX', async () => {
-        //   Seeded for #673's reason — see the header. The question is only
-        //   meaningful about a table with rows in it.
+    /** The query analytics.service issues, verbatim in shape. */
+    const DASHBOARD_FILTER = `select count(*) from users
+              where raw_data->>'createdAt' >= $1
+                and raw_data->>'createdAt' <= $2`;
+    //   One month out of the 300 days the seed spreads over: 526 rows of 5,000.
+    //   The dashboard's own selectivity, and #972 says why it is not adjusted to
+    //   suit the planner.
+    const ONE_MONTH = ['2026-01-01T00:00:00.000Z', '2026-01-31T23:59:59.999Z'];
+
+    it('THE FILTER THE DASHBOARD ISSUES CAN BE SERVED BY AN INDEX AT ALL', async () => {
+        /*
+         *   THE ASSERTION THAT IS ACTUALLY #051's FINDING, and the one that owes
+         *   nothing to a cost estimate.
+         *
+         *   A btree on the COLUMN `created_at` cannot serve a predicate on the
+         *   JSON KEY `raw_data->>'createdAt'` — not "will not today", CANNOT. So
+         *   the question is whether any index CAN, and it is asked with the
+         *   index priced to LOSE: see the helper, which makes index access cost
+         *   1000 a page and then rules out the sequential scan anyway. An index
+         *   that appears under those costs is one the predicate fits; with 051's
+         *   index dropped the plan is a Seq Scan instead, at 10000000207.06.
+         *
+         *   Seeded for #673's reason: the question is only meaningful about a
+         *   table with rows in it.
+         */
         await seedProbeRows();
 
-        const { rows } = await client!.query(
-            `explain (analyze, format json)
-             select count(*) from users
-              where raw_data->>'createdAt' >= $1
-                and raw_data->>'createdAt' <= $2`,
-            ['2026-01-01T00:00:00.000Z', '2026-01-31T23:59:59.999Z'],
-        );
-        const plan = JSON.stringify(rows[0]['QUERY PLAN']);
+        const forced = await planWithTheIndexPricedToLose(client!, DASHBOARD_FILTER, ONE_MONTH);
+
+        expect(forced.plan).toContain('idx_users_raw_created_at');
+
+        /*
+         *   AND IT WAS TAKEN AGAINST ITS OWN PRICE. Priced at 1000 a page the
+         *   index path costs 1124.55 against the 208.33 sequential scan it is
+         *   forbidden from taking, while the same query planned freely costs
+         *   156.54 — so this plan is emphatically not the cheap one.
+         *
+         *   NOT ASSERTED HERE, because the helper THROWS when the forced plan is
+         *   no dearer than the free choice: an assertion that cannot fail is the
+         *   thing this audit keeps finding, and one enforced in the helper covers
+         *   the other caller too.
+         */
+    });
+
+    it('AND THE PLANNER PREFERS IT, ON AN INDEX PROPORTIONATE TO ITS ROWS', async () => {
+        //   An index nothing scans is not a fix, so the preference is still
+        //   asserted — but #972 is why the precondition is measured first rather
+        //   than assumed. A 237-page index over a 135-page heap is a state no
+        //   production table is in, and refusing it is the planner working.
+        await seedProbeRows();
+
+        const { indexPages, heapPages } = await indexAndHeapPages(
+            client!, 'idx_users_raw_created_at', 'public.users');
+
+        //   BOTH PRECONDITIONS, MEASURED. The second is here because the test
+        //   above turns sequential scans off: it does so with `set local` inside
+        //   a transaction it rolls back, and if that ever became a bare SET this
+        //   test would go on passing while asking an entirely different question.
+        const { rows: setting } = await client!.query('show enable_seqscan');
+
+        expect({
+            indexPages, heapPages,
+            proportionate: indexPages < heapPages,
+            seqscan: setting[0].enable_seqscan,
+        }).toEqual({ indexPages, heapPages, proportionate: true, seqscan: 'on' });
+
+        const { plan } = await explainPlan(client!, DASHBOARD_FILTER, ONE_MONTH);
 
         expect(plan).toContain('idx_users_raw_created_at');
         expect(plan).not.toContain('"Node Type":"Seq Scan"');

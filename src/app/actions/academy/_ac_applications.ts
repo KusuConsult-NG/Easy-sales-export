@@ -174,7 +174,7 @@ async function _submitAcademyApplicationAction(
          *   BOTH HALVES WERE MINE, AND BOTH CAME FROM ONE MISTAKE. The first
          *   version of this gate read
          *
-         *       isAcademyEntitled(serviceRegistrations.academy.paymentStatus)
+         *       isAcademyPaid(serviceRegistrations.academy.paymentStatus)
          *
          *   which is ONE of the five sources checkAcademyPaymentStatusAction
          *   consults to decide whether to enable Submit. The others are a real

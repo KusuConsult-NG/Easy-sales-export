@@ -4,7 +4,7 @@
  * Built by scripts/build-polling-units.ts, which documents the source, the
  * join rules and what it refuses to guess. Re-run it rather than editing.
  *
- * 8687 wards, 172000 polling units, 37 states.
+ * 8741 wards, 173017 polling units, 37 states.
  *
  * SERVER ONLY. These shards total about five megabytes; lib/polling-units.ts
  * loads one state at a time and no client component imports them.

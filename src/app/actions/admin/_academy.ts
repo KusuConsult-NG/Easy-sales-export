@@ -448,7 +448,13 @@ async function _approveAcademyApplicationAction(
         return {
             error: null,
             success: true as const,
-            message: "Academy application approved successfully",
+            //   #975 — the message says what the admin has and has not done.
+            //   Approving no longer opens the module: the fee decides that, and
+            //   an admin who reads "approved successfully" and expects the
+            //   learner to be able to sign in would be reading a promise this
+            //   door stopped being able to keep.
+            message: "Academy application approved. The learner still needs to pay "
+                + "the fee before the Academy opens for them.",
         };
     } catch (error: any) {
         logger.error("Approve Academy application error:", error);
@@ -730,7 +736,11 @@ async function _manualAcademyEnrollmentAction(
         return {
             error: null,
             success: true as const,
-            message: `User successfully enrolled in Academy (${plan} package)`,
+            //   #975 — same reason as the approval door above. This one is worth
+            //   saying twice because its NAME promises enrolment: it records the
+            //   plan and the decision, and the fee is what admits them.
+            message: `${plan} package recorded for this learner. They still need to `
+                + `pay the fee before the Academy opens for them.`,
         };
     } catch (error: any) {
         logger.error("Manual academy enrollment error:", error);

@@ -118,22 +118,50 @@ describe('#789 — the required field can be answered', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#789 — the register answers for the whole country', () => {
-    it('772 OF 774 LGAs, AND THE TWO MISSING ONES ARE MISSING ON PURPOSE', () => {
+    it('ALL 774 LGAs — #974 restored the last two', () => {
+        /*
+         *   THIS ASSERTED 772 AND THAT THE OTHER TWO WERE "MISSING ON PURPOSE",
+         *   AND THE OWNER REPORTED THE CONSEQUENCE: "verify if you have all the
+         *   Wards and PUs populated because some users couldn't find some of the
+         *   wards and PUs in the drop down."
+         *
+         *   The two were Abia's Ugwunagbo ("Ward One … Ward Ten") and Cross
+         *   River's Calabar Municipality ("One … Ten"), excluded by #789 under
+         *   #774's rule that a bare number is not the name of a place. That rule
+         *   is right about what it was written for — a hand-written "Ward 1 …
+         *   Ward 10" offered for 772 of 774 LGAs — and wrong here, because these
+         *   names are not invented. They are the register's own, and the note in
+         *   scripts/build-wards.ts sets out the cross-check: two independently
+         *   published copies agree name for name, typo included, and INEC lists
+         *   492 polling units between the two LGAs.
+         *
+         *   AND THE INCONSISTENCY SETTLED IT. Calabar SOUTH numbers its wards
+         *   the same way — "One (1) … Twelve (12)" — and has been on the form all
+         *   along, because the parenthesised digit fails the regex. One state,
+         *   two adjacent LGAs, one convention, opposite treatment.
+         */
         const total = Object.values(NIGERIAN_LOCATIONS).reduce((n, v) => n + v.length, 0);
         expect(total).toBe(774);
-        expect(Object.keys(WARDS_BY_STATE_AND_LGA).length).toBe(772);
+        expect(Object.keys(WARDS_BY_STATE_AND_LGA).length).toBe(774);
 
+        expect(getWards('Ugwunagbo', 'Abia')).toHaveLength(10);
+        expect(getWards('Calabar Municipal', 'Cross River')).toHaveLength(10);
+        expect(hasVerifiedWards('Ugwunagbo', 'Abia')).toBe(true);
+    });
+
+    it('AND NO LGA ANYWHERE HANDS BACK AN EMPTY WARD LIST — the user-visible half', () => {
         /*
-         *   The two are Abia's Ugwunagbo ("Ward One … Ward Ten") and Cross
-         *   River's Calabar Municipality ("One … Ten"). Both sources agree that
-         *   is how those wards are written, so there is nothing to find — and
-         *   a form that offers "Ward Three" tells an applicant nothing she did
-         *   not already know, which is the owner's complaint exactly. They fall
-         *   back to the typed answer, which is what they have today.
+         *   The assertion the owner's report is actually about. Two LGAs out of
+         *   774 is 0.26% of the country and 100% of the experience for anybody
+         *   who lives in one: the ward dropdown was empty, with no way to tell
+         *   that from a fault.
          */
-        expect(getWards('Ugwunagbo', 'Abia')).toEqual([]);
-        expect(getWards('Calabar Municipal', 'Cross River')).toEqual([]);
-        expect(hasVerifiedWards('Ugwunagbo', 'Abia')).toBe(false);
+        const empty = Object.entries(NIGERIAN_LOCATIONS)
+            .flatMap(([state, lgas]) => lgas.map((lga) => [state, lga] as const))
+            .filter(([state, lga]) => getWards(lga, state).length === 0)
+            .map(([state, lga]) => `${state}|${lga}`);
+
+        expect({ empty }).toEqual({ empty: [] });
     });
 
     it('AND THE LGA THE OWNER WOULD HAVE CHECKED NOW NAMES ITS WARDS', () => {

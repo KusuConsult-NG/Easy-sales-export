@@ -89,87 +89,69 @@ beforeEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#815 — the server refuses a non-member', () => {
-    it('A NON-MEMBER CANNOT START A PURCHASE — the defect', async () => {
-        //   THE test. Before this, the action ran straight through to pricing
-        //   the property and opening a charge.
+describe('#973 — the gate is GONE, and a signed-in non-member can buy land', () => {
+    /**
+     *   THIS SUITE USED TO ASSERT THE OPPOSITE, AND THE OWNER OVERRULED IT.
+     *
+     *   "there is a gate that tells them they are not part of cooperative which
+     *   is not supposed to be so."
+     *
+     *   #815's three describes here — the refusal, the fail-closed read, and a
+     *   member getting past — were all correct about the SHAPE of a purchase
+     *   gate and wrong about whether this one should exist. They are replaced
+     *   rather than deleted so the rule cannot come back by accident: every test
+     *   below fails if anybody reinstates a cooperative check on this path.
+     *
+     *   app/actions/farm-nation-payment.ts records where the rule came from — a
+     *   February 2026 audit commit's `tier !== "Premium"`, a tier this platform
+     *   deleted — and why nothing replaces it.
+     */
+    it('THE test: A NON-MEMBER IS NOT REFUSED FOR NOT BEING A MEMBER', async () => {
+        //   The lookup is still mocked, and answers "not a member". Whatever
+        //   this purchase does next, it must not be refused for that.
         cooperativeTierForPerson.mockResolvedValue(null);
 
         const res = await buy();
 
-        expect(res.success).toBe(false);
-        expect(res.error).toMatch(/sold to cooperative members/i);
+        expect(res.error ?? '').not.toMatch(/cooperative/i);
+        expect(res.error ?? '').not.toMatch(/sold to cooperative members|join the cooperative/i);
     });
 
-    it('AND IS TOLD WHAT WOULD LET THEM', async () => {
-        cooperativeTierForPerson.mockResolvedValue(null);
-
-        const res = await buy();
-
-        expect(res.error).toMatch(/join the cooperative/i);
-    });
-
-    it('AND THE CHECK RUNS BEFORE THE PROPERTY IS EVEN READ', async () => {
-        //   An eligibility rule about the CALLER. There is no reason to read a
-        //   property, price it or resolve an offer for somebody who may not buy
-        //   it — and a refusal that happens after those reads is a refusal that
-        //   costs them.
+    it('AND THE ACTION DOES NOT ASK ABOUT COOPERATIVE MEMBERSHIP AT ALL', async () => {
+        /*
+         *   Stronger than checking the message, and the assertion that would
+         *   catch a reinstated gate that worded its refusal differently: the
+         *   person-aware cooperative lookup is never called on this path.
+         */
         cooperativeTierForPerson.mockResolvedValue(null);
 
         await buy();
 
-        expect(cooperativeTierForPerson).toHaveBeenCalledWith(
-            expect.anything(), 'buyer-1',
-        );
+        expect(cooperativeTierForPerson).not.toHaveBeenCalled();
     });
-});
 
-// ─────────────────────────────────────────────────────────────────────────────
-describe('#815 — a membership that cannot be read is not a membership', () => {
-    it('IT FAILS CLOSED, because this is the path that charges a card', async () => {
-        cooperativeTierForPerson.mockRejectedValue(new Error('statement timeout'));
+    it('AND A MEMBERSHIP THAT CANNOT BE READ CANNOT BLOCK A PURCHASE EITHER', async () => {
+        //   #815 made the read fail CLOSED, which was right while the rule
+        //   existed: on the path that charges a card, an unreadable membership
+        //   had to refuse. With no rule there is nothing to fail closed about,
+        //   and a cooperative outage must not stop land sales.
+        cooperativeTierForPerson.mockRejectedValue(new Error('supabase down'));
 
         const res = await buy();
 
-        expect(res.success).toBe(false);
-        expect(res.error).toMatch(/could not confirm your cooperative membership/i);
-    });
-
-    it('AND SAYS NOTHING WAS CHARGED, which is what they will worry about', async () => {
-        cooperativeTierForPerson.mockRejectedValue(new Error('statement timeout'));
-
-        const res = await buy();
-
-        expect(res.error).toMatch(/nothing has been charged/i);
-    });
-
-    it('and it is told apart from simply not being a member', async () => {
-        //   Two different situations. Telling a paying member to go and join
-        //   would be its own defect.
-        cooperativeTierForPerson.mockRejectedValue(new Error('down'));
-
-        const res = await buy();
-
-        expect(res.error).not.toMatch(/join the cooperative/i);
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('#815 — and a member is not blocked', () => {
-    it('POSITIVE CONTROL: A MEMBER GETS PAST THE MEMBERSHIP GATE', async () => {
-        //   The direction that must not move. A gate that refused everybody
-        //   would pass every assertion above and close Farm Nation sales.
-        //
-        //   It is asserted by what the action does NEXT: with no database
-        //   behind it the call fails later, on the property read — which is
-        //   proof it got past the gate, and is why the message is checked
-        //   rather than only `success`.
-        cooperativeTierForPerson.mockResolvedValue('Member');
-
-        const res = await buy();
-
-        expect(res.error ?? '').not.toMatch(/sold to cooperative members/i);
         expect(res.error ?? '').not.toMatch(/could not confirm your cooperative membership/i);
+    });
+
+    it('AND THE SOURCE CARRIES NO COOPERATIVE READ', () => {
+        //   The behaviour tests above go through mocks. This one reads the file,
+        //   so a gate added with a different helper is still caught.
+        const src = readFileSync(
+            join(process.cwd(), 'src/app/actions/farm-nation-payment.ts'), 'utf8');
+        const code = stripComments(src, { label: 'farm-nation-payment' });
+
+        expect(code).not.toMatch(/cooperativeTierForPerson/);
+        expect(code).not.toMatch(/COOPERATIVE_MEMBERS/);
+        expect(code).not.toMatch(/serviceRegistrations/);
     });
 });
 
@@ -177,13 +159,14 @@ describe('#815 — and a member is not blocked', () => {
 describe('#815 — one rule, so the two sides cannot disagree', () => {
     const read = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
 
-    it('BOTH THE SCREEN AND THE ACTION GO THROUGH THE PERSON-AWARE LOOKUP', () => {
-        expect(read('src/app/actions/farm-nation-payment.ts'))
-            .toContain('cooperativeTierForPerson(');
-        expect(read('src/app/actions/cooperative/_coop_membership.ts'))
-            .toContain('findCooperativeMemberRowForPerson(');
-    });
-
+    /*
+     *   #973 "BOTH THE SCREEN AND THE ACTION GO THROUGH THE PERSON-AWARE
+     *   LOOKUP" was here. Neither does any more — the screen and the action
+     *   both stopped asking. The #816 assertions below are about
+     *   lib/cooperative-member-lookup itself and are untouched by that: they
+     *   are the reason the cooperative's OWN doors do not mistake a person for
+     *   a stranger, and the cooperative still has those doors.
+     */
     it('AND THE TIER ACTION NO LONGER READS ONLY THE SESSION ID', () => {
         /*
          *   Scoped to _getUserTierAction'S OWN BODY, because this file holds

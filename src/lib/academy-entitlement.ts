@@ -85,6 +85,16 @@ export const ACADEMY_PAID_STATUSES = ["completed", "paid", "successful"] as cons
  */
 export const ACADEMY_GRANTED_STATUSES = ["waived"] as const;
 
+/**
+ * What an admin decision leaves in `paymentStatus`.
+ *
+ *   #975 — not a paid status and not a granted one: the learner still owes the
+ *   fee, and every reader of this field already treats an unrecognised value as
+ *   unpaid. Named rather than inlined so the two doors and this module cannot
+ *   drift.
+ */
+export const ACADEMY_UNPAID_STATUS = "pending";
+
 /** What the two admin doors record as the reason a place exists. */
 export const ADMIN_GRANT_SOURCE = "admin_grant";
 
@@ -104,26 +114,63 @@ export function isAcademyGranted(status: unknown): boolean {
 /**
  * May this learner use the module?
  *
- *   Paid OR granted. A grant is a deliberate admin decision and opens the
- *   module exactly as a payment does — the point of the split is that it is
- *   not COUNTED as one, not that it is worth less to the learner.
+ *   #975 PAID ONLY. A GRANT NO LONGER OPENS ACADEMY.
+ *
+ *   THE OWNER, stating the rule: "paid enrolment or legacy members (admin can't
+ *   grant access until user pays)."
+ *
+ *   This function used to return `isAcademyPaid(status) || isAcademyGranted(
+ *   status)`, and its note argued that "a grant is a deliberate admin decision
+ *   and opens the module exactly as a payment does". That was the right reading
+ *   of the PREVIOUS instruction — "fix the admin approval writing paymentStatus
+ *   completed without a payment" asked for grants to be recorded HONESTLY, and
+ *   the honest record was built. It did not ask for them to stop working, and I
+ *   kept them working. The rule above is the owner narrowing that.
+ *
+ *   SO THE UNION IS GONE AND THE NAME WITH IT. `isAcademyEntitled` is deleted
+ *   rather than redefined: a predicate that said "paid or granted" and now says
+ *   "paid" is one edit away from silently meaning the first thing again, and
+ *   every one of its ten callers read as though the wider meaning were intended.
+ *   Callers ask `isAcademyPaid` now, which cannot be misread.
+ *
+ *   LEGACY IS NOT A GRANT and is unaffected. It travels on its own markers —
+ *   `_isLegacy`, `legacyOnboardedBy`, and `paymentStatus: "completed"` written
+ *   by admin/_legacy.ts — none of which this touches. A pre-platform member
+ *   keeps their place.
+ *
+ *   `isAcademyGranted` STAYS, because the records still exist and an
+ *   administrator still has to be able to SEE that a place was granted. What it
+ *   no longer does is open a door.
  */
-export function isAcademyEntitled(status: unknown): boolean {
-    return isAcademyPaid(status) || isAcademyGranted(status);
-}
 
 /**
- * The fields an admin grant writes, so the two doors cannot drift apart.
+ * The fields an admin's decision writes, so the two doors cannot drift apart.
  *
  *   Mirrors _ac_admin_review's `paymentVerifiedBy` / `paymentVerifiedAt`: who
  *   decided, and when. `paymentAmount: 0` is stated rather than left absent
  *   because the metrics service sums `Number(app.paymentAmount) || 0` over
  *   everything it counts, and an explicit zero says "no money" where a missing
  *   field says "nobody wrote this yet".
+ *
+ *   #975 AND IT NO LONGER WRITES `waived`, BECAUSE `waived` NO LONGER OPENS THE
+ *   MODULE. Leaving it would have made these two doors report success for a
+ *   place the gate then refuses — an admin pressing Approve, seeing it work, and
+ *   the learner still locked out. That silent disagreement between a screen and
+ *   a gate is the defect this audit meets most often, and it is worse than the
+ *   one being closed.
+ *
+ *   `pending` IS WRITTEN EXPLICITLY, NOT OMITTED, for the same reason
+ *   `paymentVerifiedAt` is null rather than absent: a learner may already carry
+ *   a stale `completed` or `waived` from an earlier write, and leaving the field
+ *   alone would let it survive an admin decision that means the opposite.
+ *
+ *   The decision itself is still RECORDED — `entitlementSource`, `grantedBy`,
+ *   `grantedAt` — because who approved a place and when is history worth
+ *   keeping. What it no longer does is claim the fee is settled.
  */
 export function academyGrantFields(adminUserId: string, now: unknown) {
     return {
-        paymentStatus: ACADEMY_GRANTED_STATUSES[0],
+        paymentStatus: ACADEMY_UNPAID_STATUS,
         paymentAmount: 0,
         entitlementSource: ADMIN_GRANT_SOURCE,
         grantedBy: adminUserId,

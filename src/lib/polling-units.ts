@@ -8,8 +8,10 @@ import "server-only";
  *   #774 removed the "PU 001 … PU 010" placeholder — a number that matches
  *   nothing on a voter's card is not an answer — and left real names for Alausa
  *   and Garki, saying the rest had to be added one verified ward at a time.
- *   scripts/build-polling-units.ts did that: 172,000 units across 8,687 wards,
- *   99% of the register, from INEC's published list.
+ *   scripts/build-polling-units.ts did that: 173,017 units across 8,741 wards of
+ *   8,800 — 99% of the register, from INEC's published list. (#792 measured
+ *   172,000 across 8,687 of 8,780; #974 added two LGA aliases and a rule for the
+ *   "Ward <number>" prefix one register writes and the other does not.)
  *
  *   The hand-written pair are gone, and were not merely incomplete: they held
  *   FOUR units for Alausa where the register has EIGHTY-FOUR, and seven for
@@ -18,7 +20,7 @@ import "server-only";
  *
  * ── WHY THIS IS SERVER-SIDE AND ASYNC ───────────────────────────────────────
  *
- *   Five megabytes. #789's 8,780 ward names ship to the browser as a module
+ *   Five megabytes. #789's 8,800 ward names ship to the browser as a module
  *   because a form needs all of them at once to fill a dropdown; this is twenty
  *   times larger and a form needs ONE WARD'S WORTH. Shipping it would make every
  *   page of the platform slower in order to fix one field.
@@ -50,7 +52,8 @@ function shardFor(state: string): (() => Promise<{ default: Record<string, strin
 /**
  * The polling units in `ward`, or an empty list when they are not known.
  *
- * EMPTY IS A REAL ANSWER and the form treats it as one: 93 wards have no list,
+ * EMPTY IS A REAL ANSWER and the form treats it as one: 59 wards have no list
+ * (#974; 93 before it),
  * and their applicants type the unit themselves — which is what all of them did
  * before this existed. A ward handed another ward's polling units would be a
  * real-looking wrong answer on a member's record, and worse than the numbered

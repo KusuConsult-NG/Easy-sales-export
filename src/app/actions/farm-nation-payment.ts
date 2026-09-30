@@ -1,7 +1,6 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
-import { cooperativeTierForPerson } from "@/lib/cooperative-member-lookup";
 import { releasedReservationFields } from "@/lib/land-reservation-expiry";
 import { logger } from '@/lib/logger';
 import { fulfilPropertyPurchase } from "@/lib/property-purchase-fulfilment";
@@ -78,54 +77,54 @@ async function _initializePropertyPaymentAction(
         }
 
         /*
-         *   #815 THE MEMBERSHIP RULE, ENFORCED WHERE IT CAN BE.
+         *   #973 THE PURCHASE GATE THAT ASKED ABOUT THE WRONG MODULE.
          *
-         *   Farm Nation land is sold to cooperative members. That rule lived in
-         *   the checkout SCREEN and nowhere else — `getUserTierAction()` then
-         *   `if (tier !== "Member") router.push(...)` — and this action, which
-         *   is what actually takes the money, checked nothing.
+         *   THE OWNER, after users reported it: "there is a gate that tells them they
+         *   are not part of cooperative which is not supposed to be so."
          *
-         *   A SERVER ACTION IS A PUBLIC HTTP ENDPOINT. A client-side gate on a
-         *   purchase path stops the buyer who uses the buttons and nobody else,
-         *   which is the same finding as the escrow chat's maxLength one layer
-         *   further in: the rule was real, the enforcement was decoration.
+         *   Farm Nation sells land. The cooperative is a savings-and-loans service. A
+         *   buyer needed no part of the second to pay for the first, and four doors on
+         *   the Farm Nation purchase path said otherwise.
          *
-         *   FIRST, because it is an eligibility rule about the CALLER. There is
-         *   no reason to read a property, price it, or resolve an offer for
-         *   somebody who may not buy it at all.
+         *   WHERE THE RULE CAME FROM, because it was never a decision. `git log -S`
+         *   traces every one of them to 9adac845, "feat: Phase 5 Security Audit — Fix
+         *   critical vulnerabilities", February 2026. Its other changes are real
+         *   security fixes — an email fallback that leaked, a Firestore isAdmin() RBAC
+         *   mismatch. Bundled in with them was a client-side check that the buyer's
+         *   COOPERATIVE TIER was `"Premium"`:
          *
-         *   AND IT FAILS CLOSED. A membership that cannot be read is not a
-         *   membership — on the path that charges a card, the safe direction is
-         *   to refuse and say so. The screen tells the buyer the same thing and
-         *   offers a retry, so a transient fault costs a retry rather than a
-         *   wrong charge.
+         *       const [userTier, setUserTier] = useState<"Basic" | "Premium" | null>(null);
+         *       getUserTierAction().then(({ tier }) => { if (tier !== "Premium") ...
+         *
+         *   `"Basic"` and `"Premium"` DO NOT EXIST ANY MORE — the tier system was
+         *   retired when the cooperative went to one flat ₦10,000 fee, and the surviving
+         *   gates were mechanically re-pointed at `tier !== "Member"`. `_fn_listings.ts`
+         *   still carried the original comment, `// Check user tier (Premium required)`,
+         *   above a test of `serviceRegistrations.cooperatives.status`. A rule whose own
+         *   comment names a concept the platform deleted is a fossil, not a policy.
+         *
+         *   AND #815 WAS MINE, AND IT MADE IT WORSE. Finding the rule in the checkout
+         *   SCREEN and nowhere else, I enforced it in the action that takes the money —
+         *   correctly reasoning that a client-side gate on a purchase path is
+         *   decoration, and never asking whether the rule was right. Hardening a wrong
+         *   rule turns a bug users could sometimes get past into one they cannot.
+         *
+         *   WHAT REPLACES IT: nothing. A signed-in buyer may buy land. That is what the
+         *   application's own routing already said — /farm-nation/checkout/[propertyId],
+         *   /properties, /property/[id] and /map all sit OUTSIDE the (member) route
+         *   group, which is the part of Farm Nation that gates, and it gates on
+         *   `checkModuleAccess(..., "farm-nation")` — Farm Nation's own access, never
+         *   the cooperative's.
+         *
+         *   AND NOT `checkModuleAccess(..., "farm-nation")` HERE EITHER, which was the
+         *   tempting substitution. That gate requires an application an ADMIN has
+         *   APPROVED (lib/module-access-check, Layer 2.10: status `approved`, `active`
+         *   or `approved_admin`); Farm Nation onboarding writes `pending`. Gating a
+         *   purchase on it would replace a wrong gate with a slower one and stop buyers
+         *   who had done nothing wrong. The seller-side rules — a listing is verified by
+         *   an admin before it can be bought, the price comes off the listing and never
+         *   off the request — are untouched and are what actually protects this path.
          */
-        let tier: "Member" | null;
-        try {
-            tier = await cooperativeTierForPerson(
-                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
-            );
-        } catch (error) {
-            logger.error("[farm-nation-payment] could not read cooperative membership", {
-                userId: session.user.id,
-                error: error instanceof Error ? error.message : String(error),
-            });
-            return {
-                success: false,
-                error: "We could not confirm your cooperative membership just now. "
-                    + "Nothing has been charged — please try again.",
-                data: null,
-            };
-        }
-
-        if (tier !== "Member") {
-            return {
-                success: false,
-                error: "Land on Farm Nation is sold to cooperative members. "
-                    + "Join the cooperative to complete this purchase.",
-                data: null,
-            };
-        }
 
         // Strict validation of zoning compliance declaration
         if (!buyerInfo.zoningComplianceDeclarationAccepted) {

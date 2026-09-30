@@ -174,19 +174,26 @@ describe('and every door that really settles a payment still opens it', () => {
         expect(await access(UID)).toBe(true);
     });
 
-    it('POSITIVE CONTROL: AN ADMIN GRANT — "waived" opens the module too', async () => {
-        //   THE OWNER: "fix the admin approval writing paymentStatus completed
-        //   without a payment." Both admin doors write "waived" now instead of
-        //   claiming money arrived — so this gate has to honour it, or the fix
-        //   for a bookkeeping lie becomes a lockout for every learner an admin
-        //   deliberately let in.
-        //
-        //   THIS IS THE CASE THAT MAKES THE SPLIT SAFE. It is the difference
-        //   between isAcademyEntitled and isAcademyPaid, and the mutant that
-        //   swaps them dies here and nowhere else in this file.
+    it('#975 AN ADMIN GRANT — "waived" DOES NOT open the module', async () => {
+        /*
+         *   THIS ASSERTED THE OPPOSITE AND THE OWNER REVERSED IT: "paid
+         *   enrolment or legacy members (admin can't grant access until user
+         *   pays)."
+         *
+         *   The note it replaces was right about the instruction it had. "Fix
+         *   the admin approval writing paymentStatus completed without a
+         *   payment" asked for a bookkeeping lie to stop, and honouring the
+         *   honest label was how that fix avoided becoming a lockout. The rule
+         *   is narrower now: money or legacy, nothing else.
+         *
+         *   IT IS STILL THE CASE THAT CARRIES THE WHOLE CHANGE, just pointing
+         *   the other way. This is where a restored union predicate dies — and
+         *   nowhere else in this file, because every other row here is a genuine
+         *   payment.
+         */
         healedRegistration({ paymentStatus: 'waived' });
 
-        expect(await access(UID)).toBe(true);
+        expect(await access(UID)).toBe(false);
     });
 
     it('POSITIVE CONTROL: THE LEGACY IMPORT — the carve-out the owner asked for', async () => {

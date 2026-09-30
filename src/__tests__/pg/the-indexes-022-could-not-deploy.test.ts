@@ -49,7 +49,9 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Client } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { dbDescribe } from '@/lib/testing/pg-harness';
+import {
+    dbDescribe, planWithTheIndexPricedToLose, indexAndHeapPages, rebuildIndex,
+} from '@/lib/testing/pg-harness';
 
 const REQUESTED = Boolean(process.env.LOCAL_PG_URL);
 const URL = process.env.LOCAL_PG_URL ?? '';
@@ -167,6 +169,62 @@ async function planFor(text: string, params: unknown[] = []): Promise<string> {
     return rows.map((r) => r['QUERY PLAN'] as string).join('\n');
 }
 
+/**
+ *   #972 — THE TWO QUESTIONS 048's INDEX ASSERTIONS MEAN, ASKED SEPARATELY.
+ *
+ *   Three of them read "the plan names this index" for a value selecting a fifth
+ *   to a third of the table, and that is partly a statement about how many times
+ *   this directory has been run: the suites here seed tens of thousands of rows
+ *   into these four tables and delete them, VACUUM gives the freed index pages
+ *   back to the index rather than the filesystem, and the files grow every run.
+ *   Measured on one cluster: 30,378 index pages over an 1,089-page
+ *   document_collections heap; 16,364 over marketplace_orders. An index larger
+ *   than its table is an index the planner is RIGHT to refuse, and two of these
+ *   assertions failed on trees nobody had touched — cost 1472.00 at 30%
+ *   selectivity, and again at 20%.
+ *
+ *   What 048 is about is REACHABILITY: the migration's indexes exist and the
+ *   queries that motivated them can use them. That is asked with the index
+ *   priced to lose — see lib/testing/pg-harness — and owes nothing to bloat.
+ *   The preference is asked separately, on a rebuilt index, where it is fair.
+ *
+ *   `AND status = completed CORRECTLY STAYS A SEQUENTIAL SCAN` below is left
+ *   exactly as it was, deliberately: bloat can only make an index LESS
+ *   attractive, so an assertion that a Seq Scan is chosen cannot be broken by
+ *   it, and that test is about the planner being right at 85%.
+ *
+ *   MUTATION-TESTED, against re-bloated indexes:
+ *
+ *     the capability tests stop pricing the index    2 of 3        KILLED
+ *     the preference tests stop rebuilding it        2 of 3        KILLED
+ *
+ *   AND THE ONE THAT SURVIVED THE FIRST MUTANT IS THE FINDING RESTATED. Dropping
+ *   the pricing kills the 20% and 30% assertions and NOT the 8% one, because at
+ *   8% the planner prefers the index on cost anyway. That is the measurement for
+ *   the claim above: the stranded sweep was not over the cliff, it was one run's
+ *   index growth from it.
+ */
+const canBeServedBy = async (text: string, params: unknown[] = []): Promise<string> =>
+    (await planWithTheIndexPricedToLose(client!, text, params)).plan;
+
+/**
+ * Rebuild the one index, prove the rebuild landed, then ask the planner freely.
+ *
+ * No ANALYZE: REINDEX does not change a row estimate, and the fixture analysed
+ * all four tables when it seeded them.
+ */
+const preferredOnARebuiltIndex = async (
+    index: string, table: string, text: string, params: unknown[] = [],
+): Promise<string> => {
+    await rebuildIndex(client!, index);
+
+    const { indexPages, heapPages } = await indexAndHeapPages(client!, index, table);
+    expect({ index, indexPages, heapPages, proportionate: indexPages < heapPages })
+        .toEqual({ index, indexPages, heapPages, proportionate: true });
+
+    return planFor(text, params);
+};
+
 const userInCollection = () => planFor(
     `select id from public.document_collections
       where collection_name = 'disputes' and raw_data->>'userId' = $1`,
@@ -178,9 +236,9 @@ const statusInCollection = () => planFor(
       where collection_name = 'disputes' and raw_data->>'status' = 'pending' limit 50`,
 );
 
-const paymentsByType = () => planFor(
-    `select id from public.processed_payments where raw_data->>'type' = 'academy_registration'`,
-);
+const PAYMENTS_BY_TYPE =
+    `select id from public.processed_payments where raw_data->>'type' = 'academy_registration'`;
+const paymentsByType = () => planFor(PAYMENTS_BY_TYPE);
 
 const orderByReference = () => planFor(
     `select id from public.marketplace_orders where raw_data->>'paymentReference' = $1`,
@@ -188,15 +246,14 @@ const orderByReference = () => planFor(
 );
 
 /** The stranded-payment sweep — payments service line 401. */
-const strandedPayments = () => planFor(
-    `select id from public.processed_payments where raw_data->>'status' = 'pending_fulfilment'`,
-);
+const STRANDED_PAYMENTS =
+    `select id from public.processed_payments where raw_data->>'status' = 'pending_fulfilment'`;
+const strandedPayments = () => planFor(STRANDED_PAYMENTS);
 
 /** The two broadcasts: the people who have NOT paid. */
-const ordersNotPaid = () => planFor(
-    `select id from public.marketplace_orders
-      where raw_data->>'paymentStatus' in ('pending','unpaid','failed')`,
-);
+const ORDERS_NOT_PAID = `select id from public.marketplace_orders
+      where raw_data->>'paymentStatus' in ('pending','unpaid','failed')`;
+const ordersNotPaid = () => planFor(ORDERS_NOT_PAID);
 
 // ─────────────────────────────────────────────────────────────────────────────
 dbDescribe('048 — the indexes 022 could not deploy', () => {
@@ -241,17 +298,64 @@ dbDescribe('048 — the indexes 022 could not deploy', () => {
         expect(await orderByReference()).toContain('idx_mo_payment_reference');
     }, 300_000);
 
-    it('the ledger is reachable by type', async () => {
-        expect(await paymentsByType()).toContain('idx_pp_type');
+    it('the ledger IS REACHABLE by type', async () => {
+        //   'academy_registration' is 20% of the fixture, which is near enough
+        //   the crossover that the index FILE's size decided the answer: this
+        //   failed on a Seq Scan once processed_payments' indexes had grown to
+        //   5,798 pages. #972, and the two helpers above say what replaced it.
+        expect(await canBeServedBy(PAYMENTS_BY_TYPE)).toContain('idx_pp_type');
+    }, 300_000);
+
+    it('AND THE PLANNER PREFERS IT THERE, ON A REBUILT INDEX', async () => {
+        expect(await preferredOnARebuiltIndex(
+            'idx_pp_type', 'public.processed_payments', PAYMENTS_BY_TYPE,
+        )).toContain('idx_pp_type');
     }, 300_000);
 
     describe('the status indexes serve the RARE values, not the common one', () => {
-        it('the stranded-payment sweep uses idx_pp_status', async () => {
-            expect(await strandedPayments()).toContain('idx_pp_status');
+        it('the stranded-payment sweep CAN BE SERVED BY idx_pp_status', async () => {
+            //   8% — the genuinely rare value this block's heading is about, and
+            //   the only one of the three that survived the bloat measurement in
+            //   #972. Split anyway: it passed at 5,798 index pages, which is one
+            //   more run's growth from the cliff its two siblings went over.
+            expect(await canBeServedBy(STRANDED_PAYMENTS)).toContain('idx_pp_status');
         }, 300_000);
 
-        it('the unpaid-broadcast filter uses idx_mo_payment_status', async () => {
-            expect(await ordersNotPaid()).toContain('idx_mo_payment_status');
+        it('AND THE PLANNER PREFERS IT THERE, ON A REBUILT INDEX', async () => {
+            expect(await preferredOnARebuiltIndex(
+                'idx_pp_status', 'public.processed_payments', STRANDED_PAYMENTS,
+            )).toContain('idx_pp_status');
+        }, 300_000);
+
+        it('the unpaid-broadcast filter CAN BE SERVED BY idx_mo_payment_status', async () => {
+            /*
+             *   #972 — ASKED AS CAPABILITY, NOT AS COST, and this is the second
+             *   suite that needed the distinction.
+             *
+             *   THIS ASSERTION USED TO READ "uses idx_mo_payment_status" AND
+             *   FAILED ON A TREE NOBODY HAD TOUCHED. `in ('pending','unpaid',
+             *   'failed')` is 30% of the fixture — 6,000 rows of 20,000 — which
+             *   is near enough the crossover that the size of the index file
+             *   decides the answer. Measured: with marketplace_orders' indexes
+             *   grown to 5,582 pages by earlier suites seeding and deleting
+             *   300,000 rows, the plan was a Seq Scan at cost 1472.00.
+             *
+             *   30% is also not what this block's heading claims. 'completed' is
+             *   70%, and the sibling assertion above — the stranded-payment
+             *   sweep, 8% — is the genuinely rare one. So the reachability 048 is
+             *   about is asked here with the index priced to lose, and the
+             *   preference is asked separately below, where it is fair.
+             */
+            expect(await canBeServedBy(ORDERS_NOT_PAID)).toContain('idx_mo_payment_status');
+        }, 300_000);
+
+        it('AND THE PLANNER PREFERS IT THERE, ON A REBUILT INDEX', async () => {
+            //   An index nothing scans is not a fix, so the preference is still
+            //   asserted — on an index whose size reflects its rows rather than
+            //   how many times this directory has been run.
+            expect(await preferredOnARebuiltIndex(
+                'idx_mo_payment_status', 'public.marketplace_orders', ORDERS_NOT_PAID,
+            )).toContain('idx_mo_payment_status');
         }, 300_000);
 
         it('AND status = completed CORRECTLY STAYS A SEQUENTIAL SCAN', async () => {

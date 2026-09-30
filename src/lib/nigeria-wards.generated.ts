@@ -5,7 +5,7 @@
  *   were checked against each other, and what it refuses to guess. Re-run it
  *   rather than editing this file.
  *
- *   772 LGAs, 8780 wards.
+ *   774 LGAs, 8800 wards.
  *
  *   KEYED BY STATE AND LGA, both. Six LGA names are shared by two states each —
  *   Bassa (Kogi, Plateau), Ifelodun and Irepodun (Kwara, Osun), Nasarawa (Kano,
@@ -28,6 +28,7 @@ export const WARDS_BY_STATE_AND_LGA: Readonly<Record<string, readonly string[]>>
     "Abia|Obi Ngwa": ["Abayi I", "Abayi II", "Ahiaba", "Akumaimo", "Alaukwu Ohanze", "Ibeme", "Maboko Amairi", "Mgboko Itungwa", "Mgboko Umuanunu", "Ndiarata / Amairinabua", "Ntighauzo Amairi"],
     "Abia|Ohafia": ["Agboji Abiriba", "Amaeke Abiriba", "Amaogudu Abiriba", "Ania Ohafia", "Ebem Ohafia", "Isiama Ohafia", "Ndi Agbo Nkporo", "Ndi Elu Nkporo", "Ndi Etiti Nkporo", "Ohafor Ohafia", "Okamu Ohafia"],
     "Abia|Osisioma": ["Ama - Asaa", "Amaitolu Mbutu Umuojima", "Amasator", "Amator", "Amavo", "Aro - Ngwa", "Okpor - Umuobo", "Oso - Okwa", "Umunneise", "Urtta"],
+    "Abia|Ugwunagbo": ["Ward Eight", "Ward Five", "Ward Four", "Ward Nine", "Ward One", "Ward Seven", "Ward Six", "Ward Ten", "Ward Three", "Ward Two"],
     "Abia|Ukwa East": ["Akwete", "Azumini", "Ikwueke East", "Ikwueke West", "Ikwuorie", "Ikwuriator East", "Ikwuriator West", "Nkporobe/Ohuru", "Obohia", "Umuigube Achara"],
     "Abia|Ukwa West": ["Asa North", "Asa South", "Ipu East", "Ipu South", "Ipu West", "Obokwe", "Obuzor", "Ogwe", "Ozaa Ukwu", "Ozaa West"],
     "Abia|Umu Nneochi": ["Amuda", "Eziama - Agbo", "Eziama - Ugwu", "Ezingodo", "Mbala/Achara", "Ndiawa/Umuelem/I", "Obinolu/Obiagu/La", "Ubahu/Akawa/Arokpa", "Umuaku", "Umuchieze I", "Umuchieze II", "Umuchieze III"],
@@ -191,6 +192,7 @@ export const WARDS_BY_STATE_AND_LGA: Readonly<Record<string, readonly string[]>>
     "Cross River|Bekwarra": ["Abuochiche", "Afrike Ochagbe", "Afrike Okpeche", "Beten", "Gakem", "Ibiaragidi", "Nyanya", "Otukpuru", "Ugboro", "Ukpah"],
     "Cross River|Biase": ["Abayong", "Adim", "Agwagune/Okurike", "Akpet/Abini", "Biakpan", "Ehom", "Erei North", "Erei South", "Ikun/Etono", "Umon North", "Umon South"],
     "Cross River|Boki": ["Abo", "Alankwu", "Beebo/Bumaji", "Boje", "Buda", "Buentsebe", "Bunyia/Okubuchi", "Ekpashi", "Kakwagom/Bawop", "Ogep/Osokom", "Oku/Borum/Njua"],
+    "Cross River|Calabar Municipal": ["Eigth", "Five", "Four", "Nine", "One", "Seven", "Six", "Ten", "Three", "Two"],
     "Cross River|Calabar South": ["Eight (8)", "Eleven (11)", "Five (5)", "Four (4)", "Nine (9)", "One (1)", "Seven (7)", "Six (6)", "Ten (10)", "Three (3)", "Twelve (12)", "Two (2)"],
     "Cross River|Etung": ["Abia", "Abijang", "Agbokim", "Ajassor", "Bendeghe Ekiem", "Effraya", "Etomi", "Itaka", "Mkpot/Ayuk Aba", "Nsofang"],
     "Cross River|Ikom": ["Abanyum", "Akparabong", "Ikom Urban I", "Ikom Urban II", "Nde", "Nnam", "Nta/Nselle", "Ofutop I", "Ofutop II", "Olulumo", "Yala/Nkum"],
